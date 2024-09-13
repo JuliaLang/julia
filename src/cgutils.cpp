@@ -1240,8 +1240,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     assert(jl_is_concrete_type(x.typ));
-    bool hasptr = typ->layout->first_ptr >= 0;
-    assert(hasptr && x.inline_roots != nullptr);
+    assert(typ->layout->first_ptr >= 0 && x.inline_roots != nullptr);
     Align align_dst = alignment;
     Align align_src(1); // TODO: compute this (and keep aligned)
     Value *src = x.V;
@@ -4201,7 +4200,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     fval = boxed(ctx, fval_info, field_promotable);
                     if (!init_as_value) {
                         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-                        ai.decorateInst(ctx.builder.CreateAlignedStore(fval, roots ? roots : dest, Align(jl_field_align(sty, i))));
+                        ai.decorateInst(ctx.builder.CreateAlignedStore(fval, roots ? roots : dest, Align(roots ? sizeof(void*) : jl_field_align(sty, i))));
                     }
                 }
                 else if (jl_is_uniontype(jtype)) {

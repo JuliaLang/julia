@@ -697,11 +697,13 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<i
 
 void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F) {
     // Short circuit to avoid having to deal with vectors of constants, etc.
-    if (isa<PointerType>(V->getType())) {
-        if (isSpecialPtr(V->getType()))
-            if (isa<UndefValue>(V) && !isa<PoisonValue>(V))
-                F.dump();
-    }
+//#ifndef NDEBUG
+//    if (isa<PointerType>(V->getType())) {
+//        if (isSpecialPtr(V->getType()))
+//            if (isa<UndefValue>(V) && !isa<PoisonValue>(V))
+//                F.dump();
+//    }
+//#endif
     if (isa<Constant>(V))
         return;
     if (isa<PointerType>(V->getType())) {

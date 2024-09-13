@@ -6201,11 +6201,22 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
                 vi.pTIndex, Align(1), true);
         }
         else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
-            assert(vi.value.ispointer());
-            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
-            if (CountTrackedPointers(T).count) {
+            assert(vi.value.inline_roots || vi.value.ispointer());
+            if (vi.value.inline_roots) {
                 // memory optimization: make gc pointers re-initialized to NULL
-                ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
+                AllocaInst *ssaroots = cast<AllocaInst>(vi.value.inline_roots);
+                size_t nroots = cast<ConstantInt>(ssaroots->getArraySize())->getZExtValue();
+                auto T_prjlvalue = ssaroots->getAllocatedType();
+                if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
+                    nroots *= AT->getNumElements();
+                    T_prjlvalue = AT->getElementType();
+                }
+                assert(T_prjlvalue == ctx.types().T_prjlvalue);
+                Value *nullval = Constant::getNullValue(T_prjlvalue);
+                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                for (size_t i = 0; i < nroots; i++) {
+                    stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
+                }
             }
         }
     }
@@ -8432,7 +8443,7 @@ static jl_llvm_functions_t
 
     // step 7. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
-    auto allocate_local = [&ctx, &dbuilder, &debugcache, topdebugloc, va, debug_enabled, M](jl_varinfo_t &varinfo, jl_sym_t *s, int i) {
+    auto allocate_local = [&ctx, &dbuilder, &debugcache, topdebugloc, va, debug_enabled](jl_varinfo_t &varinfo, jl_sym_t *s, int i) {
         jl_value_t *jt = varinfo.value.typ;
         assert(!varinfo.boxroot); // variables shouldn't have memory locs already
         if (varinfo.value.constant) {
@@ -9612,15 +9623,19 @@ static jl_llvm_functions_t
 
     if (ctx.vaSlot > 0) {
         // remove VA allocation if we never referenced it
+        assert(ctx.slots[ctx.vaSlot].isSA && ctx.slots[ctx.vaSlot].isArgument);
         Instruction *root = cast_or_null<Instruction>(ctx.slots[ctx.vaSlot].boxroot);
         if (root) {
-            Instruction *store_value = NULL;
             bool have_real_use = false;
             for (Use &U : root->uses()) {
                 User *RU = U.getUser();
                 if (StoreInst *SRU = dyn_cast<StoreInst>(RU)) {
-                    if (!store_value)
-                        store_value = dyn_cast<Instruction>(SRU->getValueOperand());
+                    assert(isa<ConstantPointerNull>(SRU->getValueOperand()) || SRU->getValueOperand() == restTuple);
+                    (void)SRU;
+                }
+                else if (MemSetInst *MSI = dyn_cast<MemSetInst>(RU)) {
+                    assert(MSI->getValue() == ctx.builder.getInt8(0));
+                    (void)MSI;
                 }
                 else if (isa<DbgInfoIntrinsic>(RU)) {
                 }
@@ -9642,7 +9657,6 @@ static jl_llvm_functions_t
                 if (use)
                     use->eraseFromParent();
                 root->eraseFromParent();
-                assert(!store_value || store_value == restTuple);
                 restTuple->eraseFromParent();
             }
         }
