@@ -1412,7 +1412,7 @@ julia> @time @eval foo();
   0.000156 seconds (63 allocations: 2.453 KiB)
 ```
 
-Note that `@time @eval` is better for measuring compilation time because without [@eval](@ref), some compilation may
+Note that `@time @eval` is better for measuring compilation time because without [`@eval`](@ref), some compilation may
 already be done before timing starts.
 
 When developing a package, you may be able to improve the experience of your users with *precompilation*
@@ -1434,7 +1434,7 @@ General good practice for package developers includes:
 1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref) to support interoperability with other packages without bloating your essential dependencies.
 3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
    of compilation, or just take a long time to execute.
-4. Where possible, fix [invalidations](@ref) among your dependencies and from your package code.
+4. Where possible, fix invalidations among your dependencies and from your package code.
 
 The tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
 
