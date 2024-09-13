@@ -25,7 +25,7 @@
 
     for i1 = 1:ncodeunits(u8str2)
         if !isvalid(u8str2, i1); continue; end
-        for i2 = i1:length(u8str2)
+        for i2 = i1:ncodeunits(u8str2)
             if !isvalid(u8str2, i2); continue; end
             @test length(u8str2[i1:i2]) == length(u8str2plain[i1:i2])
             @test length(u8str2[i1:i2]) == length(u8str2plain[i1:i2])
