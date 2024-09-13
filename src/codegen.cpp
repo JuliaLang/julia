@@ -3484,25 +3484,26 @@ static size_t emit_masked_bits_compare(callback &emit_desc, jl_datatype_t *aty, 
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
 {
     ++EmittedBitsCompares;
+    jl_value_t *argty = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
     bool isboxed;
     Type *at = julia_type_to_llvm(ctx, arg1.typ, &isboxed);
-    assert(jl_is_datatype(arg1.typ) && arg1.typ == arg2.typ && !isboxed);
+    assert(jl_is_datatype(arg1.typ) && arg1.typ == (arg2.constant ? jl_typeof(arg2.constant) : arg2.typ) && !isboxed);
 
     if (type_is_ghost(at))
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
         Type *at_int = INTT(at, ctx.emission_context.DL);
-        Value *varg1 = emit_unbox(ctx, at_int, arg1, arg1.typ);
-        Value *varg2 = emit_unbox(ctx, at_int, arg2, arg2.typ);
+        Value *varg1 = emit_unbox(ctx, at_int, arg1, argty);
+        Value *varg2 = emit_unbox(ctx, at_int, arg2, argty);
         return ctx.builder.CreateICmpEQ(varg1, varg2);
     }
 
     if (at->isVectorTy()) {
-        jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
+        jl_svec_t *types = ((jl_datatype_t*)argty)->types;
         Value *answer = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
-        Value *varg1 = emit_unbox(ctx, at, arg1, arg1.typ);
-        Value *varg2 = emit_unbox(ctx, at, arg2, arg2.typ);
+        Value *varg1 = emit_unbox(ctx, at, arg1, argty);
+        Value *varg2 = emit_unbox(ctx, at, arg2, argty);
         for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
             jl_value_t *fldty = jl_svecref(types, i);
             Value *subAns, *fld1, *fld2;
@@ -3517,7 +3518,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
     }
 
     if (at->isAggregateType()) { // Struct or Array
-        jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
+        jl_datatype_t *sty = (jl_datatype_t*)argty;
         size_t sz = jl_datatype_size(sty);
         if (sz > 512 && !sty->layout->flags.haspadding && sty->layout->flags.isbitsegal) {
             Value *varg1 = arg1.ispointer() ? data_pointer(ctx, arg1) :
@@ -3721,8 +3722,10 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (jl_type_intersection(rt1, rt2) == (jl_value_t*)jl_bottom_type) // types are disjoint (exhaustive test)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
 
-    bool justbits1 = jl_is_concrete_immutable(rt1);
-    bool justbits2 = jl_is_concrete_immutable(rt2);
+    // can compare any concrete immutable by bits, except for UnionAll
+    // which has a special non-bits based egal
+    bool justbits1 = jl_is_concrete_immutable(rt1) && !jl_is_kind(rt1);
+    bool justbits2 = jl_is_concrete_immutable(rt2) && !jl_is_kind(rt2);
     if (justbits1 || justbits2) { // whether this type is unique'd by value
         return emit_nullcheck_guard2(ctx, nullcheck1, nullcheck2, [&] () -> Value* {
             jl_datatype_t *typ = (jl_datatype_t*)(justbits1 ? rt1 : rt2);
