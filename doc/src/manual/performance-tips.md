@@ -1434,7 +1434,7 @@ General good practice for package developers includes:
 1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref) to support interoperability with other packages without bloating your essential dependencies.
 3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
    of compilation, or just take a long time to execute.
-4. Where possible, fix invalidations among your dependencies and from your package code.
+4. Where possible, fix [invalidations](https://julialang.org/blog/2020/08/invalidations/) among your dependencies and from your package code.
 
 The tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
 
