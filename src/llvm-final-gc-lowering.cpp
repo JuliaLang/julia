@@ -24,11 +24,10 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // addrspacecast as needed for non-0 alloca addrspace
     auto gcframe = cast<Instruction>(builder.CreateAddrSpaceCast(gcframe_alloca, T_prjlvalue->getPointerTo(0)));
     gcframe->takeName(target);
-    //
+
     // Zero out the GC frame.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
     builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
-    // TODO(jwn): walk all uses in the topbasic block and drop any other MemSet calls
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();

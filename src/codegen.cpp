@@ -2240,7 +2240,7 @@ static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
     IRBuilder<> builder(ctx.topalloca);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
     // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
-    ai.decorateInst(builder.CreateMemSet(staticroots, builder.getInt8(0), nroots * sizeof(void*), staticroots->getAlign()));
+    ai.decorateInst(builder.CreateMemSet(staticroots, builder.getInt8(0), nroots * sizeof(void*), staticroots->getAlign()))->moveAfter(ctx.topalloca);
     return staticroots;
 }
 
@@ -2344,6 +2344,9 @@ static bool valid_as_globalinit(const Value *v) {
 
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
 
+// TODO: in the future, assume all callers will handle the interior pointers separately, and have
+// have zext_struct strip them out, so we aren't saving those to the stack here causing shadow stores
+// to be necessary too
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex)
 {
     Value *loc;
@@ -2397,7 +2400,6 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
         // llvm mem2reg pass will remove this if unneeded
         if (CountTrackedPointers(v->getType()).count == 0)
             return value_to_pointer(ctx, v, typ, NULL);
-        // jwn
     }
     if (isboxed)
         return jl_cgval_t(v, isboxed, typ, NULL, best_tbaa(ctx.tbaa(), typ), nullptr);
@@ -5775,7 +5777,6 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
 }
 
 static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *varname) {
-    jl_value_t *typ = vi.value.typ;
     jl_cgval_t v;
     Value *isnull = NULL;
     if (vi.boxroot == NULL || vi.pTIndex != NULL) {
@@ -5785,47 +5786,67 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 v.TIndex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1));
         }
         else {
-            if (vi.value.inline_roots)
-                abort(); // jwn
             // copy value to a non-mutable (non-volatile SSA) location
-            AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
-            setName(ctx.emission_context, varslot, jl_symbol_name(varname));
-            Type *T = varslot->getAllocatedType();
-            assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
-            AllocaInst *ssaslot = cast<AllocaInst>(varslot->clone());
-            setName(ctx.emission_context, ssaslot, jl_symbol_name(varname) + StringRef(".ssa"));
-            ssaslot->insertAfter(varslot);
-            if (vi.isVolatile) {
-                Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot,
-                        varslot->getAlign(),
-                        true);
-                ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
+            // since this might be a union slot, the most convenient approach to copying
+            // is to move the whole alloca chunk
+            AllocaInst *ssaslot = nullptr;
+            AllocaInst *ssaroots = nullptr;
+            auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+            if (vi.value.V) {
+                AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
+                Type *T = varslot->getAllocatedType();
+                assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
+                ssaslot = cast<AllocaInst>(varslot->clone());
+                setName(ctx.emission_context, ssaslot, varslot->getName() + StringRef(".ssa"));
+                ssaslot->insertAfter(varslot);
+                if (vi.isVolatile) {
+                    Value *unbox = ctx.builder.CreateAlignedLoad(ssaslot->getAllocatedType(), varslot, varslot->getAlign(), true);
+                    stack_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign()));
+                }
+                else {
+                    const DataLayout &DL = jl_Module->getDataLayout();
+                    uint64_t sz = DL.getTypeStoreSize(T);
+                    emit_memcpy(ctx, ssaslot, stack_ai, vi.value, sz, ssaslot->getAlign(), varslot->getAlign());
+                }
             }
-            else {
-                const DataLayout &DL = jl_Module->getDataLayout();
-                uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.value, sz, ssaslot->getAlign(), varslot->getAlign());
+            if (vi.value.inline_roots) {
+                AllocaInst *varslot = cast<AllocaInst>(vi.value.inline_roots);
+                ssaroots = cast<AllocaInst>(varslot->clone());
+                setName(ctx.emission_context, ssaroots, varslot->getName() + StringRef(".ssa"));
+                ssaroots->insertAfter(varslot);
+                size_t nroots = cast<ConstantInt>(varslot->getArraySize())->getZExtValue();
+                auto T_prjlvalue = varslot->getAllocatedType();
+                if (auto AT = dyn_cast<ArrayType>(T_prjlvalue)) {
+                    nroots *= AT->getNumElements();
+                    T_prjlvalue = AT->getElementType();
+                }
+                assert(T_prjlvalue == ctx.types().T_prjlvalue);
+                if (vi.isVolatile) {
+                    for (size_t i = 0; i < nroots; i++) {
+                        Value *unbox = ctx.builder.CreateAlignedLoad(T_prjlvalue, emit_ptrgep(ctx, varslot, i * sizeof(void*)), varslot->getAlign(), true);
+                        stack_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign()));
+                    }
+                }
+                else {
+                    emit_memcpy(ctx, ssaroots, stack_ai, vi.value, nroots * sizeof(void*), ssaroots->getAlign(), varslot->getAlign());
+                }
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
                 tindex = ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), vi.pTIndex, Align(1), vi.isVolatile);
-            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack);
+            v = mark_julia_slot(ssaslot, vi.value.typ, tindex, ctx.tbaa().tbaa_stack, ssaroots);
         }
-        if (vi.boxroot == NULL)
-            v = update_julia_type(ctx, v, typ);
         if (vi.usedUndef) {
             assert(vi.defFlag);
             isnull = ctx.builder.CreateAlignedLoad(getInt1Ty(ctx.builder.getContext()), vi.defFlag, Align(1), vi.isVolatile);
         }
     }
     if (vi.boxroot != NULL) {
-        if (vi.value.inline_roots || v.inline_roots)
-            abort(); // jwn
         Instruction *boxed = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, vi.boxroot, Align(sizeof(void*)), vi.isVolatile);
         Value *box_isnull = NULL;
         if (vi.usedUndef)
             box_isnull = ctx.builder.CreateICmpNE(boxed, Constant::getNullValue(ctx.types().T_prjlvalue));
-        maybe_mark_load_dereferenceable(boxed, vi.usedUndef || vi.pTIndex, typ);
+        maybe_mark_load_dereferenceable(boxed, vi.usedUndef || vi.pTIndex, vi.value.typ);
         if (vi.pTIndex) {
             // value is either boxed in the stack slot, or unboxed in value
             // as indicated by testing (pTIndex & UNION_BOX_MARKER)
@@ -5839,10 +5860,9 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             else
                 v.V = boxed;
             v.Vboxed = boxed;
-            v = update_julia_type(ctx, v, typ);
         }
         else {
-            v = mark_julia_type(ctx, boxed, true, typ);
+            v = mark_julia_type(ctx, boxed, true, vi.value.typ);
             if (vi.usedUndef)
                 isnull = box_isnull;
         }
@@ -5890,7 +5910,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             if (rval_info.TIndex)
                 emit_unionmove(ctx, vi.value.V, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
             else if (vi.value.inline_roots)
-                split_value_into(ctx, rval_info, Align(julia_alignment(rval_info.typ)), vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.value.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack));
+                split_value_into(ctx, rval_info, Align(julia_alignment(rval_info.typ)), vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.value.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.isVolatile);
             else
                 emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, Align(julia_alignment(rval_info.typ)), vi.isVolatile);
         }
@@ -8451,31 +8471,24 @@ static jl_llvm_functions_t
                 return;
         }
         else if (deserves_stack(jt)) {
-            bool isboxed;
-            Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
-            assert(!isboxed);
-            assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), nullptr, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
-            if (CountTrackedPointers(vtype).count) {
-                // jwn
-                StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
-                SI->insertAfter(ctx.topalloca);
-            }
-            varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa().tbaa_stack);
+            auto sizes = split_value_size((jl_datatype_t*)jt);
+            AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, Align(julia_alignment(jt))) : nullptr;
+            AllocaInst *roots = sizes.second > 0 ? emit_static_roots(ctx, sizes.second) : nullptr;
+            if (bits) bits->setName(jl_symbol_name(s));
+            if (roots) roots->setName(StringRef(".roots.") + jl_symbol_name(s));
+            varinfo.value = mark_julia_slot(bits, jt, NULL, ctx.tbaa().tbaa_stack, roots);
             alloc_def_flag(ctx, varinfo);
             if (debug_enabled && varinfo.dinfo) {
                 assert((Metadata*)varinfo.dinfo->getType() != debugcache.jl_pvalue_dillvmt);
-                dbuilder.insertDeclare(lv, varinfo.dinfo, dbuilder.createExpression(),
+                dbuilder.insertDeclare(bits ? bits : roots, varinfo.dinfo, dbuilder.createExpression(),
                                        topdebugloc,
                                        ctx.builder.GetInsertBlock());
             }
             return;
         }
         // otherwise give it a boxroot in this function
-        AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
-            nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
-        StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
-        SI->insertAfter(ctx.topalloca);
+        AllocaInst *av = emit_static_roots(ctx, 1);
+        av->setName(jl_symbol_name(s));
         varinfo.boxroot = av;
         if (debug_enabled && varinfo.dinfo) {
             SmallVector<uint64_t, 1> addr;
