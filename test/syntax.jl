@@ -3564,3 +3564,13 @@ let x = 1 => 2
     @test_throws ErrorException @eval a => b = 2
     @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
 end
+
+# issue #45494
+begin
+  local b::Tuple{<:Any} = (0,)
+  function f45494()
+    b = b
+    b
+  end
+end
+@test f45494() === (0,)
