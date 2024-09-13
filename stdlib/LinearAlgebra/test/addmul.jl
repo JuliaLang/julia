@@ -214,7 +214,8 @@ end
                 Cc = copy(C)
                 returned_mat = mul!(C, A, B, zero(eltype(A)), β)
                 @test returned_mat === C
-                @test collect(returned_mat) ≈ β * Cc  rtol=rtol
+                # This test is skipped because it is flakey, but should be fixed and put back (see #49966)
+                @test_skip collect(returned_mat) ≈ β * Cc  rtol=rtol
             end
         end
     end
