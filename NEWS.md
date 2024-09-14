@@ -103,6 +103,7 @@ New library features
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 * `Lockable` is now exported ([#54595])
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
+* `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#XXXXX])
 
 Standard library changes
 ------------------------
