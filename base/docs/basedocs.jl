@@ -3712,6 +3712,9 @@ unused and delete the entire benchmark code).
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
 
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+
 # Examples
 
 ```julia
