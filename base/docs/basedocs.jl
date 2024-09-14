@@ -3299,6 +3299,9 @@ unused and delete the entire benchmark code).
 !!! compat "Julia 1.8"
     This method was added in Julia 1.8.
 
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+
 # Examples
 
 ```julia
