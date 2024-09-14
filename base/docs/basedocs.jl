@@ -3293,6 +3293,9 @@ unused and delete the entire benchmark code).
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
 
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+
 # Examples
 
 ```julia
