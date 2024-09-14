@@ -1079,6 +1079,12 @@ let err_str
     @test occursin("String concatenation is performed with *", err_str)
 end
 
+# https://github.com/JuliaLang/julia/issues/55745
+let err_str
+    err_str = @except_str +() MethodError
+    @test !occursin("String concatenation is performed with *", err_str)
+end
+
 struct MissingLength; end
 struct MissingSize; end
 Base.IteratorSize(::Type{MissingSize}) = Base.HasShape{2}()

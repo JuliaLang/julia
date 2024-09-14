@@ -3977,7 +3977,10 @@ f(x) = yt(x)
                  (val (if (equal? typ '(core Any))
                           val
                           `(call (core typeassert) ,val
-                                 ,(cl-convert typ fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))))
+                                 ,(let ((convt (cl-convert typ fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                                    (if (or (symbol-like? convt) (quoted? convt))
+                                        convt
+                                        (renumber-assigned-ssavalues convt)))))))
             `(block
                ,@(if (eq? box access) '() `((= ,access ,box)))
                ,undefcheck

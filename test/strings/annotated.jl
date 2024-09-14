@@ -5,14 +5,22 @@
     @test str == Base.AnnotatedString(str.string, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[])
     @test length(str) == 11
     @test ncodeunits(str) == 11
+    @test codeunits(str) == codeunits("some string")
+    @test codeunit(str) == UInt8
+    @test codeunit(str, 1) == codeunit("some string", 1)
+    @test firstindex(str) == firstindex("some string")
     @test convert(Base.AnnotatedString, str) === str
     @test eltype(str) == Base.AnnotatedChar{eltype(str.string)}
     @test first(str) == Base.AnnotatedChar(first(str.string), Pair{Symbol, Any}[])
     @test str[1:4] isa SubString{typeof(str)}
     @test str[1:4] == Base.AnnotatedString("some")
+    big_byte_str = Base.AnnotatedString("आख")
+    @test_throws StringIndexError big_byte_str[5]
     @test "a" * str == Base.AnnotatedString("asome string")
     @test str * "a" == Base.AnnotatedString("some stringa")
     @test str * str == Base.AnnotatedString("some stringsome string")
+    @test cmp(str, "some stringy thingy") == -1
+    @test cmp("some stringy thingy", str) == 1
     @test str[3:4] == SubString("me")
     @test SubString("me") == str[3:4]
     Base.annotate!(str, 1:4, :thing => 0x01)

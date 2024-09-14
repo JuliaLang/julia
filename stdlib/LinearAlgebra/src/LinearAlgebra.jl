@@ -673,9 +673,7 @@ matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
 _matprod_dest_diag(A, TS) = similar(A, TS)
 function _matprod_dest_diag(A::SymTridiagonal, TS)
     n = size(A, 1)
-    ev = similar(A, TS, max(0, n-1))
-    dv = similar(A, TS, n)
-    Tridiagonal(ev, dv, similar(ev))
+    Tridiagonal(similar(A, TS, n-1), similar(A, TS, n), similar(A, TS, n-1))
 end
 
 # Special handling for adj/trans vec
