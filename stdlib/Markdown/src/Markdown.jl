@@ -124,6 +124,26 @@ import Base.Docs: catdoc
 catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
+    precompile(Tuple{typeof(Base.println), Markdown.MD})
+    precompile(Tuple{typeof(Base.println), Base.TTY, Markdown.MD})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{1}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Array{Any, 1}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, String})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{2}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{3}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Paragraph})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Bold, String, Vararg{Any}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Bold})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, String, Array{Any, 1}, Vararg{Any}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Italic})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.BlockQuote})
+
+    precompile(Tuple{typeof(Base.sprint), Function, Array{Any, 1}})
+    precompile(Tuple{typeof(Base.print), Base.TTY, String})
+    precompile(Tuple{typeof(Base.print), Base.TTY, Base.SubString{String}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.List})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Code, String, Vararg{String}})
+
     # workload to reduce latency
     println(devnull, md"""
     # H1
