@@ -170,6 +170,10 @@ for (name, f) in l
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
+        if isone(length(s))
+            @test readuntil(io(t), first(s)) == m
+            @test readuntil(io(t), first(s), keep=true) == kept
+        end
         @test readuntil(io(t), SubString(s, firstindex(s))) == m
         @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m

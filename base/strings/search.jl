@@ -10,7 +10,39 @@ match strings with [`match`](@ref).
 """
 abstract type AbstractPattern end
 
-nothing_sentinel(i) = i == 0 ? nothing : i
+# TODO: These unions represent bytes in memory that can be accessed via a pointer.
+# this property is used throughout Julia, e.g. also in IO code.
+# This deserves a better solution - see #53178.
+# If such a better solution comes in place, these unions should be replaced.
+const DenseInt8 = Union{
+    DenseArray{Int8},
+    FastContiguousSubArray{Int8,N,<:DenseArray} where N
+}
+
+# Note: This union is different from that above in that it includes CodeUnits.
+# Currently, this is redundant as CodeUnits <: DenseVector, but this subtyping
+# is buggy and may be removed in the future, see #54002
+const DenseUInt8 = Union{
+    DenseArray{UInt8},
+    FastContiguousSubArray{UInt8,N,<:DenseArray} where N,
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+    FastContiguousSubArray{UInt8,N,<:CodeUnits{UInt8, <:Union{String, SubString{String}}}} where N,
+}
+
+const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
+
+last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
+last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
+
+function last_utf8_byte(c::Char)
+    u = reinterpret(UInt32, c)
+    shift = ((4 - ncodeunits(c)) * 8) & 31
+    (u >> shift) % UInt8
+end
+
+# Whether the given byte is guaranteed to be the only byte in a Char
+# This holds even in the presence of invalid UTF8
+is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
@@ -20,38 +52,58 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
     c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_search(s, c % UInt8, i))
+    c ≤ '\x7f' && return _search(s, first_utf8_byte(c), i)
     while true
         i = _search(s, first_utf8_byte(c), i)
-        i == 0 && return nothing
-        pred(s[i]) && return i
+        i === nothing && return nothing
+        isvalid(s, i) && pred(s[i]) && return i
         i = nextind(s, i)
     end
 end
 
-findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_search(a, pred.x))
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
 
-findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_search(a, pred.x, i))
-
-findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
-findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
-
-function _search(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
-    if i < 1
-        throw(BoundsError(a, i))
-    end
-    n = sizeof(a)
-    if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
-    end
-    p = pointer(a)
-    q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    return q == C_NULL ? 0 : Int(q-p+1)
+function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{UInt8, Int8}}, a::Union{DenseInt8, DenseUInt8})
+    findnext(pred, a, firstindex(a))
 end
 
-function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    _search(a, pred.x, i)
+end
+
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    _search(a, pred.x, i)
+end
+
+# iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
+# so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
+findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = _search(a, zero(UInt8))
+findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _search(a, zero(UInt8), i)
+
+function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
+    fst = firstindex(a)
+    lst = last_byteindex(a)
+    if i < fst
+        throw(BoundsError(a, i))
+    end
+    n_bytes = lst - i + 1
+    if i > lst
+        return i == lst+1 ? nothing : throw(BoundsError(a, i))
+    end
+    GC.@preserve a begin
+        p = pointer(a)
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, n_bytes)
+    end
+    return q == C_NULL ? nothing : (q-p+fst) % Int
+end
+
+function _search(a::DenseUInt8, b::AbstractChar, i::Integer = firstindex(a))
     if isascii(b)
         _search(a,UInt8(b),i)
     else
@@ -60,45 +112,84 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::Union{String, SubString{String}}, i::Integer)
     c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
+    c ≤ '\x7f' && return _rsearch(s, first_utf8_byte(c), i)
     b = first_utf8_byte(c)
     while true
         i = _rsearch(s, b, i)
-        i == 0 && return nothing
-        pred(s[i]) && return i
+        i == nothing && return nothing
+        isvalid(s, i) && pred(s[i]) && return i
         i = prevind(s, i)
     end
 end
 
-findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_rsearch(a, pred.x))
-
-findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_rsearch(a, pred.x, i))
-
-findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
-findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
-
-function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
-    if i < 1
-        return i == 0 ? 0 : throw(BoundsError(a, i))
-    end
-    n = sizeof(a)
-    if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
-    end
-    p = pointer(a)
-    q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    return q == C_NULL ? 0 : Int(q-p+1)
+function findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::DenseUInt8OrInt8)
+    findprev(pred, a, lastindex(a))
 end
 
-function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    _rsearch(a, pred.x, i)
+end
+
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    _rsearch(a, pred.x, i)
+end
+
+# See comments above for findfirst(::typeof(iszero)) methods
+findlast(::typeof(iszero), a::DenseUInt8OrInt8) = _rsearch(a, zero(UInt8))
+findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _rsearch(a, zero(UInt8), i)
+
+function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
+    fst = firstindex(a)
+    lst = last_byteindex(a)
+    if i < fst
+        return i == fst - 1 ? nothing : throw(BoundsError(a, i))
+    end
+    if i > lst
+        return i == lst+1 ? nothing : throw(BoundsError(a, i))
+    end
+    GC.@preserve a begin
+        p = pointer(a)
+        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
+    end
+    return q == C_NULL ? nothing : (q-p+fst) % Int
+end
+
+function _rsearch(a::DenseUInt8, b::AbstractChar, i::Integer = length(a))
     if isascii(b)
         _rsearch(a,UInt8(b),i)
     else
         _rsearch(a,codeunits(string(b)),i).start
+    end
+end
+
+function findall(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}}
+)
+    c = Char(pred.x)::Char
+    byte = last_utf8_byte(c)
+    ncu = ncodeunits(c)
+
+    # If only one byte, and can't be part of another Char: Forward to memchr.
+    is_standalone_byte(byte) && return findall(==(byte), codeunits(s))
+    result = Int[]
+    i = firstindex(s)
+    while true
+        i = _search(s, byte, i)
+        isnothing(i) && return result
+        i += 1
+        index = i - ncu
+        # If the char is invalid, it's possible that its first byte is
+        # inside another char. If so, indexing into the string will throw an
+        # error, so we need to check for valid indices.
+        isvalid(s, index) || continue
+        # We use iterate here instead of indexing, because indexing wastefully
+        # checks for valid index. It would be better if there was something like
+        # try_getindex(::String, ::Int) we could use.
+        char = first(something(iterate(s, index)))
+        pred(char) && push!(result, index)
     end
 end
 
@@ -175,18 +266,19 @@ end
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
-function _searchindex(s::Union{AbstractString,ByteArray},
+function _searchindex(s::Union{AbstractString,DenseUInt8OrInt8},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
+    sentinel = firstindex(s) - 1
     x = Iterators.peel(t)
     if isnothing(x)
-        return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
+        return firstindex(s) <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = x
     while true
         i = findnext(isequal(t1),s,i)
-        if i === nothing return 0 end
+        if i === nothing return sentinel end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
         matched = all(splat(==), zip(SubString(s, ii), a))
@@ -460,9 +552,8 @@ julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
 """
-
-function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
-                 s::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{UInt8}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{UInt8}},
                  ; overlap::Bool=false)
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
@@ -515,7 +606,7 @@ function _rsearchindex(s::AbstractString,
     end
 end
 
-function _rsearchindex(s::String, t::String, i::Integer)
+function _rsearchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
         return something(findprev(isequal(t[1]), s, i), 0)

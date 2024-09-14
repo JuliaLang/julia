@@ -17,15 +17,14 @@ LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBC
 endif
 
 ifeq ($(OS),WINNT)
-LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
-                  --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi
+LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi
 else ifeq ($(OS),Linux)
 # textoff and notext are aliases to the same option which suppress the TEXTREL warning for i686
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext
 else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
-else ifeq ($(OS),Darwin)
-LOADER_LDFLAGS += -lSystem
+else ifeq ($(OS),OpenBSD)
+LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
 endif
 
 # Build list of dependent libraries that must be opened
@@ -107,7 +106,7 @@ julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
-ifneq (,$(filter $(OS), Linux FreeBSD))
+ifneq (,$(filter $(OS), Linux FreeBSD OpenBSD))
 VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
 endif
 
@@ -117,7 +116,7 @@ STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_
 endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) $(RPATH_LIB) -o $@ \
 		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
@@ -128,7 +127,7 @@ ifeq ($(OS), WINNT)
 endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
@@ -151,7 +150,7 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
-$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
+$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
 
 clean: | $(CLEAN_TARGETS)

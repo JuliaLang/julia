@@ -104,7 +104,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
+    official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.isdebugbuild() || !isempty(Base.TAGGED_RELEASE_BANNER) || (Base.GIT_VERSION_INFO.tagged_commit && !official_release)
         println(io, "Build Info:")
         if Base.isdebugbuild()

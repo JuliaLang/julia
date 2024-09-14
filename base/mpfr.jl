@@ -109,9 +109,9 @@ end
 tie_breaker_is_to_even(::MPFRRoundingMode) = true
 
 const ROUNDING_MODE = Ref{MPFRRoundingMode}(MPFRRoundNearest)
-const CURRENT_ROUNDING_MODE = ScopedValue{MPFRRoundingMode}()
+const CURRENT_ROUNDING_MODE = Base.ScopedValues.ScopedValue{MPFRRoundingMode}()
 const DEFAULT_PRECISION = Ref{Clong}(256)
-const CURRENT_PRECISION = ScopedValue{Clong}()
+const CURRENT_PRECISION = Base.ScopedValues.ScopedValue{Clong}()
 # Basic type and initialization definitions
 
 # Warning: the constants are MPFR implementation details from
@@ -162,7 +162,7 @@ significand_limb_count(x::BigFloat) = div(sizeof(x._d), sizeof(Limb), RoundToZer
 rounding_raw(::Type{BigFloat}) = something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 function setrounding_raw(f::Function, ::Type{BigFloat}, r::MPFRRoundingMode)
-    @with(CURRENT_ROUNDING_MODE => r, f())
+    Base.ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
 end
 
 
@@ -1109,7 +1109,7 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
     The `base` keyword requires at least Julia 1.8.
 """
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
-    @with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
+    Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
 
 setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
@@ -1199,7 +1199,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
         y = _BigFloat(x.prec, x.sign, x.exp, d′)
         #ccall((:mpfr_custom_move,libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
         return y
-    end
+    end::BigFloat
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
@@ -1222,7 +1222,8 @@ end
 # flags
 clear_flags() = ccall((:mpfr_clear_flags, libmpfr), Cvoid, ())
 had_underflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
-had_overflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
+had_overflow() = ccall((:mpfr_overflow_p, libmpfr), Cint, ()) != 0
+had_divbyzero() = ccall((:mpfr_divby0_p, libmpfr), Cint, ()) != 0
 had_nan() = ccall((:mpfr_nanflag_p, libmpfr), Cint, ()) != 0
 had_inexact_exception() = ccall((:mpfr_inexflag_p, libmpfr), Cint, ()) != 0
 had_range_exception() = ccall((:mpfr_erangeflag_p, libmpfr), Cint, ()) != 0

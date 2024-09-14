@@ -5,13 +5,16 @@ public
     Checked,
     Filesystem,
     Order,
+    ScopedValues,
     Sort,
 
 # Types
     AbstractLock,
+    AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,
+    Fix,
     Fix1,
     Fix2,
     Generator,
@@ -43,6 +46,7 @@ public
     split_rest,
     tail,
     checked_length,
+    elsize,
 
 # Loading
     DL_LOAD_PATH,
@@ -63,7 +67,7 @@ public
     ispublic,
     remove_linenums!,
 
-# Opperators
+# Operators
     operator_associativity,
     operator_precedence,
     isbinaryoperator,
@@ -84,6 +88,17 @@ public
     @locals,
     @propagate_inbounds,
 
+# External processes
+    shell_escape,
+    shell_split,
+    shell_escape_posixly,
+    shell_escape_csh,
+    shell_escape_wincmd,
+    escape_microsoft_c_args,
+
+# Strings
+    escape_raw_string,
+
 # IO
     # types
     BufferStream,
@@ -95,7 +110,11 @@ public
     reseteof,
     link_pipe!,
 
+# filesystem operations
+    rename,
+
 # misc
     notnothing,
     runtests,
-    text_colors
+    text_colors,
+    depwarn

@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-import Base: ScopedValues
+
+using Base.ScopedValues
+
+include("compiler/irutils.jl")
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -52,6 +55,16 @@ emptyf() = nothing
 @testset "conversion" begin
     with(emptyf, sval_float=>2)
     @test_throws MethodError with(emptyf, sval_float=>"hello")
+    a = ScopedValue(1)
+    with(a => 2.0) do
+        @test a[] == 2
+        @test a[] isa Int
+    end
+    a = ScopedValue(1.0)
+    with(a => 2) do
+        @test a[] == 2.0
+        @test a[] isa Float64
+    end
 end
 
 import Base.Threads: @spawn
@@ -67,13 +80,13 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}()) == "ScopedValue{$Int}(undefined)"
-    @test sprint(show, sval) == "ScopedValue{$Int}(1)"
+    @test sprint(show, ScopedValue{Int}()) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
+    @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     @test sprint(show, Core.current_scope()) == "nothing"
     with(sval => 2.0) do
-        @test sprint(show, sval) == "ScopedValue{$Int}(2)"
+        @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(Base.ScopedValues.ScopedValue{$Int}@$objid => 2)"
     end
 end
 
@@ -149,4 +162,10 @@ end
 
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
+end
+
+# inline constant scoped values
+const inlineable_const_sv = ScopedValue(1)
+@test fully_eliminated(; retval=(inlineable_const_sv => 1)) do
+    inlineable_const_sv => 1
 end

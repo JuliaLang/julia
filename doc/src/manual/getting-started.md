@@ -56,4 +56,4 @@ search: begin disable_sigint reenable_sigint
   begin...end denotes a block of code.
 ```
 
-If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).
+If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips), or check out the comprehensive [ModernJuliaWorkflows](https://modernjuliaworkflows.org/) blog.

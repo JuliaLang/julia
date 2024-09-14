@@ -383,6 +383,18 @@ v2 = copy(v)
 @test v2[end-1] == 2
 @test v2[end] == 1
 
+# push!(v::AbstractVector, x...)
+v2 = copy(v)
+@test @invoke(push!(v2::AbstractVector, 3)) === v2
+@test v2[axes(v,1)] == v
+@test v2[end] == 3
+@test v2[begin] == v[begin] == v[-2]
+v2 = copy(v)
+@test @invoke(push!(v2::AbstractVector, 5, 6)) == v2
+@test v2[axes(v,1)] == v
+@test v2[end-1] == 5
+@test v2[end] == 6
+
 # append! from array
 v2 = copy(v)
 @test append!(v2, [2, 1]) === v2
@@ -396,6 +408,23 @@ v2 = copy(v)
 # append! from SizeUnknown iterator
 v2 = copy(v)
 @test append!(v2, (v for v in [2, 1] if true)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+
+# append!(::AbstractVector, ...)
+# append! from array
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, [2, 1]::Any)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from HasLength iterator
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, (v for v in [2, 1])::Any)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from SizeUnknown iterator
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, (v for v in [2, 1] if true)::Any)) === v2
 @test v2[axes(v, 1)] == v
 @test v2[lastindex(v)+1:end] == [2, 1]
 
@@ -865,7 +894,23 @@ end
     @test CartesianIndices(A) == CartesianIndices(B)
 end
 
+@testset "overflowing show" begin
+    A = OffsetArray(repeat([1], 1), typemax(Int)-1)
+    b = IOBuffer(maxsize=10)
+    show(b, A)
+    @test String(take!(b)) == "[1]"
+    show(b, (A, A))
+    @test String(take!(b)) == "([1], [1])"
+end
+
 @testset "indexing views (#53249)" begin
     v = view([1,2,3,4], :)
     @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
+end
+
+@testset "mapreduce with OffsetRanges" begin
+    r = 5:100
+    a = OffsetArray(r, 2)
+    b = sum(a, dims=1)
+    @test b[begin] == sum(r)
 end

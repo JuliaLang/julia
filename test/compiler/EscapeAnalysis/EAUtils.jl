@@ -68,7 +68,7 @@ import .CC:
 using Core:
     CodeInstance, MethodInstance, CodeInfo
 using .CC:
-    InferenceResult, OptimizationState, IRCode
+    InferenceResult, InferenceState, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
 struct EAToken end
@@ -158,12 +158,12 @@ struct FailedAnalysis
     get_escape_cache::GetEscapeCache
 end
 
-function CC.cache_result!(interp::EscapeAnalyzer, inf_result::InferenceResult)
-    ecacheinfo = CC.traverse_analysis_results(inf_result) do @nospecialize result
+function CC.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=CC.may_discard_trees(interp))
+    ecacheinfo = CC.traverse_analysis_results(state.result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
-    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[inf_result.linfo] = ecacheinfo)
-    return @invoke CC.cache_result!(interp::AbstractInterpreter, inf_result::InferenceResult)
+    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[state.linfo] = ecacheinfo)
+    return @invoke CC.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
 end
 
 # printing

@@ -234,7 +234,7 @@ Specifies the preferred registry flavor. Currently supported values are `conserv
 (the default), which will only publish resources that have been processed by the storage
 server (and thereby have a higher probability of being available from the PkgServers),
 whereas `eager` will publish registries whose resources have not necessarily been
-processed by the storage servers.  Users behind restrictive firewalls that do not allow
+processed by the storage servers. Users behind restrictive firewalls that do not allow
 downloading from arbitrary servers should not use the `eager` flavor.
 
 !!! compat "Julia 1.7"
@@ -266,6 +266,14 @@ versions of packages already installed as possible.
 
 !!! compat "Julia 1.9"
     This only affects Julia 1.9 and above.
+
+### [`JULIA_PKG_GC_AUTO`](@id JULIA_PKG_GC_AUTO)
+
+If set to `false`, automatic garbage collection of packages and artifacts will be disabled;
+see [`Pkg.gc`](https://pkgdocs.julialang.org/v1/api/#Pkg.gc) for more details.
+
+!!! compat "Julia 1.12"
+    This environment variable is only supported on Julia 1.12 and above.
 
 ## Network transport
 
@@ -320,16 +328,25 @@ a master process to establish a connection before dying.
 
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
-An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
-if the number of CPU threads cannot be determined through system calls, then the
-number of threads is set to `1`.
+An unsigned 64-bit integer (`uint64_t`) or string that sets the maximum number
+of threads available to Julia. If `$JULIA_NUM_THREADS` is not set or is a
+non-positive integer, or if the number of CPU threads cannot be determined
+through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads.
+to the number of CPU threads. It can also be set to a comma-separated string to
+specify the size of the `:default` and `:interactive` [threadpools](@ref
+man-threadpools), respectively:
+```bash
+# 5 threads in the :default pool and 2 in the :interactive pool
+export JULIA_NUM_THREADS=5,2
+
+# `auto` threads in the :default pool and 1 in the :interactive pool
+export JULIA_NUM_THREADS=auto,1
+```
 
 !!! note
-    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `JULIA_NUM_THREADS` must be defined before starting Julia; defining it in
     `startup.jl` is too late in the startup process.
 
 !!! compat "Julia 1.5"
@@ -338,6 +355,9 @@ to the number of CPU threads.
 
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
+
+!!! compat "Julia 1.9"
+    The `x,y` format for threadpools requires Julia 1.9 or above.
 
 ### [`JULIA_THREAD_SLEEP_THRESHOLD`](@id JULIA_THREAD_SLEEP_THRESHOLD)
 
@@ -348,8 +368,7 @@ nanoseconds, the amount of time after which spinning threads should sleep.
 
 ### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
 
-Sets the number of threads used by Garbage Collection. If unspecified is set to
-half of the number of worker threads.
+Sets the number of threads used by Garbage Collection. If unspecified is set to the number of worker threads.
 
 !!! compat "Julia 1.10"
     The environment variable was added in 1.10
@@ -376,7 +395,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
-terminal. Generally, these variables should be set to [ANSI terminal escape
+terminal. The `JULIA_*_COLOR` variables should be set to [ANSI terminal escape
 sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
@@ -405,6 +424,19 @@ should have at the terminal.
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
+
+### [`NO_COLOR`](@id NO_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then colored
+text will be disabled on the REPL. Can be overridden with the flag `--color=yes` or with the
+environment variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environment variable is
+[commonly recognized by command-line applications](https://no-color.org/).
+
+### [`FORCE_COLOR`](@id FORCE_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then
+colored text will be enabled on the REPL. Can be overridden with the flag `--color=no`. This
+environment variable is [commonly recognized by command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 
@@ -469,35 +501,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_ALLOC_POOL`](@id JULIA_GC_ALLOC_POOL)
-### [`JULIA_GC_ALLOC_OTHER`](@id JULIA_GC_ALLOC_OTHER)
-### [`JULIA_GC_ALLOC_PRINT`](@id JULIA_GC_ALLOC_PRINT)
-
-If set, these environment variables take strings that optionally start with the
-character `'r'`, followed by a string interpolation of a colon-separated list of
-three signed 64-bit integers (`int64_t`). This triple of integers `a:b:c`
-represents the arithmetic sequence `a`, `a + b`, `a + 2*b`, ... `c`.
-
-*   If it's the `n`th time that `jl_gc_pool_alloc()` has been called, and `n`
-    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_POOL`,
-    then garbage collection is forced.
-*   If it's the `n`th time that `maybe_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_OTHER`, then garbage
-    collection is forced.
-*   If it's the `n`th time that `jl_gc_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_PRINT`, then counts
-    for the number of calls to `jl_gc_pool_alloc()` and `maybe_collect()` are
-    printed.
-
-If the value of the environment variable begins with the character `'r'`, then
-the interval between garbage collection events is randomized.
-
-!!! note
-
-    These environment variables only have an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
 

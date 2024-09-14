@@ -52,12 +52,12 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
-        linfo = stmt.args[1]::Core.MethodInstance
+        mi = stmt.args[1]::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = linfo.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(linfo.specTypes).parameters::Core.SimpleVector
+        sig = mi.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(mi.specTypes).parameters::Core.SimpleVector
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
@@ -145,17 +145,6 @@ function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::S
     show_unquoted(io, stmt.cond, indent)
 end
 
-function compute_inlining_depth(linetable::Vector, iline::Int32)
-    iline == 0 && return 1
-    depth = -1
-    while iline != 0
-        depth += 1
-        lineinfo = linetable[iline]::LineInfoNode
-        iline = lineinfo.inlined_at
-    end
-    return depth
-end
-
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
         return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :leave))
@@ -171,32 +160,27 @@ function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show
     return nothing
 end
 
-function normalize_method_name(m)
+function method_name(@nospecialize m)
+    if m isa LineInfoNode
+        m = m.method
+    end
+    if m isa MethodInstance
+        m = m.def
+    end
     if m isa Method
-        return m.name
-    elseif m isa MethodInstance
-        return (m.def::Method).name
-    elseif m isa Symbol
+        m = m.name
+    end
+    if m isa Module
+        return :var"top-level scope"
+    end
+    if m isa Symbol
         return m
-    else
-        return Symbol("")
     end
+    return :var""
 end
-@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
-
-# converts the linetable for line numbers
-# into a list in the form:
-#   1 outer-most-frame
-#   2   inlined-frame
-#   3     innermost-frame
-function compute_loc_stack(linetable::Vector, line::Int32)
-    stack = Int[]
-    while line != 0
-        entry = linetable[line]::LineInfoNode
-        pushfirst!(stack, line)
-        line = entry.inlined_at
-    end
-    return stack
+@noinline function normalize_method_name(@nospecialize m)
+    name = method_name(m)
+    return name === :var"" ? :none : name
 end
 
 """
@@ -265,83 +249,72 @@ function compute_ir_line_annotations(code::IRCode)
     loc_lineno = String[]
     cur_group = 1
     last_lineno = 0
-    last_stack = Int[]
+    last_stack = LineInfoNode[] # nb. only file, line, and method are populated in this
     last_printed_depth = 0
-    linetable = code.linetable
-    lines = code.stmts.line
-    last_line = zero(eltype(lines))
-    for idx in 1:length(lines)
+    debuginfo = code.debuginfo
+    def = :var"unknown scope"
+    for idx in 1:length(code.stmts)
         buf = IOBuffer()
-        line = lines[idx]
         print(buf, "│")
-        depth = compute_inlining_depth(linetable, line)
-        iline = line
-        lineno = 0
+        stack = buildLineInfoNode(debuginfo, def, idx)
+        lineno::Int = 0
         loc_method = ""
-        if line != 0
-            stack = compute_loc_stack(linetable, line)
-            lineno = linetable[stack[1]].line
+        isempty(stack) && (stack = last_stack)
+        if !isempty(stack)
+            lineno = stack[1].line
             x = min(length(last_stack), length(stack))
-            if length(stack) != 0
-                # Compute the last depth that was in common
-                first_mismatch = let last_stack=last_stack
-                    findfirst(i->last_stack[i] != stack[i], 1:x)
-                end
-                # If the first mismatch is the last stack frame, that might just
-                # be a line number mismatch in inner most frame. Ignore those
-                if length(last_stack) == length(stack) && first_mismatch == length(stack)
-                    last_entry, entry = linetable[last_stack[end]], linetable[stack[end]]
-                    if method_name(last_entry) === method_name(entry) && last_entry.file === entry.file
-                        first_mismatch = nothing
-                    end
-                end
-                last_depth = something(first_mismatch, x+1)-1
-                if min(depth, last_depth) > last_printed_depth
-                    printing_depth = min(depth, last_printed_depth + 1)
-                    last_printed_depth = printing_depth
-                elseif length(stack) > length(last_stack) || first_mismatch !== nothing
-                    printing_depth = min(depth, last_depth + 1)
-                    last_printed_depth = printing_depth
-                else
-                    printing_depth = 0
-                end
-                stole_one = false
-                if printing_depth != 0
-                    for _ in 1:(printing_depth-1)
-                        print(buf, "│")
-                    end
-                    if printing_depth <= last_depth-1 && first_mismatch === nothing
-                        print(buf, "┃")
-                        for _ in printing_depth+1:min(depth, last_depth)
-                            print(buf, "│")
-                        end
-                    else
-                        stole_one = true
-                        print(buf, "╻")
-                    end
-                else
-                    for _ in 1:min(depth, last_depth)
-                        print(buf, "│")
-                    end
-                end
-                print(buf, "╷"^max(0, depth - last_depth - stole_one))
-                if printing_depth != 0
-                    if length(stack) == printing_depth
-                        loc_method = line
-                    else
-                        loc_method = stack[printing_depth + 1]
-                    end
-                    loc_method = method_name(linetable[loc_method])
-                end
-                loc_method = string(" "^printing_depth, loc_method)
+            depth = length(stack) - 1
+            # Compute the last depth that was in common
+            first_mismatch = let last_stack=last_stack
+                findfirst(i->last_stack[i] != stack[i], 1:x)
             end
+            # If the first mismatch is the last stack frame, that might just
+            # be a line number mismatch in inner most frame. Ignore those
+            if length(last_stack) == length(stack) && first_mismatch == length(stack)
+                last_entry, entry = last_stack[end], stack[end]
+                if method_name(last_entry) === method_name(entry) && last_entry.file === entry.file
+                    first_mismatch = nothing
+                end
+            end
+            last_depth = something(first_mismatch, x+1)-1
+            if min(depth, last_depth) > last_printed_depth
+                printing_depth = min(depth, last_printed_depth + 1)
+                last_printed_depth = printing_depth
+            elseif length(stack) > length(last_stack) || first_mismatch !== nothing
+                printing_depth = min(depth, last_depth + 1)
+                last_printed_depth = printing_depth
+            else
+                printing_depth = 0
+            end
+            stole_one = false
+            if printing_depth != 0
+                for _ in 1:(printing_depth-1)
+                    print(buf, "│")
+                end
+                if printing_depth <= last_depth-1 && first_mismatch === nothing
+                    print(buf, "┃")
+                    for _ in printing_depth+1:min(depth, last_depth)
+                        print(buf, "│")
+                    end
+                else
+                    stole_one = true
+                    print(buf, "╻")
+                end
+            else
+                for _ in 1:min(depth, last_depth)
+                    print(buf, "│")
+                end
+            end
+            print(buf, "╷"^max(0, depth - last_depth - stole_one))
+            if printing_depth != 0
+                loc_method = normalize_method_name(stack[printing_depth + 1])
+            end
+            loc_method = string(" "^printing_depth, loc_method)
             last_stack = stack
-            entry = linetable[line]
         end
         push!(loc_annotations, String(take!(buf)))
         push!(loc_lineno, (lineno != 0 && lineno != last_lineno) ? string(lineno) : "")
         push!(loc_methods, loc_method)
-        last_line = line
         (lineno != 0) && (last_lineno = lineno)
         nothing
     end
@@ -350,19 +323,87 @@ end
 
 Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 
+# A line_info_preprinter for disabling line info printing
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
-function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
+# utility function to extract the file name from a DebugInfo object
+function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
+    def = debuginfo.def
+    if def isa MethodInstance
+        def = def.def
+    end
+    if def isa Method
+        def = def.file
+    end
+    if def isa Symbol
+        return def
+    end
+    return :var"<unknown>"
+end
+
+# utility function to extract the first line number and file of a block of code
+function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
+    linetable = debuginfo.linetable
+    while linetable != nothing
+        debuginfo = linetable
+        linetable = debuginfo.linetable
+    end
+    codeloc = getdebugidx(debuginfo, 0)
+    return debuginfo_file1(debuginfo), codeloc[1]
+end
+
+struct LineInfoNode
+    method # ::Union{Method,MethodInstance,Symbol}
+    file::Symbol
+    line::Int32
+end
+
+# utility function for converting a debuginfo object a particular pc to list of LineInfoNodes representing the inlining info at that pc for function `def`
+# which is either `nothing` (macro-expand), a module (top-level), a Method (unspecialized code) or a MethodInstance (specialized code)
+# Returns `false` if the line info should not be updated with this info because this
+# statement has no effect on the line numbers. The `scopes` will still be populated however
+# with as much information as was available about the inlining at that statement.
+function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospecialize(def))
+    doupdate = true
+    while true
+        debuginfo.def isa Symbol || (def = debuginfo.def)
+        codeloc = getdebugidx(debuginfo, pc)
+        line::Int = codeloc[1]
+        inl_to::Int = codeloc[2]
+        doupdate &= line != 0 || inl_to != 0 # disabled debug info--no update
+        if debuginfo.linetable === nothing || pc <= 0 || line < 0
+            line < 0 && (doupdate = false; line = 0) # broken debug info
+            push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
+        else
+            doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
+        end
+        inl_to == 0 && return doupdate
+        def = :var"macro expansion"
+        debuginfo = debuginfo.edges[inl_to]
+        pc::Int = codeloc[3]
+    end
+end
+
+# utility wrapper around `append_scopes!` that returns an empty list instead of false
+# when there is no applicable line update
+function buildLineInfoNode(debuginfo, @nospecialize(def), pc::Int)
+    DI = LineInfoNode[]
+    append_scopes!(DI, pc, debuginfo, def) || empty!(DI)
+    return DI
+end
+
+# A default line_info_preprinter for printing accurate line number information
+function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
     context = LineInfoNode[]
     context_depth = Ref(0)
     indent(s::String) = s^(max(context_depth[], 1) - 1)
-    function emit_lineinfo_update(io::IO, linestart::String, lineidx::Int32)
+    function emit_lineinfo_update(io::IO, linestart::String, pc::Int)
         # internal configuration options:
         linecolor = :yellow
         collapse = showtypes ? false : true
         indent_all = true
-        # convert lineidx to a vector
-        if lineidx == typemin(Int32)
+        # convert pc to a vector
+        if pc == 0
             # sentinel value: reset internal (and external) state
             pops = indent("└")
             if !isempty(pops)
@@ -372,13 +413,10 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
             end
             empty!(context)
             context_depth[] = 0
-        elseif lineidx > 0 # just skip over lines with no debug info at all
-            DI = LineInfoNode[]
-            while lineidx != 0
-                entry = linetable[lineidx]::LineInfoNode
-                push!(DI, entry)
-                lineidx = entry.inlined_at
-            end
+            return ""
+        end
+        DI = reverse!(buildLineInfoNode(debuginfo, def, pc))
+        if !isempty(DI)
             # FOR DEBUGGING, or if you just like very excessive output:
             # this prints out the context in full for every statement
             #empty!(context)
@@ -508,6 +546,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
             #end
         end
         indent_all || return ""
+        context_depth[] <= 1 && return ""
         return sprint(io -> printstyled(io, indent("│"), color=linecolor), context=io)
     end
     return emit_lineinfo_update
@@ -803,18 +842,8 @@ end
 
 _strip_color(s::String) = replace(s, r"\e\[\d+m"a => "")
 
-function statementidx_lineinfo_printer(f, code::IRCode)
-    printer = f(code.linetable)
-    function (io::IO, indent::String, idx::Int)
-        printer(io, indent, idx > 0 ? code.stmts[idx][:line] : typemin(Int32))
-    end
-end
-function statementidx_lineinfo_printer(f, code::CodeInfo)
-    printer = f(code.linetable)
-    function (io::IO, indent::String, idx::Int)
-        printer(io, indent, idx > 0 ? code.codelocs[idx] : typemin(Int32))
-    end
-end
+statementidx_lineinfo_printer(f, code::IRCode) = f(code.debuginfo, :var"unknown scope")
+statementidx_lineinfo_printer(f, code::CodeInfo) = f(code.debuginfo, :var"unknown scope")
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
 function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
@@ -1019,8 +1048,11 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :noub, 'u'); color=effectbits_color(e, :noub))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :nonoverlayed, 'o'); color=effectbits_color(e, :nonoverlayed))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :nortcall, 'r'); color=effectbits_color(e, :nortcall))
     print(io, ')')
-    e.nonoverlayed || printstyled(io, '′'; color=:red)
 end
 
 @specialize

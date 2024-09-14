@@ -2,7 +2,8 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) ||
+    isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -174,6 +175,52 @@ function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
     return lastnonphiidx
 end
 
+# mutable version of the compressed DebugInfo
+mutable struct DebugInfoStream
+    def::Union{MethodInstance,Symbol,Nothing}
+    linetable::Union{Nothing,DebugInfo}
+    edges::Vector{DebugInfo}
+    firstline::Int32 # the starting line for this block (specified by having an index of 0)
+    codelocs::Vector{Int32} # for each statement:
+        # index into linetable (if defined), else a line number (in the file represented by def)
+        # then index into edges
+        # then index into edges[linetable]
+    function DebugInfoStream(codelocs::Vector{Int32})
+        return new(nothing, nothing, DebugInfo[], 0, codelocs)
+    end
+    # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
+    #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
+    #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #     else
+    function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
+        codelocs = zeros(Int32, nstmts * 3)
+        for i = 1:nstmts
+            codelocs[3i - 2] = i
+        end
+        return new(def, di, DebugInfo[], 0, codelocs)
+    end
+    global copy(di::DebugInfoStream) = new(di.def, di.linetable, di.edges, di.firstline, di.codelocs)
+end
+
+Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
+    DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
+        ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
+
+getdebugidx(debuginfo::DebugInfo, pc::Int) =
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+
+function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
+    if 3 <= 3pc <= length(debuginfo.codelocs)
+        return (debuginfo.codelocs[3pc-2], debuginfo.codelocs[3pc-1], debuginfo.codelocs[3pc-0])
+    elseif pc == 0
+        return (Int32(debuginfo.firstline), Int32(0), Int32(0))
+    else
+        return (Int32(-1), Int32(0), Int32(0))
+    end
+end
+
+
 # SSA values that need renaming
 struct OldSSAValue
     id::Int
@@ -203,7 +250,6 @@ end
 
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
-
 # SSA-indexed nodes
 struct InstructionStream
     stmt::Vector{Any}
@@ -211,13 +257,16 @@ struct InstructionStream
     info::Vector{CallInfo}
     line::Vector{Int32}
     flag::Vector{UInt32}
+    function InstructionStream(stmts::Vector{Any}, type::Vector{Any}, info::Vector{CallInfo}, line::Vector{Int32}, flag::Vector{UInt32})
+        return new(stmts, type, info, line, flag)
+    end
 end
 function InstructionStream(len::Int)
     stmts = Vector{Any}(undef, len)
     types = Vector{Any}(undef, len)
     info = Vector{CallInfo}(undef, len)
     fill!(info, NoCallInfo())
-    lines = fill(Int32(0), len)
+    lines = fill(Int32(0), 3len)
     flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(stmts, types, info, lines, flags)
 end
@@ -242,10 +291,10 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.stmt, len)
     resize!(stmts.type, len)
     resize!(stmts.info, len)
-    resize!(stmts.line, len)
+    resize!(stmts.line, 3len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
-        stmts.line[i] = 0
+        stmts.line[3i-2], stmts.line[3i-1], stmts.line[3i] = NoLineUpdate
         stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = NoCallInfo()
     end
@@ -261,11 +310,20 @@ Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
 @inline function getindex(node::Instruction, fld::Symbol)
     (fld === :inst) && (fld = :stmt) # deprecated
     isdefined(node, fld) && return getfield(node, fld)
-    return getfield(getfield(node, :data), fld)[getfield(node, :idx)]
+    fldarray = getfield(getfield(node, :data), fld)
+    fldidx = getfield(node, :idx)
+    (fld === :line) && return (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0])
+    return fldarray[fldidx]
 end
 @inline function setindex!(node::Instruction, @nospecialize(val), fld::Symbol)
     (fld === :inst) && (fld = :stmt) # deprecated
-    getfield(getfield(node, :data), fld)[getfield(node, :idx)] = val
+    fldarray = getfield(getfield(node, :data), fld)
+    fldidx = getfield(node, :idx)
+    if fld === :line
+        (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0]) = val::NTuple{3,Int32}
+    else
+        fldarray[fldidx] = val
+    end
     return node
 end
 
@@ -274,7 +332,7 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.stmt[idx] = newval[:stmt]
     is.type[idx] = newval[:type]
     is.info[idx] = newval[:info]
-    is.line[idx] = newval[:line]
+    (is.line[3idx-2], is.line[3idx-1], is.line[3idx-0]) = newval[:line]
     is.flag[idx] = newval[:flag]
     return is
 end
@@ -314,14 +372,15 @@ struct NewInstruction
     stmt::Any
     type::Any
     info::CallInfo
-    line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
+    line::Union{NTuple{3,Int32},Nothing} # if nothing, copy the line from previous statement in the insertion location
     flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-                            line::Union{Int32,Nothing}, flag::Union{UInt32,Nothing})
+                            line::Union{NTuple{3,Int32},Int32,Nothing}, flag::Union{UInt32,Nothing})
+        line isa Int32 && (line = (line, zero(Int32), zero(Int32)))
         return new(stmt, type, info, line, flag)
     end
 end
-function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Int32,Nothing}=nothing)
+function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{NTuple{3,Int32},Int32,Nothing}=nothing)
     return NewInstruction(stmt, type, NoCallInfo(), line, nothing)
 end
 @nospecialize
@@ -329,7 +388,7 @@ function NewInstruction(newinst::NewInstruction;
     stmt::Any=newinst.stmt,
     type::Any=newinst.type,
     info::CallInfo=newinst.info,
-    line::Union{Int32,Nothing}=newinst.line,
+    line::Union{NTuple{3,Int32},Int32,Nothing}=newinst.line,
     flag::Union{UInt32,Nothing}=newinst.flag)
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -337,7 +396,7 @@ function NewInstruction(inst::Instruction;
     stmt::Any=inst[:stmt],
     type::Any=inst[:type],
     info::CallInfo=inst[:info],
-    line::Union{Int32,Nothing}=inst[:line],
+    line::Union{NTuple{3,Int32},Int32,Nothing}=inst[:line],
     flag::Union{UInt32,Nothing}=inst[:flag])
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -366,19 +425,27 @@ struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
     sptypes::Vector{VarState}
-    linetable::Vector{LineInfoNode}
+    debuginfo::DebugInfoStream
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
-        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
+    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
+        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
-        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
+        di = ir.debuginfo
+        @assert di.codelocs === stmts.line
+        return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta)
     end
-    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
-        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+    global function copy(ir::IRCode)
+        di = ir.debuginfo
+        stmts = copy(ir.stmts)
+        di = copy(di)
+        di.edges = copy(di.edges)
+        di.codelocs = stmts.line
+        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+    end
 end
 
 """
@@ -389,13 +456,22 @@ for debugging and unit testing of IRCode APIs. The compiler itself should genera
 from the frontend or one of the caches.
 """
 function IRCode()
-    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], VarState[])
+    stmts = InstructionStream(1)
+    debuginfo = DebugInfoStream(stmts.line)
+    stmts.line[1] = 1
+    ir = IRCode(stmts, CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), debuginfo, Any[], Expr[], VarState[])
     ir[SSAValue(1)][:stmt] = ReturnNode(nothing)
     ir[SSAValue(1)][:type] = Nothing
     ir[SSAValue(1)][:flag] = 0x00
-    ir[SSAValue(1)][:line] = Int32(0)
+    ir[SSAValue(1)][:line] = NoLineUpdate
     return ir
 end
+
+construct_domtree(ir::IRCode) = construct_domtree(ir.cfg)
+construct_domtree(cfg::CFG) = construct_domtree(cfg.blocks)
+
+construct_postdomtree(ir::IRCode) = construct_postdomtree(ir.cfg)
+construct_postdomtree(cfg::CFG) = construct_postdomtree(cfg.blocks)
 
 function block_for_inst(ir::IRCode, inst::Int)
     if inst > length(ir.stmts)
@@ -684,6 +760,7 @@ mutable struct IncrementalCompact
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
+        code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
         blocks = code.cfg.blocks
@@ -864,7 +941,7 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
 end
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
-    newline::Int32=newinst.line::Int32, newflag::UInt32=newinst.flag::UInt32)
+    newline::NTuple{3,Int32}=newinst.line::NTuple{3,Int32}, newflag::UInt32=newinst.flag::UInt32)
     node[:stmt] = newinst.stmt
     node[:type] = newinst.type
     node[:info] = newinst.info
@@ -942,7 +1019,8 @@ function did_just_finish_bb(compact)
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
     (compact.active_result_bb == length(result_bbs) + 1) ||
-    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+    (result_idx == first(result_bbs[compact.active_result_bb].stmts) &&
+     compact.active_result_bb != 1)
 end
 
 function maybe_reopen_bb!(compact)
@@ -954,7 +1032,7 @@ function maybe_reopen_bb!(compact)
 end
 
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
-    newline = newinst.line::Int32
+    newline = newinst.line::NTuple{3,Int32}
     refinish = false
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
@@ -1525,17 +1603,15 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
 
         values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-        # Don't remove the phi node if it is before the definition of its value
-        # because doing so can create forward references. This should only
-        # happen with dead loops, but can cause problems when optimization
-        # passes look at all code, dead or not. This check should be
-        # unnecessary when DCE can remove those dead loops entirely, so this is
-        # just to be safe.
-        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
-        if length(edges) == 1 && isassigned(values, 1) && !before_def &&
-                length(cfg_transforms_enabled ?
-                    result_bbs[bb_rename_succ[active_bb]].preds :
-                    compact.ir.cfg.blocks[active_bb].preds) == 1
+
+        # Quick egality check for PhiNode that may be replaced with its incoming
+        # value without needing to set the `Refined` flag. We can't do the actual
+        # refinement check, because we do not have access to the lattice here.
+        # Users may call `reprocess_phi_node!` inside the compaction loop to
+        # revisit PhiNodes with the proper lattice refinement check.
+        if may_replace_phi(values, cfg_transforms_enabled ?
+                result_bbs[bb_rename_succ[active_bb]] :
+                compact.ir.cfg.blocks[active_bb], idx) && argextype(values[1], compact) === inst[:type]
             # There's only one predecessor left - just replace it
             v = values[1]
             @assert !isa(v, NewSSAValue)
@@ -1586,6 +1662,38 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     return result_idx
 end
 
+function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
+    length(values) == 1 || return false
+    isassigned(values, 1) || return false
+    length(phi_bb.preds) == 1 || return false
+
+    # Don't remove the phi node if it is before the definition of its value
+    # because doing so can create forward references. This should only
+    # happen with dead loops, but can cause problems when optimization
+    # passes look at all code, dead or not. This check should be
+    # unnecessary when DCE can remove those dead loops entirely, so this is
+    # just to be safe.
+    v = values[1]
+    before_def = isa(v, OldSSAValue) && idx < v.id
+    return !before_def
+end
+
+function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, phi::PhiNode, old_idx::Int)
+    phi_bb = compact.active_result_bb
+    did_just_finish_bb(compact) && (phi_bb -= 1)
+    may_replace_phi(phi.values, compact.cfg_transform.result_bbs[phi_bb], compact.idx) || return false
+
+    # There's only one predecessor left - just replace it
+    v = phi.values[1]
+    if !⊑(𝕃ₒ, compact[compact.ssa_rename[old_idx]][:type], argextype(v, compact))
+        v = Refined(v)
+    end
+    compact.ssa_rename[old_idx] = v
+
+    delete_inst_here!(compact)
+    return true
+end
+
 function resize!(compact::IncrementalCompact, nnewnodes::Int)
     old_length = length(compact.result)
     resize!(compact.result, nnewnodes)
@@ -1595,6 +1703,8 @@ function resize!(compact::IncrementalCompact, nnewnodes::Int)
     end
     return compact
 end
+
+const NoLineUpdate = (Int32(0), Int32(0), Int32(0))
 
 function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
                             old_result_idx::Int=compact.result_idx, unreachable::Bool=false)
@@ -1612,9 +1722,9 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             node = compact.result[old_result_idx]
             if unreachable
-                node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, 0
+                node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, NoLineUpdate
             else
-                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, 0, IR_FLAGS_EFFECTS
+                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, NoLineUpdate, IR_FLAGS_EFFECTS
             end
             compact.result_idx = old_result_idx + 1
         elseif cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
@@ -1825,7 +1935,10 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
+    if !has_flag(inst, IR_FLAGS_REMOVABLE)
+        add_flag!(inst, IR_FLAG_UNUSED)
+        return false
+    end
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist
@@ -1956,9 +2069,11 @@ function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
     resize!(compact.result, result_idx - 1)
     just_fixup!(compact)
-    bb = compact.cfg_transform.result_bbs[end]
-    compact.cfg_transform.result_bbs[end] = BasicBlock(bb,
-                StmtRange(first(bb.stmts), result_idx-1))
+    if !did_just_finish_bb(compact)
+        # Finish the bb now
+        finish_current_bb!(compact, 0)
+    end
+    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     compact.renamed_new_nodes = true
     nothing
 end
@@ -1970,7 +2085,7 @@ function finish(compact::IncrementalCompact)
 end
 
 function complete(compact::IncrementalCompact)
-    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
+    result_bbs = compact.cfg_transform.result_bbs
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
     if should_check_ssa_counts()
         oracle_check(compact)

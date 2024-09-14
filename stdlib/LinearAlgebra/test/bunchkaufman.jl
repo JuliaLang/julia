@@ -114,7 +114,7 @@ bimint = rand(1:5, n, 2)
                 bc1 = bunchkaufman(Symmetric(asym, uplo))
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
-                @test_throws ErrorException bc1.Z
+                @test_throws FieldError bc1.Z
                 @test_throws ArgumentError uplo === :L ? bc1.U : bc1.L
             end
             # test Base.iterate

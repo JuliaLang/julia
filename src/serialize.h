@@ -52,22 +52,21 @@ extern "C" {
 #define TAG_SHORT_INT32        44
 #define TAG_CALL1              45
 #define TAG_CALL2              46
-#define TAG_LINEINFO           47
-#define TAG_SHORT_BACKREF      48
-#define TAG_BACKREF            49
-#define TAG_UNIONALL           50
-#define TAG_GOTONODE           51
-#define TAG_QUOTENODE          52
-#define TAG_GENERAL            53
-#define TAG_GOTOIFNOT          54
-#define TAG_RETURNNODE         55
-#define TAG_ARGUMENT           56
-#define TAG_RELOC_METHODROOT   57
-#define TAG_BINDING            58
-#define TAG_MEMORYT            59
-#define TAG_ENTERNODE          60
+#define TAG_SHORT_BACKREF      47
+#define TAG_BACKREF            48
+#define TAG_UNIONALL           49
+#define TAG_GOTONODE           50
+#define TAG_QUOTENODE          51
+#define TAG_GENERAL            52
+#define TAG_GOTOIFNOT          53
+#define TAG_RETURNNODE         54
+#define TAG_ARGUMENT           55
+#define TAG_RELOC_METHODROOT   56
+#define TAG_BINDING            57
+#define TAG_MEMORYT            58
+#define TAG_ENTERNODE          59
 
-#define LAST_TAG 60
+#define LAST_TAG 59
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))

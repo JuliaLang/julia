@@ -8,113 +8,11 @@ using Test
 using Random, Serialization, Sockets
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
-import .Main.FakePTYs: with_fake_pty
+isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
+using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
-const timeout = 60
-
-function challenge_prompt(code::Expr, challenges)
-    input_code = tempname()
-    open(input_code, "w") do fp
-        serialize(fp, code)
-    end
-    output_file = tempname()
-    torun = """
-        import LibGit2
-        using Serialization
-        result = open($(repr(input_code))) do fp
-            eval(deserialize(fp))
-        end
-        open($(repr(output_file)), "w") do fp
-            serialize(fp, result)
-        end"""
-    cmd = `$(Base.julia_cmd()) --startup-file=no -e $torun`
-    try
-        challenge_prompt(cmd, challenges)
-        return open(output_file, "r") do fp
-            deserialize(fp)
-        end
-    finally
-        isfile(output_file) && rm(output_file)
-        isfile(input_code) && rm(input_code)
-    end
-    return nothing
-end
-
-function challenge_prompt(cmd::Cmd, challenges)
-    function format_output(output)
-        str = read(seekstart(output), String)
-        isempty(str) && return ""
-        return "Process output found:\n\"\"\"\n$str\n\"\"\""
-    end
-    out = IOBuffer()
-    with_fake_pty() do pts, ptm
-        p = run(detach(cmd), pts, pts, pts, wait=false) # getpass uses stderr by default
-        Base.close_stdio(pts)
-
-        # Kill the process if it takes too long. Typically occurs when process is waiting
-        # for input.
-        timer = Channel{Symbol}(1)
-        watcher = @async begin
-            waited = 0
-            while waited < timeout && process_running(p)
-                sleep(1)
-                waited += 1
-            end
-
-            if process_running(p)
-                kill(p)
-                put!(timer, :timeout)
-            elseif success(p)
-                put!(timer, :success)
-            else
-                put!(timer, :failure)
-            end
-
-            # SIGKILL stubborn processes
-            if process_running(p)
-                sleep(3)
-                process_running(p) && kill(p, Base.SIGKILL)
-            end
-            wait(p)
-        end
-
-        wroteall = false
-        try
-            for (challenge, response) in challenges
-                write(out, readuntil(ptm, challenge, keep=true))
-                if !isopen(ptm)
-                    error("Could not locate challenge: \"$challenge\". ",
-                          format_output(out))
-                end
-                write(ptm, response)
-            end
-            wroteall = true
-
-            # Capture output from process until `pts` is closed
-            write(out, ptm)
-        catch ex
-            if !(wroteall && ex isa Base.IOError && ex.code == Base.UV_EIO)
-                # ignore EIO from `ptm` after `pts` dies
-                error("Process failed possibly waiting for a response. ",
-                      format_output(out))
-            end
-        end
-
-        status = fetch(timer)
-        close(ptm)
-        if status !== :success
-            if status === :timeout
-                error("Process timed out possibly waiting for a response. ",
-                      format_output(out))
-            else
-                error("Failed process. ", format_output(out), "\n", p)
-            end
-        end
-        wait(watcher)
-    end
-    nothing
-end
+challenge_prompt(code::Expr, challenges) = basic_challenge_prompt(code, challenges; pkgs=["LibGit2"])
+challenge_prompt(cmd::Cmd, challenges) = basic_challenge_prompt(cmd, challenges)
 
 const LIBGIT2_MIN_VER = v"1.0.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
