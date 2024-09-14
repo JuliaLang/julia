@@ -190,21 +190,21 @@ end
 
 Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
 """
-diagzero(A::AbstractMatrix, i, j) where {T} = zero(eltype(A))
+diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
 diagzero(D::Diagonal{M}, i, j) where {T,M<:AbstractMatrix{T}} =
     zeroslike(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
-zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer},2}) = zeroslike(M, ax)
+zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
 """
-    zeroslike(::Type{M}, ax::NTuple{2, AbstractUnitRange}) where {M<:AbstractMatrix}
+    zeroslike(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
 
-Return an appropriate zero-ed matrix similar to `M`, with either
+Return an appropriate zero-ed array similar to `M`, with either
 the axes `ax`, or the `size` `map(length, ax)`.
 This will be used as a structural zero element of a banded matrix. By default, `zeroslike` falls back to
-using the size along each axis to construct the result.
+using the size along each axis to construct the array.
 """
-zeroslike(M::Type, ax::NTuple{2,AbstractUnitRange}) = zeroslike(M, map(length, ax))
-function zeroslike(::Type{M}, sz::NTuple{2,Integer}) where {M}
+zeroslike(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = zeroslike(M, map(length, ax))
+function zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M}
     zeros(M <: AbstractMatrix ? eltype(M) : M, sz)
 end
 
