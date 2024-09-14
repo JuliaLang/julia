@@ -89,6 +89,7 @@ function add_tfunc(@nospecialize(f::Builtin), minarg::Int, maxarg::Int, @nospeci
 end
 
 add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
+add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
@@ -2313,6 +2314,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     setfield!,
     donotdelete
 ]
@@ -2335,6 +2337,7 @@ const _EFFECT_FREE_BUILTINS = [
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     getglobal,
     compilerbarrier,
 ]
@@ -2350,6 +2353,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     isa,
     nfields,
     throw,
+    Core.throw_methoderror,
     tuple,
     typeassert,
     typeof,

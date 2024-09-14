@@ -171,6 +171,14 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
     }
 }
 
+void maybeSetName(jl_codegen_params_t &params, Value *V, const Twine &Name)
+{
+    // To be used when we may get an Instruction or something that is not an instruction i.e Constants/Arguments
+    if (params.debug_level >= 2 && isa<Instruction>(V)) {
+        V->setName(Name);
+    }
+}
+
 void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
@@ -2153,6 +2161,20 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
     return cast<GlobalVariable>(local);
 }
 
+static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, size_t byte_offset, const Twine &Name="")
+{
+    auto *gep = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), base, byte_offset);
+    setName(ctx.emission_context, gep, Name);
+    return gep;
+}
+
+static Value *emit_ptrgep(jl_codectx_t &ctx, Value *base, Value *byte_offset, const Twine &Name="")
+{
+    auto *gep = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), base, byte_offset, Name);
+    setName(ctx.emission_context, gep, Name);
+    return gep;
+}
+
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -2186,10 +2208,10 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
     return gv;
 }
 
-static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
+static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "", /*InsertBefore=*/ctx.topalloca);
 }
 
 static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -2203,7 +2225,7 @@ static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *st
     size_t i, np = sty->layout->npointers;
     auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx.builder.getContext());
     for (i = 0; i < np; i++) {
-        Value *fld = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, ptr, jl_ptr_offset(sty, i));
+        Value *fld = emit_ptrgep(ctx, ptr, jl_ptr_offset(sty, i) * sizeof(jl_value_t*));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(T_prjlvalue), fld));
     }
@@ -2301,7 +2323,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
         loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), Align(julia_alignment(typ)), "_j_const", *jl_Module);
     }
     else {
-        loc = emit_static_alloca(ctx, v->getType());
+        loc = emit_static_alloca(ctx, v->getType(), Align(julia_alignment(typ)));
         ctx.builder.CreateStore(v, loc);
     }
     return mark_julia_slot(loc, typ, tindex, ctx.tbaa().tbaa_stack);
@@ -2320,7 +2342,8 @@ static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isbox
             // replace T::Type{T} with T
             return ghostValue(ctx, typ);
         }
-    } else if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
+    }
+    else if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ)) {
         // no need to explicitly load/store a constant/ghost value
         return ghostValue(ctx, typ);
     }
@@ -2412,7 +2435,7 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 {
     assert((!vi.boxroot || vi.pTIndex) && "undef check is null pointer for boxed things");
     if (vi.usedUndef) {
-        vi.defFlag = emit_static_alloca(ctx, getInt1Ty(ctx.builder.getContext()));
+        vi.defFlag = emit_static_alloca(ctx, getInt1Ty(ctx.builder.getContext()), Align(1));
         setName(ctx.emission_context, vi.defFlag, "isdefined");
         store_def_flag(ctx, vi, false);
     }
@@ -3534,8 +3557,6 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
         }
         else if (sz > 512 && jl_struct_try_layout(sty) && sty->layout->flags.isbitsegal) {
-            Type *TInt8 = getInt8Ty(ctx.builder.getContext());
-            Type *TInt1 = getInt1Ty(ctx.builder.getContext());
             Value *varg1 = arg1.ispointer() ? data_pointer(ctx, arg1) :
                 value_to_pointer(ctx, arg1).V;
             Value *varg2 = arg2.ispointer() ? data_pointer(ctx, arg2) :
@@ -3554,8 +3575,8 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 Value *ptr1 = varg1;
                 Value *ptr2 = varg2;
                 if (desc.offset != 0) {
-                    ptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr1, desc.offset);
-                    ptr2 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr2, desc.offset);
+                    ptr1 = emit_ptrgep(ctx, ptr1, desc.offset);
+                    ptr2 = emit_ptrgep(ctx, ptr2, desc.offset);
                 }
 
                 Value *new_ptr1 = ptr1;
@@ -3565,7 +3586,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 PHINode *answerphi = nullptr;
                 if (desc.nrepeats != 1) {
                     // Set up loop
-                    endptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr1, desc.nrepeats * (desc.data_bytes + desc.padding_bytes));;
+                    endptr1 = emit_ptrgep(ctx, ptr1, desc.nrepeats * (desc.data_bytes + desc.padding_bytes));;
 
                     BasicBlock *currBB = ctx.builder.GetInsertBlock();
                     loopBB = BasicBlock::Create(ctx.builder.getContext(), "egal_loop", ctx.f);
@@ -3573,6 +3594,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                     ctx.builder.CreateBr(loopBB);
 
                     ctx.builder.SetInsertPoint(loopBB);
+                    Type *TInt1 = getInt1Ty(ctx.builder.getContext());
                     answerphi = ctx.builder.CreatePHI(TInt1, 2);
                     answerphi->addIncoming(answer ? answer : ConstantInt::get(TInt1, 1), currBB);
                     answer = answerphi;
@@ -3580,11 +3602,11 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                     PHINode *itr1 = ctx.builder.CreatePHI(ptr1->getType(), 2);
                     PHINode *itr2 = ctx.builder.CreatePHI(ptr2->getType(), 2);
 
-                    new_ptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, itr1, desc.data_bytes + desc.padding_bytes);
+                    new_ptr1 = emit_ptrgep(ctx, itr1, desc.data_bytes + desc.padding_bytes);
                     itr1->addIncoming(ptr1, currBB);
                     itr1->addIncoming(new_ptr1, loopBB);
 
-                    Value *new_ptr2 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, itr2, desc.data_bytes + desc.padding_bytes);
+                    Value *new_ptr2 = emit_ptrgep(ctx, itr2, desc.data_bytes + desc.padding_bytes);
                     itr2->addIncoming(ptr2, currBB);
                     itr2->addIncoming(new_ptr2, loopBB);
 
@@ -4066,7 +4088,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             ptindex = ctx.builder.CreateInBoundsGEP(AT, data, mlen);
             data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
         }
-        ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx0);
+        ptindex = emit_ptrgep(ctx, ptindex, idx0);
         *ret = union_store(ctx, data, ptindex, val, cmp, ety,
             ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
             Order, FailOrder,
@@ -4081,7 +4103,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             assert(ptr);
             lock = ptr;
             // ptr += sizeof(lock);
-            ptr = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
+            ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
         }
         Value *data_owner = NULL; // owner object against which the write barrier must check
         if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
@@ -4196,7 +4218,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
-                Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
+                Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
                 return true;
@@ -4346,7 +4368,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ptindex = ctx.builder.CreateInBoundsGEP(AT, data, mlen);
                     data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
                 }
-                ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx0);
+                ptindex = emit_ptrgep(ctx, ptindex, idx0);
                 size_t elsz_c = 0, al_c = 0;
                 int union_max = jl_islayout_inline(ety, &elsz_c, &al_c);
                 assert(union_max && LLT_ALIGN(elsz_c, al_c) == elsz && al_c == al);
@@ -4359,7 +4381,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     assert(ptr);
                     lock = ptr;
                     // ptr += sizeof(lock);
-                    ptr = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
+                    ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
                     emit_lockstate_value(ctx, lock, true);
                 }
                 *ret = typed_load(ctx, ptr, nullptr, ety,
@@ -4450,10 +4472,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 if (needlock) {
                     // n.b. no actual lock acquire needed, as the check itself only needs to load a single pointer and check for null
                     // elem += sizeof(lock);
-                    elem = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
+                    elem = emit_ptrgep(ctx, elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
                 }
                 if (!isboxed)
-                    elem = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, elem, layout->first_ptr);
+                    elem = emit_ptrgep(ctx, elem, layout->first_ptr * sizeof(void*));
                 // emit this using the same type as jl_builtin_memoryrefget
                 // so that LLVM may be able to load-load forward them and fold the result
                 auto tbaa = isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf;
@@ -4541,7 +4563,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
                         Value *valen = emit_n_varargs(ctx);
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check (it only checks the `.V` field)
-                                ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs)),
+                                emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*)),
                                 NULL, NULL);
                         Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
@@ -4891,7 +4913,7 @@ isdefined_unknown_idx:
                 if (!jl_field_isptr(stt, fieldidx))
                     offs += ((jl_datatype_t*)jl_field_type(stt, fieldidx))->layout->first_ptr;
                 Value *ptr = data_pointer(ctx, obj);
-                Value *addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, ptr, offs);
+                Value *addr = emit_ptrgep(ctx, ptr, offs * sizeof(jl_value_t*));
                 // emit this using the same type as emit_getfield_knownidx
                 // so that LLVM may be able to load-load forward them and fold the result
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
@@ -4986,17 +5008,13 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
-                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, jl_returninfo_t &returninfo, jl_code_instance_t *fromexternal,
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs)
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
     bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
-    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure, gcstack_arg);
     FunctionType *cft = returninfo.decl.getFunctionType();
-    *cc = returninfo.cc;
-    *return_roots = returninfo.return_roots;
-
     size_t nfargs = cft->getNumParams();
     SmallVector<Value *, 0> argvals(nfargs);
     unsigned idx = 0;
@@ -5007,25 +5025,20 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
-        result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.attrs, 1, Attribute::StructRet).getValueAsType());
-        #if JL_LLVM_VERSION < 170000
-        assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
-        #endif
+        result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.attrs, 1, Attribute::StructRet).getValueAsType(), Align(julia_alignment(jlretty)));
         argvals[idx] = result;
         idx++;
         break;
     case jl_returninfo_t::Union:
-        result = emit_static_alloca(ctx, ArrayType::get(getInt8Ty(ctx.builder.getContext()), returninfo.union_bytes));
+        result = emit_static_alloca(ctx, ArrayType::get(getInt8Ty(ctx.builder.getContext()), returninfo.union_bytes), Align(returninfo.union_align));
         setName(ctx.emission_context, result, "sret_box");
-        if (returninfo.union_align > 1)
-            result->setAlignment(Align(returninfo.union_align));
         argvals[idx] = result;
         idx++;
         break;
     }
 
     if (returninfo.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, returninfo.return_roots));
+        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, returninfo.return_roots), Align(alignof(jl_value_t*)));
         argvals[idx] = return_roots;
         idx++;
     }
@@ -5038,16 +5051,17 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         // n.b.: specTypes is required to be a datatype by construction for specsig
         jl_cgval_t arg = argv[i];
         if (is_opaque_closure && i == 0) {
-            // Special optimization for opaque closures: We know that specsig opaque
-            // closures don't look at their type tag (they are fairly quickly discarded
-            // for their environments). Therefore, we can just pass these as a pointer,
-            // rather than a boxed value.
+            // Special implementation for opaque closures: their jt and thus
+            // julia_type_to_llvm values are likely wrong, so override the
+            // behavior here to directly pass the expected pointer based instead
+            // just on passing arg as a pointer
             arg = value_to_pointer(ctx, arg);
             argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
         }
         else if (is_uniquerep_Type(jt)) {
             continue;
-        } else {
+        }
+        else {
             bool isboxed = deserves_argbox(jt);
             Type *et = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jt);
             if (type_is_ghost(et))
@@ -5058,7 +5072,6 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             }
             else if (et->isAggregateType()) {
                 arg = value_to_pointer(ctx, arg);
-                // can lazy load on demand, no copy needed
                 argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
             }
             else {
@@ -5114,7 +5127,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 ctx.builder.CreateICmpEQ(
                         ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
-                decay_derived(ctx, argvals[0]),
+                decay_derived(ctx, result),
                 decay_derived(ctx, box)
             );
             retval = mark_julia_slot(derived,
@@ -5128,6 +5141,19 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             retval = mark_julia_slot(NULL, jlretty, call, ctx.tbaa().tbaa_stack);
             break;
     }
+    return retval;
+}
+
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
+                                          ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *nreturn_roots, jl_value_t *inferred_retty)
+{
+    ++EmittedSpecfunCalls;
+    // emit specialized call site
+    bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
+    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure, gcstack_arg);
+    *cc = returninfo.cc;
+    *nreturn_roots = returninfo.return_roots;
+    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, specTypes, jlretty, returninfo, fromexternal, argv, nargs);
     // see if inference has a different / better type for the call than the lambda
     return update_julia_type(ctx, retval, inferred_retty);
 }
@@ -5575,10 +5601,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
         }
     }
     assert(ctx.spvals_ptr != NULL);
-    Value *bp = ctx.builder.CreateConstInBoundsGEP1_32(
-            ctx.types().T_prjlvalue,
-            ctx.spvals_ptr,
-            i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
+    Value *bp = emit_ptrgep(ctx, ctx.spvals_ptr, i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
     setName(ctx.emission_context, sp, "sparam");
@@ -5631,10 +5654,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             }
         }
         assert(ctx.spvals_ptr != NULL);
-        Value *bp = ctx.builder.CreateConstInBoundsGEP1_32(
-                ctx.types().T_prjlvalue,
-                ctx.spvals_ptr,
-                i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
+        Value *bp = emit_ptrgep(ctx, ctx.spvals_ptr, i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
         isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
@@ -5897,11 +5917,10 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     if (vtype->isAggregateType() && CountTrackedPointers(vtype).count == 0) {
         // the value will be moved into dest in the predecessor critical block.
         // here it's moved into phi in the successor (from dest)
-        dest = emit_static_alloca(ctx, vtype);
-        Value *phi = emit_static_alloca(ctx, vtype);
-        ctx.builder.CreateMemCpy(phi, Align(julia_alignment(phiType)),
-             dest, dest->getAlign(),
-             jl_datatype_size(phiType), false);
+        Align align(julia_alignment(phiType));
+        dest = emit_static_alloca(ctx, vtype, align);
+        Value *phi = emit_static_alloca(ctx, vtype, align);
+        ctx.builder.CreateMemCpy(phi, align, dest, align, jl_datatype_size(phiType), false);
         ctx.builder.CreateLifetimeEnd(dest);
         slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack);
     }
@@ -6233,7 +6252,8 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     if (closure_method->source) {
         mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
         ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
-    } else {
+    }
+    else {
         mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
         assert(jl_is_method_instance(mi));
         ci = jl_atomic_load_relaxed(&mi->cache);
@@ -6276,7 +6296,8 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         closure_decls.specFunctionObject;
     if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
         F = cast<Function>(V);
-    } else {
+    }
+    else {
         F = Function::Create(get_func_sig(ctx.builder.getContext()),
                              Function::ExternalLinkage,
                              fname, jl_Module);
@@ -6287,7 +6308,8 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     Function *specF = NULL;
     if (!isspecsig) {
         specF = F;
-    } else {
+    }
+    else {
         //emission context holds context lock so can get module
         specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
         if (specF) {
@@ -6745,34 +6767,26 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
 
 static Value *get_current_task(jl_codectx_t &ctx)
 {
-    return get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, ctx.pgcstack);
+    return get_current_task_from_pgcstack(ctx.builder, ctx.pgcstack);
 }
 
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    return get_current_ptls_from_task(ctx.builder, ctx.types().T_size, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
+    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
 }
 
 // Get the address of the world age of the current task
 static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
-    return ctx.builder.CreateInBoundsGEP(
-            ctx.types().T_size,
-            ct,
-            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_ptr),
-            "world_age");
+    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, world_age), "world_age");
 }
 
 static Value *get_scope_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
-    return ctx.builder.CreateInBoundsGEP(
-            ctx.types().T_prjlvalue,
-            ct,
-            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, scope) / ctx.types().sizeof_ptr),
-            "current_scope");
+    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "current_scope");
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, Module *M, jl_codegen_params_t &params)
@@ -6808,14 +6822,6 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptr
     r->setAttributes(theFunc->getAttributes());
     ctx.builder.CreateRet(r);
     return f;
-}
-
-static Type *get_returnroots_type(jl_codectx_t &ctx, unsigned rootcount) {
-    return ArrayType::get(ctx.types().T_prjlvalue, rootcount);
-}
-
-static Type *get_unionbytes_type(LLVMContext &C, unsigned unionbytes) {
-    return ArrayType::get(getInt8Ty(C), unionbytes);
 }
 
 static void emit_cfunc_invalidate(
@@ -6869,15 +6875,13 @@ static void emit_cfunc_invalidate(
         else {
             Value *arg_v = &*AI;
             ++AI;
-            Type *at = arg_v->getType();
             if ((i == 0 && is_for_opaque_closure) || (!isboxed && et->isAggregateType())) {
                 myargs[i] = mark_julia_slot(arg_v, jt, NULL, ctx.tbaa().tbaa_const);
             }
             else {
-                assert(at == et);
+                assert(arg_v->getType() == et);
                 myargs[i] = mark_julia_type(ctx, arg_v, isboxed, jt);
             }
-            (void)at;
         }
     }
     assert(AI == gf_thunk->arg_end());
@@ -6904,10 +6908,7 @@ static void emit_cfunc_invalidate(
     case jl_returninfo_t::SRet: {
         if (return_roots) {
             Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            #if JL_LLVM_VERSION < 170000
-            assert(cast<PointerType>(root1->getType())->isOpaqueOrPointeeTypeMatches(get_returnroots_type(ctx, return_roots)));
-            #endif
-            root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
+            // store the whole object in the first slot
             ctx.builder.CreateStore(gf_ret, root1);
         }
         Align alignment(julia_alignment(rettype));
@@ -7086,10 +7087,7 @@ static Function* gen_cfun_wrapper(
     if (calltype) {
         LoadInst *lam_max = ctx.builder.CreateAlignedLoad(
                 ctx.types().T_size,
-                ctx.builder.CreateConstInBoundsGEP1_32(
-                    ctx.types().T_size,
-                    literal_pointer_val(ctx, (jl_value_t*)codeinst),
-                    offsetof(jl_code_instance_t, max_world) / ctx.types().sizeof_ptr),
+                emit_ptrgep(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), offsetof(jl_code_instance_t, max_world)),
                 ctx.types().alignof_ptr);
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
     }
@@ -7170,7 +7168,7 @@ static Function* gen_cfun_wrapper(
                     *closure_types = jl_alloc_vec_any(0);
                 jl_array_ptr_1d_push(*closure_types, jargty);
                 Value *runtime_dt = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
-                        ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, nestPtr, jl_array_nrows(*closure_types)),
+                        emit_ptrgep(ctx, nestPtr, jl_array_nrows(*closure_types) * ctx.types().sizeof_ptr),
                         Align(sizeof(void*)));
                 BasicBlock *boxedBB = BasicBlock::Create(ctx.builder.getContext(), "isboxed", cw);
                 BasicBlock *loadBB = BasicBlock::Create(ctx.builder.getContext(), "need-load", cw);
@@ -7236,7 +7234,7 @@ static Function* gen_cfun_wrapper(
                         *closure_types = jl_alloc_vec_any(0);
                     jl_array_ptr_1d_push(*closure_types, jargty);
                     Value *runtime_dt = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
-                            ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, nestPtr, jl_array_nrows(*closure_types)),
+                            emit_ptrgep(ctx, nestPtr, jl_array_nrows(*closure_types) * ctx.types().sizeof_ptr),
                             Align(sizeof(void*)));
                     Value *strct = box_ccall_result(ctx, val, runtime_dt, jargty);
                     inputarg = mark_julia_type(ctx, strct, true, jargty_proper);
@@ -7305,77 +7303,9 @@ static Function* gen_cfun_wrapper(
         bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
         assert(calltype == 3);
         // emit a specsig call
-        bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
         StringRef protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)callptr, invoke, codeinst);
+        bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
         jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, protoname, lam->specTypes, astrt, is_opaque_closure, gcstack_arg);
-        FunctionType *cft = returninfo.decl.getFunctionType();
-        jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
-
-        // TODO: Can use use emit_call_specfun_other here?
-        SmallVector<Value*, 0> args;
-        Value *result = nullptr;
-        if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
-            // fuse the two sret together, or emit an alloca to hold it
-            if (sig.sret && jlfunc_sret) {
-                result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
-            }
-            else {
-                if (jlfunc_sret) {
-                    result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.attrs, 1, Attribute::StructRet).getValueAsType());
-                    setName(ctx.emission_context, result, "sret");
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
-                    #endif
-                } else {
-                    result = emit_static_alloca(ctx, get_unionbytes_type(ctx.builder.getContext(), returninfo.union_bytes));
-                    setName(ctx.emission_context, result, "result_union");
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
-                    #endif
-                }
-            }
-            args.push_back(result);
-        }
-        if (returninfo.return_roots) {
-            AllocaInst *return_roots = emit_static_alloca(ctx, get_returnroots_type(ctx, returninfo.return_roots));
-            setName(ctx.emission_context, return_roots, "return_roots");
-            args.push_back(return_roots);
-        }
-        if (gcstack_arg)
-            args.push_back(ctx.pgcstack);
-        for (size_t i = 0; i < nargs + 1; i++) {
-            // figure out how to repack the arguments
-            jl_cgval_t &inputarg = inputargs[i];
-            Value *arg;
-            jl_value_t *spect = (i == 0 && is_opaque_closure) ? (jl_value_t*)jl_any_type :
-                jl_nth_slot_type(lam->specTypes, i);
-            // n.b. specTypes is required to be a datatype by construction for specsig
-            bool isboxed = deserves_argbox(spect);
-            Type *T = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, spect);
-            if (is_uniquerep_Type(spect)) {
-                continue;
-            }
-            else if (isboxed) {
-                arg = boxed(ctx, inputarg);
-            }
-            else if (type_is_ghost(T)) {
-                continue; // ghost types are skipped by the specsig method signature
-            }
-            else if (T->isAggregateType()) {
-                // aggregate types are passed by pointer
-                inputarg = value_to_pointer(ctx, inputarg);
-                arg = decay_derived(ctx, data_pointer(ctx, inputarg));
-            }
-            else {
-                arg = emit_unbox(ctx, T, inputarg, spect);
-                assert(!isa<UndefValue>(arg));
-            }
-
-            // add to argument list
-            args.push_back(arg);
-        }
-        Value *theFptr = returninfo.decl.getCallee();
-        assert(theFptr);
         if (age_ok) {
             funcName += "_gfthunk";
             Function *gf_thunk = Function::Create(returninfo.decl.getFunctionType(),
@@ -7387,49 +7317,17 @@ static Function* gen_cfun_wrapper(
             // but which has the signature of a specsig
             emit_cfunc_invalidate(gf_thunk, returninfo.cc, returninfo.return_roots, lam->specTypes, codeinst->rettype, is_opaque_closure, nargs + 1, ctx.emission_context,
                 min_world, max_world);
-            theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
+            returninfo.decl = FunctionCallee(returninfo.decl.getFunctionType(), ctx.builder.CreateSelect(age_ok, returninfo.decl.getCallee(), gf_thunk));
         }
-
-        #if JL_LLVM_VERSION < 170000
-        assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl.getFunctionType()));
-        #endif
-        CallInst *call = ctx.builder.CreateCall(
-            returninfo.decl.getFunctionType(),
-            theFptr, ArrayRef<Value*>(args));
-        call->setAttributes(returninfo.attrs);
-        if (gcstack_arg)
-            call->setCallingConv(CallingConv::Swift);
-
-        switch (returninfo.cc) {
-            case jl_returninfo_t::Boxed:
-                retval = mark_julia_type(ctx, call, true, astrt);
-                break;
-            case jl_returninfo_t::Register:
-                retval = mark_julia_type(ctx, call, false, astrt);
-                break;
-            case jl_returninfo_t::SRet:
-                retval = mark_julia_slot(result, astrt, NULL, ctx.tbaa().tbaa_stack);
-                break;
-            case jl_returninfo_t::Union: {
-                Value *box = ctx.builder.CreateExtractValue(call, 0);
-                Value *tindex = ctx.builder.CreateExtractValue(call, 1);
-                Value *derived = ctx.builder.CreateSelect(
-                    ctx.builder.CreateICmpEQ(
-                            ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
-                            ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
-                    decay_derived(ctx, result),
-                    decay_derived(ctx, box));
-                retval = mark_julia_slot(derived,
-                                         astrt,
-                                         tindex,
-                                         ctx.tbaa().tbaa_stack);
-                assert(box->getType() == ctx.types().T_prjlvalue);
-                retval.Vboxed = box;
-                break;
-            }
-            case jl_returninfo_t::Ghosts:
-                retval = mark_julia_slot(NULL, astrt, call, ctx.tbaa().tbaa_stack);
-                break;
+        retval = emit_call_specfun_other(ctx, is_opaque_closure, lam->specTypes, codeinst->rettype, returninfo, nullptr, inputargs, nargs + 1);
+        jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
+        if (jlfunc_sret && sig.sret) {
+            // fuse the two sret together
+            assert(retval.ispointer());
+            AllocaInst *result = cast<AllocaInst>(retval.V);
+            retval.V = sretPtr;
+            result->replaceAllUsesWith(sretPtr);
+            result->eraseFromParent();
         }
     }
 
@@ -7728,7 +7626,7 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, const jl_returninfo_t &f, int retarg, StringRef funcName,
+static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, jl_returninfo_t &f, unsigned nargs, int retarg, StringRef funcName,
         Module *M, jl_codegen_params_t &params)
 {
     ++GeneratedInvokeWrappers;
@@ -7756,124 +7654,37 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0);
 
-    // TODO: replace this with emit_call_specfun_other?
-    FunctionType *ftype = const_cast<llvm::FunctionCallee&>(f.decl).getFunctionType();
-    size_t nfargs = ftype->getNumParams();
-    SmallVector<Value *, 0> args(nfargs);
-    unsigned idx = 0;
-    AllocaInst *result = NULL;
-    switch (f.cc) {
-    case jl_returninfo_t::Boxed:
-    case jl_returninfo_t::Register:
-    case jl_returninfo_t::Ghosts:
-        break;
-    case jl_returninfo_t::SRet:
-        #if JL_LLVM_VERSION < 170000
-        assert(cast<PointerType>(ftype->getParamType(0))->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(f.attrs, 1, Attribute::StructRet).getValueAsType()));
-        #endif
-        result = ctx.builder.CreateAlloca(getAttributeAtIndex(f.attrs, 1, Attribute::StructRet).getValueAsType());
-        setName(ctx.emission_context, result, "sret");
-        args[idx] = result;
-        idx++;
-        break;
-    case jl_returninfo_t::Union:
-        result = ctx.builder.CreateAlloca(ArrayType::get(getInt8Ty(ctx.builder.getContext()), f.union_bytes));
-        if (f.union_align > 1)
-            result->setAlignment(Align(f.union_align));
-        args[idx] = result;
-        idx++;
-        setName(ctx.emission_context, result, "result_union");
-        break;
-    }
-    if (f.return_roots) {
-        AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, f.return_roots));
-        setName(ctx.emission_context, return_roots, "return_roots");
-        args[idx] = return_roots;
-        idx++;
-    }
-    bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
-    if (gcstack_arg) {
-        args[idx] = ctx.pgcstack;
-        idx++;
-    }
+    SmallVector<jl_cgval_t, 0> argv(nargs);
     bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
-    for (size_t i = 0; i < jl_nparams(lam->specTypes) && idx < nfargs; ++i) {
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    for (size_t i = 0; i < nargs; ++i) {
         jl_value_t *ty = ((i == 0) && is_opaque_closure) ? (jl_value_t*)jl_any_type :
             jl_nth_slot_type(lam->specTypes, i);
-        // n.b. specTypes is required to be a datatype by construction for specsig
-        bool isboxed = deserves_argbox(ty);
-        Type *lty = isboxed ?  ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ty);
-        if (type_is_ghost(lty) || is_uniquerep_Type(ty))
-            continue;
         Value *theArg;
         if (i == 0) {
-            // This function adapts from generic jlcall to OC specsig. Generic jlcall pointers
-            // come in as ::Tracked, but specsig expected ::Derived.
-            if (is_opaque_closure)
-                theArg = decay_derived(ctx, funcArg);
-            else
-                theArg = funcArg;
+            theArg = funcArg;
         }
         else {
-            Value *argPtr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, argArray, i - 1);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            Value *argPtr = emit_ptrgep(ctx, argArray, (i - 1) * ctx.types().sizeof_ptr);
             theArg = ai.decorateInst(maybe_mark_load_dereferenceable(
                     ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, argPtr, Align(sizeof(void*))),
                     false,
                     ty));
         }
-        if (!isboxed) {
-            theArg = decay_derived(ctx, theArg);
-            if (!lty->isAggregateType()) // keep "aggregate" type values in place as pointers
-                theArg = ctx.builder.CreateAlignedLoad(lty, theArg, Align(julia_alignment(ty)));
-        }
-        assert(!isa<UndefValue>(theArg));
-        args[idx] = theArg;
-        idx++;
+        argv[i] = mark_julia_type(ctx, theArg, true, ty);
     }
-    CallInst *call = ctx.builder.CreateCall(f.decl, args);
-    call->setAttributes(f.attrs);
-    if (gcstack_arg)
-        call->setCallingConv(CallingConv::Swift);
-    jl_cgval_t retval;
+    jl_cgval_t retval = emit_call_specfun_other(ctx, is_opaque_closure, lam->specTypes, jlretty, f, nullptr, argv, nargs);
     if (retarg != -1) {
         Value *theArg;
         if (retarg == 0)
             theArg = funcArg;
         else
             theArg = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
-                    ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, argArray, retarg - 1),
+                    emit_ptrgep(ctx, argArray, (retarg - 1) * ctx.types().sizeof_ptr),
                     Align(sizeof(void*)));
         retval = mark_julia_type(ctx, theArg, true, jl_any_type);
     }
-    else {
-        switch (f.cc) {
-        case jl_returninfo_t::Boxed:
-            retval = mark_julia_type(ctx, call, true, jlretty);
-            break;
-        case jl_returninfo_t::Register:
-            retval = mark_julia_type(ctx, call, false, jlretty);
-            break;
-        case jl_returninfo_t::SRet:
-            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_stack);
-            break;
-        case jl_returninfo_t::Union:
-            // result is technically not right here, but `boxed` will only look at it
-            // for the unboxed values, so it's ok.
-            retval = mark_julia_slot(result,
-                                     jlretty,
-                                     ctx.builder.CreateExtractValue(call, 1),
-                                     ctx.tbaa().tbaa_stack);
-            retval.Vboxed = ctx.builder.CreateExtractValue(call, 0);
-            assert(retval.Vboxed->getType() == ctx.types().T_prjlvalue);
-            break;
-        case jl_returninfo_t::Ghosts:
-            retval = mark_julia_slot(NULL, jlretty, call, ctx.tbaa().tbaa_stack);
-            break;
-        }
-    }
     ctx.builder.CreateRet(boxed(ctx, retval));
-    return w;
 }
 
 static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg, BitVector *used_arguments, size_t *arg_offset)
@@ -7920,6 +7731,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             if (tracked.count && !tracked.all)
                 props.return_roots = tracked.count;
             props.cc = jl_returninfo_t::SRet;
+            props.union_bytes = jl_datatype_size(jlrettype);
+            props.union_align = props.union_minalign = jl_datatype_align(jlrettype);
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
@@ -7961,7 +7774,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
-        fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
+        fsig.push_back(ctx.types().T_ptr);
         argnames.push_back("return_roots");
     }
 
@@ -7985,22 +7798,21 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         bool isboxed = false;
         Type *ty = NULL;
         if (i == 0 && is_opaque_closure) {
-            ty = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
-            isboxed = true; // true-ish anyway - we might not have the type tag
+            ty = nullptr; // special token to avoid computing this unnecessarily
         }
         else {
             if (is_uniquerep_Type(jt))
                 continue;
             isboxed = deserves_argbox(jt);
             ty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jt);
+            if (type_is_ghost(ty))
+                continue;
         }
-        if (type_is_ghost(ty))
-            continue;
         AttrBuilder param(ctx.builder.getContext());
-        if (ty->isAggregateType()) { // aggregate types are passed by pointer
+        if (ty == nullptr || ty->isAggregateType()) { // aggregate types are passed by pointer
             param.addAttribute(Attribute::NoCapture);
             param.addAttribute(Attribute::ReadOnly);
-            ty = PointerType::get(ty, AddressSpace::Derived);
+            ty = ctx.builder.getPtrTy(AddressSpace::Derived);
         }
         else if (isboxed && jl_is_immutable_datatype(jt)) {
             param.addAttribute(Attribute::ReadOnly);
@@ -8061,9 +7873,9 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     return props;
 }
 
-static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, Type *ShadowT, unsigned count)
+static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, unsigned count)
 {
-    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ShadowT, ctx.builder); //This comes from Late-GC-Lowering??
+    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ctx.builder); //This comes from Late-GC-Lowering??
     assert(emitted == count); (void)emitted; (void)count;
 }
 
@@ -8350,7 +8162,8 @@ static jl_llvm_functions_t
         std::string wrapName;
         raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
-        (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
+        size_t nparams = jl_nparams(lam->specTypes);
+        gen_invoke_wrapper(lam, jlrettype, returninfo, nparams, retarg, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
         // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>
         // TODO: (if needsparams) add attributes: dereferenceable<sizeof(void*) * length(sp)>, readonly, nocapture
@@ -8548,13 +8361,13 @@ static jl_llvm_functions_t
             if (lv) {
                 lv->setName(jl_symbol_name(s));
                 varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa().tbaa_stack);
-                varinfo.pTIndex = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()));
+                varinfo.pTIndex = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()), Align(1));
                 setName(ctx.emission_context, varinfo.pTIndex, "tindex");
                 // TODO: attach debug metadata to this variable
             }
             else if (allunbox) {
                 // all ghost values just need a selector allocated
-                AllocaInst *lv = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()));
+                AllocaInst *lv = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()), Align(1));
                 lv->setName(jl_symbol_name(s));
                 varinfo.pTIndex = lv;
                 varinfo.value.tbaa = NULL;
@@ -8765,9 +8578,7 @@ static jl_llvm_functions_t
                 // Load closure world
                 Value *oc_this = decay_derived(ctx, &*AI++);
                 Value *argaddr = oc_this;
-                Value *worldaddr = ctx.builder.CreateInBoundsGEP(
-                        getInt8Ty(ctx.builder.getContext()), argaddr,
-                        ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, world)));
+                Value *worldaddr = emit_ptrgep(ctx, argaddr, offsetof(jl_opaque_closure_t, world));
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                     nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
@@ -8775,9 +8586,7 @@ static jl_llvm_functions_t
                 emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr);
 
                 // Load closure env
-                Value *envaddr = ctx.builder.CreateInBoundsGEP(
-                        getInt8Ty(ctx.builder.getContext()), argaddr,
-                        ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, captures)));
+                Value *envaddr = emit_ptrgep(ctx, argaddr, offsetof(jl_opaque_closure_t, captures));
 
                 jl_cgval_t closure_env = typed_load(ctx, envaddr, NULL, (jl_value_t*)jl_any_type,
                     nullptr, nullptr, true, AtomicOrdering::NotAtomic, false, sizeof(void*));
@@ -8792,7 +8601,7 @@ static jl_llvm_functions_t
                     theArg = mark_julia_type(ctx, fArg, true, vi.value.typ);
                 }
                 else {
-                    Value *argPtr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, argArray, i - 1);
+                    Value *argPtr = emit_ptrgep(ctx, argArray, (i - 1) * ctx.types().sizeof_ptr);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
                     Value *load = ai.decorateInst(maybe_mark_load_dereferenceable(
                             ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, argPtr, Align(sizeof(void*))),
@@ -8868,10 +8677,8 @@ static jl_llvm_functions_t
             restTuple =
                 ctx.builder.CreateCall(F,
                         { Constant::getNullValue(ctx.types().T_prjlvalue),
-                          ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, argArray,
-                                  ConstantInt::get(ctx.types().T_size, nreq - 1)),
-                          ctx.builder.CreateSub(argCount,
-                                  ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nreq - 1)) });
+                          emit_ptrgep(ctx, argArray, (nreq - 1) * sizeof(jl_value_t*)),
+                          ctx.builder.CreateSub(argCount, ctx.builder.getInt32(nreq - 1)) });
             restTuple->setAttributes(F->getAttributes());
             ctx.builder.CreateStore(restTuple, vi.boxroot);
         }
@@ -9311,7 +9118,7 @@ static jl_llvm_functions_t
                 if (retvalinfo.ispointer()) {
                     if (returninfo.return_roots) {
                         Type *store_ty = julia_type_to_llvm(ctx, retvalinfo.typ);
-                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
+                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, returninfo.return_roots);
                     }
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
@@ -9328,7 +9135,7 @@ static jl_llvm_functions_t
                     Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
                         assert(julia_type_to_llvm(ctx, retvalinfo.typ) == store_ty);
-                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
+                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, returninfo.return_roots);
                     }
                     ctx.builder.CreateAlignedStore(Val, sret, Align(julia_alignment(retvalinfo.typ)));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
@@ -9439,11 +9246,7 @@ static jl_llvm_functions_t
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
-                auto ehptr = ctx.builder.CreateInBoundsGEP(
-                    ctx.types().T_ptr,
-                    ct,
-                    ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, eh) / ctx.types().sizeof_ptr),
-                    "eh");
+                auto ehptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, eh));
                 ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
             }
         }

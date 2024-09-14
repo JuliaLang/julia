@@ -12,6 +12,9 @@ using Base: n_avail
     end
     @test wait(a) == "success"
     @test fetch(t) == "finished"
+
+    # Test printing
+    @test repr(a) == "Condition()"
 end
 
 @testset "wait first behavior of wait on Condition" begin

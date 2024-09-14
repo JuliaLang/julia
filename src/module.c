@@ -384,7 +384,7 @@ static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROO
 static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_t world)
 {
     jl_ptr_kind_union_t owner_pku = jl_atomic_load_relaxed(&owner->restriction);
-    assert(decode_restriction_kind(owner_pku) == BINDING_KIND_GLOBAL ||
+    assert(decode_restriction_kind(owner_pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(owner_pku) == BINDING_KIND_DECLARED ||
            jl_bkind_is_some_constant(decode_restriction_kind(owner_pku)));
     jl_binding_partition_t *alias_bpart = jl_get_binding_partition(alias, world);
     if (owner == alias_bpart)
@@ -419,7 +419,7 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                 continue;
             jl_binding_partition_t *tempbpart = jl_get_binding_partition(tempb, jl_current_task->world_age);
             jl_ptr_kind_union_t tempb_pku = jl_atomic_load_relaxed(&tempbpart->restriction);
-            assert(decode_restriction_kind(tempb_pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(tempb_pku)));
+            assert(decode_restriction_kind(tempb_pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(tempb_pku) == BINDING_KIND_DECLARED || jl_bkind_is_some_constant(decode_restriction_kind(tempb_pku)));
             (void)tempb_pku;
             if (bpart != NULL && !tempb->deprecated && !b->deprecated && !eq_bindings(tempbpart, b, jl_current_task->world_age)) {
                 if (warn) {
@@ -663,7 +663,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
     else {
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-        assert(decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku)));
+        assert(decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(pku) == BINDING_KIND_DECLARED || jl_bkind_is_some_constant(decode_restriction_kind(pku)));
         (void)pku;
         if (b->deprecated) {
             if (jl_get_binding_value(b) == jl_nothing) {

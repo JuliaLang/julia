@@ -13,6 +13,7 @@
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
+#include <ctype.h>
 #include <stdint.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
@@ -704,7 +705,7 @@ int jl_valid_type_param(jl_value_t *v);
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
-void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world);
+void JL_NORETURN jl_method_error(jl_value_t *F, jl_value_t **args, size_t na, size_t world);
 JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...);
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
@@ -769,6 +770,7 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);
+jl_value_t* jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype_t * y);
 int jl_count_union_components(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT, int i) JL_NOTSAFEPOINT;
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;
@@ -946,12 +948,31 @@ STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl
 }
 #endif
 
+STATIC_INLINE int is10digit(char c) JL_NOTSAFEPOINT
+{
+    return (c >= '0' && c <= '9');
+}
+
 STATIC_INLINE int is_anonfn_typename(char *name)
 {
     if (name[0] != '#' || name[1] == '#')
         return 0;
     char *other = strrchr(name, '#');
-    return other > &name[1] && other[1] > '0' && other[1] <= '9';
+    return other > &name[1] && is10digit(other[1]);
+}
+
+// Returns true for typenames of anounymous functions that have been canonicalized (i.e.
+// we mangled the name of the outermost enclosing function in their name).
+STATIC_INLINE int is_canonicalized_anonfn_typename(char *name) JL_NOTSAFEPOINT
+{
+    char *delim = strchr(&name[1], '#');
+    if (delim == NULL)
+        return 0;
+    if (delim[1] != '#')
+        return 0;
+    if (!is10digit(delim[2]))
+        return 0;
+    return 1;
 }
 
 // Each tuple can exist in one of 4 Vararg states:

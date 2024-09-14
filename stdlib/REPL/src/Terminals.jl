@@ -97,6 +97,7 @@ abstract type UnixTerminal <: TextTerminal end
 pipe_reader(t::UnixTerminal) = t.in_stream::IO
 pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
+@nospecialize
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
 end
@@ -107,6 +108,7 @@ mutable struct TTYTerminal <: UnixTerminal
     out_stream::IO
     err_stream::IO
 end
+@specialize
 
 const CSI = "\x1b["
 
