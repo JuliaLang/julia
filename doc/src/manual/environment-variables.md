@@ -395,6 +395,8 @@ Forces garbage collection if memory usage is higher than the given value. The va
     - t  (tebibytes)
     - %  (percentage of physical memory)
 
+which are not case sensitive. For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
+
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
