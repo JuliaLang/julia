@@ -130,7 +130,6 @@ for cmat in mattypes,
     push!(testdata, (cmat{celt}, amat{aelt}, bmat{belt}))
 end
 
-for _ in 1:100 # TODO: delete this line
 @testset "mul!(::$TC, ::$TA, ::$TB, α, β)" for (TC, TA, TB) in testdata
     if needsquare(TA)
         na1 = na2 = rand(sizecandidates)
@@ -217,6 +216,5 @@ for _ in 1:100 # TODO: delete this line
         end
     end
 end
-end # TODO: delete this line
 
 end  # module
