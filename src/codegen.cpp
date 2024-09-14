@@ -2228,9 +2228,13 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align)
 {
-    if (nb == 1 && align == Align(1))
-        return emit_static_alloca(ctx, ctx.builder.getInt8Ty(), align);
-    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getInt8Ty(), alignTo(nb, align)), align);
+    // Stupid hack: SROA takes hints from the element type, and will happily split this allocation into lots of unaligned bits
+    // if it cannot find something better to do, which is terrible for performance.
+    // However, if we emit this with an element size equal to the alignment, it will instead split it into aligned chunks
+    // which is great for performance and vectorization.
+    if (alignTo(nb, align) == align.value()) // don't bother with making an array of length 1
+        return emit_static_alloca(ctx, ctx.builder.getIntNTy(align.value() * 8), align);
+    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(align.value() * 8), alignTo(nb, align) / align.value()), align);
 }
 
 static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
