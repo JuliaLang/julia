@@ -360,7 +360,7 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         SmallVector<unsigned,4> perm_offsets;
         find_perm_offsets(typ, perm_offsets, 0);
         Type *T_prjlvalue = ctx.types().T_prjlvalue;
-        auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         for (size_t i = 0; i < npointers; i++) {
             //if (jl_ptr_offset(typ, i) * sizeof(void*) in perm_offsets)
             //    continue;
@@ -1206,7 +1206,8 @@ static std::pair<AllocaInst*, AllocaInst*> split_value(jl_codectx_t &ctx, const 
     AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, Align(julia_alignment((jl_value_t*)typ))) : nullptr;
     AllocaInst *roots = sizes.second > 0 ? emit_static_roots(ctx, sizes.second) : nullptr;
     auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-    split_value_into(ctx, x, x_alignment, bits, stack_ai, roots, stack_ai);
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    split_value_into(ctx, x, x_alignment, bits, stack_ai, roots, roots_ai);
     return std::make_pair(bits, roots);
 }
 
@@ -1246,7 +1247,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
     Value *src = x.V;
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     Value *inline_roots = x.inline_roots;
-    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     size_t dst_off = 0;
     size_t src_off = 0;
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
@@ -1629,7 +1630,7 @@ static void null_load_check(jl_codectx_t &ctx, Value *v, jl_module_t *scope, jl_
 template<typename Func>
 static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, Func &&func)
 {
-    if (!ifnot) {
+    if (ifnot == nullptr) {
         return func();
     }
     if (auto Cond = dyn_cast<ConstantInt>(ifnot)) {
@@ -1961,7 +1962,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
 // declare that the pointer is legal (for zero bytes) even though it might be undef.
 static Value *emit_isa_and_defined(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
 {
-    return emit_nullcheck_guard(ctx, val.inline_roots || val.ispointer() ? val.V : nullptr, [&] {
+    return emit_nullcheck_guard(ctx, !val.inline_roots && val.ispointer() ? val.V : nullptr, [&] {
         return emit_isa(ctx, val, typ, Twine()).first;
     });
 }
@@ -2160,7 +2161,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         auto src = mark_julia_slot(ptr, jltype, NULL, tbaa);
         auto copy = split_value(ctx, src, Align(alignment));
         if (maybe_null_if_boxed && copy.second) {
-            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+            auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             Value *first_ptr = roots_ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, copy.second, Align(sizeof(void*))));
             null_pointer_check(ctx, first_ptr, nullcheck);
         }
@@ -3051,7 +3052,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             roots = offsets.second == 0 ? strct.inline_roots : emit_ptrgep(ctx, strct.inline_roots, offsets.second * sizeof(jl_value_t*));
             LoadInst *Load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, roots, Align(sizeof(void*)));
             maybe_mark_load_dereferenceable(Load, maybe_null, jfty);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             first_ptr = ai.decorateInst(Load);
             if (maybe_null)
                 null_pointer_check(ctx, first_ptr, nullcheck);
@@ -4199,7 +4200,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (jl_field_isptr(sty, i)) {
                     fval = boxed(ctx, fval_info, field_promotable);
                     if (!init_as_value) {
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, roots ? ctx.tbaa().tbaa_gcframe : ctx.tbaa().tbaa_stack);
                         ai.decorateInst(ctx.builder.CreateAlignedStore(fval, roots ? roots : dest, Align(roots ? sizeof(void*) : jl_field_align(sty, i))));
                     }
                 }
@@ -4267,7 +4268,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         fval = emit_unbox(ctx, fty, fval_info, jtype);
                     }
                     else if (roots) {
-                        split_value_into(ctx, fval_info, Align(julia_alignment(jtype)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack));
+                        split_value_into(ctx, fval_info, Align(julia_alignment(jtype)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
                     }
                     else {
                         emit_unbox_store(ctx, fval_info, dest, ctx.tbaa().tbaa_stack, Align(jl_field_align(sty, i)));
@@ -4443,7 +4444,7 @@ static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         ai0.decorateInst(load0);
         setName(ctx.emission_context, load0, "memory_ref_FCA0");
         LoadInst *load1 = ctx.builder.CreateLoad(type->getElementType(1), ref.inline_roots);
-        jl_aliasinfo_t ai1 = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        jl_aliasinfo_t ai1 = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai1.decorateInst(load1);
         setName(ctx.emission_context, load1, "memory_ref_FCA1");
         Value *load = Constant::getNullValue(type);

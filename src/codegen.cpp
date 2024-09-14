@@ -2242,7 +2242,7 @@ static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
     AllocaInst *staticroots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)));
     staticroots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nroots));
     IRBuilder<> builder(ctx.topalloca);
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
     ai.decorateInst(builder.CreateMemSet(staticroots, builder.getInt8(0), nroots * sizeof(void*), staticroots->getAlign()))->moveAfter(ctx.topalloca);
     return staticroots;
@@ -2370,7 +2370,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 {
     if (v.inline_roots) {
         if (v.V == nullptr)
-            return mark_julia_slot(v.inline_roots, v.typ, v.TIndex, ctx.tbaa().tbaa_stack);
+            return mark_julia_slot(v.inline_roots, v.typ, v.TIndex, ctx.tbaa().tbaa_gcframe);
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
         AllocaInst *loc = emit_static_alloca(ctx, ty, align);
@@ -4964,7 +4964,7 @@ isdefined_unknown_idx:
                 assert(offsets.second >= 0);
                 Value *roots = offsets.second == 0 ? obj.inline_roots : ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, obj.inline_roots, offsets.second);
                 LoadInst *Load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, roots, ctx.types().alignof_ptr);
-                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
                 fldv = ai.decorateInst(Load);
             }
             else if (obj.ispointer()) {
@@ -5201,7 +5201,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             break;
         case jl_returninfo_t::SRet:
             assert(result);
-            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_stack, return_roots);
+            retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_gcframe, return_roots);
             break;
         case jl_returninfo_t::Union: {
             Value *box = ctx.builder.CreateExtractValue(call, 0);
@@ -5795,8 +5795,8 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             // is to move the whole alloca chunk
             AllocaInst *ssaslot = nullptr;
             AllocaInst *ssaroots = nullptr;
-            auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
             if (vi.value.V) {
+                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
                 AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
                 Type *T = varslot->getAllocatedType();
                 assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
@@ -5814,6 +5814,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 }
             }
             if (vi.value.inline_roots) {
+                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
                 AllocaInst *varslot = cast<AllocaInst>(vi.value.inline_roots);
                 ssaroots = cast<AllocaInst>(varslot->clone());
                 setName(ctx.emission_context, ssaroots, varslot->getName() + StringRef(".ssa"));
@@ -5914,7 +5915,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             if (rval_info.TIndex)
                 emit_unionmove(ctx, vi.value.V, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
             else if (vi.value.inline_roots)
-                split_value_into(ctx, rval_info, Align(julia_alignment(rval_info.typ)), vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.value.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.isVolatile);
+                split_value_into(ctx, rval_info, Align(julia_alignment(rval_info.typ)), vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.value.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe), vi.isVolatile);
             else
                 emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, Align(julia_alignment(rval_info.typ)), vi.isVolatile);
         }
@@ -6217,7 +6218,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
                 }
                 assert(T_prjlvalue == ctx.types().T_prjlvalue);
                 Value *nullval = Constant::getNullValue(T_prjlvalue);
-                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
                 for (size_t i = 0; i < nroots; i++) {
                     stack_ai.decorateInst(ctx.builder.CreateAlignedStore(nullval, emit_ptrgep(ctx, ssaroots, i * sizeof(void*)), ssaroots->getAlign(), true));
                 }
@@ -7027,7 +7028,7 @@ static void emit_cfunc_invalidate(
         Align alignment(julia_alignment(rettype));
         if (return_roots) {
             Value *roots = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            split_value_into(ctx, gf_retbox, alignment, sret, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack));
+            split_value_into(ctx, gf_retbox, alignment, sret, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
         }
         else {
             emit_unbox_store(ctx, gf_retbox, sret, ctx.tbaa().tbaa_stack, alignment);
@@ -8440,10 +8441,12 @@ static jl_llvm_functions_t
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
     auto world_age_field = get_tls_world_age_field(ctx);
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-    last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-               ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
-    ctx.world_age_at_entry = last_age; // Load world age for use in get_tls_world_age
+    { // scope
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
+                   ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+        ctx.world_age_at_entry = last_age; // Load world age for use in get_tls_world_age
+    }
 
     // step 7. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
@@ -9227,7 +9230,7 @@ static jl_llvm_functions_t
                     assert(returninfo.cc == jl_returninfo_t::SRet);
                     Value *return_roots = f->arg_begin() + 1;
                     split_value_into(ctx, retvalinfo, Align(julia_alignment(jlrettype)), sret,
-                            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), return_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack));
+                            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), return_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
                 }
                 else if (retvalinfo.ispointer()) {
                     if (returninfo.cc == jl_returninfo_t::SRet) {
@@ -9463,15 +9466,16 @@ static jl_llvm_functions_t
                     // must be careful to emit undef here (rather than a bitcast or
                     // load of val) if the runtime type of val isn't phiType
                     auto tracked = split_value_size((jl_datatype_t*)phiType).second;
-                    if (tracked) {
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                    Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
+                    assert(!!roots == !!tracked && isvalid != nullptr);
+                    if (tracked && isvalid != ctx.builder.getTrue()) {
+                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
                         ai.decorateInst(ctx.builder.CreateMemSet(roots, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
                     }
-                    Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
                         jl_cgval_t typedval = update_julia_type(ctx, val, phiType);
                         if (roots)
-                            split_value_into(ctx, typedval, Align(julia_alignment(phiType)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack));
+                            split_value_into(ctx, typedval, Align(julia_alignment(phiType)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
                         else
                             emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(phiType)));
                         return nullptr;
@@ -9579,6 +9583,7 @@ static jl_llvm_functions_t
                 ctx.builder.CreateLifetimeStart(dest);
             if (jl_is_datatype(phiType) && roots) {
                 auto tracked = split_value_size((jl_datatype_t*)phiType).second;
+                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
                 ai.decorateInst(ctx.builder.CreateMemSet(roots, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
             }
             ctx.builder.ClearInsertionPoint();
