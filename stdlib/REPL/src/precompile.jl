@@ -14,6 +14,19 @@ finally
 end
 
 let
+    # these are intentionally triggered
+    allowed_errors = [
+        "BoundsError: attempt to access 0-element Vector{Any} at index [1]",
+        "MethodError: no method matching f(::$Int, ::$Int)",
+        "Padding of type", # reinterpret docstring has ERROR examples
+    ]
+    function check_errors(out)
+        str = String(out)
+        if occursin("ERROR:", str) && !any(occursin(e, str) for e in allowed_errors)
+            @error "Unexpected error (Review REPL precompilation with debug_output on):\n$str"
+            exit(1)
+        end
+    end
     ## Debugging options
     # View the code sent to the repl by setting this to `stdout`
     debug_output = devnull # or stdout
@@ -25,6 +38,8 @@ let
     DOWN_ARROW = "\e[B"
 
     repl_script = """
+    import REPL
+    REPL.activate(REPL.Precompile; interactive_utils=false) # Main is closed so we can't evaluate in it
     2+2
     print("")
     printstyled("a", "b")
@@ -47,6 +62,7 @@ let
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
+    REPL.activate(; interactive_utils=false)
     println("done")
     """
 
@@ -113,10 +129,10 @@ let
             end
             schedule(repltask)
             # wait for the definitive prompt before start writing to the TTY
-            readuntil(output_copy, JULIA_PROMPT)
+            check_errors(readuntil(output_copy, JULIA_PROMPT))
             write(debug_output, "\n#### REPL STARTED ####\n")
             sleep(0.1)
-            readavailable(output_copy)
+            check_errors(readavailable(output_copy))
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
@@ -124,16 +140,16 @@ let
                 sleep(0.1)
                 curr += 1
                 # consume any other output
-                bytesavailable(output_copy) > 0 && readavailable(output_copy)
+                bytesavailable(output_copy) > 0 && check_errors(readavailable(output_copy))
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
                 # If the line ends with a CTRL_C, don't write an extra newline, which would
                 # cause a second empty prompt. Our code below expects one new prompt per
                 # input line and can race out of sync with the unexpected second line.
                 endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
-                readuntil(output_copy, "\n")
+                check_errors(readuntil(output_copy, "\n"))
                 # wait for the next prompt-like to appear
-                readuntil(output_copy, "\n")
+                check_errors(readuntil(output_copy, "\n"))
                 strbuf = ""
                 while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
@@ -143,6 +159,7 @@ let
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.1)
                 end
+                check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
