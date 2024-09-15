@@ -193,10 +193,10 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
-    dest_array = unsafe_wrap(Array, dest, nbytes)
-    copyto!(dest_array, 1, src, so, nbytes)
-    nothing
+function unsafe_read!(dest::Ptr{UInt8}, src::{UInt8}, so::Integer, nbytes::UInt)
+    for i in 1:nbytes
+        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
+    end
 end
 
 # Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
