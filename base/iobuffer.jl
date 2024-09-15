@@ -184,7 +184,7 @@ end
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
-    adv = UInt(min(avail, nb))
+    adv = min(avail, nb)
     unsafe_read!(p, from.data, from.ptr, adv)
     from.ptr += adv
     if nb > avail
