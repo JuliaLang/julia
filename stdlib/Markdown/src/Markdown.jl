@@ -145,7 +145,7 @@ if Base.generating_output()
     precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, String, Array{Any, 1}, Vararg{Any}})
     precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Italic})
     precompile(Tuple{typeof(Markdown.footnote_link), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
-    
+
     precompile(Tuple{typeof(Base.sprint), Function, Array{Any, 1}})
     precompile(Tuple{typeof(Base.println), Markdown.MD})
     precompile(Tuple{typeof(Base.println), Base.TTY, Markdown.MD})
@@ -156,9 +156,9 @@ if Base.generating_output()
 
     precompile(Tuple{typeof(Markdown.linebreak), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
     precompile(Tuple{typeof(Markdown.escapes), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
-    
+
     precompile(Tuple{typeof(Base.:(^)), String, Int64})  # Belongs elsewhere?
-    
+
     # workload to reduce latency
     println(devnull, md"""
     # H1
