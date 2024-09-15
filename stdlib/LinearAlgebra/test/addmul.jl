@@ -164,8 +164,7 @@ end
         Bc = Matrix(B)
         returned_mat = mul!(C, A, B, α, β)
         @test returned_mat === C
-        # This test is skipped because it is flakey, but should be fixed and put back (see #49966)
-        @test_skip collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
+        @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
 
         y = C[:, 1]
         x = B[:, 1]
@@ -190,8 +189,7 @@ end
 
                     returned_mat = mul!(C, Af, Bf, α, β)
                     @test returned_mat === C
-                    # This test is skipped because it is flakey, but should be fixed and put back (see #49966)
-                    @test_skip collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
+                    @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
                 end
             end
         end
@@ -203,8 +201,7 @@ end
                 Bc = Matrix(B)
                 returned_mat = mul!(C, A, B, α, zero(eltype(C)))
                 @test returned_mat === C
-                # This test is skipped because it is flakey, but should be fixed and put back (see #49966)
-                @test_skip collect(returned_mat) ≈ α * Ac * Bc  rtol=rtol
+                @test collect(returned_mat) ≈ α * Ac * Bc  rtol=rtol
             end
         end
 
