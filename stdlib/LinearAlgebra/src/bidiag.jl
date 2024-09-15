@@ -577,18 +577,19 @@ function _bibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
-    if n <= 3
-        # naive multiplication
-        for I in CartesianIndices(C)
-            _modify!(_add, sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)), C, I)
-        end
-        return C
-    end
+    iszero(n) && return C
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
     _rmul_or_fill!(C, _add.beta)
     iszero(_add.alpha) && return C
+    if n <= 3
+        # naive multiplication
+        for I in CartesianIndices(C)
+            C[I] += _add(sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)))
+        end
+        return C
+    end
     @inbounds begin
         # first column of C
         C[1,1] += _add(A[1,1]*B[1,1] + A[1, 2]*B[2,1])
@@ -1062,14 +1063,18 @@ function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
+    iszero(n) && return C
+    # ensure that we fill off-band elements in the destination
+    _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return C
     if n <= 3
+        # For simplicity, use a naive multiplication for small matrices
+        # that loops over all elements.
         for I in CartesianIndices(C)
-            _modify!(_add, A.diag[I[1]] * B[I[1], I[2]], C, I)
+            C[I] += _add(A.diag[I[1]] * B[I[1], I[2]])
         end
         return C
     end
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -1103,7 +1108,8 @@ function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    # ensure that we fill off-band elements in the destination
+    _rmul_or_fill!(C, _add.beta)
     iszero(_add.alpha) && return C
     Ad = A.diag
     Bdv, Bev = B.dv, B.ev
