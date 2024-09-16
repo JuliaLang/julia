@@ -109,8 +109,6 @@ static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
-    // print the warning (this mysteriously needs a lot of stack for the WriteFile syscall)
-    stack_overflow_warning();
     // collect the backtrace
     stkerror_ptls->bt_size =
         rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
