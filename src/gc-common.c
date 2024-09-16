@@ -491,14 +491,8 @@ int gc_n_threads;
 jl_ptls_t* gc_all_tls_states;
 
 // =========================================================================== //
-// MISC
+// Allocation
 // =========================================================================== //
-
-JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_new_weakref_th(ptls, value);
-}
 
 JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
 {
@@ -575,17 +569,9 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
-const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
-JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
-{
-    return jl_buff_tag;
-}
-
-// callback for passing OOM errors from gmp
-JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
-{
-    jl_throw(jl_memory_exception);
-}
+// =========================================================================== //
+// Generic Memory
+// =========================================================================== //
 
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
@@ -613,48 +599,9 @@ void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, i
     ptls->gc_tls.heap.mallocarrays = ma;
 }
 
-// collector entry point and control
-_Atomic(uint32_t) jl_gc_disable_counter = 1;
-
-JL_DLLEXPORT int jl_gc_enable(int on)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    int prev = !ptls->disable_gc;
-    ptls->disable_gc = (on == 0);
-    if (on && !prev) {
-        // disable -> enable
-        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
-            gc_num.allocd += gc_num.deferred_alloc;
-            gc_num.deferred_alloc = 0;
-        }
-    }
-    else if (prev && !on) {
-        // enable -> disable
-        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-        // check if the GC is running and wait for it to finish
-        jl_gc_safepoint_(ptls);
-    }
-    return prev;
-}
-
-JL_DLLEXPORT int jl_gc_is_enabled(void)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    return !ptls->disable_gc;
-}
-
-int gc_logging_enabled = 0;
-
-JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
-    gc_logging_enabled = enable;
-}
-
-JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
-    return gc_logging_enabled;
-}
-
-// gc-debug common functions
-// ---
+// =========================================================================== //
+// GC Debug
+// =========================================================================== //
 
 int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
 {
@@ -685,6 +632,81 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     if (slot < start || slot >= start + elsize * len)
         return -1;
     return (slot - start) / elsize;
+}
+
+// =========================================================================== //
+// GC Control
+// =========================================================================== //
+
+JL_DLLEXPORT uint32_t jl_get_gc_disable_counter(void) {
+    return jl_atomic_load_acquire(&jl_gc_disable_counter);
+}
+
+JL_DLLEXPORT int jl_gc_is_enabled(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return !ptls->disable_gc;
+}
+
+int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
+    return gc_logging_enabled;
+}
+
+
+// collector entry point and control
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint_(ptls);
+    }
+    return prev;
+}
+
+// =========================================================================== //
+// MISC
+// =========================================================================== //
+
+JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_new_weakref_th(ptls, value);
+}
+
+JL_DLLEXPORT jl_datatype_t **jl_get_ijl_small_typeof(void) {
+    return ijl_small_typeof;
+}
+
+const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
+JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
+{
+    return jl_buff_tag;
+}
+
+// callback for passing OOM errors from gmp
+JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
+{
+    jl_throw(jl_memory_exception);
 }
 
 #ifdef __cplusplus
