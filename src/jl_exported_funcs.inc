@@ -496,6 +496,7 @@
     XX(jl_undefined_var_error) \
     XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
+    XX(jl_has_no_property_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
     XX(jl_ver_major) \

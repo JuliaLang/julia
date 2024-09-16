@@ -30,13 +30,13 @@ using Base: delete
 @test (x=4, y=5, z=6)[()] == NamedTuple()
 @test (x=4, y=5, z=6)[:] == (x=4, y=5, z=6)
 @test NamedTuple()[()] == NamedTuple()
-@test_throws FieldError (x=4, y=5, z=6).a
+@test_throws PropertyError (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
-@test_throws FieldError (x=4, y=5, z=6)[(:a,)]
-@test_throws FieldError (x=4, y=5, z=6)[(:x, :a)]
-@test_throws FieldError (x=4, y=5, z=6)[[:a]]
-@test_throws FieldError (x=4, y=5, z=6)[[:x, :a]]
+@test_throws PropertyError (x=4, y=5, z=6)[(:a,)]
+@test_throws PropertyError (x=4, y=5, z=6)[(:x, :a)]
+@test_throws PropertyError (x=4, y=5, z=6)[[:a]]
+@test_throws PropertyError (x=4, y=5, z=6)[[:x, :a]]
 @test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
 
 @test length(NamedTuple()) == 0
@@ -257,7 +257,7 @@ function abstr_nt_22194_2()
     a = NamedTuple[(a=1,), (b=2,)]
     return a[1].b
 end
-@test_throws FieldError abstr_nt_22194_2()
+@test_throws PropertyError abstr_nt_22194_2()
 @test Base.return_types(abstr_nt_22194_2, ()) == Any[Any]
 
 mutable struct HasAbstractNamedTuples
@@ -449,7 +449,7 @@ end
 for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
     @test fieldtype(NT, 1) == Union{}
     @test fieldtype(NT, :b) == Union{}
-    @test_throws FieldError fieldtype(NT, :c)
+    @test_throws PropertyError fieldtype(NT, :c)
     @test_throws BoundsError fieldtype(NT, 0)
     @test_throws BoundsError fieldtype(NT, 3)
     @test Base.return_types((Type{NT},)) do NT; fieldtype(NT, :a); end == Any[Type{Union{}}]

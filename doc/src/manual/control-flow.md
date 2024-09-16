@@ -602,6 +602,7 @@ below all interrupt the normal flow of control.
 | [`EOFError`](@ref)            |
 | [`ErrorException`](@ref)      |
 | [`FieldError`](@ref)          |
+| [`PropertyError`](@ref)       |
 | [`InexactError`](@ref)        |
 | [`InitError`](@ref)           |
 | [`InterruptException`](@ref)  |

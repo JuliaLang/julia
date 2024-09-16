@@ -846,6 +846,13 @@ static const auto jlhasnofield_func = new JuliaFunction<>{
              PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
+static const auto jlhasnoproperty_func = new JuliaFunction<>{
+    XSTR(jl_has_no_property_error),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted),
+             PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
@@ -4144,6 +4151,7 @@ static jl_llvm_functions_t
         jl_codegen_params_t &params);
 
 static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatype_t *type, jl_cgval_t name);
+static void emit_hasnoproperty_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatype_t *type, jl_cgval_t name);
 
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt,
@@ -4656,7 +4664,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     Value *index = ctx.builder.CreateCall(prepare_call(jlfieldindex_func),
                             {emit_typeof(ctx, obj, false, false), boxed(ctx, fld), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)});
                     Value *cond = ctx.builder.CreateICmpNE(index, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), -1));
-                    emit_hasnofield_error_ifnot(ctx, cond, utt, fld);
+                    emit_hasnoproperty_error_ifnot(ctx, cond, utt, fld);
                     Value *idx2 = ctx.builder.CreateAdd(ctx.builder.CreateIntCast(index, ctx.types().T_size, false), ConstantInt::get(ctx.types().T_size, 1)); // getfield_unknown is 1 based
                     if (emit_getfield_unknownidx(ctx, ret, obj, idx2, utt, jl_false, order))
                         return true;
@@ -5491,6 +5499,22 @@ static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatyp
     ctx.builder.CreateCondBr(ok, ifok, err);
     ctx.builder.SetInsertPoint(err);
     ctx.builder.CreateCall(prepare_call(jlhasnofield_func),
+                          {mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)type)),
+                           mark_callee_rooted(ctx, boxed(ctx, name))});
+    ctx.builder.CreateUnreachable();
+    ifok->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(ifok);
+}
+
+static void emit_hasnoproperty_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatype_t *type, jl_cgval_t name)
+{
+    ++EmittedUndefVarErrors;
+    assert(name.typ == (jl_value_t*)jl_symbol_type);
+    BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
+    BasicBlock *ifok = BasicBlock::Create(ctx.builder.getContext(), "ok");
+    ctx.builder.CreateCondBr(ok, ifok, err);
+    ctx.builder.SetInsertPoint(err);
+    ctx.builder.CreateCall(prepare_call(jlhasnoproperty_func),
                           {mark_callee_rooted(ctx, literal_pointer_val(ctx, (jl_value_t*)type)),
                            mark_callee_rooted(ctx, boxed(ctx, name))});
     ctx.builder.CreateUnreachable();
@@ -9882,6 +9906,7 @@ static void init_jit_functions(void)
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
     add_named_global(jlhasnofield_func, &jl_has_no_field_error);
+    add_named_global(jlhasnoproperty_func, &jl_has_no_property_error);
     add_named_global(jlboundserrorv_func, &jl_bounds_error_ints);
     add_named_global(jlboundserror_func, &jl_bounds_error_int);
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);

@@ -1742,8 +1742,10 @@ JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
             }
         }
     }
-    if (err)
+    if (err == 1)
         jl_has_no_field_error(t, fld);
+    if (err == 2)
+        jl_has_no_property_error(t, fld);
     return -1;
 }
 

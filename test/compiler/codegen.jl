@@ -859,7 +859,7 @@ foo50964(1) # Shouldn't assert!
 
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
-@test_throws FieldError obj51233.x
+@test_throws PropertyError obj51233.x
 
 # Very specific test for multiversioning
 if Sys.ARCH === :x86_64

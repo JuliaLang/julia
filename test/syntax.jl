@@ -2831,7 +2831,7 @@ end
     @test a == 5
     @test b == 6
 
-    @test_throws FieldError (; a, b) = (x=1,)
+    @test_throws PropertyError (; a, b) = (x=1,)
 
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x end), :error)
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x, y end), :error)
@@ -2840,7 +2840,7 @@ end
     f((; a, b)) = a, b
     @test f((b=3, a=4)) == (4, 3)
     @test f((b=3, c=2, a=4)) == (4, 3)
-    @test_throws FieldError f((;))
+    @test_throws PropertyError f((;))
 
     # with type annotation
     let num, den, a, b

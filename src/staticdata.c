@@ -237,6 +237,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_initerror_type);
         INSERT_TAG(jl_undefvarerror_type);
         INSERT_TAG(jl_fielderror_type);
+        INSERT_TAG(jl_propertyerror_type);
         INSERT_TAG(jl_stackovf_exception);
         INSERT_TAG(jl_diverror_exception);
         INSERT_TAG(jl_interrupt_exception);
