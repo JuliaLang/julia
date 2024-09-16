@@ -5671,3 +5671,14 @@ end
 
 # fieldcount on `Tuple` should constant fold, even though `.fields` not const
 @test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Issue https://github.com/JuliaLang/julia/issues/55751
+
+abstract type AbstractGrid55751{T, N} <: AbstractArray{T, N} end
+struct Grid55751{T, N, AT} <: AbstractGrid55751{T, N}
+    axes::AT
+end
+
+t155751 = Union{AbstractArray{UInt8, 4}, Array{Float32, 4}, Grid55751{Float32, 3, _A} where _A}
+t255751 = Array{Float32, 3}
+@test Core.Compiler.tmerge_types_slow(t155751,t255751) == AbstractArray # shouldn't hang
