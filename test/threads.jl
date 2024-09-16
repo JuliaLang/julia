@@ -398,7 +398,7 @@ end
 
         """
         proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`), wait=false)
-        sleep(2) # Is there a better way to do this?
+        sleep(10) # Is there a better way to do this?
         if process_running(proc)
             kill(proc)
             throw(ErrorException("Process did not exit in time"))
