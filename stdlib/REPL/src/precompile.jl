@@ -13,7 +13,7 @@ finally
     Base._track_dependencies[] = true
 end
 
-let
+function repl_workload()
     # these are intentionally triggered
     allowed_errors = [
         "BoundsError: attempt to access 0-element Vector{Any} at index [1]",
@@ -173,6 +173,34 @@ let
     end
     write(debug_output, "\n#### FINISHED ####\n")
     nothing
+end
+
+# Copied from PrecompileTools.jl
+let
+    function check_edges(node)
+        parentmi = node.mi_info.mi
+        for child in node.children
+            childmi = child.mi_info.mi
+            if !(isdefined(childmi, :backedges) && parentmi ∈ childmi.backedges)
+                precompile(childmi.specTypes)
+            end
+            check_edges(child)
+        end
+    end
+
+    Core.Compiler.Timings.reset_timings()
+    Core.Compiler.__set_measure_typeinf(true)
+    try
+        repl_workload()
+    finally
+        Core.Compiler.__set_measure_typeinf(false)
+        Core.Compiler.Timings.close_current_timer()
+    end
+    roots = Core.Compiler.Timings._timings[1].children
+    for child in roots
+        precompile(child.mi_info.mi.specTypes)
+        check_edges(child)
+    end
 end
 
 precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
