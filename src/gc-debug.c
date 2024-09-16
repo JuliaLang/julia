@@ -1105,8 +1105,6 @@ void gc_count_pool(void)
     jl_safe_printf("************************\n");
 }
 
-extern int gc_logging_enabled;
-
 void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
     if (!gc_logging_enabled) {
         return;
