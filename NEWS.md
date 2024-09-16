@@ -56,6 +56,7 @@ variables. ([#53742]).
 * `--project=@temp` starts Julia with a temporary environment.
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
 
 Multi-threading changes
 -----------------------
