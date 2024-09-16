@@ -179,4 +179,10 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
 
+// =========================================================================== //
+// Logging
+// =========================================================================== //
+
+extern int gc_logging_enabled;
+
 #endif // JL_GC_COMMON_H

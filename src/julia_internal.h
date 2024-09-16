@@ -372,6 +372,8 @@ extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
+extern void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
@@ -1082,7 +1084,7 @@ STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
     return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 4;
 }
 extern _Atomic(uint32_t) jl_gc_running;
-extern JL_DLLEXPORT _Atomic(uint32_t) jl_gc_disable_counter;
+extern _Atomic(uint32_t) jl_gc_disable_counter;
 // All the functions are safe to be called from within a signal handler
 // provided that the thread will not be interrupted by another asynchronous
 // signal.

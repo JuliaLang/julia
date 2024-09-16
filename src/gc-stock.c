@@ -2835,19 +2835,8 @@ static void sweep_finalizer_list(arraylist_t *list)
     list->len = j;
 }
 
-int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
-{
-    return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
-}
-
-int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
-{
-    if (jl_n_sweepthreads == 0) {
-        return 0;
-    }
-    int last_parallel_collector_thread_id = gc_last_parallel_collector_thread_id();
-    int concurrent_collector_thread_id = last_parallel_collector_thread_id + 1;
-    return tid == concurrent_collector_thread_id;
+int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT {
+    return gc_is_parallel_collector_thread(tid) || gc_is_concurrent_collector_thread(tid);
 }
 
 JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
@@ -3245,8 +3234,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // free empty GC state for threads that have exited
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
             // GC threads should never exit
-            assert(!gc_is_parallel_collector_thread(t_i));
-            assert(!gc_is_concurrent_collector_thread(t_i));
+            assert(!gc_is_collector_thread(t_i));
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
             if (heap->weak_refs.len == 0)
                 small_arraylist_free(&heap->weak_refs);
