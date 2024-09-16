@@ -188,24 +188,25 @@ let
         end
     end
 
-    Core.Compiler.Timings.reset_timings()
-    Core.Compiler.__set_measure_typeinf(true)
-    try
-        repl_workload()
-    finally
-        Core.Compiler.__set_measure_typeinf(false)
-        Core.Compiler.Timings.close_current_timer()
-    end
-    roots = Core.Compiler.Timings._timings[1].children
-    for child in roots
-        precompile(child.mi_info.mi.specTypes)
-        check_edges(child)
+    if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
+        Core.Compiler.Timings.reset_timings()
+        Core.Compiler.__set_measure_typeinf(true)
+        try
+            repl_workload()
+        finally
+            Core.Compiler.__set_measure_typeinf(false)
+            Core.Compiler.Timings.close_current_timer()
+        end
+        roots = Core.Compiler.Timings._timings[1].children
+        for child in roots
+            precompile(child.mi_info.mi.specTypes)
+            check_edges(child)
+        end
+        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+        precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+        precompile(Tuple{typeof(Base.:(==)), Char, String})
+        precompile(Tuple{typeof(Base.reseteof), Base.TTY})
     end
 end
-
-precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
-precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
-precompile(Tuple{typeof(Base.:(==)), Char, String})
-precompile(Tuple{typeof(Base.reseteof), Base.TTY})
 
 end # Precompile
