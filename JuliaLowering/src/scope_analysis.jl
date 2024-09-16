@@ -377,6 +377,10 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
     #     ex
     elseif k == K"local"
         makeleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"local_def"
+        id = lookup_var(ctx, NameKey(ex[1]))
+        update_binding!(ctx, id; is_always_defined=true)
+        makeleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
         lambda_info = ex.lambda_info
         scope = analyze_scope(ctx, ex, nothing, lambda_info)

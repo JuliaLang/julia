@@ -28,7 +28,7 @@ function _register_kinds()
             # (TODO: May or may not need all these - assess later)
             "break_block"
             "scope_block"
-            "local_def"
+            "local_def" # TODO: Replace with K"local" plus BindingFlags attribute?
             "_while"
             "_do_while"
             "with_static_parameters"

@@ -789,8 +789,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"local_def" || k == K"local"
-        nothing
     elseif k == K"const" || k == K"isdefined"
         emit(ctx, ex)
     else
