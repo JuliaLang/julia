@@ -121,6 +121,11 @@ precompile(Tuple{typeof(Base.Broadcast.broadcasted), typeof(Base.:(-)), NTuple{8
 precompile(Tuple{typeof(Base.getproperty), Base.Broadcast.Broadcasted{Base.Broadcast.Style{Tuple}, Nothing, typeof(Base.:(-)), Tuple{NTuple{8, Float64}, NTuple{8, Float64}}}, Symbol})
 precompile(Tuple{typeof(Base.tail), Tuple{NTuple{8, Float64}, NTuple{8, Float64}}})
 precompile(Tuple{typeof(Base.Broadcast._broadcast_getindex_evalf), typeof(Base.:(-)), Float64, Float64})
+precompile(Tuple{typeof(Base.tail), NTuple{5, Int64}})
+precompile(Tuple{typeof(Base.tail), NTuple{4, Int64}})
+precompile(Tuple{typeof(Base.:(*)), Int64, UInt64})
+precompile(Tuple{typeof(Base.print), Base.IOStream, UInt64})
+precompile(Tuple{typeof(Base.println), Base.IOStream, UInt64})
 
 # precompilepkgs
 precompile(Tuple{typeof(Base.get), Type{Array{String, 1}}, Base.Dict{String, Any}, String})
