@@ -1911,14 +1911,16 @@ end
 @testset "pwd tests" begin
     mktempdir() do dir
         cd(dir) do
-            io = IOBuffer()
-            Base.repl_cmd(@cmd("cd"), io)
-            Base.repl_cmd(@cmd("cd -"), io)
-            @test pwd() == dir
-            rm(dir)
-            @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-            # pwd() throwing was causing this to error
-            Base.repl_cmd(@cmd("cd \~"), io)
+            withenv("OLDPWD" => nothing do
+                io = IOBuffer()
+                Base.repl_cmd(@cmd("cd"), io)
+                Base.repl_cmd(@cmd("cd -"), io)
+                @test pwd() == dir
+                rm(dir)
+                @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+                # pwd() throwing was causing this to error
+                Base.repl_cmd(@cmd("cd \~"), io)
+            end
         end
     end
 end
