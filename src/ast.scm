@@ -253,6 +253,7 @@
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
+           ((thismodule)   (string "@__MODULE__()"))
            ((globalref)    (string (deparse (cadr e)) "." (deparse-colon-dot (caddr e))))
            ((ssavalue)     (string "SSAValue(" (cadr e) ")"))
            ((line)         (if (length= e 2)
@@ -265,8 +266,10 @@
                                 '(#\= #\:))))
                 (string ":" (deparse (cadr e)))
                 (string ":(" (deparse (cadr e)) ")")))
+           ((escape)
+            (string "$(esc(" (deparse `(quote ,(cadr e))) ")"))
            (else
-            (string e))))))
+            (string "$(Expr(" (string.join (map (lambda (x) (deparse `(quote ,x))) e) ", ") ")"))))))
 
 ;; custom gensyms
 
