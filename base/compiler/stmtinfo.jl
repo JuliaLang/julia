@@ -33,10 +33,13 @@ not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
+    mt::MethodTable
+    fullmatch::Bool
 end
 nsplit_impl(info::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
 getresult_impl(::MethodMatchInfo, ::Int) = nothing
+add_uncovered_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, @nospecialize(atype)) = (!info.fullmatch && push!(edges, info.mt, atype); )
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -48,20 +51,27 @@ each partition (`info.matches::Vector{MethodMatchInfo}`).
 This info is illegal on any statement that is not a call to a generic function.
 """
 struct UnionSplitInfo <: CallInfo
-    matches::Vector{MethodMatchInfo}
+    matches::Vector{MethodLookupResult}
+    mts::Vector{MethodTable}
+    fullmatches::Vector{Bool}
 end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
     n = 0
     for mminfo in info.matches
-        n += nmatches(mminfo)
+        n += length(mminfo)
     end
     return n
 end
 nsplit_impl(info::UnionSplitInfo) = length(info.matches)
-getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit_impl(info.matches[idx], 1)
+getsplit_impl(info::UnionSplitInfo, idx::Int) = info.matches[idx]
 getresult_impl(::UnionSplitInfo, ::Int) = nothing
+function add_uncovered_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, @nospecialize(atype))
+    for (mt, fullmatch) in zip(info.mts, info.fullmatches)
+        !fullmatch && push!(edges, mt, atype)
+    end
+end
 
 abstract type ConstResult end
 
@@ -105,6 +115,7 @@ end
 nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
 getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
 getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
+add_uncovered_edges_impl(edges::Vector{Any}, info::ConstCallInfo, @nospecialize(atype)) = add_uncovered_edges!(edges, info.call, atype)
 
 """
     info::MethodResultPure <: CallInfo
