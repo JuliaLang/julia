@@ -1916,10 +1916,13 @@ end
                 Base.repl_cmd(@cmd("cd"), io)
                 Base.repl_cmd(@cmd("cd -"), io)
                 @test realpath(pwd()) == realpath(dir)
-                rm(dir)
-                @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-                # pwd() throwing was causing this to error
-                Base.repl_cmd(@cmd("cd \\~"), io)
+                if !Sys.iswindows()
+                    # Delete the working directory and check we can cd out of it
+                    # Cannot delete the working directory on Windows
+                    rm(dir)
+                    @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+                    Base.repl_cmd(@cmd("cd \\~"), io)
+                end
             end
         end
     end
