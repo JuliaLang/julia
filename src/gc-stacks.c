@@ -22,22 +22,13 @@
 // number of stacks to always keep available per pool
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
-#if defined(_OS_WINDOWS_) || (!defined(_OS_OPENBSD_) && !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK))
-#define JL_USE_GUARD_PAGE   1
 const size_t jl_guard_size = (4096 * 8);
-#else
-const size_t jl_guard_size = 0;
-#endif
-
 static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-
     void *stk = VirtualAlloc(NULL, bufsz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (stk == NULL)
         return MAP_FAILED;
@@ -46,7 +37,6 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
-    stk = (char *)stk + guard_size;
 
     jl_atomic_fetch_add(&num_stack_mappings, 1);
     return stk;
@@ -55,12 +45,6 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-    stkbuf = (char *)stkbuf - guard_size;
-#endif
-
     VirtualFree(stkbuf, 0, MEM_RELEASE);
     jl_atomic_fetch_add(&num_stack_mappings, -1);
 }
@@ -69,22 +53,16 @@ static void free_stack(void *stkbuf, size_t bufsz)
 
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-#endif
-
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stk == MAP_FAILED)
         return MAP_FAILED;
 
-#ifdef JL_USE_GUARD_PAGE
+#if !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK)
     // set up a guard page to detect stack overflow
     if (mprotect(stk, jl_guard_size, PROT_NONE) == -1) {
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
-    stk = (char *)stk + guard_size;
 #endif
     jl_atomic_fetch_add(&num_stack_mappings, 1);
     return stk;
@@ -92,12 +70,6 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-    stkbuf = (char *)stkbuf - guard_size;
-#endif
-
     munmap(stkbuf, bufsz);
     jl_atomic_fetch_add(&num_stack_mappings, -1);
 }

@@ -384,7 +384,7 @@ a vector of region–annotation tuples.
 In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
-See also: `annotate!`.
+See also: [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 

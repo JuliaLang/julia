@@ -365,7 +365,8 @@ function _join_preserve_annotations(iterator, args...)
         # in nature, we extract an `AnnotatedString`, otherwise we just extract
         # a plain `String` from `io`.
         if isconcretetype(et) || !isempty(io.annotations)
-            read(seekstart(io), AnnotatedString{String})
+            seekstart(io)
+            read(io, AnnotatedString{String})
         else
             String(take!(io.io))
         end
