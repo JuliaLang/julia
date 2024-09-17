@@ -441,14 +441,14 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         // up being dead code, and type inference knows that the other
         // branch's type is the only one that matters.
         if (type_is_ghost(to)) {
-            return NULL;
+            return nullptr;
         }
         CreateTrap(ctx.builder);
         return UndefValue::get(to); // type mismatch error
     }
 
-    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
-    if (!(x.inline_roots || x.ispointer()) || c) { // already unboxed, but sometimes need conversion
+    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;
+    if ((x.inline_roots.empty() && !x.ispointer()) || c != nullptr) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
@@ -474,7 +474,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 
     unsigned alignment = julia_alignment(jt);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-    if (x.inline_roots) {
+    if (!x.inline_roots.empty()) {
         assert(x.typ == jt);
         AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
         auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
@@ -499,13 +499,13 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
     auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
 
-    if (x.inline_roots) {
+    if (!x.inline_roots.empty()) {
         recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
         return;
     }
 
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
-        assert(x.V && !x.inline_roots);
+        assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
         store->setVolatile(isVolatile);
@@ -839,7 +839,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (x.inline_roots) {
+    else if (!x.inline_roots.empty()) {
         recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
     }
     else if (x.ispointer()) {
