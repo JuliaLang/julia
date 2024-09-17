@@ -330,13 +330,31 @@ function Base.replace_in_print_matrix(A::Union{LowerTriangular,UnitLowerTriangul
     return i >= j ? s : Base.replace_with_centered_mark(s)
 end
 
-Base.@constprop :aggressive function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
+istril(A::UnitLowerTriangular, k::Integer=0) = k >= 0
+istriu(A::UnitUpperTriangular, k::Integer=0) = k <= 0
+Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
     return _istril(A, k)
 end
-Base.@constprop :aggressive function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
+@inline function _istril(A::LowerTriangular, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in max(1, k + 2):m
+        all(iszero, view(P, j:min(j - k - 1, m), j)) || return false
+    end
+    return true
+end
+Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
+end
+@inline function _istriu(A::UpperTriangular, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in 1:min(m, m + k - 1)
+        all(iszero, view(P, max(1, j - k + 1):j, j)) || return false
+    end
+    return true
 end
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
@@ -953,8 +971,6 @@ isunit_char(::UnitUpperTriangular) = 'U'
 isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
 
-lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
     lmul!(A, copyto!(C, B))
@@ -979,9 +995,20 @@ _trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractTriangular) =
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
     generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-lmul!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _trimul!(B, A, B)
-rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
-
+function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _trimul!(B, UpperTriangular(A), B)
+    else
+        _trimul!(B, LowerTriangular(A), B)
+    end
+end
+function rmul!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _trimul!(A, A, UpperTriangular(B))
+    else
+        _trimul!(A, A, LowerTriangular(B))
+    end
+end
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
@@ -1017,8 +1044,20 @@ _ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
     generic_mattridiv!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-ldiv!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _ldiv!(B, A, B)
-rdiv!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _rdiv!(A, A, B)
+function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _ldiv!(B, UpperTriangular(A), B)
+    else
+        _ldiv!(B, LowerTriangular(A), B)
+    end
+end
+function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _rdiv!(A, A, UpperTriangular(B))
+    else
+        _rdiv!(A, A, LowerTriangular(B))
+    end
+end
 
 # preserve triangular structure in in-place multiplication/division
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
@@ -2743,6 +2782,14 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
+# fallback for unknown types
+function eigvecs(A::AbstractTriangular{<:BlasFloat})
+    if istriu(A)
+        eigvecs(UpperTriangular(Matrix(A)))
+    else # istril(A)
+        eigvecs(LowerTriangular(Matrix(A)))
+    end
+end
 function eigvecs(A::AbstractTriangular{T}) where T
     TT = promote_type(T, Float32)
     if TT <: BlasFloat

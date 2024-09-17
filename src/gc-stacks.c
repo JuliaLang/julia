@@ -23,22 +23,13 @@
 // number of stacks to always keep available per pool
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
-#if defined(_OS_WINDOWS_) || (!defined(_OS_OPENBSD_) && !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK))
-#define JL_USE_GUARD_PAGE   1
 const size_t jl_guard_size = (4096 * 8);
-#else
-const size_t jl_guard_size = 0;
-#endif
-
 static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-
     void *stk = VirtualAlloc(NULL, bufsz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (stk == NULL)
         return MAP_FAILED;
@@ -49,7 +40,6 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
-    stk = (char *)stk + guard_size;
 
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
@@ -58,68 +48,41 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 
 static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-    stkbuf = (char *)stkbuf - guard_size;
-#endif
-
     VirtualFree(stkbuf, 0, MEM_RELEASE);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 
 #else
 
-# ifdef _OS_OPENBSD_
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
-    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-    if (stk == MAP_FAILED)
-        return MAP_FAILED;
-
+# ifdef _OS_OPENBSD_
     // we don't set up a guard page to detect stack overflow: on OpenBSD, any
     // mmap-ed region has guard page managed by the kernel, so there is no
     // need for it. Additionally, a memory region used as stack (memory
     // allocated with MAP_STACK option) has strict permission, and you can't
     // "create" a guard page on such memory by using `mprotect` on it
-
-    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
-    return stk;
-}
+    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if (stk == MAP_FAILED)
+        return MAP_FAILED;
 # else
-static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
-{
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-#endif
-
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stk == MAP_FAILED)
         return MAP_FAILED;
 
-#ifdef JL_USE_GUARD_PAGE
     // set up a guard page to detect stack overflow
     if (mprotect(stk, jl_guard_size, PROT_NONE) == -1) {
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
-    stk = (char *)stk + guard_size;
-#endif
+# endif
 
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
-# endif
 
 static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
-#ifdef JL_USE_GUARD_PAGE
-    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
-    bufsz += guard_size;
-    stkbuf = (char *)stkbuf - guard_size;
-#endif
-
     munmap(stkbuf, bufsz);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
@@ -160,7 +123,7 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 }
 
 
-static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -186,14 +149,14 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 {
     // avoid adding an original thread stack to the free list
-    if (task == ptls->root_task && !task->copy_stack)
+    if (task == ptls->root_task && !task->ctx.copy_stack)
         return;
-    void *stkbuf = task->stkbuf;
-    size_t bufsz = task->bufsz;
+    void *stkbuf = task->ctx.stkbuf;
+    size_t bufsz = task->ctx.bufsz;
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
-            task->stkbuf = NULL;
+            task->ctx.stkbuf = NULL;
 #ifdef _COMPILER_ASAN_ENABLED_
             __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
 #endif
@@ -296,17 +259,17 @@ void sweep_stack_pools(void) JL_NOTSAFEPOINT
             jl_task_t *t = (jl_task_t*)lst[n];
             assert(jl_is_task(t));
             if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                if (t->stkbuf == NULL)
+                if (t->ctx.stkbuf == NULL)
                     ndel++; // jl_release_task_stack called
                 else
                     n++;
             }
             else {
                 ndel++;
-                void *stkbuf = t->stkbuf;
-                size_t bufsz = t->bufsz;
+                void *stkbuf = t->ctx.stkbuf;
+                size_t bufsz = t->ctx.bufsz;
                 if (stkbuf) {
-                    t->stkbuf = NULL;
+                    t->ctx.stkbuf = NULL;
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -338,7 +301,7 @@ restart:
             continue;
         small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
-        l += n + (ptls2->root_task->stkbuf != NULL);
+        l += n + (ptls2->root_task->ctx.stkbuf != NULL);
     }
     l += l / 20; // add 5% for margin of estimation error
     jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
@@ -350,7 +313,7 @@ restart:
         if (ptls2 == NULL)
             continue;
         jl_task_t *t = ptls2->root_task;
-        if (t->stkbuf != NULL) {
+        if (t->ctx.stkbuf != NULL) {
             if (j == l)
                 goto restart;
             jl_array_data(a,void*)[j++] = t;
@@ -359,7 +322,7 @@ restart:
         size_t n = mtarraylist_length(live_tasks);
         for (size_t i = 0; i < n; i++) {
             jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
-            if (t->stkbuf != NULL) {
+            if (t->ctx.stkbuf != NULL) {
                 if (j == l)
                     goto restart;
                 jl_array_data(a,void*)[j++] = t;

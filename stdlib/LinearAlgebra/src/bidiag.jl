@@ -186,7 +186,7 @@ end
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
             A.uplo == 'U' ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
-    return x
+    return A
 end
 
 Base._reverse(A::Bidiagonal, dims) = reverse!(Matrix(A); dims)
@@ -409,7 +409,11 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        return fill!(similar(M.dv, size(M,1)-abs(n)), zero(T))
+        v = similar(M.dv, size(M,1)-abs(n))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
+        return v
     else
         throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
             lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
@@ -535,12 +539,18 @@ function rmul!(B::Bidiagonal, D::Diagonal)
 end
 
 @noinline function check_A_mul_B!_sizes((mC, nC)::NTuple{2,Integer}, (mA, nA)::NTuple{2,Integer}, (mB, nB)::NTuple{2,Integer})
+    # check for matching sizes in one column of B and C
+    check_A_mul_B!_sizes((mC,), (mA, nA), (mB,))
+    # ensure that the number of columns in B and C match
+    if nB != nC
+        throw(DimensionMismatch(lazy"second dimension of output C, $nC, and second dimension of B, $nB, must match"))
+    end
+end
+@noinline function check_A_mul_B!_sizes((mC,)::Tuple{Integer}, (mA, nA)::NTuple{2,Integer}, (mB,)::Tuple{Integer})
     if mA != mC
         throw(DimensionMismatch(lazy"first dimension of A, $mA, and first dimension of output C, $mC, must match"))
     elseif nA != mB
         throw(DimensionMismatch(lazy"second dimension of A, $nA, and first dimension of B, $mB, must match"))
-    elseif nB != nC
-        throw(DimensionMismatch(lazy"second dimension of output C, $nC, and second dimension of B, $nB, must match"))
     end
 end
 
@@ -563,8 +573,10 @@ _mul!(C::AbstractMatrix, A::BiTriSym, B::TriSym, _add::MulAddMul) =
 _mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul) =
     _bibimul!(C, A, B, _add)
 function _bibimul!(C, A, B, _add)
+    require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
+    iszero(n) && return C
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
     # `_modify!` in the following loop will not update the
@@ -727,15 +739,10 @@ end
 
 function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulAddMul)
     require_one_based_indexing(C, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     nA = size(A,1)
     nB = size(B,2)
-    if !(size(C,1) == size(B,1) == nA)
-        throw(DimensionMismatch(lazy"A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if size(C,2) != nB
-        throw(DimensionMismatch(lazy"A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
-    end
-    iszero(nA) && return C
+    (iszero(nA) || iszero(nB)) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     l = _diag(A, -1)
@@ -758,9 +765,10 @@ end
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
     m = size(B,2)
+    (iszero(m) || iszero(n)) && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if n <= 3 || m <= 1
         return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     end
@@ -793,11 +801,12 @@ end
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
+    m, n = size(A)
+    (iszero(m) || iszero(n)) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if size(A, 1) <= 3 || size(B, 2) <= 1
         return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     end
-    m, n = size(A)
     @inbounds if B.uplo == 'U'
         for i in 1:m
             for j in n:-1:2
@@ -824,6 +833,7 @@ function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
+    iszero(n) && return C
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above
     iszero(_add.alpha) && return C

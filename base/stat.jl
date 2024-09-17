@@ -198,6 +198,7 @@ end
 
 """
     stat(file)
+    stat(joinpath...)
 
 Return a structure whose fields contain information about the file.
 The fields of the structure are:
@@ -218,16 +219,19 @@ The fields of the structure are:
 | mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
 | ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
 """
+stat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("stat not implemented for $(typeof(path))") : stat(path2))
 stat(path...) = stat(joinpath(path...))
 
 """
     lstat(file)
+    lstat(joinpath...)
 
 Like [`stat`](@ref), but for symbolic links gets the info for the link
 itself rather than the file it refers to.
 This function must be called on a file path rather than a file object or a file
 descriptor.
 """
+lstat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("lstat not implemented for $(typeof(path))") : lstat(path2))
 lstat(path...) = lstat(joinpath(path...))
 
 # some convenience functions

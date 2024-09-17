@@ -56,6 +56,7 @@ variables. ([#53742]).
 * `--project=@temp` starts Julia with a temporary environment.
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
 
 Multi-threading changes
 -----------------------
@@ -128,12 +129,21 @@ Standard library changes
   between different eigendecomposition algorithms ([#49355]).
 * Added a generic version of the (unblocked) pivoted Cholesky decomposition
   (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
+* The number of default BLAS threads now respects process affinity, instead of
+  using total number of logical threads available on the system ([#55574]).
 
 #### Logging
 
 #### Printf
 
 #### Profile
+
+* `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
+  that is `true` by default. When set, the contents of Julia objects are not emitted
+  in the heap snapshot. This currently only applies to strings. ([#55326])
+* `Profile.print()` now colors Base/Core/Package modules similarly to how they are in stacktraces.
+  Also paths, even if truncated, are now clickable in terminals that support URI links
+  to take you to the specified `JULIA_EDITOR` for the given file & line number. ([#55335])
 
 #### Random
 

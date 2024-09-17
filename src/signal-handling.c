@@ -155,7 +155,7 @@ static void jl_shuffle_int_array_inplace(int *carray, int size, uint64_t *seed)
     // The "modern Fisher–Yates shuffle" - O(n) algorithm
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
     for (int i = size; i-- > 1; ) {
-        size_t j = cong(i, seed);
+        size_t j = cong(i + 1, seed); // cong is an open interval so we add 1
         uint64_t tmp = carray[j];
         carray[j] = carray[i];
         carray[i] = tmp;
@@ -427,6 +427,8 @@ void jl_show_sigill(void *_ctx)
 #endif
 }
 
+void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+
 // make it invalid for a task to return from this point to its stack
 // this is generally quite an foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
@@ -439,15 +441,17 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->eh = NULL;
         ct->world_age = 1;
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
-        small_arraylist_t *locks = &ct->ptls->locks;
+        jl_ptls_t ptls = ct->ptls;
+        small_arraylist_t *locks = &ptls->locks;
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = 0;
-        ct->ptls->in_pure_callback = 0;
-        ct->ptls->in_finalizer = 0;
-        ct->ptls->defer_signal = 0;
+        ptls->in_pure_callback = 0;
+        ptls->in_finalizer = 0;
+        ptls->defer_signal = 0;
         // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
-        jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_UNSAFE);
+        jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_UNSAFE);
+        surprise_wakeup(ptls);
         // allow continuing to use a Task that should have already died--unsafe necromancy!
         jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     }
@@ -461,6 +465,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
+        // and also resets the state of ct and ptls so that some code can run on this task again
         jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
         sigset_t sset;

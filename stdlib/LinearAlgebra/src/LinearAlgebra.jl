@@ -843,9 +843,9 @@ function __init__()
     # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
     if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
         @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint)))
         else
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint) ÷ 2))
         end
     end
 end

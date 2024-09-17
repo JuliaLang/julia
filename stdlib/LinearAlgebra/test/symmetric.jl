@@ -1116,4 +1116,23 @@ end
     end
 end
 
+@testset "tr for block matrices" begin
+    m = [1 2; 3 4]
+    for b in (m, m * (1 + im))
+        M = fill(b, 3, 3)
+        for ST in (Symmetric, Hermitian)
+            S = ST(M)
+            @test tr(S) == sum(diag(S))
+        end
+    end
+end
+
+@testset "setindex! returns the destination" begin
+    M = rand(2,2)
+    for T in (Symmetric, Hermitian)
+        S = T(M)
+        @test setindex!(S, 0, 2, 2) === S
+    end
+end
+
 end # module TestSymmetric
