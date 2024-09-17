@@ -96,7 +96,7 @@ precompile_test_harness(false) do dir
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
 
               global process_state_calls::Int = 0
-              const process_state = Base.PerProcess{typeof(getpid())}() do
+              const process_state = Base.OncePerProcess{typeof(getpid())}() do
                   @assert (global process_state_calls += 1) == 1
                   return getpid()
               end
