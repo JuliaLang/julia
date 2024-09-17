@@ -702,6 +702,8 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
     else
         return false
     end
+    has_no_escape(x::EscapeAnalysis.EscapeInfo) =
+        EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(x))
     for i = startidx:length(stmt.args)
         arg = stmt.args[i]
         argt = argextype(arg, ir)
@@ -710,7 +712,7 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
         end
         # See if we can find the allocation
         if isa(arg, Argument)
-            if EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(estate[arg]))
+            if has_no_escape(estate[arg])
                 # Even if we prove everything else effect_free, the best we can
                 # say is :effect_free_if_argmem_only
                 if sv.effect_free_if_argmem_only === nothing
@@ -721,7 +723,7 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
             end
             return false
         elseif isa(arg, SSAValue)
-            EscapeAnalysis.has_no_escape(estate[arg]) || return false
+            has_no_escape(estate[arg]) || return false
             check_all_args_noescape!(sv, ir, ir[arg][:stmt], estate) || return false
         else
             return false
