@@ -51,17 +51,17 @@ function repl_cmd(cmd, out)
                 end
                 dir = ENV["OLDPWD"]
             end
-            try
-                ENV["OLDPWD"] = pwd()
-            catch ex
-                ex isa IOError || rethrow()
-                # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
-                delete!(ENV, "OLDPWD")
-            end
-            cd(dir)
         else
-            cd()
+            dir = homedir()
         end
+        try
+            ENV["OLDPWD"] = pwd()
+        catch ex
+            ex isa IOError || rethrow()
+            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+            delete!(ENV, "OLDPWD")
+        end
+        cd(dir)
         println(out, pwd())
     else
         @static if !Sys.iswindows()
