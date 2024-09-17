@@ -34,9 +34,9 @@ Main.include
 Base.include_string
 Base.include_dependency
 __init__
-Base.PerProcess
-Base.PerTask
-Base.PerThread
+Base.OncePerProcess
+Base.OncePerTask
+Base.OncePerThread
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show

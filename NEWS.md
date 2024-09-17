@@ -69,9 +69,9 @@ Multi-threading changes
 -----------------------
 
 * New types are defined to handle the pattern of code that must run once per process, called
-  a `PerProcess{T}` type, which allows defining a function that should be run exactly once
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
   the first time it is called, and then always return the same result value of type `T`
-  every subsequent time afterwards. There are also `PerThread{T}` and `PerTask{T}` types for
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
   similar usage with threads or tasks. ([#TBD])
 
 Build system changes
