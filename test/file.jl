@@ -1911,15 +1911,15 @@ end
 @testset "pwd tests" begin
     mktempdir() do dir
         cd(dir) do
-            withenv("OLDPWD" => nothing do
+            withenv("OLDPWD" => nothing) do
                 io = IOBuffer()
                 Base.repl_cmd(@cmd("cd"), io)
                 Base.repl_cmd(@cmd("cd -"), io)
-                @test pwd() == dir
+                @test realpath(pwd()) == realpath(dir)
                 rm(dir)
                 @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
                 # pwd() throwing was causing this to error
-                Base.repl_cmd(@cmd("cd \~"), io)
+                Base.repl_cmd(@cmd("cd \\~"), io)
             end
         end
     end
