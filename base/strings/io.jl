@@ -137,7 +137,6 @@ function print_to_string(xs...)
         return ""
     end
     siz = sum(_str_sizehint, xs; init = 0)
-    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     print(s, xs...)
     String(_unsafe_take!(s))
