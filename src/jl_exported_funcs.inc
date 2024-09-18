@@ -550,7 +550,6 @@
     YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
     YY(LLVMExtraMPMAddLowerPTLSPass) \
     YY(LLVMExtraFPMAddDemoteFloat16Pass) \
-    YY(LLVMExtraFPMAddCombineMulAddPass) \
     YY(LLVMExtraFPMAddLateLowerGCPass) \
     YY(LLVMExtraFPMAddAllocOptPass) \
     YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
