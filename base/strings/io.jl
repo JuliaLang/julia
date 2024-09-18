@@ -42,9 +42,7 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        foreach(xs) do x
-            print(io, x)
-        end
+        foreach(Fix1(print, io), xs)
     finally
         unlock(io)
     end
@@ -134,20 +132,14 @@ function _str_sizehint(x)
     end
 end
 
-function _str_sizehints(xs...)
-    mapreduce(_str_sizehint, +, xs; init = 0)
-end
-
 function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
-    siz = _str_sizehints(xs...)
+    siz = sum(_str_sizehint, xs; init = 0)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    foreach(xs) do x
-        print(s, x)
-    end
+    print(s, xs...)
     String(_unsafe_take!(s))
 end
 
@@ -155,13 +147,11 @@ function string_with_env(env, xs...)
     if isempty(xs)
         return ""
     end
-    siz = _str_sizehints(xs...)
+    siz = sum(_str_sizehint, xs; init = 0)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    foreach(xs) do x
-        print(env_io, x)
-    end
+    print(env_io, xs...)
     String(_unsafe_take!(s))
 end
 
