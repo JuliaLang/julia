@@ -37,9 +37,22 @@ function repl_workload()
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
+    atreplinit() do repl
+        # Main is closed so we can't evaluate in it
+        # but atreplinit runs at a time that repl.mistate === nothing
+        # so REPL.activate fails. So do it async, with an initial
+        # sleep on the repl instructions
+        t = @async begin
+            while repl.mistate === nothing
+                yield()
+            end
+            REPL.activate(REPL.Precompile; interactive_utils=false)
+        end
+        Base.errormonitor(t)
+    end
+
     repl_script = """
-    import REPL
-    REPL.activate(REPL.Precompile; interactive_utils=false) # Main is closed so we can't evaluate in it
+    sleep(1) # give the above async atreplinit a chance to change active_module
     2+2
     print("")
     printstyled("a", "b")
@@ -62,7 +75,6 @@ function repl_workload()
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
-    REPL.activate(; interactive_utils=false)
     println("done")
     """
 
