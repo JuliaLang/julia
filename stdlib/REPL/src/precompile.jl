@@ -37,22 +37,21 @@ function repl_workload()
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
+    # This is notified as soon as the first prompt appears
+    repl_init_event = Base.Event()
+
     atreplinit() do repl
-        # Main is closed so we can't evaluate in it
-        # but atreplinit runs at a time that repl.mistate === nothing
-        # so REPL.activate fails. So do it async, with an initial
-        # sleep on the repl instructions
+        # Main is closed so we can't evaluate in it, but atreplinit runs at
+        # a time that repl.mistate === nothing so REPL.activate fails. So do
+        # it async and wait for the first prompt to know its ready.
         t = @async begin
-            while repl.mistate === nothing
-                yield()
-            end
+            wait(repl_init_event)
             REPL.activate(REPL.Precompile; interactive_utils=false)
         end
         Base.errormonitor(t)
     end
 
     repl_script = """
-    sleep(1) # give the above async atreplinit a chance to change active_module
     2+2
     print("")
     printstyled("a", "b")
@@ -171,6 +170,7 @@ function repl_workload()
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.1)
                 end
+                notify(repl_init_event)
                 check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
