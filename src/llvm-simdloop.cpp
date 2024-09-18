@@ -67,7 +67,7 @@ static bool checkCombine(Value *maybeMul, Loop &L, OptimizationRemarkEmitter &OR
     auto mulOp = dyn_cast<Instruction>(maybeMul);
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
         return false;
-    if (L.contains(mulOp))
+    if (!L.contains(mulOp))
         return false;
     if (!mulOp->hasOneUse()) {
         LLVM_DEBUG(dbgs() << "mulOp has multiple uses: " << *maybeMul << "\n");
@@ -198,13 +198,19 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRe
             case Instruction::FAdd: {
                 if (!(*K)->hasAllowContract())
                     continue;
-                checkCombine((*K)->getOperand(0), L, ORE) || checkCombine((*K)->getOperand(1), L, ORE);
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
                 break;
             }
             case Instruction::FSub: {
                 if (!(*K)->hasAllowContract())
                     continue;
-                checkCombine((*K)->getOperand(0), L, ORE) || checkCombine((*K)->getOperand(1), L, ORE);
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
                 break;
             }
             default:
