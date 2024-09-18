@@ -147,7 +147,6 @@ function string_with_env(env, xs...)
         return ""
     end
     siz = sum(_str_sizehint, xs; init = 0)
-    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
     print(env_io, xs...)
