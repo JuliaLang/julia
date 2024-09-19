@@ -2979,33 +2979,23 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     else
         (; valid_worlds, applicable) = matches
         update_valid_age!(sv, valid_worlds)
-
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        if isa(matches, MethodMatches)
-            fully_covering(matches) || add_mt_backedge!(sv, matches.info.mt, atype)
-        else
-            for (thisfullmatch, mt) in zip(matches.info.fullmatches, matches.info.mts)
-                thisfullmatch || add_mt_backedge!(sv, mt, atype)
-            end
-        end
-
         napplicable = length(applicable)
         if napplicable == 0
             rt = Const(false) # never any matches
+        elseif !fully_covering(matches) || any_ambig(matches)
+            # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+            rt = Bool
         else
             rt = Const(true) # has applicable matches
-            for i in 1:napplicable
-                match = applicable[i]::MethodMatch
-                edge = specialize_method(match)::MethodInstance
-                add_backedge!(sv, edge)
-            end
-
-            if !fully_covering(matches) || any_ambig(matches)
-                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-                rt = Bool
-            end
         end
+        for i in 1:napplicable
+            match = applicable[i]::MethodMatch
+            edge = specialize_method(match)::MethodInstance
+            add_backedge!(sv, edge)
+        end
+        # also need an edge to the method table in case something gets
+        # added that did not intersect with any existing method
+        add_uncovered_edges!(sv, matches, atype)
     end
     return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
 end
