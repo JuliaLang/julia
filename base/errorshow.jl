@@ -111,8 +111,12 @@ end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     !isa(ex.error, LoadError) && print(io, "LoadError: ")
+    # Remove the internals of how precompilation is set up
+    StackTraces.remove_frames!(bt, :include_package_for_output; reverse=true, n=1)
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
+    if ex.file !== "stdin"
+        print(io, "\nin expression starting at $(ex.file):$(ex.line)")
+    end
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 

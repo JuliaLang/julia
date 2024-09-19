@@ -2,7 +2,7 @@ module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project
+            base_project, PackagePrecompileError
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -871,7 +871,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
-                            if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
+                            if err isa PackagePrecompileError || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
                                 failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg_config, ""))) : ""
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 !fancyprint && lock(print_lock) do
