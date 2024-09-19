@@ -1125,7 +1125,7 @@ function _propertynames_bytype(T::Type)
     inferred_names = promote_op(Val∘propertynames, T)
     inferred_names isa DataType && inferred_names <: Val || return nothing
     inferred_names = inferred_names.parameters[1]
-    inferred_names isa NTuple{Symbol} || return nothing
+    inferred_names isa NTuple{<:Any, Symbol} || return nothing
     return Symbol[inferred_names[i] for i in 1:length(inferred_names)]
 end
 
