@@ -3194,7 +3194,7 @@ function normalize_depots_for_relocation()
         if isdirpath(d)
             d = dirname(d)
         end
-        push!(depots, d)
+        push!(depots, abspath(d))
     end
     return depots
 end
