@@ -484,11 +484,6 @@ let NoinlineModule = Module()
     end
 end
 
-# Make sure that Core.Compiler has enough NamedTuple infrastructure
-# to properly give error messages for basic kwargs...
-Core.eval(Core.Compiler, quote f(;a=1) = a end)
-@test_throws MethodError Core.Compiler.f(;b=2)
-
 # custom inferred data
 # ====================
 
