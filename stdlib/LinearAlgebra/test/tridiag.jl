@@ -970,4 +970,75 @@ end
     @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
 end
 
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        for T in (
+                Tridiagonal(rand(max(n-1,0)), rand(n), rand(max(n-1,0))),
+                SymTridiagonal(rand(n), rand(max(n-1,0))),
+                )
+            M = Matrix(T)
+            @test T * T ≈ M * M
+            @test mul!(similar(T, size(T)), T, T) ≈ M * M
+            @test mul!(ones(size(T)), T, T, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AR = rand(n,m)
+                AL = rand(m,n)
+                @test AL * T ≈ AL * M
+                @test T * AR ≈ M * AR
+                @test mul!(similar(AL), AL, T) ≈ AL * M
+                @test mul!(similar(AR), T, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, T, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), T, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            v = rand(n)
+            @test T * v ≈ M * v
+            @test mul!(similar(v), T, v) ≈ M * v
+
+            D = Diagonal(rand(n))
+            @test T * D ≈ M * D
+            @test D * T ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), D, T) ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), T, D) ≈ M * D
+            @test mul!(similar(T, size(T)), D, T) ≈ D * M
+            @test mul!(similar(T, size(T)), T, D) ≈ M * D
+            @test mul!(ones(size(T)), D, T, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(T)), T, D, 2, 4) ≈ M * D * 2 .+ 4
+
+            for uplo in (:U, :L)
+                B = Bidiagonal(rand(n), rand(max(0, n-1)), uplo)
+                @test T * B ≈ M * B
+                @test B * T ≈ B * M
+                if n <= 2
+                    @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
+                    @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+                end
+                @test mul!(similar(T, size(T)), B, T) ≈ B * M
+                @test mul!(similar(T, size(T)), T, B) ≈ M * B
+                @test mul!(ones(size(T)), B, T, 2, 4) ≈ B * M * 2 .+ 4
+                @test mul!(ones(size(T)), T, B, 2, 4) ≈ M * B * 2 .+ 4
+            end
+        end
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for T in (
+            SymTridiagonal(fill(arr,n), fill(arr,n-1)),
+            Tridiagonal(fill(arr,n-1), fill(arr,n), fill(arr,n-1)),
+            )
+        @test T * T ≈ Matrix(T) * Matrix(T)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * T ≈ Matrix(BL) * Matrix(T)
+        @test BU * T ≈ Matrix(BU) * Matrix(T)
+        @test T * BL ≈ Matrix(T) * Matrix(BL)
+        @test T * BU ≈ Matrix(T) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * T ≈ Matrix(D) * Matrix(T)
+        @test T * D ≈ Matrix(T) * Matrix(D)
+    end
+end
+
 end # module TestTridiagonal

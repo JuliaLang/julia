@@ -1048,4 +1048,71 @@ end
     @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
 end
 
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        D = Diagonal(rand(n))
+        v = rand(n)
+        @testset for uplo in (:L, :U)
+            B = Bidiagonal(rand(n), rand(max(n-1,0)), uplo)
+            M = Matrix(B)
+
+            @test B * v ≈ M * v
+            @test mul!(similar(v), B, v) ≈ M * v
+            @test mul!(ones(size(v)), B, v, 2, 3) ≈ M * v * 2 .+ 3
+
+            @test B * B ≈ M * M
+            @test mul!(similar(B, size(B)), B, B) ≈ M * M
+            @test mul!(ones(size(B)), B, B, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AL = rand(m,n)
+                AR = rand(n,m)
+                @test AL * B ≈ AL * M
+                @test B * AR ≈ M * AR
+                @test mul!(similar(AL), AL, B) ≈ AL * M
+                @test mul!(similar(AR), B, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, B, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), B, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            @test B * D ≈ M * D
+            @test D * B ≈ D * M
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B, size(B)), D, B) ≈ D * M
+            @test mul!(similar(B, size(B)), B, D) ≈ M * D
+            @test mul!(ones(size(B)), D, B, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(B)), B, D, 2, 4) ≈ M * D * 2 .+ 4
+        end
+        BL = Bidiagonal(rand(n), rand(max(0, n-1)), :L)
+        ML = Matrix(BL)
+        BU = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
+        MU = Matrix(BU)
+        T = Tridiagonal(zeros(max(0, n-1)), zeros(n), zeros(max(0, n-1)))
+        @test mul!(T, BL, BU) ≈ ML * MU
+        @test mul!(T, BU, BL) ≈ MU * ML
+        T = Tridiagonal(ones(max(0, n-1)), ones(n), ones(max(0, n-1)))
+        @test mul!(copy(T), BL, BU, 2, 3) ≈ ML * MU * 2 + T * 3
+        @test mul!(copy(T), BU, BL, 2, 3) ≈ MU * ML * 2 + T * 3
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for B in (
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :L),
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :U),
+            )
+        @test B * B ≈ Matrix(B) * Matrix(B)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * B ≈ Matrix(BL) * Matrix(B)
+        @test BU * B ≈ Matrix(BU) * Matrix(B)
+        @test B * BL ≈ Matrix(B) * Matrix(BL)
+        @test B * BU ≈ Matrix(B) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * B ≈ Matrix(D) * Matrix(B)
+        @test B * D ≈ Matrix(B) * Matrix(D)
+    end
+end
+
 end # module TestBidiagonal
