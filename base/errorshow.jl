@@ -1121,6 +1121,7 @@ function fielderror_listfields_hint_handler(io, exc)
 end
 
 function _propertynames_bytype(T::Type)
+    which(propertynames, (T,)) === which(propertynames, (Any,)) && return nothing
     inferred_names = promote_op(Val∘propertynames, T)
     inferred_names isa DataType && inferred_names <: Val || return nothing
     inferred_names = inferred_names.parameters[1]
