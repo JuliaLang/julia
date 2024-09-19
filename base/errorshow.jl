@@ -1120,10 +1120,13 @@ function fielderror_listfields_hint_handler(io, exc)
     print(io, "\nAvailable properties: $(join(map(k -> "`$k`", props), ", "))")
 end
 
-_extract_val(::Type{Val{V}}) where {V} = V
-_extract_val(@nospecialize _) = nothing
-_propertynames_bytype(::Type{T}) where {T} =
-    _extract_val(promote_op(Val∘propertynames, T))
+function _propertynames_bytype(T::Type)
+    inferred_names = promote_op(Val∘propertynames, T)
+    inferred_names isa DataType && inferred_names <: Val || return nothing
+    inferred_names = inferred_names.parameters[1]
+    inferred_names isa NTuple{Symbol} || return nothing
+    return Symbol[inferred_names[i] for i in 1:length(inferred_names)]
+end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
