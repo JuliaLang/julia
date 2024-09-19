@@ -332,14 +332,14 @@ end
 
 
 ############
-struct PkgPrecompileError <: Exception
+struct PrecompilePkgsError <: Exception
     msg::String
 end
-Base.showerror(io::IO, err::PkgPrecompileError) = print(io, err.msg)
-Base.showerror(io::IO, err::PkgPrecompileError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
+Base.showerror(io::IO, err::PrecompilePkgsError) = print(io, err.msg)
+Base.showerror(io::IO, err::PrecompilePkgsError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
 
 # This needs a show method to make `julia> err` show nicely
-Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", err.msg)
+Base.show(io::IO, err::PrecompilePkgsError) = print(io, "PrecompilePkgsError: ", err.msg)
 
 import Base: StaleCacheKey
 
@@ -993,7 +993,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"
                     println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
                     println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
-                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg))
+                    setglobal!(Base.MainInclude, :err, PrecompilePkgsError(err_msg))
                 else
                     # auto-precompilation shouldn't throw but if the user can't easily access the
                     # error messages, just show them
@@ -1001,7 +1001,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 end
             else
                 println(io)
-                throw(PkgPrecompileError(err_msg))
+                throw(PrecompilePkgsError(err_msg))
             end
         end
     end
