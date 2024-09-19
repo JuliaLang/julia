@@ -7584,13 +7584,14 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+bool jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     ++GeneratedCCallables;
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
     assert(ff);
     const char *name = jl_symbol_name(ft->name->mt->name);
+    bool name_conflict = (jl_ExecutionEngine->getGlobalValueAddress(StringRef(name)) != 0);
     jl_value_t *crt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
@@ -7619,12 +7620,12 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
                 // restore a ccallable from the system image
                 void *addr;
                 int found = jl_dlsym(sysimg_handle, name, &addr, 0);
-                if (found)
-                    add_named_global(name, addr);
-                else {
-                    err = jl_get_exceptionf(jl_errorexception_type, "%s not found in sysimg", name);
+                if (!found) {
+                    err = jl_get_exceptionf(jl_errorexception_type, "@ccallable: symbol '%s' not found in sysimg", name);
                     jl_throw(err);
                 }
+                if (!name_conflict)
+                    add_named_global(name, addr);
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
@@ -7632,7 +7633,7 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
                 gen_cfun_wrapper(unwrap(llvmmod)->getModuleUnlocked(), params, sig, ff, name, declrt, lam, NULL, NULL, NULL, min_valid, max_valid);
             }
             JL_GC_POP();
-            return name;
+            return !name_conflict;
         }
         err = jl_get_exceptionf(jl_errorexception_type, "%s", sig.err_msg.c_str());
     }

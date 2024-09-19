@@ -362,7 +362,7 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+bool jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -396,13 +396,9 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());
-    const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
-    bool success = true;
-    if (!sysimg) {
+    bool success = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
+    if (success && !sysimg) {
         JL_LOCK(&jl_ExecutionEngine->jitlock);
-        if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
-            success = false;
-        }
         if (success && p == NULL) {
             jl_jit_globals(params.global_targets);
             assert(params.workqueue.empty());

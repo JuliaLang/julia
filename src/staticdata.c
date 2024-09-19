@@ -2349,7 +2349,6 @@ static void jl_compile_extern(jl_method_t *m, void *sysimg_handle) JL_GC_DISABLE
     int success = jl_compile_extern_c(NULL, NULL, sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
     if (!success)
         jl_safe_printf("WARNING: @ccallable was already defined for this method name\n"); // enjoy a very bad time
-    assert(success || !sysimg_handle);
 }
 
 
