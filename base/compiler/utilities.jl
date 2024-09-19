@@ -48,15 +48,6 @@ anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-function istopfunction(@nospecialize(f), name::Symbol)
-    tn = typeof(f).name
-    if tn.mt.name === name
-        top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
-    end
-    return false
-end
-
 #######
 # AST #
 #######

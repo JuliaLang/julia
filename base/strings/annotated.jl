@@ -384,7 +384,7 @@ a vector of region–annotation tuples.
 In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
-See also: `annotate!`.
+See also: [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 
@@ -593,6 +593,7 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{U
         for i in reverse(axes(annotations, 1))
             annot = annotations[i]
             first(first(annot)) == 1 || continue
+            i <= length(io.annotations) || continue
             if last(annot) == last(last(io.annotations))
                 valid_run = true
                 for runlen in 1:i

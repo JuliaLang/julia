@@ -222,18 +222,18 @@ if opt_level > 0
     @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
-    @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
+    @test occursin("jl_gc_small_alloc", get_llvm(MutableStruct, Tuple{}))
     breakpoint_mutable_ir = get_llvm(breakpoint_mutable, Tuple{MutableStruct})
     @test !occursin("%gcframe", breakpoint_mutable_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_mutable_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_mutable_ir)
 
     breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
     @test !occursin("%gcframe", breakpoint_badref_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_badref_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_badref_ir)
 
     breakpoint_ptrstruct_ir = get_llvm(breakpoint_ptrstruct, Tuple{RealStruct})
     @test !occursin("%gcframe", breakpoint_ptrstruct_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_ptrstruct_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_ptrstruct_ir)
 end
 
 function two_breakpoint(a::Float64)
@@ -251,17 +251,17 @@ end
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a),
                                  Tuple{Float64})
-    @test !occursin("jl_gc_pool_alloc", breakpoint_f64_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_f64_ir)
     breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Any},), a),
                                  Tuple{Float64})
-    @test occursin("jl_gc_pool_alloc", breakpoint_any_ir)
+    @test occursin("jl_gc_small_alloc", breakpoint_any_ir)
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
-    @test !occursin("jl_gc_pool_alloc", two_breakpoint_ir)
+    @test !occursin("jl_gc_small_alloc", two_breakpoint_ir)
     @test occursin("llvm.lifetime.end", two_breakpoint_ir)
 
     @test load_dummy_ref(1234) === 1234
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
-    @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
+    @test !occursin("jl_gc_small_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
     @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
@@ -440,7 +440,7 @@ function f1_30093(r)
     end
 end
 
-@test f1_30093(Ref(0)) == nothing
+@test f1_30093(Ref(0)) === nothing
 
 # issue 33590
 function f33590(b, x)
@@ -697,7 +697,7 @@ mktempdir() do pfx
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) --startup-file=no -e 'print("no codegen!\n")'`) == "no codegen!"
 
     # PR #47343
     libs_emptied = 0
@@ -956,3 +956,51 @@ function foonopreds()
     pkgid.uuid !== nothing ? pkgid.uuid : false
 end
 @test foonopreds() !== nothing
+
+# issue 55396
+struct Incomplete55396
+  x::Tuple{Int}
+  y::Int
+  @noinline Incomplete55396(x::Int) = new((x,))
+end
+let x = Incomplete55396(55396)
+    @test x.x === (55396,)
+end
+
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
+
+# issue 55208
+@noinline function f55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    return z isa Core.TypeofBottom
+end
+@test f55208((Union{}, 5, 6, 7), 0)
+
+@noinline function g55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    typeof(z)
+end
+@test g55208((Union{}, true, true), 0) === typeof(Union{})
+
+@test string((Core.Union{}, true, true, true)) == "(Union{}, true, true, true)"
+
+# Issue #55558
+for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
+    @eval begin
+        struct $(StructName)
+            a::$(T)
+            b::Int64
+            c::$(T)
+        end
+        local broken_i128 = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "powerpc64le"
+        @test fieldoffset($(StructName), 2) == 16
+        @test fieldoffset($(StructName), 3) == 32 broken=broken_i128
+        @test sizeof($(StructName)) == 48 broken=broken_i128
+    end
+end
+
+@noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
+@test f55768(Vector)
+@test f55768(Vector{T} where T)
+@test !f55768(Vector{S} where S)

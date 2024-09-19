@@ -1,0 +1,49 @@
+From 23b5d66a86417a071bba9a96a0573192237981b6 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Wed, 14 Aug 2024 10:35:44 +0200
+Subject: [PATCH 1/2] Ensure a memory buffer has been allocated for each thread
+ before invoking it
+
+---
+ driver/others/blas_server.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+From d24b3cf39392a99e81ed47a5f093fbd074d4b39b Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 15 Aug 2024 15:32:58 +0200
+Subject: [PATCH 2/2] properly fix buffer allocation and assignment
+
+---
+ driver/others/blas_server.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+diff --git a/driver/others/blas_server.c b/driver/others/blas_server.c
+index 765511d8c7..b9a7674c17 100644
+--- a/driver/others/blas_server.c
++++ b/driver/others/blas_server.c
+@@ -1076,6 +1076,8 @@ fprintf(STDERR, "Server[%2ld] Calculation started.  Mode = 0x%03x M = %3ld N=%3l
+       main_status[cpu] = MAIN_RUNNING1;
+ #endif
+ 
++if (buffer == NULL) blas_thread_buffer[cpu] = blas_memory_alloc(2);
++	
+ //For target LOONGSON3R5, applying an offset to the buffer is essential
+ //for minimizing cache conflicts and optimizing performance.
+ #if defined(ARCH_LOONGARCH64) && !defined(NO_AFFINITY)
+
+diff --git a/driver/others/blas_server.c b/driver/others/blas_server.c
+index b9a7674c17..29f8a5e646 100644
+--- a/driver/others/blas_server.c
++++ b/driver/others/blas_server.c
+@@ -1076,7 +1076,11 @@ fprintf(STDERR, "Server[%2ld] Calculation started.  Mode = 0x%03x M = %3ld N=%3l
+       main_status[cpu] = MAIN_RUNNING1;
+ #endif
+ 
+-if (buffer == NULL) blas_thread_buffer[cpu] = blas_memory_alloc(2);
++if (buffer == NULL) {
++	blas_thread_buffer[cpu] = blas_memory_alloc(2);
++	buffer = blas_thread_buffer[cpu];
++}      
++
+ 	
+ //For target LOONGSON3R5, applying an offset to the buffer is essential
+ //for minimizing cache conflicts and optimizing performance.

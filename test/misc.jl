@@ -132,7 +132,7 @@ end
 # Lockable{T, L<:AbstractLock}
 using Base: Lockable
 let
-    @test_broken Base.isexported(Base, :Lockable)
+    @test Base.isexported(Base, :Lockable)
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
     # note field access is non-public
     @test lockable.value["foo"] == "hello"
@@ -157,6 +157,16 @@ let
     lockable2 = Lockable(Dict("foo" => "hello"))
     @test lockable2.lock isa ReentrantLock
     @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
 end
 
 for l in (Threads.SpinLock(), ReentrantLock())

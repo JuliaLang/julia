@@ -28,8 +28,8 @@ typedef struct {
     small_arraylist_t live_tasks;
 
     // variables for tracking malloc'd arrays
-    struct _mallocarray_t *mallocarrays;
-    struct _mallocarray_t *mafreelist;
+    struct _mallocmemory_t *mallocarrays;
+    struct _mallocmemory_t *mafreelist;
 
     // variable for tracking young (i.e. not in `GC_OLD_MARKED`/last generation) large objects
     struct _bigval_t *young_generation_of_bigvals;

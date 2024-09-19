@@ -43,6 +43,15 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
+function showerror(io::IO, ex::Core.TypeNameError)
+    print(io, "TypeNameError: ")
+    if isa(ex.a, Union)
+        print(io, "typename does not apply to unions whose components have different typenames")
+    else
+        print(io, "typename does not apply to this type")
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -1058,7 +1067,7 @@ Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f === +) && all(i -> i <: AbstractString, arg_types)
+    if (ex.f === +) && !isempty(arg_types) && all(i -> i <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")

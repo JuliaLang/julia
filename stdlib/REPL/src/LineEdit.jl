@@ -3,7 +3,7 @@
 module LineEdit
 
 import ..REPL
-using REPL: AbstractREPL, Options
+using ..REPL: AbstractREPL, Options
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
@@ -66,6 +66,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 mutable struct MIState
     interface::ModalInterface
     active_module::Module
+    previous_active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -78,7 +79,7 @@ mutable struct MIState
     async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -741,7 +742,26 @@ function edit_move_right(buf::IOBuffer)
     end
     return false
 end
-edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) ? refresh_line(s) : false
+function edit_move_right(m::MIState)
+    s = state(m)
+    buf = s.input_buffer
+    if edit_move_right(s.input_buffer)
+        refresh_line(s)
+        return true
+    else
+        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+            # Replace word by completion
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            refresh_line(state(s))
+            return true
+        else
+            return false
+        end
+    end
+end
 
 function edit_move_word_right(s::PromptState)
     if !eof(s.input_buffer)
@@ -1491,13 +1511,11 @@ end
 
 current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
-previous_active_module::Module = Main
-
 function activate_module(s::MIState)
     word = current_word_with_dots(s);
     empty = isempty(word)
     mod = if empty
-        previous_active_module
+        s.previous_active_module
     else
         try
             Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
@@ -1513,7 +1531,7 @@ function activate_module(s::MIState)
     if Base.active_module() == Main || mod == Main
         # At least one needs to be Main. Disallows toggling between two non-Main modules because it's
         # otherwise hard to get back to Main
-        global previous_active_module = Base.active_module()
+        s.previous_active_module = Base.active_module()
     end
     REPL.activate(mod)
     edit_clear(s)

@@ -198,7 +198,7 @@ end
         bar = Bar19921(foo, Dict(foo => 3))
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
-        @test bar2.fooDict[bar2.foo] != nothing
+        @test bar2.fooDict[bar2.foo] !== nothing
     end
 
     let d = IdDict(rand(2) => rand(2) for i = 1:100)
@@ -282,6 +282,8 @@ end
 
 @testset "`deepcopy` a `GenericCondition`" begin
     a = Base.GenericCondition(ReentrantLock())
+    # Test printing
+    @test repr(a) == "Base.GenericCondition(ReentrantLock())"
     @test !islocked(a.lock)
     lock(a.lock)
     @test islocked(a.lock)

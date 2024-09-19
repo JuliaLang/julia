@@ -213,7 +213,7 @@
 
         r = r"" * raw"a\Eb|c"
         @test match(r, raw"a\Eb|c").match == raw"a\Eb|c"
-        @test match(r, raw"c") == nothing
+        @test match(r, raw"c") === nothing
 
         # error for really incompatible options
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)

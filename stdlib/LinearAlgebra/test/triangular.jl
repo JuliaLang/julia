@@ -25,6 +25,12 @@ debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
@@ -436,8 +442,6 @@ debug && println("Test basic type functionality")
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
-            Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            @test lmul!(Tri,copy(A1)) ≈ Tri*M1
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
             mul!(C, Tri, A1)
@@ -897,7 +901,7 @@ end
     function test_one_oneunit_triangular(a)
         b = Matrix(a)
         @test (@inferred a^1) == b^1
-        @test (@inferred a^-1) == b^-1
+        @test (@inferred a^-1) ≈ b^-1
         @test one(a) == one(b)
         @test one(a)*a == a
         @test a*one(a) == a
@@ -1178,6 +1182,92 @@ end
     D = Float64[1 0; 0 2]
     V = @inferred eigvecs(UpperTriangular(D))
     @test V == Diagonal([1, 1])
+end
+
+@testset "preserve structure in scaling by NaN" begin
+    M = rand(Int8,2,2)
+    for (Ts, TD) in (((UpperTriangular, UnitUpperTriangular), UpperTriangular),
+                    ((LowerTriangular, UnitLowerTriangular), LowerTriangular))
+        for T in Ts
+            U = T(M)
+            for V in (U * NaN, NaN * U, U / NaN, NaN \ U)
+                @test V isa TD{Float64, Matrix{Float64}}
+                @test all(isnan, diag(V))
+            end
+        end
+    end
+end
+
+@testset "eigvecs for AbstractTriangular" begin
+    S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
+    for T in (UpperTriangular, UnitUpperTriangular,
+                LowerTriangular, UnitLowerTriangular)
+        U = T(S)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test U * V ≈ V * Diagonal(λ)
+
+        MU = MyTriangular(U)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test MU * V ≈ V * Diagonal(λ)
+    end
+end
+
+@testset "(l/r)mul! and (l/r)div! for generic triangular" begin
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        M = MyTriangular(T(rand(4,4)))
+        A = rand(4,4)
+        Ac = similar(A)
+        @testset "lmul!" begin
+            Ac .= A
+            lmul!(M, Ac)
+            @test Ac ≈ M * A
+        end
+        @testset "rmul!" begin
+            Ac .= A
+            rmul!(Ac, M)
+            @test Ac ≈ A * M
+        end
+        @testset "ldiv!" begin
+            Ac .= A
+            ldiv!(M, Ac)
+            @test Ac ≈ M \ A
+        end
+        @testset "rdiv!" begin
+            Ac .= A
+            rdiv!(Ac, M)
+            @test Ac ≈ A / M
+        end
+    end
+end
+
+@testset "istriu/istril forwards to parent" begin
+    @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            U = TriT(M)
+            A = Array(U)
+            for k in -n:n
+                @test istriu(U, k) == istriu(A, k)
+                @test istril(U, k) == istril(A, k)
+            end
+        end
+    end
+    z = zeros(n,n)
+    @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        P = Matrix{BigFloat}(undef, n, n)
+        copytrito!(P, z, TriT <: Union{UpperTriangular, UnitUpperTriangular} ? 'U' : 'L')
+        U = TriT(P)
+        A = Array(U)
+        @testset for k in -n:n
+            @test istriu(U, k) == istriu(A, k)
+            @test istril(U, k) == istril(A, k)
+        end
+    end
 end
 
 end # module TestTriangular

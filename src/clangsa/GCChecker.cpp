@@ -767,7 +767,7 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const S
   SourceLocation Loc = FD->getLocation();
   StringRef Name = SM.getFilename(Loc);
   Name = llvm::sys::path::filename(Name);
-  if (Name.startswith("llvm-"))
+  if (Name.starts_with("llvm-"))
       return true;
   return false;
 }
@@ -911,9 +911,9 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
       else if (FD->getDeclName().isIdentifier() &&
-               (FD->getName().startswith("uv_") ||
-                FD->getName().startswith("unw_") ||
-                FD->getName().startswith("_U")) &&
+               (FD->getName().starts_with("uv_") ||
+                FD->getName().starts_with("unw_") ||
+                FD->getName().starts_with("_U")) &&
                FD->getName() != "uv_run")
         isCalleeSafepoint = false;
       else
@@ -1050,13 +1050,13 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         // global roots.
         StringRef FDName =
             FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        if (FDName.startswith("jl_box_") || FDName.startswith("ijl_box_")) {
+        if (FDName.starts_with("jl_box_") || FDName.starts_with("ijl_box_")) {
           SVal Arg = Call.getArgSVal(0);
           if (auto CI = Arg.getAs<nonloc::ConcreteInt>()) {
             const llvm::APSInt &Value = CI->getValue();
             bool GloballyRooted = false;
             const int64_t NBOX_C = 1024;
-            if (FDName.startswith("jl_box_u") || FDName.startswith("ijl_box_u")) {
+            if (FDName.starts_with("jl_box_u") || FDName.starts_with("ijl_box_u")) {
               if (Value < NBOX_C) {
                 GloballyRooted = true;
               }

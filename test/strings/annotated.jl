@@ -5,13 +5,22 @@
     @test str == Base.AnnotatedString(str.string, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[])
     @test length(str) == 11
     @test ncodeunits(str) == 11
+    @test codeunits(str) == codeunits("some string")
+    @test codeunit(str) == UInt8
+    @test codeunit(str, 1) == codeunit("some string", 1)
+    @test firstindex(str) == firstindex("some string")
+    @test convert(Base.AnnotatedString, str) === str
     @test eltype(str) == Base.AnnotatedChar{eltype(str.string)}
     @test first(str) == Base.AnnotatedChar(first(str.string), Pair{Symbol, Any}[])
     @test str[1:4] isa SubString{typeof(str)}
     @test str[1:4] == Base.AnnotatedString("some")
+    big_byte_str = Base.AnnotatedString("आख")
+    @test_throws StringIndexError big_byte_str[5]
     @test "a" * str == Base.AnnotatedString("asome string")
     @test str * "a" == Base.AnnotatedString("some stringa")
     @test str * str == Base.AnnotatedString("some stringsome string")
+    @test cmp(str, "some stringy thingy") == -1
+    @test cmp("some stringy thingy", str) == 1
     @test str[3:4] == SubString("me")
     @test SubString("me") == str[3:4]
     Base.annotate!(str, 1:4, :thing => 0x01)
@@ -63,7 +72,12 @@ end
 
 @testset "AnnotatedChar" begin
     chr = Base.AnnotatedChar('c')
+    @test Base.AnnotatedChar(UInt32('c')) == chr
+    @test convert(Base.AnnotatedChar, chr) === chr
     @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
+    @test uppercase(chr) == Base.AnnotatedChar('C')
+    @test titlecase(chr) == Base.AnnotatedChar('C')
+    @test lowercase(Base.AnnotatedChar('C')) == chr
     str = Base.AnnotatedString("hmm", [(1:1, :attr => "h0h0"),
                                (1:2, :attr => "h0m1"),
                                (2:3, :attr => "m1m2")])
@@ -101,6 +115,8 @@ end
                      [(1:4, :label => 5),
                       (5:5, :label => 2),
                       (6:9, :label => 5)])
+    @test join((String(str1), str1), ' ') ==
+        Base.AnnotatedString("test test", [(6:9, :label => 5)])
     @test repeat(str1, 2) == Base.AnnotatedString("testtest", [(1:8, :label => 5)])
     @test repeat(str2, 2) == Base.AnnotatedString("casecase", [(2:3, :label => "oomph"),
                                                        (6:7, :label => "oomph")])
@@ -212,6 +228,12 @@ end
     let aio2 = copy(aio) # ...and any subsequent annotations after a matching run can just be copied over.
         @test write(aio2, Base.AnnotatedChar('c', [:b => 2, :c => 3, :d => 4])) == 1
         @test Base.annotations(aio2) == [(1:2, :a => 1), (1:3, :b => 2), (3:3, :c => 3), (3:3, :d => 4)]
+    end
+    let aio2 = Base.AnnotatedIOBuffer()
+        @test write(aio2, Base.AnnotatedChar('a', [:b => 1])) == 1
+        @test write(aio2, Base.AnnotatedChar('b', [:a => 1, :b => 1])) == 1
+        @test read(seekstart(aio2), Base.AnnotatedString) ==
+            Base.AnnotatedString("ab", [(1:1, :b => 1), (2:2, :a => 1), (2:2, :b => 1)])
     end
     # Working through an IOContext
     aio = Base.AnnotatedIOBuffer()
