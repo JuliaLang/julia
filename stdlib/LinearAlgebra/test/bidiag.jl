@@ -969,6 +969,19 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    for T in (Bidiagonal(rand(4), rand(3), :U), Bidiagonal(rand(4), rand(3), :L))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (Bidiagonal(rand(1), rand(0), :U), Bidiagonal(rand(1), rand(0), :L))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
 @testset "mul with Diagonal" begin
     for n in 0:4
         dv, ev = rand(n), rand(max(n-1,0))
