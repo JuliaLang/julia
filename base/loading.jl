@@ -2835,7 +2835,8 @@ end
 function check_package_module_loaded(pkg::PkgId)
     if !haskey(Base.loaded_modules, pkg)
         # match compilecache error type for non-125 errors
-        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`")
+        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
+            check for typos in package module name")
     end
     return nothing
 end
