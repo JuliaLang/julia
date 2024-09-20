@@ -2093,4 +2093,21 @@ precompile_test_harness("Binding Unique") do load_path
     @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
 end
 
+precompile_test_harness("Detecting importing outside of a package module") do load_path
+    write(joinpath(load_path, "ImportBeforeMod.jl"),
+    """
+    import Printf
+    module ImportBeforeMod
+    end #module
+    """)
+    @test_throws ErrorException Base.compilecache(Base.identify_package("ImportBeforeMod"), Base.DevNull())
+
+    write(joinpath(load_path, "ImportAfterMod.jl"), """
+    module ImportAfterMod
+    end #module
+    import Printf
+    """)
+    @test_throws ErrorException Base.compilecache(Base.identify_package("ImportAfterMod"), Base.DevNull())
+end
+
 finish_precompile_test!()
