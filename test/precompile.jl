@@ -2110,4 +2110,17 @@ precompile_test_harness("Detecting importing outside of a package module") do lo
     @test_throws ErrorException Base.compilecache(Base.identify_package("ImportAfterMod"), Base.DevNull())
 end
 
+precompile_test_harness("No package module") do load_path
+    write(joinpath(load_path, "NoModule.jl"),
+    """
+    x = 1
+    """)
+    @test_throws ErrorException Base.compilecache(Base.identify_package("NoModule"), Base.DevNull())
+
+    write(joinpath(load_path, "NoModuleWithImport.jl"), """
+    import Printf
+    """)
+    @test_throws ErrorException Base.compilecache(Base.identify_package("NoModuleWithImport"), Base.DevNull())
+end
+
 finish_precompile_test!()
