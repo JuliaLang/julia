@@ -378,7 +378,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
+    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1102,7 +1102,7 @@ end
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
 # Display a hint in case the user tries to access non-member fields of container type datastructures
-function fielderror_hint_handler(io, exc)
+function fielderror_dict_hint_handler(io, exc)
     @nospecialize
     field = exc.field
     type = exc.type
@@ -1113,7 +1113,32 @@ function fielderror_hint_handler(io, exc)
     end
 end
 
-Experimental.register_error_hint(fielderror_hint_handler, FieldError)
+Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
+
+function fielderror_listfields_hint_handler(io, exc)
+    fields = fieldnames(exc.type)
+    if isempty(fields)
+        print(io, "; $(nameof(exc.type)) has no fields at all.")
+    else
+        print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
+    end
+    props = _propertynames_bytype(exc.type)
+    isnothing(props) && return
+    props = setdiff(props, fields)
+    isempty(props) && return
+    print(io, "\nAvailable properties: $(join(map(k -> "`$k`", props), ", "))")
+end
+
+function _propertynames_bytype(T::Type)
+    which(propertynames, (T,)) === which(propertynames, (Any,)) && return nothing
+    inferred_names = promote_op(Val∘propertynames, T)
+    inferred_names isa DataType && inferred_names <: Val || return nothing
+    inferred_names = inferred_names.parameters[1]
+    inferred_names isa NTuple{<:Any, Symbol} || return nothing
+    return Symbol[inferred_names[i] for i in 1:length(inferred_names)]
+end
+
+Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

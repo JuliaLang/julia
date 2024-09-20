@@ -1694,7 +1694,7 @@ julia> ab = AB(1, 3)
 AB(1.0f0, 3.0)
 
 julia> ab.c # field `c` doesn't exist
-ERROR: FieldError: type AB has no field c
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
 Stacktrace:
 [...]
 ```
