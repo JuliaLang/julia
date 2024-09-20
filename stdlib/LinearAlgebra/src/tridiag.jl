@@ -230,7 +230,7 @@ end
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
 function rmul!(A::SymTridiagonal, x::Number)
     if size(A,1) > 2
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = A[3,1] * x
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
@@ -241,7 +241,7 @@ function rmul!(A::SymTridiagonal, x::Number)
 end
 function lmul!(x::Number, B::SymTridiagonal)
     if size(B,1) > 2
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = x * B[3,1]
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
@@ -861,7 +861,7 @@ tr(M::Tridiagonal) = sum(M.d)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 function rmul!(T::Tridiagonal, x::Number)
     if size(T,1) > 2
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = T[3,1] * x
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
@@ -873,7 +873,7 @@ function rmul!(T::Tridiagonal, x::Number)
 end
 function lmul!(x::Number, T::Tridiagonal)
     if size(T,1) > 2
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = x * T[3,1]
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))

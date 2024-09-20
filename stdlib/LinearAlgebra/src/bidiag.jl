@@ -445,7 +445,7 @@ function rmul!(B::Bidiagonal, x::Number)
     if size(B,1) > 1
         isupper = B.uplo == 'U'
         row, col = 1 + isupper, 1 + !isupper
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = B[row,col] * x
         iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
@@ -458,7 +458,7 @@ function lmul!(x::Number, B::Bidiagonal)
     if size(B,1) > 1
         isupper = B.uplo == 'U'
         row, col = 1 + isupper, 1 + !isupper
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = x * B[row,col]
         iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))

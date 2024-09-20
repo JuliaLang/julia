@@ -276,7 +276,7 @@ end
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
 function lmul!(x::Number, D::Diagonal)
     if size(D,1) > 1
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = D[2,1] * x
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
@@ -286,7 +286,7 @@ function lmul!(x::Number, D::Diagonal)
 end
 function rmul!(D::Diagonal, x::Number)
     if size(D,1) > 1
-        # ensure that zeros are preserved on the scaling
+        # ensure that zeros are preserved on scaling
         y = x * D[2,1]
         iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
             lazy"the tridiagonal band to a nonzero value ($y)")))
