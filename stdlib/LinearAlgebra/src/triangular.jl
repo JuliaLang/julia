@@ -140,9 +140,9 @@ julia> UnitUpperTriangular(A)
 """
 UnitUpperTriangular
 
-const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
-const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
-const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UpperOrUnitUpperTriangular{T,S<:AbstractMatrix{T}} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
+const LowerOrUnitLowerTriangular{T,S<:AbstractMatrix{T}} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
+const UpperOrLowerTriangular{T,S<:AbstractMatrix{T}} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -1851,7 +1851,19 @@ end
 
 ## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
-for f in (:*, :\)
+function matprod_dest(A::LowerOrUnitLowerTriangular, B::LowerOrUnitLowerTriangular, TS)
+    LowerTriangular(matprod_dest(parent(A), parent(B), TS))
+end
+function matprod_dest(A::UpperOrUnitUpperTriangular, B::UpperOrUnitUpperTriangular, TS)
+    UpperTriangular(matprod_dest(parent(A), parent(B), TS))
+end
+function matprod_dest(A::UnitLowerTriangular, B::UnitLowerTriangular, TS)
+    UnitLowerTriangular(matprod_dest(parent(A), parent(B), TS))
+end
+function matprod_dest(A::UnitUpperTriangular, B::UnitUpperTriangular, TS)
+    UnitUpperTriangular(matprod_dest(parent(A), parent(B), TS))
+end
+for f in (:\,)
     @eval begin
         ($f)(A::LowerTriangular, B::LowerTriangular) =
             LowerTriangular(@invoke $f(A::LowerTriangular, B::AbstractMatrix))
