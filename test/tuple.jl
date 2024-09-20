@@ -845,3 +845,25 @@ end
         end
     end
 end
+
+@testset "ntuple with non Ints, issue #55790" begin
+    # Using 2 and 12 as the test values because they are below and above the magic number 10
+    # that is used in ntuple's implementation.
+    limits = (
+        true,
+        false,
+        2,
+        12,
+        BigInt(2),
+        BigInt(12),
+        Int(2),
+        Int(12),
+        UInt128(2),
+        UInt(128),
+        UInt8(2),
+        UInt(12)
+    )
+    for limit in limits
+        @test all(typeof.(ntuple(identity, limit)) .== typeof(limit))
+    end
+end

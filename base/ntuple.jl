@@ -16,17 +16,18 @@ julia> ntuple(i -> 2*i, 4)
 """
 @inline function ntuple(f::F, n::Integer) where F
     # marked inline since this benefits from constant propagation of `n`
+    T = typeof(n)
     t = n == 0  ? () :
-        n == 1  ? (f(1),) :
-        n == 2  ? (f(1), f(2)) :
-        n == 3  ? (f(1), f(2), f(3)) :
-        n == 4  ? (f(1), f(2), f(3), f(4)) :
-        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
-        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
-        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
-        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
-        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
-        n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
+        n == 1  ? (f(T(1)),) :
+        n == 2  ? (f(T(1)), f(T(2))) :
+        n == 3  ? (f(T(1)), f(T(2)), f(T(3))) :
+        n == 4  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4))) :
+        n == 5  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5))) :
+        n == 6  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5)), f(T(6))) :
+        n == 7  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5)), f(T(6)), f(T(7))) :
+        n == 8  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5)), f(T(6)), f(T(7)), f(T(8))) :
+        n == 9  ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5)), f(T(6)), f(T(7)), f(T(8)), f(T(9))) :
+        n == 10 ? (f(T(1)), f(T(2)), f(T(3)), f(T(4)), f(T(5)), f(T(6)), f(T(7)), f(T(8)), f(T(9)), f(T(10))) :
         _ntuple(f, n)
     return t
 end
@@ -34,13 +35,13 @@ end
 function _ntuple(f::F, n) where F
     @noinline
     (n >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", n)))
-    ([f(i) for i = 1:n]...,)
+    ([f(i) for i = one(n):n]...,)
 end
 
 function ntupleany(f, n)
     @noinline
     (n >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", n)))
-    (Any[f(i) for i = 1:n]...,)
+    (Any[f(i) for i = one(n):n]...,)
 end
 
 # inferable ntuple (enough for bootstrapping)
