@@ -363,7 +363,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --gcthreads
     code = "print(Threads.ngcthreads())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+    @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
