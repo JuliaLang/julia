@@ -5003,7 +5003,7 @@ f(x) = yt(x)
 
             ;; bare :escape
             ((escape)
-             (error (string "\"esc(:(...))\" used outside of macro expansion")))
+             (error (string "\"esc(...)\" used outside of macro expansion")))
 
             ((error)
              (error (cadr e)))
