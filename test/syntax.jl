@@ -3985,3 +3985,19 @@ begin
   end
 end
 @test f45494() === (0,)
+
+# issue #55788
+@test_throws r"""
+    \$\(Expr\(:foo, :\(\$\(esc\(:\(begin
+        SSAValue\(\d+\) = 1
+        begin
+            \$\(Expr\(:newvar, :x\)
+            nothing
+            begin
+                nothing
+                x = SSAValue\(\d+\)
+            end
+            const @__MODULE__\(\).x
+            SSAValue\(\d+\)
+        end
+    end\)\)\)\)""" eval(Expr(:foo, esc(:(const x=1))))
