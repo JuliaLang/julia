@@ -1271,22 +1271,26 @@ end
 @testset "checking srcpath modules" begin
     p = Base.PkgId("Dummy")
     fpath, _ = mktemp()
+
+    function check(src)
+        write(fpath, src)
+        return Base.check_src_module_wrap(p, fpath)
+    end
+
     @testset "valid" begin
-        write(fpath, """
+        @test check("""
         module Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         baremodule Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         \"\"\"
         Foo
         using Foo
@@ -1295,66 +1299,112 @@ end
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         \"\"\" Foo \"\"\"
         module Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         \"\"\"
         Foo
         \"\"\" module Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         @doc let x = 1
             x
         end module Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test check("""
         # using foo
         module Foo
         using Bar
         end
         """)
-        @test Base.check_src_module_wrap(p, fpath)
+
+        @test check("""
+        #=
+        using foo
+        =#
+        module Foo
+        using Bar
+        end
+        """)
+
+        @test check("""
+        #=
+        nested multiline comment
+        #=
+        using foo
+        =#
+        =#
+        module Foo
+        using Bar
+        end
+        """)
+
+        @test check("""
+        #= using foo =#
+        module Foo
+        using Bar
+        end
+        """)
+
+        @test check("""
+        #= \"\"\" =#
+        module Foo
+        #= \"\"\" =#
+        using Bar
+        end
+        """)
     end
     @testset "invalid" begin
-        write(fpath, """
+        @test_throws ErrorException check("""
         # module Foo
         using Bar
         # end
         """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test_throws ErrorException check("""
         using Bar
         module Foo
         end
         """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test_throws ErrorException check("""
         using Bar
         """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
 
-        write(fpath, """
+        @test_throws ErrorException check("""
         x = 1
         """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        @test_throws ErrorException check("""
+        using Bar #=
+        =#
+        module Foo
+        end
+        """)
+
+        @test_throws ErrorException check("""
+        #=
+        module Foo
+        =#
+        using Bar
+        module Foo2
+        end
+        #=
+        end
+        =#
+        """)
     end
 end
 

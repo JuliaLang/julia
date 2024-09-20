@@ -2792,33 +2792,39 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
+# Return true if module declaration is found
+# Throw an error if using/import is found
+# Otherwise return false
+function _check_src_module_wrap(pkg::PkgId, srcpath::String, ex::Expr)
+    isexpr(ex, [:using, :import]) && throw(ErrorException("Package $(repr("text/plain", pkg)): file $srcpath has a using/import before a module declaration."))
+    isexpr(ex, :module) && return true
+    for arg in ex.args
+        if isa(arg, Expr)
+            _check_src_module_wrap(pkg, srcpath, arg) && return true
+        end
+    end
+    return false
+end
+
 """
     check_src_module_wrap(srcpath::String)
 
 Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
 """
 function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
-    load_rgx = r"\b(?:using|import)\s"
-    load_seen = false
-    inside_string = false
-    for s in eachline(srcpath)
-        if count("\"\"\"", s) == 1
-            # ignore module docstrings
-            inside_string = !inside_string
-        end
-        inside_string && continue
-        if contains(s, module_rgx)
-            if load_seen
-                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
-            end
-            return true
-        end
-        if startswith(s, load_rgx)
-            load_seen = true
-        end
+    # Fast path: if the source file starts with a module declaration, just
+    # return true
+    open(startswith("module "), srcpath) && return true
+
+    source = read(srcpath, String)
+    ex, pos = Meta.parse(source, 1)
+    while ex !== nothing
+        # Dosctrings are parsed as an expression with the module definition in
+        # the expression's argument, so we need recursive check
+        _check_src_module_wrap(pkg, srcpath, ex) && return true
+        ex, pos = Meta.parse(source, pos)
     end
-    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
+    throw(ErrorException("Package $(repr("text/plain", pkg)): file $srcpath does not contain a module declaration."))
 end
 
 # this is called in the external process that generates precompiled package files
