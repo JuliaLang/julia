@@ -414,6 +414,8 @@ end
         @test size.(a) == size.(arr)
         @test axes.(a) == axes.(arr)
     end
+
+    @test typeof(normalize(Vector{Int64}[])) == Vector{Float64}
 end
 
 @testset "normalize for scalars" begin
