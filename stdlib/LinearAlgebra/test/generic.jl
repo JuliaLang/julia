@@ -401,7 +401,7 @@ end
         [ones(2), ones(1, 2)],
         [ones(Float16, 2, 3), ones(Int16, 2, 3)],
         [Dual.(randn(2,3), randn(2,3)), Dual.(randn(3,4), randn(3,4))],
-        [OffsetArray([-1,0], (-2,)), OffsetArray([-1;0;;], (-2,-2))]
+        [OffsetArray([-1 0], (-2,-2)), OffsetArray([-1 0], (-2,-2))]
     )
         a = normalize(arr)
         an = norm(arr)
@@ -410,12 +410,12 @@ end
         R = promote_type(T, S)
         @test eltype(a[1]) == R
         @test eltype(a[2]) == R
-        @test eltype(a) == Base.promote_typeof(a[1], a[2])
+        @test eltype(a) == Base.promote_op(/, eltype(a), typeof(an))
         @test size.(a) == size.(arr)
         @test axes.(a) == axes.(arr)
     end
 
-    @test typeof(normalize(Vector{Int64}[])) == Vector{Float64}
+    @test typeof(normalize(Vector{Int64}[])) == Vector{Vector{Float64}}
 end
 
 @testset "normalize for scalars" begin
