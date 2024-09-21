@@ -327,7 +327,7 @@ mutable struct InferenceState
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
-        cycle_backedges = Vector{Tuple{InferenceState,Int}}()
+        cycle_backedges = Tuple{InferenceState,Int}[]
         callstack = AbsIntState[]
         tasks = WorkThunk[]
 
@@ -754,13 +754,6 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
         end
     end
     return nothing
-end
-
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, caller.currpc)
-    contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
-    return frame
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)

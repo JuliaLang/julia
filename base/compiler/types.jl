@@ -458,18 +458,27 @@ abstract type CallInfo end
 
 @nospecialize
 
+function add_edges!(edges::Vector{Any}, info::CallInfo)
+    if info === NoCallInfo()
+        return nothing # just a minor optimization to avoid dynamic dispatch
+    end
+    add_edges_impl(edges, info)
+    nothing
+end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
 add_uncovered_edges!(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = add_uncovered_edges_impl(edges, info, atype)
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,ConstResult}=#
 
-getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
-
-# must implement `nsplit`, `getsplit`, and `add_uncovered_edges!` to opt in to inlining
+add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
+    All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")
 nsplit_impl(::CallInfo) = nothing
-getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
-add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("unexpected call into `add_uncovered_edges!`")
-
-# must implement `getresult` to opt in to extended lattice return information
+getsplit_impl(::CallInfo, ::Int) = error("""
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupResult`
+    in order to correctly opt in to inlining""")
+add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("""
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `add_uncovered_edges_impl(edges::Vector{Any}, info::CallInfo, atype)`
+    in order to correctly opt in to inlining""")
 getresult_impl(::CallInfo, ::Int) = nothing
 
 @specialize

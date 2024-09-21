@@ -101,7 +101,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
     result = caller.result
     opt = result.src
     if opt isa OptimizationState
-        result.src = opt = ir_to_codeinf!(opt)
+        result.src = ir_to_codeinf!(opt)
     end
     valid_worlds = result.valid_worlds
     if last(valid_worlds) >= get_world_counter()
@@ -167,8 +167,8 @@ end
 function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
-    for caller in cycleid:length(frames)
-        caller = frames[caller]::InferenceState
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
         @assert caller.cycleid == cycleid
         # converge the world age range and effects for this cycle here:
         # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
@@ -177,20 +177,20 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
         cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
-    for caller in cycleid:length(frames)
-        caller = frames[caller]::InferenceState
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finishinfer!(caller, caller.interp)
     end
-    for caller in cycleid:length(frames)
-        caller = frames[caller]::InferenceState
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
         end
     end
-    for caller in cycleid:length(frames)
-        caller = frames[caller]::InferenceState
+    for frameid = cycleid:length(frames)
+        caller = frames[frameid]::InferenceState
         finish!(caller.interp, caller)
     end
     resize!(frames, cycleid - 1)
@@ -522,107 +522,16 @@ function store_backedges(caller::MethodInstance, edges::Vector{Any})
     return nothing
 end
 
-add_edges!(edges::Vector{Any}, info::MethodResultPure) = add_edges!(edges, info.info)
-add_edges!(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
-add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = add_edges!(edges, info.unspec.info) # merely creating the object implies edges for OC, unlike normal objects, since calling them doesn't normally have edges in contrast
-add_edges!(edges::Vector{Any}, info::OpaqueClosureCallInfo) = add_one_edge!(edges, specialize_method(info.match))
-add_edges!(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
-function add_edges!(edges::Vector{Any}, info::ApplyCallInfo)
-    add_edges!(edges, info.call)
-    for arg in info.arginfo
-        arg === nothing && continue
-        for edge in arg.each
-            add_edges!(edges, edge.info)
-        end
-    end
-end
-add_edges!(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.info)
-add_edges!(edges::Vector{Any}, info::UnionSplitInfo) = for split in info.matches; add_edges!(edges, split); end
-add_edges!(edges::Vector{Any}, info::UnionSplitApplyCallInfo) = for split in info.infos; add_edges!(edges, split); end
-add_edges!(edges::Vector{Any}, info::FinalizerInfo) = nothing # merely allocating a finalizer does not imply edges (unless it gets inlined later)
-add_edges!(edges::Vector{Any}, info::NoCallInfo) = nothing
-function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
-    matches = info.results.matches
-    if isempty(matches) || !(matches[end]::Core.MethodMatch).fully_covers
-        # add legacy-style missing backedge info also
-        exists = false
-        for i in 1:length(edges)
-            if edges[i] === info.mt && edges[i + 1] == info.atype
-                exists = true
-                break
-            end
-        end
-        if !exists
-            push!(edges, info.mt)
-            push!(edges, info.atype)
-        end
-    end
-    if length(matches) == 1
-        # try the optimized format for the representation, if possible and applicable
-        # if this doesn't succeed, the backedge will be less precise,
-        # but the forward edge will maintain the precision
-        m = matches[1]::Core.MethodMatch
-        mi = specialize_method(m)
-        if mi.specTypes === m.spec_types
-            add_one_edge!(edges, mi)
-            return
-        end
-    end
-    # add check for whether this lookup already existed in the edges list
-    for i in 1:length(edges)
-        if edges[i] === length(matches) && edges[i + 1] == info.atype
-            return
-        end
-    end
-    push!(edges, length(matches))
-    push!(edges, info.atype)
-    for m in matches
-        mi = specialize_method(m::Core.MethodMatch)
-        push!(edges, mi)
-    end
-    nothing
-end
-add_edges!(edges::Vector{Any}, info::InvokeCallInfo) = add_invoke_edge!(edges, info.atype, specialize_method(info.match))
-
-function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), mi::MethodInstance)
-    for i in 2:length(edges)
-        if edges[i] === mi && edges[i - 1] isa Type && edges[i - 1] == atype
-            return
-        end
-    end
-    push!(edges, atype)
-    push!(edges, mi)
-    nothing
-end
-
-function add_one_edge!(edges::Vector{Any}, mi::MethodInstance)
-    for i in 1:length(edges)
-        if edges[i] === mi && !(i > 1 && edges[i - 1] isa Type)
-            return
-        end
-    end
-    push!(edges, mi)
-    nothing
-end
-
 function compute_edges!(sv::InferenceState)
     edges = sv.edges
     for i in 1:length(sv.stmt_info)
-        info = sv.stmt_info[i]
-        #rt = sv.ssavaluetypes[i]
-        #et = sv.exectiontypes[i]
-        #effects = EFFECTS_TOTAL # TODO: sv.stmt_effects[i]
-        #if rt === Any && et === Any && effects === Effects()
-        #    continue
-        #end
-        add_edges!(edges, info)
+        add_edges!(edges, sv.stmt_info[i])
     end
     if sv.src.edges !== nothing && sv.src.edges !== Core.svec()
         append!(edges, sv.src.edges)
     end
     nothing
 end
-
 
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
@@ -726,7 +635,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     return nothing
 end
 
-function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, child::InferenceState)
+function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     frames = parent.callstack::Vector{AbsIntState}
@@ -739,12 +648,19 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
         parent = frame_parent(child)::InferenceState
     end
     # ensure that walking the callstack has the same cycleid (DAG)
-    for frame = reverse(ancestorid:length(frames))
-        frame = frames[frame]::InferenceState
+    for frameid = reverse(ancestorid:length(frames))
+        frame = frames[frameid]::InferenceState
         frame.cycleid == ancestorid && break
         @assert frame.cycleid > ancestorid
         frame.cycleid = ancestorid
     end
+end
+
+function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
+    update_valid_age!(caller, frame.valid_worlds)
+    backedge = (caller, caller.currpc)
+    contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
+    return frame
 end
 
 function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
@@ -770,8 +686,8 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
     parent isa InferenceState || return false
     frames = parent.callstack::Vector{AbsIntState}
     uncached = false
-    for frame = reverse(1:length(frames))
-        frame = frames[frame]
+    for frameid = reverse(1:length(frames))
+        frame = frames[frameid]
         isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add an uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
@@ -1061,13 +977,13 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     if run_optimizer
         if result_is_constabi(interp, frame.result)
             rt = frame.result.result::Const
-            opt = codeinfo_for_const(interp, frame.linfo, rt.val)
+            src = codeinfo_for_const(interp, frame.linfo, rt.val)
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
-            opt = ir_to_codeinf!(opt)
+            src = ir_to_codeinf!(opt)
         end
-        result.src = frame.src = opt
+        result.src = frame.src = src
     end
     return frame
 end

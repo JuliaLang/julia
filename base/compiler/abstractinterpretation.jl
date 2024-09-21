@@ -264,12 +264,6 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::MethodMatchInfo, @nospecialize(atype))
-    fully_covering(info) || add_mt_backedge!(sv, info.mt, atype)
-    nothing
-end
-add_uncovered_edges!(sv::AbsIntState, matches::MethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
 
 struct UnionSplitMethodMatches
     applicable::Vector{Any}
@@ -281,23 +275,14 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::UnionSplitInfo, @nospecialize(atype))
-    all(fully_covering, info.split) && return nothing
-    # add mt backedges with removing duplications
-    for mt in uncovered_method_tables(info)
-        add_mt_backedge!(sv, mt, atype)
-    end
-end
-add_uncovered_edges!(sv::AbsIntState, matches::UnionSplitMethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
-function uncovered_method_tables(info::UnionSplitInfo)
-    mts = MethodTable[]
+
+nmatches(info::MethodMatchInfo) = length(info.results)
+function nmatches(info::UnionSplitInfo)
+    n = 0
     for mminfo in info.split
-        fully_covering(mminfo) && continue
-        any(mt′::MethodTable->mt′===mminfo.mt, mts) && continue
-        push!(mts, mminfo.mt)
+        n += nmatches(mminfo)
     end
-    return mts
+    return n
 end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);

@@ -3034,7 +3034,10 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
-        add_edges!(sv.edges, MethodMatchInfo(MethodLookupResult(Any[], valid_worlds, true), types, mt)) # XXX: this should actually be an invoke-type backedge
+        let vresults = MethodLookupResult(Any[], valid_worlds, true)
+            vinfo = MethodMatchInfo(vresults, mt, types, false)
+            add_edges!(sv.edges, vinfo) # XXX: this should actually be an invoke-type backedge
+        end
     else
         rt = Const(true)
         add_edges!(sv.edges, InvokeCallInfo(match, nothing, types))
