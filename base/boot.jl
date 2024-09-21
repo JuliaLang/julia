@@ -326,7 +326,7 @@ cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
 # will be inserted by the frontend for closures
-_typeof_captured_variable(@nospecialize t) = has_free_typevars(t) ? typeof(t) : Typeof(t)
+_typeof_captured_variable(@nospecialize t) = (@_total_meta; has_free_typevars(t) ? typeof(t) : Typeof(t))
 
 has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
