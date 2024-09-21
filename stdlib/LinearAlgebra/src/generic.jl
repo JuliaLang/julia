@@ -1972,11 +1972,11 @@ NaN
 """
 function normalize(a::AbstractArray, p::Real = 2)
     nrm = norm(a, p)
+    T = promote_type(eltype(a), typeof(nrm))
     if !isempty(a)
-        aa = copymutable_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, T)
         return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end
