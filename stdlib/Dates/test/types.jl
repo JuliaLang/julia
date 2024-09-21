@@ -263,7 +263,7 @@ end
 end
 
 @testset "issue #31524" begin
-    dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
+    dt1 = Libc.strptime("%Y-%m-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
     dt2 = Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
 
     time = Time(dt1)
