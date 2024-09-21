@@ -1972,7 +1972,6 @@ NaN
 """
 normalize(a::AbstractArray, p::Real = 2) = _normalize(a, norm(a, p))
 
-@inline _normalize(a::AbstractArray, nrm) = _normalize(promote_op(/, eltype(a), typeof(nrm)), a, nrm)
 @inline _normalize(a::AbstractArray{T}, nrm) where {T} = _normalize(promote_type(T, typeof(nrm)), a, nrm)
 @inline _normalize(a::AbstractArray{T}, nrm) where {T <: AbstractArray} = _normalize(promote_op(/, T, typeof(nrm)), a, nrm)
 
