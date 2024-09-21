@@ -1970,9 +1970,13 @@ julia> normalize(0, 1)
 NaN
 ```
 """
-function normalize(a::AbstractArray, p::Real = 2)
-    nrm = norm(a, p)
-    T = promote_type(eltype(a), typeof(nrm))
+normalize(a::AbstractArray, p::Real = 2) = _normalize(a, norm(a, p))
+
+@inline _normalize(a::AbstractArray, nrm) = _normalize(promote_op(/, eltype(a), typeof(nrm)), a, nrm)
+@inline _normalize(a::AbstractArray{T}, nrm) where {T} = _normalize(promote_type(T, typeof(nrm)), a, nrm)
+@inline _normalize(a::AbstractArray{T}, nrm) where {T <: AbstractArray} = _normalize(promote_op(/, T, typeof(nrm)), a, nrm)
+
+@inline function _normalize(T, a::AbstractArray, nrm)
     if !isempty(a)
         aa = copymutable_oftype(a, T)
         return __normalize!(aa, nrm)
@@ -1983,6 +1987,8 @@ end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+
 
 """
     copytrito!(B, A, uplo) -> B
