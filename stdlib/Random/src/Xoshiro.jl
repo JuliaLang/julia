@@ -294,7 +294,7 @@ rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{UInt52{UInt64}})    = ran
 rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{UInt104{UInt128}})  = rand(r, UInt104Raw())
 
 rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{Float16}}) =
-    Float16(Float32(rand(r, UInt16) >>> 5) * Float32(0x1.0p-11))
+    Float16(rand(r, UInt16) >>> 5) * Float16(0x1.0p-11)
 
 rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{Float32}}) =
     Float32(rand(r, UInt32) >>> 8) * Float32(0x1.0p-24)

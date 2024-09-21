@@ -2335,7 +2335,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_GC_POP();
 }
 
-static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args, size_t world)
+static void JL_NORETURN jl_method_error_bare(jl_value_t *f, jl_value_t *args, size_t world)
 {
     if (jl_methoderror_type) {
         jl_value_t *e = jl_new_struct_uninit(jl_methoderror_type);
@@ -2360,7 +2360,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
     // not reached
 }
 
-void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world)
+void JL_NORETURN jl_method_error(jl_value_t *f, jl_value_t **args, size_t na, size_t world)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na - 1);
     JL_GC_PUSH1(&argtup);
@@ -2514,7 +2514,7 @@ jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROP
 
 jl_mutex_t precomp_statement_out_lock;
 
-static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_recompile)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -2539,11 +2539,22 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         }
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
+        if (is_recompile && s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF)
+            jl_printf(s_precompile, "\e[33m");
         if (jl_options.trace_compile_timing)
             jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
-        jl_printf(s_precompile, ")\n");
+        jl_printf(s_precompile, ")");
+        if (is_recompile) {
+            if (s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF) {
+                jl_printf(s_precompile, "\e[0m");
+            }
+            else {
+                jl_printf(s_precompile, " # recompile");
+            }
+        }
+        jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
@@ -2674,7 +2685,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     // unspec is probably not specsig, but might be using specptr
                     jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi, 0);
+                    record_precompile_statement(mi, 0, 0);
                     return codeinst;
                 }
             }
@@ -2691,7 +2702,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, jl_nothing, 0, NULL);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi, 0);
+            record_precompile_statement(mi, 0, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2740,7 +2751,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             codeinst = NULL;
         }
         else if (did_compile && codeinst->owner == jl_nothing) {
-            record_precompile_statement(mi, compile_time);
+            record_precompile_statement(mi, compile_time, is_recompile);
         }
         JL_GC_POP();
     }

@@ -999,3 +999,8 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
         @test sizeof($(StructName)) == 48 broken=broken_i128
     end
 end
+
+@noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
+@test f55768(Vector)
+@test f55768(Vector{T} where T)
+@test !f55768(Vector{S} where S)

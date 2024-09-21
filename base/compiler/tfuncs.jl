@@ -89,6 +89,7 @@ function add_tfunc(@nospecialize(f::Builtin), minarg::Int, maxarg::Int, @nospeci
 end
 
 add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
+add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
@@ -2313,6 +2314,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     setfield!,
     donotdelete
 ]
@@ -2335,6 +2337,7 @@ const _EFFECT_FREE_BUILTINS = [
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     getglobal,
     compilerbarrier,
 ]
@@ -2350,6 +2353,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     isa,
     nfields,
     throw,
+    Core.throw_methoderror,
     tuple,
     typeassert,
     typeof,
@@ -2975,34 +2979,23 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     else
         (; valid_worlds, applicable) = matches
         update_valid_age!(sv, valid_worlds)
-
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        if isa(matches, MethodMatches)
-            matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
-        else
-            for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-                thisfullmatch || add_mt_backedge!(sv, mt, atype)
-            end
-        end
-
         napplicable = length(applicable)
         if napplicable == 0
             rt = Const(false) # never any matches
+        elseif !fully_covering(matches) || any_ambig(matches)
+            # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+            rt = Bool
         else
             rt = Const(true) # has applicable matches
-            for i in 1:napplicable
-                match = applicable[i]::MethodMatch
-                edge = specialize_method(match)::MethodInstance
-                add_backedge!(sv, edge)
-            end
-
-            if isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
-                    (!all(matches.fullmatches) || any_ambig(matches))
-                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-                rt = Bool
-            end
         end
+        for i in 1:napplicable
+            match = applicable[i]::MethodMatch
+            edge = specialize_method(match)::MethodInstance
+            add_backedge!(sv, edge)
+        end
+        # also need an edge to the method table in case something gets
+        # added that did not intersect with any existing method
+        add_uncovered_edges!(sv, matches, atype)
     end
     return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
 end

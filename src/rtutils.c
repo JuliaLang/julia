@@ -269,10 +269,11 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     // `eh` may be not equal to `ct->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
-    sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
+    jl_ptls_t ptls = ct->ptls;
+    sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
-    small_arraylist_t *locks = &ct->ptls->locks;
+    small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
         for (size_t i = locks->len; i > eh->locks_len; i--)
@@ -280,14 +281,26 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
     ct->world_age = eh->world_age;
-    ct->ptls->defer_signal = eh->defer_signal;
-    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    ptls->defer_signal = eh->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ptls->gc_state);
     if (old_gc_state != eh->gc_state)
-        jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
     if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
-        jl_gc_safepoint_(ct->ptls);
+        jl_gc_safepoint_(ptls);
+    jl_value_t *exception = ptls->sig_exception;
+    if (exception) {
+        int8_t oldstate = jl_gc_unsafe_enter(ptls);
+        /* The temporary ptls->bt_data is rooted by special purpose code in the
+        GC. This exists only for the purpose of preserving bt_data until we
+        set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+        ptls->sig_exception = NULL;
+        jl_gc_unsafe_leave(ptls, oldstate);
+    }
     if (old_defer_signal && !eh->defer_signal)
-        jl_sigint_safepoint(ct->ptls);
+        jl_sigint_safepoint(ptls);
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
             unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);

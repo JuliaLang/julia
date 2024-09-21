@@ -330,13 +330,31 @@ function Base.replace_in_print_matrix(A::Union{LowerTriangular,UnitLowerTriangul
     return i >= j ? s : Base.replace_with_centered_mark(s)
 end
 
-Base.@constprop :aggressive function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
+istril(A::UnitLowerTriangular, k::Integer=0) = k >= 0
+istriu(A::UnitUpperTriangular, k::Integer=0) = k <= 0
+Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
     return _istril(A, k)
 end
-Base.@constprop :aggressive function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
+@inline function _istril(A::LowerTriangular, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in max(1, k + 2):m
+        all(iszero, view(P, j:min(j - k - 1, m), j)) || return false
+    end
+    return true
+end
+Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
+end
+@inline function _istriu(A::UpperTriangular, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in 1:min(m, m + k - 1)
+        all(iszero, view(P, max(1, j - k + 1):j, j)) || return false
+    end
+    return true
 end
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
@@ -832,35 +850,74 @@ fillstored!(A::UpperTriangular, x)     = (fillband!(A.data, x, 0, size(A,2)-1); 
 fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); A)
 
 # Binary operations
-+(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
-+(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data + B.data)
-+(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data + triu(B.data, 1) + I)
-+(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data + tril(B.data, -1) + I)
-+(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) + B.data + I)
-+(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) + B.data + I)
-+(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
-+(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+function +(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + B.data)
+end
+function +(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + B.data)
+end
+function +(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + triu(B.data, 1) + I)
+end
+function +(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + tril(B.data, -1) + I)
+end
+function +(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + B.data + I)
+end
+function +(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + B.data + I)
+end
+function +(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
+end
+function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
+end
 +(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
 
--(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data - B.data)
--(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data - B.data)
--(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data - triu(B.data, 1) - I)
--(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data - tril(B.data, -1) - I)
--(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) - B.data + I)
--(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) - B.data + I)
--(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
--(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
-
-# use broadcasting if the parents are strided, where we loop only over the triangular part
-for op in (:+, :-)
-    for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
-    for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
+function -(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - B.data)
 end
+function -(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - B.data)
+end
+function -(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - triu(B.data, 1) - I)
+end
+function -(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - tril(B.data, -1) - I)
+end
+function -(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - B.data + I)
+end
+function -(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - B.data + I)
+end
+function -(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
+end
+function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
+end
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
 
 function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
     C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
@@ -952,8 +1009,6 @@ isunit_char(::UpperTriangular) = 'N'
 isunit_char(::UnitUpperTriangular) = 'U'
 isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
-
-lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
@@ -2766,6 +2821,14 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
+# fallback for unknown types
+function eigvecs(A::AbstractTriangular{<:BlasFloat})
+    if istriu(A)
+        eigvecs(UpperTriangular(Matrix(A)))
+    else # istril(A)
+        eigvecs(LowerTriangular(Matrix(A)))
+    end
+end
 function eigvecs(A::AbstractTriangular{T}) where T
     TT = promote_type(T, Float32)
     if TT <: BlasFloat

@@ -84,15 +84,6 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
                                          jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT;
 
-// parallel task runtime
-// ---
-
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max) // [0, n)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    return cong(max, &ptls->rngseed);
-}
-
 // initialize the threading infrastructure
 // (called only by the main thread)
 void jl_init_threadinginfra(void)
