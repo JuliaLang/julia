@@ -854,8 +854,6 @@ Stacktrace processing pipeline:
     - Output is an Any[] containing (StackFrame, count) tuple elements and this form is exposed to e.g. Revise
 5. If a trace is too long, cycles are identified and summarized
 6. `update_stackframes_callback[]` provides e.g. Revise an opportunity to edit line info
-7. `stackframes_visibility_callback[]` provides e.g. AbbreviatedStackTraces an opportunity
-   to determine which frames should be displayed.
 
 =#
 
@@ -898,13 +896,6 @@ function show_backtrace(io::IO, t::Vector)
 
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
     try invokelatest(update_stackframes_callback[], filtered) catch end
-
-    # Allow external code to determine frames to hide (e.g. AbbreviatedStackTraces)
-    visible_frame_indexes = try
-        invokelatest(stackframes_visibility_callback[], filtered)
-    catch
-        collect(eachindex(filtered))
-    end
 
     show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
     nothing
@@ -1060,15 +1051,6 @@ function process_backtrace(tracecount::Vector{Any})
     _backtrace_collapse_repeated_locations!(tracecount)
     return tracecount
 end
-
-"""
-    stackframes_visibility_callback[]
-
-Provide a function that accepts a Vector{Any} with elements of type Tuple{Frame, Int} and returns
-a Vector{Int} of indexes of frames to show.
-"""
-const stackframes_visibility_callback = Ref{Function}(x -> eachindex(x))
-
 
 function show_exception_stack(io::IO, stack)
     # Display exception stack with the top of the stack first.  This ordering
