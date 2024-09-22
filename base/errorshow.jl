@@ -792,7 +792,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
-    digit_align_width = ndigits_max + 2 + max_nested_cycles
+    digit_align_width = ndigits_max + 2 + max_nested_cycles - nactive_cycles
 
     # repeated section bracket line 1
     print(io, " ")
@@ -800,7 +800,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     printstyled(io, "┌" ^ ncycle_starts; color = :light_black)
 
     # frame number
-    print(io, lpad("[" * string(i) * "]", digit_align_width - nactive_cycles - 1))
+    print(io, lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
     # func name and arguments
@@ -810,10 +810,9 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
     # repeated section bracket line 2
     print(io, " ")
     printstyled(io, "│" ^ (nactive_cycles); color = :light_black)
-    print(io, " " ^ (max_nested_cycles - nactive_cycles))
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
