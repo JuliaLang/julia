@@ -1048,6 +1048,9 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            if MT == LowerTriangular
+                @test isa(kron(L,L), MT)
+            end
             @test kron(L,L) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
@@ -1070,6 +1073,9 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            if MT == UpperTriangular
+                @test isa(kron(U,U), MT)
+            end
             @test kron(U,U) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
@@ -1081,7 +1087,17 @@ end
     for T in (UpperTriangular, LowerTriangular)
         t = T(fill(ones(2,2), 2, 2))
         m = Matrix(t)
+        @test isa(kron(t,t), T)
         @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
+@testset "kron with triangular matrices of mixed eltypes" begin
+    for T in (UpperTriangular, LowerTriangular)
+        U = T(Matrix{Union{Missing,Int}}(fill(2, 2, 2)))
+        U[1, 1] = missing
+        @test kron(U, U)[2, 3] == 0
+        @test kron(U, U)[3, 2] == 0
     end
 end
 

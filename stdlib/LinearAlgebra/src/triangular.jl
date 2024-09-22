@@ -919,21 +919,21 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
 end
 -(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
 
-function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function kron(A::UpperTriangular{T,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
-function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function kron(A::LowerTriangular{T,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C
@@ -952,7 +952,7 @@ function _triukron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = 1:(l-1)
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
@@ -984,7 +984,7 @@ function _trilkron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = (l+1):n_B
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
