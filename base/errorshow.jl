@@ -699,15 +699,12 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
 
         frame_counter != end_line && break
 
+        println(io)
+
         nactive_cycles -= 1
         line_length = max_nested_cycles + (max_nested_cycles - nactive_cycles) + ndigits_max
         printstyled(io, " ", "│" ^ nactive_cycles, "└", "─" ^ (line_length); color = :light_black)
         printstyled(io, " repeated $repetitions more time", repetitions > 1 ? "s" : ""; color = :light_black, italic = true)
-        
-        if i < nframes
-            println(io)
-            print_linebreaks && println(io)
-        end 
 
         pop!(current_cycles)
         frame_counter += cycle_length * repetitions
@@ -744,13 +741,13 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
 
+        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max, length(trace), print_linebreaks)
+        frame_counter += 1
+        
         if i < length(trace)
             println(io)
             print_linebreaks && println(io)
         end
-
-        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max, length(trace), print_linebreaks)
-        frame_counter += 1
     end
 end
 
@@ -886,7 +883,7 @@ function show_backtrace(io::IO, t::Vector)
             return
         end
     end
-    
+
     # Find repeated cycles if trace is too long
     if length(filtered) > BIG_STACKTRACE_SIZE
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
