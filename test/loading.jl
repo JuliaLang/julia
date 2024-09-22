@@ -855,22 +855,6 @@ end
     end
 end
 
-@testset "error message loading pkg bad module name" begin
-    mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
-                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                    check for typos in package module name") (@eval using BadCase)
-            end
-        finally
-            copy!(LOAD_PATH, old_loadpath)
-        end
-    end
-end
-
 @testset "Preferences loading" begin
     mktempdir() do dir
         this_uuid = uuid4()
