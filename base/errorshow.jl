@@ -712,7 +712,7 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
     return frame_counter, nactive_cycles
 end
 
-function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int, visible_frame_indexes; print_linebreaks::Bool)
+function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int; print_linebreaks::Bool)
     println(io, "\nStacktrace:")
 
     ndigits_max = ndigits(num_frames)
@@ -895,7 +895,7 @@ function show_backtrace(io::IO, t::Vector)
     # Allow external code to edit information in the frames (e.g. line numbers with Revise)
     try invokelatest(update_stackframes_callback[], filtered) catch end
 
-    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
+    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles; print_linebreaks = stacktrace_linebreaks())
     nothing
 end
 
