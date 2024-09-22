@@ -724,7 +724,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
     push!(repeated_cycles, (0,0,0)) # repeated_cycles is never empty
     frame_counter = 1
     current_cycles = NTuple{3, Int}[]
-    
+
     for i in eachindex(trace)
         (frame, n) = trace[i]
 
@@ -743,7 +743,7 @@ function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeat
 
         frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max)
         frame_counter += 1
-        
+
         if i < length(trace)
             println(io)
             print_linebreaks && println(io)
