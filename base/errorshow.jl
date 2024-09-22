@@ -886,6 +886,7 @@ function show_backtrace(io::IO, t::Vector)
             return
         end
     end
+    
     # Find repeated cycles if trace is too long
     if length(filtered) > BIG_STACKTRACE_SIZE
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
