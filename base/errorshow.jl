@@ -879,7 +879,7 @@ function show_backtrace(io::IO, t::Vector)
     # don't show a single top-level frame with no location info
     if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === :var"" 
+        if f.line == 0 && f.file === :var""
             return
         end
     end
