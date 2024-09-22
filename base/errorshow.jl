@@ -839,43 +839,23 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
-
 #=
-
-
-In Test, scrub_exc_stack > scrub_backtrace removes Test-related internal frames
-
-In client.jl, scrub_repl_backtrace removes REPL-related internal frames
-
-In show_backtrace:
-    - In process_backtrace:
-        - perform lookups if necessary
-        - decide whether to omit C frames
-        - omit kwcall frames
-        - stop processing if trace is larger than some value (e.g. typemax(Int) by default)
-        - record unique frames, recording a count for repeated frames
-        - filter out frames in `include` stack
-        - filter out some frames that have the same location
-    - don't print a lone top-level frame without location info
-    - if backtrace is "too big": In show_reduced_backtrace:
-        - Finds cycles in the trace and prints differently
-    - otherwise:
-        - allows one single function to be registered to update line info of the trace (for Revise; run inside show_reduced_backtrace as well)
-        - prints each line, except special display for repeated lines
-    - 
-
 
 Stacktrace processing pipeline:
 1. Raw traces extracted with `backtrace` or `catch_backtrace` as vector of instruction pointers.
 2. IP traces converted to frames with `stacktrace`, which may or may not include C frames.
 3. Originator trims frames related to itself (e.g. REPL removes REPL-specific frames)
    - CapturedException only keeps a limit of 100 frames by processing before display
-4. Julia implementation detail frames are hidden and rewritten (e.g. kwcall)
-5. Repeated frames are removed and summarized with a count
-6. `include` stack frames are filtered out
-7. Some frames that have the same location info are merged
-8. During display, if a trace is too long it may be further abridged
-   - cycles found and summarized
+4. `process_backtrace` filters a trace for  frames and summarizes repeated single frames:
+    - `kwcall` frames removed
+    - `include`-related stack frames removed
+    - Some frames that have the same location info are merged
+    - Repeated frames are removed and summarized with a count
+    - Output is an Any[] containing (StackFrame, count) tuple elements and this form is exposed to e.g. Revise
+5. If a trace is too long, cycles are identified and summarized
+6. `update_stackframes_callback[]` provides e.g. Revise an opportunity to edit line info
+7. `stackframes_visibility_callback[]` provides e.g. AbbreviatedStackTraces an opportunity
+   to determine which frames should be displayed.
 
 =#
 
@@ -908,7 +888,6 @@ function show_backtrace(io::IO, t::Vector)
             return
         end
     end
-
     # Find repeated cycles if trace is too long
     if length(filtered) > BIG_STACKTRACE_SIZE
         filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
@@ -922,7 +901,7 @@ function show_backtrace(io::IO, t::Vector)
 
     # Allow external code to determine frames to hide (e.g. AbbreviatedStackTraces)
     visible_frame_indexes = try
-        invokelatest(_backtrace_display_filter[], filtered)
+        invokelatest(stackframes_visibility_callback[], filtered)
     catch
         collect(eachindex(filtered))
     end
@@ -1083,12 +1062,12 @@ function process_backtrace(tracecount::Vector{Any})
 end
 
 """
-    _backtrace_display_filter[]
+    stackframes_visibility_callback[]
 
 Provide a function that accepts a Vector{Any} with elements of type Tuple{Frame, Int} and returns
 a Vector{Int} of indexes of frames to show.
 """
-const _backtrace_display_filter = Ref{Function}(x -> eachindex(x))
+const stackframes_visibility_callback = Ref{Function}(x -> eachindex(x))
 
 
 function show_exception_stack(io::IO, stack)
