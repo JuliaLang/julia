@@ -642,24 +642,28 @@ function _backtrace_find_and_remove_cycles(t)
     such that hash(t[i-1]) == h, ie the list of positions in which the
     frame appears just before. =#
 
+    max_nested_cycles = 1
     displayed_stackframes = []
-    repeated_cycle = Tuple{Int,Int,Int}[]
-    # First:  line to introuce the "cycle repetition" message
+    repeated_cycles = Tuple{Int,Int,Int}[]
+    # First:  line to introuce the cycle bracket on
     # Second: length of the cycle
     # Third:  number of repetitions
     frame_counter = 1
+    accumulated_repetitions = 0
     while frame_counter < length(t)
         (last_frame, n) = t[frame_counter]
+        accumulated_repetitions += n - 1
         frame_counter += 1 # Indicating the next frame
 
         current_hash = hash(last_frame)
         positions = get(recorded_positions, current_hash, Int[])
-        recorded_positions[current_hash] = push!(positions, frame_counter)
+        recorded_positions[current_hash] = push!(positions, frame_counter + accumulated_repetitions)
 
         repetitions = 0
+        nnested_cycles = 1
         for index_p in length(positions)-1:-1:1 # More recent is more likely
             p = positions[index_p]
-            cycle_length = frame_counter - p
+            cycle_length = frame_counter + accumulated_repetitions - p
             i = frame_counter
             j = p
             while i < length(t) && t[i] == t[j]
@@ -668,51 +672,84 @@ function _backtrace_find_and_remove_cycles(t)
             end
             if j >= frame_counter-1
                 #= At least one cycle repeated =#
-                repetitions = div(i - frame_counter + 1, cycle_length)
-                push!(repeated_cycle, (length(displayed_stackframes), cycle_length, repetitions))
+                repetitions = div(i - frame_counter + accumulated_repetitions + 1, cycle_length)
+                push!(repeated_cycles, (p - 1, cycle_length, repetitions))
                 frame_counter += cycle_length * repetitions - 1
+                nnested_cycles += 1
                 break
             end
         end
+        sort!(repeated_cycles, by = x -> (x[1], -x[2]))
+        max_nested_cycles = max(max_nested_cycles, nnested_cycles)
 
         if repetitions==0
             push!(displayed_stackframes, (last_frame, n))
         end
     end
-    return displayed_stackframes, repeated_cycle
+    push!(displayed_stackframes, t[end])
+    return displayed_stackframes, repeated_cycles, max_nested_cycles
 end
 
-function show_processed_backtrace(io::IO, trace::Vector, repeated_cycle::Vector{NTuple{3, Int}}, visible_frame_indexes; print_linebreaks::Bool)
+function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max, nframes, print_linebreaks)
+    while !isempty(current_cycles)
+        start_line = current_cycles[end][1]
+        cycle_length = current_cycles[end][2]
+        end_line = start_line + cycle_length - 1
+        repetitions = current_cycles[end][3]
+
+        frame_counter != end_line && break
+
+        nactive_cycles -= 1
+        line_length = max_nested_cycles + (max_nested_cycles - nactive_cycles) + ndigits_max
+        printstyled(io, " ", "│" ^ nactive_cycles, "└", "─" ^ (line_length); color = :light_black)
+        printstyled(io, " repeated $repetitions more time", repetitions > 1 ? "s" : ""; color = :light_black, italic = true)
+        
+        if i < nframes
+            println(io)
+            print_linebreaks && println(io)
+        end 
+
+        pop!(current_cycles)
+        frame_counter += cycle_length * repetitions
+    end
+    return frame_counter, nactive_cycles
+end
+
+function show_processed_backtrace(io::IO, trace::Vector, num_frames::Int, repeated_cycles::Vector{NTuple{3, Int}}, max_nested_cycles::Int, visible_frame_indexes; print_linebreaks::Bool)
     println(io, "\nStacktrace:")
 
-    num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
+    if any(x -> last(x) > 1, trace)
+        max_nested_cycles += 1
+    end
+
+    push!(repeated_cycles, (0,0,0)) # repeated_cycles is never empty
     frame_counter = 1
+    current_cycles = NTuple{3, Int}[]
+    
     for i in eachindex(trace)
         (frame, n) = trace[i]
 
-        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        ncycle_starts = 0
+        while repeated_cycles[1][1] == frame_counter
+            push!(current_cycles, popfirst!(repeated_cycles))
+            ncycle_starts += 1
+        end
+        if n > 1
+            push!(current_cycles, (frame_counter, 1, n - 1))
+            ncycle_starts += 1
+        end
+        nactive_cycles = length(current_cycles)
+
+        print_stackframe(io, frame_counter, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
 
         if i < length(trace)
             println(io)
             print_linebreaks && println(io)
         end
 
-        while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
-            cycle_length = repeated_cycle[1][2]
-            repetitions = repeated_cycle[1][3]
-            popfirst!(repeated_cycle)
-            printstyled(io,
-                "--- the above ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions > 1 ? "s" : "", " ---", color = :light_black)
-            if i < length(trace)
-                println(io)
-                print_linebreaks && println(io)
-            end
-            frame_counter += cycle_length * repetitions
-        end
+        frame_counter, nactive_cycles = _backtrace_print_repetition_closings!(io, i, current_cycles, frame_counter, max_nested_cycles, nactive_cycles, ndigits_max, length(trace), print_linebreaks)
         frame_counter += 1
     end
 end
@@ -720,7 +757,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -728,7 +765,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     else
         :default
     end
-    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
+    print_stackframe(io, i, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, modulecolor)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -743,7 +780,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested_cycles::Int, nactive_cycles::Int, ncycle_starts::Int, modulecolor)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -755,17 +792,25 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
-    digit_align_width = ndigits_max + 2
+    digit_align_width = ndigits_max + 2 + max_nested_cycles
+
+    # repeated section bracket line 1
+    print(io, " ")
+    printstyled(io, "│" ^ (nactive_cycles - ncycle_starts); color = :light_black)
+    printstyled(io, "┌" ^ ncycle_starts; color = :light_black)
 
     # frame number
-    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
+    print(io, lpad("[" * string(i) * "]", digit_align_width - nactive_cycles - 1))
     print(io, " ")
 
+    # func name and arguments
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
-    if n > 1
-        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
-    end
     println(io)
+
+    # repeated section bracket line 2
+    print(io, " ")
+    printstyled(io, "│" ^ (nactive_cycles); color = :light_black)
+    print(io, " " ^ (max_nested_cycles - nactive_cycles))
 
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
@@ -855,8 +900,10 @@ function show_backtrace(io::IO, t::Vector)
     end
     isempty(filtered) && return
 
+    nframes = sum(last(x) for x ∈ filtered)
+
     # don't show a single top-level frame with no location info
-    if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
+    if nframes == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
         if f.line == 0 && f.file === :var"" 
             return
@@ -865,22 +912,23 @@ function show_backtrace(io::IO, t::Vector)
 
     # Find repeated cycles if trace is too long
     if length(filtered) > BIG_STACKTRACE_SIZE
-        filtered, repeated_cycle = _backtrace_find_and_remove_cycles(filtered)
+        filtered, repeated_cycles, max_nested_cycles = _backtrace_find_and_remove_cycles(filtered)
     else
-        repeated_cycle = NTuple{3, Int}[]
+        repeated_cycles = NTuple{3, Int}[]
+        max_nested_cycles = 0
     end
 
-    # Allow external code to determine frames to show and hide
+    # Allow external code to edit information in the frames (e.g. line numbers with Revise)
+    try invokelatest(update_stackframes_callback[], filtered) catch end
+
+    # Allow external code to determine frames to hide (e.g. AbbreviatedStackTraces)
     visible_frame_indexes = try
         invokelatest(_backtrace_display_filter[], filtered)
     catch
         collect(eachindex(filtered))
     end
 
-    # Allow external code to edit information in the frames (e.g. line numbers with Revise)
-    try invokelatest(update_stackframes_callback[], filtered) catch end
-
-    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, repeated_cycle, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
+    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, nframes, repeated_cycles, max_nested_cycles, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
     nothing
 end
 
