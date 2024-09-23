@@ -166,10 +166,11 @@ end
 end
 
 @inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
-    @boundscheck checkbounds(A, _cartinds(b))
+    @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.dv[b.index]
-    elseif b.band == _offdiagind(A.uplo)
+    elseif b.band ∈ (-1,1) && b.band == _offdiagind(A.uplo)
+        # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
         return bidiagzero(A, Tuple(_cartinds(b))...)

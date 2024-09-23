@@ -236,6 +236,20 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
+# these specialized getindex methods enable constant-propagation of the band
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitLowerTriangular{T}, b::BandIndex) where {T}
+    b.band < 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::LowerTriangular, b::BandIndex)
+    b.band <= 0 ? A.data[b] : _zero(A.data, b)
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitUpperTriangular{T}, b::BandIndex) where {T}
+    b.band > 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UpperTriangular, b::BandIndex)
+    b.band >= 0 ? A.data[b] : _zero(A.data, b)
+end
+
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
 _zero_triangular_half_str(::Type{<:LowerOrUnitLowerTriangular}) = "upper"
 

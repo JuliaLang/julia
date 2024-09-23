@@ -6,7 +6,7 @@ debug = false
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
-    mul!, rdiv!, rmul!, lmul!
+    mul!, rdiv!, rmul!, lmul!, BandIndex
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -1283,6 +1283,42 @@ end
             @test istriu(U, k) == istriu(A, k)
             @test istril(U, k) == istril(A, k)
         end
+    end
+end
+
+@testset "indexing with a BandIndex" begin
+    # these tests should succeed even if the linear index along
+    # the band isn't a constant, or type-inferred at all
+    M = rand(Int,2,2)
+    f(A,j, v::Val{n}) where {n} = Val(A[BandIndex(n,j)])
+    function common_tests(M, ind)
+        j = ind[]
+        @test @inferred(f(UpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(0))) == Val(1)
+        @test @inferred(f(LowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(0))) == Val(1)
+    end
+    common_tests(M, Any[1])
+
+    M = Diagonal([1,2])
+    common_tests(M, Any[1])
+    # extra tests for banded structure of the parent
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(1))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-1))) == Val(0)
+    end
+
+    M = Tridiagonal([1,2], [1,2,3], [1,2])
+    common_tests(M, Any[1])
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(2))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
     end
 end
 
