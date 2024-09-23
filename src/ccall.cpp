@@ -550,7 +550,7 @@ static Value *julia_to_native(
     Align align(julia_alignment(jlto));
     Value *slot = emit_static_alloca(ctx, to, align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
-    emit_unbox_store(ctx, jvinfo, slot, jvinfo.tbaa, align);
+    emit_unbox_store(ctx, jvinfo, slot, ctx.tbaa().tbaa_stack, align);
     return slot;
 }
 

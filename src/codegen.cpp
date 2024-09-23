@@ -5905,7 +5905,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
         // are the same slot. We're not allowed to memcpy in that case
         // due to LLVM bugs.
         // This check should probably mostly catch the relevant situations.
-        if (vi.value.V != rval_info.V || (vi.inline_roots && vi.value.V == nullptr)) {
+        if (vi.value.V != nullptr ? vi.value.V != rval_info.V : vi.inline_roots != nullptr) {
             MDNode *tbaa = ctx.tbaa().tbaa_stack; // Use vi.value.tbaa ?
             if (rval_info.TIndex)
                 emit_unionmove(ctx, vi.value.V, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
@@ -9473,11 +9473,13 @@ static jl_llvm_functions_t
                         incomingroots.resize(tracked, Constant::getNullValue(ctx.types().T_prjlvalue));
                     emit_guarded_test(ctx, isvalid, incomingroots, [&] {
                         jl_cgval_t typedval = update_julia_type(ctx, val, phiType);
-                        SmallVector<Value*,0> mayberoots(tracked);
-                        if (tracked)
-                            split_value_into(ctx, typedval, Align(julia_alignment(phiType)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
-                        else
-                            emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(phiType)));
+                        SmallVector<Value*,0> mayberoots(tracked, Constant::getNullValue(ctx.types().T_prjlvalue));
+                        if (typedval.typ != jl_bottom_type) {
+                            if (tracked)
+                                split_value_into(ctx, typedval, Align(julia_alignment(phiType)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
+                            else
+                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(phiType)));
+                        }
                         return mayberoots;
                     });
                     for (size_t nr = 0; nr < tracked; nr++)
