@@ -1345,6 +1345,17 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    D = Diagonal(rand(4))
+    @test rmul!(copy(D), 0.2) ≈ rmul!(Array(D), 0.2)
+    @test lmul!(0.2, copy(D)) ≈ lmul!(0.2, Array(D))
+    @test_throws ArgumentError rmul!(D, NaN)
+    @test_throws ArgumentError lmul!(NaN, D)
+    D = Diagonal(rand(1))
+    @test all(isnan, rmul!(copy(D), NaN))
+    @test all(isnan, lmul!(NaN, copy(D)))
+end
+
 @testset "+/- with block Symmetric/Hermitian" begin
     for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
         m = SizedArrays.SizedArray{(2,2)}(p)

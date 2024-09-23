@@ -166,10 +166,11 @@ end
 end
 
 @inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
-    @boundscheck checkbounds(A, _cartinds(b))
+    @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.dv[b.index]
-    elseif b.band == _offdiagind(A.uplo)
+    elseif b.band ∈ (-1,1) && b.band == _offdiagind(A.uplo)
+        # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
         return bidiagzero(A, Tuple(_cartinds(b))...)
@@ -441,6 +442,32 @@ end
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
 *(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
+function rmul!(B::Bidiagonal, x::Number)
+    if size(B,1) > 1
+        isupper = B.uplo == 'U'
+        row, col = 1 + isupper, 1 + !isupper
+        # ensure that zeros are preserved on scaling
+        y = B[row,col] * x
+        iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv *= x
+    @. B.ev *= x
+    return B
+end
+function lmul!(x::Number, B::Bidiagonal)
+    if size(B,1) > 1
+        isupper = B.uplo == 'U'
+        row, col = 1 + isupper, 1 + !isupper
+        # ensure that zeros are preserved on scaling
+        y = x * B[row,col]
+        iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv = x * B.dv
+    @. B.ev = x * B.ev
+    return B
+end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
 \(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
