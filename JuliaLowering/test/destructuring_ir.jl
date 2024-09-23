@@ -179,3 +179,63 @@ end
 9   (call core.tuple %₁ %₇ %₈)
 10  (return %₉)
 
+########################################
+# Property destructuring
+let
+    (; x, y) = rhs
+end
+#---------------------
+1   TestMod.rhs
+2   (= slot₁/x (call top.getproperty %₁ :x))
+3   TestMod.rhs
+4   (= slot₂/y (call top.getproperty %₃ :y))
+5   TestMod.rhs
+6   (return %₅)
+
+########################################
+# Property destructuring with colliding symbolic lhs/rhs
+let
+    local x
+    (; x, y) = x
+end
+#---------------------
+1   slot₁/x
+2   (= slot₁/x (call top.getproperty %₁ :x))
+3   (= slot₂/y (call top.getproperty %₁ :y))
+4   (return %₁)
+
+########################################
+# Property destructuring with nontrivial rhs
+let
+    (; x) = f()
+end
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   (= slot₁/x (call top.getproperty %₂ :x))
+4   (return %₂)
+
+########################################
+# Property destructuring with type decl
+let
+    (; x::T) = rhs
+end
+#---------------------
+1   TestMod.rhs
+2   (call top.getproperty %₁ :x)
+3   (= slot₂/tmp %₂)
+4   slot₂/tmp
+5   TestMod.T
+6   (call core.isa %₄ %₅)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₄)
+9   TestMod.T
+10  slot₂/tmp
+11  (call top.convert %₉ %₁₀)
+12  TestMod.T
+13  (= slot₂/tmp (call core.typeassert %₁₁ %₁₂))
+14  slot₂/tmp
+15  (= slot₁/x %₁₄)
+16  TestMod.rhs
+17  (return %₁₆)
+

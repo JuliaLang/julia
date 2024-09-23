@@ -502,6 +502,21 @@ let x = 1
 end
 """
 
+src = """
+let
+    (a, bs...,) = (1,2,3)
+    bs
+end
+"""
+
+src = """
+let
+    rhs = 1 + 2*Base.im
+    (; im, re) = rhs
+    (re, im)
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

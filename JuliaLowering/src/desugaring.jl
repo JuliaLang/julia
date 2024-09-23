@@ -139,16 +139,6 @@ function _tuple_sides_match(lhs, rhs)
     end
 end
 
-function _in_assignment_lhs(lhss, x_rhs)
-    for e in lhss
-        x = kind(e) == K"..." ? e[1] : e
-        if is_same_identifier_like(x, x_rhs)
-            return true
-        end
-    end
-    return false
-end
-
 # Lower `(lhss...) = rhs` in contexts where `rhs` must be a tuple at runtime
 # by assuming that `getfield(rhs, i)` works and is efficient.
 function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
@@ -267,7 +257,43 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
     stmts
 end
 
-# Expands all cases of general tuple destructuring
+# Expands cases of property destructuring
+function expand_property_destruct(ctx, ex)
+    @assert numchildren(ex) == 2
+    lhs = ex[1]
+    @assert kind(lhs) == K"tuple"
+    if numchildren(lhs) != 1
+        throw(LoweringError(ex, "Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
+    end
+    params = lhs[1]
+    @assert kind(params) == K"parameters"
+    rhs = ex[2]
+    stmts = SyntaxList(ctx)
+    rhs1 = if is_ssa(ctx, rhs) || (is_identifier_like(rhs) &&
+                                   !any(is_same_identifier_like(l, rhs) for l in children(params)))
+        rhs
+    else
+        emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
+    end
+    for prop in children(params)
+        propname = kind(prop) == K"Identifier"                           ? prop    :
+                   kind(prop) == K"::" && kind(prop[1]) == K"Identifier" ? prop[1] :
+                   throw(LoweringError(prop, "invalid assignment location"))
+        push!(stmts, expand_forms_2(ctx, @ast ctx rhs1 [K"="
+            prop
+            [K"call"
+                "getproperty"::K"top"
+                rhs1
+                propname=>K"Symbol"
+            ]
+        ]))
+    end
+    push!(stmts, @ast ctx rhs1 [K"unnecessary" rhs1])
+    makenode(ctx, ex, K"block", stmts)
+end
+
+# Expands all cases of general tuple destructuring, eg
+#   (x,y) = (a,b)
 function expand_tuple_destruct(ctx, ex)
     lhs = ex[1]
     @assert kind(lhs) == K"tuple"
@@ -281,14 +307,23 @@ function expand_tuple_destruct(ctx, ex)
         end
     end
 
-    if kind(rhs) == K"tuple" && !any_assignment(children(rhs)) &&
-            !has_parameters(rhs) && _tuple_sides_match(children(lhs), children(rhs))
-        return expand_forms_2(ctx, tuple_to_assignments(ctx, ex))
+    if kind(rhs) == K"tuple"
+        num_splat = sum(kind(rh) == K"..." for rh in children(rhs))
+        if num_splat == 0 && (numchildren(lhs) - num_slurp) > numchildren(rhs)
+            throw(LoweringError(ex, "More variables on left hand side than right hand in tuple assignment"))
+        end
+
+        if !any_assignment(children(rhs)) && !has_parameters(rhs) &&
+                _tuple_sides_match(children(lhs), children(rhs))
+            return expand_forms_2(ctx, tuple_to_assignments(ctx, ex))
+        end
     end
 
     stmts = SyntaxList(ctx)
-    rhs1 = if is_ssa(ctx, rhs) || (is_identifier_like(rhs) &&
-                                   !_in_assignment_lhs(children(lhs), rhs))
+    rhs1 = if is_ssa(ctx, rhs) ||
+            (is_identifier_like(rhs) &&
+             !any(is_same_identifier_like(kind(l) == K"..." ? l[1] : l, rhs)
+                  for l in children(lhs)))
         rhs
     else
         emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
@@ -418,7 +453,7 @@ function expand_assignment(ctx, ex)
     elseif kl == K"tuple"
         # TODO: has_parameters
         if has_parameters(lhs)
-            TODO(lhs, "Destructuring with named fields")
+            expand_property_destruct(ctx, ex)
         else
             expand_tuple_destruct(ctx, ex)
         end

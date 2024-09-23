@@ -101,11 +101,16 @@ function desugar(mod::Module, src::String)
 end
 
 function match_ir_test_case(case_str)
-    m = match(r"# *([^\n]*)\n((?:.|\n)*)#----*\n((?:.|\n)*)"m, strip(case_str))
+    m = match(r"# *([^\n]*)\n((?:.|\n)*)"m, strip(case_str))
     if isnothing(m)
         error("Malformatted IR test case:\n$(repr(case_str))")
     end
-    (description=strip(m[1]), input=strip(m[2]), output=strip(m[3]))
+    description = strip(m[1])
+    inout = split(m[2], r"#----*")
+    input, output = length(inout) == 2 ? inout          :
+                    length(inout) == 1 ? (inout[1], "") :
+                    error("Too many sections in IR test case")
+    (; description=strip(description), input=strip(input), output=strip(output))
 end
 
 function read_ir_test_cases(filename)

@@ -101,7 +101,7 @@ end
 @testset "Tuples on both sides" begin
 
 # lhs variable name in rhs
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
     x = 1
     y = 2
@@ -109,6 +109,22 @@ let
     (x,y)
 end
 """) == (2, 1)
+
+end
+
+@testset "Property destructuring" begin
+
+# TODO: Move named tuple inside test case once we can lower it
+Base.eval(test_mod, :(some_named_tuple = (a=1,b=2)))
+@test JuliaLowering.include_string(test_mod, """
+let
+    (; a, b) = some_named_tuple
+    (a, b)
+end
+""") == (1, 2)
+
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "(x ; a, b) = rhs")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "(; a=1, b) = rhs")
 
 end
 
