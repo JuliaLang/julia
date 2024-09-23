@@ -212,3 +212,14 @@ b[a[begin]] = x
 6   (call top.setindex! %₂ %₁ %₅)
 7   (return %₁)
 
+########################################
+# empty ref and setindex!
+let
+    a[] = rhs
+end
+#---------------------
+1   TestMod.rhs
+2   TestMod.a
+3   (call top.setindex! %₂ %₁)
+4   (return %₁)
+

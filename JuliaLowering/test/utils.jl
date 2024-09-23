@@ -2,6 +2,7 @@ using Test
 
 using JuliaLowering
 using JuliaSyntax
+import FileWatching
 
 using JuliaSyntax: sourcetext
 
@@ -195,4 +196,16 @@ end
 
 function refresh_all_ir_test_cases(test_dir=".")
     foreach(refresh_ir_test_cases, filter(fn->endswith(fn, "ir.jl"), readdir(test_dir, join=true)))
+end
+
+function watch_ir_tests(dir, delay=0.5)
+    dir = abspath(dir)
+    while true
+        (name, event) = FileWatching.watch_folder(dir)
+        if endswith(name, "_ir.jl") && (event.changed || event.renamed)
+            FileWatching.unwatch_folder(dir)
+            sleep(delay)
+            refresh_ir_test_cases(joinpath(dir, name))
+        end
+    end
 end

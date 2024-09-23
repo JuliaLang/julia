@@ -501,7 +501,7 @@ function expand_setindex(ctx, ex)
     @assert kind(ex) == K"=" && numchildren(ex) == 2
     lhs = ex[1]
     @assert kind(lhs) == K"ref"
-    @chk numchildren(lhs) >= 2
+    @chk numchildren(lhs) >= 1
     arr = lhs[1]
     idxs = lhs[2:end]
     rhs = ex[2]
