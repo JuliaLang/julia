@@ -551,21 +551,22 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Powers, logs and roots
 
-| Function                 | Description                                                                |
-|:------------------------ |:-------------------------------------------------------------------------- |
-| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
-| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
-| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
-| [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
-| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
-| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
-| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1 + x)` for `x` near zero                                    |
-| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
-| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
+| Function                      | Description                                                                |
+|:----------------------------- |:-------------------------------------------------------------------------- |
+| [`sqrt(x)`](@ref), `√x`       | square root of `x`                                                         |
+| [`cbrt(x)`](@ref), `∛x`       | cube root of `x`                                                           |
+| [`fourthroot(x)`](@ref), `∜x` | fourth root of `x`                                                         |
+| [`hypot(x, y)`](@ref)         | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@ref)              | natural exponential function at `x`                                        |
+| [`expm1(x)`](@ref)            | accurate `exp(x) - 1` for `x` near zero                                    |
+| [`ldexp(x, n)`](@ref)         | `x * 2^n` computed efficiently for integer values of `n`                   |
+| [`log(x)`](@ref)              | natural logarithm of `x`                                                   |
+| [`log(b, x)`](@ref)           | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@ref)             | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@ref)            | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@ref)            | accurate `log(1 + x)` for `x` near zero                                    |
+| [`exponent(x)`](@ref)         | binary exponent of `x`                                                     |
+| [`significand(x)`](@ref)      | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
 For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),

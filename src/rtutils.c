@@ -269,10 +269,11 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     // `eh` may be not equal to `ct->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
-    sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
+    jl_ptls_t ptls = ct->ptls;
+    sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
-    small_arraylist_t *locks = &ct->ptls->locks;
+    small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
         for (size_t i = locks->len; i > eh->locks_len; i--)
@@ -280,14 +281,26 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
     ct->world_age = eh->world_age;
-    ct->ptls->defer_signal = eh->defer_signal;
-    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    ptls->defer_signal = eh->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ptls->gc_state);
     if (old_gc_state != eh->gc_state)
-        jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
     if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
-        jl_gc_safepoint_(ct->ptls);
+        jl_gc_safepoint_(ptls);
+    jl_value_t *exception = ptls->sig_exception;
+    if (exception) {
+        int8_t oldstate = jl_gc_unsafe_enter(ptls);
+        /* The temporary ptls->bt_data is rooted by special purpose code in the
+        GC. This exists only for the purpose of preserving bt_data until we
+        set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+        ptls->sig_exception = NULL;
+        jl_gc_unsafe_leave(ptls, oldstate);
+    }
     if (old_defer_signal && !eh->defer_signal)
-        jl_sigint_safepoint(ct->ptls);
+        jl_sigint_safepoint(ptls);
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
             unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
@@ -553,7 +566,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
+    return stderr_obj ? jl_get_binding_value(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -648,12 +661,10 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
-            jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
-            // The `||` makes this function work for both function instances and function types.
-            if (bv == v || jl_typeof(bv) == v)
-                return 1;
-        }
+        jl_value_t *bv = jl_get_binding_value_if_const(b);
+        // The `||` makes this function work for both function instances and function types.
+        if (bv && (bv == v || jl_typeof(bv) == v))
+            return 1;
     }
     return 0;
 }
@@ -1403,6 +1414,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
+            ((jl_datatype_t*)ftype)->name->mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);

@@ -1095,20 +1095,13 @@ LIBUNWIND:=
 else ifneq ($(DISABLE_LIBUNWIND), 0)
 LIBUNWIND:=
 else
-ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
-ifneq ($(OS),Darwin)
 LIBUNWIND:=-lunwind
-# Only for linux since we want to use not yet released libunwind features
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
+JCPPFLAGS+=-DLLVMLIBUNWIND
+else ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+# Only for linux and freebsd since we want to use not yet released gnu libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
-endif
-else
-ifneq ($(findstring $(OS),Darwin OpenBSD),)
-LIBUNWIND:=-lunwind
-JCPPFLAGS+=-DLLVMLIBUNWIND
-else
-LIBUNWIND:=-lunwind
-endif
 endif
 endif
 

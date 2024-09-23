@@ -1120,4 +1120,14 @@ end
     end
 end
 
+@testset "vector-matrix multiplication" begin
+    a = [1,2]
+    A = reshape([1,2], 2, 1)
+    B = [1 2]
+    @test a * B ≈ A * B
+    B = reshape([1,2], 2, 1)
+    @test a * B' ≈ A * B'
+    @test a * transpose(B) ≈ A * transpose(B)
+end
+
 end # module TestMatmul

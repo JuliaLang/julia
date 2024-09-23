@@ -89,6 +89,7 @@ function add_tfunc(@nospecialize(f::Builtin), minarg::Int, maxarg::Int, @nospeci
 end
 
 add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
+add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
@@ -419,7 +420,7 @@ end
             else
                 return Bottom
             end
-            if 1 <= idx <= datatype_min_ninitialized(a1)
+            if 1 ≤ idx ≤ datatype_min_ninitialized(a1)
                 return Const(true)
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
@@ -427,14 +428,20 @@ end
                 else
                     ns = a1.parameters[1]
                     if isa(ns, Tuple)
-                        return Const(1 <= idx <= length(ns))
+                        return Const(1 ≤ idx ≤ length(ns))
                     end
                 end
-            elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
+            elseif idx ≤ 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
             elseif isa(arg1, Const)
                 if !ismutabletype(a1) || isconst(a1, idx)
                     return Const(isdefined(arg1.val, idx))
+                end
+            elseif isa(arg1, PartialStruct)
+                if !isvarargtype(arg1.fields[end])
+                    if 1 ≤ idx ≤ length(arg1.fields)
+                        return Const(true)
+                    end
                 end
             elseif !isvatuple(a1)
                 fieldT = fieldtype(a1, idx)
@@ -989,27 +996,39 @@ end
     ⊑ = partialorder(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
-    if isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
-            sv = (s00::DataType).parameters[1]
-        else
+    if isa(s00, Const) || isconstType(s00) || isa(s00, PartialStruct)
+        if isa(s00, Const)
             sv = s00.val
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
+        elseif isa(s00, PartialStruct)
+            sty = unwrap_unionall(s00.typ)
+            nflds = fieldcount_noerror(sty)
+            ismod = false
+        else
+            sv = (s00::DataType).parameters[1]
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
         end
         if isa(name, Const)
             nval = name.val
             if !isa(nval, Symbol)
-                isa(sv, Module) && return false
+                ismod && return false
                 isa(nval, Int) || return false
             end
             return isdefined_tfunc(𝕃, s00, name) === Const(true)
         end
-        boundscheck && return false
+
         # If bounds checking is disabled and all fields are assigned,
         # we may assume that we don't throw
-        isa(sv, Module) && return false
+        @assert !boundscheck
+        ismod && return false
         name ⊑ Int || name ⊑ Symbol || return false
-        typeof(sv).name.n_uninitialized == 0 && return true
-        for i = (datatype_min_ninitialized(typeof(sv)) + 1):nfields(sv)
+        sty.name.n_uninitialized == 0 && return true
+        nflds === nothing && return false
+        for i = (datatype_min_ninitialized(sty)+1):nflds
             isdefined_tfunc(𝕃, s00, Const(i)) === Const(true) || return false
         end
         return true
@@ -2295,6 +2314,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     setfield!,
     donotdelete
 ]
@@ -2317,6 +2337,7 @@ const _EFFECT_FREE_BUILTINS = [
     (<:),
     typeassert,
     throw,
+    Core.throw_methoderror,
     getglobal,
     compilerbarrier,
 ]
@@ -2332,6 +2353,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     isa,
     nfields,
     throw,
+    Core.throw_methoderror,
     tuple,
     typeassert,
     typeof,
@@ -2948,7 +2970,7 @@ end
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
     length(argtypes) < 2 && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_method_matches(interp, argtypes, atype; max_methods)
@@ -2957,34 +2979,23 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     else
         (; valid_worlds, applicable) = matches
         update_valid_age!(sv, valid_worlds)
-
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        if isa(matches, MethodMatches)
-            matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
-        else
-            for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-                thisfullmatch || add_mt_backedge!(sv, mt, atype)
-            end
-        end
-
         napplicable = length(applicable)
         if napplicable == 0
             rt = Const(false) # never any matches
+        elseif !fully_covering(matches) || any_ambig(matches)
+            # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+            rt = Bool
         else
             rt = Const(true) # has applicable matches
-            for i in 1:napplicable
-                match = applicable[i]::MethodMatch
-                edge = specialize_method(match)::MethodInstance
-                add_backedge!(sv, edge)
-            end
-
-            if isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
-                    (!all(matches.fullmatches) || any_ambig(matches))
-                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-                rt = Bool
-            end
         end
+        for i in 1:napplicable
+            match = applicable[i]::MethodMatch
+            edge = specialize_method(match)::MethodInstance
+            add_backedge!(sv, edge)
+        end
+        # also need an edge to the method table in case something gets
+        # added that did not intersect with any existing method
+        add_uncovered_edges!(sv, matches, atype)
     end
     return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
 end
@@ -3173,6 +3184,11 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     elseif name === :jl_genericmemory_copy_slice
         return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
     end
+    # `:foreigncall` can potentially perform all sorts of operations, including calling
+    # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
+    # concern that the method calls that potentially occur within the `:foreigncall` will
+    # be executed using the wrong method table due to concrete evaluation, so using
+    # `EFFECTS_UNKNOWN` here and not tainting with `:nonoverlayed` is fine
     return EFFECTS_UNKNOWN
 end
 

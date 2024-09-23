@@ -293,8 +293,14 @@ julia> numerator(4)
 4
 ```
 """
-numerator(x::Integer) = x
+numerator(x::Union{Integer,Complex{<:Integer}}) = x
 numerator(x::Rational) = x.num
+function numerator(z::Complex{<:Rational})
+    den = denominator(z)
+    reim = (real(z), imag(z))
+    result = checked_mul.(numerator.(reim), div.(den, denominator.(reim)))
+    complex(result...)
+end
 
 """
     denominator(x)
@@ -310,8 +316,9 @@ julia> denominator(4)
 1
 ```
 """
-denominator(x::Integer) = one(x)
+denominator(x::Union{Integer,Complex{<:Integer}}) = one(x)
 denominator(x::Rational) = x.den
+denominator(z::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)

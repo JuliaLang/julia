@@ -168,12 +168,15 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    p = open(`$cmd -e $script`)
+    # use multiple threads here to ensure that profiling works with threading
+    p = open(`$cmd -t2 -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGTERM)
-        sleep(10)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
         kill(p, Base.SIGKILL)
     end
     s = read(p, String)
@@ -202,8 +205,10 @@ if Sys.isbsd() || Sys.islinux()
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
-                kill(p, Base.SIGTERM)
-                sleep(10)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
                 kill(p, Base.SIGKILL)
                 close(notify_exit)
             end
@@ -275,15 +280,30 @@ end
 
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
+
+    # ensure that we can prevent redacting data
     fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
     end
 
     @test isfile(fname)
 
-    open(fname) do fs
-        @test readline(fs) != ""
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test contains(sshot, "redact_this")
+
+    rm(fname)
+
+    # ensure that string data is redacted by default
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
     end
+
+    @test isfile(fname)
+
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test !contains(sshot, "redact_this")
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)

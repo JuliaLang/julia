@@ -580,6 +580,14 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_throw_methoderror)
+{
+    JL_NARGSV(throw_methoderror, 1);
+    size_t world = jl_get_tls_world_age();
+    jl_method_error(args[0], &args[1], nargs, world);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_ifelse)
 {
     JL_NARGS(ifelse, 3, 3);
@@ -1369,19 +1377,10 @@ JL_CALLABLE(jl_f_get_binding_type)
     jl_sym_t *var = (jl_sym_t*)args[1];
     JL_TYPECHK(get_binding_type, module, (jl_value_t*)mod);
     JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
-    jl_value_t *ty = jl_get_binding_type(mod, var);
-    if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-        if (b == NULL)
-            return (jl_value_t*)jl_any_type;
-        jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
-        if (b2 != b)
-            return (jl_value_t*)jl_any_type;
-        jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-        return jl_atomic_load_relaxed(&b->ty);
-    }
-    return ty;
+    jl_value_t *ret = jl_get_binding_type(mod, var);
+    if (ret == jl_nothing)
+        return (jl_value_t*)jl_any_type;
+    return ret;
 }
 
 JL_CALLABLE(jl_f_swapglobal)
@@ -2206,6 +2205,9 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    // if tb recursively refers to itself in its supertype, assume that it refers to ta
+    // before checking whether the supertypes are equal
+    b = jl_substitute_datatype(b, dtb, dta);
     if (!jl_types_equal(a, b))
         goto no;
     JL_TRY {
@@ -2442,7 +2444,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
-    add_builtin_func("current_scope", jl_f_current_scope);
+    jl_builtin_current_scope = add_builtin_func("current_scope", jl_f_current_scope);
+    add_builtin_func("throw_methoderror", jl_f_throw_methoderror);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -2509,6 +2512,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("Binding", (jl_value_t*)jl_binding_type);
+    add_builtin("BindingPartition", (jl_value_t*)jl_binding_partition_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 

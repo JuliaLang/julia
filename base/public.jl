@@ -110,6 +110,9 @@ public
     reseteof,
     link_pipe!,
 
+# filesystem operations
+    rename,
+
 # misc
     notnothing,
     runtests,

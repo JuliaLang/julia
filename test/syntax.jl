@@ -2645,9 +2645,9 @@ end
 @test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
 @test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
-@test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
-@test_throws ErrorException("cannot assign a value to imported variable Mod3.f") Core.eval(Mod3, :(const f = 3))
-@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
+@test_throws ErrorException("cannot declare Mod3.always_undef constant; it was already declared as an import") Core.eval(Mod3, :(const always_undef = 3))
+@test_throws ErrorException("cannot declare Mod3.f constant; it was already declared as an import") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it was already declared global") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42
 import .z as also_z
@@ -3704,7 +3704,8 @@ end
 module Foreign54607
     # Syntactic, not dynamic
     try_to_create_binding1() = (Foreign54607.foo = 2)
-    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo)) = 2)
+    # GlobalRef is allowed for same-module assignment
+    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo2)) = 2)
     function global_create_binding()
         global bar
         bar = 3
@@ -3719,6 +3720,11 @@ end
 @test_throws ErrorException (Foreign54607.foo = 1)
 @test_throws ErrorException Foreign54607.try_to_create_binding1()
 @test_throws ErrorException Foreign54607.try_to_create_binding2()
+function assign_in_foreign_module()
+    (Foreign54607.foo = 1)
+    nothing
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(assign_in_foreign_module))
 @test_throws ErrorException begin
     @Base.Experimental.force_compile
     (Foreign54607.foo = 1)
@@ -3904,3 +3910,80 @@ module ExtendedIsDefined
         @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
     end
 end
+
+# Test importing the same module twice using two different paths
+module FooDualImport
+end
+module BarDualImport
+import ..FooDualImport
+import ..FooDualImport.FooDualImport
+end
+
+# Test trying to define a constant and then importing the same constant
+const ImportConstant = 1
+module ImportConstantTestModule
+    using Test
+    const ImportConstant = 1
+    import ..ImportConstant
+    @test ImportConstant == 1
+    @test isconst(@__MODULE__, :ImportConstant)
+end
+
+# Test trying to define a constant and then trying to assign to the same value
+module AssignConstValueTest
+    const x = 1
+    x = 1
+end
+@test isconst(AssignConstValueTest, :x)
+
+# Module Replacement
+module ReplacementContainer
+    module ReplaceMe
+        const x = 1
+    end
+    const Old = ReplaceMe
+    module ReplaceMe
+        const x = 2
+    end
+end
+@test ReplacementContainer.Old !== ReplacementContainer.ReplaceMe
+@test ReplacementContainer.ReplaceMe.x === 2
+
+# Setglobal of previously declared global
+module DeclareSetglobal
+    using Test
+    @test_throws ErrorException setglobal!(@__MODULE__, :DeclareMe, 1)
+    global DeclareMe
+    setglobal!(@__MODULE__, :DeclareMe, 1)
+    @test DeclareMe === 1
+end
+
+# Binding type of const (N.B.: This may change in the future)
+module ConstBindingType
+    using Test
+    const x = 1
+    @test Core.get_binding_type(@__MODULE__, :x) === Any
+end
+
+# Explicit import may resolve using failed
+module UsingFailedExplicit
+    using Test
+    module A; export x; x = 1; end
+    module B; export x; x = 2; end
+    using .A, .B
+    @test_throws UndefVarError x
+    using .A: x as x
+    @test x === 1
+end
+
+# issue #45494
+begin
+  local b::Tuple{<:Any} = (0,)
+  function f45494()
+    b = b
+    b
+  end
+end
+@test f45494() === (0,)
+
+@test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))
