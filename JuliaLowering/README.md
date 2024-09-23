@@ -557,6 +557,11 @@ In general, we'd be replacing current *declarative* lowering targets like
 the setup of its arguments would need to go in a thunk. We've currently got an
 odd mixture of imperative and declarative lowered code.
 
+## Bugs in Julia's lowering
+
+List of bugs which should be fixed upstream in flisp implementation
+* `f()[begin]` has the side effect `f()` twice.
+* `a[(begin=1; a=2)]` gives a weird error
 
 ## Notes on Racket's hygiene
 

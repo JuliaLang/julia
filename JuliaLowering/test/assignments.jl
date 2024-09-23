@@ -42,7 +42,7 @@ end
 """) == (10,2)
 
 # Lowering of ref
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
     as = [0,0,0,0]
     as[begin] = 1
@@ -51,6 +51,18 @@ let
     as
 end
 """) == [1, 2, 0, 4]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    as = zeros(Int, 2,3)
+    as[begin, end] = 1
+    as[end, begin] = 2
+    js = (2,)
+    as[js..., end] = 3
+    as
+end
+""") == [0 0 1;
+         2 0 3]
 
 # Declarations
 @test JuliaLowering.include_string(test_mod, """

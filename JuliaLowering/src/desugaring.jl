@@ -38,6 +38,15 @@ function is_same_identifier_like(x, y)
            (kind(x) == K"BindingId"  && kind(y) == K"BindingId"  && x.var_id   == y.var_id)
 end
 
+function is_same_identifier_like(x, name::AbstractString)
+    return kind(x) == K"Identifier" && x.name_val == name
+end
+
+function contains_identifier(ex, idents...)
+    return any(is_same_identifier_like(ex, id) for id in idents) ||
+        (!is_leaf(ex) && any(contains_identifier(e, idents...) for e in children(ex)))
+end
+
 # Identify some expressions that are safe to repeat
 #
 # TODO: Can we use this in more places?
@@ -372,6 +381,105 @@ function remove_argument_side_effects(ctx, stmts, ex)
     end
 end
 
+# Replace any `begin` or `end` symbols with an expression indexing the array
+# `arr` in the `n`th index. `splats` are a list of the splatted arguments that
+# precede index `n` `is_last` is true when this is this
+# last index
+function replace_beginend(ctx, ex, arr, n, splats, is_last)
+    k = kind(ex)
+    if k == K"Identifier" && ex.name_val in ("begin", "end")
+        indexfunc = @ast ctx ex (ex.name_val == "begin" ? "firstindex" : "lastindex")::K"top"
+        if length(splats) == 0
+            if is_last && n == 1
+                @ast ctx ex [K"call" indexfunc arr]
+            else
+                @ast ctx ex [K"call" indexfunc arr n::K"Integer"]
+            end
+        else
+            splat_lengths = SyntaxList(ctx)
+            for splat in splats
+                push!(splat_lengths, @ast ctx ex [K"call" "length"::K"top" splat])
+            end
+            @ast ctx ex [K"call"
+                indexfunc
+                arr
+                [K"call"
+                    "+"::K"top"
+                    (n - length(splats))::K"Integer"
+                    splat_lengths...
+                ]
+            ]
+        end
+    elseif is_leaf(ex) || is_quoted(ex)
+        ex
+    elseif k == K"ref" || k == K"."
+        # inside ref and `.` only replace within the first argument
+        @ast ctx ex [k
+            replace_beginend(ctx, ex[1], arr, n, splats, is_last)
+            ex[2:end]...
+        ]
+    # elseif k == K"kw" - keyword args - what does this mean here?
+    #   # note from flisp
+    #   # TODO: this probably should not be allowed since keyword args aren't
+    #   # positional, but in this context we have just used their positions anyway
+    else
+        mapchildren(e->replace_beginend(ctx, e, arr, n, splats, is_last), ctx, ex)
+    end
+end
+
+# Go through indices and replace the `begin` or `end` symbol
+# `arr` - array being indexed
+# `idxs` - list of indices
+# returns `idxs_out`; any statements that need to execute first are appended to
+# `stmts`.
+function process_indices(ctx, stmts, arr, idxs, expand_stmts)
+    has_splats = any(kind(i) == K"..." for i in idxs)
+    idxs_out = SyntaxList(ctx)
+    splats = SyntaxList(ctx)
+    for (n, idx0) in enumerate(idxs)
+        is_splat = kind(idx0) == K"..."
+        val = replace_beginend(ctx, is_splat ? idx0[1] : idx0,
+                               arr, n, splats, n == length(idxs))
+        # TODO: kwarg?
+        idx = !has_splats || is_simple_atom(ctx, val) ?
+              val : emit_assign_tmp(stmts, ctx, expand_stmts ? expand_forms_2(ctx, val) : val)
+        if is_splat
+            push!(splats, idx)
+        end
+        push!(idxs_out, is_splat ? @ast(ctx, idx0, [K"..." idx]) : idx)
+    end
+    return idxs_out
+end
+
+function expand_setindex(ctx, ex)
+    @assert kind(ex) == K"=" && numchildren(ex) == 2
+    lhs = ex[1]
+    @assert kind(lhs) == K"ref"
+    @chk numchildren(lhs) >= 2
+    arr = lhs[1]
+    idxs = lhs[2:end]
+    rhs = ex[2]
+
+    stmts = SyntaxList(ctx)
+    if !is_leaf(arr) && any(contains_identifier(e, "begin", "end") for e in idxs)
+        arr = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, arr))
+    end
+    new_idxs = process_indices(ctx, stmts, arr, idxs, true)
+    if !is_ssa(ctx, rhs) && !is_quoted(rhs)
+        rhs = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
+    end
+    @ast ctx ex [K"block"
+        stmts...
+        expand_forms_2(ctx, @ast ctx ex [K"call"
+            "setindex!"::K"top"
+            arr
+            rhs
+            new_idxs...
+        ])
+        [K"unnecessary" rhs]
+    ]
+end
+
 # Expand general assignment syntax, including
 #   * UnionAll definitions
 #   * Chained assignments
@@ -459,7 +567,7 @@ function expand_assignment(ctx, ex)
         end
     elseif kl == K"ref"
         # a[i1, i2] = rhs
-        TODO(lhs)
+        expand_setindex(ctx, ex)
     elseif kl == K"::" && numchildren(lhs) == 2
         x = lhs[1]
         T = lhs[2]

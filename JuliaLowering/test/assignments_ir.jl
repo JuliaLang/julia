@@ -110,3 +110,105 @@ end
 9   TestMod.x
 10  (return %₉)
 
+########################################
+# simple setindex!
+a[i] = x
+#---------------------
+1   TestMod.x
+2   TestMod.a
+3   TestMod.i
+4   (call top.setindex! %₂ %₁ %₃)
+5   (return %₁)
+
+########################################
+# simple setindex! with begin
+a[begin] = x
+#---------------------
+1   TestMod.x
+2   TestMod.a
+3   TestMod.a
+4   (call top.firstindex %₃)
+5   (call top.setindex! %₂ %₁ %₄)
+6   (return %₁)
+
+########################################
+# simple setindex! with end
+a[end] = x
+#---------------------
+1   TestMod.x
+2   TestMod.a
+3   TestMod.a
+4   (call top.lastindex %₃)
+5   (call top.setindex! %₂ %₁ %₄)
+6   (return %₁)
+
+########################################
+# multidimensional setindex! with begin
+a[i, begin] = x
+#---------------------
+1   TestMod.x
+2   TestMod.a
+3   TestMod.i
+4   TestMod.a
+5   (call top.firstindex %₄ 2)
+6   (call top.setindex! %₂ %₁ %₃ %₅)
+7   (return %₁)
+
+########################################
+# multidimensional setindex! with end
+a[i, end] = x
+#---------------------
+1   TestMod.x
+2   TestMod.a
+3   TestMod.i
+4   TestMod.a
+5   (call top.lastindex %₄ 2)
+6   (call top.setindex! %₂ %₁ %₃ %₅)
+7   (return %₁)
+
+########################################
+# multidimensional setindex! with begin/end and splats
+a[is..., end, js..., begin] = x
+#---------------------
+1   TestMod.is
+2   TestMod.a
+3   (call top.length %₁)
+4   (call top.+ 1 %₃)
+5   (call top.lastindex %₂ %₄)
+6   TestMod.js
+7   TestMod.a
+8   (call top.length %₁)
+9   (call top.length %₆)
+10  (call top.+ 2 %₈ %₉)
+11  (call top.firstindex %₇ %₁₀)
+12  TestMod.x
+13  TestMod.a
+14  (call core.tuple %₁₃ %₁₂)
+15  (call core.tuple %₅)
+16  (call core.tuple %₁₁)
+17  (call core._apply_iterate top.iterate top.setindex! %₁₄ %₁ %₁₅ %₆ %₁₆)
+18  (return %₁₂)
+
+########################################
+# setindex! with nontrivial array expression and begin/end
+f()[end] = x
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   TestMod.x
+4   (call top.lastindex %₂)
+5   (call top.setindex! %₂ %₃ %₄)
+6   (return %₃)
+
+########################################
+# nested refs (fixme!)
+b[a[begin]] = x
+#---------------------
+1   TestMod.x
+2   TestMod.b
+3   TestMod.a
+4   TestMod.begin
+5   (call top.getindex %₃ %₄)
+6   (call top.setindex! %₂ %₁ %₅)
+7   (return %₁)
+
