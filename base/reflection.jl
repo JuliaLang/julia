@@ -2378,6 +2378,7 @@ Determine the module containing the (first) definition of a generic
 function.
 """
 parentmodule(f::Function) = parentmodule(typeof(f))
+parentmodule(f::Core.IntrinsicFunction) = Core.Intrinsics
 
 """
     parentmodule(f::Function, types) -> Module
