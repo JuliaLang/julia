@@ -1524,6 +1524,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     end
 end
 
+precompiling_package::Bool = false
 loading_extension::Bool = false
 precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
@@ -2215,6 +2216,11 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    if into === Base.__toplevel__ && precompiling_package
+        # this error type needs to match the error type compilecache throws for non-125 errors.
+        error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
+         is not allowed during package precompilation.")
+    end
     if _require_world_age[] != typemax(UInt)
         Base.invoke_in_world(_require_world_age[], __require, into, mod)
     else
@@ -2792,40 +2798,9 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
-"""
-    check_src_module_wrap(srcpath::String)
-
-Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
-"""
-function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
-    load_rgx = r"\b(?:using|import)\s"
-    load_seen = false
-    inside_string = false
-    for s in eachline(srcpath)
-        if count("\"\"\"", s) == 1
-            # ignore module docstrings
-            inside_string = !inside_string
-        end
-        inside_string && continue
-        if contains(s, module_rgx)
-            if load_seen
-                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
-            end
-            return true
-        end
-        if startswith(s, load_rgx)
-            load_seen = true
-        end
-    end
-    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
-end
-
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
-
-    check_src_module_wrap(pkg, input)
 
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
@@ -2853,6 +2828,17 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+    # check that the package defined the expected module so we can give a nice error message if not
+    Base.check_package_module_loaded(pkg)
+end
+
+function check_package_module_loaded(pkg::PkgId)
+    if !haskey(Base.loaded_modules, pkg)
+        # match compilecache error type for non-125 errors
+        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
+            check for typos in package module name")
+    end
+    return nothing
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
@@ -2927,6 +2913,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
         Base.precompiling_extension = $(loading_extension)
+        Base.precompiling_package = true
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
