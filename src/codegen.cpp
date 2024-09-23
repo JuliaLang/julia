@@ -6378,13 +6378,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_value_t *val = expr;
         if (jl_is_quotenode(expr))
             val = jl_fieldref_noalloc(expr, 0);
-        if (jl_is_method(ctx.linfo->def.method)) // toplevel exprs are already rooted
-            val = jl_ensure_rooted(ctx, val);
-        else {
-            jl_task_t *ct = jl_current_task;
-            jl_gc_force_mark_old(ct->ptls, val); // Make the value old and marked + put it in the remset
-        }                                        // Top level expressions are no longer rooted after execution
-                                                 // so storing a new object into an old binding will cause GC corruption
+        // Toplevel exprs are rooted but because codegen assumes this is constant, it removes the write barriers for this code.
+        // This means we have to globally root the value here. (The other option would be to change how we optimize toplevel code)
+        val = jl_ensure_rooted(ctx, val);
         return mark_julia_const(ctx, val);
     }
 
