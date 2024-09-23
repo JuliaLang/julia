@@ -501,7 +501,7 @@ function f37262(x)
     end
 end
 @testset "#37262" begin
-    str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 16\n  store volatile ptr null"
+    str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 8\n  store volatile ptr null"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
     @test contains(llvmstr, str_opaque)
     @test f37262(Base.inferencebarrier(true)) === nothing
