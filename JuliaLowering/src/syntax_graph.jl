@@ -3,6 +3,8 @@ const NodeId = Int
 """
 Directed graph with arbitrary attributes on nodes. Used here for representing
 one or several syntax trees.
+
+TODO: Global attributes!
 """
 struct SyntaxGraph{Attrs}
     edge_ranges::Vector{UnitRange{Int}}

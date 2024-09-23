@@ -61,6 +61,12 @@ end
 
 # Convert things like `(x,y,z) = (a,b,c)` to assignments, eliminating the
 # tuple. Includes support for slurping/splatting.
+#
+# If lhss and rhss are the list of terms on each side, this function assumes
+# the following have been checked:
+#   * There's only one `...` on the left hand side
+#   * Neither side has any key=val terms
+#   * _tuple_sides_match returns true
 function tuple_to_assignments(ctx, ex)
     lhs = ex[1]
     rhs = ex[2]
@@ -69,21 +75,61 @@ function tuple_to_assignments(ctx, ex)
     elements = SyntaxList(ctx)
     assigned = SyntaxList(ctx)
 
-    for i in 1:numchildren(lhs)
-        lh = lhs[i]
+    il = 0
+    ir = 0
+    while il < numchildren(lhs)
+        il += 1
+        ir += 1
+        lh = lhs[il]
         if kind(lh) == K"..."
-            # can be null iff lh is a vararg
-            rh = i <= numchildren(rhs) ? rhs[i] : nothing
-            TODO(lh, "... in tuple_to_assignments")
+            TODO(lhs, "... in tuple lhs")
+            n_lhs = numchildren(lhs)
+            n_rhs = numchildren(rhs)
+            if il == n_lhs
+                # Simple case: exactly one `...` at end of lhs. Examples:
+                #   (x, ys...) = (a,b,c)
+                #   (ys...)    = ()
+                rhs_tmp = emit_assign_tmp(stmts, ctx,
+                    @ast(ctx, rhs, [K"tuple" rhs[ir:end]...]),
+                    "rhs_tmp"
+                )
+                push!(stmts, @ast ctx ex [K"=" lh[1] rhs_tmp])
+                push!(elements, @ast ctx rhs_tmp [K"..." rhs_tmp])
+                break
+            else
+                # Exactly one lhs `...` occurs in the middle somewhere, with a
+                # general rhs which has one `...` term or at least as many
+                # non-`...` terms.
+                # Examples:
+                #   (x, ys..., z) = (a, b, c, d)
+                #   (x, ys..., z) = (a, bs...)
+                #   (xs..., y)    = (a, bs...)
+                # in this case we pairwise-match arguments from the end
+                # backward, with rhs splats falling back to the general case.
+                jl = n_lhs + 1
+                jr = n_rhs + 1
+                while jl > il && jr > ir
+                    if kind(lhs[jl-1]) == K"..." || kind(rhs[jr-1]) == K"..."
+                        break
+                    end
+                    jl -= 1
+                    jr -= 1
+                end
+                rhs[jr]
+            end
             continue
         end
-        rh = rhs[i] # In other cases `rhs[i]` must exist
+        rh = rhs[ir] # In other cases `rhs[ir]` must exist
         if kind(rh) == K"..."
-            TODO(rh, "... in tuple_to_assignments")
+            @assert ir == numchildren(rhs) # _tuple_sides_match ensures this
+            rh_tmp = emit_assign_tmp(stmts, ctx, rh[1])
+            push!(end_stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:end]...] rh_tmp])
+            push!(elements, @ast ctx rh [K"..." rh_tmp])
+            break
         else
             if is_identifier_like(lh) && is_effect_free(rh) &&
-                    !any(is_same_identifier_like(lh, rhs[j]) for j in i+1:lastindex(rhs))
-                    !any(is_same_identifier_like(rh, a) for a in assigned)
+                    !any(contains_identifier(rhs[j], lh) for j in ir+1:lastindex(rhs))
+                    !any(contains_identifier(a, rh) for a in assigned)
                 # Overwrite `lh` directly if that won't cause conflicts with
                 # other symbols
                 push!(stmts, @ast ctx ex [K"=" lh rh])

@@ -180,6 +180,22 @@ end
 10  (return %₉)
 
 ########################################
+# Destructuring with tuple elimination and trailing rhs ...
+let
+    (x, y) = (a, rhs...)
+end
+#---------------------
+1   TestMod.a
+2   (= slot₁/x %₁)
+3   TestMod.rhs
+4   (call top.indexed_iterate %₃ 1)
+5   (= slot₂/y (call core.getfield %₄ 1))
+6   TestMod.a
+7   (call core.tuple %₆)
+8   (call core._apply_iterate top.iterate core.tuple %₇ %₃)
+9   (return %₈)
+
+########################################
 # Property destructuring
 let
     (; x, y) = rhs

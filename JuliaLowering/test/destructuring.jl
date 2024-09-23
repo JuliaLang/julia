@@ -110,7 +110,24 @@ let
 end
 """) == (2, 1)
 
+# dotted rhs in last place
+@test JuliaLowering.include_string(test_mod, """
+let
+    rh = (2, 3)
+    (x,y,z) = (1,rh...)
+    (x,y,z)
 end
+""") == (1, 2, 3)
+# in value position
+@test JuliaLowering.include_string(test_mod, """
+let
+    rh = (2, 3)
+    (x,y) = (1,rh...)
+end
+""") == (1, 2, 3)
+
+end
+
 
 @testset "Property destructuring" begin
 
