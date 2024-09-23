@@ -230,8 +230,8 @@ end
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
     if sz == -1
-        err = Libc.errno()
-        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+        # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
+        sz = filesize(stat(s))
     end
     return sz
 end
