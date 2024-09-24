@@ -1096,14 +1096,7 @@ public
     Lockable,
     OneTo,
     LogRange,
-    AnnotatedString,
-    AnnotatedChar,
     UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
 
 # Semaphores
     Semaphore,
