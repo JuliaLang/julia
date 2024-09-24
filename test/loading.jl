@@ -793,6 +793,17 @@ import .Foo28190.Libdl; import Libdl
     end
 end
 
+@testset "`::AbstractString` constraint on the path argument to `include`" begin
+    for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        let i = m.include
+            @test !applicable(i, (nothing,))
+            @test !applicable(i, (identity, nothing,))
+            @test !hasmethod(i, Tuple{Nothing})
+            @test !hasmethod(i, Tuple{Function,Nothing})
+        end
+    end
+end
+
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
