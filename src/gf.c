@@ -3102,7 +3102,8 @@ static void jl_compile_now(jl_method_instance_t *mi)
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world)
 {
     size_t tworld = jl_typeinf_world;
-    jl_atomic_store_relaxed(&mi->precompiled, 1);
+    uint8_t miflags = jl_atomic_load_relaxed(&mi->flags) | JL_MI_FLAGS_MASK_PRECOMPILED;
+    jl_atomic_store_relaxed(&mi->flags, miflags);
     if (jl_generating_output()) {
         jl_compile_now(mi);
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
@@ -3117,7 +3118,8 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)mi->def.method->sig, &tpenv2);
             jl_method_instance_t *mi2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
-            jl_atomic_store_relaxed(&mi2->precompiled, 1);
+            miflags = jl_atomic_load_relaxed(&mi2->flags) | JL_MI_FLAGS_MASK_PRECOMPILED;
+            jl_atomic_store_relaxed(&mi2->flags, miflags);
             if (jl_rettype_inferred_native(mi2, world, world) == jl_nothing)
                 (void)jl_type_infer(mi2, world, SOURCE_MODE_NOT_REQUIRED);
             if (jl_typeinf_func && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= tworld) {
@@ -3394,8 +3396,11 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world);
     JL_GC_PROMISE_ROOTED(mfunc);
-    if (!mfunc->dispatched) {
-        mfunc->dispatched = 1;
+    uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+    uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+    if (!was_dispatched) {
+        miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+        jl_atomic_store_relaxed(&mfunc->flags, miflags);
         record_dispatch_statement(mfunc);
     }
     return _jl_invoke(F, args, nargs, mfunc, world);
@@ -3504,6 +3509,13 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
     JL_GC_PROMISE_ROOTED(mfunc);
+    uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+    uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+    if (!was_dispatched) {
+        miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+        jl_atomic_store_relaxed(&mfunc->flags, miflags);
+        record_dispatch_statement(mfunc);
+    }
     size_t world = jl_current_task->world_age;
     return _jl_invoke(gf, args, nargs - 1, mfunc, world);
 }
