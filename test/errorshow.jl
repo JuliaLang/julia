@@ -10,7 +10,8 @@ Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, Meth
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.fielderror_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -808,12 +809,13 @@ end
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
 
-# issue #53618
-@testset "FieldErrorHint" begin
+# issue #53618, pr #55165
+@testset "FieldErrorHints" begin
     struct FieldFoo
         a::Float32
         b::Int
     end
+    Base.propertynames(foo::FieldFoo) = (:a, :x, :y)
 
     s = FieldFoo(1, 2)
 
@@ -823,7 +825,9 @@ end
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field c", errorMsg)
+    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("available fields: `a`, `b`", errorMsg)
+    @test occursin("Available properties: `x`, `y`", errorMsg)
 
     d = Dict(s => 1)
 
@@ -840,7 +844,7 @@ end
     ex = test.value::FieldError
 
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type Dict has no field c", errorMsg)
+    @test occursin("FieldError: type Dict has no field `c`", errorMsg)
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)

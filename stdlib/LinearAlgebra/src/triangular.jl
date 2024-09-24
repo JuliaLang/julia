@@ -236,6 +236,20 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
+# these specialized getindex methods enable constant-propagation of the band
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitLowerTriangular{T}, b::BandIndex) where {T}
+    b.band < 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::LowerTriangular, b::BandIndex)
+    b.band <= 0 ? A.data[b] : _zero(A.data, b)
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitUpperTriangular{T}, b::BandIndex) where {T}
+    b.band > 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::UpperTriangular, b::BandIndex)
+    b.band >= 0 ? A.data[b] : _zero(A.data, b)
+end
+
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
 _zero_triangular_half_str(::Type{<:LowerOrUnitLowerTriangular}) = "upper"
 
@@ -850,51 +864,90 @@ fillstored!(A::UpperTriangular, x)     = (fillband!(A.data, x, 0, size(A,2)-1); 
 fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); A)
 
 # Binary operations
-+(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
-+(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data + B.data)
-+(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data + triu(B.data, 1) + I)
-+(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data + tril(B.data, -1) + I)
-+(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) + B.data + I)
-+(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) + B.data + I)
-+(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
-+(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+function +(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + B.data)
+end
+function +(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + B.data)
+end
+function +(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + triu(B.data, 1) + I)
+end
+function +(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + tril(B.data, -1) + I)
+end
+function +(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + B.data + I)
+end
+function +(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + B.data + I)
+end
+function +(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
+end
+function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
+end
 +(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
 
--(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data - B.data)
--(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data - B.data)
--(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data - triu(B.data, 1) - I)
--(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data - tril(B.data, -1) - I)
--(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) - B.data + I)
--(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) - B.data + I)
--(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
--(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
+function -(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - B.data)
+end
+function -(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - B.data)
+end
+function -(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - triu(B.data, 1) - I)
+end
+function -(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - tril(B.data, -1) - I)
+end
+function -(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - B.data + I)
+end
+function -(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - B.data + I)
+end
+function -(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
+end
+function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
+end
 -(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
 
-# use broadcasting if the parents are strided, where we loop only over the triangular part
-for op in (:+, :-)
-    for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
-    for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
-end
-
-function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function kron(A::UpperTriangular{T,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
-function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function kron(A::LowerTriangular{T,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C
@@ -913,7 +966,7 @@ function _triukron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = 1:(l-1)
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
@@ -945,7 +998,7 @@ function _trilkron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = (l+1):n_B
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end

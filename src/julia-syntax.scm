@@ -5001,6 +5001,10 @@ f(x) = yt(x)
             ((≔ ⩴ ≕ :=)
              (error (string "unsupported assignment operator \"" (deparse (car e)) "\"")))
 
+            ;; bare :escape
+            ((escape)
+             (error (string "\"esc(...)\" used outside of macro expansion")))
+
             ((error)
              (error (cadr e)))
             (else

@@ -228,6 +228,29 @@ end
 -(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
+function rmul!(A::SymTridiagonal, x::Number)
+    if size(A,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = A[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    A.dv .*= x
+    _evview(A) .*= x
+    return A
+end
+function lmul!(x::Number, B::SymTridiagonal)
+    if size(B,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * B[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv = x * B.dv
+    ev = _evview(B)
+    @. ev = x * ev
+    return B
+end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal{<:Number}, B::SymTridiagonal{<:Number}) =
@@ -836,6 +859,30 @@ tr(M::Tridiagonal) = sum(M.d)
 -(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
+function rmul!(T::Tridiagonal, x::Number)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = T[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    T.dl .*= x
+    T.d .*= x
+    T.du .*= x
+    return T
+end
+function lmul!(x::Number, T::Tridiagonal)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * T[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. T.dl = x * T.dl
+    @. T.d = x * T.d
+    @. T.du = x * T.du
+    return T
+end
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
 \(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 

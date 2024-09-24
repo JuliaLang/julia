@@ -3985,3 +3985,5 @@ begin
   end
 end
 @test f45494() === (0,)
+
+@test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))

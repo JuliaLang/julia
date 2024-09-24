@@ -37,9 +37,21 @@ function repl_workload()
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
+    # This is notified as soon as the first prompt appears
+    repl_init_event = Base.Event()
+
+    atreplinit() do repl
+        # Main is closed so we can't evaluate in it, but atreplinit runs at
+        # a time that repl.mistate === nothing so REPL.activate fails. So do
+        # it async and wait for the first prompt to know its ready.
+        t = @async begin
+            wait(repl_init_event)
+            REPL.activate(REPL.Precompile; interactive_utils=false)
+        end
+        Base.errormonitor(t)
+    end
+
     repl_script = """
-    import REPL
-    REPL.activate(REPL.Precompile; interactive_utils=false) # Main is closed so we can't evaluate in it
     2+2
     print("")
     printstyled("a", "b")
@@ -62,7 +74,6 @@ function repl_workload()
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
-    REPL.activate(; interactive_utils=false)
     println("done")
     """
 
@@ -159,6 +170,7 @@ function repl_workload()
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.1)
                 end
+                notify(repl_init_event)
                 check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
