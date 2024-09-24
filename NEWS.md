@@ -134,6 +134,10 @@ Standard library changes
   writes 4 bytes for each character, instead of writing the UTF-8 representation of each character.
   The new format is compatible with that used by `Array`, making it possible to use `read!` to get
   the data back ([#42593]).
+* It's not possible to define `length` for stateful iterators in a generally consistent manner. The
+  potential for silently incorrect results for `Stateful` iterators is addressed by deleting the
+  `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
+  PR: ([#51747]).
 
 #### StyledStrings
 
