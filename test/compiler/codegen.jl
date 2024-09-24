@@ -501,10 +501,9 @@ function f37262(x)
     end
 end
 @testset "#37262" begin
-    str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
-    str_opaque = "store volatile { i8, ptr, ptr, ptr, ptr } zeroinitializer, ptr %phic"
+    str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 8\n  store volatile ptr null"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
-    @test (contains(llvmstr, str) || contains(llvmstr, str_opaque)) || llvmstr
+    @test contains(llvmstr, str_opaque)
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
 
