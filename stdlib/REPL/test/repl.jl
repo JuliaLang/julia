@@ -1971,6 +1971,15 @@ end
         @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
     end
 
+    # Issue 55850
+    tmp_55850 = mktempdir()
+    tmp_sym_link = joinpath(tmp_55850, "sym")
+    symlink(tmp_55850, tmp_sym_link; dir_target=true)
+    withenv("JULIA_DEPOT_PATH" => tmp_sym_link, "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.projname(REPL.find_project_file()))"`)
+        @test prompt == "@v$(VERSION.major).$(VERSION.minor)"
+    end
+
     get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
 
     @test get_prompt("--project=$(pkgdir(REPL))") == "(REPL) pkg> "
