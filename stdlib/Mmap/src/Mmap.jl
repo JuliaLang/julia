@@ -45,7 +45,6 @@ Anonymous() = Anonymous("",false,true)
 Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
-Base.isfile(::Anonymous) = true
 
 # const used for zeroed, anonymous memory
 gethandle(io::Anonymous) = INVALID_OS_HANDLE
@@ -221,7 +220,7 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        if isfile(io) && requestedSizeLarger  # add a condition to this line to ensure it only checks files
+        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
             if iswrite
                 if grow
                     grow!(io, offset, len)
