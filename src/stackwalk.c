@@ -1166,10 +1166,22 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 }
 
 extern int gc_first_tid;
+extern int jl_inside_heartbeat_thread(void);
+extern int jl_heartbeat_pause(void);
+extern int jl_heartbeat_resume(void);
 
-// Print backtraces for all live tasks, for all threads, to jl_safe_printf stderr
+// Print backtraces for all live tasks, for all threads, to jl_safe_printf
+// stderr. This can take a _long_ time!
 JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
+    // disable heartbeats to prevent heartbeat loss while running this,
+    // unless this is called from the heartbeat thread itself; in that
+    // situation, the thread is busy running this and it will not be
+    // updating the missed heartbeats counter
+    if (!jl_inside_heartbeat_thread()) {
+        jl_heartbeat_pause();
+    }
+
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     int ctid = -1;
@@ -1232,6 +1244,10 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
         jl_safe_printf("thread (%d) ==== End thread %d\n", ctid, ptls2->tid + 1);
     }
     jl_safe_printf("thread (%d) ++++ Done\n", ctid);
+
+    if (!jl_inside_heartbeat_thread()) {
+        jl_heartbeat_resume();
+    }
 }
 
 #ifdef __cplusplus

@@ -3734,6 +3734,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     return recollect;
 }
 
+extern int jl_heartbeat_pause(void);
+extern int jl_heartbeat_resume(void);
+
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     JL_PROBE_GC_BEGIN(collection);
@@ -3775,6 +3778,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // existence of the thread in the jl_n_threads count.
     //
     // TODO: concurrently queue objects
+    jl_heartbeat_pause();
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -3806,6 +3810,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
+    jl_heartbeat_resume();
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
