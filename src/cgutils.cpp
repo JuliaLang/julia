@@ -323,6 +323,8 @@ static bool type_is_permalloc(jl_value_t *typ)
 }
 
 
+// find the offset of pointer fields which never need a write barrier since their type-analysis
+// shows they are permanently rooted
 static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
 {
     // This is a inlined field at `offset`.
@@ -346,6 +348,7 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res
     }
 }
 
+// load a pointer to N inlined_roots into registers (as a SmallVector)
 static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inline_roots_ptr, size_t npointers, bool isVolatile=false)
 {
     SmallVector<Value*,0> gcroots(npointers);
@@ -359,6 +362,7 @@ static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inlin
     return gcroots;
 }
 
+// inlined bool indicates whether this must return the inlined roots inside x separately, or whether x itself may be used as the root (if x is already isboxed)
 static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x, bool inlined=false)
 {
     if (x.constant || x.typ == jl_bottom_type)
@@ -367,10 +371,10 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
         return {x.Vboxed};
     assert(!x.isboxed || !inlined);
     if (!x.inline_roots.empty()) {
-        // if (!inlined) {
-        // SmallVector<unsigned,4> perm_offsets;
-        // find_perm_offsets(typ, perm_offsets, 0);
-        // return filter(!in(perm_offsets), x.inline_roots)
+        // if (!inlined) { // TODO: implement this filter operation
+        //     SmallVector<unsigned,4> perm_offsets;
+        //     find_perm_offsets(typ, perm_offsets, 0);
+        //     return filter(!in(perm_offsets), x.inline_roots)
         // }
         return x.inline_roots;
     }
@@ -1104,6 +1108,7 @@ static bool allpointers(jl_datatype_t *typ)
 }
 
 // compute the space required by split_value_into, by simulating it
+// returns (sizeof(split_value), n_pointers)
 static std::pair<size_t,size_t> split_value_size(jl_datatype_t *typ)
 {
     assert(jl_is_datatype(typ));
@@ -1128,11 +1133,10 @@ static std::pair<size_t,size_t> split_value_size(jl_datatype_t *typ)
 }
 
 // take a value `x` and split its bits into dst and the roots into inline_roots
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore=false)
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, Value *inline_roots_ptr, jl_aliasinfo_t const &roots_ai, bool isVolatileStore=false)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     assert(jl_is_concrete_type(x.typ));
-    Align align_dst(1); // TODO: compute this (and keep aligned)
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (!x.inline_roots.empty()) {
@@ -1178,7 +1182,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
             load->setOrdering(AtomicOrdering::Unordered);
         src_ai.decorateInst(load);
         roots_ai.decorateInst(ctx.builder.CreateAlignedStore(load, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
-        align_src = Align(sizeof(void*));
+        align_src = align_dst = Align(sizeof(void*));
         src_off = ptr + sizeof(void*);
         if (!nodata) {
             // store an undef pointer here, to make sure nobody looks at this
@@ -1193,11 +1197,10 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     }
 }
 
-static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, jl_aliasinfo_t const &dst_ai, MutableArrayRef<Value*> inline_roots)
+static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, MutableArrayRef<Value*> inline_roots)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     assert(jl_is_concrete_type(x.typ));
-    Align align_dst(1); // TODO: compute this (and keep aligned)
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (!x.inline_roots.empty()) {
@@ -1240,7 +1243,7 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
             load->setOrdering(AtomicOrdering::Unordered);
         src_ai.decorateInst(load);
         inline_roots[i] = load;
-        align_src = Align(sizeof(void*));
+        align_src = align_dst = Align(sizeof(void*));
         src_off = ptr + sizeof(void*);
         if (!nodata) {
             // store an undef pointer here, to make sure nobody looks at this
@@ -1258,13 +1261,15 @@ static std::pair<AllocaInst*, SmallVector<Value*,0>> split_value(jl_codectx_t &c
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     auto sizes = split_value_size(typ);
-    AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, Align(julia_alignment((jl_value_t*)typ))) : nullptr;
+    Align align_dst(julia_alignment((jl_value_t*)typ));
+    AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, align_dst) : nullptr;
     SmallVector<Value*,0> roots(sizes.second);
     auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-    split_value_into(ctx, x, x_alignment, bits, stack_ai, MutableArrayRef(roots));
+    split_value_into(ctx, x, x_alignment, bits, align_dst, stack_ai, MutableArrayRef(roots));
     return std::make_pair(bits, roots);
 }
 
+// Return the offset values corresponding to jl_field_offset, but into the two buffers for a split value (or -1)
 static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx)
 {
     size_t fldoff = jl_field_offset(typ, idx);
@@ -1291,13 +1296,15 @@ static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned
     return std::make_pair(dst_off + fldoff - src_off, -1);
 }
 
+// Copy `x` to `dst`, where `x` was a split value and dst needs to have a native layout, copying any inlined roots back into their native location.
+// This does not respect roots, so you must call emit_write_multibarrier afterwards.
 static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment, bool isVolatileStore)
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     assert(jl_is_concrete_type(x.typ));
     assert(typ->layout->first_ptr >= 0 && !x.inline_roots.empty());
     Align align_dst = alignment;
-    Align align_src(1); // TODO: compute this (and keep aligned)
+    Align align_src(julia_alignment(x.typ));
     Value *src = x.V;
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     size_t dst_off = 0;
@@ -1327,7 +1334,7 @@ static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, 
         if (!isstack)
             store->setOrdering(AtomicOrdering::Unordered);
         dst_ai.decorateInst(store);
-        align_dst = Align(sizeof(void*));
+        align_dst = align_src = Align(sizeof(void*));
         dst_off = ptr + sizeof(void*);
         if (!nodata) {
             assert(src_off + sizeof(void*) == dst_off);
@@ -4338,7 +4345,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         fval = emit_unbox(ctx, fty, fval_info, jtype);
                     }
                     else if (!roots.empty()) {
-                        split_value_into(ctx, fval_info, Align(julia_alignment(jtype)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots);
+                        split_value_into(ctx, fval_info, Align(julia_alignment(jtype)), dest, Align(jl_field_align(sty, i)), jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots);
                     }
                     else {
                         emit_unbox_store(ctx, fval_info, dest, ctx.tbaa().tbaa_stack, Align(jl_field_align(sty, i)));

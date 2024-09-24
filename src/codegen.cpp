@@ -5909,10 +5909,13 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
             MDNode *tbaa = ctx.tbaa().tbaa_stack; // Use vi.value.tbaa ?
             if (rval_info.TIndex)
                 emit_unionmove(ctx, vi.value.V, tbaa, rval_info, /*skip*/isboxed, vi.isVolatile);
-            else if (vi.inline_roots)
-                split_value_into(ctx, rval_info, Align(julia_alignment(rval_info.typ)), vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe), vi.isVolatile);
-            else
-                emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, Align(julia_alignment(rval_info.typ)), vi.isVolatile);
+            else {
+                Align align(julia_alignment(rval_info.typ));
+                if (vi.inline_roots)
+                    split_value_into(ctx, rval_info, align, vi.value.V, align, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe), vi.isVolatile);
+                else
+                    emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, align, vi.isVolatile);
+            }
         }
     }
     else {
@@ -5957,7 +5960,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
-            ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, dest->getAlign(), nbytes, false);
+            ctx.builder.CreateMemCpy(phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 decay_derived(ctx, ptr_phi),
@@ -7023,13 +7026,13 @@ static void emit_cfunc_invalidate(
     }
     case jl_returninfo_t::SRet: {
         Value *sret = &*gf_thunk->arg_begin();
-        Align alignment(julia_alignment(rettype));
+        Align align(julia_alignment(rettype));
         if (return_roots) {
             Value *roots = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            split_value_into(ctx, gf_retbox, alignment, sret, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
+            split_value_into(ctx, gf_retbox, align, sret, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
         }
         else {
-            emit_unbox_store(ctx, gf_retbox, sret, ctx.tbaa().tbaa_stack, alignment);
+            emit_unbox_store(ctx, gf_retbox, sret, ctx.tbaa().tbaa_stack, align);
         }
         ctx.builder.CreateRetVoid();
         break;
@@ -9220,31 +9223,31 @@ static jl_llvm_functions_t
                 break;
             }
             if (sret) {
+                Align align(returninfo.union_align);
                 if (!returninfo.return_roots && !retvalinfo.inline_roots.empty()) {
                     assert(retvalinfo.V == nullptr);
                     assert(returninfo.cc == jl_returninfo_t::SRet);
-                    split_value_into(ctx, retvalinfo, Align(julia_alignment(jlrettype)), nullptr,
+                    split_value_into(ctx, retvalinfo, align, nullptr, align,
                             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), sret, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
                 }
                 else if (returninfo.return_roots) {
                     assert(returninfo.cc == jl_returninfo_t::SRet);
                     Value *return_roots = f->arg_begin() + 1;
-                    split_value_into(ctx, retvalinfo, Align(julia_alignment(jlrettype)), sret,
+                    split_value_into(ctx, retvalinfo, align, sret, align,
                             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), return_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
                 }
                 else if (retvalinfo.ispointer()) {
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
-                        Align alignment(julia_alignment(jlrettype));
                         emit_memcpy(ctx, sret, jl_aliasinfo_t::fromTBAA(ctx, nullptr), retvalinfo,
-                                    jl_datatype_size(jlrettype), alignment, alignment);
+                                    jl_datatype_size(jlrettype), align, align);
                     }
                     else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);
                     }
                 }
                 else {
-                    ctx.builder.CreateAlignedStore(retvalinfo.V, sret, Align(julia_alignment(retvalinfo.typ)));
+                    ctx.builder.CreateAlignedStore(retvalinfo.V, sret, align);
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
             }
@@ -9475,10 +9478,11 @@ static jl_llvm_functions_t
                         jl_cgval_t typedval = update_julia_type(ctx, val, phiType);
                         SmallVector<Value*,0> mayberoots(tracked, Constant::getNullValue(ctx.types().T_prjlvalue));
                         if (typedval.typ != jl_bottom_type) {
+                            Align align(julia_alignment(phiType));
                             if (tracked)
-                                split_value_into(ctx, typedval, Align(julia_alignment(phiType)), dest, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
+                                split_value_into(ctx, typedval, align, dest, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
                             else
-                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(phiType)));
+                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, align);
                         }
                         return mayberoots;
                     });
