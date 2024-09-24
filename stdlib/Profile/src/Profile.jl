@@ -808,7 +808,7 @@ end
 # Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
 function editor_link(path::String, linenum::Int)
     editor = get(ENV, "JULIA_EDITOR", "")
-
+    path = escape_string(path)
     if editor == "code"
         return "vscode://file/$path:$linenum"
     elseif editor == "subl" || editor == "sublime_text"
