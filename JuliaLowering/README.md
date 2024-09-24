@@ -344,6 +344,13 @@ multiple `return`s create multiple tags rather than assigning to a single
 variable. Collapsing these into a single case might be worth considering? But
 also might be worse for type inference in some cases?)
 
+## Untyped IR
+
+Julia's untyped IR as held in the `CodeInfo` data structure is an array of
+statements of type `Expr` with a small number of allowed forms. The IR obeys
+certain invariants which are checked by the downstream code in
+base/compiler/validation.jl.
+
 ## Julia's existing lowering implementation
 
 ### How does macro expansion work?
@@ -562,6 +569,7 @@ odd mixture of imperative and declarative lowered code.
 List of bugs which should be fixed upstream in flisp implementation
 * `f()[begin]` has the side effect `f()` twice.
 * `a[(begin=1; a=2)]` gives a weird error
+* `function A.ccall() ; end` allows `ccall` as a name but it's not allowed without the `A.`
 
 ## Notes on Racket's hygiene
 

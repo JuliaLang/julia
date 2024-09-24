@@ -30,17 +30,16 @@ let
 end
 #---------------------
 1   (method :b)
-2   TestMod.b
-3   (call core.Typeof %₂)
-4   (call core.svec %₃)
-5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
-7   --- method :b %₆
+2   (call core.Typeof %₁)
+3   (call core.svec %₂)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 2 =#)))))
+6   --- method :b %₅
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)
-8   (= slot₁/a %₁)
-9   (return %₁)
+7   (= slot₁/a %₁)
+8   (return %₁)
 
 ########################################
 # a.b = ... => setproperty! assignment

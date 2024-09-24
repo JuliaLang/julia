@@ -510,10 +510,7 @@ end
 """
 
 src = """
-let
-    rhs = 1 + 2*Base.im
-    (; im, re) = rhs
-    (re, im)
+function A.ccall(ex)
 end
 """
 

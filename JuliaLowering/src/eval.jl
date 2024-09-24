@@ -234,11 +234,10 @@ function to_lowered_expr(mod, bindings, ex)
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, to_lowered_expr(ex[2]))
     elseif k == K"method"
-        name = ex[1]
-        @chk kind(name) == K"Symbol"
-        namesym = Symbol(name.name_val)
-        cs = map(e->to_lowered_expr(mod, bindings, e), ex[2:end])
-        Expr(:method, namesym, cs...)
+        cs = map(e->to_lowered_expr(mod, bindings, e), children(ex))
+        # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
+        c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
+        Expr(:method, c1, cs[2:end]...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

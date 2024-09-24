@@ -1103,7 +1103,8 @@ function expand_function_def(ctx, ex, docs)
         return_type = name[2]
         name = name[1]
     end
-    if numchildren(ex) == 1 && is_identifier(name) # TODO: Or name as globalref
+    if numchildren(ex) == 1 && is_identifier_like(name)
+        # Function declaration with no methods
         if !is_valid_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
@@ -1120,8 +1121,10 @@ function expand_function_def(ctx, ex, docs)
         static_parameters = SyntaxList(ctx)
 
         # Add self argument where necessary
-        args = name[2:end]
-        name = name[1]
+        args = callex[2:end]
+        name = callex[1]
+        function_name = nothing
+        func_var = ssavar(ctx, name, "func_var")
         if kind(name) == K"::"
             if numchildren(name) == 1
                 farg = @ast ctx name [K"::"
@@ -1132,19 +1135,25 @@ function expand_function_def(ctx, ex, docs)
                 TODO("Fixme type")
                 farg = name
             end
-            function_name = nothing_(ctx, ex)
         else
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
+            end
+            if is_identifier_like(name)
+                function_name = @ast ctx name name=>K"Symbol"
+                func_var_assignment = @ast ctx name [K"=" func_var [K"method" function_name]]
             end
             farg = @ast ctx name [K"::"
                 new_mutable_var(ctx, name, "#self#")
                 [K"call"
                     "Typeof"::K"core"
-                    name
+                    func_var
                 ]
             ]
-            function_name = name
+        end
+        if isnothing(function_name)
+            function_name = nothing_(ctx, name)
+            func_var_assignment = @ast ctx name [K"=" func_var name]
         end
         args = pushfirst!(collect(args), farg)
 
@@ -1195,9 +1204,9 @@ function expand_function_def(ctx, ex, docs)
         end
         @ast ctx ex [
             K"block"
-            func = [K"method" function_name=>K"Symbol"]
+            func_var_assignment
             [K"method"
-                function_name=>K"Symbol"
+                function_name
                 preamble
                 [K"lambda"(body, lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
                     body
@@ -1206,12 +1215,12 @@ function expand_function_def(ctx, ex, docs)
             if !isnothing(docs)
                 [K"call"(docs)
                     bind_docs!::K"Value"
-                    func
+                    func_var
                     docs[1]
                     method_metadata
                 ]
             end
-            [K"unnecessary" func]
+            [K"unnecessary" func_var]
         ]
     elseif kind(name) == K"tuple"
         TODO(name, "Anon function lowering")
@@ -1220,11 +1229,17 @@ function expand_function_def(ctx, ex, docs)
     end
 end
 
-function _make_macro_name(ctx, name)
-    @chk kind(name) == K"Identifier" (name, "invalid macro name")
-    ex = mapleaf(ctx, name, K"Identifier")
-    ex.name_val = "@$(name.name_val)"
-    ex
+function _make_macro_name(ctx, ex)
+    if kind(ex) == K"Identifier"
+        name = mapleaf(ctx, ex, K"Identifier")
+        name.name_val = "@$(ex.name_val)"
+        name
+    elseif is_valid_modref(ex)
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"." ex[1] _make_macro_name(ctx, ex[2])]
+    else
+        throw(LoweringError(ex, "invalid macro name"))
+    end
 end
 
 # flisp: expand-macro-def
@@ -1246,7 +1261,8 @@ function expand_macro_def(ctx, ex)
         [K"call"(sig)
             _make_macro_name(ctx, name)
             [K"::"
-                adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), name)
+                adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), 
+                            kind(name) == K"." ? name[1] : name)
                 MacroContext::K"Value"
             ]
             # flisp: We don't mark these @nospecialize because all arguments to

@@ -535,13 +535,22 @@ function any_assignment(exs)
     any(kind(e) == K"=" for e in exs)
 end
 
+# Check valid identifier/function names
 function is_valid_name(ex)
-    n = identifier_name(ex).name_val
-    n !== "ccall" && n !== "cglobal"
+    k = kind(ex)
+    if k == K"Identifier"
+        name = ex.name_val
+    elseif k == K"var"
+        name = ex[1].name_val
+    elseif k == K"."
+        return is_valid_name(ex[2])
+    end
+    return name != "ccall" && name != "cglobal"
 end
 
-function identifier_name(ex)
-    kind(ex) == K"var" ? ex[1] : ex
+function is_valid_modref(ex)
+    return kind(ex) == K"." && kind(ex[2]) == K"Identifier" &&
+           (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
 function decl_var(ex)

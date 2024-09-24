@@ -149,7 +149,7 @@ end
 """)
 
 @test_throws LoweringError JuliaLowering.include_string(test_mod, """
-macro A.b(ex)
+macro mmm[](ex)
 end
 """)
 

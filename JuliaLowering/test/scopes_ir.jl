@@ -36,15 +36,14 @@ end
 1   2
 2   (= slot₁/y %₁)
 3   (method :f)
-4   TestMod.f
-5   (call core.Typeof %₄)
-6   (call core.svec %₅ core.Any)
-7   (call core.svec)
-8   (call core.svec %₆ %₇ :($(QuoteNode(:(#= line 2 =#)))))
-9   --- method :f %₈
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 2 =#)))))
+8   --- method :f %₇
     1   (call core.tuple false true true)
     2   (return %₁)
-10  (return %₃)
+9   (return %₃)
 
 ########################################
 # @islocal with global
@@ -81,12 +80,11 @@ function f(z)
 end
 #---------------------
 1   (method :f)
-2   TestMod.f
-3   (call core.Typeof %₂)
-4   (call core.svec %₃ core.Any)
-5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method :f %₆
+2   (call core.Typeof %₁)
+3   (call core.svec %₂ core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method :f %₅
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (isdefined slot₂/z)
@@ -94,5 +92,5 @@ end
     5   (gotoifnot %₄ label₇)
     6   (call top.setindex! %₂ slot₂/z :z)
     7   (return %₂)
-8   (return %₁)
+7   (return %₁)
 

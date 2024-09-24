@@ -45,6 +45,16 @@ begin
 end
 """) === (42, 255)
 
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+function ccall()
+end
+""")
+
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+function A.ccall()
+end
+""")
+
 Base.include_string(test_mod,
 """
     struct X end

@@ -205,7 +205,11 @@ function watch_ir_tests(dir, delay=0.5)
         if endswith(name, "_ir.jl") && (event.changed || event.renamed)
             FileWatching.unwatch_folder(dir)
             sleep(delay)
-            refresh_ir_test_cases(joinpath(dir, name))
+            try
+                refresh_ir_test_cases(joinpath(dir, name))
+            catch
+                @error "Error refreshing test case" exception=current_exceptions()
+            end
         end
     end
 end
