@@ -45,6 +45,7 @@ Anonymous() = Anonymous("",false,true)
 Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
+Base.isfile(::Anonymous) = true
 
 # const used for zeroed, anonymous memory
 gethandle(io::Anonymous) = INVALID_OS_HANDLE
@@ -87,7 +88,7 @@ function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
     # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
-    filelen == 0 && !isfile(stat(io)) && return
+    filelen == 0 && !isfile(io) && return
     if filelen < offset + len
         failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
