@@ -3112,7 +3112,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 #endif
         current_sweep_full = sweep_full;
         sweep_weak_refs();
+        uint64_t stack_pool_time = jl_hrtime();
         sweep_stack_pools(ptls);
+        stack_pool_time = jl_hrtime() - stack_pool_time;
+        gc_num.total_stack_pool_sweep_time += stack_pool_time;
+        gc_num.stack_pool_sweep_time = stack_pool_time;
         gc_sweep_other(ptls, sweep_full);
         gc_scrub();
         gc_verify_tags();
