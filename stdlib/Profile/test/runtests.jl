@@ -25,18 +25,63 @@ end
     end
 end
 
-busywait(0, 0) # compile
-@profile busywait(1, 20)
+@noinline function sleeping_tasks(ch::Channel)
+    for _ in 1:100
+        Threads.@spawn take!(ch)
+    end
+    sleep(10)
+end
 
-let r = Profile.retrieve()
-    mktemp() do path, io
-        serialize(io, r)
-        close(io)
-        open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+function test_profile()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+            end
         end
     end
 end
+
+function test_has_task_profiler_sample_in_buffer()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                all = deserialize(io)
+                data = all[1]
+                startframe = length(data)
+                for i in startframe:-1:1
+                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+                    if Profile.is_block_end(data, i)
+                        thread_sleeping_state = data[i - Profile.META_OFFSET_SLEEPSTATE]
+                        @test thread_sleeping_state == 0x3
+                    end
+                end
+            end
+        end
+    end
+end
+
+busywait(0, 0) # compile
+
+@profile_walltime busywait(1, 20)
+test_profile()
+
+Profile.clear()
+
+ch = Channel(1)
+@profile_walltime sleeping_tasks(ch)
+test_profile()
+close(ch)
+test_has_task_profiler_sample_in_buffer()
+
+Profile.clear()
+
+@profile busywait(1, 20)
+test_profile()
 
 # test printing options
 for options in ((format=:tree, C=true),
