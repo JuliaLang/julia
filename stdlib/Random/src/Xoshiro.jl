@@ -185,8 +185,8 @@ end
     TaskLocalRNG
 
 The `TaskLocalRNG` has state that is local to its task, not its thread.
-It is seeded upon task creation, from the state of its parent task.
-Therefore, task creation is an event that changes the parent's RNG state.
+It is seeded upon task creation, from the state of its parent task, but without
+advancing the state of the parent's RNG.
 
 As an upside, the `TaskLocalRNG` is pretty fast, and permits reproducible
 multithreaded simulations (barring race conditions), independent of scheduler
