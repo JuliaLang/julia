@@ -2,6 +2,7 @@
 
 using Test, FileWatching
 using Base: uv_error, Experimental
+using Base.Filesystem: StatStruct
 
 @testset "FileWatching" begin
 
@@ -218,7 +219,7 @@ function test_timeout(tval)
         @async test_file_poll(channel, 10, tval)
         tr = take!(channel)
     end
-    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
+    @test ispath(tr[1]::StatStruct) && tr[2] === EOFError()
     @test tval <= t_elapsed
 end
 
@@ -231,7 +232,7 @@ function test_touch(slval)
     write(f, "Hello World\n")
     close(f)
     tr = take!(channel)
-    @test ispath(tr[1]) && ispath(tr[2])
+    @test ispath(tr[1]::StatStruct) && ispath(tr[2]::StatStruct)
     fetch(t)
 end
 
@@ -435,8 +436,8 @@ end
 @test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
              watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
-    @test(poll_file("____nonexistent_file", 1, 3.1) ===
-          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
+    @test(poll_file("____nonexistent_file", 1, 3.1) ==
+          (StatStruct(), EOFError()))) > 3)
 
 unwatch_folder(dir)
 @test isempty(FileWatching.watched_folders)
