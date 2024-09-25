@@ -18,46 +18,46 @@ extern "C" {
 #include <threading.h>
 
 // Profiler control variables
-// Note: these "static" variables are also used in "signals-*.c"
-static volatile jl_bt_element_t *bt_data_prof = NULL;
-static volatile size_t bt_size_max = 0;
-static volatile size_t bt_size_cur = 0;
+volatile jl_bt_element_t *profile_bt_data_prof = NULL;
+volatile size_t profile_bt_size_max = 0;
+volatile size_t profile_bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
-static volatile int running = 0;
-static const    uint64_t GIGA = 1000000000ULL;
+volatile int profile_running = 0;
+volatile int profile_all_tasks = 0;
+static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(void);
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
 
 ///////////////////////
 // Utility functions //
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
-    bt_size_max = maxsize;
+    profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
-    if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof != NULL)
+        free((void*)profile_bt_data_prof);
+    profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
+    if (profile_bt_data_prof == NULL && maxsize > 0)
         return -1;
-    bt_size_cur = 0;
+    profile_bt_size_cur = 0;
     return 0;
 }
 
 JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
 {
-    return (uint8_t*) bt_data_prof;
+    return (uint8_t*) profile_bt_data_prof;
 }
 
 JL_DLLEXPORT size_t jl_profile_len_data(void)
 {
-    return bt_size_cur;
+    return profile_bt_size_cur;
 }
 
 JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
-    return bt_size_max;
+    return profile_bt_size_max;
 }
 
 JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
@@ -67,12 +67,12 @@ JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
 
 JL_DLLEXPORT void jl_profile_clear_data(void)
 {
-    bt_size_cur = 0;
+    profile_bt_size_cur = 0;
 }
 
 JL_DLLEXPORT int jl_profile_is_running(void)
 {
-    return running;
+    return profile_running;
 }
 
 // Any function that acquires this lock must be either a unmanaged thread
@@ -184,7 +184,7 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
     // terminator `0`'s plus the 4 metadata entries.
-    return bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > bt_size_max;
+    return profile_bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > profile_bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;

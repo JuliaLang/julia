@@ -25,18 +25,27 @@ end
     end
 end
 
-busywait(0, 0) # compile
-@profile busywait(1, 20)
-
-let r = Profile.retrieve()
-    mktemp() do path, io
-        serialize(io, r)
-        close(io)
-        open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+function test_profile()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+            end
         end
     end
 end
+
+busywait(0, 0) # compile
+
+@profile_tasks busywait(1, 20)
+test_profile()
+
+Profile.clear()
+
+@profile busywait(1, 20)
+test_profile()
 
 # test printing options
 for options in ((format=:tree, C=true),
