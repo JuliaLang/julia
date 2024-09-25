@@ -107,8 +107,8 @@ end
     TaskLocalRNG
 
 The `TaskLocalRNG` has state that is local to its task, not its thread.
-It is seeded upon task creation, from the state of its parent task.
-Therefore, task creation is an event that changes the parent's RNG state.
+It is seeded upon task creation, from the state of its parent task, but without
+advancing the state of the parent's RNG.
 
 As an upside, the `TaskLocalRNG` is pretty fast, and permits reproducible
 multithreaded simulations (barring race conditions), independent of scheduler
@@ -119,6 +119,9 @@ endianness and possibly word size.
 
 Using or seeding the RNG of any other task than the one returned by `current_task()`
 is undefined behavior: it will work most of the time, and may sometimes fail silently.
+
+!!! compat "Julia 1.10"
+    Task creation no longer advances the parent task's RNG state as of Julia 1.10.
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
