@@ -10,13 +10,15 @@ struct LoweringError <: Exception
     msg::String
 end
 
-function Base.showerror(io::IO, exc::LoweringError)
+function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     print(io, "LoweringError:\n")
     src = sourceref(exc.ex)
     highlight(io, src; note=exc.msg)
 
-    print(io, "\n\nDetailed provenance:\n")
-    showprov(io, exc.ex, tree=true)
+    if show_detail
+        print(io, "\n\nDetailed provenance:\n")
+        showprov(io, exc.ex, tree=true)
+    end
 end
 
 #-------------------------------------------------------------------------------

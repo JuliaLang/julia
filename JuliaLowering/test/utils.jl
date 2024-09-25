@@ -111,7 +111,9 @@ function match_ir_test_case(case_str)
     input, output = length(inout) == 2 ? inout          :
                     length(inout) == 1 ? (inout[1], "") :
                     error("Too many sections in IR test case")
-    (; description=strip(description), input=strip(input), output=strip(output))
+    expect_error = startswith(description, "Error")
+    (; expect_error=expect_error, description=strip(description),
+     input=strip(input), output=strip(output))
 end
 
 function read_ir_test_cases(filename)
@@ -128,19 +130,27 @@ function read_ir_test_cases(filename)
      [match_ir_test_case(s) for s in split(cases_str, r"####*") if strip(s) != ""])
 end
 
-function format_ir_for_test(mod, input)
+function format_ir_for_test(mod, input, expect_error=false)
     ex = parsestmt(SyntaxTree, input)
-    x = JuliaLowering.lower(mod, ex)
-    ir = strip(sprint(JuliaLowering.print_ir, x))
-    return replace(ir, string(mod)=>"TestMod")
+    try
+        x = JuliaLowering.lower(mod, ex)
+        ir = strip(sprint(JuliaLowering.print_ir, x))
+        return replace(ir, string(mod)=>"TestMod")
+    catch exc
+        if expect_error && (exc isa LoweringError)
+            return sprint(io->Base.showerror(io, exc, show_detail=false))
+        else
+            rethrow()
+        end
+    end
 end
 
 function test_ir_cases(filename::AbstractString)
     preamble, cases = read_ir_test_cases(filename)
     test_mod = Module(:TestMod)
     Base.include_string(test_mod, preamble)
-    for (description,input,ref) in cases
-        output = format_ir_for_test(test_mod, input)
+    for (expect_error, description, input, ref) in cases
+        output = format_ir_for_test(test_mod, input, expect_error)
         @testset "$description" begin
             if output != ref
                 # Do our own error dumping, as @test will 
@@ -149,17 +159,6 @@ function test_ir_cases(filename::AbstractString)
             @test output == ref
         end
     end
-end
-
-function format_ir_test_case(mod, input, description="-- Add description here --")
-    ir = format_ir_for_test(mod, input)
-    """
-    ########################################
-    # $description
-    $(strip(input))
-    #---------------------
-    $ir
-    """
 end
 
 """
@@ -174,8 +173,8 @@ function refresh_ir_test_cases(filename)
         println(io, preamble, "\n")
         println(io, "#*******************************************************************************")
     end
-    for (description,input,ref) in cases
-        ir = format_ir_for_test(test_mod, input)
+    for (expect_error, description,input,ref) in cases
+        ir = format_ir_for_test(test_mod, input, expect_error)
         if ir != ref
             @info "Refreshing test case $(repr(description)) in $filename"
         end

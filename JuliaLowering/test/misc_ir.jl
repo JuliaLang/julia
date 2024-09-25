@@ -1,4 +1,12 @@
 ########################################
+# Error: Placeholder value used
+_ + 1
+#---------------------
+LoweringError:
+_ + 1
+╙ ── all-underscore identifiers are write-only and their values cannot be used in expressions
+
+########################################
 # Named tuple
 (a=1, b=2)
 #---------------------
@@ -87,4 +95,52 @@
 10  (call %₇ %₉)
 11  (call top.merge %₄ %₁₀)
 12  (return %₁₁)
+
+########################################
+# Error: Named tuple with repeated fields
+(; a=1, bs..., c=3, a=2)
+#---------------------
+LoweringError:
+(; a=1, bs..., c=3, a=2)
+#                   ╙ ── Field name repeated in named tuple
+
+########################################
+# Error: Named tuple frankentuple
+(a=1; b=2, c=3)
+#---------------------
+LoweringError:
+(a=1; b=2, c=3)
+#   └────────┘ ── unexpected semicolon in tuple - use `,` to separate tuple elements
+
+########################################
+# Error: Named tuple field dots in rhs
+(; a=xs...)
+#---------------------
+LoweringError:
+(; a=xs...)
+#    └───┘ ── `...` cannot be used in a value for a named tuple field
+
+########################################
+# Error: Named tuple field invalid lhs
+(; a[]=1)
+#---------------------
+LoweringError:
+(; a[]=1)
+#  └─┘ ── invalid named tuple field name
+
+########################################
+# Error: Named tuple element with weird dot syntax
+(; a."b")
+#---------------------
+LoweringError:
+(; a."b")
+#  └───┘ ── invalid named tuple element
+
+########################################
+# Error: Named tuple element without valid name
+(; a=1, f())
+#---------------------
+LoweringError:
+(; a=1, f())
+#       └─┘ ── Invalid named tuple element
 
