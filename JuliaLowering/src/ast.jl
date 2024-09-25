@@ -527,8 +527,12 @@ function is_function_def(ex)
     return k == K"function" || k == K"->"
 end
 
-function has_parameters(ex)
+function has_parameters(ex::SyntaxTree)
     numchildren(ex) >= 1 && kind(ex[end]) == K"parameters"
+end
+
+function has_parameters(args::AbstractVector)
+    length(args) >= 1 && kind(args[end]) == K"parameters"
 end
 
 function any_assignment(exs)
@@ -542,14 +546,16 @@ function is_valid_name(ex)
         name = ex.name_val
     elseif k == K"var"
         name = ex[1].name_val
-    elseif k == K"."
-        return is_valid_name(ex[2])
+    elseif k == K"." && kind(ex[2]) == K"Symbol"
+        name = ex[2].name_val
+    else
+        return false
     end
     return name != "ccall" && name != "cglobal"
 end
 
 function is_valid_modref(ex)
-    return kind(ex) == K"." && kind(ex[2]) == K"Identifier" &&
+    return kind(ex) == K"." && kind(ex[2]) == K"Symbol" &&
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
@@ -564,5 +570,9 @@ function remove_empty_parameters(args)
         i -= 1
     end
     args[1:i]
+end
+
+function to_symbol(ctx, ex)
+    @ast ctx ex ex=>K"Symbol"
 end
 

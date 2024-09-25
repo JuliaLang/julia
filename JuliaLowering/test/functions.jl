@@ -72,6 +72,4 @@ begin
 end
 """)
 
-test_ir_cases(joinpath(@__DIR__, "functions_ir.jl"))
-
 end

@@ -337,9 +337,4 @@ end
     """)
 end
 
-#-------------------------------------------------------------------------------
-@testset "Branching IR" begin
-    test_ir_cases(joinpath(@__DIR__,"branching_ir.jl"))
-end
-
 end

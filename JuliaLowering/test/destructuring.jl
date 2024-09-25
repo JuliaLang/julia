@@ -1,7 +1,5 @@
 @testset "Destructuring" begin
 
-test_ir_cases(joinpath(@__DIR__, "loops_ir.jl"))
-
 test_mod = Module()
 
 @testset "Destructuring via iteration" begin

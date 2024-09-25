@@ -599,6 +599,16 @@ function Base.pop!(v::SyntaxList)
     SyntaxTree(v.graph, pop!(v.ids))
 end
 
+function Base.resize!(v::SyntaxList, n)
+    resize!(v.ids, n)
+    v
+end
+
+function Base.empty!(v::SyntaxList)
+    empty!(v.ids)
+    v
+end
+
 function Base.copy(v::SyntaxList)
     SyntaxList(v.graph, copy(v.ids))
 end

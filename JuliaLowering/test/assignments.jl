@@ -1,7 +1,5 @@
 @testset "assignments" begin
 
-test_ir_cases(joinpath(@__DIR__, "assignments_ir.jl"))
-
 test_mod = Module()
 
 Base.include_string(test_mod,

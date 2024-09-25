@@ -6,6 +6,8 @@ include("utils.jl")
 
     include("syntax_graph.jl")
 
+    include("ir_tests.jl")
+
     include("branching.jl")
     include("decls.jl")
     include("desugaring.jl")

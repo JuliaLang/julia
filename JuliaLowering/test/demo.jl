@@ -510,8 +510,7 @@ end
 """
 
 src = """
-function A.ccall(ex)
-end
+(; a=1, a=2)
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

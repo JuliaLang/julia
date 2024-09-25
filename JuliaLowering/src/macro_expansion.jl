@@ -250,6 +250,13 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         expand_macro(ctx, ex)
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
         ex
+    elseif k == K"." && numchildren(ex) == 2
+        e2 = expand_forms_1(ctx, ex[2])
+        if kind(e2) == K"Identifier" || kind(e2) == K"Placeholder"
+            # FIXME: Do the K"Symbol" transformation in the parser??
+            e2 = @ast ctx e2 e2=>K"Symbol"
+        end
+        @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
     elseif is_leaf(ex)
         ex
     else

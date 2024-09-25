@@ -458,8 +458,8 @@ function replace_beginend(ctx, ex, arr, n, splats, is_last)
         end
     elseif is_leaf(ex) || is_quoted(ex)
         ex
-    elseif k == K"ref" || k == K"."
-        # inside ref and `.` only replace within the first argument
+    elseif k == K"ref"
+        # inside ref, only replace within the first argument
         @ast ctx ex [k
             replace_beginend(ctx, ex[1], arr, n, splats, is_last)
             ex[2:end]...
@@ -588,12 +588,11 @@ function expand_assignment(ctx, ex)
         a = lhs[1]
         b = lhs[2]
         stmts = SyntaxList(ctx)
+        # TODO: Do we need these first two temporaries?
         if !is_identifier_like(a)
             a = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, a), "a_tmp")
         end
-        if kind(b) == K"Identifier"
-            b = @ast ctx b b=>K"Symbol"
-        else
+        if kind(b) != K"Symbol"
             b = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, b), "b_tmp")
         end
         if !is_identifier_like(rhs) && !is_literal(rhs)
@@ -605,7 +604,6 @@ function expand_assignment(ctx, ex)
             [K"unnecessary" rhs]
         ]
     elseif kl == K"tuple"
-        # TODO: has_parameters
         if has_parameters(lhs)
             expand_property_destruct(ctx, ex)
         else
@@ -730,6 +728,101 @@ function expand_let(ctx, ex)
     return blk
 end
 
+function _named_tuple_expr(ctx, srcref, names, values)
+    if isempty(names)
+        @ast ctx srcref [K"call" "NamedTuple"::K"core"]
+    else
+        @ast ctx srcref [K"call"
+            [K"curly" "NamedTuple"::K"core" [K"tuple" names...]]
+            # NOTE: don't use `tuple` head, so an assignment expression as a value
+            # doesn't turn this into another named tuple.
+            [K"call" "tuple"::K"core" values...]
+        ]
+    end
+end
+
+function _merge_named_tuple(ctx, srcref, old, new)
+    if isnothing(old)
+        new
+    else
+        @ast ctx srcref [K"call" "merge"::K"top" old new]
+    end
+end
+
+function expand_named_tuple(ctx, ex, kws)
+    name_strs = Set{String}()
+    names = SyntaxList(ctx)
+    values = SyntaxList(ctx)
+    current_nt = nothing
+    for (i,kw) in enumerate(kws)
+        k = kind(kw)
+        appended_nt = nothing
+        name = nothing
+        if kind(k) == K"Identifier"
+            # x  ==>  x = x
+            name = to_symbol(ctx, kw)
+            value = kw
+        elseif k == K"="
+            # x = a
+            if kind(kw[1]) != K"Identifier" && kind(kw[1]) != K"Placeholder"
+                throw(LoweringError(kw[1], "invalid named tuple field name"))
+            end
+            if kind(kw[2]) == K"..."
+                throw(LoweringError(kw[2], "`...` cannot be used in a value for a named tuple field"))
+            end
+            name = to_symbol(ctx, kw[1])
+            value = kw[2]
+        elseif k == K"."
+            # a.x ==> x=a.x
+            if kind(kw[2]) != K"Symbol"
+                throw(LoweringError(kw, "invalid named tuple element"))
+            end
+            name = to_symbol(ctx, kw[2])
+            value = kw
+        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 && kw[2].name_val == "=>"
+            # a=>b   ==>  $a=b
+            appended_nt = _named_tuple_expr(ctx, kw, (kw[1],), (kw[3],))
+            nothing, nothing
+        elseif k == K"..."
+            # args...  ==> splat pairs
+            appended_nt = kw[1]
+            if isnothing(current_nt) && isempty(names)
+                # Must call merge to create NT from an initial splat
+                current_nt = _named_tuple_expr(ctx, ex, (), ())
+            end
+            nothing, nothing
+        else
+            throw(LoweringError(kw, "Invalid named tuple element"))
+        end
+        if !isnothing(name)
+            if kind(name) == K"Symbol"
+                name_str = name.name_val
+                if name_str in name_strs
+                    throw(LoweringError(name, "Field name repeated in named tuple"))
+                end
+                push!(name_strs, name_str)
+            end
+            push!(names, name)
+            push!(values, value)
+        end
+        if !isnothing(appended_nt)
+            if !isempty(names)
+                current_nt = _merge_named_tuple(ctx, ex, current_nt,
+                                                _named_tuple_expr(ctx, ex, names, values))
+                empty!(names)
+                empty!(values)
+            end
+            current_nt = _merge_named_tuple(ctx, ex, current_nt, appended_nt)
+        end
+    end
+    if !isempty(names) || isnothing(current_nt)
+        current_nt = _merge_named_tuple(ctx, ex, current_nt,
+                                        _named_tuple_expr(ctx, ex, names, values))
+    end
+    @assert !isnothing(current_nt)
+    current_nt
+end
+
 # Wrap unsplatted arguments in `tuple`:
 # `[a, b, xs..., c]` -> `[(a, b), xs, (c,)]`
 function _wrap_unsplatted_args(ctx, call_ex, args)
@@ -779,22 +872,17 @@ end
 function expand_dot(ctx, ex)
     @chk numchildren(ex) == 2 # TODO: bare `.+` syntax
     rhs = ex[2]
-    kr = kind(rhs)
+    # Required to support the possibly dubious syntax `a."b"`. See
+    # https://github.com/JuliaLang/julia/issues/26873
+    # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
+    if !(kind(rhs) == K"string" || is_leaf(rhs))
+        throw(LoweringError(rhs, "Unrecognized field access syntax"))
+    end
     expand_forms_2(ctx,
         @ast ctx ex [K"call"
             "getproperty"::K"top" 
             ex[1]
-            if kr == K"Identifier"
-                rhs=>K"Symbol"
-            else
-                if !(kind(rhs) == K"string" || is_leaf(rhs))
-                    throw(LoweringError(rhs, "Unrecognized field access syntax"))
-                end
-                # Required to support the possibly dubious syntax `a."b"`. See
-                # https://github.com/JuliaLang/julia/issues/26873
-                # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
-                rhs
-            end
+            rhs
         ]
     )
 end
@@ -1230,8 +1318,9 @@ function expand_function_def(ctx, ex, docs)
 end
 
 function _make_macro_name(ctx, ex)
-    if kind(ex) == K"Identifier"
-        name = mapleaf(ctx, ex, K"Identifier")
+    k = kind(ex)
+    if k == K"Identifier" || k == K"Symbol"
+        name = mapleaf(ctx, ex, k)
         name.name_val = "@$(ex.name_val)"
         name
     elseif is_valid_modref(ex)
@@ -1513,11 +1602,19 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"try"
         expand_forms_2(ctx, expand_try(ctx, ex))
     elseif k == K"tuple"
-        # TODO: named tuples
-        expand_forms_2(ctx, @ast ctx ex [K"call" 
-            "tuple"::K"core"
-            children(ex)...
-        ])
+        if has_parameters(ex)
+            if numchildren(ex) > 1
+                throw(LoweringError(ex[end], "unexpected semicolon in tuple - use `,` to separate tuple elements"))
+            end
+            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex[1])))
+        elseif any_assignment(children(ex))
+            expand_forms_2(ctx, expand_named_tuple(ctx, ex, children(ex)))
+        else
+            expand_forms_2(ctx, @ast ctx ex [K"call" 
+                "tuple"::K"core"
+                children(ex)...
+            ])
+        end
     elseif k == K"$"
         throw(LoweringError(ex, "`\$` expression outside string or quote block"))
     elseif k == K"module"

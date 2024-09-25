@@ -73,6 +73,4 @@ function f()
 end
 """)
 
-test_ir_cases(joinpath(@__DIR__, "decls_ir.jl"))
-
 end

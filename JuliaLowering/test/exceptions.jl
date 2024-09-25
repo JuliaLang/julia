@@ -260,8 +260,6 @@ end
 
 @test isempty(current_exceptions())
 
-test_ir_cases(joinpath(@__DIR__, "exceptions_ir.jl"))
-
 end
 
 #-------------------------------------------------------------------------------

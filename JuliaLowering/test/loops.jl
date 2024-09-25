@@ -53,8 +53,6 @@ break
 continue
 """)
 
-test_ir_cases(joinpath(@__DIR__, "loops_ir.jl"))
-
 # TODO: Test soft scope rules
 
 end
