@@ -5457,8 +5457,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_value_t *val = expr;
         if (jl_is_quotenode(expr))
             val = jl_fieldref_noalloc(expr, 0);
-        if (jl_is_method(ctx.linfo->def.method)) // toplevel exprs are already rooted
-            val = jl_ensure_rooted(ctx, val);
+        // Toplevel exprs are rooted but because codegen assumes this is constant, it removes the write barriers for this code.
+        // This means we have to globally root the value here. (The other option would be to change how we optimize toplevel code)
+        val = jl_ensure_rooted(ctx, val);
         return mark_julia_const(ctx, val);
     }
 
