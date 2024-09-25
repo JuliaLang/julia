@@ -203,6 +203,8 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     return stk;
 }
 
+uv_mutex_t live_tasks_lock;
+
 void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
 {
     // Stack sweeping algorithm:
