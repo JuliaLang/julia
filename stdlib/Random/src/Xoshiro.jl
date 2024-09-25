@@ -203,6 +203,9 @@ may be any integer.
 
 !!! compat "Julia 1.11"
     Seeding `TaskLocalRNG()` with a negative integer seed requires at least Julia 1.11.
+
+!!! compat "Julia 1.10"
+    Task creation no longer advances the parent task's RNG state as of Julia 1.10.
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
