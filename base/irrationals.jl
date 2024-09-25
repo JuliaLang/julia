@@ -110,7 +110,7 @@ end
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-@assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
+@assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where {T <: Integer}
     return rationalize(T, big(x), tol=tol)
 end
 @assume_effects :total function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
