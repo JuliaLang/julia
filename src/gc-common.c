@@ -693,10 +693,6 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     return jl_gc_new_weakref_th(ptls, value);
 }
 
-JL_DLLEXPORT jl_datatype_t **jl_get_ijl_small_typeof(void) {
-    return ijl_small_typeof;
-}
-
 const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
 {
