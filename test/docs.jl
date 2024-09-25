@@ -4,6 +4,7 @@ import Base.Docs: meta, @var, DocStr, parsedoc
 
 # check that @doc can work before REPL is loaded
 @test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc @time'`, String), "nothing")
 
 using Markdown
 using REPL
