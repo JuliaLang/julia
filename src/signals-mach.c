@@ -222,36 +222,90 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
-                             void (*fptr)(void))
+// create a fake function that describes the variable manipulations in jl_call_in_state
+__attribute__((naked)) static void fake_stack_pop(void)
 {
 #ifdef _CPU_X86_64_
-    uintptr_t rsp = state->__rsp;
+    __asm__ volatile (
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa %rsp, 0\n" // CFA here uses %rsp directly
+        "  .cfi_offset %rip, 0\n" // previous value of %rip at CFA
+        "  .cfi_offset %rsp, 8\n" // previous value of %rsp at CFA
+        "  nop\n"
+    );
 #elif defined(_CPU_AARCH64_)
-    uintptr_t rsp = state->__sp;
+    __asm__ volatile (
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa sp, 0\n" // use sp as fp here
+        "  .cfi_offset lr, 0\n"
+        "  .cfi_offset sp, 8\n"
+        // Anything else got smashed, since we didn't explicitly copy all of the
+        // state object to the stack (to build a real sigreturn frame).
+        // This is also not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
+        // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
+        // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
+        " nop\n"
+    );
 #else
-#error "julia: throw-in-context not supported on this platform"
+CFI_NORETURN
 #endif
-    if (ptls2 == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
-        rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
-    }
-    else {
-        rsp = (uintptr_t)ptls2->signal_stack + (ptls2->signal_stack_size ? ptls2->signal_stack_size : sig_stack_size);
-    }
-    assert(rsp % 16 == 0);
-    rsp -= 16;
+}
 
+static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void))
+{
 #ifdef _CPU_X86_64_
-    rsp -= sizeof(void*);
-    state->__rsp = rsp; // set stack pointer
+    uintptr_t sp = state->__rsp;
+#elif defined(_CPU_AARCH64_)
+    uintptr_t sp = state->__sp;
+#endif
+    sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    assert(sp % 16 == 0);
+    sp -= 16;
+#ifdef _CPU_X86_64_
+    // set return address to NULL
+    *(uintptr_t*)sp = 0;
+    // pushq %sp
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = state->__rsp;
+    // pushq %rip
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = state->__rip;
+    // pushq .fake_stack_pop + 1; aka call from fake_stack_pop
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = (uintptr_t)&fake_stack_pop + 1;
+    state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
 #elif defined(_CPU_AARCH64_)
-    state->__sp = rsp;
-    state->__pc = (uint64_t)fptr;
-    state->__lr = 0;
+    // push {%sp, %pc + 4}
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = state->__sp;
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = (uintptr_t)state->__pc;
+    state->__sp = sp; // x31
+    state->__pc = (uint64_t)fptr; // pc
+    state->__lr = (uintptr_t)&fake_stack_pop + 4; // x30
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
+}
+
+static void jl_longjmp_in_state(host_thread_state_t *state, jl_jmp_buf jmpbuf)
+{
+
+    if (!jl_simulate_longjmp(jmpbuf, (bt_context_t*)state)) {
+        // for sanitizer builds, fallback to calling longjmp on the original stack
+        // (this will fail for stack overflow, but that is hardly sanitizer-legal anyways)
+#ifdef _CPU_X86_64_
+    state->__rdi = (uintptr_t)jmpbuf;
+    state->__rsi = 1;
+#elif defined(_CPU_AARCH64_)
+    state->__x[0] = (uintptr_t)jmpbuf;
+    state->__x[1] = 1;
+#else
+#error "julia: jl_longjmp_in_state not supported on this platform"
+#endif
+        jl_call_in_state(state, (void (*)(void))longjmp);
+    }
 }
 
 #ifdef _CPU_X86_64_
@@ -275,14 +329,26 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
     host_thread_state_t state;
     kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-    if (1) { // XXX: !jl_has_safe_restore(ptls2)
+    if (ptls2->safe_restore) {
+        jl_longjmp_in_state(&state, *ptls2->safe_restore);
+    }
+    else {
         assert(exception);
         ptls2->bt_size =
             rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
-                              NULL /*current_task?*/);
+                            NULL /*current_task?*/);
         ptls2->sig_exception = exception;
+        ptls2->io_wait = 0;
+        jl_task_t *ct = ptls2->current_task;
+        jl_handler_t *eh = ct->eh;
+        if (eh != NULL) {
+            asan_unpoison_task_stack(ct, &eh->eh_ctx);
+            jl_longjmp_in_state(&state, eh->eh_ctx);
+        }
+        else {
+            jl_no_exc_handler(exception, ct);
+        }
     }
-    jl_call_in_state(ptls2, &state, &jl_sig_throw);
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
 }
@@ -290,14 +356,15 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
-    if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
-        jl_task_t *ct = jl_get_current_task();
-        jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
-        jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
+    jl_jmp_buf *saferestore = jl_get_safe_restore();
+    if (saferestore) { // restarting jl_ or jl_unwind_stepn
+        jl_longjmp_in_state((host_thread_state_t*)jl_to_bt_context(context), *saferestore);
         return;
     }
     jl_task_t *ct = jl_get_current_task();
-    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) &&
+    !(ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING || ct->eh == NULL)
+    && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
         stack_overflow_warning();
     }
     sigdie_handler(sig, info, context);
@@ -352,12 +419,10 @@ kern_return_t catch_mach_exception_raise(
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
-    // XXX: jl_throw_in_thread or segv_handler will eventually check this, but
-    //      we would like to avoid some of this work if we could detect this earlier
-    // if (jl_has_safe_restore(ptls2)) {
-    //     jl_throw_in_thread(ptls2, thread, NULL);
-    //     return KERN_SUCCESS;
-    // }
+    if (ptls2->safe_restore) {
+        jl_throw_in_thread(ptls2, thread, NULL);
+        return KERN_SUCCESS;
+    }
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
@@ -516,7 +581,6 @@ static void jl_try_deliver_sigint(void)
 
 static void JL_NORETURN jl_exit_thread0_cb(int signo)
 {
-CFI_NORETURN
     jl_critical_error(signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(signo);
@@ -548,7 +612,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 #else
 #error Fill in first integer argument here
 #endif
-    jl_call_in_state(ptls2, &state, (void (*)(void))&jl_exit_thread0_cb);
+    jl_call_in_state(&state, (void (*)(void))&jl_exit_thread0_cb);
     unsigned int count = MACH_THREAD_STATE_COUNT;
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);

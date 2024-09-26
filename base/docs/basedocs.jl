@@ -1694,7 +1694,7 @@ julia> ab = AB(1, 3)
 AB(1.0f0, 3.0)
 
 julia> ab.c # field `c` doesn't exist
-ERROR: FieldError: type AB has no field c
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
 Stacktrace:
 [...]
 ```
@@ -3711,6 +3711,9 @@ unused and delete the entire benchmark code).
     *if* the intrinsic is semantically executed, then there is some program state at
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 
 # Examples
 

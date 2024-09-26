@@ -269,7 +269,6 @@ struct TOMLCache{Dates}
     d::Dict{String, CachedTOMLDict}
 end
 TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
-# TODO: Delete this converting constructor once Pkg stops using it
 TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, convert(Dict{String, CachedTOMLDict}, d))
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
@@ -509,6 +508,8 @@ package root.
 To get the root directory of the package that implements the current module
 the form `pkgdir(@__MODULE__)` can be used.
 
+If an extension module is given, the root of the parent package is returned.
+
 ```julia-repl
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
@@ -526,7 +527,19 @@ function pkgdir(m::Module, paths::String...)
     rootmodule = moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return joinpath(dirname(dirname(path)), paths...)
+    original = path
+    path, base = splitdir(dirname(path))
+    if base == "src"
+        # package source in `../src/Foo.jl`
+    elseif base == "ext"
+        # extension source in `../ext/FooExt.jl`
+    elseif basename(path) == "ext"
+        # extension source in `../ext/FooExt/FooExt.jl`
+        path = dirname(path)
+    else
+        error("Unexpected path structure for module source: $original")
+    end
+    return joinpath(path, paths...)
 end
 
 function get_pkgversion_from_path(path)
@@ -1190,7 +1203,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing)
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing; register::Bool=true)
     if isnothing(ignore_native)
         if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
             ignore_native = false
@@ -1239,23 +1252,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     for M in restored
         M = M::Module
         if parentmodule(M) === M && PkgId(M) == pkg
+            register && register_root_module(M)
             if timing_imports
-                elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                elapsed_time = time_ns() - t_before
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
-                print(lpad(elapsed, 9), " ms  ")
-                parentid = get(EXT_PRIMED, pkg, nothing)
-                if parentid !== nothing
-                    print(parentid.name, " → ")
-                end
-                print(pkg.name)
-                if comp_time > 0
-                    printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
-                end
-                if recomp_time > 0
-                    perc = Float64(100 * recomp_time / comp_time)
-                    printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
-                end
-                println()
+                print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
             end
             return M
         end
@@ -1265,6 +1266,73 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     finally
         timing_imports && cumulative_compile_timing(false)
     end
+end
+
+# printing functions for @time_imports
+# note that the time inputs are UInt64 on all platforms. Give default values here so that we don't have
+# confusing UInt64 types in generate_precompile.jl
+function print_time_imports_report(
+        mod::Module,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
+    print(lpad(round(elapsed_time / 1e6, digits=1), 9), " ms  ")
+    ext_parent = extension_parent_name(mod)
+    if ext_parent !== nothing
+        print(ext_parent::String, " → ")
+    end
+    print(string(mod))
+    if comp_time > 0
+        perc = Ryu.writefixed(Float64(100 * comp_time / (elapsed_time)), 2)
+        printstyled(" $perc% compilation time", color = Base.info_color())
+    end
+    if recomp_time > 0
+        perc = Float64(100 * recomp_time / comp_time)
+        perc_show = perc < 1 ? "<1" : Ryu.writefixed(perc, 0)
+        printstyled(" ($perc_show% recompilation)", color = Base.warn_color())
+    end
+    println()
+end
+function print_time_imports_report_init(
+        mod::Module, i::Int=1,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
+    connector = i > 1 ? "├" : "┌"
+    printstyled("               $connector ", color = :light_black)
+    print("$(round(elapsed_time / 1e6, digits=1)) ms $mod.__init__() ")
+    if comp_time > 0
+        perc = Ryu.writefixed(Float64(100 * (comp_time) / elapsed_time), 2)
+        printstyled("$perc% compilation time", color = Base.info_color())
+    end
+    if recomp_time > 0
+        perc = Float64(100 * recomp_time / comp_time)
+        printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
+    end
+    println()
+end
+
+# if M is an extension, return the string name of the parent. Otherwise return nothing
+function extension_parent_name(M::Module)
+    rootmodule = moduleroot(M)
+    src_path = pathof(rootmodule)
+    src_path === nothing && return nothing
+    pkgdir_parts = splitpath(src_path)
+    ext_pos = findlast(==("ext"), pkgdir_parts)
+    if ext_pos !== nothing && ext_pos >= length(pkgdir_parts) - 2
+        parent_package_root = joinpath(pkgdir_parts[1:ext_pos-1]...)
+        parent_package_project_file = locate_project_file(parent_package_root)
+        if parent_package_project_file isa String
+            d = parsed_toml(parent_package_project_file)
+            name = get(d, "name", nothing)
+            if name !== nothing
+                return name
+            end
+        end
+    end
+    return nothing
 end
 
 function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
@@ -1303,31 +1371,18 @@ function run_module_init(mod::Module, i::Int=1)
     # `i` informs ordering for the `@time_imports` report formatting
     if TIMING_IMPORTS[] == 0
         ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
-    else
-        if isdefined(mod, :__init__)
-            connector = i > 1 ? "├" : "┌"
-            printstyled("               $connector ", color = :light_black)
+    elseif isdefined(mod, :__init__)
+        elapsed_time = time_ns()
+        cumulative_compile_timing(true)
+        compile_elapsedtimes = cumulative_compile_time_ns()
 
-            elapsedtime = time_ns()
-            cumulative_compile_timing(true)
-            compile_elapsedtimes = cumulative_compile_time_ns()
+        ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
 
-            ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+        elapsed_time = time_ns() - elapsed_time
+        cumulative_compile_timing(false);
+        comp_time, recomp_time = cumulative_compile_time_ns() .- compile_elapsedtimes
 
-            elapsedtime = (time_ns() - elapsedtime) / 1e6
-            cumulative_compile_timing(false);
-            comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
-
-            print("$(round(elapsedtime, digits=1)) ms $mod.__init__() ")
-            if comp_time > 0
-                printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
-            end
-            if recomp_time > 0
-                perc = Float64(100 * recomp_time / comp_time)
-                printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
-            end
-            println()
-        end
+        print_time_imports_report_init(mod, i, elapsed_time, comp_time, recomp_time)
     end
 end
 
@@ -1450,7 +1505,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
         id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
-        if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
+        if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
         EXT_PRIMED[id] = parent
@@ -1471,6 +1526,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     end
 end
 
+precompiling_package::Bool = false
 loading_extension::Bool = false
 precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
@@ -1879,8 +1935,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         depmods[i] = dep
     end
     # then load the file
-    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native)
-    loaded isa Module && register_root_module(loaded)
+    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native; register = true)
     return loaded
 end
 
@@ -1947,8 +2002,7 @@ end
                     if dep === nothing
                         try
                             set_pkgorigin_version_path(modkey, modpath)
-                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps)
-                            dep isa Module && stalecheck && register_root_module(dep)
+                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
                         finally
                             end_loading(modkey, dep)
                         end
@@ -1964,9 +2018,8 @@ end
             end
             restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
             if !isa(restored, Module)
-                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
             end
-            isa(restored, Module) && stalecheck && register_root_module(restored)
             isa(restored, Module) && return restored
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
             @label check_next_path
@@ -2165,6 +2218,11 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    if into === Base.__toplevel__ && precompiling_package
+        # this error type needs to match the error type compilecache throws for non-125 errors.
+        error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
+         is not allowed during package precompilation.")
+    end
     if _require_world_age[] != typemax(UInt)
         Base.invoke_in_world(_require_world_age[], __require, into, mod)
     else
@@ -2717,8 +2775,8 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
         Expr(:toplevel,
              :(const ARGS = $args),
              :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-             :(include(x) = $(Expr(:top, :include))(__anon__, x)),
-             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
+             :(include(x::AbstractString) = $(Expr(:top, :include))(__anon__, x)),
+             :(include(mapexpr::Function, x::AbstractString) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
@@ -2742,40 +2800,9 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
-"""
-    check_src_module_wrap(srcpath::String)
-
-Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
-"""
-function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
-    load_rgx = r"\b(?:using|import)\s"
-    load_seen = false
-    inside_string = false
-    for s in eachline(srcpath)
-        if count("\"\"\"", s) == 1
-            # ignore module docstrings
-            inside_string = !inside_string
-        end
-        inside_string && continue
-        if contains(s, module_rgx)
-            if load_seen
-                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
-            end
-            return true
-        end
-        if startswith(s, load_rgx)
-            load_seen = true
-        end
-    end
-    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
-end
-
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
-
-    check_src_module_wrap(pkg, input)
 
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
@@ -2803,6 +2830,17 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+    # check that the package defined the expected module so we can give a nice error message if not
+    Base.check_package_module_loaded(pkg)
+end
+
+function check_package_module_loaded(pkg::PkgId)
+    if !haskey(Base.loaded_modules, pkg)
+        # match compilecache error type for non-125 errors
+        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
+            check for typos in package module name")
+    end
+    return nothing
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
@@ -2877,6 +2915,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
         Base.precompiling_extension = $(loading_extension | isext)
+        Base.precompiling_package = true
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)

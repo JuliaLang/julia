@@ -446,7 +446,7 @@ STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(jl_n_markthreads > 0);
-    int v = gc_first_tid + (int)cong(jl_n_markthreads - 1, &ptls->rngseed);
+    int v = gc_first_tid + (int)cong(jl_n_markthreads, &ptls->rngseed); // cong is [0, n)
     assert(v >= gc_first_tid && v <= gc_last_parallel_collector_thread_id());
     return v;
 }

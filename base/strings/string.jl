@@ -208,7 +208,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i

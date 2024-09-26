@@ -781,6 +781,9 @@ end
     @test transpose(Dherm) == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
     @test adjoint(Dsym) == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
     @test transpose(Dsym) == Dsym
+    @test diag(D, 0) == diag(D) == [[1 2; 3 4], [1 2; 3 4]]
+    @test diag(D, 1) == diag(D, -1) == [zeros(Int,2,2)]
+    @test diag(D, 2) == diag(D, -2) == []
 
     v = [[1, 2], [3, 4]]
     @test Dherm' * v == Dherm * v
@@ -1342,6 +1345,17 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    D = Diagonal(rand(4))
+    @test rmul!(copy(D), 0.2) ≈ rmul!(Array(D), 0.2)
+    @test lmul!(0.2, copy(D)) ≈ lmul!(0.2, Array(D))
+    @test_throws ArgumentError rmul!(D, NaN)
+    @test_throws ArgumentError lmul!(NaN, D)
+    D = Diagonal(rand(1))
+    @test all(isnan, rmul!(copy(D), NaN))
+    @test all(isnan, lmul!(NaN, copy(D)))
+end
+
 @testset "+/- with block Symmetric/Hermitian" begin
     for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
         m = SizedArrays.SizedArray{(2,2)}(p)
@@ -1352,6 +1366,11 @@ end
             @test S + D == Array(S) + Array(D)
         end
     end
+end
+
+@testset "bounds-check with CartesianIndex ranges" begin
+    D = Diagonal(1:typemax(Int))
+    @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
 end
 
 end # module TestDiagonal

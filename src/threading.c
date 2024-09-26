@@ -74,6 +74,16 @@ JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
 
 JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 {
+#ifdef _OS_DARWIN_
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct->ptls) {
+        if (sr == NULL)
+            pthread_setspecific(jl_safe_restore_key, (void*)sr);
+        ct->ptls->safe_restore = sr;
+        if (sr == NULL)
+            return;
+    }
+#endif
     pthread_setspecific(jl_safe_restore_key, (void*)sr);
 }
 #endif
@@ -82,51 +92,17 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
-// lower level API) (Mac, Windows), we use the platform runtime API to create
+// lower level API) (Windows), we use the platform runtime API to create
 // TLS variable directly.
 // This is functionally equivalent to using `__thread` but can be
 // more efficient since we can have better control over the creation and
 // initialization of the TLS buffer.
 //
-// On platforms that use ELF (Linux, FreeBSD), we use a `__thread` variable
+// On platforms that support native TLS (ELF platforms + Macos) we use a `__thread` variable
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
-#if defined(_OS_DARWIN_)
-// Mac doesn't seem to have static TLS model so the runtime TLS getter
-// registration will only add overhead to TLS access. The `__thread` variables
-// are emulated with `pthread_key_t` so it is actually faster to use it directly.
-static pthread_key_t jl_pgcstack_key;
-
-__attribute__((constructor)) void jl_init_tls(void)
-{
-    pthread_key_create(&jl_pgcstack_key, NULL);
-}
-
-JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
-{
-    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
-}
-
-void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
-{
-    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
-}
-
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, pthread_key_t *k)
-{
-    // for codegen
-    *f = pthread_getspecific;
-    *k = jl_pgcstack_key;
-}
-
-
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, pthread_key_t k)
-{
-    jl_safe_printf("ERROR: Attempt to change TLS address.\n");
-}
-
-#elif defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
 
@@ -338,6 +314,18 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
     return -1; // everything else uses threadpool -1 (does not belong to any threadpool)
 }
 
+// get thread local rng
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->rngseed;
+}
+
+// get thread local rng
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
+{
+    jl_current_task->ptls->rngseed = new_seed;
+}
+
 jl_ptls_t jl_init_threadtls(int16_t tid)
 {
 #ifndef _OS_WINDOWS_
@@ -464,6 +452,7 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
@@ -492,7 +481,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
         }
         if (signal_stack != NULL) {
             if (signal_stack_size)
-                jl_free_stack(signal_stack, signal_stack_size);
+                _jl_free_stack(ptls ,signal_stack, signal_stack_size);
             else
                 free(signal_stack);
         }

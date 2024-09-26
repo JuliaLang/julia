@@ -1392,8 +1392,20 @@ end
 end
 
 @testset "transcode" begin
-    str = "αβγ"
-    @test transcode(String, transcode(UInt16, str)) == str
-    @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
-    @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    # string starting with a 4 byte UTF-8 character
+    str_4 = "𒃵𒃰"
+    @testset for str in (str_1, str_2, str_3, str_4)
+        @test transcode(String, str) === str
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
 end

@@ -42,7 +42,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
     𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
-    ⊑ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
+    ⊑ₚ, ⋤ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
     argtypes = arginfo.argtypes
     matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
@@ -97,9 +97,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
-                    if !(exct ⊑ₚ const_call_result.exct)
-                        exct = const_call_result.exct
-                        (; const_result, edge) = const_call_result
+                    if const_call_result.exct ⋤ exct
+                        (; exct, const_result, edge) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
@@ -154,7 +153,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 # Treat the exception type separately. Currently, constprop often cannot determine the exception type
                 # because consistent-cy does not apply to exceptions.
-                if !(this_exct ⊑ₚ const_call_result.exct)
+                if const_call_result.exct ⋤ this_exct
                     this_exct = const_call_result.exct
                     (; const_result, edge) = const_call_result
                 else
@@ -210,8 +209,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         rettype = exctype = Any
         all_effects = Effects()
     else
-        if (matches isa MethodMatches ? (!matches.fullmatch || any_ambig(matches)) :
-            (!all(matches.fullmatches) || any_ambig(matches)))
+        if !fully_covering(matches) || any_ambig(matches)
             # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
             all_effects = Effects(all_effects; nothrow=false)
             exctype = exctype ⊔ₚ MethodError
@@ -276,21 +274,47 @@ struct MethodMatches
     applicable::Vector{Any}
     info::MethodMatchInfo
     valid_worlds::WorldRange
-    mt::MethodTable
-    fullmatch::Bool
 end
-any_ambig(info::MethodMatchInfo) = info.results.ambig
+any_ambig(result::MethodLookupResult) = result.ambig
+any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
+fully_covering(info::MethodMatchInfo) = info.fullmatch
+fully_covering(m::MethodMatches) = fully_covering(m.info)
+function add_uncovered_edges!(sv::AbsIntState, info::MethodMatchInfo, @nospecialize(atype))
+    fully_covering(info) || add_mt_backedge!(sv, info.mt, atype)
+    nothing
+end
+add_uncovered_edges!(sv::AbsIntState, matches::MethodMatches, @nospecialize(atype)) =
+    add_uncovered_edges!(sv, matches.info, atype)
 
 struct UnionSplitMethodMatches
     applicable::Vector{Any}
     applicable_argtypes::Vector{Vector{Any}}
     info::UnionSplitInfo
     valid_worlds::WorldRange
-    mts::Vector{MethodTable}
-    fullmatches::Vector{Bool}
 end
-any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
+any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
+any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
+fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
+fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
+function add_uncovered_edges!(sv::AbsIntState, info::UnionSplitInfo, @nospecialize(atype))
+    all(fully_covering, info.split) && return nothing
+    # add mt backedges with removing duplications
+    for mt in uncovered_method_tables(info)
+        add_mt_backedge!(sv, mt, atype)
+    end
+end
+add_uncovered_edges!(sv::AbsIntState, matches::UnionSplitMethodMatches, @nospecialize(atype)) =
+    add_uncovered_edges!(sv, matches.info, atype)
+function uncovered_method_tables(info::UnionSplitInfo)
+    mts = MethodTable[]
+    for mminfo in info.split
+        fully_covering(mminfo) && continue
+        any(mt′::MethodTable->mt′===mminfo.mt, mts) && continue
+        push!(mts, mminfo.mt)
+    end
+    return mts
+end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
@@ -312,41 +336,28 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
     applicable = Any[]
     applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
     valid_worlds = WorldRange()
-    mts = MethodTable[]
-    fullmatches = Bool[]
     for i in 1:length(split_argtypes)
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
         mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
         mt === nothing && return FailedMethodMatch("Could not identify method table for call")
         mt = mt::MethodTable
-        matches = findall(sig_n, method_table(interp); limit = max_methods)
-        if matches === nothing
+        thismatches = findall(sig_n, method_table(interp); limit = max_methods)
+        if thismatches === nothing
             return FailedMethodMatch("For one of the union split cases, too many methods matched")
         end
-        push!(infos, MethodMatchInfo(matches))
-        for m in matches
+        for m in thismatches
             push!(applicable, m)
             push!(applicable_argtypes, arg_n)
         end
-        valid_worlds = intersect(valid_worlds, matches.valid_worlds)
-        thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
-        found = false
-        for (i, mt′) in enumerate(mts)
-            if mt′ === mt
-                fullmatches[i] &= thisfullmatch
-                found = true
-                break
-            end
-        end
-        if !found
-            push!(mts, mt)
-            push!(fullmatches, thisfullmatch)
-        end
+        valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
+        thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
+        thisinfo = MethodMatchInfo(thismatches, mt, thisfullmatch)
+        push!(infos, thisinfo)
     end
     info = UnionSplitInfo(infos)
     return UnionSplitMethodMatches(
-        applicable, applicable_argtypes, info, valid_worlds, mts, fullmatches)
+        applicable, applicable_argtypes, info, valid_worlds)
 end
 
 function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
@@ -361,10 +372,9 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         # (assume this will always be true, so we don't compute / update valid age in this case)
         return FailedMethodMatch("Too many methods matched")
     end
-    info = MethodMatchInfo(matches)
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    return MethodMatches(
-        matches.matches, info, matches.valid_worlds, mt, fullmatch)
+    info = MethodMatchInfo(matches, mt, fullmatch)
+    return MethodMatches(matches.matches, info, matches.valid_worlds)
 end
 
 """
@@ -584,13 +594,7 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
     end
     # also need an edge to the method table in case something gets
     # added that did not intersect with any existing method
-    if isa(matches, MethodMatches)
-        matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
-    else
-        for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-            thisfullmatch || add_mt_backedge!(sv, mt, atype)
-        end
-    end
+    add_uncovered_edges!(sv, matches, atype)
     return nothing
 end
 
@@ -2135,12 +2139,13 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
     isexact || return CallMeta(Any, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
-    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
-        return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    types === Bottom && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
+        return CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    nargtype === Bottom && return CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo())
     nargtype isa DataType || return CallMeta(Any, Any, Effects(), NoCallInfo()) # other cases are not implemented below
     isdispatchelem(ft) || return CallMeta(Any, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
@@ -2154,7 +2159,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, si, sv)
-    (; rt, edge, effects, volatile_inf_result) = result
+    (; rt, exct, edge, effects, volatile_inf_result) = result
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -2168,20 +2173,28 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
     𝕃ₚ = ipo_lattice(interp)
+    ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
     f = singleton_type(ft′)
     invokecall = InvokeCall(types, lookupsig)
     const_call_result = abstract_call_method_with_const_args(interp,
         result, f, arginfo, si, match, sv, invokecall)
     const_result = volatile_inf_result
     if const_call_result !== nothing
-        if ⊑(𝕃ₚ, const_call_result.rt, rt)
+        if const_call_result.rt ⊑ rt
             (; rt, effects, const_result, edge) = const_call_result
+        end
+        if const_call_result.exct ⋤ exct
+            (; exct, const_result, edge) = const_call_result
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
-    return CallMeta(rt, Any, effects, info)
+    if !match.fully_covers
+        effects = Effects(effects; nothrow=false)
+        exct = exct ⊔ TypeError
+    end
+    return CallMeta(rt, exct, effects, info)
 end
 
 function invoke_rewrite(xs::Vector{Any})
@@ -2202,18 +2215,30 @@ end
 
 function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
     na = length(argtypes)
-    𝕃ᵢ = typeinf_lattice(interp)
+    ⊔ = join(typeinf_lattice(interp))
     if na == 2
         argtype2 = argtypes[2]
         if isvarargtype(argtype2)
-            exct = tmerge(𝕃ᵢ, unwrapva(argtype2), ArgumentError)
+            exct = unwrapva(argtype2) ⊔ ArgumentError
         else
             exct = argtype2
         end
     elseif na == 3 && isvarargtype(argtypes[3])
-        exct = tmerge(𝕃ᵢ, argtypes[2], ArgumentError)
+        exct = argtypes[2] ⊔ ArgumentError
     else
         exct = ArgumentError
+    end
+    return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
+end
+
+function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
+    exct = if length(argtypes) == 1
+        ArgumentError
+    elseif !isvarargtype(argtypes[2])
+        MethodError
+    else
+        ⊔ = join(typeinf_lattice(interp))
+        MethodError ⊔ ArgumentError
     end
     return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
 end
@@ -2238,6 +2263,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw
             return abstract_throw(interp, argtypes, sv)
+        elseif f === Core.throw_methoderror
+            return abstract_throw_methoderror(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
@@ -2334,35 +2361,43 @@ end
 function abstract_call_opaque_closure(interp::AbstractInterpreter,
     closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
-    result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
-    (; rt, edge, effects, volatile_inf_result) = result
     tt = closure.typ
-    sigT = (unwrap_unionall(tt)::DataType).parameters[1]
-    match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
+    ocargsig = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[1], tt)
+    ocargsig′ = unwrap_unionall(ocargsig)
+    ocargsig′ isa DataType || return CallMeta(Any, Any, Effects(), NoCallInfo())
+    ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
+    hasintersect(sig, ocsig) || return CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo())
+    ocmethod = closure.source::Method
+    result = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
+    (; rt, exct, edge, effects, volatile_inf_result) = result
+    match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     𝕃ₚ = ipo_lattice(interp)
-    ⊑ₚ = ⊑(𝕃ₚ)
+    ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
     const_result = volatile_inf_result
     if !result.edgecycle
         const_call_result = abstract_call_method_with_const_args(interp, result,
             nothing, arginfo, si, match, sv)
         if const_call_result !== nothing
-            if const_call_result.rt ⊑ₚ rt
+            if const_call_result.rt ⊑ rt
                 (; rt, effects, const_result, edge) = const_call_result
+            end
+            if const_call_result.exct ⋤ exct
+                (; exct, const_result, edge) = const_call_result
             end
         end
     end
     if check # analyze implicit type asserts on argument and return type
-        ftt = closure.typ
-        (aty, rty) = (unwrap_unionall(ftt)::DataType).parameters
-        rty = rewrap_unionall(rty isa TypeVar ? rty.lb : rty, ftt)
-        if !(rt ⊑ₚ rty && tuple_tfunc(𝕃ₚ, arginfo.argtypes[2:end]) ⊑ₚ rewrap_unionall(aty, ftt))
+        rty = (unwrap_unionall(tt)::DataType).parameters[2]
+        rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, tt)
+        if !(rt ⊑ rty && sig ⊑ ocsig)
             effects = Effects(effects; nothrow=false)
+            exct = exct ⊔ TypeError
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
     info = OpaqueClosureCallInfo(match, const_result)
     edge !== nothing && add_backedge!(sv, edge)
-    return CallMeta(rt, Any, effects, info)
+    return CallMeta(rt, exct, effects, info)
 end
 
 function most_general_argtypes(closure::PartialOpaque)
@@ -2733,6 +2768,8 @@ function abstract_eval_isdefined(interp::AbstractInterpreter, e::Expr, vtypes::U
             rt = Const(false) # never assigned previously
         elseif !vtyp.undef
             rt = Const(true) # definitely assigned previously
+        else # form `Conditional` to refine `vtyp.undef` in the then branch
+            rt = Conditional(sym, vtyp.typ, vtyp.typ; isdefined=true)
         end
     elseif isa(sym, GlobalRef)
         if InferenceParams(interp).assume_bindings_static
@@ -3205,7 +3242,7 @@ end
 @inline function abstract_eval_basic_statement(interp::AbstractInterpreter,
     @nospecialize(stmt), pc_vartable::VarTable, frame::InferenceState)
     if isa(stmt, NewvarNode)
-        changes = StateUpdate(stmt.slot, VarState(Bottom, true), false)
+        changes = StateUpdate(stmt.slot, VarState(Bottom, true))
         return BasicStmtChange(changes, nothing, Union{})
     elseif !isa(stmt, Expr)
         (; rt, exct) = abstract_eval_statement(interp, stmt, pc_vartable, frame)
@@ -3220,7 +3257,7 @@ end
         end
         lhs = stmt.args[1]
         if isa(lhs, SlotNumber)
-            changes = StateUpdate(lhs, VarState(rt, false), false)
+            changes = StateUpdate(lhs, VarState(rt, false))
         elseif isa(lhs, GlobalRef)
             handle_global_assignment!(interp, frame, lhs, rt)
         elseif !isa(lhs, SSAValue)
@@ -3230,7 +3267,7 @@ end
     elseif hd === :method
         fname = stmt.args[1]
         if isa(fname, SlotNumber)
-            changes = StateUpdate(fname, VarState(Any, false), false)
+            changes = StateUpdate(fname, VarState(Any, false))
         end
         return BasicStmtChange(changes, nothing, Union{})
     elseif (hd === :code_coverage_effect || (
@@ -3576,7 +3613,7 @@ function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecia
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
-        stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef), false)
+        stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
         stoverwrite1!(currstate, stmtupdate)
     end
 end
@@ -3600,7 +3637,9 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # "causes" since we ignored those in the comparison
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, vtype.undef), true)
+    # if this `Conditional` is from from `@isdefined condt.slot`, refine its `undef` information
+    newundef = condt.isdefined ? !then_or_else : vtype.undef
+    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
 end
 
 function condition_object_change(currstate::VarTable, condt::Conditional,
@@ -3609,7 +3648,7 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
     newcondt = Conditional(condt.slot,
         then_or_else ? condt.thentype : Union{},
         then_or_else ? Union{} : condt.elsetype)
-    return StateUpdate(condslot, VarState(newcondt, vtype.undef), false)
+    return StateUpdate(condslot, VarState(newcondt, vtype.undef))
 end
 
 # make as much progress on `frame` as possible (by handling cycles)
