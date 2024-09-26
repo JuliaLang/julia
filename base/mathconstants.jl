@@ -32,7 +32,7 @@ end
 Base.@assume_effects :foldable function rationalize(::Type{T}, x::_KnownIrrational; tol::Real=0) where {T<:Integer}
     Base._rationalize_irrational(T, x, tol)
 end
-Base.@assume_effects :foldable function lessrational(rx::Rational, x::_KnownIrrational)
+Base.@assume_effects :foldable function Base.lessrational(rx::Rational, x::_KnownIrrational)
     Base._lessrational(rx, x)
 end
 
