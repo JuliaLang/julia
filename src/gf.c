@@ -2568,8 +2568,6 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
     static ios_t f_dispatch;
     static JL_STREAM* s_dispatch = NULL;
     jl_method_t *def = mi->def.method;
-    if (jl_options.trace_dispatch == NULL)
-        return;
     if (!jl_is_method(def))
         return;
 
@@ -3396,12 +3394,14 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world);
     JL_GC_PROMISE_ROOTED(mfunc);
-    uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
-    uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
-    if (!was_dispatched) {
-        miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
-        jl_atomic_store_relaxed(&mfunc->flags, miflags);
-        record_dispatch_statement(mfunc);
+    if (jl_options.trace_dispatch != NULL) {
+        uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+        uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+        if (!was_dispatched) {
+            miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+            jl_atomic_store_relaxed(&mfunc->flags, miflags);
+            record_dispatch_statement(mfunc);
+        }
     }
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
@@ -3509,12 +3509,14 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
     JL_GC_PROMISE_ROOTED(mfunc);
-    uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
-    uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
-    if (!was_dispatched) {
-        miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
-        jl_atomic_store_relaxed(&mfunc->flags, miflags);
-        record_dispatch_statement(mfunc);
+    if (jl_options.trace_dispatch != NULL) {
+        uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+        uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+        if (!was_dispatched) {
+            miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+            jl_atomic_store_relaxed(&mfunc->flags, miflags);
+            record_dispatch_statement(mfunc);
+        }
     }
     size_t world = jl_current_task->world_age;
     return _jl_invoke(gf, args, nargs - 1, mfunc, world);
