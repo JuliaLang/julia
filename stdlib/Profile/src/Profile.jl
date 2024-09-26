@@ -814,8 +814,8 @@ function editor_link(path::String, linenum::Int)
     for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
         str = get(ENV, var, nothing)
         str isa String || continue
-        isempty(str) && break
         editor = str
+        break
     end
     path_encoded = Base.Filesystem.encode_uri_component(path)
     if editor !== nothing
