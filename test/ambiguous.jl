@@ -169,6 +169,7 @@ module UnboundAmbig55868
         Base.@deprecate_binding D C
     end
     using .B
+    export C, D
 end
 @test !Base.isbindingresolved(UnboundAmbig55868, :C)
 @test !Base.isbindingresolved(UnboundAmbig55868, :D)
