@@ -4366,24 +4366,17 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     ctx.builder.restoreIP(savedIP);
                 }
             }
-            for (size_t i = nargs; i < nf; i++) {
-                if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
-                    ssize_t offs = jl_field_offset(sty, i);
-                    ssize_t ptrsoffs = -1;
-                    if (!inline_roots.empty())
-                        std::tie(offs, ptrsoffs) = split_value_field(sty, i);
-                    assert(ptrsoffs < 0 && offs >= 0);
-                    int fsz = jl_field_size(sty, i) - 1;
-                    if (init_as_value) {
+            if (init_as_value) {
+                for (size_t i = nargs; i < nf; i++) {
+                    if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
+                        ssize_t offs = jl_field_offset(sty, i);
+                        ssize_t ptrsoffs = -1;
+                        if (!inline_roots.empty())
+                            std::tie(offs, ptrsoffs) = split_value_field(sty, i);
+                        assert(ptrsoffs < 0 && offs >= 0);
+                        int fsz = jl_field_size(sty, i) - 1;
                         unsigned llvm_idx = convert_struct_offset(ctx, cast<StructType>(lt), offs + fsz);
                         strct = ctx.builder.CreateInsertValue(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), ArrayRef<unsigned>(llvm_idx));
-                    }
-                    else {
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_unionselbyte);
-                        Instruction *dest = cast<Instruction>(emit_ptrgep(ctx, strct, offs + fsz));
-                        if (promotion_point == nullptr)
-                            promotion_point = dest;
-                        ai.decorateInst(ctx.builder.CreateAlignedStore(ctx.builder.getInt8(0), dest, Align(1)));
                     }
                 }
             }
