@@ -179,9 +179,7 @@ add_uncovered_edges_impl(edges::Vector{Any}, info::ConstCallInfo, @nospecialize(
 """
     info::MethodResultPure <: CallInfo
 
-This struct represents a method result constant was proven to be
-effect-free, including being no-throw (typically because the value was computed
-by calling an `@pure` function).
+This struct represents a method result constant was proven to be effect-free.
 """
 struct MethodResultPure <: CallInfo
     info::CallInfo
