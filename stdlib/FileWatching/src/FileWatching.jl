@@ -6,7 +6,7 @@ Utilities for monitoring files and file descriptors for events.
 module FileWatching
 
 export
-    # one-shot API (returns results):
+    # one-shot API (returns results, race-y):
     watch_file, # efficient for small numbers of files
     watch_folder, # efficient for large numbers of files
     unwatch_folder,
@@ -78,6 +78,134 @@ isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
 |(a::FDEvent, b::FDEvent) = FDEvent(getfield(a, :events) | getfield(b, :events))
 
+# Callback functions
+
+function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
+    t = @handle_as handle FileMonitor
+    lock(t.notify)
+    try
+        if status != 0
+            t.ioerrno = status
+            notify_error(t.notify, _UVError("FileMonitor", status))
+            uvfinalize(t)
+        elseif events != t.events
+            events = t.events |= events
+            notify(t.notify, all=false)
+        end
+    finally
+        unlock(t.notify)
+    end
+    nothing
+end
+
+function uv_fseventscb_folder(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
+    t = @handle_as handle FolderMonitor
+    lock(t.notify)
+    try
+        if status != 0
+            notify_error(t.notify, _UVError("FolderMonitor", status))
+        else
+            fname = (filename == C_NULL) ? "" : unsafe_string(convert(Cstring, filename))
+            push!(t.channel, fname => FileEvent(events))
+            notify(t.notify)
+        end
+    finally
+        unlock(t.notify)
+    end
+    nothing
+end
+
+function uv_pollcb(handle::Ptr{Cvoid}, status::Int32, events::Int32)
+    t = @handle_as handle _FDWatcher
+    lock(t.notify)
+    try
+        if status != 0
+            notify_error(t.notify, _UVError("FDWatcher", status))
+        else
+            t.events |= events
+            if t.active[1] || t.active[2]
+                if isempty(t.notify)
+                    # if we keep hearing about events when nobody appears to be listening,
+                    # stop the poll to save cycles
+                    t.active = (false, false)
+                    ccall(:uv_poll_stop, Int32, (Ptr{Cvoid},), t.handle)
+                end
+            end
+            notify(t.notify, events)
+        end
+    finally
+        unlock(t.notify)
+    end
+    nothing
+end
+
+function uv_fspollcb(req::Ptr{Cvoid})
+    pfw = unsafe_pointer_to_objref(uv_req_data(req))::PollingFileWatcher
+    pfw.active = false
+    unpreserve_handle(pfw)
+    @assert pointer(pfw.stat_req) == req
+    r = Int32(ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req))
+    statbuf = ccall(:uv_fs_get_statbuf, Ptr{UInt8}, (Ptr{Cvoid},), req)
+    curr_stat = StatStruct(pfw.file, statbuf, r)
+    uv_fs_req_cleanup(req)
+    lock(pfw.notify)
+    try
+        if !isempty(pfw.notify) # must discard the update if nobody watching
+            if pfw.ioerrno != r || (r == 0 && pfw.prev_stat != curr_stat)
+                if r == 0
+                    pfw.prev_stat = curr_stat
+                end
+                pfw.ioerrno = r
+                notify(pfw.notify, true)
+            end
+            pfw.timer = Timer(pfw.interval) do t
+                # async task
+                iolock_begin()
+                lock(pfw.notify)
+                try
+                    if pfw.timer === t # use identity check to test if this callback is stale by the time we got the lock
+                        pfw.timer = nothing
+                        @assert !pfw.active
+                        if isopen(pfw) && !isempty(pfw.notify)
+                            preserve_handle(pfw)
+                            uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid},))
+                            err = ccall(:uv_fs_stat, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                                eventloop(), pfw.stat_req, pfw.file, uv_jl_fspollcb::Ptr{Cvoid})
+                            err == 0 || notify(pfw.notify, _UVError("PollingFileWatcher (start)", err), error=true) # likely just ENOMEM
+                            pfw.active = true
+                        end
+                    end
+                finally
+                    unlock(pfw.notify)
+                end
+                iolock_end()
+                nothing
+            end
+        end
+    finally
+        unlock(pfw.notify)
+    end
+    nothing
+end
+
+# Types
+
+"""
+    FileMonitor(path::AbstractString)
+
+Watch file or directory `path` (which must exist) for changes until a change occurs. This
+function does not poll the file system and instead uses platform-specific functionality to
+receive notifications from the operating system (e.g. via inotify on Linux). See the NodeJS
+documentation linked below for details.
+
+`fm = FileMonitor(path)` acts like an auto-reset Event, so `wait(fm)` blocks until there has
+been at least one event in the file originally at the given path and then returns an object
+with boolean fields `renamed`, `changed`, `timedout` summarizing all changes that have
+occurred since the last call to `wait` returned.
+
+This behavior of this function varies slightly across platforms. See
+<https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
+"""
 mutable struct FileMonitor
     @atomic handle::Ptr{Cvoid}
     const file::String
@@ -96,6 +224,7 @@ mutable struct FileMonitor
             uv_error("FileMonitor", err)
         end
         finalizer(uvfinalize, this)
+        uv_jl_fseventscb_file = @cfunction(uv_fseventscb_file, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
         uv_error("FileMonitor (start)",
                  ccall(:uv_fs_event_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32),
                        this.handle, uv_jl_fseventscb_file::Ptr{Cvoid}, file, 0))
@@ -104,6 +233,23 @@ mutable struct FileMonitor
     end
 end
 
+
+"""
+    FolderMonitor(folder::AbstractString)
+
+Watch a file or directory `path` for changes until a change has occurred. This function does
+not poll the file system and instead uses platform-specific functionality to receive
+notifications from the operating system (e.g. via inotify on Linux). See the NodeJS
+documentation linked below for details.
+
+This acts similar to a Channel, so calling `take!` (or `wait`) blocks until some change has
+occurred. The `wait` function will return a pair where the first field is the name of the
+changed file (if available) and the second field is an object with boolean fields `renamed`
+and `changed`, giving the event that occurred on it.
+
+This behavior of this function varies slightly across platforms. See
+<https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
+"""
 mutable struct FolderMonitor
     @atomic handle::Ptr{Cvoid}
     # notify::Channel{Any} # eltype = Union{Pair{String, FileEvent}, IOError}
@@ -121,6 +267,7 @@ mutable struct FolderMonitor
             throw(_UVError("FolderMonitor", err))
         end
         finalizer(uvfinalize, this)
+        uv_jl_fseventscb_folder = @cfunction(uv_fseventscb_folder, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
         uv_error("FolderMonitor (start)",
                  ccall(:uv_fs_event_start, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32),
                        handle, uv_jl_fseventscb_folder::Ptr{Cvoid}, folder, 0))
@@ -131,6 +278,28 @@ end
 
 # this is similar to uv_fs_poll, but strives to avoid the design mistakes that make it unsuitable for any usable purpose
 # https://github.com/libuv/libuv/issues/4543
+"""
+    PollingFileWatcher(path::AbstractString, interval_s::Real=5.007)
+
+Monitor a file for changes by polling `stat` every `interval_s` seconds until a change
+occurs or `timeout_s` seconds have elapsed. The `interval_s` should be a long period; the
+default is 5.007 seconds. Call `stat` on it to get the most recent, but old, result.
+
+This acts like an auto-reset Event, so calling `wait` blocks until the `stat` result has
+changed since the previous value captured upon entry to the `wait` call. The `wait` function
+will return a pair of status objects `(previous, current)` once any `stat` change is
+detected since the previous time that `wait` was called. The `previous` status is always a
+`StatStruct`, but it may have all of the fields zeroed (indicating the file didn't
+previously exist, or wasn't previously accessible).
+
+The `current` status object may be a `StatStruct`, an `EOFError` (if the wait is canceled by
+closing this object), or some other `Exception` subtype (if the `stat` operation failed: for
+example, if the path is removed). Note that `stat` value may be outdated if the file has
+changed again multiple times.
+
+Using [`FileMonitor`](@ref) for this operation is preferred, since it is more reliable and
+efficient, although in some situations it may not be available.
+"""
 mutable struct PollingFileWatcher
     file::String
     interval::Float64
@@ -150,8 +319,6 @@ mutable struct PollingFileWatcher
         return this
     end
 end
-
-Base.stat(pfw::PollingFileWatcher) = Base.checkstat(@lock pfw.notify pfw.prev_stat)
 
 mutable struct _FDWatcher
     @atomic handle::Ptr{Cvoid}
@@ -276,6 +443,25 @@ mutable struct _FDWatcher
     end
 end
 
+"""
+    FDWatcher(fd::Union{RawFD,WindowsRawSocket}, readable::Bool, writable::Bool)
+
+Monitor a file descriptor `fd` for changes in the read or write availability.
+
+The keyword arguments determine which of read and/or write status should be monitored; at
+least one of them must be set to `true`.
+
+The returned value is an object with boolean fields `readable`, `writable`, and `timedout`,
+giving the result of the polling.
+
+This acts like a level-set event, so calling `wait` blocks until one of those conditions is
+met, but then continues to return without blocking until the condition is cleared (either
+there is no more to read, or no more space in the write buffer, or both).
+
+!!! warning
+    You must call `close` manually, when finished with this object, before the fd
+    argument is closed. Failure to do so risks serious crashes.
+"""
 mutable struct FDWatcher
     # WARNING: make sure `close` has been manually called on this watcher before closing / destroying `fd`
     const watcher::_FDWatcher
@@ -396,148 +582,7 @@ isopen(pfw::PollingFileWatcher) = !pfw.closed
 isopen(pfw::_FDWatcher) = pfw.refcount != (0, 0)
 isopen(pfw::FDWatcher) = !pfw.mask.timedout
 
-function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
-    t = @handle_as handle FileMonitor
-    lock(t.notify)
-    try
-        if status != 0
-            t.ioerrno = status
-            notify_error(t.notify, _UVError("FileMonitor", status))
-            uvfinalize(t)
-        elseif events != t.events
-            events = t.events |= events
-            notify(t.notify, all=false)
-        end
-    finally
-        unlock(t.notify)
-    end
-    nothing
-end
-
-function uv_fseventscb_folder(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
-    t = @handle_as handle FolderMonitor
-    lock(t.notify)
-    try
-        if status != 0
-            notify_error(t.notify, _UVError("FolderMonitor", status))
-        else
-            fname = (filename == C_NULL) ? "" : unsafe_string(convert(Cstring, filename))
-            push!(t.channel, fname => FileEvent(events))
-            notify(t.notify)
-        end
-    finally
-        unlock(t.notify)
-    end
-    nothing
-end
-
-function uv_pollcb(handle::Ptr{Cvoid}, status::Int32, events::Int32)
-    t = @handle_as handle _FDWatcher
-    lock(t.notify)
-    try
-        if status != 0
-            notify_error(t.notify, _UVError("FDWatcher", status))
-        else
-            t.events |= events
-            if t.active[1] || t.active[2]
-                if isempty(t.notify)
-                    # if we keep hearing about events when nobody appears to be listening,
-                    # stop the poll to save cycles
-                    t.active = (false, false)
-                    ccall(:uv_poll_stop, Int32, (Ptr{Cvoid},), t.handle)
-                end
-            end
-            notify(t.notify, events)
-        end
-    finally
-        unlock(t.notify)
-    end
-    nothing
-end
-
-function uv_fspollcb(req::Ptr{Cvoid})
-    pfw = unsafe_pointer_to_objref(uv_req_data(req))::PollingFileWatcher
-    pfw.active = false
-    unpreserve_handle(pfw)
-    @assert pointer(pfw.stat_req) == req
-    r = Int32(ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req))
-    statbuf = ccall(:uv_fs_get_statbuf, Ptr{UInt8}, (Ptr{Cvoid},), req)
-    curr_stat = StatStruct(pfw.file, statbuf, r)
-    uv_fs_req_cleanup(req)
-    lock(pfw.notify)
-    try
-        if !isempty(pfw.notify) # discard the update if nobody watching
-            if pfw.ioerrno != r || (r == 0 && pfw.prev_stat != curr_stat)
-                if r == 0
-                    pfw.prev_stat = curr_stat
-                end
-                pfw.ioerrno = r
-                notify(pfw.notify, true)
-            end
-            pfw.timer = Timer(pfw.interval) do t
-                # async task
-                iolock_begin()
-                lock(pfw.notify)
-                try
-                    if pfw.timer === t # use identity check to test if this callback is stale by the time we got the lock
-                        pfw.timer = nothing
-                        @assert !pfw.active
-                        if isopen(pfw) && !isempty(pfw.notify)
-                            preserve_handle(pfw)
-                            err = ccall(:uv_fs_stat, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                                eventloop(), pfw.stat_req, pfw.file, uv_jl_fspollcb)
-                            err == 0 || notify(pfw.notify, _UVError("PollingFileWatcher (start)", err), error=true) # likely just ENOMEM
-                            pfw.active = true
-                        end
-                    end
-                finally
-                    unlock(pfw.notify)
-                end
-                iolock_end()
-                nothing
-            end
-        end
-    finally
-        unlock(pfw.notify)
-    end
-    nothing
-end
-
-global uv_jl_pollcb::Ptr{Cvoid}
-global uv_jl_fspollcb::Ptr{Cvoid}
-global uv_jl_fseventscb_file::Ptr{Cvoid}
-global uv_jl_fseventscb_folder::Ptr{Cvoid}
-
-function __init__()
-    global uv_jl_pollcb = @cfunction(uv_pollcb, Cvoid, (Ptr{Cvoid}, Cint, Cint))
-    global uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid},))
-    global uv_jl_fseventscb_file = @cfunction(uv_fseventscb_file, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
-    global uv_jl_fseventscb_folder = @cfunction(uv_fseventscb_folder, Cvoid, (Ptr{Cvoid}, Ptr{Int8}, Int32, Int32))
-
-    Base.mkpidlock_hook = mkpidlock
-    Base.trymkpidlock_hook = trymkpidlock
-    Base.parse_pidfile_hook = Pidfile.parse_pidfile
-
-    nothing
-end
-
-function start_watching(t::_FDWatcher)
-    iolock_begin()
-    t.handle == C_NULL && throw(ArgumentError("FDWatcher is closed"))
-    readable = t.refcount[1] > 0
-    writable = t.refcount[2] > 0
-    if t.active[1] != readable || t.active[2] != writable
-        # make sure the READABLE / WRITEABLE state is updated
-        uv_error("FDWatcher (start)",
-                 ccall(:uv_poll_start, Int32, (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
-                       t.handle,
-                       (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0),
-                       uv_jl_pollcb::Ptr{Cvoid}))
-        t.active = (readable, writable)
-    end
-    iolock_end()
-    nothing
-end
+Base.stat(pfw::PollingFileWatcher) = Base.checkstat(@lock pfw.notify pfw.prev_stat)
 
 # n.b. this _wait may return spuriously early with a timedout event
 function _wait(fdw::_FDWatcher, mask::FDEvent)
@@ -549,7 +594,20 @@ function _wait(fdw::_FDWatcher, mask::FDEvent)
         if !isopen(fdw) # !open
             throw(EOFError())
         elseif events.timedout
-            start_watching(fdw) # make sure the poll is active
+            fdw.handle == C_NULL && throw(ArgumentError("FDWatcher is closed"))
+            # start_watching to make sure the poll is active
+            readable = fdw.refcount[1] > 0
+            writable = fdw.refcount[2] > 0
+            if fdw.active[1] != readable || fdw.active[2] != writable
+                # make sure the READABLE / WRITEABLE state is updated
+                uv_jl_pollcb = @cfunction(uv_pollcb, Cvoid, (Ptr{Cvoid}, Cint, Cint))
+                uv_error("FDWatcher (start)",
+                         ccall(:uv_poll_start, Int32, (Ptr{Cvoid}, Int32, Ptr{Cvoid}),
+                               fdw.handle,
+                               (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0),
+                               uv_jl_pollcb::Ptr{Cvoid}))
+                fdw.active = (readable, writable)
+            end
             iolock_end()
             return FDEvent(wait(fdw.notify)::Int32)
         else
@@ -631,8 +689,9 @@ function wait(pfw::PollingFileWatcher)
         # start_watching
         if !pfw.active
             preserve_handle(pfw)
+            uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid},))
             err = ccall(:uv_fs_stat, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
-                eventloop(), pfw.stat_req, pfw.file, uv_jl_fspollcb)
+                eventloop(), pfw.stat_req, pfw.file, uv_jl_fspollcb::Ptr{Cvoid})
             err == 0 || uv_error("PollingFileWatcher (start)", err) # likely just ENOMEM
             pfw.active = true
         end
@@ -664,7 +723,8 @@ function wait(pfw::PollingFileWatcher)
     if !havechange # user canceled by calling close
         return prevstat, EOFError()
     end
-    # grab the most up-to-date stat result as of this time, even if it was a bit newer than the notify call
+    # grab the most up-to-date stat result as of this time, even if it was a bit newer than
+    # the notify call (unlikely, as there would need to be a concurrent call to wait)
     lock(pfw.notify)
     currstat = pfw.prev_stat
     ioerrno = pfw.ioerrno
@@ -729,6 +789,10 @@ least one of them must be set to `true`.
 
 The returned value is an object with boolean fields `readable`, `writable`, and `timedout`,
 giving the result of the polling.
+
+This is a thin wrapper over calling `wait` on a [`FDWatcher`](@ref), which implements the
+functionality but requires the user to call `close` manually when finished with it, or risk
+serious crashes.
 """
 function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     mask = FDEvent(readable, writable, false, false)
@@ -786,6 +850,15 @@ giving the result of watching the file.
 
 This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
+
+This is a thin wrapper over calling `wait` on a [`FileMonitor`](@ref). This function has a
+small race window between consecutive calls to `watch_file` where the file might change
+without being detected. To avoid this race, use
+
+    fm = FileMonitor(path)
+    wait(fm)
+
+directly, re-using the same `fm` each time you `wait`.
 """
 function watch_file(s::String, timeout_s::Float64=-1.0)
     fm = FileMonitor(s)
@@ -812,7 +885,7 @@ watch_file(s::AbstractString, timeout_s::Real=-1) = watch_file(String(s), Float6
 """
     watch_folder(path::AbstractString, timeout_s::Real=-1)
 
-Watches a file or directory `path` for changes until a change has occurred or `timeout_s`
+Watch a file or directory `path` for changes until a change has occurred or `timeout_s`
 seconds have elapsed. This function does not poll the file system and instead uses platform-specific
 functionality to receive notifications from the operating system (e.g. via inotify on Linux).
 See the NodeJS documentation linked below for details.
@@ -826,6 +899,8 @@ giving the event.
 
 This behavior of this function varies slightly across platforms. See
 <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
+
+This function is a thin wrapper over calling `wait` on a [`FolderMonitor`](@ref), with added timeout support.
 """
 watch_folder(s::AbstractString, timeout_s::Real=-1) = watch_folder(String(s), timeout_s)
 function watch_folder(s::String, timeout_s::Real=-1)
@@ -895,11 +970,15 @@ The `previous` status is always a `StatStruct`, but it may have all of the field
 (indicating the file didn't previously exist, or wasn't previously accessible).
 
 The `current` status object may be a `StatStruct`, an `EOFError` (indicating the timeout elapsed),
-or some other `Exception` subtype (if the `stat` operation failed - for example, if the path does not exist).
+or some other `Exception` subtype (if the `stat` operation failed: for example, if the path does not exist).
 
 To determine when a file was modified, compare `!(current isa StatStruct && prev == current)` to detect
 notification of changes to the mtime or inode. However, using [`watch_file`](@ref) for this operation
 is preferred, since it is more reliable and efficient, although in some situations it may not be available.
+
+This is a thin wrapper over calling `wait` on a [`PollingFileWatcher`](@ref), which implements
+the functionality, but this function has a small race window between consecutive calls to
+`poll_file` where the file might change without being detected.
 """
 function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::Real=-1)
     pfw = PollingFileWatcher(s, Float64(interval_seconds))
@@ -919,5 +998,12 @@ end
 
 include("pidfile.jl")
 import .Pidfile: mkpidlock, trymkpidlock
+
+function __init__()
+    Base.mkpidlock_hook = mkpidlock
+    Base.trymkpidlock_hook = trymkpidlock
+    Base.parse_pidfile_hook = Pidfile.parse_pidfile
+    nothing
+end
 
 end
