@@ -318,7 +318,7 @@ function expand_property_destruct(ctx, ex)
     lhs = ex[1]
     @assert kind(lhs) == K"tuple"
     if numchildren(lhs) != 1
-        throw(LoweringError(ex, "Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
+        throw(LoweringError(lhs, "Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
     end
     params = lhs[1]
     @assert kind(params) == K"parameters"

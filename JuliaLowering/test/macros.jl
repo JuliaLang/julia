@@ -142,29 +142,4 @@ end == [
     "2"
 ]
 
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-macro mmm(a; b=2)
-end
-""")
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-macro mmm[](ex)
-end
-""")
-
-# Macros not allowed in local scope
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-let
-    macro foo(ex)
-    end
-end
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-function f()
-    macro foo()
-    end
-end
-""")
-
 end

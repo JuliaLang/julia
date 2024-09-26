@@ -134,6 +134,9 @@ function format_ir_for_test(mod, input, expect_error=false)
     ex = parsestmt(SyntaxTree, input)
     try
         x = JuliaLowering.lower(mod, ex)
+        if expect_error
+            error("Expected a lowering error in test case")
+        end
         ir = strip(sprint(JuliaLowering.print_ir, x))
         return replace(ir, string(mod)=>"TestMod")
     catch exc

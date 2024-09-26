@@ -72,3 +72,35 @@ end
 16  (goto label₇)
 17  (return core.nothing)
 
+########################################
+# Error: break outside for/while
+break
+#---------------------
+LoweringError:
+break
+└───┘ ── break must be used inside a `while` or `for` loop
+
+########################################
+# Error: continue outside for/while
+continue
+#---------------------
+LoweringError:
+continue
+└──────┘ ── continue must be used inside a `while` or `for` loop
+
+########################################
+# Error: `outer` without outer local variable
+let
+    for outer i = 1:2
+        nothing
+    end
+    i
+end
+#---------------------
+LoweringError:
+let
+    for outer i = 1:2
+#             ╙ ── `outer` annotations must match with a local variable in an outer scope but no such variable was found
+        nothing
+    end
+

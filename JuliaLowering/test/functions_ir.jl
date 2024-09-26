@@ -42,3 +42,23 @@ end
     1   (return core.nothing)
 8   (return %₂)
 
+########################################
+# Error: Invalid function name
+function ccall()
+end
+#---------------------
+LoweringError:
+function ccall()
+#        └───┘ ── Invalid function name
+end
+
+########################################
+# Error: Invalid function name
+function A.ccall()
+end
+#---------------------
+LoweringError:
+function A.ccall()
+#        └─────┘ ── Invalid function name
+end
+

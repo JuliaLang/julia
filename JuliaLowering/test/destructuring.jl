@@ -89,10 +89,6 @@ let
 end
 """) == (1, [2,3], 4)
 
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-(xs..., ys...) = x
-""")
-
 end
 
 
@@ -137,9 +133,6 @@ let
     (a, b)
 end
 """) == (1, 2)
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, "(x ; a, b) = rhs")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, "(; a=1, b) = rhs")
 
 end
 

@@ -305,36 +305,21 @@ end
 end
 
 @testset "symbolic goto/label" begin
-    JuliaLowering.include_string(test_mod, """
-    let
-        a = []
-        i = 1
-        @label foo
-        push!(a, i)
-        i = i + 1
-        if i <= 2
-            @goto foo
-        end
-        a
-    end
-    """) == [1,2]
 
-    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
-    begin
+JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 1
+    @label foo
+    push!(a, i)
+    i = i + 1
+    if i <= 2
         @goto foo
     end
-    """)
+    a
+end
+""") == [1,2]
 
-    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
-    begin
-        @label foo
-        @label foo
-    end
-    """)
-
-    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
-    x = @label foo
-    """)
 end
 
 end

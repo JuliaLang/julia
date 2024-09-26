@@ -222,3 +222,75 @@ end
 3   (call top.setindex! %₂ %₁)
 4   (return %₁)
 
+########################################
+# Error: Invalid lhs in `=`
+a.(b) = rhs
+#---------------------
+LoweringError:
+a.(b) = rhs
+└───┘ ── invalid dot call syntax on left hand side of assignment
+
+########################################
+# Error: Invalid lhs in `=`
+T[x y] = rhs
+#---------------------
+LoweringError:
+T[x y] = rhs
+└────┘ ── invalid spacing in left side of indexed assignment
+
+########################################
+# Error: Invalid lhs in `=`
+T[x; y] = rhs
+#---------------------
+LoweringError:
+T[x; y] = rhs
+└─────┘ ── unexpected `;` in left side of indexed assignment
+
+########################################
+# Error: Invalid lhs in `=`
+T[x ;;; y] = rhs
+#---------------------
+LoweringError:
+T[x ;;; y] = rhs
+└────────┘ ── unexpected `;` in left side of indexed assignment
+
+########################################
+# Error: Invalid lhs in `=`
+[x, y] = rhs
+#---------------------
+LoweringError:
+[x, y] = rhs
+└────┘ ── use `(a, b) = ...` to assign multiple values
+
+########################################
+# Error: Invalid lhs in `=`
+[x y] = rhs
+#---------------------
+LoweringError:
+[x y] = rhs
+└───┘ ── use `(a, b) = ...` to assign multiple values
+
+########################################
+# Error: Invalid lhs in `=`
+[x; y] = rhs
+#---------------------
+LoweringError:
+[x; y] = rhs
+└────┘ ── use `(a, b) = ...` to assign multiple values
+
+########################################
+# Error: Invalid lhs in `=`
+[x ;;; y] = rhs
+#---------------------
+LoweringError:
+[x ;;; y] = rhs
+└───────┘ ── use `(a, b) = ...` to assign multiple values
+
+########################################
+# Error: Invalid lhs in `=`
+1 = rhs
+#---------------------
+LoweringError:
+1 = rhs
+╙ ── invalid assignment location
+

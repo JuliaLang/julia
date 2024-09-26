@@ -144,3 +144,42 @@ LoweringError:
 (; a=1, f())
 #       └─┘ ── Invalid named tuple element
 
+########################################
+# Error: Modules not allowed in local scope
+let
+    module C
+    end
+end
+#---------------------
+LoweringError:
+let
+#   ┌───────
+    module C
+    end
+#─────┘ ── module is only allowed in global scope
+end
+
+########################################
+# Error: Modules not allowed in local scope
+function f()
+    module C
+    end
+end
+#---------------------
+LoweringError:
+function f()
+#   ┌───────
+    module C
+    end
+#─────┘ ── module is only allowed in global scope
+end
+
+########################################
+# Basic type assert
+x::T
+#---------------------
+1   TestMod.x
+2   TestMod.T
+3   (call core.typeassert %₁ %₂)
+4   (return %₃)
+

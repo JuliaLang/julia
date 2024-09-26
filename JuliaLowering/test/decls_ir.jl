@@ -80,11 +80,48 @@ global xx::T = 10
 14  (return 10)
 
 ########################################
-# Type assert (TODO: move this?)
-x::T
+# Error: x declared twice
+begin
+    local x::T = 1
+    local x::S = 1
+end
 #---------------------
-1   TestMod.x
-2   TestMod.T
-3   (call core.typeassert %₁ %₂)
-4   (return %₃)
+LoweringError:
+begin
+    local x::T = 1
+    local x::S = 1
+#         └──┘ ── multiple type declarations found for `x`
+end
+
+########################################
+# Error: Const not supported on locals
+const local x = 1
+#---------------------
+LoweringError:
+const local x = 1
+#           ╙ ── unsupported `const` declaration on local variable
+
+########################################
+# Error: Const not supported on locals
+let
+    const x = 1
+end
+#---------------------
+LoweringError:
+let
+    const x = 1
+#         ╙ ── unsupported `const` declaration on local variable
+end
+
+########################################
+# Error: global type decls only allowed at top level
+function f()
+    global x::Int = 1
+end
+#---------------------
+LoweringError:
+function f()
+    global x::Int = 1
+#          └────┘ ── type declarations for global variables must be at top level, not inside a function
+end
 

@@ -202,3 +202,37 @@ end
 23  (pop_exception %₁)
 24  (return core.nothing)
 
+########################################
+# Error: no symbolic label
+begin
+    @goto foo
+end
+#---------------------
+LoweringError:
+begin
+    @goto foo
+#         └─┘ ── label `foo` referenced but not defined
+end
+
+########################################
+# Error: duplicate symbolic label
+begin
+    @label foo
+    @label foo
+end
+#---------------------
+LoweringError:
+begin
+    @label foo
+    @label foo
+#          └─┘ ── Label `foo` defined multiple times
+end
+
+########################################
+# Error: using value of symbolic label
+x = @label foo
+#---------------------
+LoweringError:
+x = @label foo
+#          └─┘ ── misplaced label in value position
+

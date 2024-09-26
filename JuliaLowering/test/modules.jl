@@ -31,18 +31,4 @@ begin
 end
 """)) == Module
 
-# Modules not allowed in local scope
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-let
-    module C
-    end
-end
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-function f()
-    module C
-    end
-end
-""")
-
 end

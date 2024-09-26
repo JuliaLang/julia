@@ -49,28 +49,4 @@ end
 @test Core.get_binding_type(test_mod, :a_typed_global_2) === Int
 @test test_mod.a_typed_global_2 === 10
 
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-begin
-    local x::T = 1
-    local x::S = 1
-end
-""")
-
-# Const not supported on locals
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-const local x = 1
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-let
-    const x = 1
-end
-""")
-
-# global type decls only allowed at top level
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-function f()
-    global x::Int = 1
-end
-""")
-
 end

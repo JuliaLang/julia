@@ -82,6 +82,14 @@ end
 13  (return %₁₂)
 
 ########################################
+# Error: Slurping multiple args
+(xs..., ys...) = x
+#---------------------
+LoweringError:
+(xs..., ys...) = x
+#      └────┘ ── multiple `...` in destructuring assignment are ambiguous
+
+########################################
 # Recursive destructuring
 let
     ((x,y), (z,w)) = as
@@ -254,4 +262,20 @@ end
 15  (= slot₁/x %₁₄)
 16  TestMod.rhs
 17  (return %₁₆)
+
+########################################
+# Error: Property destructuring with frankentuple
+(x ; a, b) = rhs
+#---------------------
+LoweringError:
+(x ; a, b) = rhs
+└────────┘ ── Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`
+
+########################################
+# Error: Property destructuring with values for properties
+(; a=1, b) = rhs
+#---------------------
+LoweringError:
+(; a=1, b) = rhs
+#  └─┘ ── invalid assignment location
 

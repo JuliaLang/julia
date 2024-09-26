@@ -71,37 +71,5 @@ let
 end
 """) === 10
 
-#-------------------------------------------------------------------------------
-# Invalid assignment left hand sides with specific error messages
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-a.(b) = c
-""")
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-T[x y] = z
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-T[x; y] = z
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-T[x ;;; y] = z
-""")
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-[x, y] = z
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-[x y] = z
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-[x; y] = z
-""")
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-[x ;;; y] = z
-""")
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-1 = x
-""")
 
 end

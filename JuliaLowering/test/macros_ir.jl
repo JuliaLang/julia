@@ -34,3 +34,53 @@ end
     3   (return %₁)
 7   (return %₁)
 
+########################################
+# Error: Macro with kw args
+macro mmm(a; b=2)
+end
+#---------------------
+LoweringError:
+macro mmm(a; b=2)
+#          └───┘ ── macros cannot accept keyword arguments
+end
+
+########################################
+# Error: Bad macro name
+macro mmm[](ex)
+end
+#---------------------
+LoweringError:
+macro mmm[](ex)
+#     └───┘ ── invalid macro name
+end
+
+########################################
+# Error: Macros not allowed in local scope
+let
+    macro foo(ex)
+    end
+end
+#---------------------
+LoweringError:
+let
+#   ┌────────────
+    macro foo(ex)
+    end
+#─────┘ ── macro is only allowed in global scope
+end
+
+########################################
+# Error: Macros not allowed in local scope
+function f()
+    macro foo()
+    end
+end
+#---------------------
+LoweringError:
+function f()
+#   ┌──────────
+    macro foo()
+    end
+#─────┘ ── macro is only allowed in global scope
+end
+

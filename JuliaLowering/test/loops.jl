@@ -45,14 +45,6 @@ let
 end
 """) == [2,4]
 
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-break
-""")
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-continue
-""")
-
 # TODO: Test soft scope rules
 
 end
@@ -151,15 +143,6 @@ let
     i
 end
 """) == 2
-
-@test_throws LoweringError JuliaLowering.include_string(test_mod, """
-let
-    for outer i = 1:2
-        nothing
-    end
-    i
-end
-""")
 
 end
 
