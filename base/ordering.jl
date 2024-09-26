@@ -180,7 +180,7 @@ A wrapper that reverses the order of `isless` comparisons. Useful when sorting b
 
 # Examples
 ```julia
-sort(..., by=x -> (x.a, rev(x.b), rev(x.c)))
+sort(..., by=x -> (x.a, Order.rev(x.b), Order.rev(x.c)))
 ```
 """
 struct rev{T}
