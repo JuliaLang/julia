@@ -406,10 +406,11 @@ import .CC: CallInfo
 struct NoinlineCallInfo <: CallInfo
     info::CallInfo # wrapped call
 end
+CC.add_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo) = CC.add_edges!(edges, info.info)
 CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
 CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
+CC.add_uncovered_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo, @nospecialize(atype)) = CC.add_uncovered_edges!(edges, info.info, atype)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
-CC.add_edges!(edges::Vector{Any}, info::NoinlineCallInfo) = CC.add_edges!(edges, info.info)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
     arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
