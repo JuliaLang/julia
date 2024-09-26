@@ -169,12 +169,13 @@ file = joinpath(dir, "afile.txt")
 
 # initialize a watch_folder instance and create afile.txt
 function test_init_afile()
-    @test isempty(FileWatching.watched_folders)
+    watched_folders = FileWatching.watched_folders
+    @test @lock watched_folders isempty(watched_folders[])
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
     @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
-    @test length(FileWatching.watched_folders) == 1
+    @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     @test unwatch_folder(dir) === nothing
-    @test isempty(FileWatching.watched_folders)
+    @test @lock watched_folders isempty(watched_folders[])
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test unwatch_folder(dir) === nothing
@@ -204,7 +205,7 @@ function test_init_afile()
     @test unwatch_folder(dir) === nothing
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
     @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
-    @test length(FileWatching.watched_folders) == 1
+    @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     nothing
 end
 
@@ -440,7 +441,7 @@ end
           (StatStruct(), EOFError()))) > 3)
 
 unwatch_folder(dir)
-@test isempty(FileWatching.watched_folders)
+@test @lock FileWatching.watched_folders isempty(FileWatching.watched_folders[])
 rm(file)
 rm(dir)
 
