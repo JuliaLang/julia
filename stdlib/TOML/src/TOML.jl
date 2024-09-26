@@ -36,12 +36,14 @@ explicitly create a `Parser` but instead one directly use use
 will however reuse some internal data structures which can be beneficial for
 performance if a larger number of small files are parsed.
 """
-const Parser = Internals.Parser
+struct Parser
+    _p::Internals.Parser{Dates}
+end
 
 # Dates-enabled constructors
-Parser() = Parser{Dates}()
-Parser(io::IO) = Parser{Dates}(io)
-Parser(str::String; filepath=nothing) = Parser{Dates}(str; filepath)
+Parser() = Parser(Internals.Parser{Dates}())
+Parser(io::IO) = Parser(Internals.Parser{Dates}(io))
+Parser(str::String; filepath=nothing) = Parser(Internals.Parser{Dates}(str; filepath))
 
 """
     parsefile(f::AbstractString)
@@ -53,9 +55,9 @@ Parse file `f` and return the resulting table (dictionary). Throw a
 See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.parse(Internals.Parser{Dates}(readstring(f); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.parse(Internals.reinit!(p._p, readstring(f); filepath=abspath(f)))
 
 """
     tryparsefile(f::AbstractString)
@@ -67,9 +69,9 @@ Parse file `f` and return the resulting table (dictionary). Return a
 See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Internals.Parser{Dates}(readstring(f); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Internals.reinit!(p._p, readstring(f); filepath=abspath(f)))
 
 """
     parse(x::Union{AbstractString, IO})
@@ -80,10 +82,11 @@ Throw a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.tryparse`](@ref).
 """
+parse(p::Parser) = Internals.parse(p._p)
 parse(str::AbstractString) =
-    Internals.parse(Parser(String(str)))
+    Internals.parse(Internals.Parser{Dates}(String(str)))
 parse(p::Parser, str::AbstractString) =
-    Internals.parse(Internals.reinit!(p, String(str)))
+    Internals.parse(Internals.reinit!(p._p, String(str)))
 parse(io::IO) = parse(read(io, String))
 parse(p::Parser, io::IO) = parse(p, read(io, String))
 
@@ -96,10 +99,11 @@ Return a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.parse`](@ref).
 """
+tryparse(p::Parser) = Internals.tryparse(p._p)
 tryparse(str::AbstractString) =
-    Internals.tryparse(Parser(String(str)))
+    Internals.tryparse(Internals.Parser{Dates}(String(str)))
 tryparse(p::Parser, str::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, String(str)))
+    Internals.tryparse(Internals.reinit!(p._p, String(str)))
 tryparse(io::IO) = tryparse(read(io, String))
 tryparse(p::Parser, io::IO) = tryparse(p, read(io, String))
 
