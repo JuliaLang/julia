@@ -175,7 +175,7 @@ public AbstractTriangular,
         peakflops,
         symmetric,
         symmetric_type,
-        diagzero
+        zeroslike
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
