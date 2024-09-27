@@ -74,6 +74,7 @@ External links:
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
+#include "htable.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"
@@ -2971,6 +2972,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_free(&nullptrs);
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);
+    htable_free(&type_in_worklist_table);
     nsym_tag = 0;
 
     jl_gc_enable(en);
@@ -3025,7 +3027,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
     JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
-
+    htable_new(&type_in_worklist_table, 5000);
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
         // Generate _native_data`

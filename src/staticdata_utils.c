@@ -104,6 +104,7 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
+static htable_t type_in_worklist_table;
 
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
@@ -112,42 +113,64 @@ static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (jl_object_in_image(v))
         return 0; // fast-path for rejection
+    //TODO: is the hash table faster than the eytzinger tree?
+    void* value = ptrhash_get(&type_in_worklist_table, v);
+    if (value == v)
+        return 1;
+    else if (value == NULL)
+        return 0;
+
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
-        return type_in_worklist(u->a) ||
-               type_in_worklist(u->b);
+        if (type_in_worklist(u->a) || type_in_worklist(u->b))
+            goto found;
+        else
+            goto not_found;
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        return type_in_worklist((jl_value_t*)ua->var) ||
-               type_in_worklist(ua->body);
+        if (type_in_worklist((jl_value_t*)ua->var) || type_in_worklist(ua->body))
+            goto found;
+        else
+            goto not_found;
     }
     else if (jl_is_typevar(v)) {
         jl_tvar_t *tv = (jl_tvar_t*)v;
-        return type_in_worklist(tv->lb) ||
-               type_in_worklist(tv->ub);
+        if (type_in_worklist(tv->lb) || type_in_worklist(tv->ub))
+            goto found;
+        else
+            goto not_found;
+
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *tv = (jl_vararg_t*)v;
         if (tv->T && type_in_worklist(tv->T))
-            return 1;
+            goto found;
         if (tv->N && type_in_worklist(tv->N))
-            return 1;
+            goto found;
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (!jl_object_in_image((jl_value_t*)dt->name))
-            return 1;
+            goto found;
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);
         for (i = 0; i < l; i++)
             if (type_in_worklist(jl_tparam(dt, i)))
-                return 1;
+                goto found;
     }
     else {
-        return type_in_worklist(jl_typeof(v));
+        if (type_in_worklist(jl_typeof(v)))
+            goto found;
     }
+
+    not_found:
+    ptrhash_put(&type_in_worklist_table, v, NULL);
     return 0;
+
+    found:
+    ptrhash_put(&type_in_worklist_table, v, v);
+    return 1;
 }
 
 // When we infer external method instances, ensure they link back to the
