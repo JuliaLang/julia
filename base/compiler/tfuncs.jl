@@ -2608,7 +2608,9 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
         end
         # Remember that we looked at this handler, so we get re-scheduled
         # if the scope information changes
-        isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
+        if !isdefined(pchandler, :scope_uses)
+            pchandler = sethandler!(sv, TryCatchFrame(pchandler; scope_uses=Int[]), pc)
+        end
         pcbb = block_for_inst(sv.cfg, pc)
         if findfirst(==(pcbb), pchandler.scope_uses) === nothing
             push!(pchandler.scope_uses, pcbb)

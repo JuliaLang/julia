@@ -3336,10 +3336,11 @@ end
 
 function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
     𝕃ₚ = ipo_lattice(interp)
+    ⊔, ⊑ = join(𝕃ₚ), partialorder(𝕃ₚ)
     handler = gethandler(frame)
     if handler === nothing
-        if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
-            frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
+        if !(exct ⊑ frame.exc_bestguess)
+            frame.exc_bestguess = frame.exc_bestguess ⊔ exct
             update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
                 caller_handler = gethandler(caller, caller_pc)
                 caller_exct = caller_handler === nothing ?
@@ -3348,8 +3349,9 @@ function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct),
             end
         end
     else
-        if !⊑(𝕃ₚ, exct, handler.exct)
-            handler.exct = tmerge(𝕃ₚ, handler.exct, exct)
+        if !(exct ⊑ handler.exct)
+            handler = TryCatchFrame(handler; exct=handler.exct⊔exct)
+            sethandler!(frame, handler)
             enter = frame.src.code[handler.enter_idx]::EnterNode
             exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
             push!(frame.ip, exceptbb)
@@ -3386,6 +3388,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
+    ⊔, ⊑ = join(𝕃ᵢ), partialorder(𝕃ᵢ)
 
     currbb = frame.currbb
     if currbb != 1
@@ -3430,7 +3433,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         condt = Conditional(condslot, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
-                    nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
+                    nothrow = (condval !== nothing) || orig_condt ⊑ Bool
                     if nothrow
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
@@ -3520,8 +3523,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         scopet = abstract_eval_value(interp, stmt.scope, currstate, frame)
                         handler = gethandler(frame, frame.currpc+1)::TryCatchFrame
                         @assert handler.scopet !== nothing
-                        if !⊑(𝕃ᵢ, scopet, handler.scopet)
-                            handler.scopet = tmerge(𝕃ᵢ, scopet, handler.scopet)
+                        if !(scopet ⊑ handler.scopet)
+                            handler = TryCatchFrame(handler; scopet=scopet⊔handler.scopet)
+                            sethandler!(frame, handler, frame.currpc+1)
                             if isdefined(handler, :scope_uses)
                                 for bb in handler.scope_uses
                                     push!(W, bb)

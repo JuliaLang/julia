@@ -214,12 +214,25 @@ const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
 const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
-mutable struct TryCatchFrame
+struct TryCatchFrame
     exct
     scopet
-    const enter_idx::Int
+    enter_idx::Int
     scope_uses::Vector{Int}
     TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int, scope_uses::Vector{Int}) = new(exct, scopet, enter_idx, scope_uses)
+end
+function TryCatchFrame(handler::TryCatchFrame;
+                       @nospecialize(exct = handler.exct),
+                       @nospecialize(scopet = handler.scopet),
+                       enter_idx::Int = handler.enter_idx,
+                       scope_uses::Union{Nothing,Vector{Int}} =
+                           isdefined(handler, :scope_uses) ? handler.scope_uses : nothing)
+    if scope_uses === nothing
+        return TryCatchFrame(exct, scopet, enter_idx)
+    else
+        return TryCatchFrame(exct, scopet, enter_idx, scope_uses)
+    end
 end
 
 struct HandlerInfo
@@ -381,6 +394,11 @@ function gethandler(handler_info::HandlerInfo, pc::Int)
     handler_idx = handler_info.handler_at[pc][1]
     handler_idx == 0 && return nothing
     return handler_info.handlers[handler_idx]
+end
+function sethandler!(frame::InferenceState, handler::TryCatchFrame, pc::Int=frame.currpc)
+    handler_info = frame.handler_info::HandlerInfo
+    handler_idx = handler_info.handler_at[pc][1]
+    return handler_info.handlers[handler_idx] = handler
 end
 
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
