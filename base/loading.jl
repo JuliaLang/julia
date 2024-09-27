@@ -1387,9 +1387,7 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    if !precompiling_extension
-        run_extension_callbacks(modkey)
-    end
+    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1528,6 +1526,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
 end
 
 loading_extension::Bool = false
+loadable_extensions::Union{Nothing,Vector{PkgId}} = nothing
 precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
@@ -1558,7 +1557,7 @@ function run_extension_callbacks(pkgid::PkgId)
     for extid in extids
         @assert extid.ntriggers > 0
         extid.ntriggers -= 1
-        if extid.ntriggers == 0
+        if extid.ntriggers == 0 && (loadable_extensions === nothing || extid.id in loadable_extensions)
             push!(extids_to_load, extid)
         end
     end
@@ -2868,7 +2867,7 @@ end
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, isext::Bool=false)
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2942,7 +2941,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
-        Base.precompiling_extension = $(loading_extension | isext)
+        Base.loadable_extensions = $(loadable_exts)
+        Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
@@ -2999,18 +2999,18 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons, isext)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons, loadable_exts)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
+                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3050,7 +3050,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, isext)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts)
 
         if success(p)
             if cache_objects
