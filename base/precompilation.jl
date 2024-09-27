@@ -423,10 +423,10 @@ function _precompilepkgs(pkgs::Vector{String},
     # in the current environment (i.e. their triggers are present)
     parent_to_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
     # inverse map of `parent_to_ext` above (ext → parent)
-    ext_to_parent_name = Dict{Base.PkgId, String}()
+    ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
 
     function describe_pkg(pkg::PkgId, is_direct_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
-        name = haskey(ext_to_parent_name, pkg) ? string(ext_to_parent_name[pkg], " → ", pkg.name) : pkg.name
+        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
         name = is_direct_dep ? name : color_string(name, :light_black)
         if nconfigs > 1 && !isempty(flags)
             config_str = join(flags, " ")
@@ -445,7 +445,6 @@ function _precompilepkgs(pkgs::Vector{String},
         Base.in_sysimage(pkg) && continue
         deps = [Base.PkgId(x, env.names[x]) for x in deps]
         direct_deps[pkg] = filter!(!Base.in_sysimage, deps)
-        pkg_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
         for (ext_name, trigger_uuids) in env.extensions[dep]
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
             ext = Base.PkgId(ext_uuid, ext_name)
@@ -461,11 +460,14 @@ function _precompilepkgs(pkgs::Vector{String},
                 end
             end
             all_triggers_available || continue
-            ext_to_parent_name[ext] = pkg.name
-            pkg_exts[ext] = direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
-        end
-        if !isempty(pkg_exts)
-            parent_to_exts[pkg] = collect(keys(pkg_exts))
+            ext_to_parent[ext] = pkg
+            direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
+
+            if !haskey(parent_to_exts, pkg)
+                parent_to_exts[pkg] = Base.PkgId[ext]
+            else
+                push!(parent_to_exts[pkg], ext)
+            end
         end
     end
 
@@ -475,13 +477,13 @@ function _precompilepkgs(pkgs::Vector{String},
     ]
 
     # consider exts of project deps to be project deps so that errors are reported
-    append!(project_deps, keys(filter(d->last(d) in keys(env.project_deps), ext_to_parent_name)))
+    append!(project_deps, keys(filter(d->last(d).name in keys(env.project_deps), ext_to_parent)))
 
     @debug "precompile: deps collected"
 
     # An extension effectively depends on another extension if it has a strict superset of its triggers
-    for ext_a in keys(ext_to_parent_name)
-        for ext_b in keys(ext_to_parent_name)
+    for ext_a in keys(ext_to_parent)
+        for ext_b in keys(ext_to_parent)
             if triggers[ext_a] ⊋ triggers[ext_b]
                 push!(direct_deps[ext_a], ext_b)
             end
@@ -493,7 +495,7 @@ function _precompilepkgs(pkgs::Vector{String},
         # find any packages that depend on the extension(s)'s deps and replace those deps in their deps list with the extension(s),
         # basically injecting the extension into the precompile order in the graph, to avoid race to precompile extensions
         for (_pkg, deps) in direct_deps # for each manifest dep
-            if !in(_pkg, keys(ext_to_parent_name)) && pkg in deps # if not an extension and depends on pkg
+            if !in(_pkg, keys(ext_to_parent)) && pkg in deps # if not an extension and depends on pkg
                 append!(deps, pkg_exts) # add the package extensions to deps
                 filter!(!isequal(pkg), deps) # remove the pkg from deps
             end
@@ -591,7 +593,7 @@ function _precompilepkgs(pkgs::Vector{String},
                 collect_all_deps(direct_deps, dep_pkgid, keep)
             end
         end
-        for ext in keys(ext_to_parent_name)
+        for ext in keys(ext_to_parent)
             if issubset(collect_all_deps(direct_deps, ext), keep) # if all extension deps are kept
                 push!(keep, ext)
             end
@@ -851,7 +853,7 @@ function _precompilepkgs(pkgs::Vector{String},
                                     keep_loaded_modules = false
                                     # for extensions, any extension in our direct dependencies is one we have a right to load
                                     # for packages, we may load any extension (all possible triggers are accounted for above)
-                                    loadable_exts = haskey(ext_to_parent_name, pkg) ? filter((dep)->haskey(ext_to_parent_name, dep), direct_deps[pkg]) : nothing
+                                    loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
                                     Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
                                                       flags, cacheflags, loadable_exts)
                                 end
@@ -966,7 +968,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         else
                             join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
                         end
-                        name = haskey(ext_to_parent_name, pkg) ? string(ext_to_parent_name[pkg], " → ", pkg.name) : pkg.name
+                        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
                         print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
                     end
                 end
