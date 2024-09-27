@@ -496,11 +496,12 @@ endif
 endif
 
 JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
+JCFLAGS_COMMON    := $(JCFLAGS_COMMON) -funwind-tables -fasynchronous-unwind-tables -femit-dwarf-unwind=always
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
 # These flags are needed to generate decent debug info
-JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
+JCPPFLAGS_COMMON  := -funwind-tables -fasynchronous-unwind-tables -femit-dwarf-unwind=always
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
