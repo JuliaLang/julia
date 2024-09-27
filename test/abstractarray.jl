@@ -898,6 +898,12 @@ test_ind2sub(TestAbstractArray)
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test_throws ArgumentError map!(-, [1])
+# Issue #30624
+@test map!(+, [0,0,0], [1,2], [10,20,30], [100]) == [111,0,0]
+## destination container should be large enough
+@test_throws DimensionMismatch map!(+, [0], [1,2])
+@test_throws DimensionMismatch map!(+, [0], [1,2], [1,2])
+@test_throws DimensionMismatch map!(+, [0], [1,2], [1,2], [1,2])
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
