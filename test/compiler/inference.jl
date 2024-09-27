@@ -6152,3 +6152,6 @@ end
 t155751 = Union{AbstractArray{UInt8, 4}, Array{Float32, 4}, Grid55751{Float32, 3, _A} where _A}
 t255751 = Array{Float32, 3}
 @test Core.Compiler.tmerge_types_slow(t155751,t255751) == AbstractArray # shouldn't hang
+
+issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
+@test Base.infer_return_type(issue55882_nfields) <: Int
