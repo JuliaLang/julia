@@ -1231,7 +1231,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         dep = depmods[i]
         dep isa Module && continue
         _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
-        dep = loaded_precompiles[depkey => depbuild_id]
+        dep = something(maybe_loaded_precompile(depkey, depbuild_id))
         @assert PkgId(dep) == depkey && module_build_id(dep) === depbuild_id
         depmods[i] = dep
     end
@@ -1337,6 +1337,7 @@ end
 
 function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     # This function is also used by PkgCacheInspector.jl
+    assert_havelock(require_lock)
     restored = sv[1]::Vector{Any}
     for M in restored
         M = M::Module
@@ -1345,7 +1346,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
         end
         if parentmodule(M) === M
             push!(loaded_modules_order, M)
-            loaded_precompiles[pkg => module_build_id(M)] = M
+            push!(get!(Vector{Module}, loaded_precompiles, pkg), M)
         end
     end
 
@@ -1945,90 +1946,102 @@ end
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg, DEPOT_PATH)
     newdeps = PkgId[]
-    for path_to_try in paths::Vector{String}
-        staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; reasons, stalecheck)
-        if staledeps === true
-            continue
+    try_build_ids = UInt128[build_id]
+    if build_id == UInt128(0)
+        let loaded = get(loaded_precompiles, pkg, nothing)
+            if loaded !== nothing
+                for mod in loaded # try these in reverse original load order to see if one is already valid
+                    pushfirst!(try_build_ids, module_build_id(mod))
+                end
+            end
         end
-        try
-            staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-            # finish checking staledeps module graph
-            for i in eachindex(staledeps)
-                dep = staledeps[i]
-                dep isa Module && continue
-                modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
-                modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
-                for modpath_to_try in modpaths
-                    modstaledeps = stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; stalecheck)
-                    if modstaledeps === true
-                        continue
+    end
+    for build_id in try_build_ids
+        for path_to_try in paths::Vector{String}
+            staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; reasons, stalecheck)
+            if staledeps === true
+                continue
+            end
+            try
+                staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+                # finish checking staledeps module graph
+                for i in eachindex(staledeps)
+                    dep = staledeps[i]
+                    dep isa Module && continue
+                    modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+                    modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
+                    for modpath_to_try in modpaths
+                        modstaledeps = stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; stalecheck)
+                        if modstaledeps === true
+                            continue
+                        end
+                        modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+                        staledeps[i] = (modpath, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
+                        @goto check_next_dep
                     end
-                    modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-                    staledeps[i] = (modpath, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
-                    @goto check_next_dep
+                    @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
+                    @goto check_next_path
+                    @label check_next_dep
                 end
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
-                @goto check_next_path
-                @label check_next_dep
-            end
-            M = get(loaded_precompiles, pkg => newbuild_id, nothing)
-            if isa(M, Module)
-                stalecheck && register_root_module(M)
-                return M
-            end
-            if stalecheck
-                try
-                    touch(path_to_try) # update timestamp of precompilation file
-                catch ex # file might be read-only and then we fail to update timestamp, which is fine
-                    ex isa IOError || rethrow()
+                M = maybe_loaded_precompile(pkg, newbuild_id)
+                if isa(M, Module)
+                    stalecheck && register_root_module(M)
+                    return M
                 end
-            end
-            # finish loading module graph into staledeps
-            # TODO: call all start_loading calls (in reverse order) before calling any _include_from_serialized, since start_loading will drop the loading lock
-            for i in eachindex(staledeps)
-                dep = staledeps[i]
-                dep isa Module && continue
-                modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
-                dep = start_loading(modkey, modbuild_id, stalecheck)
-                while true
-                    if dep isa Module
-                        if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
-                            break
-                        else
-                            @debug "Rejecting cache file $path_to_try because module $modkey got loaded at a different version than expected."
-                            @goto check_next_path
-                        end
-                    end
-                    if dep === nothing
-                        try
-                            set_pkgorigin_version_path(modkey, modpath)
-                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
-                        finally
-                            end_loading(modkey, dep)
-                        end
-                        if !isa(dep, Module)
-                            @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
-                            @goto check_next_path
-                        else
-                            push!(newdeps, modkey)
-                        end
+                if stalecheck
+                    try
+                        touch(path_to_try) # update timestamp of precompilation file
+                    catch ex # file might be read-only and then we fail to update timestamp, which is fine
+                        ex isa IOError || rethrow()
                     end
                 end
-                staledeps[i] = dep
+                # finish loading module graph into staledeps
+                # TODO: call all start_loading calls (in reverse order) before calling any _include_from_serialized, since start_loading will drop the loading lock
+                for i in eachindex(staledeps)
+                    dep = staledeps[i]
+                    dep isa Module && continue
+                    modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                    dep = start_loading(modkey, modbuild_id, stalecheck)
+                    while true
+                        if dep isa Module
+                            if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
+                                break
+                            else
+                                @debug "Rejecting cache file $path_to_try because module $modkey got loaded at a different version than expected."
+                                @goto check_next_path
+                            end
+                        end
+                        if dep === nothing
+                            try
+                                set_pkgorigin_version_path(modkey, modpath)
+                                dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
+                            finally
+                                end_loading(modkey, dep)
+                            end
+                            if !isa(dep, Module)
+                                @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
+                                @goto check_next_path
+                            else
+                                push!(newdeps, modkey)
+                            end
+                        end
+                    end
+                    staledeps[i] = dep
+                end
+                restored = maybe_loaded_precompile(pkg, newbuild_id)
+                if !isa(restored, Module)
+                    restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
+                end
+                isa(restored, Module) && return restored
+                @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
+                @label check_next_path
+            finally
+                for modkey in newdeps
+                    insert_extension_triggers(modkey)
+                    stalecheck && run_package_callbacks(modkey)
+                end
+                empty!(newdeps)
             end
-            restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
-            if !isa(restored, Module)
-                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
-            end
-            isa(restored, Module) && return restored
-            @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
-            @label check_next_path
-        finally
-            for modkey in newdeps
-                insert_extension_triggers(modkey)
-                stalecheck && run_package_callbacks(modkey)
-            end
-            empty!(newdeps)
         end
     end
     return nothing
@@ -2047,7 +2060,7 @@ function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
         if build_id != UInt128(0)
-            loaded = get(loaded_precompiles, modkey => build_id, nothing)
+            loaded = maybe_loaded_precompile(modkey, build_id)
             loaded isa Module && return loaded
         end
         loading = get(package_locks, modkey, nothing)
@@ -2377,11 +2390,20 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const explicit_loaded_modules = Dict{PkgId,Module}() # Emptied on Julia start
 const loaded_modules = Dict{PkgId,Module}() # available to be explicitly loaded
-const loaded_precompiles = Dict{Pair{PkgId,UInt128},Module}() # extended (complete) list of modules, available to be loaded
+const loaded_precompiles = Dict{PkgId,Vector{Module}}() # extended (complete) list of modules, available to be loaded
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse of loaded_modules
 
 root_module_key(m::Module) = @lock require_lock module_keys[m]
+
+function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
+    assert_havelock(require_lock)
+    mods = get(loaded_precompiles, key, nothing)
+    mods === nothing && return
+    for mod in mods
+        module_build_id(mod) == buildid && return mod
+    end
+end
 
 function module_build_id(m::Module)
     hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
@@ -2403,7 +2425,7 @@ end
             end
         end
     end
-    haskey(loaded_precompiles, key => module_build_id(m)) || push!(loaded_modules_order, m)
+    maybe_loaded_precompile(key, module_build_id(m)) === nothing && push!(loaded_modules_order, m)
     loaded_modules[key] = m
     explicit_loaded_modules[key] = m
     module_keys[m] = key
@@ -3789,8 +3811,8 @@ end
         for i in 1:ndeps
             req_key, req_build_id = required_modules[i]
             # Check if module is already loaded
-            if !stalecheck && haskey(loaded_precompiles, req_key => req_build_id)
-                M = loaded_precompiles[req_key => req_build_id]
+            M = stalecheck ? nothing : maybe_loaded_precompile(req_key, req_build_id)
+            if M !== nothing
                 @assert PkgId(M) == req_key && module_build_id(M) === req_build_id
                 depmods[i] = M
             elseif root_module_exists(req_key)
