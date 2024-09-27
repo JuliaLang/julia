@@ -367,7 +367,7 @@ extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
-extern void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
