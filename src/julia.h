@@ -2243,6 +2243,7 @@ typedef struct _jl_excstack_t jl_excstack_t;
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
+    jl_value_t *scope;
     struct _jl_handler_t *prev;
     int8_t gc_state;
     size_t locks_len;
