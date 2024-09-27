@@ -3378,6 +3378,16 @@ have_entry:
             jl_method_error(F, args, nargs, world);
             // unreachable
         }
+        // mfunc is about to be dispatched
+        if (jl_options.trace_dispatch != NULL) {
+            uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
+            uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
+            if (!was_dispatched) {
+                miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
+                jl_atomic_store_relaxed(&mfunc->flags, miflags);
+                record_dispatch_statement(mfunc);
+            }
+        }
     }
 
 #ifdef JL_TRACE
@@ -3394,15 +3404,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
                                                      jl_int32hash_fast(jl_return_address()),
                                                      world);
     JL_GC_PROMISE_ROOTED(mfunc);
-    if (jl_options.trace_dispatch != NULL) {
-        uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
-        uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
-        if (!was_dispatched) {
-            miflags |= JL_MI_FLAGS_MASK_DISPATCHED;
-            jl_atomic_store_relaxed(&mfunc->flags, miflags);
-            record_dispatch_statement(mfunc);
-        }
-    }
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
