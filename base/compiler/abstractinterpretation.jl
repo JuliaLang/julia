@@ -94,7 +94,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, edge, effects, volatile_inf_result) = mresult[]
+                local (; rt, exct, effects, volatile_inf_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
@@ -118,9 +118,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         # e.g. in cases when there are cycles but cached result is still accurate
                         this_conditional = this_const_conditional
                         this_rt = this_const_rt
-                        (; effects, const_result, edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     elseif is_better_effects(const_call_result.effects, effects)
-                        (; effects, const_result, edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
@@ -128,7 +128,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     # because consistent-cy does not apply to exceptions.
                     if const_call_result.exct ⋤ this_exct
                         this_exct = const_call_result.exct
-                        (; const_result, edge) = const_call_result
+                        (; const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
@@ -228,7 +228,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # and avoid keeping track of a more complex result type.
             rettype = Any
         end
-        any_slot_refined = slotrefinements !== nothing
         if isa(sv, InferenceState)
             # TODO (#48913) implement a proper recursion handling for irinterp:
             # This works just because currently the `:terminate` condition guarantees that
@@ -814,13 +813,11 @@ struct ConstCallResults
     exct::Any
     const_result::ConstResult
     effects::Effects
-    edge::MethodInstance
     function ConstCallResults(
         @nospecialize(rt), @nospecialize(exct),
         const_result::ConstResult,
-        effects::Effects,
-        edge::MethodInstance)
-        return new(rt, exct, const_result, effects, edge)
+        effects::Effects)
+        return new(rt, exct, const_result, effects)
     end
 end
 
@@ -972,9 +969,9 @@ function concrete_eval_call(interp::AbstractInterpreter,
     catch e
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
         # Howevever, at present, :consistency does not mandate the type of the exception
-        return ConstCallResults(Bottom, Any, ConcreteResult(edge, result.effects), result.effects, edge)
+        return ConstCallResults(Bottom, Any, ConcreteResult(edge, result.effects), result.effects)
     end
-    return ConstCallResults(Const(value), Union{}, ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
+    return ConstCallResults(Const(value), Union{}, ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
@@ -1239,7 +1236,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                     effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
                 exct = refine_exception_type(result.exct, effects)
-                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects, spec_info(irsv)), effects, mi)
+                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects, spec_info(irsv)), effects)
             end
         end
     end
@@ -1248,7 +1245,7 @@ end
 
 const_prop_result(inf_result::InferenceResult) =
     ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
-                     inf_result.ipo_effects, inf_result.linfo)
+                     inf_result.ipo_effects)
 
 # return cached result of constant analysis
 return_localcache_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
@@ -2186,7 +2183,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, edge, effects, volatile_inf_result) = result
+        (; rt, exct, effects, volatile_inf_result) = result
         res = nothing
         sig = match.spec_types
         argtypes′ = invoke_rewrite(argtypes)
@@ -2207,10 +2204,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         const_result = volatile_inf_result
         if const_call_result !== nothing
             if const_call_result.rt ⊑ rt
-                (; rt, effects, const_result, edge) = const_call_result
+                (; rt, effects, const_result) = const_call_result
             end
             if const_call_result.exct ⋤ exct
-                (; exct, const_result, edge) = const_call_result
+                (; exct, const_result) = const_call_result
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
@@ -2410,19 +2407,19 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, edge, effects, volatile_inf_result, edgecycle) = result
+        (; rt, exct, effects, volatile_inf_result, edgecycle) = result
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         const_result = volatile_inf_result
         if !edgecycle
             const_call_result = abstract_call_method_with_const_args(interp, result,
-                nothing, arginfo, si, match, sv)
+                #=f=#nothing, arginfo, si, match, sv)
             if const_call_result !== nothing
                 if const_call_result.rt ⊑ rt
-                    (; rt, effects, const_result, edge) = const_call_result
+                    (; rt, effects, const_result) = const_call_result
                 end
                 if const_call_result.exct ⋤ exct
-                    (; exct, const_result, edge) = const_call_result
+                    (; exct, const_result) = const_call_result
                 end
             end
         end
