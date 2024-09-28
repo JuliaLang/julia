@@ -319,8 +319,6 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigen(A).vectors
-
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
 
