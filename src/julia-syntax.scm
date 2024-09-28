@@ -2489,8 +2489,14 @@
    '|.|
    (lambda (e)
      (if (length= e 2)
-         ;; e = (|.| op)
-         `(call (top BroadcastFunction) ,(cadr e))
+         (let ((oplens (cadr e)))
+           (if (symbol? oplens)
+            ;; e = (|.| op)
+            `(call (top BroadcastFunction) ,oplens)
+            ;; e = (|.| lens)
+            (if (eq? (car oplens) '|.|)
+              (expand-fuse-broadcast '() `(|.| (|.| (call (top getproperty)) ,(cadr oplens)) ,(caddr oplens)))
+              (expand-fuse-broadcast '() `(|.| (call (top getproperty)) ,oplens)))))
          ;; e = (|.| f x)
          (expand-fuse-broadcast '() e)))
 
@@ -2674,7 +2680,7 @@
            (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
                  ;; "(.op)(...)"
-                 ((and (length= f 2) (eq? (car f) '|.|))
+                 ((and (length= f 2) (eq? (car f) '|.|) (symbol? (cadr f)))
                   (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))

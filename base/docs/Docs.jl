@@ -290,7 +290,7 @@ namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,Globa
 
 function astname(x::Expr, ismacro::Bool)
     head = x.head
-    if head === :.
+    if head === :var"."
         ismacro ? macroname(x) : x
     elseif head === :call && isexpr(x.args[1], :(::))
         return astname((x.args[1]::Expr).args[end], ismacro)
@@ -306,7 +306,7 @@ astname(@nospecialize(other), ismacro::Bool) = other
 macroname(s::Symbol) = Symbol('@', s)
 macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))
 
-isfield(@nospecialize x) = isexpr(x, :.) &&
+isfield(@nospecialize x) = isexpr(x, :var".") &&
     (isa(x.args[1], Symbol) || isfield(x.args[1])) &&
     (isa(x.args[2], QuoteNode) || isexpr(x.args[2], :quote))
 
@@ -560,7 +560,7 @@ isquotedmacrocall(@nospecialize x) =
     isa(x.args[1], QuoteNode) &&
     isexpr(x.args[1].value, :macrocall, 2)
 # Simple expressions / atoms the may be documented.
-isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
+isbasicdoc(@nospecialize x) = isexpr(x, :var".") || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
 function _doc(binding::Binding, sig::Type = Union{})

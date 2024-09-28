@@ -1241,7 +1241,7 @@ end
 function make_atomic(order, ex)
     @nospecialize
     if ex isa Expr
-        if isexpr(ex, :., 2)
+        if isexpr(ex, :var".", 2)
             l, r = esc(ex.args[1]), esc(ex.args[2])
             return :(getproperty($l, $r, $order))
         elseif isexpr(ex, :call, 3)
@@ -1251,7 +1251,7 @@ function make_atomic(order, ex)
             return :(getindex_atomic($x, $order, $(idcs...)))
         elseif ex.head === :(=)
             l, r = ex.args[1], esc(ex.args[2])
-            if is_expr(l, :., 2)
+            if is_expr(l, :var".", 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
                 return :(setproperty!($ll, $lr, $r, $order))
             elseif is_expr(l, :ref)

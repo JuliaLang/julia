@@ -2860,7 +2860,7 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
                 push!(args, x)
             end
         end
-    elseif isexpr(ex, :.)   # `x.f`
+    elseif isexpr(ex, :var".")   # `x.f`
         f = GlobalRef(topmod, :getproperty)
         args = flatten(ex.args)
     elseif isexpr(ex, :ref) # `x[i]`
@@ -2868,7 +2868,7 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
         args = flatten(ex.args)
     elseif isexpr(ex, :(=)) # `x.f = v` or `x[i] = v`
         lhs, rhs = ex.args
-        if isexpr(lhs, :.)
+        if isexpr(lhs, :var".")
             f = GlobalRef(topmod, :setproperty!)
             args = flatten(Any[lhs.args..., rhs])
         elseif isexpr(lhs, :ref)
