@@ -62,4 +62,33 @@ begin
 end
 """)
 
+#-------------------------------------------------------------------------------
+# Keyword calls
+Base.eval(test_mod, :(
+begin
+    function f(; kws...)
+        values(kws)
+    end
+
+    function f()
+        "non-kw version of f"
+    end
+end
+))
+
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    kws = (c=3,d=4)
+    f(; kws..., a=1, d=0, e=5)
+end
+""") == (c=3, d=0, a=1, e=5)
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    kws = (;)
+    f(; kws..., kws...)
+end
+""") == "non-kw version of f"
+
 end

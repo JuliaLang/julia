@@ -62,3 +62,41 @@ function A.ccall()
 #        └─────┘ ── Invalid function name
 end
 
+########################################
+# Keyword calls
+f(x; a=1, b=2)
+#---------------------
+1   TestMod.f
+2   (call core.tuple :a :b)
+3   (call core.apply_type core.NamedTuple %₂)
+4   (call core.tuple 1 2)
+5   (call %₃ %₄)
+6   TestMod.x
+7   (call core.kwcall %₅ %₁ %₆)
+8   (return %₇)
+
+########################################
+# Keyword call with only splats for kws
+f(; ks1..., ks2...)
+#---------------------
+1   TestMod.f
+2   (call core.NamedTuple)
+3   TestMod.ks1
+4   (call top.merge %₂ %₃)
+5   TestMod.ks2
+6   (call top.merge %₄ %₅)
+7   (call top.isempty %₆)
+8   (gotoifnot %₇ label₁₁)
+9   (call %₁)
+10  (return %₉)
+11  (call core.kwcall %₆ %₁)
+12  (return %₁₁)
+
+########################################
+# Error: Call with repeated keywords
+f(x; a=1, a=2)
+#---------------------
+LoweringError:
+f(x; a=1, a=2)
+#         ╙ ── Repeated keyword argument name
+

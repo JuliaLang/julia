@@ -125,11 +125,10 @@ end
 
 @testset "Property destructuring" begin
 
-# TODO: Move named tuple inside test case once we can lower it
-Base.eval(test_mod, :(some_named_tuple = (a=1,b=2)))
 @test JuliaLowering.include_string(test_mod, """
 let
-    (; a, b) = some_named_tuple
+    ab = (a=1, b=2)
+    (; a, b) = ab
     (a, b)
 end
 """) == (1, 2)

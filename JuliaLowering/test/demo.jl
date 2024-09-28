@@ -513,6 +513,18 @@ src = """
 (; a=1, a=2)
 """
 
+function f(args...; kws...)
+    @info "" args kws
+end
+
+src = """
+begin
+    kws = (c=3, d=4)
+    xs = 1:3
+    f(xs...; kws..., a=1, b=2)
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

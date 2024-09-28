@@ -749,7 +749,9 @@ function _merge_named_tuple(ctx, srcref, old, new)
     end
 end
 
-function expand_named_tuple(ctx, ex, kws)
+function expand_named_tuple(ctx, ex, kws;
+                            field_name="named tuple field",
+                            element_name="named tuple element")
     name_strs = Set{String}()
     names = SyntaxList(ctx)
     values = SyntaxList(ctx)
@@ -765,17 +767,17 @@ function expand_named_tuple(ctx, ex, kws)
         elseif k == K"="
             # x = a
             if kind(kw[1]) != K"Identifier" && kind(kw[1]) != K"Placeholder"
-                throw(LoweringError(kw[1], "invalid named tuple field name"))
+                throw(LoweringError(kw[1], "invalid $field_name name"))
             end
             if kind(kw[2]) == K"..."
-                throw(LoweringError(kw[2], "`...` cannot be used in a value for a named tuple field"))
+                throw(LoweringError(kw[2], "`...` cannot be used in a value for a $field_name"))
             end
             name = to_symbol(ctx, kw[1])
             value = kw[2]
         elseif k == K"."
             # a.x ==> x=a.x
             if kind(kw[2]) != K"Symbol"
-                throw(LoweringError(kw, "invalid named tuple element"))
+                throw(LoweringError(kw, "invalid $element_name"))
             end
             name = to_symbol(ctx, kw[2])
             value = kw
@@ -792,13 +794,13 @@ function expand_named_tuple(ctx, ex, kws)
             end
             nothing, nothing
         else
-            throw(LoweringError(kw, "Invalid named tuple element"))
+            throw(LoweringError(kw, "Invalid $element_name"))
         end
         if !isnothing(name)
             if kind(name) == K"Symbol"
                 name_str = name.name_val
                 if name_str in name_strs
-                    throw(LoweringError(name, "Field name repeated in named tuple"))
+                    throw(LoweringError(name, "Repeated $field_name name"))
                 end
                 push!(name_strs, name_str)
             end
@@ -821,6 +823,25 @@ function expand_named_tuple(ctx, ex, kws)
     end
     @assert !isnothing(current_nt)
     current_nt
+end
+
+function expand_kw_call(ctx, srcref, farg, args, kws)
+    @ast ctx srcref [K"block"
+        func = farg
+        kw_container = expand_named_tuple(ctx, srcref, kws;
+                                          field_name="keyword argument",
+                                          element_name="keyword argument")
+        if all(kind(kw) == K"..." for kw in kws)
+            # In this case need to check kws nonempty at runtime
+            [K"if"
+                [K"call" "isempty"::K"top" kw_container]
+                [K"call" func args...]
+                [K"call" "kwcall"::K"core" kw_container func args...]
+            ]
+        else
+            [K"call" "kwcall"::K"core" kw_container func args...]
+        end
+    ]
 end
 
 # Wrap unsplatted arguments in `tuple`:
@@ -846,26 +867,67 @@ function _wrap_unsplatted_args(ctx, call_ex, args)
     wrapped
 end
 
-function expand_call(ctx, ex)
-    cs = children(ex)
-    if is_infix_op_call(ex)
-        @chk numchildren(ex) == 3
-        cs = [cs[2], cs[1], cs[3]]
-    elseif is_postfix_op_call(ex)
-        @chk numchildren(ex) == 2
-        cs = [cs[2], cs[1]]
+function remove_kw_args!(ctx, args::SyntaxList)
+    kws = nothing
+    j = 0
+    num_parameter_blocks = 0
+    for i in 1:length(args)
+        arg = args[i]
+        k = kind(arg)
+        if k == K"="
+            if isnothing(kws)
+                kws = SyntaxList(ctx)
+            end
+            push!(kws, arg)
+        elseif k == K"parameters"
+            num_parameter_blocks += 1
+            if num_parameter_blocks > 1
+                throw(LoweringError(arg, "Cannot have more than one group of keyword arguments separated with `;`"))
+            end
+            if numchildren(arg) == 0
+                continue # ignore empty parameters (issue #18845)
+            end
+            if isnothing(kws)
+                kws = SyntaxList(ctx)
+            end
+            append!(kws, children(arg))
+        else
+            j += 1
+            if j < i
+                args[j] = args[i]
+            end
+        end
     end
-    # TODO: keywords
-    if any(kind(c) == K"..." for c in cs)
+    resize!(args, j)
+    return kws
+end
+
+function expand_call(ctx, ex)
+    args = SyntaxList(ctx)
+    if is_infix_op_call(ex) || is_postfix_op_call(ex)
+        @chk numchildren(ex) >= 2 "Postfix/infix operators must have at least two positional arguments"
+        farg = ex[2]
+        push!(args, ex[1])
+        append!(args, ex[3:end])
+    else
+        @chk numchildren(ex) > 0 "Call expressions must have a function name"
+        farg = ex[1]
+        append!(args, ex[2:end])
+    end
+    kws = remove_kw_args!(ctx, args)
+    if !isnothing(kws)
+        return expand_forms_2(ctx, expand_kw_call(ctx, ex, farg, args, kws))
+    end
+    if any(kind(arg) == K"..." for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
         @ast ctx ex [K"call" 
             "_apply_iterate"::K"core"
             "iterate"::K"top"
-            expand_forms_2(ctx, cs[1])
-            expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, cs[2:end]))...
+            expand_forms_2(ctx, farg)
+            expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
         ]
     else
-        @ast ctx ex [K"call" expand_forms_2(ctx, cs)...]
+        @ast ctx ex [K"call" expand_forms_2(ctx, farg) expand_forms_2(ctx, args)...]
     end
 end
 
@@ -1630,6 +1692,17 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             TODO(ex, "ref expansion")
         end
         expand_forms_2(ctx, @ast ctx ex [K"call" "getindex"::K"top" ex[1] ex[2]])
+    elseif k == K"curly"
+        if has_parameters(ex)
+            throw(LoweringError(ex[end], "unexpected semicolon in type parameter list"))
+        end
+        for c in children(ex)
+            if kind(c) == K"="
+                throw(LoweringError(c, "misplace assignment in type parameter list"))
+            end
+        end
+        # TODO: implicit where parameters like T{A<:B}
+        expand_forms_2(ctx, @ast ctx ex [K"call" "apply_type"::K"core" children(ex)...])
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.

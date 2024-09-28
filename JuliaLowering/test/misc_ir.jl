@@ -102,7 +102,7 @@ _ + 1
 #---------------------
 LoweringError:
 (; a=1, bs..., c=3, a=2)
-#                   ╙ ── Field name repeated in named tuple
+#                   ╙ ── Repeated named tuple field name
 
 ########################################
 # Error: Named tuple frankentuple
