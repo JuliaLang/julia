@@ -2513,12 +2513,32 @@ jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROP
 
 jl_mutex_t precomp_statement_out_lock;
 
+_Atomic(uint8_t) jl_force_trace_compile_timing_enabled = 0;
+
+/**
+ * @brief Enable force trace compile to stderr with timing.
+ */
+JL_DLLEXPORT void jl_force_trace_compile_timing_enable(void)
+{
+    // Increment the flag to allow reentrant callers to `@trace_compile`.
+    jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, 1);
+}
+/**
+ * @brief Disable force trace compile to stderr with timing.
+ */
+JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void)
+{
+    // Increment the flag to allow reentrant callers to `@trace_compile`.
+    jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, -1);
+}
+
 static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_recompile)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
     jl_method_t *def = mi->def.method;
-    if (jl_options.trace_compile == NULL)
+    uint8_t force_trace_compile = jl_atomic_load_relaxed(&jl_force_trace_compile_timing_enabled);
+    if (force_trace_compile == 0 && jl_options.trace_compile == NULL)
         return;
     if (!jl_is_method(def))
         return;
@@ -2528,7 +2548,7 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
         const char *t = jl_options.trace_compile;
-        if (!strncmp(t, "stderr", 6)) {
+        if (force_trace_compile || !strncmp(t, "stderr", 6)) {
             s_precompile = JL_STDERR;
         }
         else {
@@ -2540,7 +2560,7 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
     if (!jl_has_free_typevars(mi->specTypes)) {
         if (is_recompile && s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF)
             jl_printf(s_precompile, "\e[33m");
-        if (jl_options.trace_compile_timing)
+        if (force_trace_compile || jl_options.trace_compile_timing)
             jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);

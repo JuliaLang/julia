@@ -256,6 +256,17 @@ macro time_imports(ex)
     end
 end
 
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
 """
     @functionloc
 
@@ -409,3 +420,24 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile

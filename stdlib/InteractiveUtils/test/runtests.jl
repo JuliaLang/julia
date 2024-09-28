@@ -708,7 +708,7 @@ let
         length((@code_lowered sum(1:10)).code)
 end
 
-@testset "@time_imports" begin
+@testset "@time_imports and @trace_compile" begin
     mktempdir() do dir
         cd(dir) do
             try
@@ -717,7 +717,11 @@ end
                 write(foo_file,
                     """
                     module Foo3242
-                    foo() = 1
+                    function foo()
+                        Base.Experimental.@force_compile
+                        foo(1)
+                    end
+                    foo(x) = x
                     end
                     """)
 
@@ -734,6 +738,16 @@ end
 
                 @test occursin("ms  Foo3242", String(buf))
 
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_compile @eval Foo3242.foo()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms =# precompile(", String(buf))
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end
