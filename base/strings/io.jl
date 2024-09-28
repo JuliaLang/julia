@@ -42,7 +42,9 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        foreach(Fix1(print, io), xs)
+        for x in xs
+            print(io, x)
+        end
     finally
         unlock(io)
     end
@@ -136,9 +138,15 @@ function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
-    siz = sum(_str_sizehint, xs; init = 0)
+    siz::Int = 0
+    for x in xs
+        siz += _str_sizehint(x)
+    end
+    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    print(s, xs...)
+    for x in xs
+        print(s, x)
+    end
     String(_unsafe_take!(s))
 end
 
@@ -146,10 +154,16 @@ function string_with_env(env, xs...)
     if isempty(xs)
         return ""
     end
-    siz = sum(_str_sizehint, xs; init = 0)
+    siz::Int = 0
+    for x in xs
+        siz += _str_sizehint(x)
+    end
+    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    print(env_io, xs...)
+    for x in xs
+        print(env_io, x)
+    end
     String(_unsafe_take!(s))
 end
 

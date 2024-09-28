@@ -3637,6 +3637,8 @@ static void union_alloca_type(jl_uniontype_t *ut,
             },
             (jl_value_t*)ut,
             counter);
+    if (align > JL_HEAP_ALIGNMENT)
+        align = JL_HEAP_ALIGNMENT;
 }
 
 static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, bool &allunbox, size_t &min_align, size_t &nbytes)

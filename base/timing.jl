@@ -104,6 +104,33 @@ function gc_page_utilization_data()
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
+# must be kept in sync with `src/gc-stock.h``
+const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+
+"""
+    Base.full_sweep_reasons()
+
+Return a dictionary of the number of times each full sweep reason has occurred.
+
+The reasons are:
+- `:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL`: Full sweep was caused due to `always_full` being set in the GC debug environment
+- `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
+- `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
+- `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+
+Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
+"""
+function full_sweep_reasons()
+    reason = cglobal(:jl_full_sweep_reasons, UInt64)
+    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+    d = Dict{Symbol, Int64}()
+    for (i, r) in enumerate(FULL_SWEEP_REASONS)
+        d[r] = reasons_as_array[i]
+    end
+    return d
+end
+
 """
     Base.jit_total_bytes()
 
