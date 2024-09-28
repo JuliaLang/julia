@@ -101,6 +101,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
                         0, // trace_compile_timing
+                        0, // trim
     };
     jl_options_initialized = 1;
 }
@@ -251,7 +252,7 @@ static const char opts_hidden[]  =
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
     "                                               functions\n\n"
 
-    // compiler debugging (see the devdocs for tips on using these options)
+    // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --output-unopt-bc <name>                      Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
@@ -265,6 +266,13 @@ static const char opts_hidden[]  =
     "                                               compile in ms\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
+    " --trim={no*|safe|unsafe|unsafe-warn}\n"
+    "                                               Build a sysimage including only code provably reachable\n"
+    "                                               from methods marked by calling `entrypoint`. In unsafe\n"
+    "                                               mode, the resulting binary might be missing needed code\n"
+    "                                               and can throw errors. With unsafe-warn warnings will be\n"
+    "                                               printed for dynamic call sites that might lead to such\n"
+    "                                               errors. In safe mode compile-time errors are given instead.\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -311,7 +319,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_trim,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -375,6 +384,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "trim",  optional_argument, 0, opt_trim },
         { 0, 0, 0, 0 }
     };
 
@@ -933,6 +943,18 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_trim:
+            if (optarg == NULL || !strcmp(optarg,"safe"))
+                jl_options.trim = JL_TRIM_SAFE;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trim = JL_TRIM_NO;
+            else if (!strcmp(optarg,"unsafe"))
+                jl_options.trim = JL_TRIM_UNSAFE;
+            else if (!strcmp(optarg,"unsafe-warn"))
+                jl_options.trim = JL_TRIM_UNSAFE_WARN;
+            else
+                jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
