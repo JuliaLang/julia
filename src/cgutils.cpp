@@ -4490,6 +4490,12 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
+static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *mty_dt, jl_cgval_t len)
+{
+    // Jameson HALP
+    return len;
+}
+
 static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)
 {
     //jl_cgval_t argv[] = {
