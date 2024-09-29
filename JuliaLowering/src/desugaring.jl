@@ -926,6 +926,22 @@ function expand_call(ctx, ex)
             expand_forms_2(ctx, farg)
             expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
         ]
+    elseif length(args) == 2 && kind(farg) == K"Identifier" && farg.name_val == "^" && 
+            kind(args[2]) == K"Integer"
+        expand_forms_2(ctx,
+            @ast ctx ex [K"call"
+                "literal_pow"::K"top"
+                farg
+                args[1]
+                [K"call"
+                    [K"call"
+                        "apply_type"::K"core"
+                        "Val"::K"top"
+                        args[2]
+                    ]
+                ]
+            ]
+        )
     else
         @ast ctx ex [K"call" expand_forms_2(ctx, farg) expand_forms_2(ctx, args)...]
     end

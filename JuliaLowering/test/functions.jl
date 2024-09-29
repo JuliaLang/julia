@@ -91,4 +91,8 @@ let
 end
 """) == "non-kw version of f"
 
+# literal_pow
+@test JuliaLowering.include_string(test_mod, """
+2^4
+""") == 16
 end

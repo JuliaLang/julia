@@ -100,3 +100,23 @@ LoweringError:
 f(x; a=1, a=2)
 #         ╙ ── Repeated keyword argument name
 
+########################################
+# literal_pow lowering
+x^42
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call core.apply_type top.Val 42)
+4   (call %₃)
+5   (call top.literal_pow %₁ %₂ %₄)
+6   (return %₅)
+
+########################################
+# not-literal_pow lowering :)
+x^42.0
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call %₁ %₂ 42.0)
+4   (return %₃)
+
