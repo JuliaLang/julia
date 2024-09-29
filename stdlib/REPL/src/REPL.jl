@@ -75,7 +75,7 @@ function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
     Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
     active_mod = Base.active_module()
-    mod_imported = in(Symbol(m), names(active_mod, imported=true))
+    mod_imported = isdefined(active_mod, Symbol(m))
     if !mod_imported && Symbol(m) == var
         print(io, "\nHint: $m is loaded but not imported in the active module `$(active_mod)`.")
     else
