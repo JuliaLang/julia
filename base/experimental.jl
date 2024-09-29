@@ -321,7 +321,7 @@ function show_error_hints(io, ex, args...)
             @invokelatest handler(io, ex, args...)
         catch err
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" err
         end
     end
 end

@@ -74,7 +74,18 @@ end
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
     Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
-    print(io, "\nHint: a global variable of this name also exists in $m.")
+    active_mod = Base.active_module()
+    mod_imported = in(Symbol(m), names(active_mod, imported=true))
+    if !mod_imported && Symbol(m) == var
+        print(io, "\nHint: $m is loaded but not imported in the active module `$(active_mod)`.")
+    else
+        print(io, "\nHint: a global variable of this name also exists in $m")
+        if mod_imported
+            print(io, ".")
+        else
+            print(io, ", which is loaded but not imported in the active module `$(active_mod)`.")
+        end
+    end
     return true
 end
 
