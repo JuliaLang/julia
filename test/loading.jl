@@ -793,6 +793,17 @@ import .Foo28190.Libdl; import Libdl
     end
 end
 
+@testset "`::AbstractString` constraint on the path argument to `include`" begin
+    for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        let i = m.include
+            @test !applicable(i, (nothing,))
+            @test !applicable(i, (identity, nothing,))
+            @test !hasmethod(i, Tuple{Nothing})
+            @test !hasmethod(i, Tuple{Function,Nothing})
+        end
+    end
+end
+
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
@@ -852,22 +863,6 @@ end
         touch(joinpath(tmp, "Manifest.toml"))
         man = basename(Base.project_file_manifest_path(proj))
         @test man == "Manifest.toml"
-    end
-end
-
-@testset "error message loading pkg bad module name" begin
-    mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
-                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                    check for typos in package module name") (@eval using BadCase)
-            end
-        finally
-            copy!(LOAD_PATH, old_loadpath)
-        end
     end
 end
 
@@ -1266,96 +1261,6 @@ end
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
-end
-
-@testset "checking srcpath modules" begin
-    p = Base.PkgId("Dummy")
-    fpath, _ = mktemp()
-    @testset "valid" begin
-        write(fpath, """
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        baremodule Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        using Foo
-        \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\" Foo \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        \"\"\" module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        @doc let x = 1
-            x
-        end module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        # using foo
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-    end
-    @testset "invalid" begin
-        write(fpath, """
-        # module Foo
-        using Bar
-        # end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        module Foo
-        end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        x = 1
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-    end
 end
 
 @testset "relocatable upgrades #51989" begin

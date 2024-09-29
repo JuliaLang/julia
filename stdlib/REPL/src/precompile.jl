@@ -13,7 +13,7 @@ finally
     Base._track_dependencies[] = true
 end
 
-let
+function repl_workload()
     # these are intentionally triggered
     allowed_errors = [
         "BoundsError: attempt to access 0-element Vector{Any} at index [1]",
@@ -37,9 +37,21 @@ let
     UP_ARROW = "\e[A"
     DOWN_ARROW = "\e[B"
 
+    # This is notified as soon as the first prompt appears
+    repl_init_event = Base.Event()
+
+    atreplinit() do repl
+        # Main is closed so we can't evaluate in it, but atreplinit runs at
+        # a time that repl.mistate === nothing so REPL.activate fails. So do
+        # it async and wait for the first prompt to know its ready.
+        t = @async begin
+            wait(repl_init_event)
+            REPL.activate(REPL.Precompile; interactive_utils=false)
+        end
+        Base.errormonitor(t)
+    end
+
     repl_script = """
-    import REPL
-    REPL.activate(REPL.Precompile; interactive_utils=false) # Main is closed so we can't evaluate in it
     2+2
     print("")
     printstyled("a", "b")
@@ -62,7 +74,6 @@ let
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
-    REPL.activate(; interactive_utils=false)
     println("done")
     """
 
@@ -159,6 +170,7 @@ let
                     occursin(HELP_PROMPT, strbuf) && break
                     sleep(0.1)
                 end
+                notify(repl_init_event)
                 check_errors(strbuf)
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
@@ -175,9 +187,38 @@ let
     nothing
 end
 
-precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
-precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
-precompile(Tuple{typeof(Base.:(==)), Char, String})
-precompile(Tuple{typeof(Base.reseteof), Base.TTY})
+# Copied from PrecompileTools.jl
+let
+    function check_edges(node)
+        parentmi = node.mi_info.mi
+        for child in node.children
+            childmi = child.mi_info.mi
+            if !(isdefined(childmi, :backedges) && parentmi ∈ childmi.backedges)
+                precompile(childmi.specTypes)
+            end
+            check_edges(child)
+        end
+    end
+
+    if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
+        Core.Compiler.Timings.reset_timings()
+        Core.Compiler.__set_measure_typeinf(true)
+        try
+            repl_workload()
+        finally
+            Core.Compiler.__set_measure_typeinf(false)
+            Core.Compiler.Timings.close_current_timer()
+        end
+        roots = Core.Compiler.Timings._timings[1].children
+        for child in roots
+            precompile(child.mi_info.mi.specTypes)
+            check_edges(child)
+        end
+        precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+        precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+        precompile(Tuple{typeof(Base.:(==)), Char, String})
+        precompile(Tuple{typeof(Base.reseteof), Base.TTY})
+    end
+end
 
 end # Precompile

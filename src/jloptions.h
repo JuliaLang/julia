@@ -62,6 +62,7 @@ typedef struct {
     int8_t permalloc_pkgimg;
     uint64_t heap_size_hint;
     int8_t trace_compile_timing;
+    int8_t trim;
 } jl_options_t;
 
 #endif

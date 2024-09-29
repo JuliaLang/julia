@@ -1088,3 +1088,12 @@ end
         clear_flags()
     end
 end
+
+@testset "RawBigInt truncation OOB read" begin
+    @testset "T: $T" for T ∈ (UInt8, UInt16, UInt32, UInt64, UInt128)
+        v = Base.RawBigInt{T}("a"^sizeof(T), 1)
+        @testset "bit_count: $bit_count" for bit_count ∈ (0:10:80)
+            @test Base.truncated(UInt128, v, bit_count) isa Any
+        end
+    end
+end

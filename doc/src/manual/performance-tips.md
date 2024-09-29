@@ -1537,7 +1537,7 @@ be modified as suggested by the warnings.
 Sometimes you can enable better optimization by promising certain program properties.
 
   * Use [`@inbounds`](@ref) to eliminate array bounds checking within expressions. Be certain before doing
-    this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.
+    this. If the indices are ever out of bounds, you may suffer crashes or silent corruption.
   * Use [`@fastmath`](@ref) to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
