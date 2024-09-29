@@ -117,7 +117,7 @@ function lines(words)
             n += length(w)+1
         end
     end
-    String(take!(io))
+    takestring!(io)
 end
 import Markdown
 [string(n) for n in names(Core;all=true)

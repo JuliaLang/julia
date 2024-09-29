@@ -315,7 +315,7 @@ function point_to_line(str::AbstractString, a::Int, b::Int, context)
         c == '\n' && break
         print(io1, c)
     end
-    return String(take!(io1.io)), String(take!(io2.io))
+    return takestring!(io1.io), takestring!(io2.io)
 end
 
 function Base.showerror(io::IO, err::ParserError)

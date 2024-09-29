@@ -13,7 +13,7 @@ known as a read-eval-print loop or "REPL") by double-clicking the Julia executab
 using REPL
 io = IOBuffer()
 REPL.banner(io)
-banner = String(take!(io))
+banner = takestring!(io)
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n\njulia> ans\n3\n```")
 ```

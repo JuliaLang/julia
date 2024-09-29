@@ -312,7 +312,7 @@ function compute_ir_line_annotations(code::IRCode)
             loc_method = string(" "^printing_depth, loc_method)
             last_stack = stack
         end
-        push!(loc_annotations, String(take!(buf)))
+        push!(loc_annotations, takestring!(buf))
         push!(loc_lineno, (lineno != 0 && lineno != last_lineno) ? string(lineno) : "")
         push!(loc_methods, loc_method)
         (lineno != 0) && (last_lineno = lineno)

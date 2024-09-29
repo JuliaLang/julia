@@ -25,7 +25,7 @@ import Base: @handle_as, wait, close, eventloop, notify_error, IOError,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
     iolock_begin, iolock_end, associate_julia_struct, disassociate_julia_struct,
     preserve_handle, unpreserve_handle, isreadable, iswritable, isopen,
-    |, getproperty, propertynames
+    |, getproperty, propertynames, unsafe_takestring
 import Base.Filesystem.StatStruct
 if Sys.iswindows()
     import Base.WindowsRawSocket

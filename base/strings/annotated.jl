@@ -260,7 +260,7 @@ function annotatedstring(xs...)
             print(s, x)
         end
     end
-    str = String(take!(buf))
+    str = takestring!(buf)
     AnnotatedString(str, annotations)
 end
 
@@ -443,7 +443,7 @@ function annotated_chartransform(f::Function, str::AnnotatedString, state=nothin
         stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
         push!(annots, ((start + start_offset):(stop + stop_offset), value))
     end
-    AnnotatedString(String(take!(outstr)), annots)
+    AnnotatedString(takestring!(outstr), annots)
 end
 
 ## AnnotatedIOBuffer
