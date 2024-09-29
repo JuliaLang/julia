@@ -616,3 +616,20 @@ end
 @test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable
+
+@testset "literal power" begin
+    @testset for T in Base.uniontypes(Base.HWReal)
+        ns = (T(0), T(1), T(5))
+        if T <: AbstractFloat
+            ns = (ns..., T(3.14), T(-2.71))
+        end
+        for n in ns
+            @test n ^ 0 === T(1)
+            @test n ^ 1 === n
+            @test n ^ 2 === n * n
+            @test n ^ 3 === n * n * n
+            @test n ^ -1 ≈ inv(n)
+            @test n ^ -2 ≈ inv(n) * inv(n)
+        end
+    end
+end
