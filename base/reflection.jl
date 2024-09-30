@@ -2274,7 +2274,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         else
             empty!(cst)
             resize!(cst, length(code.code))
-            sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
+            sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, #= ssadef =# typemin(Int), false) for sp in match.sparams]
             maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx

@@ -230,7 +230,7 @@ end
 
 function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
     if isa(b, Conditional)
-        return Conditional(b.slot, b.elsetype, b.thentype)
+        return Conditional(b.slot, b.ssadef, b.elsetype, b.thentype)
     elseif isa(b, Const)
         return Const(not_int(b.val))
     end
@@ -351,14 +351,14 @@ end
     if isa(x, Conditional)
         y = widenconditional(y)
         if isa(y, Const)
-            y.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
+            y.val === false && return Conditional(x.slot, x.ssadef, x.elsetype, x.thentype)
             y.val === true && return x
             return Const(false)
         end
     elseif isa(y, Conditional)
         x = widenconditional(x)
         if isa(x, Const)
-            x.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
+            x.val === false && return Conditional(y.slot, y.ssadef, y.elsetype, y.thentype)
             x.val === true && return y
             return Const(false)
         end
@@ -1356,7 +1356,7 @@ end
     return Bool
 end
 
-@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if ff === modifyfield!
         minargs = 5
         maxargs = 6
@@ -1416,7 +1416,7 @@ end
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=#1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), vtypes, sv, #=max_methods=#1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
@@ -2935,10 +2935,11 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     if isa(sv, InferenceState)
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+        # TODO: vtypes?
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
         sv.restrict_abstract_call_sites = old_restrict
     else
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
     end
     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
     rt = widenslotwrapper(call.rt)

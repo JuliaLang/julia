@@ -1378,7 +1378,7 @@ let isa_tfunc(@nospecialize xs...) =
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1430,7 +1430,7 @@ let subtype_tfunc(@nospecialize xs...) =
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1474,7 +1474,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1485,17 +1485,17 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, Union{}, c.elsetype)
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, Union{}, c.thentype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.thentype, Union{})
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -2289,20 +2289,20 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     isa_tfunc(@nospecialize xs...) = Core.Compiler.isa_tfunc(𝕃ᵢ, xs...)
     ifelse_tfunc(@nospecialize xs...) = Core.Compiler.ifelse_tfunc(𝕃ᵢ, xs...)
 
-    @test (MustAlias(2, AliasableField{Any}, 1, Int) ⊑ Int)
-    @test !(Int ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test !(MustAlias(2, AliasableField{Any}, 1, Any) ⊑ Int)
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Any), Const(nothing)) === Any
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Any)) === Any
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Int, Int) === Int
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+    @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -2461,7 +2461,7 @@ end |> only === Int
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
-    if isa(v, Int) # ::Conditional(3, Int, Any)
+    if isa(v, Int) # ::Conditional(3, _, Int, Any)
         v = v      # ::Int (∵ Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
     else
         v = 42

@@ -49,9 +49,9 @@ function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int
     return abstract_eval_phi(interp, phi, nothing, irsv)
 end
 
-function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
+function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, vtypes::Union{VarTable,Nothing}, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    call = abstract_call(interp, arginfo, si, irsv)
+    call = abstract_call(interp, arginfo, si, vtypes, irsv)
     irsv.ir.stmts[irsv.curridx][:info] = call.info
     return call
 end
