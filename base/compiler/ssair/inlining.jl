@@ -1597,7 +1597,6 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
             push!(stmt.args, item1.invoke)
         elseif isa(item1, ConstantCase)
             push!(stmt.args, nothing)
-            push!(stmt.args, item1.val)
         end
     end
     return nothing

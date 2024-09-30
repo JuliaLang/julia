@@ -1570,7 +1570,6 @@ let
     @test get_finalization_count() == 1000
 end
 
-
 function cfg_finalization7(io)
     for i = -999:1000
         o = DoAllocWithField(0)
@@ -1596,7 +1595,6 @@ let
     cfg_finalization7(IOBuffer())
     @test get_finalization_count() == 1000
 end
-
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
