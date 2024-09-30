@@ -668,8 +668,8 @@ for Tri in (:UpperTriangular, :LowerTriangular)
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
+    valA = A.diag; mA, nA = size(A)
+    valB = B.diag; mB, nB = size(B)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch(lazy"expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
