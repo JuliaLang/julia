@@ -3089,7 +3089,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "cache",
                             "inInference",
                             "cache_with_orig",
-                            "precompiled"),
+                            "flags"),
                         jl_svec(10,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,

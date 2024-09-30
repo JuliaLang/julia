@@ -32,7 +32,7 @@ for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
         (Core.Method, []),
-        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodInstance, [:uninferred, :cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
