@@ -34,5 +34,6 @@ InteractiveUtils.code_native
 InteractiveUtils.@code_native
 InteractiveUtils.@time_imports
 InteractiveUtils.@trace_compile
+InteractiveUtils.@trace_dispatch
 InteractiveUtils.clipboard
 ```

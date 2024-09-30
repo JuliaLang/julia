@@ -267,6 +267,17 @@ macro trace_compile(ex)
     end
 end
 
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
+        end
+    end
+end
+
 """
     @functionloc
 
@@ -441,3 +452,15 @@ julia> @trace_compile rand(2,2) * rand(2,2)
 
 """
 :@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch

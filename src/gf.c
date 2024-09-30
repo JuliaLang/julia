@@ -2582,6 +2582,25 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
 
 jl_mutex_t dispatch_statement_out_lock;
 
+_Atomic(uint8_t) jl_force_trace_dispatch_enabled = 0;
+
+/**
+ * @brief Enable force trace dispatch to stderr.
+ */
+JL_DLLEXPORT void jl_force_trace_dispatch_enable(void)
+{
+    // Increment the flag to allow reentrant callers to `@trace_dispatch`.
+    jl_atomic_fetch_add(&jl_force_trace_dispatch_enabled, 1);
+}
+/**
+ * @brief Disable force trace dispatch to stderr.
+ */
+JL_DLLEXPORT void jl_force_trace_dispatch_disable(void)
+{
+    // Increment the flag to allow reentrant callers to `@trace_dispatch`.
+    jl_atomic_fetch_add(&jl_force_trace_dispatch_enabled, -1);
+}
+
 static void record_dispatch_statement(jl_method_instance_t *mi)
 {
     static ios_t f_dispatch;
@@ -2590,10 +2609,11 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
     if (!jl_is_method(def))
         return;
 
+    uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
     JL_LOCK(&dispatch_statement_out_lock);
     if (s_dispatch == NULL) {
         const char *t = jl_options.trace_dispatch;
-        if (!strncmp(t, "stderr", 6)) {
+        if (force_trace_dispatch || !strncmp(t, "stderr", 6)) {
             s_dispatch = JL_STDERR;
         }
         else {
@@ -3413,7 +3433,8 @@ have_entry:
             // unreachable
         }
         // mfunc is about to be dispatched
-        if (jl_options.trace_dispatch != NULL) {
+        uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
+        if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
             uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
             uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
             if (!was_dispatched) {
@@ -3544,7 +3565,8 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
     JL_GC_PROMISE_ROOTED(mfunc);
-    if (jl_options.trace_dispatch != NULL) {
+    uint8_t force_trace_dispatch = jl_atomic_load_relaxed(&jl_force_trace_dispatch_enabled);
+    if (force_trace_dispatch || jl_options.trace_dispatch != NULL) {
         uint8_t miflags = jl_atomic_load_relaxed(&mfunc->flags);
         uint8_t was_dispatched = miflags & JL_MI_FLAGS_MASK_DISPATCHED;
         if (!was_dispatched) {
