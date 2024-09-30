@@ -704,7 +704,15 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
     @inbounds for j = 1:nA
         A_jj = A[j,j]
@@ -714,6 +722,17 @@ end
                 m += 1
             end
             m += (nA - 1) * mB
+        end
+        if !zerofilled
+            # populate the zero elements
+            for i in 1:mA
+                i == j && continue
+                A_ij = A[i, j]
+                for k in 1:nB, l in 1:nA
+                    B_lk = B[l, k]
+                    C[(i-1)*mB + l, (j-1)*nB + k] = A_ij * B_lk
+                end
+            end
         end
         m += mB
     end
@@ -727,16 +746,34 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
     @inbounds for j = 1:nA
         for l = 1:mB
             Bll = B[l,l]
-            for k = 1:mA
-                C[m] = A[k,j] * Bll
+            for i = 1:mA
+                C[m] = A[i,j] * Bll
                 m += nB
             end
             m += 1
+        end
+        if !zerofilled
+            for i in 1:mA
+                A_ij = A[i, j]
+                for k in 1:nB, l in 1:mB
+                    l == k && continue
+                    B_lk = B[l, k]
+                    C[(i-1)*mB + l, (j-1)*nB + k] = A_ij * B_lk
+                end
+            end
         end
         m -= nB
     end
