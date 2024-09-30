@@ -180,7 +180,7 @@ The arguments may be integer and rational numbers.
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 
-!!! compat "Julia 1.11"
+!!! compat "Julia 1.12"
     More or fewer arguments than two require Julia 1.12 or later.
 
 # Examples
