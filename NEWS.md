@@ -64,7 +64,7 @@ Multi-threading changes
 -----------------------
 
 * A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
-* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing.
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing ([#55944]).
 
 Build system changes
 --------------------
