@@ -37,6 +37,8 @@ uv_sem_t gc_sweep_assists_needed;
 uv_mutex_t gc_queue_observer_lock;
 // Tag for sentinel nodes in bigval list
 uintptr_t gc_bigval_sentinel_tag;
+// Table recording number of full GCs due to each reason
+JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 
 // Linked list of callback functions
 
@@ -3551,6 +3553,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         if (large_frontier) {
             sweep_full = 1;
             gc_num.interval = last_long_collect_interval;
+            gc_count_full_sweep_reason(FULL_SWEEP_REASON_LARGE_INTERGEN_FRONTIER);
         }
         if (not_freed_enough || large_frontier) {
             gc_num.interval = gc_num.interval * 2;
@@ -3566,6 +3569,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         if (gc_num.interval > maxmem) {
             sweep_full = 1;
             gc_num.interval = maxmem;
+            gc_count_full_sweep_reason(FULL_SWEEP_REASON_ALLOCATION_INTERVAL_ABOVE_MAXMEM);
         }
     }
 
@@ -3574,13 +3578,16 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (live_bytes > max_total_memory) {
         under_memory_pressure = 1;
         sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_LIVE_BYTES_ABOVE_MAX_TOTAL_MEMORY);
     }
     if (gc_sweep_always_full) {
         sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL);
     }
     if (collection == JL_GC_FULL && !prev_sweep_full) {
         sweep_full = 1;
         recollect = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
     if (sweep_full) {
         // these are the difference between the number of gc-perm bytes scanned

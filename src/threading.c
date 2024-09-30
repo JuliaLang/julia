@@ -1035,7 +1035,7 @@ JL_DLLEXPORT int jl_heartbeat_resume(void)
     if (uv_sem_trywait(&heartbeat_off_sem) != 0) {
         return -1;
     }
-    
+
     // reset state as we've been paused
     n_hbs_missed = 0;
     n_hbs_recvd = 0;

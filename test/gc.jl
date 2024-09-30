@@ -28,6 +28,13 @@ function run_pg_size_test()
     @test page_size == (1 << 12) || page_size == (1 << 14)
 end
 
+function full_sweep_reasons_test()
+    GC.gc()
+    reasons = Base.full_sweep_reasons()
+    @test reasons[:FULL_SWEEP_REASON_FORCED_FULL_SWEEP] >= 1
+    @test keys(reasons) == Set(Base.FULL_SWEEP_REASONS)
+end
+
 # !!! note:
 #     Since we run our tests on 32bit OS as well we confine ourselves
 #     to parameters that allocate about 512MB of objects. Max RSS is lower
@@ -42,4 +49,8 @@ end
 @testset "GC page metrics" begin
     run_nonzero_page_utilization_test()
     run_pg_size_test()
+end
+
+@testset "Full GC reasons" begin
+    full_sweep_reasons_test()
 end
