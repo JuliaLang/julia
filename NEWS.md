@@ -63,6 +63,9 @@ variables. ([#53742]).
 Multi-threading changes
 -----------------------
 
+* A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock`.
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing.
+
 Build system changes
 --------------------
 
