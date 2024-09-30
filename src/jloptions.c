@@ -77,6 +77,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         1,    // can_inline
                         JL_OPTIONS_POLLY_ON, // polly
                         NULL, // trace_compile
+                        NULL, // trace_dispatch
                         JL_OPTIONS_FAST_MATH_DEFAULT,
                         0,    // worker
                         NULL, // cookie
@@ -294,6 +295,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_polly,
            opt_trace_compile,
            opt_trace_compile_timing,
+           opt_trace_dispatch,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -372,6 +374,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
+        { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -827,6 +830,11 @@ restart_switch:
             break;
         case opt_trace_compile_timing:
             jl_options.trace_compile_timing = 1;
+            break;
+         case opt_trace_dispatch:
+            jl_options.trace_dispatch = strdup(optarg);
+            if (!jl_options.trace_dispatch)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))
