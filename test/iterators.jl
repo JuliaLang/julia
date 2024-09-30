@@ -513,6 +513,7 @@ end
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
 @test collect(flatten(Any[2:1])) == Any[]
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test eltype(flatten((Int16[1, 2], Int32[3, 4]))) == Int32
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
