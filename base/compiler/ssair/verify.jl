@@ -1,9 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main)
+    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
+    else
+        print(Core.stderr, "Verification error in IR for function ")
+        print(Core.stderr, ir.argtypes[1])
+        print(Core.stderr, " with args ")
+        println(Core.stderr, ir.argtypes[2:end])
+        print(Core.stderr, " sptypes ")
+        println(Core.stderr, ir.sptypes)
+        for i in 1:length(ir.stmts.stmt)
+            print(Core.stderr, "Block ")
+            print(Core.stderr, block_for_inst(ir, i))
+            print(Core.stderr, " ")
+            print(Core.stderr, "%")
+            print(Core.stderr, i)
+            print(Core.stderr, " = ")
+            print(Core.stderr, ir.stmts[i][:stmt])
+            print(Core.stderr, " :: ")
+            print(Core.stderr, ir.stmts[i][:type])
+            println(Core.stderr, "")
+        end
+        println(Core.stderr, "")
     end
 end
 
