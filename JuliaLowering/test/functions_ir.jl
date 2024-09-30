@@ -1,4 +1,102 @@
 ########################################
+# Functions with placeholder arg
+function f(x, _, y)
+    x + y
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂ core.Any core.Any core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method :f %₅
+    1   TestMod.+
+    2   (call %₁ slot₂/x slot₄/y)
+    3   (return %₂)
+7   (return %₁)
+
+########################################
+# Functions with argument types only, no name
+function f(::T, x)
+    x
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   TestMod.T
+4   (call core.svec %₂ %₃ core.Any)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
+7   --- method :f %₆
+    1   slot₃/x
+    2   (return %₁)
+8   (return %₁)
+
+########################################
+# Functions argument types
+function f(x, y::T)
+    body
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   TestMod.T
+4   (call core.svec %₂ core.Any %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
+7   --- method :f %₆
+    1   TestMod.body
+    2   (return %₁)
+8   (return %₁)
+
+########################################
+# Functions with slurp of Any
+function f(x, ys...)
+    body
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.apply_type core.Vararg core.Any)
+4   (call core.svec %₂ core.Any %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
+7   --- method :f %₆
+    1   TestMod.body
+    2   (return %₁)
+8   (return %₁)
+
+########################################
+# Functions with slurp of T
+function f(x, ys::T...)
+    body
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   TestMod.T
+4   (call core.apply_type core.Vararg %₃)
+5   (call core.svec %₂ core.Any %₄)
+6   (call core.svec)
+7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
+8   --- method :f %₇
+    1   TestMod.body
+    2   (return %₁)
+9   (return %₁)
+
+########################################
+# Error: Function with slurp not in last position arg
+function f(xs..., y)
+    body
+end
+#---------------------
+LoweringError:
+function f(xs..., y)
+#          └───┘ ── `...` may only be used for the last function argument
+    body
+end
+
+########################################
 # Return types
 function f(x)::Int
     if x
@@ -112,7 +210,7 @@ x^42
 6   (return %₅)
 
 ########################################
-# not-literal_pow lowering :)
+# almost but not quite literal_pow lowering :)
 x^42.0
 #---------------------
 1   TestMod.^

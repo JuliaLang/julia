@@ -209,10 +209,11 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     # Add lambda arguments
     function add_lambda_args(args, var_kind)
         for a in args
-            if kind(a) == K"Identifier"
+            ka = kind(a)
+            if ka == K"Identifier"
                 varkey = NameKey(a)
                 var_ids[varkey] = init_binding(ctx, varkey, var_kind)
-            elseif kind(a) != K"BindingId"
+            elseif ka != K"BindingId" && ka != K"Placeholder"
                 throw(LoweringError(a, "Unexpected lambda arg kind"))
             end
         end

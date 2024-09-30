@@ -192,7 +192,8 @@ end
 
 function makeleaf(ctx, srcref, k::Kind, value; kws...)
     graph = syntax_graph(ctx)
-    if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref"
+    if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" ||
+            k == K"globalref" || k == K"Placeholder"
         makeleaf(graph, srcref, k; name_val=value, kws...)
     elseif k == K"BindingId"
         makeleaf(graph, srcref, k; var_id=value, kws...)
@@ -227,7 +228,6 @@ core_ref(ctx, ex, name) = makeleaf(ctx, ex, K"core", name)
 Any_type(ctx, ex) = core_ref(ctx, ex, "Any")
 svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
 nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
-unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
 
 top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 

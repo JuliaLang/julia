@@ -99,9 +99,9 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex, mod, funcname, nargs, bindings, slot_rewrites)
+function to_code_info(ex, mod, funcname, nargs, slots)
     input_code = children(ex)
-    code = Any[to_lowered_expr(mod, bindings, ex) for ex in input_code]
+    code = Any[to_lowered_expr(mod, ex) for ex in input_code]
 
     debuginfo = ir_debug_info(ex)
 
@@ -111,13 +111,11 @@ function to_code_info(ex, mod, funcname, nargs, bindings, slot_rewrites)
     # - call site @assume_effects
     ssaflags = zeros(UInt32, length(code))
 
-    nslots = length(slot_rewrites)
-    slotnames = Vector{Symbol}(undef, nslots)
+    slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
-    slotflags = Vector{UInt8}(undef, nslots)
-    for (id,i) in slot_rewrites
-        info = lookup_binding(bindings, id)
-        name = info.name
+    slotflags = Vector{UInt8}(undef, length(slots))
+    for (i, slot) in enumerate(slots)
+        name = slot.name
         ni = get(slot_rename_inds, name, 0)
         slot_rename_inds[name] = ni + 1
         if ni > 0
@@ -177,7 +175,7 @@ function to_code_info(ex, mod, funcname, nargs, bindings, slot_rewrites)
     )
 end
 
-function to_lowered_expr(mod, bindings, ex)
+function to_lowered_expr(mod, ex)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -204,7 +202,7 @@ function to_lowered_expr(mod, bindings, ex)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id)
     elseif k == K"return"
-        Core.ReturnNode(to_lowered_expr(mod, bindings, ex[1]))
+        Core.ReturnNode(to_lowered_expr(mod, ex[1]))
     elseif is_quoted(k)
         if k == K"inert"
             ex[1]
@@ -216,7 +214,7 @@ function to_lowered_expr(mod, bindings, ex)
             "top-level scope" :
             "none"              # FIXME
         nargs = length(ex.lambda_info.args)
-        ir = to_code_info(ex[1], mod, funcname, nargs, bindings, ex.slot_rewrites)
+        ir = to_code_info(ex[1], mod, funcname, nargs, ex.slots)
         if ex.lambda_info.is_toplevel_thunk
             Expr(:thunk, ir)
         else
@@ -227,14 +225,14 @@ function to_lowered_expr(mod, bindings, ex)
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, bindings, ex[1]), ex[2].id)
+        Core.GotoIfNot(to_lowered_expr(mod, ex[1]), ex[2].id)
     elseif k == K"enter"
         catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, to_lowered_expr(ex[2]))
     elseif k == K"method"
-        cs = map(e->to_lowered_expr(mod, bindings, e), children(ex))
+        cs = map(e->to_lowered_expr(mod, e), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
         Expr(:method, c1, cs[2:end]...)
@@ -256,7 +254,7 @@ function to_lowered_expr(mod, bindings, ex)
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
         end
-        Expr(head, map(e->to_lowered_expr(mod, bindings, e), children(ex))...)
+        Expr(head, map(e->to_lowered_expr(mod, e), children(ex))...)
     end
 end
 
@@ -272,7 +270,7 @@ function Core.eval(mod::Module, ex::SyntaxTree)
         return x
     end
     linear_ir = lower(mod, ex)
-    expr_form = to_lowered_expr(mod, linear_ir.bindings, linear_ir)
+    expr_form = to_lowered_expr(mod, linear_ir)
     eval(mod, expr_form)
 end
 

@@ -912,33 +912,44 @@ function renumber_body(ctx, input_code, slot_rewrites)
     code
 end
 
-function _add_slots!(slot_rewrites, bindings, ids)
-    n = length(slot_rewrites) + 1
-    for id in ids
-        info = lookup_binding(bindings, id)
-        if info.kind == :local || info.kind == :argument
-            slot_rewrites[id] = n
-            n += 1
-        end
-    end
-    slot_rewrites
+struct Slot
+    name::String
+    # <- todo: flags here etc
 end
 
 function compile_lambda(outer_ctx, ex)
-    info = ex.lambda_info
-    # TODO: Add assignments for reassigned arguments to body using info.args
-    ctx = LinearIRContext(outer_ctx, info.is_toplevel_thunk, ex.lambda_locals, info.ret_var)
+    lambda_info = ex.lambda_info
+    # TODO: Add assignments for reassigned arguments to body using lambda_info.args
+    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, ex.lambda_locals, lambda_info.ret_var)
     compile_body(ctx, ex[1])
+    slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
-    _add_slots!(slot_rewrites, ctx.bindings, (arg.var_id for arg in info.args))
+    for arg in lambda_info.args
+        if kind(arg) == K"Placeholder"
+            # Unused functions arguments like: `_` or `::T`
+            push!(slots, Slot(arg.name_val))
+        else
+            @assert kind(arg) == K"BindingId"
+            id = arg.var_id
+            info = lookup_binding(ctx.bindings, id)
+            @assert info.kind == :local || info.kind == :argument
+            push!(slots, Slot(info.name))
+            slot_rewrites[id] = length(slots)
+        end
+    end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    _add_slots!(slot_rewrites, ctx.bindings, sort(collect(ex.lambda_locals)))
+    for id in sort(collect(ex.lambda_locals))
+        info = lookup_binding(ctx.bindings, id)
+        @assert info.kind == :local || info.kind == :argument
+        push!(slots, Slot(info.name))
+        slot_rewrites[id] = length(slots)
+    end
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
              makenode(ctx, ex[1], K"block", code),
-             lambda_info=info,
-             slot_rewrites=slot_rewrites
+             lambda_info=lambda_info,
+             slots=slots
             )
 end
 
@@ -952,8 +963,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
 """
 function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
-                              slot_rewrites=Dict{IdTag,Int},
-                              bindings=Bindings,
+                              slots=Vector{Slot},
                               mod=Module,
                               id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
@@ -967,7 +977,6 @@ function linearize_ir(ctx, ex)
                            Dict{String, JumpTarget{GraphType}}(),
                            Vector{JumpOrigin{GraphType}}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
-    setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res
 end
 

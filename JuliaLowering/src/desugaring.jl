@@ -1330,17 +1330,15 @@ function expand_function_def(ctx, ex, docs)
         arg_types = SyntaxList(ctx)
         for (i,arg) in enumerate(args)
             info = analyze_function_arg(arg)
-            aname = (isnothing(info.name) || kind(info.name) == K"Placeholder") ?
-                    unused(ctx, arg) : info.name
+            aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
             push!(arg_names, aname)
             atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
             @assert !info.is_nospecialize # TODO
-            @assert !isnothing(info.name) && is_identifier_like(info.name) # TODO
             if info.is_slurp
                 if i != length(args)
                     throw(LoweringError(arg, "`...` may only be used for the last function argument"))
                 end
-                atype = @ast ctx arg [K"curly" "Vararg"::K"core" arg]
+                atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
             end
             push!(arg_types, atype)
         end

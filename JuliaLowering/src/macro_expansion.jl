@@ -141,7 +141,7 @@ function eval_macro_name(ctx, ex)
     ctx4, ex4 = convert_closures(ctx3, ex3)
     ctx5, ex5 = linearize_ir(ctx4, ex4)
     mod = ctx.current_layer.mod
-    expr_form = to_lowered_expr(mod, ex5.bindings, ex5)
+    expr_form = to_lowered_expr(mod, ex5)
     eval(mod, expr_form)
 end
 

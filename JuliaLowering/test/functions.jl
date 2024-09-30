@@ -20,49 +20,6 @@ end
          (2,3,4),
          (1,2,3,4,5))
 
-#-------------------------------------------------------------------------------
-# Function definitions
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f(x)
-        y = x + 1
-        "hi", x, y
-    end
-
-    f(1)
-end
-""") == ("hi", 1, 2)
-
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function g(x)::Int
-        if x == 1
-            return 42.0
-        end
-        0xff
-    end
-    (g(1), g(2))
-end
-""") === (42, 255)
-
-Base.include_string(test_mod,
-"""
-    struct X end
-
-    # Erroneous `convert` to test type assert in function return values
-    Base.convert(::Type{X}, y) = y
-""")
-
-@test_throws TypeError JuliaLowering.include_string(test_mod, """
-begin
-    function h()::X
-        return nothing
-    end
-    h()
-end
-""")
-
-#-------------------------------------------------------------------------------
 # Keyword calls
 Base.eval(test_mod, :(
 begin
@@ -95,4 +52,56 @@ end
 @test JuliaLowering.include_string(test_mod, """
 2^4
 """) == 16
+
+#-------------------------------------------------------------------------------
+# Function definitions
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f(x)
+        y = x + 1
+        "hi", x, y
+    end
+
+    f(1)
+end
+""") == ("hi", 1, 2)
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function unused_arg(x, _, y)
+        x + y
+    end
+    unused_arg(1,2,3)
+end
+""") == 4
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function g(x)::Int
+        if x == 1
+            return 42.0
+        end
+        0xff
+    end
+    (g(1), g(2))
+end
+""") === (42, 255)
+
+Base.include_string(test_mod,
+"""
+    struct X end
+
+    # Erroneous `convert` to test type assert in function return values
+    Base.convert(::Type{X}, y) = y
+""")
+
+@test_throws TypeError JuliaLowering.include_string(test_mod, """
+begin
+    function h()::X
+        return nothing
+    end
+    h()
+end
+""")
+
 end
