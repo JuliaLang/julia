@@ -673,10 +673,27 @@ end
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch(lazy"expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     @inbounds for i = 1:nA, j = 1:nB
         idx = (i-1)*nB+j
         C[idx, idx] = valA[i] * valB[j]
+    end
+    if !zerofilled
+        for j in 1:nA, i in 1:mA
+            Δrow, Δcol = (i-1)*mB, (j-1)*nB
+            for k in 1:nB, l in 1:mB
+                i == j && k == l && continue
+                C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
+            end
+        end
     end
     return C
 end
@@ -728,9 +745,10 @@ end
             for i in 1:mA
                 i == j && continue
                 A_ij = A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
                 for k in 1:nB, l in 1:nA
                     B_lk = B[l, k]
-                    C[(i-1)*mB + l, (j-1)*nB + k] = A_ij * B_lk
+                    C[Δrow + l, Δcol + k] = A_ij * B_lk
                 end
             end
         end
@@ -768,10 +786,11 @@ end
         if !zerofilled
             for i in 1:mA
                 A_ij = A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
                 for k in 1:nB, l in 1:mB
                     l == k && continue
                     B_lk = B[l, k]
-                    C[(i-1)*mB + l, (j-1)*nB + k] = A_ij * B_lk
+                    C[Δrow + l, Δcol + k] = A_ij * B_lk
                 end
             end
         end

@@ -1378,6 +1378,9 @@ end
     B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
     @test kron(D, B) == kron(Array(D), B)
     @test kron(B, D) == kron(B, Array(D))
+    D2 = Diagonal([ones(2,2), ones(3,3)])
+    @test kron(D, D2) == kron(D, Array{eltype(D2)}(D2))
+    @test kron(D2, D) == kron(Array{eltype(D2)}(D2), D)
 end
 
 end # module TestDiagonal
