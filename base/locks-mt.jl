@@ -56,7 +56,11 @@ mutable struct PaddedSpinLock <: AbstractSpinLock
     _padding_before::NTuple{max(0, CACHE_LINE_SIZE - sizeof(Int)), UInt8}
     @atomic owned::Int
     _padding_after::NTuple{max(0, CACHE_LINE_SIZE - sizeof(Int)), UInt8}
-    PaddedSpinLock() = new(0)
+    function PaddedSpinLock()
+        l = new()
+        @atomic l.owned = 0
+        return l
+    end
 end
 
 # Note: this cannot assert that the lock is held by the correct thread, because we do not
