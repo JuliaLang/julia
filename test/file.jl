@@ -2128,6 +2128,16 @@ Base.joinpath(x::URI50890) = URI50890(x.f)
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+    s = Base.Filesystem.StatStruct()
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"\" ENOENT: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"\"\n ENOENT: ") && !endswith(stat_show_str_multi, r"\s")
+    s = Base.Filesystem.StatStruct("my/test", Ptr{UInt8}(0), Int32(Base.UV_ENOTDIR))
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"my/test\" ENOTDIR: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"my/test\"\n ENOTDIR: ") && !endswith(stat_show_str_multi, r"\s")
 end
 
 @testset "diskstat() works" begin
