@@ -902,8 +902,8 @@ end
 unwrap_macrocalls(@nospecialize(x)) = x
 function unwrap_macrocalls(ex::Expr)
     inner = ex
-    while inner.head === :macrocall
-        inner = inner.args[end]::Expr
+    while isexpr(inner, :macrocall)
+        inner = inner.args[end]
     end
     return inner
 end
