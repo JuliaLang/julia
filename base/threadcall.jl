@@ -43,8 +43,10 @@ macro threadcall(f, rettype, argtypes, argvals...)
         push!(body, :(p += Core.sizeof($T)))
         push!(args, arg)
     end
+    push!(body, :(gc_state = ccall(:jl_gc_safe_enter, Int8, (), )))
     push!(body, :(ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))))
     push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
+    push!(body, :(gc_state = ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)))
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
