@@ -812,25 +812,29 @@ end
 ^(A::Symmetric{<:Complex}, p::Integer) = sympow(A, p)
 ^(A::SymTridiagonal{<:Real}, p::Integer) = sympow(A, p)
 ^(A::SymTridiagonal{<:Complex}, p::Integer) = sympow(A, p)
-function sympow(A::Union{Symmetric,SymTridiagonal}, p::Integer)
-    if p < 0
-        return Symmetric(Base.power_by_squaring(inv(A), -p))
-    else
-        return Symmetric(Base.power_by_squaring(A, p))
+for hermtype in (:Symmetric, :SymTridiagonal)
+    @eval begin
+        function sympow(A::$hermtype, p::Integer)
+            if p < 0
+                return Symmetric(Base.power_by_squaring(inv(A), -p))
+            else
+                return Symmetric(Base.power_by_squaring(A, p))
+            end
+        end
+        function ^(A::$hermtype{<:Real}, p::Real)
+            isinteger(p) && return integerpow(A, p)
+            F = eigen(A)
+            if all(λ -> λ ≥ 0, F.values)
+                return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
+            else
+                return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
+            end
+        end
+        function ^(A::$hermtype{<:Complex}, p::Real)
+            isinteger(p) && return integerpow(A, p)
+            return Symmetric(schurpow(A, p))
+        end
     end
-end
-function ^(A::Union{Symmetric{<:Real},SymTridiagonal{<:Real}}, p::Real)
-    isinteger(p) && return integerpow(A, p)
-    F = eigen(A)
-    if all(λ -> λ ≥ 0, F.values)
-        return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
-    else
-        return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
-    end
-end
-function ^(A::Union{Symmetric{<:Complex},SymTridiagonal{<:Complex}}, p::Real)
-    isinteger(p) && return integerpow(A, p)
-    return Symmetric(schurpow(A, p))
 end
 function ^(A::Hermitian, p::Integer)
     if p < 0
