@@ -3165,21 +3165,27 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-function replace_depot_path(path::AbstractString)
-    for depot in DEPOT_PATH
-        !isdir(depot) && continue
-
-        # Strip extraneous pathseps through normalization.
-        if isdirpath(depot)
-            depot = dirname(depot)
-        end
-
-        if startswith(path, depot)
+function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    for depot in depots
+        if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
             path = replace(path, depot => "@depot"; count=1)
             break
         end
     end
     return path
+end
+
+function normalize_depots_for_relocation()
+    depots = String[]
+    sizehint!(depots, length(DEPOT_PATH))
+    for d in DEPOT_PATH
+        isdir(d) || continue
+        if isdirpath(d)
+            d = dirname(d)
+        end
+        push!(depots, abspath(d))
+    end
+    return depots
 end
 
 function restore_depot_path(path::AbstractString, depot::AbstractString)
