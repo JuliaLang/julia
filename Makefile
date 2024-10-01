@@ -405,7 +405,7 @@ endif
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
 	# Install terminal info database
 ifneq ($(WITH_TERMINFO),0)
-	cp -R -L $(build_datarootdir)/terminfo $(DESTDIR)$(datarootdir)
+	cp -R -L $(build_datarootdir)/julia/terminfo $(DESTDIR)$(datarootdir)/julia/
 endif
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
