@@ -647,7 +647,7 @@ end
 function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
-        nargs = length(ir.argtypes)
+        nargs = let def = sv.result.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
         estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
