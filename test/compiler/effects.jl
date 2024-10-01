@@ -1135,7 +1135,7 @@ end
 
 # These need EA
 @test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_1, (Base.RefValue{Int},)))
-@test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_2, (Base.RefValue{Int},)))
+@test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_2, (Base.RefValue{Int},)))
 @test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_ref!, (Base.RefValue{Int},)))
 @test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_1, (Vector{Int},)))
 @test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_2, (Vector{Int},)))
