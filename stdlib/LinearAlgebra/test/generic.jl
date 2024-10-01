@@ -425,6 +425,33 @@ end
                        [0.0 + 0.0im, 0.0 - 0.0im, NaN + NaN*im]))
 end
 
+@testset "normalize(array; dims)" begin
+    v = randn(10)
+    @test normalize(v) ≈ normalize(v; dims=1)
+    @test sign.(v) ≈ normalize(v; dims=2)
+
+    @testset for p in [-Inf,-1.5,-1,0,1,1.5,2,3,Inf]
+        @test normalize(v, p) ≈ normalize(v, p; dims=1)  broken=(p==-Inf)
+        @test_broken normalize(fill(-2pi), p) ≈ normalize(fill(-2pi), p; dims=1)  broken=(p==-Inf)
+        # TODO fix zero-arrays
+    end
+
+    x = randn(3, 5, 2)
+    @testset for p in [-1.5,-1,0,1,1.5,2,3,Inf]
+        for dims in (2, (1,3))
+            y = normalize(x, p; dims)  # error for p = -Inf
+            z = norm(y, p; dims)
+            if p==0
+                @test z ≈ zero.(z) .+ prod(size(x, d) for d in dims)
+            else
+                @test z ≈ one.(z)
+            end
+        end
+    end
+
+    # TODO test Inf, NaN, overflow cases
+end
+
 @testset "Issue 14657" begin
     @test det([true false; false true]) == det(Matrix(1I, 2, 2))
 end

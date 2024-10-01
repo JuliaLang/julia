@@ -726,6 +726,136 @@ julia> norm(-2, Inf)
 end
 norm(::Missing, p::Real=2) = missing
 
+# With dims keyword
+norm0_dims!(B, A) = count!(!iszero, B, A)
+norm1_dims!(B, A) = Base.mapreducedim!(norm, +, B, A)
+normInf_dims!(B, A) = Base.mapreducedim!(norm, max, B, A)
+normMinusInf_dims!(B, A) = Base.mapreducedim!(norm, min, B, A)
+
+function norm2_dims!(B::AbstractArray, A::AbstractArray, dims)
+    sum!(LinearAlgebra.norm_sqr, B, A)
+    map!(sqrt, B, B)
+    # Checking whether `A` is safe for the fast path is slower than taking it,
+    # so check and fix any zero/infinite answers afterwards:
+    _norm_dims_check!(B, A, dims, LinearAlgebra.norm2)
+    B
+end
+
+function normp_dims!(B::AbstractArray, A::AbstractArray, p::Real, dims)
+    if p == 0.5
+        sum!(sqrt ∘ norm, B, A)
+        map!(abs2, B, B)
+    elseif p == 3
+        sum!(x -> norm(x)^3, B, A)
+        map!(cbrt, B, B)
+    else
+        sum!(x -> norm(x)^p, B, A)
+        invp = inv(p)
+        map!(x -> x^invp, B, B)
+    end
+    _norm_dims_check!(B, A, dims, LinearAlgebra.normp, p)
+    B
+end
+
+function _norm_dims_check!(B, A, dims, norm, args...)
+    if A isa AbstractVecOrMat && dims == 1
+        for (i,x) in zip(eachindex(B), eachcol(A))
+            !iszero(B[i]) && isfinite(B[i]) && continue
+            B[i] = norm(x, args...)
+        end
+    elseif A isa AbstractVecOrMat && dims == 2
+        for (i,x) in zip(eachindex(B), eachrow(A))
+            !iszero(B[i]) && isfinite(B[i]) && continue
+            B[i] = norm(x, args...)
+        end
+    elseif all(y -> !iszero(y) && isfinite(y), B)
+        for I in CartesianIndices(B)
+            !iszero(B[I]) && isfinite(B[I]) && continue
+            # Unfortunately `eachslice(A; dims)` is not what we need here.
+            # This path is not type-stable, so quite slow, but hopefully rare.
+            J = ntuple(d -> d in dims ? Colon() : I[d], ndims(A))
+            B[I] = norm(view(A, J...), args...)
+        end
+    end
+    B
+end
+
+"""
+    norm(A::AbstractArray, [p]; dims)
+
+Find the vector `norm`s of slices of a given array.
+
+The result has the same size as `sum(A; dims)`, containing `norm(A[i,:,j,...], p)`
+for each possible `i,j,...`, with colons at dimensions `d ∈ dims`.
+
+The result is always a floating point array. To avoid this when `eltype(A) <: Integer`,
+0-norm is `count(!iszero, A; dims)`, 1-norm is `sum(abs, A; dims)`,
+and the `Inf`-norm is `maximum(abs, A; dims)`.
+
+!!! compat "Julia 1.10"
+    Methods taking keyword `dims` require at least Julia 1.10.
+
+# Examples
+```jldoctest
+julia> v = [3, -2, 6]; m = hcat(v, -v, [3,0,0], [4,4,4])
+3×4 Matrix{Int64}:
+  3  -3  3  4
+ -2   2  0  4
+  6  -6  0  4
+
+julia> norm(v)
+7.0
+
+julia> norm(m; dims=1)
+1×4 Matrix{Float64}:
+ 7.0  7.0  3.0  6.9282
+
+julia> map(norm, eachcol(m))  # same contents as dims=1
+4-element Vector{Float64}:
+ 7.0
+ 7.0
+ 3.0
+ 6.928203230275509
+
+julia> norm(v, 1), norm(m, 1; dims=1), sum(abs, m; dims=1)
+(11.0, [11.0 11.0 3.0 12.0], [11 11 3 12])
+
+julia> norm(m, 1; dims=2)
+3×1 Matrix{Float64}:
+ 13.0
+  8.0
+ 16.0
+
+julia> norm(v, Inf), norm(m, Inf; dims=1), maximum(abs, m; dims=1)
+(6.0, [6.0 6.0 3.0 4.0], [6 6 3 4])
+
+julia> norm(m, 0; dims=2), count(!iszero, m; dims=2)
+([4.0; 3.0; 3.0;;], [4; 3; 3;;])
+
+julia> norm([1e-200, 0, 1e-300]; dims=1)  # avoids underflow & overflow
+1-element Vector{Float64}:
+ 1.0e-200
+```
+"""
+function norm(A::AbstractArray, p::Real=2; dims=:)
+    dims isa Colon && return invoke(norm, Tuple{Any, Real}, A, p)
+    B = Base.reducedim_init(norm, +, A, dims)
+    if p == 2
+        norm2_dims!(B, A, dims)
+    elseif p == 1
+        norm1_dims!(B, A)
+    elseif p == Inf
+        normInf_dims!(B, A)
+    elseif p == 0
+        norm0_dims!(B, A)
+    elseif p == -Inf
+        normMinusInf_dims!(B, A)
+    else
+        normp_dims!(B, A, p, dims)
+    end
+    B
+end
+
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
@@ -1896,7 +2026,11 @@ end
 
 Normalize the array `a` in-place so that its `p`-norm equals unity,
 i.e. `norm(a, p) == 1`.
+
 See also [`normalize`](@ref) and [`norm`](@ref).
+
+Note that `normalize!(a)` does not take a `dims` keyword. You can write
+`a ./= norm(a, p; dims)`, although this omits some steps for avoiding overflow.
 """
 function normalize!(a::AbstractArray, p::Real=2)
     nrm = norm(a, p)
@@ -1917,16 +2051,40 @@ end
     return a
 end
 
+@inline function __normalize!(a::AbstractArray, nrm::AbstractArray)
+    δ = inv(prevfloat(typemax(eltype(nrm))))
+    if all(≥(δ), nrm)
+        nrm = inv.(nrm)  # know this is mutable as `norm2_dims!` etc wrote into it
+        a .= a .* nrm
+    else
+        εδ = eps(one(nrm))/δ
+        nrm .= inv.(nrm .* εδ)
+        a .= (a .* εδ) .* nrm
+    end
+    a
+end
+
+
 """
-    normalize(a, p::Real=2)
+    normalize(a, p::Real=2; [dims])
 
 Normalize `a` so that its `p`-norm equals unity,
-i.e. `norm(a, p) == 1`. For scalars, this is similar to sign(a),
-except normalize(0) = NaN.
+i.e. `norm(a, p) == 1`. For scalars, this is similar to `sign(a)`,
+except `normalize(0) == NaN`.
+
 See also [`normalize!`](@ref), [`norm`](@ref), and [`sign`](@ref).
 
 # Examples
 ```jldoctest
+julia> normalize(3, 1)
+1.0
+
+julia> normalize(-8, 1)
+-1.0
+
+julia> normalize(0, 1)
+NaN
+
 julia> a = [1,2,4];
 
 julia> b = normalize(a)
@@ -1946,43 +2104,62 @@ julia> c = normalize(a, 1)
 
 julia> norm(c, 1)
 1.0
-
-julia> a = [1 2 4 ; 1 2 4]
-2×3 Matrix{Int64}:
- 1  2  4
- 1  2  4
-
-julia> norm(a)
-6.48074069840786
-
-julia> normalize(a)
-2×3 Matrix{Float64}:
- 0.154303  0.308607  0.617213
- 0.154303  0.308607  0.617213
-
-julia> normalize(3, 1)
-1.0
-
-julia> normalize(-8, 1)
--1.0
-
-julia> normalize(0, 1)
-NaN
 ```
 """
-function normalize(a::AbstractArray, p::Real = 2)
-    nrm = norm(a, p)
+normalize(x) = x / norm(x)
+normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    normalize(A::AbstractArray, p::Real=2; dims)
+
+Return a similar array for which `norm(result, p; dims)` is everywhere 1.
+Equivalent to `mapslices(x -> normalize(x, p), mat; dims)`, but usually more efficient.
+
+!!! compat "Julia 1.11"
+    The `dims` keyword requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> mat = [1 2 5 ; 1 2 5]
+2×3 Matrix{Int64}:
+ 1  2  5
+ 1  2  5
+
+julia> cols2 = normalize(mat; dims=1)
+2×3 Matrix{Float64}:
+ 0.707107  0.707107  0.707107
+ 0.707107  0.707107  0.707107
+
+julia> norm(cols2; dims=1)
+1×3 Matrix{Float64}:
+ 1.0  1.0  1.0
+
+julia> rows1 = normalize(mat, 1; dims=2)
+2×3 Matrix{Float64}:
+ 0.125  0.25  0.625
+ 0.125  0.25  0.625
+
+julia> sum(rows1, dims=2)
+2×1 Matrix{Float64}:
+ 1.0
+ 1.0
+
+julia> rows1 == mapslices(x -> normalize(x, 1), mat; dims=2)
+true
+```
+"""
+function normalize(a::AbstractArray, p::Real = 2; dims=:)
+    nrm = norm(a, p; dims)
     if !isempty(a)
-        aa = copymutable_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/first(nrm)))
         return __normalize!(aa, nrm)
     else
+        @assert dims isa Colon  # else `norm(a; dims)` is already an error
         T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end
 
-normalize(x) = x / norm(x)
-normalize(x, p::Real) = x / norm(x, p)
 
 """
     copytrito!(B, A, uplo) -> B
