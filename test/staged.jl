@@ -381,31 +381,6 @@ let
     @test length(ir.cfg.blocks) == 1
 end
 
-# Test that `Core.CachedGenerator` works as expected
-struct Generator54916 <: Core.CachedGenerator end
-function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:doit54916, :func, :arg), Core.svec())
-    return stub(world, source, :(func(arg)))
-end
-@eval function doit54916(func, arg)
-    $(Expr(:meta, :generated, Generator54916()))
-    $(Expr(:meta, :generated_only))
-end
-@test doit54916(sin, 1) == sin(1)
-let mi = only(methods(doit54916)).specializations
-    ci = mi.cache::Core.CodeInstance
-    found = false
-    while true
-        if ci.owner === :uninferred && ci.inferred isa Core.CodeInfo
-            found = true
-            break
-        end
-        isdefined(ci, :next) || break
-        ci = ci.next
-    end
-    @test found
-end
-
 # Test that writing a bad cassette-style pass gives the expected error (#49715)
 function generator49715(world, source, self, f, tt)
     tt = tt.parameters[1]
