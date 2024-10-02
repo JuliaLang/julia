@@ -870,7 +870,7 @@ function ^(A::Hermitian{T}, p::Real) where T
     end
 end
 
-for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh, :cbrt)
     for (hermtype, wrapper) in [(:Symmetric, :Symmetric), (:SymTridiagonal, :Symmetric), (:Hermitian, :Hermitian)]
         @eval begin
             function ($func)(A::$hermtype{<:Real})
@@ -1025,24 +1025,6 @@ for func in (:log, :sqrt)
             end
         end
     end
-end
-
-for (hermtype, wrapper) in [(:Symmetric, :Symmetric), (:SymTridiagonal, :Symmetric), (:Hermitian, :Hermitian)]
-    @eval begin
-        function cbrt(A::$hermtype{<:Real})
-            F = eigen(A)
-            return $wrapper(F.vectors * Diagonal(cbrt.(F.values)) * F.vectors')
-        end
-    end
-end
-function cbrt(A::Hermitian{<:Complex})
-    n = checksquare(A)
-    F = eigen(A)
-    retmat = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
-    for i = 1:n
-        retmat[i,i] = real(retmat[i,i])
-    end
-    return Hermitian(retmat)
 end
 
 """
