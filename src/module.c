@@ -52,6 +52,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    m->file = name; // Using the name as a placeholder is better than nothing
+    m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
@@ -1177,6 +1179,14 @@ jl_module_t *jl_module_root(jl_module_t *m)
             return m;
         m = m->parent;
     }
+}
+
+JL_DLLEXPORT jl_sym_t *jl_module_getloc(jl_module_t *m, int32_t *line)
+{
+    if (line) {
+        *line = m->line;
+    }
+    return m->file;
 }
 
 JL_DLLEXPORT jl_uuid_t jl_module_build_id(jl_module_t *m) { return m->build_id; }

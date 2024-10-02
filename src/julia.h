@@ -710,6 +710,8 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     _Atomic(jl_svec_t*) bindings;
     _Atomic(jl_genericmemory_t*) bindingkeyset; // index lookup by name into bindings
+    jl_sym_t *file;
+    int32_t line;
     // hidden fields:
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
