@@ -88,6 +88,9 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
         return UNDEF_TOKEN
+    elseif has_flag(ir.stmts[idx], IR_FLAG_NOTHROW)
+        # if the `isdefined`-ness of this slot is guaranteed by abstract interpretation,
+        # there is no need to form a `:throw_undef_if_not`
     elseif def_ssa !== true
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
@@ -153,12 +156,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, stmt::SlotNumber->(ssa, true), ir, ci, use, code[use])
+        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, ::SlotNumber->Pair{Any,Any}(ssa, true), ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Pair{Any, Any}})
-    return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
+    return fixemup!(::SlotNumber->true, x::SlotNumber->renames[slot_id(x)], ir, ci, idx, stmt)
 end
 
 # maybe use expr_type?
@@ -549,7 +552,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     end
 
     # Record the correct exception handler for all critical sections
-    handler_at, handlers = compute_trycatch(code, BitSet())
+    handler_info = compute_trycatch(code)
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
@@ -656,7 +659,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     visited = BitSet()
     new_nodes = ir.new_nodes
     @timeit "SSA Rename" while !isempty(worklist)
-        (item::Int, pred, incoming_vals) = pop!(worklist)
+        (item, pred, incoming_vals) = pop!(worklist)
         if sv.bb_vartables[item] === nothing
             continue
         end
@@ -780,8 +783,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
                         enter_idx = idx
-                        while handler_at[enter_idx][1] != 0
-                            (; enter_idx) = handlers[handler_at[enter_idx][1]]
+                        while (handler = gethandler(handler_info, enter_idx)) !== nothing
+                            (; enter_idx) = handler
                             leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing

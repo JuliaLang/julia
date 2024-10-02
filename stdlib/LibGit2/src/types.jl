@@ -1057,7 +1057,6 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
@@ -1072,17 +1071,17 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
         if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
         end
     end
+    @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, obj::$typ) = obj.ptr
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
@@ -1116,10 +1115,11 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj)
         obj.ptr = C_NULL
     end
 end
+Base.unsafe_convert(::Type{Ptr{SignatureStruct}}, obj::GitSignature) = obj.ptr
 
 # Structure has the same layout as SignatureStruct
 mutable struct Signature

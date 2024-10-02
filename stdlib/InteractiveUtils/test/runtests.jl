@@ -138,6 +138,11 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64}->_ x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
+
 end # module WarnType
 
 # Adds test for PR #17636
@@ -388,23 +393,40 @@ let errf = tempname(),
     new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
+        @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
         println(new_stderr, "start")
         flush(new_stderr)
-        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test_throws "could not compile the specified method" sprint(io -> code_native(io, f_broken_code, (), dump_module=true))
+        Libc.flush_cstdio()
+        println(new_stderr, "middle")
+        flush(new_stderr)
+        @test !isempty(sprint(io -> code_native(io, f_broken_code, (), dump_module=false)))
+        Libc.flush_cstdio()
+        println(new_stderr, "later")
+        flush(new_stderr)
+        @test invokelatest(g_broken_code) == 0
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @eval @test g_broken_code() == 0
     finally
+        Libc.flush_cstdio()
         redirect_stderr(old_stderr)
         close(new_stderr)
         let errstr = read(errf, String)
             @test startswith(errstr, """start
-                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
-            @test !endswith(errstr, "\nend\n") || errstr
+            @test occursin("""\nmiddle
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
+            @test occursin("""\nlater
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
+            @test endswith(errstr, "\nend\n") || errstr
         end
         rm(errf)
     end
@@ -743,6 +765,7 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
         @test ir.debuginfo.def === nothing
         ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)

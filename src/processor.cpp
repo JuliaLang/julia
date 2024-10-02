@@ -7,7 +7,11 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Host.h>
+#else
 #include <llvm/Support/Host.h>
+#endif
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -158,7 +162,11 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
+            #if JL_LLVM_VERSION >= 170000
+            cnt += llvm::popcount(eles[i]);
+            #else
             cnt += llvm::countPopulation(eles[i]);
+            #endif
         return cnt;
     }
     inline bool empty() const

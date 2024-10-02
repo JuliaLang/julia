@@ -111,7 +111,25 @@ end
 
 ### Parse tokens
 
-for c in "yYmdHIMS"
+for c in "yY"
+    @eval begin
+        @inline function tryparsenext(d::DatePart{$c}, str, i, len)
+            val = tryparsenext_sign(str, i, len)
+            if val !== nothing
+                coefficient, i = val
+            else
+                coefficient = 1
+            end
+            # The sign character does not affect fixed length `DatePart`s
+            val = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+            val === nothing && return nothing
+            y, ii = val
+            return y * coefficient, ii
+        end
+    end
+end
+
+for c in "mdHIMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
             return tryparsenext_base10(str, i, len, min_width(d), max_width(d))

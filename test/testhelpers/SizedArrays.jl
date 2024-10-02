@@ -23,6 +23,9 @@ Base.first(::SOneTo) = 1
 Base.last(r::SOneTo) = length(r)
 Base.show(io::IO, r::SOneTo) = print(io, "SOneTo(", length(r), ")")
 
+Broadcast.axistype(a::Base.OneTo, s::SOneTo) = s
+Broadcast.axistype(s::SOneTo, a::Base.OneTo) = s
+
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
     function SizedArray{SZ}(data::AbstractArray{T,N}) where {SZ,T,N}
@@ -33,10 +36,16 @@ struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
         SZ == size(data) || throw(ArgumentError("size mismatch!"))
         new{SZ,T,N,A}(A(data))
     end
+    function SizedArray{SZ,T,N}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
+    function SizedArray{SZ,T}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
 end
 SizedMatrix{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,2,A}
 SizedVector{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,1,A}
-Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A} = SizedArray{SZ,T,N,A}(data)
+Base.convert(::Type{S}, data::AbstractArray) where {S<:SizedArray} = data isa S ? data : S(data)
 
 # Minimal AbstractArray interface
 Base.size(a::SizedArray) = size(typeof(a))
@@ -60,6 +69,10 @@ end
 function Base.similar(::Type{A}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {A<:AbstractArray}
     R = similar(A, length.(shape))
     SizedArray{length.(shape)}(R)
+end
+function Base.similar(x::SizedArray, ::Type{T}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {T}
+    sz = map(length, shape)
+    SizedArray{sz}(similar(parent(x), T, sz))
 end
 
 const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}

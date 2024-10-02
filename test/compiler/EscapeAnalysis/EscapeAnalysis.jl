@@ -2139,21 +2139,13 @@ end
 # ========================
 
 # propagate escapes imposed on call arguments
-@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
-let result = code_escapes() do
-        broadcast_noescape1(Ref("Hi"))
-    end
-    i = only(findall(isnew, result.ir.stmts.stmt))
-    @test !has_return_escape(result.state[SSAValue(i)])
-    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # TODO `getfield(RefValue{String}, :x)` isn't safe
-end
 @noinline broadcast_noescape2(b) = broadcast(identity, b)
 let result = code_escapes() do
         broadcast_noescape2(Ref("Hi"))
     end
     i = only(findall(isnew, result.ir.stmts.stmt))
     @test_broken !has_return_escape(result.state[SSAValue(i)]) # TODO interprocedural alias analysis
-    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # TODO `getfield(RefValue{String}, :x)` isn't safe
+    @test !has_thrown_escape(result.state[SSAValue(i)])
 end
 @noinline allescape_argument(a) = (global GV = a) # obvious escape
 let result = code_escapes() do
@@ -2248,13 +2240,13 @@ end
 # accounts for ThrownEscape via potential MethodError
 
 # no method error
-@noinline identity_if_string(x::SafeRef) = (println("preventing inlining"); nothing)
+@noinline identity_if_string(x::SafeRef{<:AbstractString}) = (println("preventing inlining"); nothing)
 let result = code_escapes((SafeRef{String},)) do x
         identity_if_string(x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
-let result = code_escapes((Union{SafeRef{String},Nothing},)) do x
+let result = code_escapes((SafeRef,)) do x
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))

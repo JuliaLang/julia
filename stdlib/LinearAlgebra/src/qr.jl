@@ -417,7 +417,7 @@ true
     `qr` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
-    compactly rather as two separate dense matrices.
+    compactly rather than two separate dense matrices.
 """
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
@@ -533,6 +533,13 @@ function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T}
     m, n = size(A)
     ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
     return B
+end
+
+function rank(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(real(float(one(eltype(A.Q))))) * iszero(atol))
+    m = min(size(A)...)
+    m == 0 && return 0
+    tol = max(atol, rtol*abs(A.R[1,1]))
+    return something(findfirst(i -> abs(A.R[i,i]) <= tol, 1:m), m+1) - 1
 end
 
 # Julia implementation similar to xgelsy

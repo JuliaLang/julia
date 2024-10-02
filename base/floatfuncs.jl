@@ -42,7 +42,7 @@ it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
+isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
 
 # See rounding.jl for docstring.
 
@@ -232,7 +232,9 @@ function isapprox(x::Integer, y::Integer;
     if norm === abs && atol < 1 && rtol == 0
         return x == y
     else
-        return norm(x - y) <= max(atol, rtol*max(norm(x), norm(y)))
+        # We need to take the difference `max` - `min` when comparing unsigned integers.
+        _x, _y = x < y ? (x, y) : (y, x)
+        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
     end
 end
 

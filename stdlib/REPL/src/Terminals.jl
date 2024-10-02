@@ -97,6 +97,7 @@ abstract type UnixTerminal <: TextTerminal end
 pipe_reader(t::UnixTerminal) = t.in_stream::IO
 pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
+@nospecialize
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
 end
@@ -107,6 +108,7 @@ mutable struct TTYTerminal <: UnixTerminal
     out_stream::IO
     err_stream::IO
 end
+@specialize
 
 const CSI = "\x1b["
 
@@ -118,10 +120,8 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
 cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
 
-const is_precompiling = Ref(false)
 if Sys.iswindows()
     function raw!(t::TTYTerminal,raw::Bool)
-        is_precompiling[] && return true
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
             run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),

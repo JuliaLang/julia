@@ -108,7 +108,11 @@ To mark a name as public without exporting it into the namespace of folks who ca
 one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
 but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
 and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
-[Compat](https://github.com/JuliaLang/Compat.jl) package.
+[Compat](https://github.com/JuliaLang/Compat.jl) package, or the version-aware construct
+
+```julia
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
+```
 
 ### Standalone `using` and `import`
 
@@ -434,7 +438,7 @@ Large modules can take several seconds to load because executing all of the stat
 often involves compiling a large amount of code.
 Julia creates precompiled caches of the module to reduce this time.
 
-Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module.  If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
+Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module. If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
 cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]`. If nothing about your system changes,
 such cache files will be used when you load the module with `import` or `using`.
 
@@ -486,12 +490,12 @@ or other imported modules have their `__init__` functions called *before* the `_
 enclosing module.
 
 Two typical uses of `__init__` are calling runtime initialization functions of external C libraries
-and initializing global constants that involve pointers returned by external libraries.  For example,
+and initializing global constants that involve pointers returned by external libraries. For example,
 suppose that we are calling a C library `libfoo` that requires us to call a `foo_init()` initialization
 function at runtime. Suppose that we also want to define a global constant `foo_data_ptr` that
 holds the return value of a `void *foo_data()` function defined by `libfoo` -- this constant must
 be initialized at runtime (not at compile time) because the pointer address will change from run
-to run.  You could accomplish this by defining the following `__init__` function in your module:
+to run. You could accomplish this by defining the following `__init__` function in your module:
 
 ```julia
 const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
@@ -516,9 +520,9 @@ null pointers unless they are hidden inside an [`isbits`](@ref) object). This in
 of the Julia functions [`@cfunction`](@ref) and [`pointer`](@ref).
 
 Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
-are a trickier case.  In the common case where the keys are numbers, strings, symbols, ranges,
+are a trickier case. In the common case where the keys are numbers, strings, symbols, ranges,
 `Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
-precompile.  However, for a few other key types, such as `Function` or `DataType` and generic
+precompile. However, for a few other key types, such as `Function` or `DataType` and generic
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
 on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this

@@ -19,8 +19,9 @@ module Docs
 Functions, methods and types can be documented by placing a string before the definition:
 
     \"\"\"
-    # The Foo Function
-    `foo(x)`: Foo the living hell out of `x`.
+        foo(x)
+
+    Return a fooified version of `x`.
     \"\"\"
     foo(x) = ...
 
@@ -562,14 +563,62 @@ isquotedmacrocall(@nospecialize x) =
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
+function _doc(binding::Binding, sig::Type = Union{})
+    if defined(binding)
+        result = getdoc(resolve(binding), sig)
+        result === nothing || return result
+    end
+    # Lookup first match for `binding` and `sig` in all modules of the docsystem.
+    for mod in modules
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
+        if haskey(dict, binding)
+            multidoc = dict[binding]
+            for msig in multidoc.order
+                sig <: msig && return multidoc.docs[msig]
+            end
+            # if no matching signatures, return first
+            if !isempty(multidoc.docs)
+                return first(values(multidoc.docs))
+            end
+        end
+    end
+    return nothing
+end
+
+# Some additional convenience `doc` methods that take objects rather than `Binding`s.
+_doc(obj::UnionAll) = _doc(Base.unwrap_unionall(obj))
+_doc(object, sig::Type = Union{}) = _doc(aliasof(object, typeof(object)), sig)
+_doc(object, sig...)              = _doc(object, Tuple{sig...})
+
+function simple_lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
+    if haskey(keywords, ex)
+        return keywords[ex]
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(_doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(namify(ex)))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
+        sig = esc(signature(ex))
+        :($(_doc)($binding, $sig))
+    else
+        :($(_doc)($binding))
+    end
+end
+
 function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    elseif isassigned(Base.REPL_MODULE_REF)
+    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        REPL = Base.REPL_MODULE_REF[]
         return invokelatest(REPL.lookup_doc, ex)
+    else
+        return simple_lookup_doc(ex)
     end
     return nothing
 end

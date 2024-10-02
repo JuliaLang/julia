@@ -130,13 +130,18 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     end
-    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
     # prepare approximate code info
     if code isa MethodInstance && (meth = code.def; meth isa Method)
         func = meth.name
         file = meth.file
         line = meth.line
+        codeinfo = meth.source
     else
+        if code isa Core.CodeInstance
+            codeinfo = code.inferred::CodeInfo
+        else
+            codeinfo = code::CodeInfo
+        end
         func = top_level_scope_sym
         file = empty_sym
         line = Int32(0)

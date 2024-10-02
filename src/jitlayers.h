@@ -26,9 +26,10 @@
 #include "julia_internal.h"
 #include "platform.h"
 #include "llvm-codegen-shared.h"
+#include "llvm-version.h"
 #include <stack>
 #include <queue>
-
+#include <tuple>
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -64,6 +65,7 @@
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
+extern arraylist_t new_invokes;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
@@ -90,6 +92,7 @@ struct OptimizationOptions {
     bool enable_vector_pipeline;
     bool remove_ni;
     bool cleanup;
+    bool warn_missed_transformations;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
@@ -103,12 +106,13 @@ struct OptimizationOptions {
         bool enable_loop_optimizations=true,
         bool enable_vector_pipeline=true,
         bool remove_ni=true,
-        bool cleanup=true) {
+        bool cleanup=true,
+        bool warn_missed_transformations=false) {
         return {lower_intrinsics, dump_native, external_use, llvm_only,
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
                 enable_loop_optimizations, enable_vector_pipeline,
-                remove_ni, cleanup};
+                remove_ni, cleanup, warn_missed_transformations};
     }
 };
 
@@ -208,7 +212,7 @@ struct jl_codegen_call_target_t {
 typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 // TODO DenseMap?
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
-
+typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
 struct jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
@@ -227,6 +231,7 @@ struct jl_codegen_params_t {
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
+    llvm::MapVector<jl_method_instance_t*, std::tuple<jl_method_instance_t*, CallFrames>> enqueuers;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
@@ -261,9 +266,7 @@ jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
-        jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        size_t min_world, size_t max_world);
+        jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,
@@ -342,11 +345,13 @@ private:
 };
 using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
 
+#if JL_LLVM_VERSION < 170000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
+#endif
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
@@ -520,16 +525,22 @@ public:
                             bool ShouldOptimize = false) JL_NOTSAFEPOINT;
     Error addObjectFile(orc::JITDylib &JD,
                         std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
-    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    JL_JITSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    #if JL_LLVM_VERSION >= 170000
+    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    #else
+    JITEvaluatedSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    JITEvaluatedSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
-    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
+    StringRef getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
     auto getContext() JL_NOTSAFEPOINT {
         return *ContextPool;
     }
@@ -551,6 +562,7 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
+    void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
@@ -567,6 +579,8 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
+    jl_mutex_t jitlock;
 
 private:
 
@@ -595,10 +609,10 @@ private:
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
+    std::atomic<size_t> jit_bytes_size{0};
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
-    std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
@@ -624,11 +638,18 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+
+#if JL_LLVM_VERSION < 170000
 void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
+#endif
 
 void optimizeDLSyms(Module &M);
 
 // NewPM
 #include "passes.h"
 
+#if JL_LLVM_VERSION >= 180000
+CodeGenOptLevel CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#else
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#endif

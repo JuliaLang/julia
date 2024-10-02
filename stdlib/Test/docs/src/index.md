@@ -417,6 +417,8 @@ Add the following to `src/Example.jl`:
 ```julia
 module Example
 
+export greet, simple_add, type_multiply
+
 function greet()
     "Hello world!"
 end
@@ -428,8 +430,6 @@ end
 function type_multiply(a::Float64, b::Float64)
     a * b
 end
-
-export greet, simple_add, type_multiply
 
 end
 ```

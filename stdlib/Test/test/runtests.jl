@@ -1534,6 +1534,22 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
 
+# Issue 54807
+struct FEexc
+    a::Nothing
+    b::Nothing
+end
+
+@testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
+    feexc = FEexc(nothing, nothing)
+    # This is redundant regular test for FieldError
+    @test_throws FieldError feexc.c
+    # This should raise ErrorException
+    @test_throws ErrorException feexc.a = 1
+    # This is test for FieldError shim and deprecation
+    @test_deprecated @test_throws ErrorException feexc.c
+end
+
 # Issue 25483
 mutable struct PassInformationTestSet <: Test.AbstractTestSet
     results::Vector
@@ -1709,4 +1725,14 @@ end
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
     end
+
+end
+
+@testset "Deprecated multiple arguments" begin
+    msg1 = """Multiple descriptions provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg1 @macroexpand @testset "name1" "name2" begin end
+    msg2 = """Multiple testset types provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg2 @macroexpand @testset DefaultTestSet DefaultTestSet begin end
 end

@@ -13,6 +13,7 @@ Base.istaskfailed
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
+Core.ConcurrencyViolationError
 ```
 
 ## Scheduling
@@ -74,11 +75,11 @@ Base.bind(c::Channel, task::Task)
 ## [Low-level synchronization using `schedule` and `wait`](@id low-level-schedule-wait)
 
 The easiest correct use of [`schedule`](@ref) is on a `Task` that is not started (scheduled)
-yet.  However, it is possible to use [`schedule`](@ref) and [`wait`](@ref) as a very
-low-level building block for constructing synchronization interfaces.  A crucial
+yet. However, it is possible to use [`schedule`](@ref) and [`wait`](@ref) as a very
+low-level building block for constructing synchronization interfaces. A crucial
 pre-condition of calling `schedule(task)` is that the caller must "own" the `task`; i.e., it
 must know that the call to `wait` in the given `task` is happening at the locations known to
-the code calling `schedule(task)`.  One strategy for ensuring such pre-condition is to use
+the code calling `schedule(task)`. One strategy for ensuring such pre-condition is to use
 atomics, as demonstrated in the following example:
 
 ```jldoctest
@@ -123,8 +124,8 @@ function Base.wait(ev::OneWayEvent)
     state, ok = @atomicreplace(ev.state, OWE_EMPTY => OWE_WAITING)
     if ok
         # OWE_EMPTY -> OWE_WAITING transition means that the notifier task is guaranteed to
-        # invoke OWE_WAITING -> OWE_NOTIFYING transition.  The waiter task must call
-        # `wait()` immediately.  In particular, it MUST NOT invoke any function that may
+        # invoke OWE_WAITING -> OWE_NOTIFYING transition. The waiter task must call
+        # `wait()` immediately. In particular, it MUST NOT invoke any function that may
         # yield to the scheduler at this point in code.
         wait()
     else
@@ -137,7 +138,7 @@ end
 
 ev = OneWayEvent()
 @sync begin
-    @async begin
+    Threads.@spawn begin
         wait(ev)
         println("done")
     end
@@ -150,12 +151,12 @@ notifying...
 done
 ```
 
-`OneWayEvent` lets one task to `wait` for another task's `notify`.  It is a limited
+`OneWayEvent` lets one task to `wait` for another task's `notify`. It is a limited
 communication interface since `wait` can only be used once from a single task (note the
 non-atomic assignment of `ev.task`)
 
 In this example, `notify(ev::OneWayEvent)` is allowed to call `schedule(ev.task)` if and
-only if *it* modifies the state from `OWE_WAITING` to `OWE_NOTIFYING`.  This lets us know that
+only if *it* modifies the state from `OWE_WAITING` to `OWE_NOTIFYING`. This lets us know that
 the task executing `wait(ev::OneWayEvent)` is now in the `ok` branch and that there cannot be
 other tasks that tries to `schedule(ev.task)` since their
 `@atomicreplace(ev.state, state => OWE_NOTIFYING)` will fail.

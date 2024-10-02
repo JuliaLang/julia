@@ -194,7 +194,7 @@ end
 function validate_tags(tags::Dict)
     throw_invalid_key(k) = throw(ArgumentError("Key \"$(k)\" cannot have value \"$(tags[k])\""))
     # Validate `arch`
-    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le")
+    if tags["arch"] ∉ ("x86_64", "i686", "armv7l", "armv6l", "aarch64", "powerpc64le", "riscv64")
         throw_invalid_key("arch")
     end
     # Validate `os`
@@ -597,6 +597,7 @@ const arch_mapping = Dict(
     "armv7l" => "arm(v7l)?", # if we just see `arm-linux-gnueabihf`, we assume it's `armv7l`
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
+    "riscv64" => "riscv64",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
 # These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
@@ -632,7 +633,10 @@ const arch_march_isa_mapping = let
         ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
-        ]
+        ],
+        "riscv64" => [
+            "riscv64" => get_set("riscv64", "riscv64"),
+        ],
     )
 end
 const os_mapping = Dict(

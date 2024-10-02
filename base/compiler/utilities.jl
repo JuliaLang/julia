@@ -48,15 +48,6 @@ anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-function istopfunction(@nospecialize(f), name::Symbol)
-    tn = typeof(f).name
-    if tn.mt.name === name
-        top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
-    end
-    return false
-end
-
 #######
 # AST #
 #######
@@ -138,19 +129,43 @@ use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
+    cache_ci = (mi.def::Method).generator isa Core.CachedGenerator ?
+        RefValue{CodeInstance}() : nothing
     try
-        # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
-        return ci
-    catch
+        return call_get_staged(mi, world, cache_ci)
+    catch # user code might throw errors – ignore them
         return nothing
     end
 end
 
+# enable caching of unoptimized generated code if the generator is `CachedGenerator`
+function call_get_staged(mi::MethodInstance, world::UInt, cache_ci::RefValue{CodeInstance})
+    token = @_gc_preserve_begin cache_ci
+    cache_ci_ptr = pointer_from_objref(cache_ci)
+    src = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{CodeInstance}), mi, world, cache_ci_ptr)
+    @_gc_preserve_end token
+    return src
+end
+function call_get_staged(mi::MethodInstance, world::UInt, ::Nothing)
+    return ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
+end
+
+function get_cached_uninferred(mi::MethodInstance, world::UInt)
+    ccall(:jl_cached_uninferred, Any, (Any, UInt), mi.cache, world)::CodeInstance
+end
+
 function retrieve_code_info(mi::MethodInstance, world::UInt)
     def = mi.def
-    isa(def, Method) || return mi.uninferred
-    c = isdefined(def, :generator) ? get_staged(mi, world) : nothing
+    if !isa(def, Method)
+        ci = get_cached_uninferred(mi, world)
+        src = ci.inferred
+        # Inference may corrupt the src, which is fine, because this is a
+        # (short-lived) top-level thunk, but set it to NULL anyway, so we
+        # can catch it if somebody tries to read it again by accident.
+        # @atomic ci.inferred = C_NULL
+        return src
+    end
+    c = hasgenerator(def) ? get_staged(mi, world) : nothing
     if c === nothing && isdefined(def, :source)
         src = def.source
         if src === nothing
@@ -445,67 +460,6 @@ function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
             push!(uses[val.id], line)
         end
     end
-end
-
-function is_throw_call(e::Expr, code::Vector{Any})
-    if e.head === :call
-        f = e.args[1]
-        if isa(f, SSAValue)
-            f = code[f.id]
-        end
-        if isa(f, GlobalRef)
-            ff = abstract_eval_globalref_type(f)
-            if isa(ff, Const) && ff.val === Core.throw
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
-    for stmt in find_throw_blocks(src.code, handler_at)
-        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
-    end
-    return nothing
-end
-
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
-    stmts = BitSet()
-    n = length(code)
-    for i in n:-1:1
-        s = code[i]
-        if isa(s, Expr)
-            if s.head === :gotoifnot
-                if i+1 in stmts && s.args[2]::Int in stmts
-                    push!(stmts, i)
-                end
-            elseif s.head === :return
-                # see `ReturnNode` handling
-            elseif is_throw_call(s, code)
-                if handler_at[i][1] == 0
-                    push!(stmts, i)
-                end
-            elseif i+1 in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, ReturnNode)
-            # NOTE: it potentially makes sense to treat unreachable nodes
-            # (where !isdefined(s, :val)) as `throw` points, but that can cause
-            # worse codegen around the call site (issue #37558)
-        elseif isa(s, GotoNode)
-            if s.label in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, GotoIfNot)
-            if i+1 in stmts && s.dest in stmts
-                push!(stmts, i)
-            end
-        elseif i+1 in stmts
-            push!(stmts, i)
-        end
-    end
-    return stmts
 end
 
 # using a function to ensure we can infer this

@@ -23,7 +23,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         end
         res_and_time_data = @timed @testset "$name" begin
             # Random.seed!(nothing) will fail
-            seed != nothing && Random.seed!(seed)
+            seed !== nothing && Random.seed!(seed)
 
             original_depot_path = copy(Base.DEPOT_PATH)
             original_load_path = copy(Base.LOAD_PATH)

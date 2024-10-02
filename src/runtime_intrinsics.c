@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 const unsigned int host_char_bit = 8;
 
@@ -673,8 +674,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     void *ptr;
     jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
-    jl_value_t *jv = jl_gc_alloc_1w();
-    jl_set_typeof(jv, rt);
+    jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
     JL_GC_POP();
     return jv;
@@ -1574,6 +1574,16 @@ bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
+#if JL_LLVM_VERSION >= 170000
+//uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
+uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
+//#define ctlz_op(a) __builtin_ctlz(a)
+//uu_iintrinsic_fast(LLVMCountl_zero, ctlz_op, ctlz_int, u)
+uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
+//#define cttz_op(a) __builtin_cttz(a)
+//uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
+uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
+#else
 //uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
@@ -1582,6 +1592,7 @@ uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
+#endif
 #define not_op(a) ~a
 un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 

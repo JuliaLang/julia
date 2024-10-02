@@ -155,7 +155,7 @@ function choosetests(choices = [])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", [
-        "compiler/datastructures", "compiler/inference", "compiler/effects",
+        "compiler/datastructures", "compiler/inference", "compiler/effects", "compiler/compact",
         "compiler/validation", "compiler/ssair", "compiler/irpasses", "compiler/tarjan",
         "compiler/codegen", "compiler/inline", "compiler/contextual", "compiler/invalidation",
         "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/EscapeAnalysis"])

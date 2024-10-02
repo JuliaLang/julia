@@ -1222,7 +1222,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1281,6 +1281,9 @@ Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S
             end
         end
     end
+    # constant propagation in the PermutedDimsArray constructor
+    X = @inferred (A -> PermutedDimsArray(A, (2,3,1)))(A)
+    @test @inferred((X -> PermutedDimsArray(X, (3,1,2)))(X)) == A
 end
 
 @testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
@@ -1431,6 +1434,31 @@ using .Main.OffsetArrays
         @test_throws Exception f(a, args...)
         @test a == orig
     end
+end
+
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin
@@ -1781,6 +1809,9 @@ end
     @test_throws ArgumentError stack([1:3, 4:6]; dims=3)
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
 
+    @test stack(["hello", "world"]) isa Matrix{Char}
+    @test_throws DimensionMismatch stack(["hello", "world!"])  # had a bug in error printing
+
     # Empty
     @test_throws ArgumentError stack(())
     @test_throws ArgumentError stack([])
@@ -1850,6 +1881,24 @@ function check_pointer_strides(A::AbstractArray)
         A[i] === Base.unsafe_load(pointer(A, i)) || return false
     end
     return true
+end
+
+@testset "colonful `reshape`, #54245" begin
+    @test reshape([], (0, :)) isa Matrix
+    @test_throws DimensionMismatch reshape([7], (0, :))
+    let b = prevpow(2, typemax(Int))
+        @test iszero(b*b)
+        @test_throws ArgumentError reshape([7], (b, :, b))
+        @test reshape([], (b, :, b)) isa Array{<:Any, 3}
+    end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
 end
 
 @testset "strides for ReshapedArray" begin
@@ -2040,37 +2089,6 @@ end
     end
 end
 
-@testset "_unsetindex!" begin
-    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
-    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
-    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
-    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
-    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
-
-    function test_unsetindex(MT)
-        M = MT(ones(2,2))
-        M2 = MT(Matrix{BigFloat}(undef, 2,2))
-        copyto!(M, M2)
-        @test all(==(1), M)
-        M3 = MT(Matrix{BigFloat}(undef, 2,2))
-        for i in eachindex(M3)
-            @test !isassigned(M3, i)
-        end
-        M3 .= 1
-        @test_throws MethodError copyto!(M3, M2)
-    end
-    test_unsetindex(MyMatrixUnsetIndexCartInds)
-    test_unsetindex(MyMatrixUnsetIndexLinInds)
-end
-
 @testset "reshape for offset arrays" begin
     p = Base.IdentityUnitRange(3:4)
     r = reshape(p, :, 1)
@@ -2118,4 +2136,21 @@ end
             @test all(==(v), A)
         end
     end
+end
+
+@testset "one" begin
+    @test one([1 2; 3 4]) == [1 0; 0 1]
+    @test one([1 2; 3 4]) isa Matrix{Int}
+
+    struct Mat <: AbstractMatrix{Int}
+        p::Matrix{Int}
+    end
+    Base.size(m::Mat) = size(m.p)
+    Base.IndexStyle(::Type{<:Mat}) = IndexLinear()
+    Base.getindex(m::Mat, i::Int) = m.p[i]
+    Base.setindex!(m::Mat, v, i::Int) = m.p[i] = v
+    Base.similar(::Mat, ::Type{Int}, size::NTuple{2,Int}) = Mat(Matrix{Int}(undef, size))
+
+    @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
+    @test one(Mat([1 2; 3 4])) isa Mat
 end

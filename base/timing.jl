@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This type must be kept in sync with the C struct in src/gc.h
+# This type must be kept in sync with the C struct in src/gc-interface.h
 struct GC_Num
     allocd          ::Int64 # GC internal
     deferred_alloc  ::Int64 # GC internal
@@ -29,7 +29,6 @@ struct GC_Num
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
-reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
@@ -48,7 +47,7 @@ gc_total_bytes(gc_num::GC_Num) =
     gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from `src/gc.c:jl_gc_total_bytes`
+    # logic from `jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd       - old_allocd,
@@ -103,6 +102,33 @@ const JL_GC_N_MAX_POOLS = 51
 function gc_page_utilization_data()
     page_utilization_raw = cglobal(:jl_gc_page_utilization_stats, Float64)
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
+end
+
+# must be kept in sync with `src/gc-stock.h``
+const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+
+"""
+    Base.full_sweep_reasons()
+
+Return a dictionary of the number of times each full sweep reason has occurred.
+
+The reasons are:
+- `:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL`: Full sweep was caused due to `always_full` being set in the GC debug environment
+- `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
+- `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
+- `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+
+Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
+"""
+function full_sweep_reasons()
+    reason = cglobal(:jl_full_sweep_reasons, UInt64)
+    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+    d = Dict{Symbol, Int64}()
+    for (i, r) in enumerate(FULL_SWEEP_REASONS)
+        d[r] = reasons_as_array[i]
+    end
+    return d
 end
 
 """
@@ -316,7 +342,8 @@ macro time(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        local _msg_str = _msg === nothing ? _msg : string(_msg)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
         ret.value
     end
 end
@@ -388,7 +415,8 @@ macro timev(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        local _msg_str = _msg === nothing ? _msg : string(_msg)
+        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
         ret.value
     end
 end

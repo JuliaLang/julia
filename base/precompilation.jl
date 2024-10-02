@@ -285,7 +285,7 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
         return
     end
     t = time()
-    if p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
+    if !p.always_reprint && p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
         return
     end
     p.time_shown = t
@@ -301,12 +301,15 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
     n_filled = ceil(Int, max_progress_width * perc / 100)
     n_left = max_progress_width - n_filled
+    headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
         print(io, " "^p.indent)
-        printstyled(io, p.header, color=p.color, bold=true)
-        print(io, " [")
-        print(io, "="^n_filled, ">")
-        print(io, " "^n_left, "]  ", )
+        printstyled(io, headers[1], " "; color=:green, bold=true)
+        printstyled(io, join(headers[2:end], ' '))
+        print(io, " ")
+        printstyled(io, "━"^n_filled; color=p.color)
+        printstyled(io, perc >= 95 ? "━" : "╸"; color=p.color)
+        printstyled(io, "━"^n_left, " "; color=:light_black)
         print(io, progress_text)
         carriagereturn && print(io, "\r")
     end
@@ -342,7 +345,7 @@ import Base: StaleCacheKey
 
 can_fancyprint(io::IO) = io isa Base.TTY && (get(ENV, "CI", nothing) != "true")
 
-function printpkgstyle(io, header, msg; color=:light_green)
+function printpkgstyle(io, header, msg; color=:green)
     printstyled(io, header; color, bold=true)
     println(io, " ", msg)
 end
@@ -385,10 +388,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     hascolor = get(io, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
-    direct_deps = [
-        Base.PkgId(uuid, name)
-        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
-    ]
     stale_cache = Dict{StaleCacheKey, Bool}()
     exts = Dict{Base.PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
@@ -402,7 +401,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         depsmap[pkg] = filter!(!Base.in_sysimage, deps)
         # add any extensions
         pkg_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
-        prev_ext = nothing
         for (ext_name, extdep_uuids) in env.extensions[dep]
             ext_deps = Base.PkgId[]
             push!(ext_deps, pkg) # depends on parent package
@@ -417,13 +415,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 end
             end
             all_extdeps_available || continue
-            if prev_ext isa Base.PkgId
-                # also make the exts depend on eachother sequentially to avoid race
-                push!(ext_deps, prev_ext)
-            end
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
             ext = Base.PkgId(ext_uuid, ext_name)
-            prev_ext = ext
             filter!(!Base.in_sysimage, ext_deps)
             depsmap[ext] = ext_deps
             exts[ext] = pkg.name
@@ -433,6 +426,14 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             pkg_exts_map[pkg] = collect(keys(pkg_exts))
         end
     end
+
+    direct_deps = [
+        Base.PkgId(uuid, name)
+        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
+    ]
+
+    # consider exts of direct deps to be direct deps so that errors are reported
+    append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
 
     @debug "precompile: deps collected"
     # this loop must be run after the full depsmap has been populated
@@ -520,9 +521,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     if !manifest
         if isempty(pkgs)
             pkgs = [pkg.name for pkg in direct_deps]
-            target = "all packages"
-        else
-            target = join(pkgs, ", ")
         end
         # restrict to dependencies of given packages
         function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
@@ -558,18 +556,16 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 return
             end
         end
-    else
-        target = "manifest"
     end
 
     nconfigs = length(configs)
+    target = nothing
     if nconfigs == 1
         if !isempty(only(configs)[1])
-            target *= " for configuration $(join(only(configs)[1], " "))"
+            target = "for configuration $(join(only(configs)[1], " "))"
         end
-        target *= "..."
     else
-        target *= " for $nconfigs compilation configurations..."
+        target = "for $nconfigs compilation configurations..."
     end
     @debug "precompile: packages filtered"
 
@@ -651,15 +647,19 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done.set) && return
-            fancyprint && lock(print_lock) do
-                printpkgstyle(io, :Precompiling, target)
-                print(io, ansi_disablecursor)
+            lock(print_lock) do
+                if target !== nothing
+                    printpkgstyle(io, :Precompiling, target)
+                end
+                if fancyprint
+                    print(io, ansi_disablecursor)
+                end
             end
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
             last_length = 0
-            bar = MiniProgressBar(; indent=2, header = "Progress", color = Base.info_color(), percentage=false, always_reprint=true)
+            bar = MiniProgressBar(; indent=0, header = "Precompiling packages ", color = :green, percentage=false, always_reprint=true)
             n_total = length(depsmap) * length(configs)
             bar.max = n_total - n_already_precomp
             final_loop = false
@@ -667,7 +667,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             while !printloop_should_exit
                 lock(print_lock) do
                     term_size = Base.displaysize(io)::Tuple{Int,Int}
-                    num_deps_show = term_size[1] - 3
+                    num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
                     else
@@ -748,6 +748,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     end
     @debug "precompile: starting precompilation loop" depsmap direct_deps
     ## precompilation loop
+
     for (pkg, deps) in depsmap
         cachepaths = Base.find_all_in_cache_path(pkg)
         sourcepath = Base.locate_package(pkg)
@@ -787,8 +788,10 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             config_str = "$(join(flags, " "))"
                             name *= color_string(" $(config_str)", :light_black)
                         end
-                        !fancyprint && lock(print_lock) do
-                            isempty(pkg_queue) && printpkgstyle(io, :Precompiling, target)
+                        lock(print_lock) do
+                            if !fancyprint && target === nothing && isempty(pkg_queue)
+                                printpkgstyle(io, :Precompiling, "packages...")
+                            end
                         end
                         push!(pkg_queue, pkg_config)
                         started[pkg_config] = true
@@ -804,7 +807,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags)
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags, isext = haskey(exts, pkg))
                                 end
                             end
                             if ret isa Base.PrecompilableError
@@ -820,6 +823,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             end
                             loaded && (n_loaded += 1)
                         catch err
+                            # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
@@ -843,7 +847,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    # println("Task failed $err_outer") # logging doesn't show here
+                    # println("Task failed $err_outer")
+                    # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
                     handle_interrupt(err_outer) || rethrow()
                     notify(was_processed[pkg_config])
                 finally
@@ -851,6 +856,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     length(tasks) == 1 && notify(interrupted_or_done)
                 end
             end
+            Base.errormonitor(task) # interrupts are handled separately so ok to watch for other errors like this
             push!(tasks, task)
         end
     end
@@ -868,8 +874,12 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     seconds_elapsed = round(Int, (time_ns() - time_start) / 1e9)
     ndeps = count(values(was_recompiled))
     if ndeps > 0 || !isempty(failed_deps) || (quick_exit && !isempty(std_outputs))
-        str = sprint() do iostr
+        str = sprint(context=io) do iostr
             if !quick_exit
+                if fancyprint # replace the progress bar
+                    what = isempty(requested_pkgs) ? "packages finished." : "$(join(requested_pkgs, ", ", " and ")) finished."
+                    printpkgstyle(iostr, :Precompiling, what)
+                end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
                 print(iostr, "  $(ndeps) $(plural) successfully precompiled in $(seconds_elapsed) seconds")
                 if n_already_precomp > 0 || !isempty(circular_deps)

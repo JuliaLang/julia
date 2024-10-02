@@ -27,8 +27,6 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
-
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
 """
@@ -81,7 +79,7 @@ function String(v::Vector{UInt8})
     end
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
-    setfield!(v, :ref, MemoryRef(Memory{UInt8}()))
+    setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
 end
 
@@ -104,9 +102,11 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# This is `@assume_effects :total !:consistent @ccall jl_alloc_string(n::Csize_t)::Ref{String}`,
 # but the macro is not available at this time in bootstrap, so we write it manually.
-@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
+const _string_n_override = 0x04ee
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -117,10 +117,7 @@ String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Memory{UInt8}}, s::String) = ccall(:jl_string_to_genericmemory, Ref{Memory{UInt8}}, (Any,), s)
-function unsafe_wrap(::Type{Vector{UInt8}}, s::String)
-    mem = unsafe_wrap(Memory{UInt8}, s)
-    view(mem, eachindex(mem))
-end
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = wrap(Array, unsafe_wrap(Memory{UInt8}, s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
@@ -211,7 +208,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
@@ -434,7 +431,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return iterate_continued(s, i, u)
+    return @noinline iterate_continued(s, i, u)
 end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
