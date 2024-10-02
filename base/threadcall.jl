@@ -39,15 +39,19 @@ macro threadcall(f, rettype, argtypes, argvals...)
     args = Symbol[]
     for (i, T) in enumerate(argtypes)
         arg = Symbol("arg", i)
-        push!(body, :($arg = unsafe_load(convert(Ptr{$T}, p))))
+        push!(body, :($arg = unsafe_convert($T, cconvert($T, unsafe_load(convert(Ptr{$T}, p))))))
         push!(body, :(p += Core.sizeof($T)))
         push!(args, arg)
     end
-    push!(body, :(gc_state = ccall(:jl_gc_safe_enter, Int8, (), )))
-    push!(body, :(ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))))
-    push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
-    push!(body, :(gc_state = ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)))
-    push!(body, :(return Int(Core.sizeof($rettype))))
+    append!(body, (quote
+        GC.@preserve $(args...) begin
+        gc_state = ccall(:jl_gc_safe_enter, Int8, ())
+        ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))
+        ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)
+        unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)
+        return Int(Core.sizeof($rettype))
+        end
+    end).args)
 
     # return code to generate wrapper function and send work request thread queue
     wrapper = Expr(:var"hygienic-scope", wrapper, @__MODULE__, __source__)
