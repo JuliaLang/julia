@@ -77,6 +77,17 @@ function fullname(m::Module)
 end
 
 """
+    moduleloc(m::Module) -> LineNumberNode
+
+Get the location of the `module` definition.
+"""
+function moduleloc(m::Module)
+    line = Ref{Int32}(0)
+    file = ccall(:jl_module_getloc, Ref{Symbol}, (Any, Ref{Int32}), m, line)
+    return LineNumberNode(Int(line[]), file)
+end
+
+"""
     names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.

@@ -1259,6 +1259,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     jl_atomic_store_relaxed(&newm->bindingkeyset, NULL);
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, bindingkeyset)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
+    newm->file = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->file, s->link_ids_relocs));
 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
