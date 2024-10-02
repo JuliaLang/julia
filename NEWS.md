@@ -179,13 +179,14 @@ Standard library changes
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
   set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
-  ```
+  ```julia
   if VERSION >= v"1.11.0-0"
     atreplinit() do repl
         repl.options.hint_tab_completes = false
     end
   end
-  ``` ([#51229]).
+  ```
+  ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple ([#51616], [#52670]).
 
@@ -236,6 +237,7 @@ Tooling Improvements
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
 [#47354]: https://github.com/JuliaLang/julia/issues/47354
 [#47679]: https://github.com/JuliaLang/julia/issues/47679
+[#47790]: https://github.com/JuliaLang/julia/issues/47790
 [#48273]: https://github.com/JuliaLang/julia/issues/48273
 [#48625]: https://github.com/JuliaLang/julia/issues/48625
 [#49546]: https://github.com/JuliaLang/julia/issues/49546
@@ -251,6 +253,7 @@ Tooling Improvements
 [#50661]: https://github.com/JuliaLang/julia/issues/50661
 [#50795]: https://github.com/JuliaLang/julia/issues/50795
 [#50797]: https://github.com/JuliaLang/julia/issues/50797
+[#50864]: https://github.com/JuliaLang/julia/issues/50864
 [#50958]: https://github.com/JuliaLang/julia/issues/50958
 [#50974]: https://github.com/JuliaLang/julia/issues/50974
 [#51229]: https://github.com/JuliaLang/julia/issues/51229
@@ -265,16 +268,15 @@ Tooling Improvements
 [#51646]: https://github.com/JuliaLang/julia/issues/51646
 [#51647]: https://github.com/JuliaLang/julia/issues/51647
 [#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51747]: https://github.com/JuliaLang/julia/issues/51747
 [#51798]: https://github.com/JuliaLang/julia/issues/51798
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929
-[#52049]: https://github.com/JuliaLang/julia/issues/52049
 [#52096]: https://github.com/JuliaLang/julia/issues/52096
 [#52123]: https://github.com/JuliaLang/julia/issues/52123
 [#52139]: https://github.com/JuliaLang/julia/issues/52139
 [#52180]: https://github.com/JuliaLang/julia/issues/52180
-[#52196]: https://github.com/JuliaLang/julia/issues/52196
 [#52400]: https://github.com/JuliaLang/julia/issues/52400
 [#52413]: https://github.com/JuliaLang/julia/issues/52413
 [#52461]: https://github.com/JuliaLang/julia/issues/52461
@@ -290,3 +292,5 @@ Tooling Improvements
 [#53092]: https://github.com/JuliaLang/julia/issues/53092
 [#53262]: https://github.com/JuliaLang/julia/issues/53262
 [#53320]: https://github.com/JuliaLang/julia/issues/53320
+[#53352]: https://github.com/JuliaLang/julia/issues/53352
+[#55411]: https://github.com/JuliaLang/julia/issues/55411
