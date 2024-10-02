@@ -1076,7 +1076,10 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # escape its arguments. However, since the arguments might be returned, we need
             # to consider the possibility of aliasing between them and the return value.
             for argidx = first_idx:last_idx
-                add_alias_change!(astate, ret, args[argidx])
+                arg = args[argidx]
+                if !is_mutation_free_argtype(argextype(arg, astate.ir))
+                    add_alias_change!(astate, ret, arg)
+                end
             end
             return nothing
         else
