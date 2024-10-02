@@ -381,11 +381,18 @@ let
     @test length(ir.cfg.blocks) == 1
 end
 
+function generate_lambda_ex(world::UInt, source::LineNumberNode,
+                            argnames::Core.SimpleVector, spnames::Core.SimpleVector,
+                            body::Expr)
+    stub = Core.GeneratedFunctionStub(identity, argnames, spnames)
+    return stub(world, source, body)
+end
+
 # Test that `Core.CachedGenerator` works as expected
 struct Generator54916 <: Core.CachedGenerator end
 function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:doit54916, :func, :arg), Core.svec())
-    return stub(world, source, :(func(arg)))
+    return generate_lambda_ex(world, source,
+        Core.svec(:doit54916, :func, :arg), Core.svec(), :(func(arg)))
 end
 @eval function doit54916(func, arg)
     $(Expr(:meta, :generated, Generator54916()))
@@ -412,8 +419,8 @@ function generator49715(world, source, self, f, tt)
     sig = Tuple{f, tt.parameters...}
     mi = Base._which(sig; world)
     error("oh no")
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :ctx, :x, :f), Core.svec())
-    stub(world, source, :(nothing))
+    return generate_lambda_ex(world, source,
+        Core.svec(:doit49715, :f, :tt), Core.svec(), :(nothing))
 end
 @eval function doit49715(f, tt)
     $(Expr(:meta, :generated, generator49715))
@@ -426,9 +433,10 @@ function overdubbee54341(a, b)
     a + b
 end
 const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
-function overdub_generator54341(world::UInt, source::LineNumberNode, args...)
-    if length(args) != 2
-        :(error("Wrong number of arguments"))
+function overdub_generator54341(world::UInt, source::LineNumberNode, selftype, fargtypes)
+    if length(fargtypes) != 2
+        return generate_lambda_ex(world, source,
+            Core.svec(:overdub54341, :args), Core.svec(), :(error("Wrong number of arguments")))
     else
         return copy(overdubee_codeinfo54341)
     end
@@ -438,3 +446,4 @@ end
     $(Expr(:meta, :generated_only))
 end
 @test overdub54341(1, 2) == 3
+@test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
