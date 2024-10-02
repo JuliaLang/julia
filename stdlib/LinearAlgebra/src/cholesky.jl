@@ -839,7 +839,7 @@ end
 function logdet(C::Cholesky)
     dd = zero(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
-        dd += log(real(C.factors[i,i]))
+        dd += log(abs(real(C.factors[i,i])))
     end
     dd + dd # instead of 2.0dd which can change the type
 end
