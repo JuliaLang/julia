@@ -1634,7 +1634,7 @@ static const auto &builtin_func_map() {
           { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
           { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
-          { jl_f_memory_addr,             new JuliaFunction<>{XSTR(jl_f_memory), get_func_sig, get_func_attrs} },
+          { jl_f_memorynew_addr,             new JuliaFunction<>{XSTR(jl_f_memorynew), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefoffset_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefoffset), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefset_addr,       new JuliaFunction<>{XSTR(jl_f_memoryrefset), get_func_sig, get_func_attrs} },
@@ -4477,15 +4477,20 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
-    else if (f == jl_builtin_memory && (nargs == 2)) {
+    else if (f == jl_builtin_memorynew && (nargs == 2)) {
         const jl_cgval_t &memty = argv[1];
-        jl_datatype_t *mty_dt = (jl_datatype_t*)jl_unwrap_unionall(memty.typ);
-        if (jl_is_genericmemoryref_type(mty_dt) && jl_is_concrete_type((jl_value_t*)mty_dt)) {
-            *ret = emit_memorynew(ctx, mty_dt, argv[2]);
-            return true;
-        }
+        if (!memty.constant)
+            return false;
+        jl_datatype_t *typ = (jl_datatype_t*) memty.constant;
+        if (!jl_is_concrete_type((jl_value_t*)typ) || !jl_is_genericmemory_type(typ))
+            return false;
+        jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
+        if (inst == NULL)
+            return false;
+        *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        return true;
     }
- 
+
     else if (f == jl_builtin_memoryref && nargs == 1) {
         const jl_cgval_t &mem = argv[1];
         jl_datatype_t *mty_dt = (jl_datatype_t*)jl_unwrap_unionall(mem.typ);
@@ -4510,7 +4515,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return true;
         }
     }
-    
+
     else if (f == jl_builtin_memoryrefoffset && nargs == 1) {
         const jl_cgval_t &ref = argv[1];
         jl_value_t *mty_dt = jl_unwrap_unionall(ref.typ);
