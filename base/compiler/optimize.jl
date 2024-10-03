@@ -644,10 +644,10 @@ function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
     return false
 end
 
-function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
+function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
-        nargs = let def = sv.result.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+        nargs = Int(opt.src.nargs)
         estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
@@ -939,7 +939,8 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     end
 end
 
-function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
+function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                ir::IRCode, result::InferenceResult)
     if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
         return false
     end
@@ -967,13 +968,13 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    return refine_effects!(interp, sv)
+    return refine_effects!(interp, opt, sv)
 end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt, caller)
-    ipo_dataflow_analysis!(interp, ir, caller)
+    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -995,7 +996,6 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass

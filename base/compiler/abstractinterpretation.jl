@@ -1282,7 +1282,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                     effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
                 exct = refine_exception_type(result.exct, effects)
-                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects), effects, mi)
+                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects, spec_info(irsv)), effects, mi)
             end
         end
     end
