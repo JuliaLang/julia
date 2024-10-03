@@ -4490,6 +4490,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
+
 static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
 {
     emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
@@ -4499,13 +4500,23 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
 
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
     assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)typ)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
 
+
+    auto T_size = ctx.types().T_size;
+    auto int8t = getInt8Ty(ctx.builder.getContext());
+    auto ptls = get_current_ptls(ctx);
     BasicBlock *emptymemBB, *defaultBB, *retvalBB;
     emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
     defaultBB = BasicBlock::Create(ctx.builder.getContext(), "default");
     retvalBB = BasicBlock::Create(ctx.builder.getContext(), "retval");
     auto nel_unboxed = emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type);
-    Value *memorynew_empty = ctx.builder.CreateICmpEQ(nel_unboxed, ConstantInt::get(ctx.types().T_size, 0));
+    Value *memorynew_empty = ctx.builder.CreateICmpEQ(nel_unboxed, ConstantInt::get(T_size, 0));
     setName(ctx.emission_context, memorynew_empty, "memorynew_empty");
     ctx.builder.CreateCondBr(memorynew_empty, emptymemBB, defaultBB);
     // if nel == 0
@@ -4527,7 +4538,31 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
             type_str = "<unknown type>";
         return "Memory{" + type_str + "}[]";
     };
-    auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { literal_pointer_val(ctx, (jl_value_t*) typ), nel_unboxed});
+    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
+    auto cg_elsz = ConstantInt::get(T_size, elsz);
+
+    FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
+    Value *prod_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, cg_elsz});
+    Value *nbytes = ctx.builder.CreateExtractValue(prod_with_overflow, 0);
+    Value *overflow = ctx.builder.CreateExtractValue(prod_with_overflow, 1);
+    if (isunion) {
+        intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
+        Value *add_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, nbytes});
+        nbytes = ctx.builder.CreateExtractValue(add_with_overflow, 0);
+        Value *overflow1 = ctx.builder.CreateExtractValue(add_with_overflow, 1);
+        overflow = ctx.builder.CreateOr(overflow, overflow1);
+    }
+    Value *notoverflow = ctx.builder.CreateNot(overflow);
+    error_unless(ctx, notoverflow, "invalid GenericMemory size: too large for system address width");
+
+    auto alloc = ctx.builder.CreateCall(prepare_call(jl_alloc_genericmemory_unchecked_func), { ptls, nbytes, cg_typ});
+    auto len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, alloc, 0);
+    ctx.builder.CreateStore(nel_unboxed, len_field);
+    if (zi) {
+        auto data_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, alloc, 1);
+        ctx.builder.CreateMemSet(data_field, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
+    }
+
     setName(ctx.emission_context, alloc, arg_typename);
     ctx.builder.CreateBr(retvalBB);
     // phi node to choose which side of branch
@@ -4536,37 +4571,8 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     auto phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
     phi->addIncoming(emptyalloc, emptymemBB);
     phi->addIncoming(alloc, defaultBB);
-    ctx.f->print(dbgs(), NULL);
+    //ctx.f->print(dbgs(), NULL);
     return mark_julia_type(ctx, phi, true, typ);
-
-
-    /*
-     *
-    BasicBlock *failBB, *endBB;
-    failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
-    endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
-    Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
-    Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
-    setName(ctx.emission_context, offset, "memoryref_isinbounds");
-    ctx.builder.CreateCondBr(inbound, endBB, failBB);
-    failBB->insertInto(ctx.f);
-    ctx.builder.SetInsertPoint(failBB);
-    ctx.builder.CreateCall(prepare_call(jlboundserror_func),
-        { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
-    ctx.builder.CreateUnreachable();
-    endBB->insertInto(ctx.f);
-    ctx.builder.SetInsertPoint(endBB);
-*/
-    /*
-
-    size_t elsz = layout->size;
-    int isboxed = layout->flags.arrayelem_isboxed;
-    int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)mtype)->zeroinit;
-    if (isboxed)
-        elsz = sizeof(void*);
-    return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
-     */
 }
 
 static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)
