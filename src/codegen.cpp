@@ -1174,6 +1174,34 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
             None);
     },
 };
+static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_alloc_genericmemory_unchecked),
+    [](LLVMContext &C, Type *T_size) {
+        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
+        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        return FunctionType::get(T_prjlvalue,
+                {T_pjlvalue, T_size, T_prjlvalue}, false);
+    },
+    [](LLVMContext &C) {
+        auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        auto RetAttrs = AttrBuilder(C);
+        RetAttrs.addAttribute(Attribute::NoAlias);
+        RetAttrs.addAttribute(Attribute::NonNull);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet::get(C, RetAttrs),
+            None);
+    },
+};
+
 static const auto jl_newbits_func = new JuliaFunction<>{
     XSTR(jl_new_bits),
     [](LLVMContext &C) {
@@ -10361,6 +10389,7 @@ static void init_jit_functions(void)
     add_named_global(jltypeassert_func, &jl_typeassert);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
     add_named_global(jl_object_id__func, &jl_object_id_);
+    add_named_global(jl_alloc_genericmemory_unchecked_func, &jl_alloc_genericmemory_unchecked);
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
