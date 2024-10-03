@@ -1183,7 +1183,7 @@ end
 
 # Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
 # so that users can define their own binding named `Module` in Main.
-@test !Base.isbindingresolved(Main, :Module)
+@test success(`$(Base.julia_cmd()) -e '@assert !Base.isbindingresolved(Main, :Module)'`)
 
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
