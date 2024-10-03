@@ -32,6 +32,32 @@ typedef uint64_t wideint_t;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
+// ONLY USE FROM CODEGEN. It only partially initializes the mem
+JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
+{
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+
+    int pooled = tot <= GC_MAX_SZCLASS;
+    char *data;
+    jl_genericmemory_t *m;
+    if (!pooled) {
+        data = (char*)jl_gc_managed_malloc(nbytes);
+        tot = sizeof(jl_genericmemory_t) + sizeof(void*);
+    }
+    m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
+    if (pooled) {
+        data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
+    }
+    else {
+        int isaligned = 1; // jl_gc_managed_malloc is always aligned
+        jl_gc_track_malloced_genericmemory(ptls, m, isaligned);
+        jl_genericmemory_data_owner_field(m) = (jl_value_t*)m;
+    }
+    // length set by codegen
+    m->ptr = data;
+    return m;
+}
+
 jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
 {
     jl_task_t *ct = jl_current_task;
