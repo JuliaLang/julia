@@ -4490,10 +4490,43 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
-static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *mty_dt, jl_cgval_t len)
+static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
 {
-    // Jameson HALP
-    return len;
+    emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
+    nel = update_julia_type(ctx, nel, (jl_value_t*)jl_long_type);
+    if (nel.typ == jl_bottom_type)
+        return jl_cgval_t();
+
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+    //auto len_0 = ctx.builder.CreateICmpEQ(nel.V, ConstantInt::get(ctx.types().T_size, 0))
+    //ctx.builder.Create
+    //if (nel == 0) // zero-sized allocation optimization fast path
+    //    return inst;
+    assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    auto arg_typename = [&] JL_NOTSAFEPOINT {
+        std::string type_str;
+        auto eltype = jl_tparam1(typ);
+        if (jl_is_datatype(eltype))
+            type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+        else if (jl_is_uniontype(eltype))
+            type_str = "Union";
+        else
+            type_str = "<unknown type>";
+        return "Memory{" + type_str + "}[]";
+    };
+    auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { literal_pointer_val(ctx, (jl_value_t*) typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type)});
+    setName(ctx.emission_context, alloc, arg_typename);
+    /*
+
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)mtype)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
+    return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
+     */
+    return mark_julia_type(ctx, alloc, true, jl_any_type);
 }
 
 static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)

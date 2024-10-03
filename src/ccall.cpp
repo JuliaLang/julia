@@ -1902,7 +1902,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 type_str = "<unknown type>";
             return "Memory{" + type_str + "}[]";
             };
-        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
+        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type)});
         setName(ctx.emission_context, alloc, arg_typename);
         JL_GC_POP();
         return mark_julia_type(ctx, alloc, true, jl_any_type);
