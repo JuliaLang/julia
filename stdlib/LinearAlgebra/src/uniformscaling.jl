@@ -411,7 +411,7 @@ Copies a [`UniformScaling`](@ref) onto a matrix.
 !!! compat "Julia 1.12"
     This method is available as of Julia 1.12.
 """
-copy!(A::AbstractMatrix, J::UniformScaling) = copyto!(A, J)
+Base.copy!(A::AbstractMatrix, J::UniformScaling) = copyto!(A, J)
 
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
