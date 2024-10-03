@@ -403,6 +403,16 @@ function copyto!(A::Tridiagonal, J::UniformScaling)
     return A
 end
 
+"""
+    copy!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.12"
+    This method is available as of Julia 1.12.
+"""
+Base.copy!(A::AbstractMatrix, J::UniformScaling) = copyto!(A, J)
+
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
