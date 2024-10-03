@@ -206,7 +206,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0 || lock_conflicts > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
