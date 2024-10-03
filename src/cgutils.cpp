@@ -4498,11 +4498,24 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
         return jl_cgval_t();
 
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
-    //auto len_0 = ctx.builder.CreateICmpEQ(nel.V, ConstantInt::get(ctx.types().T_size, 0))
-    //ctx.builder.Create
-    //if (nel == 0) // zero-sized allocation optimization fast path
-    //    return inst;
     assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+
+    BasicBlock *emptymemBB, *defaultBB, *retvalBB;
+    emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
+    defaultBB = BasicBlock::Create(ctx.builder.getContext(), "default");
+    retvalBB = BasicBlock::Create(ctx.builder.getContext(), "retval");
+    auto nel_unboxed = emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type);
+    Value *memorynew_empty = ctx.builder.CreateICmpEQ(nel_unboxed, ConstantInt::get(ctx.types().T_size, 0));
+    setName(ctx.emission_context, memorynew_empty, "memorynew_empty");
+    ctx.builder.CreateCondBr(memorynew_empty, emptymemBB, defaultBB);
+    // if nel == 0
+    emptymemBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(emptymemBB);
+    auto emptyalloc =literal_pointer_val(ctx, (jl_value_t*)inst);
+    ctx.builder.CreateBr(retvalBB);
+    defaultBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(defaultBB);
+    // else actually allocate mem
     auto arg_typename = [&] JL_NOTSAFEPOINT {
         std::string type_str;
         auto eltype = jl_tparam1(typ);
@@ -4514,8 +4527,36 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
             type_str = "<unknown type>";
         return "Memory{" + type_str + "}[]";
     };
-    auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { literal_pointer_val(ctx, (jl_value_t*) typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type)});
+    auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { literal_pointer_val(ctx, (jl_value_t*) typ), nel_unboxed});
     setName(ctx.emission_context, alloc, arg_typename);
+    ctx.builder.CreateBr(retvalBB);
+    // phi node to choose which side of branch
+    retvalBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(retvalBB);
+    auto phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+    phi->addIncoming(emptyalloc, emptymemBB);
+    phi->addIncoming(alloc, defaultBB);
+    ctx.f->print(dbgs(), NULL);
+    return mark_julia_type(ctx, phi, true, typ);
+
+
+    /*
+     *
+    BasicBlock *failBB, *endBB;
+    failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
+    endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
+    Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
+    Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
+    setName(ctx.emission_context, offset, "memoryref_isinbounds");
+    ctx.builder.CreateCondBr(inbound, endBB, failBB);
+    failBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(failBB);
+    ctx.builder.CreateCall(prepare_call(jlboundserror_func),
+        { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
+    ctx.builder.CreateUnreachable();
+    endBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(endBB);
+*/
     /*
 
     size_t elsz = layout->size;
@@ -4526,7 +4567,6 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
         elsz = sizeof(void*);
     return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
      */
-    return mark_julia_type(ctx, alloc, true, jl_any_type);
 }
 
 static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)
