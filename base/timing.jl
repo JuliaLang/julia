@@ -228,7 +228,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, ", ", lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
