@@ -37,6 +37,7 @@ DECLARE_BUILTIN(compilerbarrier);
 DECLARE_BUILTIN(current_scope);
 DECLARE_BUILTIN(donotdelete);
 DECLARE_BUILTIN(fieldtype);
+DECLARE_BUILTIN(finalize);
 DECLARE_BUILTIN(finalizer);
 DECLARE_BUILTIN(getfield);
 DECLARE_BUILTIN(getglobal);

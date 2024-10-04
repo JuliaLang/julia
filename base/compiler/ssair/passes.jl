@@ -1631,19 +1631,18 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     foreach(note_defuse!, defuse.defs)
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
+    # Figure out the exact statement where we're going to inline the finalizer.
+    loc = insert_idx === nothing ? first(ir.cfg.blocks[insert_bb].stmts) : insert_idx::Int
+    attach_after = insert_idx !== nothing
+    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
+
     if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = reachable_blocks(ir.cfg, finalizer_bb, insert_bb)
 
         # Check #3
-        function check_range_nothrow(s::Int, e::Int)
-            return all(s:e) do sidx::Int
-                sidx == finalizer_idx && return true
-                sidx == alloc_idx && return true
-                return is_nothrow(ir, SSAValue(sidx))
-            end
-        end
         for bb in blocks
             range = ir.cfg.blocks[bb].stmts
             s, e = first(range), last(range)
@@ -1654,18 +1653,23 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
             if bb == finalizer_bb
                 s = finalizer_idx
             end
-            check_range_nothrow(s, e) || return nothing
+            all(s:e) do sidx::Int
+                sidx == finalizer_idx && return true
+                sidx == alloc_idx && return true
+                return is_nothrow(ir, SSAValue(sidx))
+            end && continue
+
+            # An exception may be thrown between the finalizer registration and the point
+            # where the object’s lifetime ends (`insert_idx`): In such cases, we can’t
+            # remove the finalizer registration, but we can still insert a `Core.finalize`
+            # call at `insert_idx` while leaving the registration intact.
+            newinst = add_flag(NewInstruction(Expr(:call, GlobalRef(Core, :finalize), finalizer_stmt.args[3]), Nothing), flag)
+            insert_node!(ir, loc, newinst, attach_after)
+            return nothing
         end
     end
 
-    # Ok, legality check complete. Figure out the exact statement where we're
-    # going to inline the finalizer.
-    loc = insert_idx === nothing ? first(ir.cfg.blocks[insert_bb].stmts) : insert_idx::Int
-    attach_after = insert_idx !== nothing
-
-    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing

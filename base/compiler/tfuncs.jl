@@ -751,6 +751,7 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
 end
 add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
+add_tfunc(Core.finalize, 1, 1, @nospecs((𝕃::AbstractLattice, o)->Nothing), 100)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
     return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
@@ -2298,8 +2299,11 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return true
     elseif f === Core.finalizer
         2 <= na <= 4 || return false
-        # Core.finalizer does no error checking - that's done in Base.finalizer
+        # `Core.finalizer` does no error checking - that's done in Base.finalizer
         return true
+    elseif f === Core.finalize
+        na == 2 || return false
+        return true # `Core.finalize` does no error checking
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)

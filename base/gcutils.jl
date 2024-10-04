@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-
 """
     WeakRef(x)
 
@@ -99,8 +98,7 @@ end
 
 Immediately run finalizers registered for object `x`.
 """
-finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Any, Any,),
-                                   current_task(), o)
+finalize(@nospecialize(o)) = Core.finalize(o)
 
 """
     Base.GC
