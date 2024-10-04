@@ -178,7 +178,7 @@ Standard library changes
 #### REPL
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl ([#51229]):
   ```julia
   if VERSION >= v"1.11.0-0"
     atreplinit() do repl
@@ -186,7 +186,6 @@ Standard library changes
     end
   end
   ```
-  ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple ([#51616], [#52670]).
 
