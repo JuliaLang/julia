@@ -1181,7 +1181,7 @@ end
     @test oneunit(D3) isa typeof(D3)
 end
 
-@testset "AbstractTriangular" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+@testset "$Tri" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
     A = randn(4, 4)
     TriA = Tri(A)
     UTriA = UTri(A)
@@ -1211,6 +1211,20 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+
+    @testset "partly filled parents" begin
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = 3
+        isupper = Tri == UpperTriangular
+        M[1+!isupper, 1+isupper] = 3
+        D = Diagonal(1:2)
+        T = Tri(M)
+        @test T * D == Array(T) * D
+        @test D * T == D * Array(T)
+        U = UTri(M)
+        @test U * D == Array(U) * D
+        @test D * U == D * Array(U)
+    end
 end
 
 struct SMatrix1{T} <: AbstractArray{T,2}
