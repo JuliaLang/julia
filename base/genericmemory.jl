@@ -241,9 +241,10 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
-    ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
+function _setindex!(A::Memory{T}, x::T, i::Int) where {T}
+    @boundscheck Core.Intrinsics.ult_int(i, A.length)
+    ref = memoryrefnew(memoryref(A), i, false)
+    memoryrefset!(ref, x, :not_atomic, false)
     return A
 end
 
