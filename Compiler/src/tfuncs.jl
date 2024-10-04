@@ -2017,6 +2017,12 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
 end
 
+@nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, m)
+    hasintersect(widenconst(m), Int) || return Bottom
+    return tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+end
+add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
+
 @nospecs function memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
     return memoryref_elemtype(mem)
@@ -2244,7 +2250,16 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
                           @nospecialize(rt))
     ⊑ = partialorder(𝕃)
     na = length(argtypes)
-    if f === memoryrefnew
+    if f === Core.memorynew
+        argtypes[1] isa Const && argtypes[2] isa Const || return false
+        MemT = argtypes[1].val
+        isconcretetype(MemT) && MemT <: GenericMemory || return false
+        len = argtypes[2].val
+        len isa Int && 0 <= len < typemax(Int) || return false
+        elsz = datatype_layoutsize(MemT)
+        checked_smul_int(len, elsz)[2] && return false
+        return true
+    elseif f === memoryrefnew
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
         length(argtypes) == 1 || return false
@@ -2347,6 +2362,7 @@ const _EFFECT_FREE_BUILTINS = [
     isa,
     UnionAll,
     getfield,
+    Core.memorynew,
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
@@ -2381,6 +2397,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     compilerbarrier,
     Core._typevar,
     donotdelete,
+    Core.memorynew,
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2543,7 +2560,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_TRUE
         elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
-        elseif f === Core._typevar
+        elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
