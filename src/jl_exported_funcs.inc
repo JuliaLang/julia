@@ -316,6 +316,7 @@
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_getloc) \
     XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
@@ -344,6 +345,8 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
+    XX(jl_method_match_to_mi) \
+    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -522,6 +525,7 @@
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_external_fns) \
+    YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

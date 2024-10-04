@@ -1155,6 +1155,19 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+
+        # Extension with cycles in dependencies
+        code = """
+        using CyclicExtensions
+        Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+        Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+        CyclicExtensions.greet()
+        """
+        proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+        @test occursin("Hello Cycles!", String(read(cmd)))
+
     finally
         try
             rm(depot_path, force=true, recursive=true)

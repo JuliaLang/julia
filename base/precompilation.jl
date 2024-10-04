@@ -435,51 +435,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     # consider exts of direct deps to be direct deps so that errors are reported
     append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
 
-    # An extension effectively depends on another extension if it has all the the
-    # dependencies of that other extension
-    function expand_dependencies(depsmap)
-        function visit!(visited, node, all_deps)
-            if node in visited
-                return
-            end
-            push!(visited, node)
-            for dep in get(Set{Base.PkgId}, depsmap, node)
-                if !(dep in all_deps)
-                    push!(all_deps, dep)
-                    visit!(visited, dep, all_deps)
-                end
-            end
-        end
-
-        depsmap_transitive = Dict{Base.PkgId, Set{Base.PkgId}}()
-        for package in keys(depsmap)
-            # Initialize a set to keep track of all dependencies for 'package'
-            all_deps = Set{Base.PkgId}()
-            visited = Set{Base.PkgId}()
-            visit!(visited, package, all_deps)
-            # Update depsmap with the complete set of dependencies for 'package'
-            depsmap_transitive[package] = all_deps
-        end
-        return depsmap_transitive
-    end
-
-    depsmap_transitive = expand_dependencies(depsmap)
-
-    for (_, extensions_1) in pkg_exts_map
-        for extension_1 in extensions_1
-            deps_ext_1 = depsmap_transitive[extension_1]
-            for (_, extensions_2) in pkg_exts_map
-                for extension_2 in extensions_2
-                    extension_1 == extension_2 && continue
-                    deps_ext_2 = depsmap_transitive[extension_2]
-                    if issubset(deps_ext_2, deps_ext_1)
-                        push!(depsmap[extension_1], extension_2)
-                    end
-                end
-            end
-        end
-    end
-
     @debug "precompile: deps collected"
     # this loop must be run after the full depsmap has been populated
     for (pkg, pkg_exts) in pkg_exts_map
@@ -852,7 +807,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags)
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags, isext = haskey(exts, pkg))
                                 end
                             end
                             if ret isa Base.PrecompilableError

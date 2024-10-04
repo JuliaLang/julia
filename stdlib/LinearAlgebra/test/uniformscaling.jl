@@ -226,6 +226,13 @@ let
         @test copyto!(B, J) == [λ zero(λ)]
     end
 
+    @testset "copy!" begin
+        A = Matrix{Int}(undef, (3,3))
+        @test copy!(A, I) == one(A)
+        B = Matrix{ComplexF64}(undef, (1,2))
+        @test copy!(B, J) == [λ zero(λ)]
+    end
+
     @testset "binary ops with vectors" begin
         v = complex.(randn(3), randn(3))
         # As shown in #20423@GitHub, vector acts like x1 matrix when participating in linear algebra

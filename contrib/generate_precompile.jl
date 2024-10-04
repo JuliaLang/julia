@@ -347,8 +347,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "F$n_step1")
         return :ok
     end
-    Base.errormonitor(step1)
-    !PARALLEL_PRECOMPILATION && wait(step1)
+    PARALLEL_PRECOMPILATION ? bind(statements_step1, step1) : wait(step1)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -362,7 +361,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     # Make statements unique
     statements = Set{String}()
     # Execute the precompile statements
-    for sts in [statements_step1,], statement in sts
+    for statement in statements_step1
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
@@ -398,6 +397,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     println()
     # Seems like a reasonable number right now, adjust as needed
     # comment out if debugging script
+    have_repl = false
     n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
@@ -408,7 +408,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
 finally
     fancyprint && print(ansi_enablecursor)
     GC.gc(true); GC.gc(false); # reduce memory footprint
-    return
 end
 
 generate_precompile_statements()
