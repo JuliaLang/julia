@@ -538,6 +538,14 @@ function takestring!(io::IOBuffer)
     # we can return an empty string without interacting with the buffer at all.
     io.reinit && return ""
 
+    # If the buffer is not writable, it may hold external memory the user has a
+    # reference to. We can't use unsafe_takestring! because the GC would take control
+    # of the memory and could deallocate it while the user still has a reference to it.
+    if !io.writable
+        nbytes = filesize(io)
+        return copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
+    end
+    
     s = unsafe_takestring!(io)
 
     # Restore the buffer to a usable state, making it no longer undefined behaviour to
