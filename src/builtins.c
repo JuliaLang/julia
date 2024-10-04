@@ -2010,6 +2010,13 @@ JL_CALLABLE(jl_f_finalizer)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_finalize)
+{
+    JL_NARGS(finalize, 1, 1);
+    jl_finalize(args[0]);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f__compute_sparams)
 {
     JL_NARGSV(_compute_sparams, 1);
@@ -2442,6 +2449,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
     add_builtin_func("finalizer", jl_f_finalizer);
+    add_builtin_func("finalize", jl_f_finalize);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
     jl_builtin_current_scope = add_builtin_func("current_scope", jl_f_current_scope);

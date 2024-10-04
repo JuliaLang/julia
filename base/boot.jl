@@ -214,7 +214,7 @@ export
     nfields, throw, tuple, ===, isdefined, eval,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!,
-    # ifelse, sizeof    # not exported, to avoid conflicting with Base
+    # ifelse, sizeof, finalize # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
     # method reflection
