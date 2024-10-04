@@ -31,7 +31,7 @@ namespace {
 using namespace clang;
 using namespace ento;
 
-#define PDP std::shared_ptr<PathDiagnosticPiece>
+typedef std::shared_ptr<PathDiagnosticPiece> PDP;
 #define MakePDP make_unique<PathDiagnosticEventPiece>
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
@@ -394,13 +394,18 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        if (Pos.isValid())
+          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
-      return MakePDP(Pos, "Safepoints re-enabled here");
+      if (Pos.isValid())
+        return MakePDP(Pos, "Safepoints re-enabled here");
+      //N->getLocation().dump();
     }
+    // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
   }
   return nullptr;
 }
@@ -865,7 +870,7 @@ bool GCChecker::isGCTracked(const Expr *E) {
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
   return isJuliaType(
-      [](StringRef Name) { return Name.endswith("jl_sym_t"); }, QT);
+      [](StringRef Name) { return Name.ends_with("jl_sym_t"); }, QT);
 }
 
 bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
@@ -1166,10 +1171,10 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     // TODO: We may want to refine this. This is to track pointers through the
     // array list in jl_module_t.
     bool ParentIsModule = isJuliaType(
-        [](StringRef Name) { return Name.endswith("jl_module_t"); },
+        [](StringRef Name) { return Name.ends_with("jl_module_t"); },
         Parent->getType());
     bool ResultIsArrayList = isJuliaType(
-        [](StringRef Name) { return Name.endswith("arraylist_t"); },
+        [](StringRef Name) { return Name.ends_with("arraylist_t"); },
         Result->getType());
     if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
       ResultTracked = false;

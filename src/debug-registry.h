@@ -32,7 +32,7 @@ public:
             std::unique_lock<std::mutex> lock;
             CResourceT &resource;
 
-            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
+            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER : lock(mutex), resource(resource) {}
             Lock(Lock &&) JL_NOTSAFEPOINT = default;
             Lock &operator=(Lock &&) JL_NOTSAFEPOINT = default;
 
@@ -56,7 +56,7 @@ public:
                 return resource;
             }
 
-            ~Lock() JL_NOTSAFEPOINT = default;
+            ~Lock() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
         };
     private:
 
@@ -68,15 +68,15 @@ public:
 
         Locked(ResourceT resource = ResourceT()) JL_NOTSAFEPOINT : mutex(), resource(std::move(resource)) {}
 
-        LockT operator*() JL_NOTSAFEPOINT {
+        LockT operator*() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
             return LockT(mutex, resource);
         }
 
-        ConstLockT operator*() const JL_NOTSAFEPOINT {
+        ConstLockT operator*() const JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
             return ConstLockT(mutex, resource);
         }
 
-        ~Locked() JL_NOTSAFEPOINT = default;
+        ~Locked() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
     };
 
     struct image_info_t {
