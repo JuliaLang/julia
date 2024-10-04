@@ -2404,7 +2404,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if t isa Const
             tv = t.val
             rt = Const(has_free_typevars(tv) ? typeof(tv) : Core.Typeof(tv))
-        elseif isType(t)
+        elseif isconstType(t)
             tv = t.parameters[1]
             rt = Const(has_free_typevars(tv) ? typeof(tv) : Core.Typeof(tv))
         elseif !hasintersect(widenconst(t), Type)
