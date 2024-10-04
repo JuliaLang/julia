@@ -549,7 +549,7 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
 
     code_native(buf, linear_foo, ())
     output = String(take!(buf))
-    @test occursin(rgx, output)
+    @test !occursin(rgx, output)
 
     @testset "binary" begin
         # check the RET instruction (opcode: C3)
