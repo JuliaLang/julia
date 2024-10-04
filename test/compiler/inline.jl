@@ -1622,6 +1622,19 @@ let src = code_typed1((Int,)) do x
     @test count(iscall((src, setfield!)), src.code) == 1
 end
 
+# early `finalize` insertion
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", objectid(obj))
+        end
+        @show xs[]
+        return xs[]
+    end
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+    @test count(iscall((src, Core.finalize)), src.code) == 1
+end
+
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
