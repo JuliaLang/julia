@@ -1185,7 +1185,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
         return FunctionType::get(T_prjlvalue,
-                {T_pjlvalue, T_size, T_prjlvalue}, false);
+                {T_pjlvalue, T_size, T_pjlvalue}, false);
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
