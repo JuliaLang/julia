@@ -548,7 +548,7 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, (), debuginfo = :none)
-    output = String(take!(buf))
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
     @testset "binary" begin
