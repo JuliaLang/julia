@@ -2976,7 +2976,7 @@ static void jl_name_jlfuncparams_args(jl_codegen_params_t &params, Function *F) 
     F->getArg(3)->setName("sparams::Any");
 }
 
-static void jl_init_function(Function *F, const Triple &TT)
+void jl_init_function(Function *F, const Triple &TT)
 {
     // set any attributes that *must* be set on all functions
     AttrBuilder attr(F->getContext());
@@ -5570,9 +5570,9 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     if (!handled) {
         if (trim_may_error(ctx.params->trim)) {
             if (lival.constant) {
-                arraylist_push(&new_invokes, lival.constant);
                 push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
-            } else {
+            }
+            else {
                 errs() << "Dynamic call to unknown function";
                 errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
 
@@ -5762,48 +5762,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
     int failed_dispatch = !argv[0].constant;
     if (ctx.params->trim != JL_TRIM_NO) {
-        size_t min_valid = 1;
-        size_t max_valid = ~(size_t)0;
-        size_t latest_world = jl_get_world_counter(); // TODO: marshal the world age of the compilation here.
-
-        // Find all methods matching the call signature
-        jl_array_t *matches = NULL;
-        jl_value_t *tup = NULL;
-        JL_GC_PUSH2(&tup, &matches);
-        if (!failed_dispatch) {
-            SmallVector<jl_value_t*> argtypes;
-            for (auto& arg: argv)
-                argtypes.push_back(arg.typ);
-            tup = jl_apply_tuple_type_v(argtypes.data(), argtypes.size());
-            matches = (jl_array_t*)jl_matching_methods((jl_tupletype_t*)tup, jl_nothing, 10 /*TODO: make global*/, 1,
-                                                latest_world, &min_valid, &max_valid, NULL);
-            if ((jl_value_t*)matches == jl_nothing)
-                failed_dispatch = 1;
-        }
-
-        // Expand each matching method to its unique specialization, if it has exactly one
-        if (!failed_dispatch) {
-            size_t k;
-            size_t len = new_invokes.len;
-            for (k = 0; k < jl_array_nrows(matches); k++) {
-                jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
-                jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 0);
-                if (!mi) {
-                    if (jl_array_nrows(matches) == 1) {
-                        // if the method match is not compileable, but there is only one, fall back to
-                        // unspecialized implementation
-                        mi = jl_get_unspecialized(match->method);
-                    }
-                    else {
-                        new_invokes.len = len;
-                        failed_dispatch = 1;
-                        break;
-                    }
-                }
-                arraylist_push(&new_invokes, mi);
-            }
-        }
-        JL_GC_POP();
+        abort(); // this code path is unsound, unsafe, and bad
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {
@@ -6610,92 +6569,93 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 
 static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_method_t *closure_method, jl_tupletype_t *env_t, jl_tupletype_t *argt_typ, jl_value_t *rettype)
 {
-    jl_svec_t *sig_args = NULL;
-    jl_value_t *sigtype = NULL;
-    JL_GC_PUSH2(&sig_args, &sigtype);
+    return {nullptr, nullptr}; // this implementation violates the no-recursion rule we have for codegen
+    //jl_svec_t *sig_args = NULL;
+    //jl_value_t *sigtype = NULL;
+    //JL_GC_PUSH2(&sig_args, &sigtype);
 
-    size_t nsig = 1 + jl_svec_len(argt_typ->parameters);
-    sig_args = jl_alloc_svec_uninit(nsig);
-    jl_svecset(sig_args, 0, env_t);
-    for (size_t i = 0; i < jl_svec_len(argt_typ->parameters); ++i) {
-        jl_svecset(sig_args, 1+i, jl_svecref(argt_typ->parameters, i));
-    }
-    sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+    //size_t nsig = 1 + jl_svec_len(argt_typ->parameters);
+    //sig_args = jl_alloc_svec_uninit(nsig);
+    //jl_svecset(sig_args, 0, env_t);
+    //for (size_t i = 0; i < jl_svec_len(argt_typ->parameters); ++i) {
+    //    jl_svecset(sig_args, 1+i, jl_svecref(argt_typ->parameters, i));
+    //}
+    //sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
-    jl_method_instance_t *mi;
-    jl_code_instance_t *ci;
+    //jl_method_instance_t *mi;
+    //jl_code_instance_t *ci;
 
-    if (closure_method->source) {
-        mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
-    }
-    else {
-        mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
-        assert(jl_is_method_instance(mi));
-        ci = jl_atomic_load_relaxed(&mi->cache);
-    }
+    //if (closure_method->source) {
+    //    mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
+    //    ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
+    //}
+    //else {
+    //    mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
+    //    assert(jl_is_method_instance(mi));
+    //    ci = jl_atomic_load_relaxed(&mi->cache);
+    //}
 
-    if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
-        JL_GC_POP();
-        return std::make_pair((Function*)NULL, (Function*)NULL);
-    }
-    auto inferred = jl_atomic_load_relaxed(&ci->inferred);
-    if (!inferred || inferred == jl_nothing) {
-        JL_GC_POP();
-        return std::make_pair((Function*)NULL, (Function*)NULL);
-    }
+    //if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
+    //    JL_GC_POP();
+    //    return std::make_pair((Function*)NULL, (Function*)NULL);
+    //}
+    //auto inferred = jl_atomic_load_relaxed(&ci->inferred);
+    //if (!inferred || inferred == jl_nothing) {
+    //    JL_GC_POP();
+    //    return std::make_pair((Function*)NULL, (Function*)NULL);
+    //}
 
-    auto it = ctx.emission_context.compiled_functions.find(ci);
+    //auto it = ctx.emission_context.compiled_functions.find(ci);
 
-    if (it == ctx.emission_context.compiled_functions.end()) {
-        ++EmittedOpaqueClosureFunctions;
-        jl_code_info_t *ir = jl_uncompress_ir(closure_method, ci, (jl_value_t*)inferred);
-        JL_GC_PUSH1(&ir);
-        // TODO: Emit this inline and outline it late using LLVM's coroutine support.
-        orc::ThreadSafeModule closure_m = jl_create_ts_module(
-                name_from_method_instance(mi), ctx.emission_context.tsctx,
-                jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
-        jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
-        JL_GC_POP();
-        it = ctx.emission_context.compiled_functions.insert(std::make_pair(ci, std::make_pair(std::move(closure_m), std::move(closure_decls)))).first;
-    }
+    //if (it == ctx.emission_context.compiled_functions.end()) {
+    //    ++EmittedOpaqueClosureFunctions;
+    //    jl_code_info_t *ir = jl_uncompress_ir(closure_method, ci, (jl_value_t*)inferred);
+    //    JL_GC_PUSH1(&ir);
+    //    // TODO: Emit this inline and outline it late using LLVM's coroutine support.
+    //    orc::ThreadSafeModule closure_m = jl_create_ts_module(
+    //            name_from_method_instance(mi), ctx.emission_context.tsctx,
+    //            jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
+    //    jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
+    //    JL_GC_POP();
+    //    it = ctx.emission_context.compiled_functions.insert(std::make_pair(ci, std::make_pair(std::move(closure_m), std::move(closure_decls)))).first;
+    //}
 
-    auto &closure_m = it->second.first;
-    auto &closure_decls = it->second.second;
+    //auto &closure_m = it->second.first;
+    //auto &closure_decls = it->second.second;
 
-    assert(closure_decls.functionObject != "jl_fptr_sparam");
-    bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
+    //assert(closure_decls.functionObject != "jl_fptr_sparam");
+    //bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
 
-    Function *F = NULL;
-    std::string fname = isspecsig ?
-        closure_decls.functionObject :
-        closure_decls.specFunctionObject;
-    if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
-        F = cast<Function>(V);
-    }
-    else {
-        F = Function::Create(get_func_sig(ctx.builder.getContext()),
-                             Function::ExternalLinkage,
-                             fname, jl_Module);
-        jl_init_function(F, ctx.emission_context.TargetTriple);
-        jl_name_jlfunc_args(ctx.emission_context, F);
-        F->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_func_attrs(ctx.builder.getContext()), F->getAttributes()}));
-    }
-    Function *specF = NULL;
-    if (!isspecsig) {
-        specF = F;
-    }
-    else {
-        //emission context holds context lock so can get module
-        specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
-        if (specF) {
-            jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, NULL,
-                closure_decls.specFunctionObject, sigtype, rettype, true, JL_FEAT_TEST(ctx,gcstack_arg));
-            specF = cast<Function>(returninfo.decl.getCallee());
-        }
-    }
-    JL_GC_POP();
-    return std::make_pair(F, specF);
+    //Function *F = NULL;
+    //std::string fname = isspecsig ?
+    //    closure_decls.functionObject :
+    //    closure_decls.specFunctionObject;
+    //if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
+    //    F = cast<Function>(V);
+    //}
+    //else {
+    //    F = Function::Create(get_func_sig(ctx.builder.getContext()),
+    //                         Function::ExternalLinkage,
+    //                         fname, jl_Module);
+    //    jl_init_function(F, ctx.emission_context.TargetTriple);
+    //    jl_name_jlfunc_args(ctx.emission_context, F);
+    //    F->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_func_attrs(ctx.builder.getContext()), F->getAttributes()}));
+    //}
+    //Function *specF = NULL;
+    //if (!isspecsig) {
+    //    specF = F;
+    //}
+    //else {
+    //    //emission context holds context lock so can get module
+    //    specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
+    //    if (specF) {
+    //        jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, NULL,
+    //            closure_decls.specFunctionObject, sigtype, rettype, true, JL_FEAT_TEST(ctx,gcstack_arg));
+    //        specF = cast<Function>(returninfo.decl.getCallee());
+    //    }
+    //}
+    //JL_GC_POP();
+    //return std::make_pair(F, specF);
 }
 
 // `expr` is not clobbered in JL_TRY
@@ -7173,7 +7133,7 @@ static Value *get_scope_field(jl_codectx_t &ctx)
     return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "current_scope");
 }
 
-static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, Module *M, jl_codegen_params_t &params)
+Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOINT
 {
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(M->getContext(), params, codeinst);
@@ -7184,7 +7144,6 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptr
             name, M);
     jl_init_function(f, params.TargetTriple);
     if (trim_may_error(params.params->trim)) {
-        arraylist_push(&new_invokes, codeinst->def); // Try t compile this invoke
         // TODO: Debuginfo!
         push_frames(ctx, ctx.linfo, codeinst->def, 1);
     }
@@ -7213,7 +7172,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptr
     return f;
 }
 
-static void emit_cfunc_invalidate(
+void emit_cfunc_invalidate(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
@@ -9996,7 +9955,6 @@ jl_llvm_functions_t jl_emit_code(
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
     jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_DEFAULT_BLOCK);
-    // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
         compare_cgparams(params.params, &jl_default_cgparams)) &&
@@ -10149,126 +10107,6 @@ jl_llvm_functions_t jl_emit_codeinst(
     return decls;
 }
 
-
-void jl_compile_workqueue(
-    jl_codegen_params_t &params,
-    CompilationPolicy policy)
-{
-    JL_TIMING(CODEGEN, CODEGEN_Workqueue);
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
-    while (!params.workqueue.empty()) {
-        jl_code_instance_t *codeinst;
-        auto it = params.workqueue.back();
-        codeinst = it.first;
-        auto proto = it.second;
-        params.workqueue.pop_back();
-        // try to emit code for this item from the workqueue
-        StringRef preal_decl = "";
-        bool preal_specsig = false;
-        jl_callptr_t invoke = NULL;
-        if (params.cache) {
-            // WARNING: this correctness is protected by an outer lock
-            uint8_t specsigflags;
-            void *fptr;
-            jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
-            //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
-            if (invoke == jl_fptr_args_addr) {
-                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
-            }
-            else if (specsigflags & 0b1) {
-                preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
-                preal_specsig = true;
-            }
-        }
-        if (preal_decl.empty()) {
-            auto it = params.compiled_functions.find(codeinst);
-            if (it == params.compiled_functions.end()) {
-                // Reinfer the function. The JIT came along and removed the inferred
-                // method body. See #34993
-                if ((policy != CompilationPolicy::Default || params.params->trim) &&
-                    jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
-                    // XXX: SOURCE_MODE_FORCE_SOURCE is wrong here (neither sufficient nor necessary)
-                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
-                }
-                if (codeinst) {
-                    orc::ThreadSafeModule result_m =
-                        jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.DL, params.TargetTriple);
-                    auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
-                    if (result_m)
-                        it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
-                }
-            }
-            if (it != params.compiled_functions.end()) {
-                auto &decls = it->second.second;
-                if (decls.functionObject == "jl_fptr_args") {
-                    preal_decl = decls.specFunctionObject;
-                }
-                else if (decls.functionObject != "jl_fptr_sparam") {
-                    preal_decl = decls.specFunctionObject;
-                    preal_specsig = true;
-                }
-            }
-        }
-        // patch up the prototype we emitted earlier
-        Module *mod = proto.decl->getParent();
-        assert(proto.decl->isDeclaration());
-        if (proto.specsig) {
-            // expected specsig
-            if (!preal_specsig) {
-                if (params.params->trim) {
-                    auto it = params.compiled_functions.find(codeinst); //TODO: What to do about this
-                    errs() << "Bailed out to invoke when compiling:";
-                    jl_(codeinst->def);
-                    if (it != params.compiled_functions.end()) {
-                        errs() << it->second.second.functionObject << "\n";
-                        errs() << it->second.second.specFunctionObject << "\n";
-                    } else
-                        errs() << "codeinst not in compile_functions\n";
-                }
-                // emit specsig-to-(jl)invoke conversion
-                StringRef invokeName;
-                if (invoke != NULL)
-                    invokeName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, invoke, codeinst);
-                Function *preal = emit_tojlinvoke(codeinst, invokeName, mod, params);
-                proto.decl->setLinkage(GlobalVariable::InternalLinkage);
-                //protodecl->setAlwaysInline();
-                jl_init_function(proto.decl, params.TargetTriple);
-                size_t nrealargs = jl_nparams(codeinst->def->specTypes); // number of actual arguments being passed
-                // TODO: maybe this can be cached in codeinst->specfptr?
-                emit_cfunc_invalidate(proto.decl, proto.cc, proto.return_roots, codeinst->def->specTypes, codeinst->rettype, false, nrealargs, params, preal, 0, 0);
-                preal_decl = ""; // no need to fixup the name
-            }
-            else {
-                assert(!preal_decl.empty());
-            }
-        }
-        else {
-            // expected non-specsig
-            if (preal_decl.empty() || preal_specsig) {
-                // emit jlcall1-to-(jl)invoke conversion
-                StringRef invokeName;
-                if (invoke != NULL)
-                    invokeName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, invoke, codeinst);
-                preal_decl = emit_tojlinvoke(codeinst, invokeName, mod, params)->getName();
-            }
-        }
-        if (!preal_decl.empty()) {
-            // merge and/or rename this prototype to the real function
-            if (Value *specfun = mod->getNamedValue(preal_decl)) {
-                if (proto.decl != specfun)
-                    proto.decl->replaceAllUsesWith(specfun);
-            }
-            else {
-                proto.decl->setName(preal_decl);
-            }
-        }
-    }
-    JL_GC_POP();
-}
-
-
 // --- initialization ---
 SmallVector<std::pair<jl_value_t**, JuliaVariable*>, 0> gv_for_global;
 static void global_jlvalue_to_llvm(JuliaVariable *var, jl_value_t **addr)
@@ -10286,6 +10124,9 @@ static JuliaVariable *julia_const_gv(jl_value_t *val)
 
 static void init_jit_functions(void)
 {
+    add_named_global("jl_fptr_args", jl_fptr_args_addr);
+    add_named_global("jl_fptr_sparam", jl_fptr_sparam_addr);
+    add_named_global("jl_f_opaque_closure_call", &jl_f_opaque_closure_call);
     add_named_global(jl_small_typeof_var, &jl_small_typeof);
     add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);

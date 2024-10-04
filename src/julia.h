@@ -2339,7 +2339,13 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
 
+#ifdef __cplusplus
+}
+#endif
 #include "julia_locks.h"   // requires jl_task_t definition
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Return the exception currently being handled, or `jl_nothing`.
 //
