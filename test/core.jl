@@ -813,9 +813,15 @@ let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
     @test t.parameters[1] isa Core.TypeVar
 
     @test @inferred(f()) isa Function
-    @test Base.return_types(f()) == Any[DataType]
+    @test Base.infer_return_type(f()) == DataType
     @test fieldtype(typeof(f()), 1) === DataType
 end
+function issue23618(a::AbstractVector)
+    T = eltype(a)
+    b = Vector{T}()
+    return [Set{T}() for x in a]
+end
+@test Base.infer_return_type(issue23618, (Vector{Int},)) == Vector{Set{Int}}
 
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
