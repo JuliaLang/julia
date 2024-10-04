@@ -10371,6 +10371,7 @@ static void init_jit_functions(void)
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
+    add_named_global("__julia_personality", &__julia_personality);
 #if defined(_COMPILER_GCC_)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else

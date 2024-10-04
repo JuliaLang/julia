@@ -665,8 +665,7 @@ static Expected<orc::ThreadSafeModule> selectOptLevel(orc::ThreadSafeModule TSM,
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress);
+                            std::function<uint64_t(const StringRef &)> getLoadAddress);
 
 namespace {
 
@@ -726,7 +725,7 @@ public:
                 return result->second;
             };
 
-            jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+            jl_register_jit_object(*NewInfo->Object, getLoadAddress);
             PendingObjs.erase(&MR);
         }
 
@@ -957,10 +956,6 @@ public:
 };
 
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-void *lookupWriteAddressFor(RTDyldMemoryManager *MemMgr, void *rt_addr);
-#endif
-
 void registerRTDyldJITObject(const object::ObjectFile &Object,
                              const RuntimeDyld::LoadedObjectInfo &L,
                              const std::shared_ptr<RTDyldMemoryManager> &MemMgr)
@@ -983,14 +978,7 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     };
 
     auto DebugObject = L.getObjectForDebug(Object); // ELF requires us to make a copy to mutate the header with the section load addresses. On other platforms this is a no-op.
-    jl_register_jit_object(DebugObject.getBinary() ? *DebugObject.getBinary() : Object,
-        getLoadAddress,
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-        [MemMgr](void *p) { return lookupWriteAddressFor(MemMgr.get(), p); }
-#else
-        nullptr
-#endif
-    );
+    jl_register_jit_object(DebugObject.getBinary() ? *DebugObject.getBinary() : Object, getLoadAddress);
 }
 namespace {
     static std::unique_ptr<TargetMachine> createTargetMachine() JL_NOTSAFEPOINT {
@@ -1281,8 +1269,9 @@ namespace {
                 }
 
                 // Windows needs some inline asm to help
-                // build unwind tables
-                jl_decorate_module(M);
+                // build unwind tables, if they have any functions to decorate
+                if (!M.functions().empty())
+                    jl_decorate_module(M);
             });
             return std::move(TSM);
         }
@@ -2255,30 +2244,64 @@ static void jl_decorate_module(Module &M) {
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
-        // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
-        std::string inline_asm = "\
-    .section ";
-        inline_asm +=
+        // and with JITLink it became difficult to change the content afterwards, but we
+        // would prefer that this simple content wasn't recompiled in every single module,
+        // so we emit the necessary PLT trampoline as inline assembly.
+        // This is somewhat duplicated with the .pdata section, but we haven't been able to
+        // use that yet due to relocation issues.
+#define ASM_USES_ELF // use ELF or COFF syntax based on FORCE_ELF
+        StringRef inline_asm(
+    ".section"
 #if JL_LLVM_VERSION >= 180000
-    ".ltext,\"ax\",@progbits";
+        " .ltext,\"ax\",@progbits\n"
 #else
-    ".text";
+        " .text\n"
 #endif
-        inline_asm +=              "\n\
-    .type   __UnwindData,@object    \n\
-    .p2align        2, 0x90         \n\
-    __UnwindData:                   \n\
-        .zero   12                  \n\
-        .size   __UnwindData, 12    \n\
-                                    \n\
-        .type   __catchjmp,@object  \n\
-        .p2align        2, 0x90     \n\
-    __catchjmp:                     \n\
-        .zero   12                  \n\
-        .size   __catchjmp, 12";
-
+    ".globl __julia_personality\n"
+    "\n"
+#ifdef ASM_USES_ELF
+    ".type __UnwindData,@object\n"
+#else
+    ".def __UnwindData\n"
+    ".scl 2\n"
+    ".type 0\n"
+    ".endef\n"
+#endif
+    ".p2align        2, 0x90\n"
+    "__UnwindData:\n"
+    "  .byte 0x09;\n" // version info, UNW_FLAG_EHANDLER
+    "  .byte 4;\n"    // size of prolog (bytes)
+    "  .byte 2;\n"    // count of unwind codes (slots)
+    "  .byte 0x05;\n" // frame register (rbp) = rsp
+    "  .byte 4;\n"    // second instruction
+    "  .byte 0x03;\n" // mov RBP, RSP
+    "  .byte 1;\n"    // first instruction
+    "  .byte 0x50;\n" // push RBP
+    "  .int __catchjmp - "
+#if JL_LLVM_VERSION >= 180000
+    ".ltext;\n" // Section-relative offset (if using COFF and JITLink, this can be relative to __ImageBase instead, though then we could possibly use pdata/xdata directly then)
+#else
+    ".text;\n"
+#endif
+    ".size __UnwindData, 12\n"
+    "\n"
+#ifdef ASM_USES_ELF
+    ".type __catchjmp,@function\n"
+#else
+    ".def __catchjmp\n"
+    ".scl 2\n"
+    ".type 32\n"
+    ".endef\n"
+#endif
+    ".p2align        2, 0x90\n"
+    "__catchjmp:\n"
+    "  movabsq $__julia_personality, %rax\n"
+    "  jmpq *%rax\n"
+    ".size __catchjmp, . - __catchjmp\n"
+    "\n");
         M.appendModuleInlineAsm(inline_asm);
     }
+#undef ASM_USES_ELF
 }
 
 #ifndef JL_USE_JITLINK
