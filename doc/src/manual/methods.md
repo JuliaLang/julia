@@ -701,10 +701,10 @@ supertypes:
 julia> eltype_wrong(Union{Vector{Int}, Matrix{Int}})
 ERROR: MethodError: no method matching supertype(::Type{VecOrMat{Int64}})
 
-Closest candidates are:  
-  supertype(::UnionAll)  
+Closest candidates are:
+  supertype(::UnionAll)
    @ Base operators.jl:44
-  supertype(::DataType)  
+  supertype(::DataType)
    @ Base operators.jl:43
 ```
 
