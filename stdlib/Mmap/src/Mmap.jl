@@ -86,6 +86,8 @@ grow!(::Anonymous,o::Integer,l::Integer) = return
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
+    # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
+    filelen == 0 && !isfile(io) && return
     if filelen < offset + len
         failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
@@ -218,7 +220,7 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        if requestedSizeLarger
+        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
             if iswrite
                 if grow
                     grow!(io, offset, len)
