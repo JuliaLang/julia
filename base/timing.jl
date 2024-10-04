@@ -206,7 +206,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0 || lock_conflicts > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -224,8 +224,11 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
         if lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
             plural = lock_conflicts == 1 ? "" : "s"
-            print(io, ", ", lock_conflicts, " lock conflict$plural")
+            print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
             if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
