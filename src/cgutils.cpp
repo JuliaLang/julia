@@ -4491,6 +4491,82 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 #endif
 
 
+static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, size_t nel, jl_genericmemory_t *inst)
+{
+    if (nel == 0){
+        Value *empty_alloc = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)inst));
+        return mark_julia_type(ctx, empty_alloc, true, typ);
+    }
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+    assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)typ)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
+
+    __int128 nbytes = (__int128)nel * elsz;
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        nbytes += nel;
+    }
+    __int128 MAXINTVAL = (((size_t)-1)>>1);
+    if (nel >= MAXINTVAL || nbytes >= (__int128) MAXINTVAL)
+        emit_error(ctx, "invalid GenericMemory size: too large for system address width");
+
+    auto ct = get_current_task(ctx);
+    auto ptls = get_current_ptls(ctx);
+    auto T_size = ctx.types().T_size;
+    auto int8t = getInt8Ty(ctx.builder.getContext());
+    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
+    auto cg_nbytes = ConstantInt::get(T_size, nbytes);
+    auto cg_nel = ConstantInt::get(T_size, nel);
+
+    // else actually allocate mem
+    auto arg_typename = [&] JL_NOTSAFEPOINT {
+        std::string type_str;
+        auto eltype = jl_tparam1(typ);
+        if (jl_is_datatype(eltype))
+            type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+        else if (jl_is_uniontype(eltype))
+            type_str = "Union";
+        else
+            type_str = "<unknown type>";
+        return "Memory{" + type_str + "}[]";
+    };
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+
+    int pooled = tot <= GC_MAX_SZCLASS;
+    Value *alloc, *decay_alloc, *ptr_field;
+    if (pooled) {
+        auto cg_tot = ConstantInt::get(T_size, tot);
+        auto call = prepare_call(jl_alloc_obj_func);
+        alloc = ctx.builder.CreateCall(call, { ct, cg_tot, track_pjlvalue(ctx, cg_typ)});
+        // set data (jl_alloc_genericmemory_unchecked_func doesn't have it)
+        decay_alloc = maybe_decay_tracked(ctx, alloc);
+        ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        Value *data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, alloc), JL_SMALL_BYTE_ALIGNMENT);
+        ctx.builder.CreateStore(data, ptr_field);
+    } else { // just use the dynamic length version since the malloc will be slow anyway
+        auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
+        alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+        decay_alloc = maybe_decay_tracked(ctx, alloc);
+    }
+    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
+    Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
+    ctx.builder.CreateStore(cg_nel, len_field);
+    // zeroinit pointers and unions
+    if (zi) {
+        ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        Value *mem_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, ptr_field, Align(sizeof(void*)));
+        ctx.builder.CreateMemSet(mem_ptr, ConstantInt::get(int8t, 0), cg_nbytes, Align(sizeof(void*)));
+    }
+
+    setName(ctx.emission_context, alloc, arg_typename);
+    return mark_julia_type(ctx, alloc, true, typ);
+}
+
 static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
 {
     emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
@@ -4555,7 +4631,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     }
     Value *notoverflow = ctx.builder.CreateNot(overflow);
     error_unless(ctx, notoverflow, "invalid GenericMemory size: too large for system address width");
-    // actually allocate (TODO: optimize alloc for fixed sizes)
+    // actually allocate
     auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
     auto alloc = ctx.builder.CreateCall(call, { ptls, nbytes, cg_typ});
     // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
@@ -4564,11 +4640,9 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     ctx.builder.CreateStore(nel_unboxed, len_field);
     // zeroinit pointers and unions
     if (zi) {
-        auto data_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        jl_value_t *ety = jl_tparam1(typ);
-        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, ety);
-        auto data = ctx.builder.CreateInBoundsGEP(elty, data_field, 0);
-        ctx.builder.CreateMemSet(data, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
+        Value *ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        Value *mem_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, ptr_field, Align(sizeof(void*)));
+        ctx.builder.CreateMemSet(mem_ptr, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
     }
 
     setName(ctx.emission_context, alloc, arg_typename);
@@ -4579,7 +4653,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     ctx.builder.SetInsertPoint(retvalBB);
     auto phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
     phi->addIncoming(emptyalloc, emptymemBB);
-    phi->addIncoming(alloc, nonemptymemBB;
+    phi->addIncoming(alloc, nonemptymemBB);
     return mark_julia_type(ctx, phi, true, typ);
 }
 
