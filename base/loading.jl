@@ -3121,7 +3121,7 @@ end
                 # point to an unreadable directory, make sure we can `stat` the
                 # file before comparing it with `modpath`.
                 isreadable = iszero(@ccall jl_fs_access(stdlib_path::Cstring, 0x04::Cint)::Cint)
-                if isreadable && !samefile(stdlib_path, modpath)
+                if !(isreadable && samefile(stdlib_path, modpath))
                     @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                     return true # cache file was compiled from a different path
                 end
