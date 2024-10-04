@@ -708,7 +708,7 @@ let
         length((@code_lowered sum(1:10)).code)
 end
 
-@testset "@time_imports and @trace_compile" begin
+@testset "@time_imports, @trace_compile, @trace_dispatch" begin
     mktempdir() do dir
         cd(dir) do
             try
@@ -722,6 +722,11 @@ end
                         foo(1)
                     end
                     foo(x) = x
+                    function bar()
+                        Base.Experimental.@force_compile
+                        bar(1)
+                    end
+                    bar(x) = x
                     end
                     """)
 
@@ -748,6 +753,17 @@ end
                 rm(fname)
 
                 @test occursin("ms =# precompile(", String(buf))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_dispatch @eval Foo3242.bar()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("precompile(", String(buf))
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end
