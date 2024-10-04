@@ -4515,7 +4515,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
         if (inst == NULL)
             return false;
-        *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        if(argv[2].constant) {
+            if (argv[2].typ != (jl_value_t*)jl_long_type)
+                return false;
+            size_t nel = jl_unbox_long(argv[2].constant);
+            if (nel < 0)
+                return false;
+            *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
+        } else
+            *ret = emit_memorynew(ctx, typ, argv[2], inst);
         return true;
     }
 
