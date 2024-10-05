@@ -688,12 +688,15 @@ function expand_condition(ctx, ex)
 end
 
 function expand_let(ctx, ex)
-    scope_type = get(ex, :scope_type, :hard)
+    @chk numchildren(ex) == 2
+    bindings = ex[1]
+    @chk kind(bindings) == K"block"
     blk = ex[2]
-    if numchildren(ex[1]) == 0
+    scope_type = get(ex, :scope_type, :hard)
+    if numchildren(bindings) == 0
         return @ast ctx ex [K"scope_block"(scope_type=scope_type) blk]
     end
-    for binding in Iterators.reverse(children(ex[1]))
+    for binding in Iterators.reverse(children(bindings))
         kb = kind(binding)
         if is_sym_decl(kb)
             blk = @ast ctx ex [K"scope_block"(scope_type=scope_type)
@@ -1438,6 +1441,90 @@ function expand_macro_def(ctx, ex)
     ]
 end
 
+# Analyze type signatures such as `A <: B where C`
+#
+# Return (name, params, supertype)
+function analyze_type_sig(ctx, ex)
+    k = kind(ex)
+    if k == K"Identifier"
+        return (ex, (), nothing_(ctx, ex))
+    elseif k == K"curly" && numchildren(ex) >= 1 && kind(ex[1]) == K"Identifier"
+        return (ex[1], ex[2:end], nothing_(ctx, ex))
+    elseif k == K"<:" && numchildren(ex) == 2
+        if kind(ex[1]) == K"Identifier"
+            return (ex[1], (), ex[2])
+        elseif kind(ex[1]) == K"curly" && numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"Identifier"
+            return (ex[1][1], ex[1][2:end], ex[2])
+        end
+    end
+    throw(LoweringError(ex, "invalid type signature"))
+end
+
+# Match `x<:T<:y` etc, returning `(name, lower_bound, upper_bound)`
+# A bound is `nothing` if not specified
+function analyze_typevar(ctx, ex)
+    k = kind(ex)
+    if k == K"Identifier"
+        (ex, nothing, nothing)
+    elseif k == K"comparison" && numchildren(ex) == 5
+        kind(ex[3]) == K"Identifier" || throw(LoweringError(ex[3], "expected type name"))
+        if !((kind(ex[2]) == K"Identifier" && ex[2].name_val == "<:") &&
+             (kind(ex[4]) == K"Identifier" && ex[4].name_val == "<:"))
+            throw(LoweringError(ex, "invalid type bounds"))
+        end
+        # a <: b <: c
+        (ex[3], ex[1], ex[5])
+    elseif k == K"<:" && numchildren(ex) == 2
+        kind(ex[1]) == K"Identifier" || throw(LoweringError(ex[1], "expected type name"))
+        (ex[1], nothing, ex[2])
+    elseif k == K">:" && numchildren(ex) == 2
+        kind(ex[2]) == K"Identifier" || throw(LoweringError(ex[2], "expected type name"))
+        (ex[2], ex[1], nothing)
+    else
+        throw(LoweringError(ex, "expected type name or type bounds"))
+    end
+end
+
+function bounds_to_TypeVar(ctx, srcref, bounds)
+    name, lb, ub = bounds
+    # Generate call to one of
+    # TypeVar(name)
+    # TypeVar(name, ub)
+    # TypeVar(name, lb, ub)
+    @ast ctx srcref [K"call"
+        "TypeVar"::K"core"
+        name=>K"Symbol"
+        lb
+        if isnothing(ub) && !isnothing(lb)
+            "Any"::K"core"
+        else
+            ub
+        end
+    ]
+end
+
+function expand_where(ctx, srcref, lhs, rhs)
+    bounds = analyze_typevar(ctx, rhs)
+    v = bounds[1]
+    @ast ctx srcref [K"let"
+        [K"block" [K"=" v bounds_to_TypeVar(ctx, srcref, bounds)]]
+        [K"call" "UnionAll"::K"core" v lhs]
+    ]
+end
+
+function expand_wheres(ctx, ex)
+    body = ex[1]
+    rhs = ex[2]
+    if kind(rhs) == K"braces"
+        for r in reverse(children(rhs))
+            body = expand_where(ctx, ex, body, r)
+        end
+    else
+        body = expand_where(ctx, ex, body, rhs)
+    end
+    body
+end
+
 function _append_importpath(ctx, path_spec, path)
     prev_was_dot = true
     for component in children(path)
@@ -1661,6 +1748,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             expand_forms_2(ctx, expand_decls(ctx, ex)) # FIXME
         end
+    elseif k == K"where"
+        expand_forms_2(ctx, expand_wheres(ctx, ex))
     elseif is_operator(k) && is_leaf(ex)
         makeleaf(ctx, ex, K"Identifier", ex.name_val)
     elseif k == K"char" || k == K"var"

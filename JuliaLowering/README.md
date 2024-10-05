@@ -351,6 +351,41 @@ statements of type `Expr` with a small number of allowed forms. The IR obeys
 certain invariants which are checked by the downstream code in
 base/compiler/validation.jl.
 
+## Scope resolution
+
+Scopes are documented in the Juila documentation on
+[Scope of Variables](https://docs.julialang.org/en/v1/manual/variables-and-scoping/)
+
+The scope resolution pass disambiguates variables which have the same name in
+different scopes and fills in the list of local variables within each lambda.
+
+During scope resolution, we maintain a stack of `ScopeInfo` data structures.
+
+When a new `lambda` or `scope_block` is discovered, we create a new `ScopeInfo` by
+1. Find all identifiers bound or used within a scope. New *bindings* may be
+   introduced by one of the `local`, `global` keywords, implicitly by
+   assignment, as function arguments to a `lambda`, or as type arguments in a
+   method ("static parameters"). Identifiers are *used* when they are
+   referenced.
+2. Infer which bindings are newly introduced local or global variables (and
+   thus require a distinct identity from names already in the stack)
+3. Assign a `BindingId` (unique integer) to each new binding
+
+We then push this `ScopeInfo` onto the stack and traverse the expressions
+within the scope translating each `K"Identifier"` into the associated
+`K"BindingId"`. While we're doing this we also resolve some special forms like
+`islocal` by making use of the scope stack.
+
+The detailed rules for whether assignment introduces a new variable depend on
+the `scope_block`'s `scope_type` attribute when we are processing top-level
+code.
+* `scope_type == :hard` (as for bindings inside a `let` block) means an
+  assignment always introduces a new binding
+* `scope_type == :neutral` - inherit soft or hard scope from the parent scope.
+* `scope_type == :soft` - assignments are to globals if the variable
+  exists in global module scope. Soft scope doesn't have surface syntax and is
+  introduced for top-level code by REPL-like environments.
+
 ## Julia's existing lowering implementation
 
 ### How does macro expansion work?
@@ -413,58 +448,6 @@ Things which are expanded:
 * "`do` macrocalls" have their own special handling because the macrocall is
   the child of the `do`. This seems like a mess!!
 
-
-### Scope resolution
-
-Scopes are documented in the Juila documentation on [Scope of Variables](https://docs.julialang.org/en/v1/manual/variables-and-scoping/)
-
-This pass disambiguates variables which have the same name in different scopes
-and fills in the list of local variables within each lambda.
-
-#### Which data is needed to define a scope?
-
-As scope is a collection of variable names by category:
-* `argument` - arguments to a lambda
-* `local` - variables declared local (at top level) or implicitly local (in lambdas) or desugared to local-def
-* `global` - variables declared global (in lambdas) or implicitly global (at top level)
-* `static-parameter` - lambda type arguments from `where` clauses
-
-#### How does scope resolution work?
-
-We traverse the AST starting at the root paying attention to certian nodes:
-* Nodes representing identifiers (Identifier, operators, var)
-    - If a variable exists in the table, it's *replaced* with the value in the table.
-    - If it doesn't exist, it becomes an `outerref`
-* Variable scoping constructs: `local`, `local-def`
-    - collected by scope-block
-    - removed during traversal
-* Scope metadata `softscope`, `hardscope` - just removed
-* New scopes
-    - `lambda` creates a new scope containing itself and its arguments,
-      otherwise copying the parent scope. It resolves the body with that new scope.
-    - `scope-block` is really complicated - see below
-* Scope queries `islocal`, `locals`
-    - `islocal` - statically expand to true/false based on whether var name is a local var
-    - `locals` - return list of locals - see `@locals`
-    - `require-existing-local` - somewhat like `islocal`, but allows globals
-      too (whaa?! naming) and produces a lowering error immediately if variable
-      is not known.  Should be called `require-in-scope` ??
-* `break-block`, `symbolicgoto`, `symboliclabel` need special handling because
-  one of their arguments is a non-quoted symbol.
-* Add static parameters for generated functions `with-static-parameters`
-* `method` - special handling for static params
-
-`scope-block` is the complicated bit. It's processed by
-* Searching the expressions within the block for any `local`, `local-def`,
-  `global` and assigned vars. Searching doesn't recurse into `lambda`,
-  `scope-block`, `module` and `toplevel`
-* Building lists of implicit locals or globals (depending on whether we're in a
-  top level thunk)
-* Figuring out which local variables need to be renamed. This is any local variable
-  with a name which has already occurred in processing one of the previous scope blocks
-* Check any conflicting local/global decls and soft/hard scope
-* Build new scope with table of renames
-* Resolve the body with the new scope, applying the renames
 
 ### Intermediate forms used in lowering
 
