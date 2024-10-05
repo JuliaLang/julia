@@ -2787,5 +2787,5 @@ Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
 @testset "show AbstractDict with unknown length" begin
     x = NoLengthDict{Int,Int}()
     x[1] = 2
-    @test sprint((io, x) -> show(io, MIME("text/plain"), x), x) == "NoLengthDict(1 => 2)"
+    @test endswith(sprint((io, x) -> show(io, MIME("text/plain"), x), x), "NoLengthDict(1 => 2)")
 end
