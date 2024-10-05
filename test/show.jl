@@ -2773,3 +2773,19 @@ end
     do_expr1 = :(foo() do; bar(); end)
     @test !contains(sprint(show, do_expr1), " \n")
 end
+
+struct NoLengthDict{K,V} <: AbstractDict{K,V}
+    dict::Dict{K,V}
+    NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
+end
+Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
+Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
+Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
+Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
+
+# Issue 55931
+@testset "show AbstractDict with unknown length" begin
+    x = NoLengthDict{Int,Int}()
+    x[1] = 2
+    @test sprint((io, x) -> show(io, MIME("text/plain"), x), x) == "NoLengthDict(1 => 2)"
+end
