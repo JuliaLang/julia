@@ -4506,13 +4506,13 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     if (isboxed)
         elsz = sizeof(void*);
 
-    __int128 nbytes = (__int128)nel * elsz;
+    size_t nbytes;
+    bool overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        nbytes += nel;
+        overflow |= __builtin_add_overflow(nbytes, nel, &nbytes);
     }
-    __int128 MAXINTVAL = (((size_t)-1)>>1);
-    if (nel >= MAXINTVAL || nbytes >= (__int128) MAXINTVAL)
+    if (overflow)
         emit_error(ctx, "invalid GenericMemory size: too large for system address width");
 
     auto ct = get_current_task(ctx);
