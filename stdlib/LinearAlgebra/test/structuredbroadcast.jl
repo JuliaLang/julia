@@ -3,6 +3,10 @@
 module TestStructuredBroadcast
 using Test, LinearAlgebra
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 @testset "broadcast[!] over combinations of scalars, structured matrices, and dense vectors/matrices" begin
     N = 10
     s = rand()
@@ -364,6 +368,11 @@ end
         A = [1 3; 2 4]
         U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
         standardbroadcastingtests(U, UpperTriangular)
+    end
+    @testset "SymTridiagonal" begin
+        m = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        S = SymTridiagonal(fill(m,4), fill(m,3))
+        standardbroadcastingtests(S, SymTridiagonal)
     end
 end
 
