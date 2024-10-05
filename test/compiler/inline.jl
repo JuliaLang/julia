@@ -1596,6 +1596,32 @@ let
     @test get_finalization_count() == 1000
 end
 
+# Load forwarding with `finalizer` elision
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            @noinline
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", obj[])
+        end
+        Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
+        return xs[]
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            @noinline
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", obj[])
+        end
+        Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
+        xs[] += 1
+        return xs[]
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
+
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
