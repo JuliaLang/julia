@@ -1276,13 +1276,11 @@ end
     return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
-for (T, WT) in ((Float16, Float32), (Float32, Float64))
-    @eval function ^(x::$T, n::Integer)
-        n == -2 && return (i=inv(x); i*i)
-        n == 3 && return x*x*x #keep compatibility with literal_pow
-        n < 0 && return $T(Base.power_by_squaring(inv($WT(x)),-n))
-        $T(Base.power_by_squaring($WT(x),n))
-    end
+function ^(x::Union{Float16,Float32}, n::Integer)
+    n == -2 && return (i=inv(x); i*i)
+    n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
+    oftype(x, Base.power_by_squaring(widen(x),n))
 end
 
 ## rem2pi-related calculations ##
