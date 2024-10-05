@@ -1504,7 +1504,16 @@ function analyze_type_sig(ctx, ex)
     throw(LoweringError(ex, "invalid type signature"))
 end
 
-function expand_abstract_type(ctx, ex)
+function expand_abstract_or_primitive_type(ctx, ex)
+    is_abstract = kind(ex) == K"abstract"
+    if is_abstract
+        @chk numchildren(ex) == 1
+    elseif kind(ex) == K"primitive"
+        @chk numchildren(ex) == 2
+        nbits = ex[2]
+    else
+        @assert false
+    end
     name, params, supertype = analyze_type_sig(ctx, ex[1])
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
@@ -1524,10 +1533,13 @@ function expand_abstract_type(ctx, ex)
                 [K"="
                     newtype_var
                     [K"call"
-                        "_abstracttype"::K"core"
+                        (is_abstract ? "_abstracttype" : "_primitivetype")::K"core"
                         ctx.mod::K"Value"
                         name=>K"Symbol"
                         [K"call" "svec"::K"core" typevar_names...]
+                        if !is_abstract
+                            nbits
+                        end
                     ]
                 ]
                 [K"=" name newtype_var]
@@ -1837,8 +1849,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_import(ctx, ex)
     elseif k == K"export" || k == K"public"
         TODO(ex)
-    elseif k == K"abstract"
-        expand_forms_2(ctx, expand_abstract_type(ctx, ex))
+    elseif k == K"abstract" || k == K"primitive"
+        expand_forms_2(ctx, expand_abstract_or_primitive_type(ctx, ex))
     elseif k == K"ref"
         if numchildren(ex) > 2
             TODO(ex, "ref expansion")

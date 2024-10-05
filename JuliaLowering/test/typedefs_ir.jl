@@ -220,3 +220,70 @@ function f()
 #   └─────────────────┘ ── this syntax is only allowed in top level code
 end
 
+########################################
+# Simple primitive type definition
+primitive type P 8 end
+#---------------------
+1   (call core.svec)
+2   (call core._primitivetype TestMod :P %₁ 8)
+3   (= slot₁/P %₂)
+4   (call core._setsuper! %₂ core.Any)
+5   (call core._typebody! %₂)
+6   (global TestMod.P)
+7   (const TestMod.P)
+8   (isdefined TestMod.P)
+9   (gotoifnot %₈ label₁₄)
+10  TestMod.P
+11  (call core._equiv_typedef %₁₀ %₂)
+12  (gotoifnot %₁₁ label₁₄)
+13  (goto label₁₅)
+14  (= TestMod.P %₂)
+15  (return core.nothing)
+
+########################################
+# Complex primitive type definition
+primitive type P{X,Y} <: Z 32 end
+#---------------------
+1   (= slot₂/X (call core.TypeVar :X))
+2   (= slot₃/Y (call core.TypeVar :Y))
+3   slot₂/X
+4   slot₃/Y
+5   (call core.svec %₃ %₄)
+6   (call core._primitivetype TestMod :P %₅ 32)
+7   (= slot₁/P %₆)
+8   TestMod.Z
+9   (call core._setsuper! %₆ %₈)
+10  (call core._typebody! %₆)
+11  (global TestMod.P)
+12  (const TestMod.P)
+13  (isdefined TestMod.P)
+14  (gotoifnot %₁₃ label₁₉)
+15  TestMod.P
+16  (call core._equiv_typedef %₁₅ %₆)
+17  (gotoifnot %₁₆ label₁₉)
+18  (goto label₂₀)
+19  (= TestMod.P %₆)
+20  (return core.nothing)
+
+########################################
+# Primitive type definition with computed size (should this be allowed??)
+primitive type P P_nbits() end
+#---------------------
+1   (call core.svec)
+2   TestMod.P_nbits
+3   (call %₂)
+4   (call core._primitivetype TestMod :P %₁ %₃)
+5   (= slot₁/P %₄)
+6   (call core._setsuper! %₄ core.Any)
+7   (call core._typebody! %₄)
+8   (global TestMod.P)
+9   (const TestMod.P)
+10  (isdefined TestMod.P)
+11  (gotoifnot %₁₀ label₁₆)
+12  TestMod.P
+13  (call core._equiv_typedef %₁₂ %₄)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₇)
+16  (= TestMod.P %₄)
+17  (return core.nothing)
+
