@@ -385,7 +385,7 @@ control over the factorization of `A`.
     these are already in a factorized form
 
 # Examples
-```jldoctest
+```julia-repl
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
 
 julia> X = [1; 2.5; 3];
@@ -426,7 +426,7 @@ control over the factorization of `A`.
     these are already in a factorized form
 
 # Examples
-```jldoctest
+```julia-repl
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
 
 julia> X = [1; 2.5; 3];
