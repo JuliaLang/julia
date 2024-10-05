@@ -1535,7 +1535,7 @@ function expand_abstract_type(ctx, ex)
                 [K"call" "_typebody!"::K"core" newtype_var]
             ]
         ]
-        # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ] FIXME
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
         [K"global" name]
         [K"const" name]
         [K"if"
@@ -1634,15 +1634,17 @@ function expand_import(ctx, ex)
         push!(path_spec, isnothing(as_name) ? nothing_(ctx, ex) :
                          @ast(ctx, as_name, as_name.name_val::K"String"))
     end
-    @ast ctx ex [
-        K"call"
-        module_import ::K"Value"
-        ctx.mod       ::K"Value"
-        is_using      ::K"Value"
-        from_path
+    @ast ctx ex [K"block"
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
         [K"call"
-            "svec"::K"core"
-            path_spec...
+            module_import ::K"Value"
+            ctx.mod       ::K"Value"
+            is_using      ::K"Value"
+            from_path
+            [K"call"
+                "svec"::K"core"
+                path_spec...
+            ]
         ]
     ]
 end
@@ -1830,10 +1832,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"$"
         throw(LoweringError(ex, "`\$` expression outside string or quote block"))
     elseif k == K"module"
-        # TODO: check-toplevel
         expand_module(ctx, ex)
     elseif k == K"import" || k == K"using"
-        # TODO: check-toplevel
         expand_import(ctx, ex)
     elseif k == K"export" || k == K"public"
         TODO(ex)
@@ -1858,12 +1858,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
-        # TODO: check-toplevel
-        @ast ctx ex [
-            K"call"
-            eval          ::K"Value"
-            ctx.mod       ::K"Value"
-            [K"inert" ex]
+        @ast ctx ex [K"block"
+            [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+            [K"call"
+                eval          ::K"Value"
+                ctx.mod       ::K"Value"
+                [K"inert" ex]
+            ]
         ]
     elseif k == K"vect"
         @ast ctx ex [K"call"

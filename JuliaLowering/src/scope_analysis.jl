@@ -462,6 +462,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
                 e = ex[2][1]
                 throw(LoweringError(e, "$(kind(e)) is only allowed in global scope"))
             end
+        elseif etype == "toplevel_only"
+            if !ctx.scope_stack[end].in_toplevel_thunk
+                e = ex[2][1]
+                throw(LoweringError(e, "this syntax is only allowed in top level code"))
+            end
         else
             throw(LoweringError(ex, "Unknown syntax assertion"))
         end

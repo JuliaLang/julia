@@ -208,3 +208,15 @@ LoweringError:
 abstract type A() <: B end
 #            └───────┘ ── invalid type signature
 
+########################################
+# Error: Abstract type definition in function scope
+function f()
+    abstract type A end
+end
+#---------------------
+LoweringError:
+function f()
+    abstract type A end
+#   └─────────────────┘ ── this syntax is only allowed in top level code
+end
+
