@@ -1158,6 +1158,8 @@ end
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
+    @test pi != Float64(pi)
+    @test Float64(pi) != pi
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
     @test !(Float64(pi,RoundDown) > pi)
@@ -1176,6 +1178,7 @@ end
     @test nextfloat(big(pi)) > pi
     @test !(prevfloat(big(pi)) > pi)
     @test !(nextfloat(big(pi)) < pi)
+    @test big(typeof(pi)) == BigFloat
 
     @test 2646693125139304345//842468587426513207 < pi
     @test !(2646693125139304345//842468587426513207 > pi)

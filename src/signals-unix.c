@@ -426,6 +426,7 @@ pthread_mutex_t in_signal_lock; // shared with jl_delete_thread
 static bt_context_t *signal_context; // protected by in_signal_lock
 static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
+static int signals_inflight = 0;
 
 int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
@@ -438,7 +439,7 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
         pthread_mutex_unlock(&in_signal_lock);
         return 0;
     }
-    if (jl_atomic_load(&ptls2->signal_request) != 0) {
+    while (signals_inflight) {
         // something is wrong, or there is already a usr2 in flight elsewhere
         // try to wait for it to finish or wait for timeout
         struct pollfd event = {signal_caught_cond, POLLIN, 0};
@@ -450,25 +451,16 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return 0;
         }
-    }
-    // check for  any stale signal_caught_cond events
-    struct pollfd event = {signal_caught_cond, POLLIN, 0};
-    do {
-        err = poll(&event, 1, 0);
-    } while (err == -1 && errno == EINTR);
-    if (err == -1) {
-        pthread_mutex_unlock(&in_signal_lock);
-        return 0;
-    }
-    if ((event.revents & POLLIN) != 0) {
         // consume it before continuing
         eventfd_t got;
         do {
             err = read(signal_caught_cond, &got, sizeof(eventfd_t));
         } while (err == -1 && errno == EINTR);
         if (err != sizeof(eventfd_t)) abort();
-        assert(got == 1); (void) got;
+        assert(signals_inflight >= got);
+        signals_inflight -= got;
     }
+    signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
     assert(request == 0 || request == -1);
     request = 1;
@@ -485,6 +477,7 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
     if (err == -1) {
         // not ready after timeout: try to cancel this request
         if (jl_atomic_cmpswap(&ptls2->signal_request, &request, 0)) {
+            signals_inflight--;
             pthread_mutex_unlock(&in_signal_lock);
             return 0;
         }
@@ -494,7 +487,9 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
         err = read(signal_caught_cond, &got, sizeof(eventfd_t));
     } while (err == -1 && errno == EINTR);
     if (err != sizeof(eventfd_t)) abort();
-    assert(got == 1); (void) got;
+    assert(signals_inflight >= got);
+    signals_inflight -= got;
+    signals_inflight++;
     // Now the other thread is waiting on exit_signal_cond (verify that here by
     // checking it is 0, and add an acquire barrier for good measure)
     request = jl_atomic_load_acquire(&ptls2->signal_request);
@@ -521,6 +516,7 @@ static void jl_try_deliver_sigint(void)
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     pthread_mutex_lock(&in_signal_lock);
+    signals_inflight++;
     jl_atomic_store_release(&ptls2->signal_request, 2);
     // This also makes sure `sleep` is aborted.
     pthread_kill(ptls2->system_id, SIGUSR2);

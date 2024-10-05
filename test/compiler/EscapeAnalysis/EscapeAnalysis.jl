@@ -2240,13 +2240,13 @@ end
 # accounts for ThrownEscape via potential MethodError
 
 # no method error
-@noinline identity_if_string(x::SafeRef) = (println("preventing inlining"); nothing)
+@noinline identity_if_string(x::SafeRef{<:AbstractString}) = (println("preventing inlining"); nothing)
 let result = code_escapes((SafeRef{String},)) do x
         identity_if_string(x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
-let result = code_escapes((Union{SafeRef{String},Nothing},)) do x
+let result = code_escapes((SafeRef,)) do x
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))
@@ -2298,5 +2298,22 @@ let result = code_escapes((SafeRef{String},Any)) do x, y
     @test has_all_escape(result.state[Argument(2)])  # x
     @test has_all_escape(result.state[Argument(3)])  # y
 end
+
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+@test (@code_escapes scope_folding()) isa EAUtils.EscapeResult
+@test (@code_escapes scope_folding_opt()) isa EAUtils.EscapeResult
 
 end # module test_EA

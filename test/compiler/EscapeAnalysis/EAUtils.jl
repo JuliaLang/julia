@@ -116,12 +116,14 @@ CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
 CC.cache_owner(::EscapeAnalyzer) = EAToken()
 
-function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::InferenceResult)
+function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationState,
+                                   ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized
-    nargs = let def = caller.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    nargs = Int(opt.src.nargs)
+    𝕃ₒ = CC.optimizer_lattice(interp)
     get_escape_cache = GetEscapeCache(interp)
     estate = try
-        analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), get_escape_cache)
+        analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache)
     catch err
         @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
         Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
@@ -133,7 +135,8 @@ function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::I
     end
     record_escapes!(interp, caller, estate, ir)
 
-    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, caller::InferenceResult)
+    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                      ir::IRCode, caller::InferenceResult)
 end
 
 function record_escapes!(interp::EscapeAnalyzer,

@@ -102,7 +102,7 @@ endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
-LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off
+LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off -DLLVM_ENABLE_LIBEDIT=OFF
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
@@ -291,6 +291,9 @@ endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
+endif
+ifeq ($(BUILD_LLD), 1)
+LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
 endif
 
 $(eval $(call staged-install, \
