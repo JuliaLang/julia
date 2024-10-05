@@ -783,14 +783,20 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"global"
+    elseif k == K"global" || k == K"const"
         if needs_value
-            throw(LoweringError(ex, "misplaced `global` declaration"))
+            throw(LoweringError(ex, "misplaced declaration"))
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"const" || k == K"isdefined"
-        emit(ctx, ex)
+    elseif k == K"isdefined"
+        if in_tail_pos
+            emit_return(ctx, ex)
+        elseif needs_value
+            ex
+        else
+            emit(ctx, ex)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end

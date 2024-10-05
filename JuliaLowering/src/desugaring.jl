@@ -1441,25 +1441,6 @@ function expand_macro_def(ctx, ex)
     ]
 end
 
-# Analyze type signatures such as `A <: B where C`
-#
-# Return (name, params, supertype)
-function analyze_type_sig(ctx, ex)
-    k = kind(ex)
-    if k == K"Identifier"
-        return (ex, (), nothing_(ctx, ex))
-    elseif k == K"curly" && numchildren(ex) >= 1 && kind(ex[1]) == K"Identifier"
-        return (ex[1], ex[2:end], nothing_(ctx, ex))
-    elseif k == K"<:" && numchildren(ex) == 2
-        if kind(ex[1]) == K"Identifier"
-            return (ex[1], (), ex[2])
-        elseif kind(ex[1]) == K"curly" && numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"Identifier"
-            return (ex[1][1], ex[1][2:end], ex[2])
-        end
-    end
-    throw(LoweringError(ex, "invalid type signature"))
-end
-
 # Match `x<:T<:y` etc, returning `(name, lower_bound, upper_bound)`
 # A bound is `nothing` if not specified
 function analyze_typevar(ctx, ex)
@@ -1500,6 +1481,72 @@ function bounds_to_TypeVar(ctx, srcref, bounds)
         else
             ub
         end
+    ]
+end
+
+# Analyze type signatures such as `A <: B where C`
+#
+# Return (name, params, supertype)
+function analyze_type_sig(ctx, ex)
+    k = kind(ex)
+    if k == K"Identifier"
+        return (ex, (), @ast ctx ex "Any"::K"core")
+    elseif k == K"curly" && numchildren(ex) >= 1 && kind(ex[1]) == K"Identifier"
+        # name{params}
+        return (ex[1], ex[2:end], @ast ctx ex "Any"::K"core")
+    elseif k == K"<:" && numchildren(ex) == 2
+        if kind(ex[1]) == K"Identifier"
+            return (ex[1], (), ex[2])
+        elseif kind(ex[1]) == K"curly" && numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"Identifier"
+            return (ex[1][1], ex[1][2:end], ex[2])
+        end
+    end
+    throw(LoweringError(ex, "invalid type signature"))
+end
+
+function expand_abstract_type(ctx, ex)
+    name, params, supertype = analyze_type_sig(ctx, ex[1])
+    typevar_names = SyntaxList(ctx)
+    typevar_stmts = SyntaxList(ctx)
+    for param in params
+        bounds = analyze_typevar(ctx, param)
+        n = bounds[1]
+        push!(typevar_names, n)
+        push!(typevar_stmts, @ast ctx param [K"local" n])
+        push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
+    end
+    newtype_var = ssavar(ctx, ex, "new_type")
+    @ast ctx ex [K"block"
+        [K"scope_block"(scope_type=:neutral)
+            [K"block"
+                [K"local_def" name]
+                typevar_stmts...
+                [K"="
+                    newtype_var
+                    [K"call"
+                        "_abstracttype"::K"core"
+                        ctx.mod::K"Value"
+                        name=>K"Symbol"
+                        [K"call" "svec"::K"core" typevar_names...]
+                    ]
+                ]
+                [K"=" name newtype_var]
+                [K"call" "_setsuper!"::K"core" newtype_var supertype]
+                [K"call" "_typebody!"::K"core" newtype_var]
+            ]
+        ]
+        # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ] FIXME
+        [K"global" name]
+        [K"const" name]
+        [K"if"
+            [K"&&"
+                [K"isdefined" name]
+                [K"call" "_equiv_typedef"::K"core" name newtype_var]
+            ]
+            nothing_(ctx, ex)
+            [K"=" name newtype_var]
+        ]
+        nothing_(ctx, ex)
     ]
 end
 
@@ -1790,6 +1837,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_import(ctx, ex)
     elseif k == K"export" || k == K"public"
         TODO(ex)
+    elseif k == K"abstract"
+        expand_forms_2(ctx, expand_abstract_type(ctx, ex))
     elseif k == K"ref"
         if numchildren(ex) > 2
             TODO(ex, "ref expansion")

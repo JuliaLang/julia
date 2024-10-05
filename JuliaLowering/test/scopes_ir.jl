@@ -67,11 +67,10 @@ end
 2   (call core.apply_type top.Dict core.Symbol core.Any)
 3   (call %₂)
 4   (isdefined slot₁/y)
-5   (isdefined slot₁/y)
-6   (gotoifnot %₅ label₉)
-7   slot₁/y
-8   (call top.setindex! %₃ %₇ :y)
-9   (return %₃)
+5   (gotoifnot %₄ label₈)
+6   slot₁/y
+7   (call top.setindex! %₃ %₆ :y)
+8   (return %₃)
 
 ########################################
 # @locals with function args (TODO: static parameters)
@@ -88,9 +87,8 @@ end
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (isdefined slot₂/z)
-    4   (isdefined slot₂/z)
-    5   (gotoifnot %₄ label₇)
-    6   (call top.setindex! %₂ slot₂/z :z)
-    7   (return %₂)
+    4   (gotoifnot %₃ label₆)
+    5   (call top.setindex! %₂ slot₂/z :z)
+    6   (return %₂)
 7   (return %₁)
 

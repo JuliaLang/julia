@@ -525,6 +525,10 @@ begin
 end
 """
 
+src = """
+abstract type Abstract1 end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
@@ -547,7 +551,7 @@ ctx4, ex_converted = JuliaLowering.convert_closures(ctx3, ex_scoped)
 ctx5, ex_compiled = JuliaLowering.linearize_ir(ctx4, ex_converted)
 @info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id) Text(sprint(JuliaLowering.print_ir, ex_compiled))
 
-ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx5.bindings, ex_compiled)
+ex_expr = JuliaLowering.to_lowered_expr(in_mod, ex_compiled)
 @info "CodeInfo" ex_expr
 
 eval_result = Base.eval(in_mod, ex_expr)
