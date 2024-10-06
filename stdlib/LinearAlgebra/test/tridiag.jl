@@ -501,8 +501,8 @@ end
     @test @inferred diag(A, 1) == fill(M, n-1)
     @test @inferred diag(A, 0) == fill(Symmetric(M), n)
     @test @inferred diag(A, -1) == fill(transpose(M), n-1)
-    @test_throws ArgumentError diag(A, -2)
-    @test_throws ArgumentError diag(A, 2)
+    @test_throws MethodError diag(A, -2)
+    @test_throws MethodError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
 
@@ -529,6 +529,13 @@ end
         A = Tridiagonal(ev, dv, ev)
         @test A == Matrix{eltype(A)}(A)
     end
+
+    M = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    S = SymTridiagonal(fill(M,4), fill(M,3))
+    @test diag(S,2) == fill(zero(M), 2)
+    @test diag(S,-2) == fill(zero(M), 2)
+    @test isempty(diag(S,4))
+    @test isempty(diag(S,-4))
 end
 
 @testset "Issue 12068" begin

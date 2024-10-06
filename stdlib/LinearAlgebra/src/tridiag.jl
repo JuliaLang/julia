@@ -189,35 +189,24 @@ tr(S::SymTridiagonal) = sum(symmetric, S.dv)
             lazy"and at most $sz2 for an $(sz1)-by-$(sz2) matrix")))
 end
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
-    # every branch call similar(..., ::Int) to make sure the
-    # same vector type is returned independent of n
-    absn = abs(n)
-    if absn == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
-    elseif absn <= size(M,1)
-        v = similar(M.dv, size(M,1)-absn)
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
-    else
-        throw_diag_outofboundserror(n, size(M))
-    end
-end
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+        v = similar(M.dv, length(M.dv))
+        return copyto!(v, eltype(M) <: Number ? M.dv : (symmetric(x, :U) for x in M.dv))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
+        v = similar(M.dv, length(M.dv)-1)
+        return copyto!(v, _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
-    elseif n <= size(M,1)
-        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+        v = similar(M.dv, length(M.dv)-1)
+        return copyto!(v, eltype(M) <: Number ? _evview(M) : (transpose(x) for x in _evview(M)))
+    elseif abs(n) <= size(M,1)
+        v = similar(M.dv, size(M,1)-abs(n))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
+        return v
     else
         throw_diag_outofboundserror(n, size(M))
     end
