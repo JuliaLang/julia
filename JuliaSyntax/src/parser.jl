@@ -536,9 +536,9 @@ end
 # Parse docstrings attached by a space or single newline
 #
 # flisp: parse-docstring
-function parse_docstring(ps::ParseState)
+function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
-    parse_eq(ps)
+    down(ps)
     if peek_behind(ps).kind == K"string"
         is_doc = true
         k = peek(ps)
@@ -563,7 +563,7 @@ function parse_docstring(ps::ParseState)
             # """\n doc\n """ foo ==> (doc (string-s "doc\n") foo)
         end
         if is_doc
-            parse_eq(ps)
+            down(ps)
             emit(ps, mark, K"doc")
         end
     end
@@ -1947,7 +1947,7 @@ function parse_resword(ps::ParseState)
         @check peek(ps) == K"struct"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
-        parse_block(ps, parse_struct_field)
+        parse_block(ps, ps1->parse_docstring(ps1, parse_struct_field))
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"struct", is_mut ? MUTABLE_FLAG : EMPTY_FLAGS)
     elseif word == K"primitive"

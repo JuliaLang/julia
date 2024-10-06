@@ -727,6 +727,9 @@
                  Expr(:block, LineNumberNode(2), :a, LineNumberNode(3), :b))
         @test parsestmt("struct A const a end", version=v"1.8") ==
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(1), Expr(:const, :a)))
+
+        @test parsestmt("struct A \n \"doc\" \n a end") ==
+            Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
     end
 
     @testset "export" begin
