@@ -85,6 +85,10 @@ struct Scope
     values::ScopeStorage
 end
 
+function Scope(parent::Scope)
+    return Scope(parent.values)
+end
+
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
     val = convert(T, value)
     if parent === nothing
