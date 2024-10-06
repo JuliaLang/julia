@@ -38,7 +38,7 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
             return nothing
         end
 
-        # syntax.jl has some intentially weird syntax which we parse
+        # syntax.jl has some intentionally weird syntax which we parse
         # differently than the flisp parser, and some cases which we've
         # decided are syntax errors.
         if endswith(f, "syntax.jl")

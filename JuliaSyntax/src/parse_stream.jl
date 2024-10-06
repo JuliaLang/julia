@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Flags hold auxilary information about tokens/nonterminals which the Kind
+# Flags hold auxiliary information about tokens/nonterminals which the Kind
 # doesn't capture in a nice way.
 #
 # TODO: Use `primitive type SyntaxFlags 16 end` rather than an alias?
@@ -40,7 +40,7 @@ Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
 const PARENS_FLAG = RawFlags(1<<5)
 
 """
-Set for K"quote" for the short form `:x` as oppsed to long form `quote x end`
+Set for K"quote" for the short form `:x` as opposed to long form `quote x end`
 """
 const COLON_QUOTE = RawFlags(1<<5)
 
@@ -223,7 +223,7 @@ is_dotted(x) = has_flags(x, DOTOP_FLAG)
 """
     is_suffixed(x)
 
-Return true for operators which have sufficies, such as `+₁`
+Return true for operators which have suffixes, such as `+₁`
 """
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
 
@@ -822,7 +822,7 @@ end
 Bump an invisible zero-width token into the output
 
 This is useful when surrounding syntax implies the presence of a token.  For
-example, `2x` means `2*x` via the juxtoposition rules.
+example, `2x` means `2*x` via the juxtaposition rules.
 """
 function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
                         error=nothing)

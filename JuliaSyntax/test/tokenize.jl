@@ -720,7 +720,7 @@ end
     @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
     @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
 
-    # Dotted operators and other dotted sufficies
+    # Dotted operators and other dotted suffixes
     @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]
     @test toks("1234.0+1") == ["1234.0"=>K"Float", "+"=>K"+", "1"=>K"Integer"]
     @test toks("1234.0 .+1") == ["1234.0"=>K"Float", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]

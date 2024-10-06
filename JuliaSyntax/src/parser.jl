@@ -723,7 +723,7 @@ function parse_cond(ps::ParseState)
     # FIXME: This is a very specific case. Error recovery should be handled more
     # generally elsewhere.
     if is_block_continuation_keyword(ps, kind(t))
-        # a "continuaton keyword" is likely to belong to the surrounding code, so
+        # a "continuation keyword" is likely to belong to the surrounding code, so
         # we abort early
 
         # if true; x ? true elseif true end  ==> (if true (block (if x true (error-t) (error-t))) (elseif true (block)))
@@ -1472,7 +1472,7 @@ function parse_unary_prefix(ps::ParseState)
     end
 end
 
-# Parses a chain of sufficies at function call precedence, leftmost binding
+# Parses a chain of suffixes at function call precedence, leftmost binding
 # tightest. This handles
 #  * Bracketed calls like a() b[] c{}
 #  * Field access like a.b.c
@@ -1722,7 +1722,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # x`str` ==> (macrocall @x_cmd (cmdstring-r "str"))
             # x""    ==> (macrocall @x_str (string-r ""))
             # x``    ==> (macrocall @x_cmd (cmdstring-r ""))
-            # Triple quoted procesing for custom strings
+            # Triple quoted processing for custom strings
             # r"""\nx"""          ==> (macrocall @r_str (string-s-r "x"))
             # r"""\n x\n y"""     ==> (macrocall @r_str (string-s-r "x\n" "y"))
             # r"""\n x\\n y"""    ==> (macrocall @r_str (string-s-r "x\\\n" "y"))
@@ -1735,7 +1735,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             t = peek_token(ps)
             k = kind(t)
             if !preceding_whitespace(t) && is_string_macro_suffix(k)
-                # Macro sufficies can include keywords and numbers
+                # Macro suffixes can include keywords and numbers
                 # x"s"y    ==> (macrocall @x_str (string-r "s") "y")
                 # x"s"end  ==> (macrocall @x_str (string-r "s") "end")
                 # x"s"in   ==> (macrocall @x_str (string-r "s") "in")
@@ -3484,7 +3484,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
         emit(ps, mark, K"char")
     elseif leading_kind == K"Char"
-        # FIXME: This is a tokenization error and should be preceeded with
+        # FIXME: This is a tokenization error and should be preceded with
         # K"'". However this workaround is better than emitting a bare Char.
         bump(ps, remap_kind=K"Identifier")
     elseif leading_kind == K":"

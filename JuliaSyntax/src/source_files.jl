@@ -70,17 +70,17 @@ second form, get the line number at the given `byte_index` within `source`.
 source_line(x) = source_line(sourcefile(x), first_byte(x))
 
 """
-    souce_location(x)
-    souce_location(source::SourceFile, byte_index::Integer)
+    source_location(x)
+    source_location(source::SourceFile, byte_index::Integer)
 
-    souce_location(LineNumberNode, x)
-    souce_location(LineNumberNode, source, byte_index)
+    source_location(LineNumberNode, x)
+    source_location(LineNumberNode, source, byte_index)
 
 Get `(line,column)` of the first byte where object `x` appears in the source.
 The second form allows one to be more precise with the `byte_index`, given the
 source file.
 
-Providing `LineNumberNode` as the first agrument will return the line and file
+Providing `LineNumberNode` as the first argument will return the line and file
 name in a line number node object.
 """
 source_location(x) = source_location(sourcefile(x), first_byte(x))
@@ -373,7 +373,7 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
             # The diagnostic range is compact and we show the whole thing
             _printstyled(io, source[p:q]; bgcolor=color)
         else
-            # Or large and we trucate the code to show only the region around the
+            # Or large and we truncate the code to show only the region around the
             # start and end of the error.
             _printstyled(io, source[p:y]; bgcolor=color)
             print(io, "⋮\n")

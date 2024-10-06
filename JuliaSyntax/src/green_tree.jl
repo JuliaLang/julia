@@ -12,7 +12,7 @@ As implementation choices, we choose that:
 
 * Nodes are immutable and don't know their parents or absolute position, so can
   be cached and reused
-* Nodes are homogenously typed at the language level so they can be stored
+* Nodes are homogeneously typed at the language level so they can be stored
   concretely, with the `head` defining the node type. Normally this would
   include a "syntax kind" enumeration, but it can also include flags and record
   information the parser knew about the layout of the child nodes.

@@ -317,7 +317,7 @@ parsing `key=val` pairs inside parentheses.
 
 ### Other oddities
 
-* Operators with suffices don't seem to always be parsed consistently as the
+* Operators with suffixes don't seem to always be parsed consistently as the
   same operator without a suffix. Unclear whether this is by design or mistake.
   For example, `[x +y] ==> (hcat x (+ y))`, but `[x +₁y] ==> (hcat (call +₁ x y))`
 
@@ -425,7 +425,7 @@ First, there's no support for precise source locations and the existing data
 structures (bare flisp lists) can't easily be extended to add these. Fixing
 this would require changes to nearly all of the code.
 
-Second, it's written in flisp: an aestheically pleasing, minimal but obscure
+Second, it's written in flisp: an aesthetically pleasing, minimal but obscure
 implementation of Scheme. Learning Scheme is actually a good way to appreciate
 some of Julia's design inspiration, but it's quite a barrier for developers of
 Julia language tooling. (Flisp has no user-level documentation but non-schemers

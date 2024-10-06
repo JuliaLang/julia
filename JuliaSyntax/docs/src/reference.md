@@ -73,7 +73,7 @@ class of tokenization errors and lets the parser deal with them.
 
 ### Improvements to awkward AST forms
 
-* Frakentuples with multiple parameter blocks like `(a=1, b=2; c=3; d=4)` are flattened into the parent tuple instead of using nested `K"parameters"` nodes (#133)
+* `FrankenTuple`s with multiple parameter blocks like `(a=1, b=2; c=3; d=4)` are flattened into the parent tuple instead of using nested `K"parameters"` nodes (#133)
 * Using `try catch else finally end` is parsed with `K"catch"` `K"else"` and `K"finally"` children to avoid the awkwardness of the optional child nodes in the `Expr` representation (#234)
 * The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
 * We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
