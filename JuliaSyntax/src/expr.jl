@@ -466,6 +466,19 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         headsym = :call
         pushfirst!(args, :*)
     elseif k == K"struct"
+        @assert args[2].head == :block
+        orig_fields = args[2].args
+        fields = Expr(:block)
+        for field in orig_fields
+            if @isexpr(field, :macrocall) && field.args[1] == GlobalRef(Core, Symbol("@doc"))
+                # @doc macro calls don't occur within structs, in Expr form.
+                push!(fields.args, field.args[3])
+                push!(fields.args, field.args[4])
+            else
+                push!(fields.args, field)
+            end
+        end
+        args[2] = fields
         pushfirst!(args, has_flags(head, MUTABLE_FLAG))
     elseif k == K"importpath"
         headsym = :.

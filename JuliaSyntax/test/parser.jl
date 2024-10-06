@@ -502,6 +502,7 @@ tests = [
         # struct
         "struct A <: B \n a::X \n end" =>  "(struct (<: A B) (block (::-i a X)))"
         "struct A \n a \n b \n end"    =>  "(struct A (block a b))"
+        "struct A \n \"doca\" \n a \n \"docb\" \n b \n end"    =>  "(struct A (block (doc (string \"doca\") a) (doc (string \"docb\") b)))"
         "mutable struct A end"         =>  "(struct-mut A (block))"
         ((v=v"1.8",), "struct A const a end") => "(struct A (block (const a)))"
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
