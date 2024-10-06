@@ -1432,6 +1432,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
     elseif isa(stmt, GotoNode) && cfg_transforms_enabled
+        stmt.label < 0 && (println(stmt); println(compact))
         label = bb_rename_succ[stmt.label]
         @assert label > 0
         ssa_rename[idx] = SSAValue(result_idx)

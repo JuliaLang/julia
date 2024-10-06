@@ -40,6 +40,8 @@ uv_sem_t gc_sweep_assists_needed;
 uv_mutex_t gc_queue_observer_lock;
 // Tag for sentinel nodes in bigval list
 uintptr_t gc_bigval_sentinel_tag;
+// Table recording number of full GCs due to each reason
+JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 
 // Flag that tells us whether we need to support conservative marking
 // of objects.
@@ -3043,10 +3045,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // we either free some space or get an OOM error.
     if (gc_sweep_always_full) {
         sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL);
     }
     if (collection == JL_GC_FULL && !prev_sweep_full) {
         sweep_full = 1;
         recollect = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
     if (sweep_full) {
         // these are the difference between the number of gc-perm bytes scanned
@@ -3182,10 +3186,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    if (heap_size > user_max || old_ratio > 0.15)
+    if (heap_size > user_max) {
         next_sweep_full = 1;
-    else
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
+    }
+    else if (old_ratio > 0.15) {
+        next_sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_LARGE_PROMOTION_RATE);
+    }
+    else {
         next_sweep_full = 0;
+    }
     if (heap_size > user_max || thrashing)
         under_pressure = 1;
     // sweeping is over

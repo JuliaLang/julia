@@ -831,6 +831,7 @@ end
                     typenames[i] = Any.name
                     simplify[i] = false
                     types[j] = widen
+                    typenames[j] = ijname
                     break
                 end
             end

@@ -102,7 +102,6 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 
 // --- dir/file stuff ---
 
-JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
@@ -772,26 +771,11 @@ JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT size_t jl_maxrss(void)
 {
-#if defined(_OS_WINDOWS_)
-    PROCESS_MEMORY_COUNTERS counter;
-    GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
-    return (size_t)counter.PeakWorkingSetSize;
-
-// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
-//        All of them return `ru_maxrss` in kilobytes.
-#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_) || defined (_OS_OPENBSD_)
-    struct rusage rusage;
-    getrusage( RUSAGE_SELF, &rusage );
-
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined (_OS_OPENBSD_)
-    return (size_t)(rusage.ru_maxrss * 1024);
-#else
-    return (size_t)rusage.ru_maxrss;
-#endif
-
-#else
-    return (size_t)0;
-#endif
+    uv_rusage_t rusage;
+    if (uv_getrusage(&rusage) == 0) {
+        return rusage.ru_maxrss * 1024;
+    }
+    return 0;
 }
 
 // Simple `rand()` like function, with global seed and added thread-safety

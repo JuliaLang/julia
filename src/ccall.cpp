@@ -441,22 +441,13 @@ static Value *llvm_type_rewrite(
     // we need to use this alloca copy trick instead
     // On ARM and AArch64, the ABI requires casting through memory to different
     // sizes.
-    Value *from;
-    Value *to;
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     Align align = std::max(DL.getPrefTypeAlign(target_type), DL.getPrefTypeAlign(from_type));
-    if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
-        to = emit_static_alloca(ctx, target_type, align);
-        setName(ctx.emission_context, to, "type_rewrite_buffer");
-        from = to;
-    }
-    else {
-        from = emit_static_alloca(ctx, from_type, align);
-        setName(ctx.emission_context, from, "type_rewrite_buffer");
-        to = from;
-    }
-    ctx.builder.CreateAlignedStore(v, from, align);
-    auto pun = ctx.builder.CreateAlignedLoad(target_type, to, align);
+    size_t nb = std::max(DL.getTypeAllocSize(target_type), DL.getTypeAllocSize(from_type));
+    AllocaInst *cast = emit_static_alloca(ctx, nb, align);
+    setName(ctx.emission_context, cast, "type_rewrite_buffer");
+    ctx.builder.CreateAlignedStore(v, cast, align);
+    auto pun = ctx.builder.CreateAlignedLoad(target_type, cast, align);
     setName(ctx.emission_context, pun, "type_rewrite");
     return pun;
 }
@@ -494,7 +485,7 @@ static const std::string make_errmsg(const char *fname, int n, const char *err)
     return msg.str();
 }
 
-static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn)
+static jl_cgval_t typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unionall_t *jlto_env, int argn)
 {
     if (jlto != (jl_value_t*)jl_any_type && !jl_subtype(jvinfo.typ, jlto)) {
         if (jlto == (jl_value_t*)jl_voidpointer_type) {
@@ -502,6 +493,7 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
             if (!jl_is_cpointer_type(jvinfo.typ)) {
                 // emit a typecheck, if not statically known to be correct
                 emit_cpointercheck(ctx, jvinfo, make_errmsg("ccall", argn + 1, ""));
+                return update_julia_type(ctx, jvinfo, (jl_value_t*)jl_pointer_type);
             }
         }
         else {
@@ -526,8 +518,10 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 ctx.builder.CreateUnreachable();
                 ctx.builder.SetInsertPoint(passBB);
             }
+            return update_julia_type(ctx, jvinfo, jlto);
         }
     }
+    return jvinfo;
 }
 
 // Emit code to convert argument to form expected by C ABI
@@ -537,7 +531,7 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
 static Value *julia_to_native(
         jl_codectx_t &ctx,
         Type *to, bool toboxed, jl_value_t *jlto, jl_unionall_t *jlto_env,
-        const jl_cgval_t &jvinfo,
+        jl_cgval_t jvinfo,
         bool byRef, int argn)
 {
     // We're passing Any
@@ -547,7 +541,7 @@ static Value *julia_to_native(
     }
     assert(jl_is_datatype(jlto) && jl_struct_try_layout((jl_datatype_t*)jlto));
 
-    typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
+    jvinfo = typeassert_input(ctx, jvinfo, jlto, jlto_env, argn);
     if (!byRef)
         return emit_unbox(ctx, to, jvinfo, jlto);
 
@@ -556,14 +550,7 @@ static Value *julia_to_native(
     Align align(julia_alignment(jlto));
     Value *slot = emit_static_alloca(ctx, to, align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
-    if (!jvinfo.ispointer()) {
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
-        ai.decorateInst(ctx.builder.CreateStore(emit_unbox(ctx, to, jvinfo, jlto), slot));
-    }
-    else {
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
-        emit_memcpy(ctx, slot, ai, jvinfo, jl_datatype_size(jlto), align, align);
-    }
+    emit_unbox_store(ctx, jvinfo, slot, ctx.tbaa().tbaa_stack, align);
     return slot;
 }
 
@@ -1991,7 +1978,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             // If the value is not boxed, try to compute the object id without
             // reboxing it.
             auto T_p_derived = PointerType::get(ctx.builder.getContext(), AddressSpace::Derived);
-            if (!val.isghost && !val.ispointer())
+            if (!val.isghost)
                 val = value_to_pointer(ctx, val);
             Value *args[] = {
                 emit_typeof(ctx, val, false, true),

@@ -190,7 +190,7 @@ function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
     p = unsafe_convert(Ptr{Cvoid}, a)
     T = eltype(a)
-    memset(p, x isa T ? x : convert(T, x), length(a))
+    memset(p, x isa T ? x : convert(T, x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -320,11 +320,13 @@ end
 
 # get, set(once), modify, swap and replace at index, atomically
 function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return memoryrefget(memref, order, @_boundscheck)
 end
 
 function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return memoryrefset!(
@@ -342,6 +344,7 @@ function setindexonce_atomic!(
     val,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefsetonce!(
@@ -354,11 +357,13 @@ function setindexonce_atomic!(
 end
 
 function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
 end
 
 function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefswap!(
@@ -377,6 +382,7 @@ function replaceindex_atomic!(
     desired,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefreplace!(

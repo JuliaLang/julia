@@ -144,7 +144,7 @@ files, artifacts, etc. For example, to switch the user depot to `/foo/bar` just 
 ```sh
 export JULIA_DEPOT_PATH="/foo/bar:"
 ```
-All package operations, like cloning registrise or installing packages, will now write to
+All package operations, like cloning registries or installing packages, will now write to
 `/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
 resources will still be available. If you really only want to use the depot at `/foo/bar`,
 and not load any bundled resources, simply set the environment variable to `/foo/bar`

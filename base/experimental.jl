@@ -319,9 +319,9 @@ function show_error_hints(io, ex, args...)
     for handler in hinters
         try
             @invokelatest handler(io, ex, args...)
-        catch err
+        catch
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
         end
     end
 end
@@ -456,5 +456,19 @@ used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a
 without adding them to the global method table.
 """
 :@MethodTable
+
+"""
+    Base.Experimental.entrypoint(f, argtypes::Tuple)
+
+Mark a method for inclusion when the `--trim` option is specified.
+"""
+function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    entrypoint(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function entrypoint(@nospecialize(argt::Type))
+    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    nothing
+end
 
 end
