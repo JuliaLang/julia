@@ -415,7 +415,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ref = a.ref
     t = @_gc_preserve_begin ref
     p = unsafe_convert(Ptr{Cvoid}, ref)
-    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end

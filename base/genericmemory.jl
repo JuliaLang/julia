@@ -190,7 +190,7 @@ function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
     p = unsafe_convert(Ptr{Cvoid}, a)
     T = eltype(a)
-    memset(p, x isa T ? x : convert(T, x), length(a))
+    memset(p, x isa T ? x : convert(T, x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
