@@ -1051,3 +1051,9 @@ function Base.replace_in_print_matrix(A::HermOrSym,i::Integer,j::Integer,s::Abst
     inds = A.uplo == 'U' ? ijminmax : reverse(ijminmax)
     Base.replace_in_print_matrix(parent(A), inds..., s)
 end
+
+function Base.show(io::IO, S::HermOrSym)
+    print(io, string(nameof(typeof(S))), "(")
+    @invoke show(io::IO, S::AbstractMatrix)
+    print(io, ")")
+end

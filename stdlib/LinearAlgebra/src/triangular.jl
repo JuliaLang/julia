@@ -2986,3 +2986,10 @@ end
 # Cube roots of real-valued triangular matrices
 cbrt(A::UpperTriangular{T}) where {T<:Real} = UpperTriangular(_cbrt_quasi_triu!(Matrix{T}(A)))
 cbrt(A::LowerTriangular{T}) where {T<:Real} = LowerTriangular(_cbrt_quasi_triu!(Matrix{T}(A'))')
+
+# show
+function Base.show(io::IO, S::UpperOrLowerTriangular)
+    print(io, string(nameof(typeof(S))), "(")
+    @invoke show(io::IO, S::AbstractMatrix)
+    print(io, ")")
+end
