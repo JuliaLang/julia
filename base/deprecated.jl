@@ -432,13 +432,8 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
 
 # the plan is to eventually overload getproperty to access entries of the dict
 @noinline function getproperty(x::Pairs, s::Symbol)
-    if s == :data
-        depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
-    elseif s == :itr
-        depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
-    else
-        depwarn("use NamedTuple(kwargs).$s instead of kwargs.$s", :getproperty, force=true)
-    end
+    s == :data && depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
+    s == :itr && depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
     return getfield(x, s)
 end
 
