@@ -391,7 +391,7 @@ function ParseStream(text::String, index::Integer=1; version=VERSION)
     ParseStream(unsafe_wrap(Vector{UInt8}, text),
                 text, index, version)
 end
-function ParseStream(text::SubString, index::Integer=1; version=VERSION)
+function ParseStream(text::SubString{String}, index::Integer=1; version=VERSION)
     # See also IOBuffer(SubString("x"))
     ParseStream(unsafe_wrap(Vector{UInt8}, pointer(text), sizeof(text)),
                 text, index, version)
