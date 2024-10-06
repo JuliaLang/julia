@@ -444,17 +444,17 @@ tests = [
         "x``"        => """(macrocall @x_cmd (cmdstring-r ""))"""
         "in\"str\""  => """(macrocall @in_str (string-r "str"))"""
         "outer\"str\"" => """(macrocall @outer_str (string-r "str"))"""
-        # Triple quoted procesing for custom strings
+        # Triple quoted processing for custom strings
         "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str (string-s-r "x"))"""
         "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-s-r "x\n" "y"))"""
         "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall @r_str (string-s-r "x\\\n" "y"))"""
-        # Macro sufficies can include keywords and numbers
+        # Macro suffixes can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str (string-r "s") "y")"""
         "x\"s\"end"  => """(macrocall @x_str (string-r "s") "end")"""
         "x\"s\"in"   => """(macrocall @x_str (string-r "s") "in")"""
         "x\"s\"2"    => """(macrocall @x_str (string-r "s") 2)"""
         "x\"s\"10.0" => """(macrocall @x_str (string-r "s") 10.0)"""
-        # Cmd macro sufficies
+        # Cmd macro suffixes
         "x`s`y"    => """(macrocall @x_cmd (cmdstring-r "s") "y")"""
         "x`s`end"  => """(macrocall @x_cmd (cmdstring-r "s") "end")"""
         "x`s`in"   => """(macrocall @x_cmd (cmdstring-r "s") "in")"""

@@ -440,7 +440,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         a1 = args[1]
         if @isexpr(a1, :block)
             a1a = (args[1]::Expr).args
-            # Ugly logic to strip the Expr(:block) in certian cases for compatibility
+            # Ugly logic to strip the Expr(:block) in certain cases for compatibility
             if length(a1a) == 1
                 a = a1a[1]
                 if a isa Symbol || @isexpr(a, :(=)) || @isexpr(a, :(::))

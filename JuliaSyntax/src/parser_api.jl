@@ -161,7 +161,7 @@ Token type resulting from calling `tokenize(text)`
 
 Use
 * `kind(tok)` to get the token kind
-* `untokenize(tok, text)` to retreive the text
+* `untokenize(tok, text)` to retrieve the text
 * Predicates like `is_error(tok)` to query token categories and flags
 """
 struct Token
@@ -177,7 +177,7 @@ head(t::Token) = t.head
     tokenize(text)
 
 Returns the tokenized UTF-8 encoded `text` as a vector of `Token`s. The
-text for the token can be retreived by using `untokenize()`. The full text can be
+text for the token can be retrieved by using `untokenize()`. The full text can be
 reconstructed with, for example, `join(untokenize.(tokenize(text), text))`.
 
 This interface works on UTF-8 encoded string or buffer data only.

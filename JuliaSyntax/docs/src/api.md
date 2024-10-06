@@ -82,7 +82,7 @@ JuliaSyntax.kind
 ```
 
 In addition to the `kind`, a small integer set of "flags" is included to
-further distinguish details of each expresssion, accessed with the `flags`
+further distinguish details of each expression, accessed with the `flags`
 function. The kind and flags can be wrapped into a `SyntaxHead` which is
 accessed with the `head` function.
 

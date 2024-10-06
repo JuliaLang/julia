@@ -135,7 +135,7 @@ Register custom `Kind`s with the given `names`, belonging to a module `mod`.
 `names` is an array of arbitrary strings.
 
 In order for kinds to be represented by a small number of bits, some nontrivial
-cooperation is reqired between modules using custom kinds:
+cooperation is required between modules using custom kinds:
 * The integer `module_id` is globally unique for each `mod` which will be used
   together, and not larger than $_kind_module_id_max.
 * No two modules register the same `name`. The semantics of a given `kind` name
