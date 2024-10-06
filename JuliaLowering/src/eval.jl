@@ -209,7 +209,7 @@ function to_lowered_expr(mod, ex)
         else
             TODO(ex, "Convert SyntaxTree to Expr")
         end
-    elseif k == K"lambda"
+    elseif k == K"code_info"
         funcname = ex.lambda_info.is_toplevel_thunk ?
             "top-level scope" :
             "none"              # FIXME

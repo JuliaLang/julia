@@ -3,25 +3,45 @@
 # part of the surface syntax
 function _register_kinds()
     JuliaSyntax.register_kinds!(JuliaLowering, 1, [
-        "BEGIN_LOWERING_KINDS"
-            # Compiler metadata hints
-            "meta"
-            "extension"
-            # Semantic assertions used by lowering. The content of an assertion
-            # is not considered to be quoted, so use K"Symbol" inside where necessary.
-            "assert"
-            # A literal Julia value of any kind, as might be inserted by the AST
-            # during macro expansion
+        # "Syntax extensions" - expression kinds emitted by macros or macro
+        # expansion, and known to lowering. These are part of the AST API but
+        # without having surface syntax.
+        "BEGIN_EXTENSION_KINDS"
+            # atomic fields or accesses (see `@atomic`)
+            "atomic"
+            # A literal Julia value of any kind, as might be inserted into the
+            # AST during macro expansion
             "Value"
             # A (quoted) `Symbol`
             "Symbol"
+            # Compiler metadata hints
+            "meta"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "inline"
             "noinline"
             "loopinfo"
-            # Identifier for a value which is only assigned once
-            "SSAValue"
+            # Call into foreign code. Emitted by `@ccall`
+            "foreigncall"
+            # Test whether a variable is defined
+            "isdefined"
+            # named labels for `@label` and `@goto`
+            "symbolic_label"
+            # Goto named label
+            "symbolic_goto"
+            # Internal initializer for structures, called from inner constructor
+            "new"
+            # Catch-all for additional syntax extensions without the need to
+            # extend `Kind`. Known extensions include:
+            #   locals, islocal
+            "extension"
+        "END_EXTENSION_KINDS"
+
+        # The following kinds are internal to lowering
+        "BEGIN_LOWERING_KINDS"
+            # Semantic assertions used by lowering. The content of an assertion
+            # is not considered to be quoted, so use K"Symbol" etc inside where necessary.
+            "assert"
             # Unique identifying integer for bindings (of variables, constants, etc)
             "BindingId"
             # Various heads harvested from flisp lowering.
@@ -37,26 +57,36 @@ function _register_kinds()
             "lambda"
             "toplevel_butfirst"
             "const_if_global"
-            "isdefined"
             "moved_local"
-            "foreigncall"
-            "new"
-            "globalref"
             "outerref"
-            "enter"
-            "pop_exception"
-            "leave"
             "label"
-            "symbolic_label"
-            "symbolic_goto"
-            "goto"
-            "gotoifnot"
             "trycatchelse"
             "tryfinally"
-            "method"
-            "slot"
             "unnecessary"
             "decl"
         "END_LOWERING_KINDS"
+
+        # The following kinds are emitted by lowering and used in Julia's untyped IR
+        "BEGIN_IR_KINDS"
+            # Identifier for a value which is only assigned once
+            "SSAValue"
+            # Local variable in a `CodeInfo` code object (including lambda arguments)
+            "slot"
+            # Reference to a global variable within a module
+            "globalref"
+            # Unconditional goto
+            "goto"
+            # Conditional goto
+            "gotoifnot"
+            # Exception handling
+            "enter"
+            "leave"
+            "pop_exception"
+            # Lowering targets for method definitions arising from `function` etc
+            "method"
+            # Result of lowering a `K"lambda"` after bindings have been
+            # converted to slot/globalref/SSAValue.
+            "code_info"
+        "END_IR_KINDS"
     ])
 end

@@ -867,7 +867,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         ex
     elseif k == K"label"
         @ast ctx ex label_table[ex.id]::K"label"
-    elseif k == K"lambda"
+    elseif k == K"code_info"
         ex
     else
         mapchildren(ctx, ex) do e
@@ -952,7 +952,7 @@ function compile_lambda(outer_ctx, ex)
     end
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
-    makenode(ctx, ex, K"lambda",
+    makenode(ctx, ex, K"code_info",
              makenode(ctx, ex[1], K"block", code),
              lambda_info=lambda_info,
              slots=slots
