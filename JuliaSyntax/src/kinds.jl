@@ -42,36 +42,32 @@ function Kind(x::Integer)
     return Base.bitcast(Kind, convert(UInt16, x))
 end
 
-function Base.convert(::Type{String}, k::Kind)
-    _kind_int_to_str[reinterpret(UInt16, k)]
-end
-
-function Base.convert(::Type{Kind}, s::AbstractString)
+function Kind(s::AbstractString)
     i = get(_kind_str_to_int, s) do
         error("unknown Kind name $(repr(s))")
     end
     Kind(i)
 end
 
-Base.string(x::Kind) = convert(String, x)
-Base.print(io::IO, x::Kind) = print(io, convert(String, x))
+Base.string(x::Kind) = _kind_int_to_str[reinterpret(UInt16, x)]
+Base.print(io::IO, x::Kind) = print(io, string(x))
 
 Base.isless(x::Kind, y::Kind) = reinterpret(UInt16, x) < reinterpret(UInt16, y)
 
 function Base.show(io::IO, k::Kind)
-    print(io, "K\"$(convert(String, k))\"")
+    print(io, "K\"", k, "\"")
 end
 
 # Save the string representation rather than the bit pattern so that kinds
 # can be serialized and deserialized across different JuliaSyntax versions.
 function Base.write(io::IO, k::Kind)
-    str = convert(String, k)
+    str = string(k)
     write(io, UInt8(sizeof(str))) + write(io, str)
 end
 function Base.read(io::IO, ::Type{Kind})
     len = read(io, UInt8)
     str = String(read(io, len))
-    convert(Kind, str)
+    Kind(str)
 end
 
 function Base.parentmodule(k::Kind)
@@ -162,7 +158,7 @@ For example
 * K"block" is the kind of a block of code (eg, statements within a begin-end).
 """
 macro K_str(s)
-    convert(Kind, s)
+    Kind(s)
 end
 
 """
@@ -171,7 +167,7 @@ A set of kinds which can be used with the `in` operator.  For example
     k in KSet"+ - *"
 """
 macro KSet_str(str)
-    kinds = [convert(Kind, s) for s in split(str)]
+    kinds = [Kind(s) for s in split(str)]
 
     quote
         ($(kinds...),)
@@ -1146,7 +1142,7 @@ function untokenize(k::Kind; unique=true)
     if unique && k in _nonunique_kind_names
         return nothing
     else
-        return convert(String, k)
+        return string(k)
     end
 end
 

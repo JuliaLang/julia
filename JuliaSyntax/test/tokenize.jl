@@ -334,7 +334,7 @@ end
                     "type",
                     "var"]
 
-        @test kind(tok(kw)) == convert(Kind, kw)
+        @test kind(tok(kw)) == Kind(kw)
     end
 end
 
