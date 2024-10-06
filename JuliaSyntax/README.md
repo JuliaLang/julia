@@ -1,7 +1,7 @@
 # JuliaSyntax
 
 [![Build Status](https://github.com/c42f/JuliaSyntax.jl/workflows/CI/badge.svg)](https://github.com/c42f/JuliaSyntax.jl/actions)
-[![codecov.io](http://codecov.io/github/JuliaLang/JuliaSyntax.jl/coverage.svg?branch=main)](http://codecov.io/github/JuliaLang/JuliaSyntax.jl?branch=main)
+[![codecov.io](https://codecov.io/github/JuliaLang/JuliaSyntax.jl/coverage.svg?branch=main)](https://codecov.io/github/JuliaLang/JuliaSyntax.jl?branch=main)
 
 A Julia compiler frontend, written in Julia.
 
