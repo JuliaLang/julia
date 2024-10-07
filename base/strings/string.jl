@@ -570,9 +570,10 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)
