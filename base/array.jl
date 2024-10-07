@@ -1085,7 +1085,6 @@ function _growbeg!(a::Vector, delta::Integer)
         # increasing the size of the array, and that we leave enough space at both the beginning and the end.
         if newoffset + newlen < memlen
             newoffset = div(memlen - newlen, 2) + 1
-            @show newoffset, newmemlen, offset, len
             newmem = mem
             unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
             for j in offset:newoffset+delta-1
