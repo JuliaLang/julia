@@ -1141,6 +1141,14 @@ end
 @test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_2, (Vector{Int},)))
 @test_broken Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_arr!, (Vector{Int},)))
 
+# EA-based refinement of :effect_free
+function f_EA_refine(ax, b)
+    bx = Ref{Any}()
+    @noinline bx[] = b
+    return ax[] + b
+end
+@test Core.Compiler.is_effect_free(Base.infer_effects(f_EA_refine, (Base.RefValue{Int},Int)))
+
 function issue51837(; openquotechar::Char, newlinechar::Char)
     ncodeunits(openquotechar) == 1 || throw(ArgumentError("`openquotechar` must be a single-byte character"))
     if !isnothing(newlinechar)
@@ -1361,3 +1369,8 @@ end |> Core.Compiler.is_nothrow
 @test Base.infer_effects((Vector{Any},)) do xs
     Core.svec(xs...)
 end |> Core.Compiler.is_nothrow
+
+# effects for unknown `:foreigncall`s
+@test Base.infer_effects() do
+    @ccall unsafecall()::Cvoid
+end == Core.Compiler.EFFECTS_UNKNOWN

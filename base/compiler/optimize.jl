@@ -59,6 +59,12 @@ const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 
+function iscallstmt(@nospecialize stmt)
+    stmt isa Expr || return false
+    head = stmt.head
+    return head === :call || head === :invoke || head === :foreigncall
+end
+
 function flags_for_effects(effects::Effects)
     flags = zero(UInt32)
     if is_consistent(effects)
@@ -380,7 +386,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     elseif nothrow
         flag |= IR_FLAG_NOTHROW
     end
-    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
+    if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
         # statements (e.g. PiNode) can be UB:, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
@@ -638,10 +644,10 @@ function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
     return false
 end
 
-function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
+function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
-        nargs = length(ir.argtypes)
+        nargs = Int(opt.src.nargs)
         estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
@@ -696,6 +702,8 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
     else
         return false
     end
+    has_no_escape(x::EscapeAnalysis.EscapeInfo) =
+        EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(x))
     for i = startidx:length(stmt.args)
         arg = stmt.args[i]
         argt = argextype(arg, ir)
@@ -704,7 +712,7 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
         end
         # See if we can find the allocation
         if isa(arg, Argument)
-            if EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(estate[arg]))
+            if has_no_escape(estate[arg])
                 # Even if we prove everything else effect_free, the best we can
                 # say is :effect_free_if_argmem_only
                 if sv.effect_free_if_argmem_only === nothing
@@ -715,7 +723,7 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
             end
             return false
         elseif isa(arg, SSAValue)
-            EscapeAnalysis.has_no_escape(estate[arg]) || return false
+            has_no_escape(estate[arg]) || return false
             check_all_args_noescape!(sv, ir, ir[arg][:stmt], estate) || return false
         else
             return false
@@ -784,7 +792,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     if !has_flag(flag, IR_FLAG_NORTCALL)
         # if a function call that might invoke `Core.Compiler.return_type` has been deleted,
         # there's no need to taint with `:nortcall`, allowing concrete evaluation
-        if isexpr(stmt, :call) || isexpr(stmt, :invoke)
+        if iscallstmt(stmt)
             sv.nortcall = false
         end
     end
@@ -931,7 +939,8 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     end
 end
 
-function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
+function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                ir::IRCode, result::InferenceResult)
     if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
         return false
     end
@@ -959,13 +968,13 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    return refine_effects!(interp, sv)
+    return refine_effects!(interp, opt, sv)
 end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt, caller)
-    ipo_dataflow_analysis!(interp, ir, caller)
+    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -987,7 +996,6 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass

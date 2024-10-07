@@ -10,7 +10,8 @@ Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, Meth
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.fielderror_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -738,8 +739,7 @@ end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
 struct ANumber <: Number end
-let err_str
-    err_str = @except_str ANumber()(3 + 4) MethodError
+let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
     # issue 40478
@@ -747,20 +747,23 @@ let err_str
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
 end
 
-let err_str
-    a = [1 2; 3 4];
+let a = [1 2; 3 4];
     err_str = @except_str (a[1][2] = 5) MethodError
     @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
     @test occursin("a[1, 2]", err_str)
     @test occursin("rather than a[1][2]", err_str)
 end
 
-let err_str
-    d = Dict
+let d = Dict
     err_str = @except_str (d[1] = 5) MethodError
     @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
     @test occursin("d = Dict([...])", err_str)
     @test occursin(" rather than d = Dict", err_str)
+end
+
+let s = Some("foo")
+    err_str = @except_str (s[] = "bar") MethodError
+    @test !occursin("You attempted to index the type String", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
@@ -808,12 +811,13 @@ end
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
 
-# issue #53618
-@testset "FieldErrorHint" begin
+# issue #53618, pr #55165
+@testset "FieldErrorHints" begin
     struct FieldFoo
         a::Float32
         b::Int
     end
+    Base.propertynames(foo::FieldFoo) = (:a, :x, :y)
 
     s = FieldFoo(1, 2)
 
@@ -823,7 +827,9 @@ end
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field c", errorMsg)
+    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("available fields: `a`, `b`", errorMsg)
+    @test occursin("Available properties: `x`, `y`", errorMsg)
 
     d = Dict(s => 1)
 
@@ -840,7 +846,7 @@ end
     ex = test.value::FieldError
 
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type Dict has no field c", errorMsg)
+    @test occursin("FieldError: type Dict has no field `c`", errorMsg)
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
@@ -1077,6 +1083,12 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+# https://github.com/JuliaLang/julia/issues/55745
+let err_str
+    err_str = @except_str +() MethodError
+    @test !occursin("String concatenation is performed with *", err_str)
 end
 
 struct MissingLength; end

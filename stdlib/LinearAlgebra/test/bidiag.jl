@@ -124,6 +124,9 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+
+        # setindex should return the destination
+        @test setindex!(ubd, 1, 1, 1) === ubd
     end
 
     @testset "isstored" begin
@@ -826,6 +829,9 @@ end
         end
     end
 
+    @test diag(BU, -1) == [zeros(size(dv[i+1], 1), size(dv[i],2)) for i in 1:length(dv)-1]
+    @test diag(BL, 1) == [zeros(size(dv[i], 1), size(dv[i+1],2)) for i in 1:length(dv)-1]
+
     M = ones(2,2)
     for n in 0:1
         dv = fill(M, n)
@@ -963,6 +969,19 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    for T in (Bidiagonal(rand(4), rand(3), :U), Bidiagonal(rand(4), rand(3), :L))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (Bidiagonal(rand(1), rand(0), :U), Bidiagonal(rand(1), rand(0), :L))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
 @testset "mul with Diagonal" begin
     for n in 0:4
         dv, ev = rand(n), rand(max(n-1,0))
@@ -1018,6 +1037,95 @@ end
 @testset "off-band indexing error" begin
     B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
     @test_throws "cannot set entry" B[1,2] = 4
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    B = Bidiagonal(zeros(0), zeros(0), :U)
+    BL = Bidiagonal(zeros(5), zeros(4), :U)
+    @test size(A * B) == size(A)
+    @test size(BL * A) == size(A)
+    @test size(B * B) == size(B)
+    C = similar(A)
+    @test mul!(C, A, B) == A * B
+    @test mul!(C, BL, A) == BL * A
+    @test mul!(similar(B), B, B) == B * B
+    @test mul!(similar(B, size(B)), B, B) == B * B
+
+    v = zeros(size(B,2))
+    @test size(B * v) == size(v)
+    @test mul!(similar(v), B, v) == B * v
+
+    D = Diagonal(zeros(size(B,2)))
+    @test size(B * D) == size(D * B) == size(D)
+    @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
+end
+
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        D = Diagonal(rand(n))
+        v = rand(n)
+        @testset for uplo in (:L, :U)
+            B = Bidiagonal(rand(n), rand(max(n-1,0)), uplo)
+            M = Matrix(B)
+
+            @test B * v ≈ M * v
+            @test mul!(similar(v), B, v) ≈ M * v
+            @test mul!(ones(size(v)), B, v, 2, 3) ≈ M * v * 2 .+ 3
+
+            @test B * B ≈ M * M
+            @test mul!(similar(B, size(B)), B, B) ≈ M * M
+            @test mul!(ones(size(B)), B, B, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AL = rand(m,n)
+                AR = rand(n,m)
+                @test AL * B ≈ AL * M
+                @test B * AR ≈ M * AR
+                @test mul!(similar(AL), AL, B) ≈ AL * M
+                @test mul!(similar(AR), B, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, B, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), B, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            @test B * D ≈ M * D
+            @test D * B ≈ D * M
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B, size(B)), D, B) ≈ D * M
+            @test mul!(similar(B, size(B)), B, D) ≈ M * D
+            @test mul!(ones(size(B)), D, B, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(B)), B, D, 2, 4) ≈ M * D * 2 .+ 4
+        end
+        BL = Bidiagonal(rand(n), rand(max(0, n-1)), :L)
+        ML = Matrix(BL)
+        BU = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
+        MU = Matrix(BU)
+        T = Tridiagonal(zeros(max(0, n-1)), zeros(n), zeros(max(0, n-1)))
+        @test mul!(T, BL, BU) ≈ ML * MU
+        @test mul!(T, BU, BL) ≈ MU * ML
+        T = Tridiagonal(ones(max(0, n-1)), ones(n), ones(max(0, n-1)))
+        @test mul!(copy(T), BL, BU, 2, 3) ≈ ML * MU * 2 + T * 3
+        @test mul!(copy(T), BU, BL, 2, 3) ≈ MU * ML * 2 + T * 3
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for B in (
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :L),
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :U),
+            )
+        @test B * B ≈ Matrix(B) * Matrix(B)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * B ≈ Matrix(BL) * Matrix(B)
+        @test BU * B ≈ Matrix(BU) * Matrix(B)
+        @test B * BL ≈ Matrix(B) * Matrix(BL)
+        @test B * BU ≈ Matrix(B) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * B ≈ Matrix(D) * Matrix(B)
+        @test B * D ≈ Matrix(B) * Matrix(D)
+    end
 end
 
 end # module TestBidiagonal

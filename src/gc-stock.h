@@ -446,7 +446,7 @@ STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(jl_n_markthreads > 0);
-    int v = gc_first_tid + (int)cong(jl_n_markthreads - 1, &ptls->rngseed);
+    int v = gc_first_tid + (int)cong(jl_n_markthreads, &ptls->rngseed); // cong is [0, n)
     assert(v >= gc_first_tid && v <= gc_last_parallel_collector_thread_id());
     return v;
 }
@@ -503,6 +503,20 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
         sentinel_node->next->prev = node;
     }
     sentinel_node->next = node;
+}
+
+// Must be kept in sync with `base/timing.jl`
+#define FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL (0)
+#define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
+#define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
+#define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
+#define FULL_SWEEP_NUM_REASONS (4)
+
+extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
+STATIC_INLINE void gc_count_full_sweep_reason(int reason) JL_NOTSAFEPOINT
+{
+    assert(reason >= 0 && reason < FULL_SWEEP_NUM_REASONS);
+    jl_full_sweep_reasons[reason]++;
 }
 
 extern uv_mutex_t gc_perm_lock;

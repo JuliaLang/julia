@@ -77,6 +77,17 @@ function fullname(m::Module)
 end
 
 """
+    moduleloc(m::Module) -> LineNumberNode
+
+Get the location of the `module` definition.
+"""
+function moduleloc(m::Module)
+    line = Ref{Int32}(0)
+    file = ccall(:jl_module_getloc, Ref{Symbol}, (Any, Ref{Int32}), m, line)
+    return LineNumberNode(Int(line[]), file)
+end
+
+"""
     names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
@@ -206,6 +217,27 @@ function _fieldnames(@nospecialize t)
     end
     return t.name.names
 end
+
+const BINDING_KIND_GLOBAL       = 0x0
+const BINDING_KIND_CONST        = 0x1
+const BINDING_KIND_CONST_IMPORT = 0x2
+const BINDING_KIND_IMPLICIT     = 0x3
+const BINDING_KIND_EXPLICIT     = 0x4
+const BINDING_KIND_IMPORTED     = 0x5
+const BINDING_KIND_FAILED       = 0x6
+const BINDING_KIND_DECLARED     = 0x7
+const BINDING_KIND_GUARD        = 0x8
+
+function lookup_binding_partition(world::UInt, b::Core.Binding)
+    ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
+end
+
+binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
 
 """
     fieldname(x::DataType, i::Integer)
@@ -943,7 +975,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-13-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Type}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -957,6 +989,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000050, :blocks, Int64)
  (0x0000000000000058, :mtime, Float64)
  (0x0000000000000060, :ctime, Float64)
+ (0x0000000000000068, :ioerrno, Int32)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
@@ -996,7 +1029,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: FieldError: type Foo has no field z
+ERROR: FieldError: type Foo has no field `z`, available fields: `x`, `y`
 Stacktrace:
 [...]
 
@@ -1199,11 +1232,17 @@ hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
-unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
-unionlen(@nospecialize(x)) = 1
+unionlen(@nospecialize(x)) = x isa Union ? unionlen(x.a) + unionlen(x.b) : 1
 
-_uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
-_uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
+function _uniontypes(@nospecialize(x), ts::Array{Any,1})
+    if x isa Union
+        _uniontypes(x.a, ts)
+        _uniontypes(x.b, ts)
+    else
+        push!(ts, x)
+    end
+    return ts
+end
 uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
 function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
@@ -1478,6 +1517,13 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
+    If enabled, only provably reachable code (from functions marked with `entrypoint`) is included
+    in the output system image. Errors or warnings can be given for call sites too dynamic to handle.
+    The option is disabled by default. (0=>disabled, 1=>safe (static errors), 2=>unsafe, 3=>unsafe plus warnings)
+    """
+    trim::Cint
+
+    """
     A pointer of type
 
     typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
@@ -1492,14 +1538,14 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0),
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt),
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim),
             lookup)
     end
 end
@@ -2413,7 +2459,7 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t))
-    return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
+    return Core._hasmethod(signature_type(f, t))
 end
 
 function Core.kwcall(kwargs::NamedTuple, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))

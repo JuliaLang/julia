@@ -159,7 +159,8 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (jl_atomic_load_relaxed(&mi->precompiled) || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
+    uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -752,6 +753,16 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     static jl_value_t *replace_depot_func = NULL;
     if (!replace_depot_func)
         replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
+    static jl_value_t *normalize_depots_func = NULL;
+    if (!normalize_depots_func)
+        normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
+
+    jl_value_t *depots = NULL, *prefs_hash = NULL, *prefs_list = NULL;
+    JL_GC_PUSH2(&depots, &prefs_list);
+    last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    depots = jl_apply(&normalize_depots_func, 1);
+    ct->world_age = last_age;
 
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
@@ -764,13 +775,14 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 
         if (replace_depot_func) {
             jl_value_t **replace_depot_args;
-            JL_GC_PUSHARGS(replace_depot_args, 2);
+            JL_GC_PUSHARGS(replace_depot_args, 3);
             replace_depot_args[0] = replace_depot_func;
             replace_depot_args[1] = deppath;
+            replace_depot_args[2] = depots;
             ct = jl_current_task;
             size_t last_age = ct->world_age;
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-            deppath = (jl_value_t*)jl_apply(replace_depot_args, 2);
+            deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
             ct->world_age = last_age;
             JL_GC_POP();
         }
@@ -803,9 +815,6 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     write_int32(s, 0); // terminator, for ease of reading
 
     // Calculate Preferences hash for current package.
-    jl_value_t *prefs_hash = NULL;
-    jl_value_t *prefs_list = NULL;
-    JL_GC_PUSH1(&prefs_list);
     if (jl_base_module) {
         // Toplevel module is the module we're currently compiling, use it to get our preferences hash
         jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
@@ -852,7 +861,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_int32(s, 0);
         write_uint64(s, 0);
     }
-    JL_GC_POP(); // for prefs_list
+    JL_GC_POP(); // for depots, prefs_list
 
     // write a dummy file position to indicate the beginning of the source-text
     pos = ios_pos(s);

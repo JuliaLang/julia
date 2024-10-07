@@ -440,7 +440,7 @@ function f1_30093(r)
     end
 end
 
-@test f1_30093(Ref(0)) == nothing
+@test f1_30093(Ref(0)) === nothing
 
 # issue 33590
 function f33590(b, x)
@@ -501,10 +501,9 @@ function f37262(x)
     end
 end
 @testset "#37262" begin
-    str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
-    str_opaque = "store volatile { i8, ptr, ptr, ptr, ptr } zeroinitializer, ptr %phic"
+    str_opaque = "getelementptr inbounds i8, ptr %.roots.phic, i32 8\n  store volatile ptr null"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
-    @test (contains(llvmstr, str) || contains(llvmstr, str_opaque)) || llvmstr
+    @test contains(llvmstr, str_opaque)
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
 
@@ -984,3 +983,23 @@ end
 @test g55208((Union{}, true, true), 0) === typeof(Union{})
 
 @test string((Core.Union{}, true, true, true)) == "(Union{}, true, true, true)"
+
+# Issue #55558
+for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
+    @eval begin
+        struct $(StructName)
+            a::$(T)
+            b::Int64
+            c::$(T)
+        end
+        local broken_i128 = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "powerpc64le"
+        @test fieldoffset($(StructName), 2) == 16
+        @test fieldoffset($(StructName), 3) == 32 broken=broken_i128
+        @test sizeof($(StructName)) == 48 broken=broken_i128
+    end
+end
+
+@noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
+@test f55768(Vector)
+@test f55768(Vector{T} where T)
+@test !f55768(Vector{S} where S)

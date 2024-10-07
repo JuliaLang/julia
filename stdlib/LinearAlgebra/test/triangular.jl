@@ -6,7 +6,7 @@ debug = false
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
-    mul!, rdiv!, rmul!, lmul!
+    mul!, rdiv!, rmul!, lmul!, BandIndex
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -24,6 +24,12 @@ Random.seed!(123)
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
+
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
@@ -436,8 +442,6 @@ debug && println("Test basic type functionality")
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
-            Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            @test lmul!(Tri,copy(A1)) ≈ Tri*M1
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
             mul!(C, Tri, A1)
@@ -897,7 +901,7 @@ end
     function test_one_oneunit_triangular(a)
         b = Matrix(a)
         @test (@inferred a^1) == b^1
-        @test (@inferred a^-1) == b^-1
+        @test (@inferred a^-1) ≈ b^-1
         @test one(a) == one(b)
         @test one(a)*a == a
         @test a*one(a) == a
@@ -1044,6 +1048,9 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            if MT == LowerTriangular
+                @test isa(kron(L,L), MT)
+            end
             @test kron(L,L) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
@@ -1066,6 +1073,9 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            if MT == UpperTriangular
+                @test isa(kron(U,U), MT)
+            end
             @test kron(U,U) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
@@ -1077,7 +1087,17 @@ end
     for T in (UpperTriangular, LowerTriangular)
         t = T(fill(ones(2,2), 2, 2))
         m = Matrix(t)
+        @test isa(kron(t,t), T)
         @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
+@testset "kron with triangular matrices of mixed eltypes" begin
+    for T in (UpperTriangular, LowerTriangular)
+        U = T(Matrix{Union{Missing,Int}}(fill(2, 2, 2)))
+        U[1, 1] = missing
+        @test kron(U, U)[2, 3] == 0
+        @test kron(U, U)[3, 2] == 0
     end
 end
 
@@ -1191,6 +1211,114 @@ end
                 @test all(isnan, diag(V))
             end
         end
+    end
+end
+
+@testset "eigvecs for AbstractTriangular" begin
+    S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
+    for T in (UpperTriangular, UnitUpperTriangular,
+                LowerTriangular, UnitLowerTriangular)
+        U = T(S)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test U * V ≈ V * Diagonal(λ)
+
+        MU = MyTriangular(U)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test MU * V ≈ V * Diagonal(λ)
+    end
+end
+
+@testset "(l/r)mul! and (l/r)div! for generic triangular" begin
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        M = MyTriangular(T(rand(4,4)))
+        A = rand(4,4)
+        Ac = similar(A)
+        @testset "lmul!" begin
+            Ac .= A
+            lmul!(M, Ac)
+            @test Ac ≈ M * A
+        end
+        @testset "rmul!" begin
+            Ac .= A
+            rmul!(Ac, M)
+            @test Ac ≈ A * M
+        end
+        @testset "ldiv!" begin
+            Ac .= A
+            ldiv!(M, Ac)
+            @test Ac ≈ M \ A
+        end
+        @testset "rdiv!" begin
+            Ac .= A
+            rdiv!(Ac, M)
+            @test Ac ≈ A / M
+        end
+    end
+end
+
+@testset "istriu/istril forwards to parent" begin
+    @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            U = TriT(M)
+            A = Array(U)
+            for k in -n:n
+                @test istriu(U, k) == istriu(A, k)
+                @test istril(U, k) == istril(A, k)
+            end
+        end
+    end
+    z = zeros(n,n)
+    @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        P = Matrix{BigFloat}(undef, n, n)
+        copytrito!(P, z, TriT <: Union{UpperTriangular, UnitUpperTriangular} ? 'U' : 'L')
+        U = TriT(P)
+        A = Array(U)
+        @testset for k in -n:n
+            @test istriu(U, k) == istriu(A, k)
+            @test istril(U, k) == istril(A, k)
+        end
+    end
+end
+
+@testset "indexing with a BandIndex" begin
+    # these tests should succeed even if the linear index along
+    # the band isn't a constant, or type-inferred at all
+    M = rand(Int,2,2)
+    f(A,j, v::Val{n}) where {n} = Val(A[BandIndex(n,j)])
+    function common_tests(M, ind)
+        j = ind[]
+        @test @inferred(f(UpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(0))) == Val(1)
+        @test @inferred(f(LowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(0))) == Val(1)
+    end
+    common_tests(M, Any[1])
+
+    M = Diagonal([1,2])
+    common_tests(M, Any[1])
+    # extra tests for banded structure of the parent
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(1))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-1))) == Val(0)
+    end
+
+    M = Tridiagonal([1,2], [1,2,3], [1,2])
+    common_tests(M, Any[1])
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(2))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
     end
 end
 

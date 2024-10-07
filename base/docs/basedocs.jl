@@ -937,11 +937,14 @@ expression, rather than the side effects that evaluating `b` or `c` may have.
 See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
 
 # Examples
-```
+```jldoctest
 julia> x = 1; y = 2;
 
-julia> x > y ? println("x is larger") : println("y is larger")
-y is larger
+julia> x > y ? println("x is larger") : println("x is not larger")
+x is not larger
+
+julia> x > y ? "x is larger" : x == y ? "x and y are equal" : "y is larger"
+"y is larger"
 ```
 """
 kw"?", kw"?:"
@@ -1694,7 +1697,7 @@ julia> ab = AB(1, 3)
 AB(1.0f0, 3.0)
 
 julia> ab.c # field `c` doesn't exist
-ERROR: FieldError: type AB has no field c
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
 Stacktrace:
 [...]
 ```
@@ -3711,6 +3714,9 @@ unused and delete the entire benchmark code).
     *if* the intrinsic is semantically executed, then there is some program state at
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 
 # Examples
 

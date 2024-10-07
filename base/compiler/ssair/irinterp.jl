@@ -24,7 +24,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         end
         newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
         if newirsv !== nothing
-            newirsv.parent = parent
+            assign_parentchild!(newirsv, parent)
             return ir_abstract_constant_propagation(interp, newirsv)
         end
         return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
@@ -51,8 +51,11 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    call = abstract_call(interp, arginfo, si, irsv)
-    irsv.ir.stmts[irsv.curridx][:info] = call.info
+    call = abstract_call(interp, arginfo, si, irsv)::Future
+    Future{Nothing}(call, interp, irsv) do call, interp, irsv
+        irsv.ir.stmts[irsv.curridx][:info] = call.info
+        nothing
+    end
     return call
 end
 
@@ -141,8 +144,21 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
-            (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+            head === :static_parameter || head === :isdefined || head === :boundscheck)
+            @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
+            result = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+            reverse!(irsv.tasks)
+            while true
+                if length(irsv.callstack) > irsv.frameid
+                    typeinf(interp, irsv.callstack[irsv.frameid + 1])
+                elseif !doworkloop(interp, irsv)
+                    break
+                end
+            end
+            @assert length(irsv.callstack) == irsv.frameid && isempty(irsv.tasks)
+            result isa Future && (result = result[])
+            (; rt, effects) = result
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
             rt, (nothrow, noub) = abstract_eval_invoke_inst(interp, inst, irsv)
@@ -292,7 +308,7 @@ function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irs
     return true
 end
 
-function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
+function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
 
@@ -440,20 +456,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         store_backedges(frame_instance(irsv), irsv.edges)
     end
 
+    if irsv.frameid != 0
+        callstack = irsv.callstack::Vector{AbsIntState}
+        @assert callstack[end] === irsv && length(callstack) == irsv.frameid
+        pop!(callstack)
+    end
+
     return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
 end
-
-function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
-    if __measure_typeinf__[]
-        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
-        Timings.enter_new_timer(inf_frame)
-        ret = _ir_abstract_constant_propagation(interp, irsv)
-        append!(inf_frame.slottypes, irsv.ir.argtypes)
-        Timings.exit_current_timer(inf_frame)
-        return ret
-    else
-        return _ir_abstract_constant_propagation(interp, irsv)
-    end
-end
-ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
-    _ir_abstract_constant_propagation(interp, irsv)

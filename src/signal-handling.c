@@ -155,7 +155,7 @@ static void jl_shuffle_int_array_inplace(int *carray, int size, uint64_t *seed)
     // The "modern Fisher–Yates shuffle" - O(n) algorithm
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
     for (int i = size; i-- > 1; ) {
-        size_t j = cong(i, seed);
+        size_t j = cong(i + 1, seed); // cong is an open interval so we add 1
         uint64_t tmp = carray[j];
         carray[j] = carray[i];
         carray[i] = tmp;

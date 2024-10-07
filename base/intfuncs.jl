@@ -271,7 +271,7 @@ n * invmod(n) == 1
 (n % T) * invmod(n, T) == 1
 ```
 Note that `*` here is modular multiplication in the integer ring, `T`.  This will
-throw an error if ``n`` is even, because then it is not relatively prime with `2^N`
+throw an error if `n` is even, because then it is not relatively prime with `2^N`
 and thus has no such inverse.
 
 Specifying the modulus implied by an integer type as an explicit value is often
@@ -362,7 +362,7 @@ end
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
-const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float16,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # Inline x^2 and x^3 for Val

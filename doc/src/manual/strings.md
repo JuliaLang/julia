@@ -1207,6 +1207,10 @@ last backslash escapes a quote, since these backslashes appear before a quote.
 
 ## [Annotated Strings](@id man-annotated-strings)
 
+!!! note
+    The API for AnnotatedStrings is considered experimental and is subject to change between
+    Julia versions.
+
 It is sometimes useful to be able to hold metadata relating to regions of a
 string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
 allows for regions of it to be annotated with labelled values (`:label => value`).

@@ -39,13 +39,6 @@ the combined range.
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
-!!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedString` are not. This is to allow for potential future
-    changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
-
 # Constructors
 
 ```julia
@@ -80,13 +73,6 @@ More specifically, this is a simple wrapper around any other
 
 See also: [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 and `annotate!`.
-
-!!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedChar` are not. This it to allow for potential future
-    changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
 
 # Constructors
 

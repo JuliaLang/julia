@@ -40,6 +40,8 @@ uv_sem_t gc_sweep_assists_needed;
 uv_mutex_t gc_queue_observer_lock;
 // Tag for sentinel nodes in bigval list
 uintptr_t gc_bigval_sentinel_tag;
+// Table recording number of full GCs due to each reason
+JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 
 // Flag that tells us whether we need to support conservative marking
 // of objects.
@@ -2144,9 +2146,9 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                                         (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task));
                 }
         #ifdef COPY_STACKS
-                void *stkbuf = ta->stkbuf;
-                if (stkbuf && ta->copy_stack) {
-                    gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
+                void *stkbuf = ta->ctx.stkbuf;
+                if (stkbuf && ta->ctx.copy_stack) {
+                    gc_setmark_buf_(ptls, stkbuf, bits, ta->ctx.bufsz);
                     // For gc_heap_snapshot_record:
                     // TODO: attribute size of stack
                     // TODO: edge to stack data
@@ -2159,12 +2161,12 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uintptr_t lb = 0;
                 uintptr_t ub = (uintptr_t)-1;
         #ifdef COPY_STACKS
-                if (stkbuf && ta->copy_stack && !ta->ptls) {
+                if (stkbuf && ta->ctx.copy_stack && !ta->ptls) {
                     int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                     assert(tid >= 0);
                     jl_ptls_t ptls2 = gc_all_tls_states[tid];
                     ub = (uintptr_t)ptls2->stackbase;
-                    lb = ub - ta->copy_stack;
+                    lb = ub - ta->ctx.copy_stack;
                     offset = (uintptr_t)stkbuf - lb;
                 }
         #endif
@@ -2307,6 +2309,16 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (npointers == 0)
             return;
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
+        if (vt == jl_binding_partition_type) {
+            // BindingPartition has a special union of jl_value_t and flag bits
+            // but is otherwise regular.
+            jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_valueof(o);
+            jl_value_t *val = decode_restriction_value(
+                jl_atomic_load_relaxed(&bpart->restriction));
+            if (val)
+                gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)bpart, val);
+            gc_try_claim_and_push(mq, val, &nptr);
+        }
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
                "opaque types should have been handled specially");
         if (layout->flags.fielddesc_type == 0) {
@@ -3033,10 +3045,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // we either free some space or get an OOM error.
     if (gc_sweep_always_full) {
         sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL);
     }
     if (collection == JL_GC_FULL && !prev_sweep_full) {
         sweep_full = 1;
         recollect = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
     if (sweep_full) {
         // these are the difference between the number of gc-perm bytes scanned
@@ -3172,10 +3186,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    if (heap_size > user_max || old_ratio > 0.15)
+    if (heap_size > user_max) {
         next_sweep_full = 1;
-    else
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
+    }
+    else if (old_ratio > 0.15) {
+        next_sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_LARGE_PROMOTION_RATE);
+    }
+    else {
         next_sweep_full = 0;
+    }
     if (heap_size > user_max || thrashing)
         under_pressure = 1;
     // sweeping is over

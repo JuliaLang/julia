@@ -907,3 +907,10 @@ end
     v = view([1,2,3,4], :)
     @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
 end
+
+@testset "mapreduce with OffsetRanges" begin
+    r = 5:100
+    a = OffsetArray(r, 2)
+    b = sum(a, dims=1)
+    @test b[begin] == sum(r)
+end
