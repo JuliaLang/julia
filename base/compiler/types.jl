@@ -41,11 +41,14 @@ struct StmtInfo
     used::Bool
 end
 
-struct MethodInfo
+struct SpecInfo
+    nargs::Int
+    isva::Bool
     propagate_inbounds::Bool
     method_for_inference_limit_heuristics::Union{Nothing,Method}
 end
-MethodInfo(src::CodeInfo) = MethodInfo(
+SpecInfo(src::CodeInfo) = SpecInfo(
+    Int(src.nargs), src.isva,
     src.propagate_inbounds,
     src.method_for_inference_limit_heuristics::Union{Nothing,Method})
 

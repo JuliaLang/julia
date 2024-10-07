@@ -1532,7 +1532,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     end
 
     src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
-    src, di = retrieve_ir_for_inlining(code, src)
+    src, spec_info, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
@@ -1542,7 +1542,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 
     # TODO: Should there be a special line number node for inlined finalizers?
     inline_at = ir[SSAValue(idx)][:line]
-    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, di, mi, inline_at, argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, spec_info, di, mi, inline_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     ssa_rename = Vector{Any}(undef, length(src.stmts))
@@ -1707,22 +1707,24 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         ismutabletype(typ) || continue
         typ = typ::DataType
         # First check for any finalizer calls
-        finalizer_idx = nothing
-        for use in defuse.uses
+        finalizer_useidx = nothing
+        for (useidx, use) in enumerate(defuse.uses)
             if use.kind === :finalizer
                 # For now: Only allow one finalizer per allocation
-                finalizer_idx !== nothing && @goto skip
-                finalizer_idx = use.idx
+                finalizer_useidx !== nothing && @goto skip
+                finalizer_useidx = useidx
             end
         end
-        if finalizer_idx !== nothing && inlining !== nothing
+        all_eliminated = all_forwarded = true
+        if finalizer_useidx !== nothing && inlining !== nothing
+            finalizer_idx = defuse.uses[finalizer_useidx].idx
             try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining,
                 lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
-            continue
+            deleteat!(defuse.uses, finalizer_useidx)
+            all_eliminated = all_forwarded = false # can't eliminate `setfield!` calls safely
         end
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        all_eliminated = all_forwarded = true
         for use in defuse.uses
             if use.kind === :preserve
                 for du in fielddefuse

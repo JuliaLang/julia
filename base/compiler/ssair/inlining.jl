@@ -12,6 +12,8 @@ struct InliningTodo
     mi::MethodInstance
     # The IR of the inlinee
     ir::IRCode
+    # The SpecInfo for the inlinee
+    spec_info::SpecInfo
     # The DebugInfo table for the inlinee
     di::DebugInfo
     # If the function being inlined is a single basic block we can use a
@@ -20,8 +22,8 @@ struct InliningTodo
     # Effects of the call statement
     effects::Effects
 end
-function InliningTodo(mi::MethodInstance, (ir, di)::Tuple{IRCode, DebugInfo}, effects::Effects)
-    return InliningTodo(mi, ir, di, linear_inline_eligible(ir), effects)
+function InliningTodo(mi::MethodInstance, ir::IRCode, spec_info::SpecInfo, di::DebugInfo, effects::Effects)
+    return InliningTodo(mi, ir, spec_info, di, linear_inline_eligible(ir), effects)
 end
 
 struct ConstantCase
@@ -321,7 +323,8 @@ function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::Deb
 end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
-                              ir::IRCode, di::DebugInfo, mi::MethodInstance, inlined_at::NTuple{3,Int32}, argexprs::Vector{Any})
+                              ir::IRCode, spec_info::SpecInfo, di::DebugInfo, mi::MethodInstance,
+                              inlined_at::NTuple{3,Int32}, argexprs::Vector{Any})
     def = mi.def::Method
     debuginfo = inline_target isa IRCode ? inline_target.debuginfo : inline_target.ir.debuginfo
     topline = new_inlined_at = ir_inline_linetable!(debuginfo, di, inlined_at)
@@ -334,8 +337,8 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
         spvals_ssa = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
-    if def.isva
-        nargs_def = Int(def.nargs::Int32)
+    if spec_info.isva
+        nargs_def = spec_info.nargs
         if nargs_def > 0
             argexprs = fix_va_argexprs!(insert_node!, inline_target, argexprs, nargs_def, topline)
         end
@@ -362,7 +365,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inlined_at = compact.result[idx][:line]
-    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.di, item.mi, inlined_at, argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.spec_info, item.di, item.mi, inlined_at, argexprs)
     boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
 
     # If the iterator already moved on to the next basic block,
@@ -860,15 +863,14 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
     if inferred_result isa ConstantCase
         add_inlining_backedge!(et, mi)
         return inferred_result
-    end
-    if inferred_result isa InferredResult
+    elseif inferred_result isa InferredResult
         (; src, effects) = inferred_result
     elseif inferred_result isa CodeInstance
         src = @atomic :monotonic inferred_result.inferred
         effects = decode_effects(inferred_result.ipo_purity_bits)
-    else
-        src = nothing
-        effects = Effects()
+    else # there is no cached source available, bail out
+        return compileable_specialization(mi, Effects(), et, info;
+            compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
     # the duplicated check might have been done already within `analyze_method!`, but still
@@ -883,9 +885,12 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
-    ir = inferred_result isa CodeInstance  ? retrieve_ir_for_inlining(inferred_result, src) :
-                                             retrieve_ir_for_inlining(mi, src, preserve_local_sources)
-    return InliningTodo(mi, ir, effects)
+    if inferred_result isa CodeInstance
+        ir, spec_info, debuginfo = retrieve_ir_for_inlining(inferred_result, src)
+    else
+        ir, spec_info, debuginfo = retrieve_ir_for_inlining(mi, src, preserve_local_sources)
+    end
+    return InliningTodo(mi, ir, spec_info, debuginfo, effects)
 end
 
 # the special resolver for :invoke-d call
@@ -901,23 +906,17 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
     if cached_result isa ConstantCase
         add_inlining_backedge!(et, mi)
         return cached_result
-    end
-    if cached_result isa InferredResult
-        (; src, effects) = cached_result
     elseif cached_result isa CodeInstance
         src = @atomic :monotonic cached_result.inferred
         effects = decode_effects(cached_result.ipo_purity_bits)
-    else
-        src = nothing
-        effects = Effects()
+    else # there is no cached source available, bail out
+        return nothing
     end
 
-    preserve_local_sources = true
     src_inlining_policy(state.interp, src, info, flag) || return nothing
-    ir = cached_result isa CodeInstance  ? retrieve_ir_for_inlining(cached_result, src) :
-                                           retrieve_ir_for_inlining(mi, src, preserve_local_sources)
+    ir, spec_info, debuginfo = retrieve_ir_for_inlining(cached_result, src)
     add_inlining_backedge!(et, mi)
-    return InliningTodo(mi, ir, effects)
+    return InliningTodo(mi, ir, spec_info, debuginfo, effects)
 end
 
 function validate_sparams(sparams::SimpleVector)
@@ -971,22 +970,29 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     return resolve_todo(mi, volatile_inf_result, info, flag, state; invokesig)
 end
 
-function retrieve_ir_for_inlining(cached_result::CodeInstance, src::MaybeCompressed)
-    src = _uncompressed_ir(cached_result, src)::CodeInfo
-    return inflate_ir!(src, cached_result.def), src.debuginfo
+function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
+    src = _uncompressed_ir(cached_result, src)
+    return inflate_ir!(src, cached_result.def), SpecInfo(src), src.debuginfo
+end
+function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
+    return inflate_ir!(copy(src), cached_result.def), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
         src = copy(src)
     end
-    return inflate_ir!(src, mi), src.debuginfo
+    return inflate_ir!(src, mi), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local_sources::Bool)
     if preserve_local_sources
         ir = copy(ir)
     end
+    # COMBAK this is not correct, we should make `InferenceResult` propagate `SpecInfo`
+    spec_info = let m = mi.def::Method
+        SpecInfo(Int(m.nargs), m.isva, false, nothing)
+    end
     ir.debuginfo.def = mi
-    return ir, DebugInfo(ir.debuginfo, length(ir.stmts))
+    return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
 end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
@@ -1466,8 +1472,8 @@ function semiconcrete_result_item(result::SemiConcreteResult,
 
     add_inlining_backedge!(et, mi)
     preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
-    ir = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
-    return InliningTodo(mi, ir, result.effects)
+    ir, _, debuginfo = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
+    return InliningTodo(mi, ir, result.spec_info, debuginfo, result.effects)
 end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,

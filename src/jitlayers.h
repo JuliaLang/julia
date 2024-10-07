@@ -47,7 +47,7 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64 and Linux/aarch64.
-// #define JL_FORCE_JITLINK
+//#define JL_FORCE_JITLINK
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
@@ -363,7 +363,6 @@ public:
     typedef orc::ObjectLinkingLayer ObjLayerT;
 #else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
-#endif
     struct LockLayerT : public orc::ObjectLayer {
 
         LockLayerT(orc::ObjectLayer &BaseLayer) JL_NOTSAFEPOINT : orc::ObjectLayer(BaseLayer.getExecutionSession()), BaseLayer(BaseLayer) {}
@@ -381,11 +380,11 @@ public:
         orc::ObjectLayer &BaseLayer;
         std::mutex EmissionMutex;
     };
+#endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef orc::IRTransformLayer OptSelLayerT;
-    typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -500,10 +499,9 @@ public:
 
     struct DLSymOptimizer;
 
-private:
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
+#ifndef JL_USE_JITLINK
+    void RegisterJITEventListener(JITEventListener *L) JL_NOTSAFEPOINT;
+#endif
 
 public:
 
@@ -511,10 +509,9 @@ public:
     ~JuliaOJIT() JL_NOTSAFEPOINT;
 
     void enableJITDebuggingSupport() JL_NOTSAFEPOINT;
-#ifndef JL_USE_JITLINK
-    // JITLink doesn't support old JITEventListeners (yet).
-    void RegisterJITEventListener(JITEventListener *L) JL_NOTSAFEPOINT;
-#endif
+    void enableIntelJITEventListener() JL_NOTSAFEPOINT;
+    void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
+    void enablePerfJITEventListener() JL_NOTSAFEPOINT;
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
@@ -525,7 +522,7 @@ public:
                             bool ShouldOptimize = false) JL_NOTSAFEPOINT;
     Error addObjectFile(orc::JITDylib &JD,
                         std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
-    orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
+    orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return CompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
@@ -533,6 +530,7 @@ public:
     Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
     Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
     Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names) JL_NOTSAFEPOINT;
     #else
     JITEvaluatedSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
     JITEvaluatedSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
@@ -616,13 +614,13 @@ private:
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
+#ifndef JL_USE_JITLINK
     LockLayerT LockLayer;
+#endif
     CompileLayerT CompileLayer;
     JITPointersLayerT JITPointersLayer;
     OptimizeLayerT OptimizeLayer;
     OptSelLayerT OptSelLayer;
-    DepsVerifyLayerT DepsVerifyLayer;
-    CompileLayerT ExternalCompileLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
