@@ -1,22 +1,28 @@
 # [Strings](@id man-strings)
 
-Strings are finite sequences of characters. Of course, the real trouble comes when one asks what
-a character is. The characters that English speakers are familiar with are the letters `A`, `B`,
-`C`, etc., together with numerals and common punctuation symbols. These characters are standardized
-together with a mapping to integer values between 0 and 127 by the [ASCII](https://en.wikipedia.org/wiki/ASCII)
-standard. There are, of course, many other characters used in non-English languages, including
-variants of the ASCII characters with accents and other modifications, related scripts such as
-Cyrillic and Greek, and scripts completely unrelated to ASCII and English, including Arabic, Chinese,
-Hebrew, Hindi, Japanese, and Korean. The [Unicode](https://en.wikipedia.org/wiki/Unicode) standard
-tackles the complexities of what exactly a character is, and is generally accepted as the definitive
-standard addressing this problem. Depending on your needs, you can either ignore these complexities
-entirely and just pretend that only ASCII characters exist, or you can write code that can handle
-any of the characters or encodings that one may encounter when handling non-ASCII text. Julia
-makes dealing with plain ASCII text simple and efficient, and handling Unicode is as simple and
-efficient as possible. In particular, you can write C-style string code to process ASCII strings,
-and they will work as expected, both in terms of performance and semantics. If such code encounters
-non-ASCII text, it will gracefully fail with a clear error message, rather than silently introducing
-corrupt results. When this happens, modifying the code to handle non-ASCII data is straightforward.
+
+If Tcl is installed you can use its scan built-in on characters.
+
+```
+$ tclsh <<< 'puts [scan A %c]' # ASCII
+65
+$ tclsh <<< 'puts [scan Ä %c]' # extended ASCII
+196
+$
+```
+
+The `%c` specifier converts a single character to a decimal string.
+
+ASCII's integer values 0-31 and 127 are control characters, 32-126 are for US layout keyboard printable
+characters, and 128-255 are "extended" ASCII.
+
+Strings are finite sequences of characters. Other natural languages include RTL character sets and
+Asian fonts (CJK). Julia makes dealing with ASCII text simple and efficient, and handling Unicode is
+as simple and efficient as possible. In particular, you can write C-style string code to process ASCII
+strings, and they will work as expected, both in terms of performance and semantics. If such code
+encounters non-ASCII text, it will gracefully fail with a clear error message, rather than silently
+introducing corrupt results. When this happens, modifying the code to handle non-ASCII data is
+straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
