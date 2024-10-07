@@ -66,7 +66,7 @@ When `data` is not given, the buffer will be both readable and writable by defau
     its content at this point. For example, `IOBuffer` may re-allocate the data as required,
     which may or may not be visible in any outstanding bindings to `array`. There could be
     unallocated, arbitrary values. Likewise, the ordering of any values written to this
-    array be presumed.
+    array cannot be presumed.
 
 # Examples
 ```jldoctest
