@@ -51,7 +51,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
-        print(io, "invoke ")
+        printstyled(io, "invoke "; color = :light_black)
         mi = stmt.args[1]::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
@@ -72,11 +72,11 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
             arg1 = getfield(arg1.mod, arg1.name)
         end
         if isa(arg1, Core.IntrinsicFunction)
-            print(io, "intrinsic ")
+            printstyled(io, "intrinsic "; color = :light_black)
         elseif isa(arg1, Core.Builtin)
-            print(io, "builtin ")
+            printstyled(io, "builtin "; color = :light_black)
         else
-            print(io, "dynamic ")
+            printstyled(io, "dynamic "; color = :yellow)
         end
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
