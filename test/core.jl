@@ -34,7 +34,7 @@ for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
-        (Core.MethodInstance, [:cache, :precompiled]),
+        (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -1183,7 +1183,7 @@ end
 
 # Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
 # so that users can define their own binding named `Module` in Main.
-@test !Base.isbindingresolved(Main, :Module)
+@test success(`$(Base.julia_cmd()) -e '@assert !Base.isbindingresolved(Main, :Module)'`)
 
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
@@ -5611,6 +5611,26 @@ end
     x::Array{T} where T<:Integer
 end
 
+# issue #54757, type redefinitions with recursive reference in supertype
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+
 let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
@@ -8268,3 +8288,19 @@ end
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
+
+# Make sure that Core.Compiler has enough NamedTuple infrastructure
+# to properly give error messages for basic kwargs...
+Core.eval(Core.Compiler, quote issue50174(;a=1) = a end)
+@test_throws MethodError Core.Compiler.issue50174(;b=2)
+
+let s = mktemp() do path, io
+        xxx = 42
+        redirect_stdout(io) do
+            Base.@assume_effects :nothrow @show xxx
+        end
+        flush(io)
+        read(path, String)
+    end
+    @test strip(s) == "xxx = 42"
+end

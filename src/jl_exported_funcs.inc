@@ -316,6 +316,7 @@
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_getloc) \
     XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
@@ -344,6 +345,8 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
+    XX(jl_method_match_to_mi) \
+    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -420,7 +423,6 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
-    XX(jl_sig_throw) \
     XX(jl_spawn) \
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
@@ -453,6 +455,8 @@
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
+    XX(jl_get_ptls_rng) \
+    XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -521,6 +525,7 @@
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_external_fns) \
+    YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

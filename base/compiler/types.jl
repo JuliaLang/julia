@@ -1,4 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
+
+const WorkThunk = Any
+# #@eval struct WorkThunk
+#    thunk::Core.OpaqueClosure{Tuple{Vector{Tasks}}, Bool}
+#    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
+# end
+# (p::WorkThunk)() = p.thunk()
 
 """
     AbstractInterpreter
@@ -33,11 +41,14 @@ struct StmtInfo
     used::Bool
 end
 
-struct MethodInfo
+struct SpecInfo
+    nargs::Int
+    isva::Bool
     propagate_inbounds::Bool
     method_for_inference_limit_heuristics::Union{Nothing,Method}
 end
-MethodInfo(src::CodeInfo) = MethodInfo(
+SpecInfo(src::CodeInfo) = SpecInfo(
+    Int(src.nargs), src.isva,
     src.propagate_inbounds,
     src.method_for_inference_limit_heuristics::Union{Nothing,Method})
 
@@ -450,10 +461,16 @@ abstract type CallInfo end
 
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+add_uncovered_edges!(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = add_uncovered_edges_impl(edges, info, atype)
+
 getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
 
+# must implement `nsplit`, `getsplit`, and `add_uncovered_edges!` to opt in to inlining
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("unexpected call into `add_uncovered_edges!`")
+
+# must implement `getresult` to opt in to extended lattice return information
 getresult_impl(::CallInfo, ::Int) = nothing
 
 @specialize

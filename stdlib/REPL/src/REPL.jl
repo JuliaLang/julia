@@ -74,7 +74,17 @@ end
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
     Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
-    print(io, "\nHint: a global variable of this name also exists in $m.")
+    active_mod = Base.active_module()
+    print(io, "\nHint: ")
+    if isdefined(active_mod, Symbol(m))
+        print(io, "a global variable of this name also exists in $m.")
+    else
+        if Symbol(m) == var
+            print(io, "$m is loaded but not imported in the active module $active_mod.")
+        else
+            print(io, "a global variable of this name may be made accessible by importing $m in the current active module $active_mod")
+        end
+    end
     return true
 end
 
@@ -758,11 +768,11 @@ setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = 
 Set `mod` as the default contextual module in the REPL,
 both for evaluating expressions and printing them.
 """
-function activate(mod::Module=Main)
+function activate(mod::Module=Main; interactive_utils::Bool=true)
     mistate = (Base.active_repl::LineEditREPL).mistate
     mistate === nothing && return nothing
     mistate.active_module = mod
-    Base.load_InteractiveUtils(mod)
+    interactive_utils && Base.load_InteractiveUtils(mod)
     return nothing
 end
 

@@ -112,6 +112,8 @@ for op in (:+, :-)
     end
 end
 
+(*)(Da::Diagonal, A::BandedMatrix, Db::Diagonal) = _tri_matmul(Da, A, Db)
+
 # disambiguation between triangular and banded matrices, banded ones "dominate"
 _mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
@@ -286,6 +288,25 @@ function (-)(A::UniformScaling, B::Bidiagonal)
 end
 function (-)(A::UniformScaling, B::Diagonal)
     Diagonal(Ref(A) .- B.diag)
+end
+
+for f in (:+, :-)
+    @eval function $f(D::Diagonal{<:Number}, S::Symmetric)
+        uplo = sym_uplo(S.uplo)
+        return Symmetric(parentof_applytri($f, Symmetric(D, uplo), S), uplo)
+    end
+    @eval function $f(S::Symmetric, D::Diagonal{<:Number})
+        uplo = sym_uplo(S.uplo)
+        return Symmetric(parentof_applytri($f, S, Symmetric(D, uplo)), uplo)
+    end
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+        uplo = sym_uplo(H.uplo)
+        return Hermitian(parentof_applytri($f, Hermitian(D, uplo), H), uplo)
+    end
+    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+        uplo = sym_uplo(H.uplo)
+        return Hermitian(parentof_applytri($f, H, Hermitian(D, uplo)), uplo)
+    end
 end
 
 ## Diagonal construction from UniformScaling
@@ -567,3 +588,7 @@ function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot 
     B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end
+
+# istriu/istril for triangular wrappers of structured matrices
+_istril(A::LowerTriangular{<:Any, <:BandedMatrix}, k) = istril(parent(A), k)
+_istriu(A::UpperTriangular{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)

@@ -135,27 +135,43 @@ end
         @test_throws ArgumentError tril!(SymTridiagonal(d, dl), n)
         @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), -n - 2)
         @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), n)
-        @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zerosdl)
-        @test tril(SymTridiagonal(d,dl),1)  == Tridiagonal(dl,d,dl)
-        @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zerosd,zerosdl)
-        @test tril(SymTridiagonal(d,dl),-2) == Tridiagonal(zerosdl,zerosd,zerosdl)
-        @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zerosdu)
-        @test tril(Tridiagonal(dl,d,du),1)  == Tridiagonal(dl,d,du)
-        @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zerosd,zerosdu)
-        @test tril(Tridiagonal(dl,d,du),-2) == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(tril(SymTridiagonal(d,dl)))    == Tridiagonal(dl,d,zerosdl)
+        @test @inferred(tril(SymTridiagonal(d,dl),1))  == Tridiagonal(dl,d,dl)
+        @test @inferred(tril(SymTridiagonal(d,dl),-1)) == Tridiagonal(dl,zerosd,zerosdl)
+        @test @inferred(tril(SymTridiagonal(d,dl),-2)) == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(tril(Tridiagonal(dl,d,du)))    == Tridiagonal(dl,d,zerosdu)
+        @test @inferred(tril(Tridiagonal(dl,d,du),1))  == Tridiagonal(dl,d,du)
+        @test @inferred(tril(Tridiagonal(dl,d,du),-1)) == Tridiagonal(dl,zerosd,zerosdu)
+        @test @inferred(tril(Tridiagonal(dl,d,du),-2)) == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl))))    == Tridiagonal(dl,d,zerosdl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),1))  == Tridiagonal(dl,d,dl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),-1)) == Tridiagonal(dl,zerosd,zerosdl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),-2)) == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du))))    == Tridiagonal(dl,d,zerosdu)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),1))  == Tridiagonal(dl,d,du)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),-1)) == Tridiagonal(dl,zerosd,zerosdu)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),-2)) == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test_throws ArgumentError triu!(SymTridiagonal(d, dl), -n)
         @test_throws ArgumentError triu!(SymTridiagonal(d, dl), n + 2)
         @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), -n)
         @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), n + 2)
-        @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zerosdl,d,dl)
-        @test triu(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,d,dl)
-        @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zerosdl,zerosd,dl)
-        @test triu(SymTridiagonal(d,dl),2)  == Tridiagonal(zerosdl,zerosd,zerosdl)
-        @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zerosdl,d,du)
-        @test triu(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,d,du)
-        @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zerosdl,zerosd,du)
-        @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(triu(SymTridiagonal(d,dl)))    == Tridiagonal(zerosdl,d,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),-1)) == Tridiagonal(dl,d,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),1))  == Tridiagonal(zerosdl,zerosd,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),2))  == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(triu(Tridiagonal(dl,d,du)))    == Tridiagonal(zerosdl,d,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),-1)) == Tridiagonal(dl,d,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),1))  == Tridiagonal(zerosdl,zerosd,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),2))  == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl))))    == Tridiagonal(zerosdl,d,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),-1)) == Tridiagonal(dl,d,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),1))  == Tridiagonal(zerosdl,zerosd,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),2))  == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du))))    == Tridiagonal(zerosdl,d,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),-1)) == Tridiagonal(dl,d,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),1))  == Tridiagonal(zerosdl,zerosd,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),2))  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test !istril(SymTridiagonal(d,dl))
         @test istril(SymTridiagonal(d,zerosdl))
@@ -919,6 +935,19 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    for T in (SymTridiagonal(rand(4), rand(3)), Tridiagonal(rand(3), rand(4), rand(3)))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (SymTridiagonal(rand(2), rand(1)), Tridiagonal(rand(1), rand(2), rand(1)))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
 @testset "mul with empty arrays" begin
     A = zeros(5,0)
     T = Tridiagonal(zeros(0), zeros(0), zeros(0))
@@ -952,6 +981,77 @@ end
     @test sprint(show, T) == "Tridiagonal($(repr(diag(T,-1))), $(repr(diag(T))), $(repr(diag(T,1))))"
     S = SymTridiagonal(fill(m,3), fill(m,2))
     @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
+end
+
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        for T in (
+                Tridiagonal(rand(max(n-1,0)), rand(n), rand(max(n-1,0))),
+                SymTridiagonal(rand(n), rand(max(n-1,0))),
+                )
+            M = Matrix(T)
+            @test T * T ≈ M * M
+            @test mul!(similar(T, size(T)), T, T) ≈ M * M
+            @test mul!(ones(size(T)), T, T, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AR = rand(n,m)
+                AL = rand(m,n)
+                @test AL * T ≈ AL * M
+                @test T * AR ≈ M * AR
+                @test mul!(similar(AL), AL, T) ≈ AL * M
+                @test mul!(similar(AR), T, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, T, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), T, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            v = rand(n)
+            @test T * v ≈ M * v
+            @test mul!(similar(v), T, v) ≈ M * v
+
+            D = Diagonal(rand(n))
+            @test T * D ≈ M * D
+            @test D * T ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), D, T) ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), T, D) ≈ M * D
+            @test mul!(similar(T, size(T)), D, T) ≈ D * M
+            @test mul!(similar(T, size(T)), T, D) ≈ M * D
+            @test mul!(ones(size(T)), D, T, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(T)), T, D, 2, 4) ≈ M * D * 2 .+ 4
+
+            for uplo in (:U, :L)
+                B = Bidiagonal(rand(n), rand(max(0, n-1)), uplo)
+                @test T * B ≈ M * B
+                @test B * T ≈ B * M
+                if n <= 2
+                    @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
+                    @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+                end
+                @test mul!(similar(T, size(T)), B, T) ≈ B * M
+                @test mul!(similar(T, size(T)), T, B) ≈ M * B
+                @test mul!(ones(size(T)), B, T, 2, 4) ≈ B * M * 2 .+ 4
+                @test mul!(ones(size(T)), T, B, 2, 4) ≈ M * B * 2 .+ 4
+            end
+        end
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for T in (
+            SymTridiagonal(fill(arr,n), fill(arr,n-1)),
+            Tridiagonal(fill(arr,n-1), fill(arr,n), fill(arr,n-1)),
+            )
+        @test T * T ≈ Matrix(T) * Matrix(T)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * T ≈ Matrix(BL) * Matrix(T)
+        @test BU * T ≈ Matrix(BU) * Matrix(T)
+        @test T * BL ≈ Matrix(T) * Matrix(BL)
+        @test T * BU ≈ Matrix(T) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * T ≈ Matrix(D) * Matrix(T)
+        @test T * D ≈ Matrix(T) * Matrix(D)
+    end
 end
 
 end # module TestTridiagonal

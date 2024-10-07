@@ -208,7 +208,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
@@ -570,9 +570,10 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)

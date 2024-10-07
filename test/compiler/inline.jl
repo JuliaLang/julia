@@ -876,7 +876,7 @@ let src = code_typed1((Any,)) do x
         abstract_unionsplit_fallback(x)
     end
     @test count(isinvoke(:abstract_unionsplit_fallback), src.code) == 2
-    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+    @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 let src = code_typed1((Union{Type,Number},)) do x
         abstract_unionsplit_fallback(x)
@@ -912,7 +912,7 @@ let src = code_typed1((Any,)) do x
     @test count(iscall((src, typeof)), src.code) == 2
     @test count(isinvoke(:println), src.code) == 0
     @test count(iscall((src, println)), src.code) == 0
-    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+    @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 let src = code_typed1((Union{Type,Number},)) do x
         abstract_unionsplit_fallback(false, x)
@@ -960,8 +960,8 @@ let # aggressive inlining of single, abstract method match
     end |> only |> first
     # both callsites should be inlined
     @test count(isinvoke(:has_free_typevars), src.code) == 2
-    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
-    @test count(iscall((src,isGoodType)), src.code) == 1
+    # `isGoodType(y::Any)` isn't fully covered, so the fallback is a method error
+    @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 
 @inline isGoodType2(cnd, @nospecialize x::Type) =
@@ -973,8 +973,8 @@ let # aggressive inlining of single, abstract method match (with constant-prop'e
     # both callsite should be inlined with constant-prop'ed result
     @test count(isinvoke(:isType), src.code) == 2
     @test count(isinvoke(:has_free_typevars), src.code) == 0
-    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
-    @test count(iscall((src,isGoodType2)), src.code) == 1
+    # `isGoodType(y::Any)` isn't fully covered, thus a MethodError gets inserted
+    @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 
 @noinline function checkBadType!(@nospecialize x::Type)
@@ -989,8 +989,8 @@ let # aggressive static dispatch of single, abstract method match
     end |> only |> first
     # both callsites should be resolved statically
     @test count(isinvoke(:checkBadType!), src.code) == 2
-    # `checkBadType!(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
-    @test count(iscall((src,checkBadType!)), src.code) == 1
+    # `checkBadType!(y::Any)` isn't fully covered, thus a MethodError gets inserted
+    @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 
 @testset "late_inline_special_case!" begin
@@ -1570,7 +1570,6 @@ let
     @test get_finalization_count() == 1000
 end
 
-
 function cfg_finalization7(io)
     for i = -999:1000
         o = DoAllocWithField(0)
@@ -1597,6 +1596,31 @@ let
     @test get_finalization_count() == 1000
 end
 
+# Load forwarding with `finalizer` elision
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            @noinline
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", obj[])
+        end
+        Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
+        return xs[]
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+end
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            @noinline
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", obj[])
+        end
+        Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
+        xs[] += 1
+        return xs[]
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
@@ -2004,7 +2028,7 @@ f48397(::Tuple{String,String}) = :ok
 let src = code_typed1((Union{Bool,Tuple{String,Any}},)) do x
         f48397(x)
     end
-    @test any(iscall((src, f48397)), src.code)
+    @test any(iscall((src, Core.throw_methoderror)), src.code) # fallback method error)
 end
 g48397::Union{Bool,Tuple{String,Any}} = ("48397", 48397)
 let res = @test_throws MethodError let
@@ -2175,11 +2199,6 @@ let src = code_typed1() do
     @test count(isinvoke(:iterate), src.code) == 0
 end
 
-# JuliaLang/julia#53062: proper `joint_effects` for call with empty method matches
-let ir = first(only(Base.code_ircode(setproperty!, (Base.RefValue{Int},Symbol,Base.RefValue{Int}))))
-    i = findfirst(iscall((ir, convert)), ir.stmts.stmt)::Int
-    @test iszero(ir.stmts.flag[i] & Core.Compiler.IR_FLAG_NOTHROW)
-end
 function issue53062(cond)
     x = Ref{Int}(0)
     if cond
@@ -2213,4 +2232,20 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
     irfunc = Core.OpaqueClosure(ir)
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test_throws MethodError irfunc(Issue52644(Tuple{<:Integer}))
+end
+
+foo_split(x::Float64) = 1
+foo_split(x::Int) = 2
+bar_inline_error() = foo_split(nothing)
+bar_split_error() = foo_split(Core.compilerbarrier(:type,nothing))
+
+let src = code_typed1(bar_inline_error, Tuple{})
+    # Should inline method errors
+    @test count(iscall((src, foo_split)), src.code) == 0
+    @test count(iscall((src, Core.throw_methoderror)), src.code) > 0
+end
+let src = code_typed1(bar_split_error, Tuple{})
+    # Should inline method errors
+    @test count(iscall((src, foo_split)), src.code) == 0
+    @test count(iscall((src, Core.throw_methoderror)), src.code) > 0
 end

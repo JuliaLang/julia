@@ -144,7 +144,7 @@ files, artifacts, etc. For example, to switch the user depot to `/foo/bar` just 
 ```sh
 export JULIA_DEPOT_PATH="/foo/bar:"
 ```
-All package operations, like cloning registrise or installing packages, will now write to
+All package operations, like cloning registries or installing packages, will now write to
 `/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
 resources will still be available. If you really only want to use the depot at `/foo/bar`,
 and not load any bundled resources, simply set the environment variable to `/foo/bar`
@@ -328,16 +328,25 @@ a master process to establish a connection before dying.
 
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
-An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia. If `$JULIA_NUM_THREADS` is not positive or is not set, or
-if the number of CPU threads cannot be determined through system calls, then the
-number of threads is set to `1`.
+An unsigned 64-bit integer (`uint64_t`) or string that sets the maximum number
+of threads available to Julia. If `$JULIA_NUM_THREADS` is not set or is a
+non-positive integer, or if the number of CPU threads cannot be determined
+through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads.
+to the number of CPU threads. It can also be set to a comma-separated string to
+specify the size of the `:default` and `:interactive` [threadpools](@ref
+man-threadpools), respectively:
+```bash
+# 5 threads in the :default pool and 2 in the :interactive pool
+export JULIA_NUM_THREADS=5,2
+
+# `auto` threads in the :default pool and 1 in the :interactive pool
+export JULIA_NUM_THREADS=auto,1
+```
 
 !!! note
-    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `JULIA_NUM_THREADS` must be defined before starting Julia; defining it in
     `startup.jl` is too late in the startup process.
 
 !!! compat "Julia 1.5"
@@ -346,6 +355,9 @@ to the number of CPU threads.
 
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
+
+!!! compat "Julia 1.9"
+    The `x,y` format for threadpools requires Julia 1.9 or above.
 
 ### [`JULIA_THREAD_SLEEP_THRESHOLD`](@id JULIA_THREAD_SLEEP_THRESHOLD)
 
@@ -379,6 +391,23 @@ during image compilation. Defaults to 0.
 If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: the master thread is on proc 0, and threads are
 affinitized. Otherwise, Julia lets the operating system handle thread policy.
+
+## Garbage Collection
+
+### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
+
+Environment variable equivalent to the `--heap-size-hint` command line option.
+
+Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
+
+    - b  (bytes)
+    - k  (kibibytes)
+    - m  (mebibytes)
+    - g  (gibibytes)
+    - t  (tebibytes)
+    - %  (percentage of physical memory)
+
+which are not case sensitive. For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
 ## REPL formatting
 

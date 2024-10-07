@@ -51,6 +51,8 @@ function print(io::IO, xs...)
     return nothing
 end
 
+setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
+
 """
     println([io::IO], xs...)
 
@@ -74,6 +76,7 @@ julia> String(take!(io))
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
 
+setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -149,6 +152,7 @@ function print_to_string(xs...)
     end
     String(_unsafe_take!(s))
 end
+setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -365,7 +369,8 @@ function _join_preserve_annotations(iterator, args...)
         # in nature, we extract an `AnnotatedString`, otherwise we just extract
         # a plain `String` from `io`.
         if isconcretetype(et) || !isempty(io.annotations)
-            read(seekstart(io), AnnotatedString{String})
+            seekstart(io)
+            read(io, AnnotatedString{String})
         else
             String(take!(io.io))
         end

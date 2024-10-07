@@ -4,6 +4,8 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
+- New option `--trim` for building "trimmed" binaries, where code not provably reachable from entry points
+  is removed. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
 - the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
@@ -35,6 +37,10 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - Trivial infinite loops (like `while true; end`) are no longer undefined
+   behavior. Infinite loops that actually do things (e.g. have side effects
+   or sleep) were never and are still not undefined behavior. ([#52999])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -56,6 +62,8 @@ variables. ([#53742]).
 * `--project=@temp` starts Julia with a temporary environment.
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
+* New `--trace-dispatch` option to report methods that are dynamically dispatched ([#55848]).
 
 Multi-threading changes
 -----------------------
@@ -128,6 +136,8 @@ Standard library changes
   between different eigendecomposition algorithms ([#49355]).
 * Added a generic version of the (unblocked) pivoted Cholesky decomposition
   (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
+* The number of default BLAS threads now respects process affinity, instead of
+  using total number of logical threads available on the system ([#55574]).
 
 #### Logging
 
@@ -138,6 +148,9 @@ Standard library changes
 * `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
   that is `true` by default. When set, the contents of Julia objects are not emitted
   in the heap snapshot. This currently only applies to strings. ([#55326])
+* `Profile.print()` now colors Base/Core/Package modules similarly to how they are in stacktraces.
+  Also paths, even if truncated, are now clickable in terminals that support URI links
+  to take you to the specified `JULIA_EDITOR` for the given file & line number. ([#55335])
 
 #### Random
 
@@ -168,6 +181,10 @@ Standard library changes
 #### DelimitedFiles
 
 #### InteractiveUtils
+
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
 
 Deprecated or removed
 ---------------------

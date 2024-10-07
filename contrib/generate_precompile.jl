@@ -39,6 +39,15 @@ precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
 precompile(Base._require, (Base.PkgId, Nothing))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
+precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
+
+# LazyArtifacts (but more generally helpful)
+precompile(Tuple{Type{Base.Val{x} where x}, Module})
+precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
+precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
+precompile(Tuple{typeof(Base.invokelatest), Any})
+precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
 precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
@@ -161,6 +170,8 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
+    Base.print_time_imports_report(Base)
+    Base.print_time_imports_report_init(Base)
 
     # Preferences uses these
     get(Dict{String,Any}(), "missing", nothing)
@@ -171,6 +182,11 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
 
     # interactive startup uses this
     write(IOBuffer(), "")
+
+    # not critical, but helps hide unrelated compilation from @time when using --trace-compile
+    foo() = rand(2,2) * rand(2,2)
+    @time foo()
+    @time foo()
 
     break   # only actually need to do this once
 end
@@ -331,8 +347,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "F$n_step1")
         return :ok
     end
-    Base.errormonitor(step1)
-    !PARALLEL_PRECOMPILATION && wait(step1)
+    PARALLEL_PRECOMPILATION ? bind(statements_step1, step1) : wait(step1)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -346,7 +361,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     # Make statements unique
     statements = Set{String}()
     # Execute the precompile statements
-    for sts in [statements_step1,], statement in sts
+    for statement in statements_step1
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
@@ -382,6 +397,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     println()
     # Seems like a reasonable number right now, adjust as needed
     # comment out if debugging script
+    have_repl = false
     n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
@@ -392,7 +408,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
 finally
     fancyprint && print(ansi_enablecursor)
     GC.gc(true); GC.gc(false); # reduce memory footprint
-    return
 end
 
 generate_precompile_statements()

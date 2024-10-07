@@ -52,6 +52,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    m->file = name; // Using the name as a placeholder is better than nothing
+    m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
@@ -384,7 +386,7 @@ static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROO
 static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_t world)
 {
     jl_ptr_kind_union_t owner_pku = jl_atomic_load_relaxed(&owner->restriction);
-    assert(decode_restriction_kind(owner_pku) == BINDING_KIND_GLOBAL ||
+    assert(decode_restriction_kind(owner_pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(owner_pku) == BINDING_KIND_DECLARED ||
            jl_bkind_is_some_constant(decode_restriction_kind(owner_pku)));
     jl_binding_partition_t *alias_bpart = jl_get_binding_partition(alias, world);
     if (owner == alias_bpart)
@@ -419,7 +421,7 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                 continue;
             jl_binding_partition_t *tempbpart = jl_get_binding_partition(tempb, jl_current_task->world_age);
             jl_ptr_kind_union_t tempb_pku = jl_atomic_load_relaxed(&tempbpart->restriction);
-            assert(decode_restriction_kind(tempb_pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(tempb_pku)));
+            assert(decode_restriction_kind(tempb_pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(tempb_pku) == BINDING_KIND_DECLARED || jl_bkind_is_some_constant(decode_restriction_kind(tempb_pku)));
             (void)tempb_pku;
             if (bpart != NULL && !tempb->deprecated && !b->deprecated && !eq_bindings(tempbpart, b, jl_current_task->world_age)) {
                 if (warn) {
@@ -663,7 +665,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
     else {
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-        assert(decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku)));
+        assert(decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || decode_restriction_kind(pku) == BINDING_KIND_DECLARED || jl_bkind_is_some_constant(decode_restriction_kind(pku)));
         (void)pku;
         if (b->deprecated) {
             if (jl_get_binding_value(b) == jl_nothing) {
@@ -856,7 +858,7 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
     return kind == BINDING_KIND_DECLARED || !jl_bkind_is_some_guard(kind);
 }
 
-static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
+uint_t bindingkey_hash(size_t idx, jl_value_t *data)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx); // This must always happen inside the lock
     jl_sym_t *var = b->globalref->name;
@@ -1177,6 +1179,14 @@ jl_module_t *jl_module_root(jl_module_t *m)
             return m;
         m = m->parent;
     }
+}
+
+JL_DLLEXPORT jl_sym_t *jl_module_getloc(jl_module_t *m, int32_t *line)
+{
+    if (line) {
+        *line = m->line;
+    }
+    return m->file;
 }
 
 JL_DLLEXPORT jl_uuid_t jl_module_build_id(jl_module_t *m) { return m->build_id; }

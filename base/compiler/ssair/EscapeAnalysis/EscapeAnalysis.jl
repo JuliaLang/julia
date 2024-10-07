@@ -732,11 +732,13 @@ function compute_frameinfo(ir::IRCode)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if isa(stmt, EnterNode)
-            @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
-            tryregions === nothing && (tryregions = UnitRange{Int}[])
             leave_block = stmt.catch_dest
-            leave_pc = first(ir.cfg.blocks[leave_block].stmts)
-            push!(tryregions, idx:leave_pc)
+            if leave_block ≠ 0
+                @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
+                tryregions === nothing && (tryregions = UnitRange{Int}[])
+                leave_pc = first(ir.cfg.blocks[leave_block].stmts)
+                push!(tryregions, idx:leave_pc)
+            end
         elseif arrayinfo !== nothing
             # TODO this super limited alias analysis is able to handle only very simple cases
             # this should be replaced with a proper forward dimension analysis
@@ -1213,6 +1215,7 @@ escape_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
 escape_builtin!(::typeof(isdefined), _...) = false
 escape_builtin!(::typeof(throw), _...) = false
+escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
