@@ -60,11 +60,12 @@ It may take optional keyword arguments:
 When `data` is not given, the buffer will be both readable and writable by default.
 
 !!! warn "`data` is invalid after being passed to `IOBuffer`"
-    Once `data` is passed to `IOBuffer`, `IOBuffer` essentially "owns" this data, and existing
-    bindings to `data` should be considered invalid. There are no guarantees on its content at
-    this point. For example, `IOBuffer` may re-allocate the data as required, which may or may
-    not be visible in any outstanding bindings to `array`. There could be unallocated, arbitrary
-    values, nor can the ordering of any values written to this array be presumed.
+    Once `data` is passed to `IOBuffer`, if `write=true` (or `append=true`) and `maxsize >
+    length(data)`, `IOBuffer` essentially "owns" this data, and existing bindings to `data`
+    should be considered invalid. There are no guarantees on its content at this point. For
+    example, `IOBuffer` may re-allocate the data as required, which may or may not be visible in
+    any outstanding bindings to `array`. There could be unallocated, arbitrary values, nor can
+    the ordering of any values written to this array be presumed.
 
 # Examples
 ```jldoctest
