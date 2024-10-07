@@ -74,7 +74,14 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         if isa(arg1, Core.IntrinsicFunction)
             printstyled(io, "intrinsic "; color = :light_black)
         elseif isa(arg1, Core.Builtin)
-            printstyled(io, "builtin "; color = :light_black)
+            if (arg1 === Core._apply_iterate || arg1 === Core._apply_pure ||
+                arg1 === Core._call_in_world || arg1 === Core._call_in_world_total ||
+                arg1 === Core._call_latest)
+                # These apply-like builtins are effectively dynamic calls
+                printstyled(io, "dynamic builtin "; color = :yellow)
+            else
+                printstyled(io, "builtin "; color = :light_black)
+            end
         else
             printstyled(io, "dynamic "; color = :yellow)
         end
