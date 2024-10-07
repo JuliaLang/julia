@@ -381,6 +381,86 @@ end
 42  (return core.nothing)
 
 ########################################
+# Struct with const and atomic fields
+struct X
+    const a
+    @atomic b
+    const @atomic c
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (call core.svec)
+4   (call core.svec :a :b :c)
+5   (call core.svec 1 :const 2 :atomic 3 :atomic 3 :const)
+6   (call core._structtype TestMod :X %₃ %₄ %₅ false 3)
+7   (= slot₁/X %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (isdefined TestMod.X)
+10  (gotoifnot %₉ label₂₀)
+11  TestMod.X
+12  (call core._equiv_typedef %₁₁ %₆)
+13  (gotoifnot %₁₂ label₁₇)
+14  TestMod.X
+15  (= slot₁/X %₁₄)
+16  (goto label₁₉)
+17  slot₁/X
+18  (= TestMod.X %₁₇)
+19  (goto label₂₂)
+20  slot₁/X
+21  (= TestMod.X %₂₀)
+22  slot₁/X
+23  (call core.svec core.Any core.Any core.Any)
+24  (call core._typebody! %₂₂ %₂₃)
+25  (return core.nothing)
+
+########################################
+# Documented struct
+"""
+X docs
+"""
+struct X
+    "field a docs"
+    a
+    "field b docs"
+    b
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (call core.svec)
+4   (call core.svec :a :b)
+5   (call core.svec)
+6   (call core._structtype TestMod :X %₃ %₄ %₅ false 2)
+7   (= slot₁/X %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (isdefined TestMod.X)
+10  (gotoifnot %₉ label₂₀)
+11  TestMod.X
+12  (call core._equiv_typedef %₁₁ %₆)
+13  (gotoifnot %₁₂ label₁₇)
+14  TestMod.X
+15  (= slot₁/X %₁₄)
+16  (goto label₁₉)
+17  slot₁/X
+18  (= TestMod.X %₁₇)
+19  (goto label₂₂)
+20  slot₁/X
+21  (= TestMod.X %₂₀)
+22  slot₁/X
+23  (call core.svec core.Any core.Any)
+24  (call core._typebody! %₂₂ %₂₃)
+25  JuliaLowering.bind_docs!
+26  (call core.tuple :field_docs)
+27  (call core.apply_type core.NamedTuple %₂₆)
+28  (call core.svec 1 "field a docs" 2 "field b docs")
+29  (call core.tuple %₂₈)
+30  (call %₂₇ %₂₉)
+31  TestMod.X
+32  (call core.kwcall %₃₀ %₂₅ %₃₁ "X docs\n" :($(QuoteNode(:(#= line 4 =#)))))
+33  (return core.nothing)
+
+########################################
 # Error: Struct not at top level
 function f()
     struct X

@@ -170,15 +170,36 @@ function bind_docs!(f::Function, docstr, method_metadata)
     bind = Base.Docs.Binding(mod, nameof(f))
     full_sig = method_metadata[1]
     arg_sig = Tuple{full_sig[2:end]...}
-    linenum = method_metadata[3]
+    lineno = method_metadata[3]
     metadata = Dict{Symbol, Any}(
-        :linenumber => linenum.line,
+        :linenumber => lineno.line,
         :module => mod,
     )
-    if !isnothing(linenum.file)
-        push!(metadata, :path => string(linenum.file))
+    if !isnothing(lineno.file)
+        push!(metadata, :path => string(lineno.file))
     end
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), arg_sig)
+end
+
+function bind_docs!(type::Type, docstr, lineno; field_docs=Core.svec())
+    mod = parentmodule(type)
+    bind = Base.Docs.Binding(mod, nameof(type))
+    metadata = Dict{Symbol, Any}(
+        :linenumber => lineno,
+        :module => mod,
+    )
+    if !isnothing(lineno.file)
+        push!(metadata, :path => string(lineno.file))
+    end
+    if !isempty(field_docs)
+        fd = Dict{Symbol, Any}()
+        fns = fieldnames(type)
+        for i = 1:2:length(field_docs)
+            fd[fns[field_docs[i]]] = field_docs[i+1]
+        end
+        metadata[:fields] = fd
+    end
+    Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), Union{})
 end
 
 #-------------------------------------------------------------------------------

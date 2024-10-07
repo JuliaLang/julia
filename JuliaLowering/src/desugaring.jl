@@ -1611,8 +1611,8 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
             m = _match_struct_field(e)
             if !isnothing(m)
                 # Struct field
-                n = length(field_names)
                 push!(field_names, @ast ctx m.name m.name=>K"Symbol")
+                n = length(field_names)
                 push!(field_types, isnothing(m.type) ? @ast(ctx, e, "Any"::K"core") : m.type)
                 if m.atomic
                     push!(field_attrs, @ast ctx e n::K"Integer")
@@ -1733,6 +1733,25 @@ function expand_struct_def(ctx, ex, docs)
                 ]
             ]
         ]
+        # Inner constructors
+        # TODO
+        # [K"scope_block"(scope_type=:hard)
+        #     [K"block"
+        #         [K"global" struct_name]
+        #     ]
+        # ]
+        if !isnothing(docs) || !isempty(field_docs)
+            [K"call"(isnothing(docs) ? ex : docs)
+                bind_docs!::K"Value"
+                struct_name
+                isnothing(docs) ? nothing_(ctx, ex) : docs[1]
+                QuoteNode(source_location(LineNumberNode, ex))::K"Value"
+                [K"="
+                    "field_docs"::K"Identifier"
+                    [K"call" "svec"::K"core" field_docs...]
+                ]
+            ]
+        end
         nothing_(ctx, ex)
     ]
 end
