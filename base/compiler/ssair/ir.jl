@@ -313,6 +313,7 @@ Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
     fldarray = getfield(getfield(node, :data), fld)
     fldidx = getfield(node, :idx)
     (fld === :line) && return (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0])
+    (1 ≤ fldidx ≤ length(fldarray)) || throw(InvalidIRError())
     return fldarray[fldidx]
 end
 @inline function setindex!(node::Instruction, @nospecialize(val), fld::Symbol)
@@ -481,11 +482,16 @@ function block_for_inst(ir::IRCode, inst::Int)
 end
 
 function getindex(ir::IRCode, s::SSAValue)
+    id = s.id
+    (id ≥ 1) || throw(InvalidIRError())
     nstmts = length(ir.stmts)
-    if s.id <= nstmts
-        return ir.stmts[s.id]
+    if id <= nstmts
+        return ir.stmts[id]
     else
-        return ir.new_nodes.stmts[s.id - nstmts]
+        id -= nstmts
+        stmts = ir.new_nodes.stmts
+        (id ≤ length(stmts)) || throw(InvalidIRError())
+        return stmts[id]
     end
 end
 
@@ -801,12 +807,13 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    @assert ssa.id < compact.result_idx
+    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 
 function getindex(compact::IncrementalCompact, ssa::OldSSAValue)
     id = ssa.id
+    (id ≥ 1) || throw(InvalidIRError())
     if id < compact.idx
         new_idx = compact.ssa_rename[id]::Int
         return compact.result[new_idx]
@@ -818,12 +825,15 @@ function getindex(compact::IncrementalCompact, ssa::OldSSAValue)
         return compact.ir.new_nodes.stmts[id]
     end
     id -= length(compact.ir.new_nodes)
+    (id ≤ length(compact.pending_nodes.stmts)) || throw(InvalidIRError())
     return compact.pending_nodes.stmts[id]
 end
 
 function getindex(compact::IncrementalCompact, ssa::NewSSAValue)
     if ssa.id < 0
-        return compact.new_new_nodes.stmts[-ssa.id]
+        stmts = compact.new_new_nodes.stmts
+        (-ssa.id ≤ length(stmts)) || throw(InvalidIRError())
+        return stmts[-ssa.id]
     else
         return compact[SSAValue(ssa.id)]
     end
@@ -1069,6 +1079,7 @@ function getindex(view::TypesView, v::OldSSAValue)
     id = v.id
     ir = view.ir.ir
     stmts = ir.stmts
+    (id ≥ 1) || throw(InvalidIRError())
     if id <= length(stmts)
         return stmts[id][:type]
     end
@@ -1077,7 +1088,9 @@ function getindex(view::TypesView, v::OldSSAValue)
         return ir.new_nodes.stmts[id][:type]
     end
     id -= length(ir.new_nodes)
-    return view.ir.pending_nodes.stmts[id][:type]
+    stmts = view.ir.pending_nodes.stmts
+    (id ≤ length(stmts)) || throw(InvalidIRError())
+    return stmts[id][:type]
 end
 
 function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
@@ -1204,20 +1217,27 @@ end
 
 getindex(view::TypesView, idx::SSAValue) = getindex(view, idx.id)
 function getindex(view::TypesView, idx::Int)
+    (idx ≥ 1) || throw(InvalidIRError())
     if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
         return view.ir.result[idx][:type]
     elseif isa(view.ir, IncrementalCompact) && view.ir.renamed_new_nodes
         if idx <= length(view.ir.result)
             return view.ir.result[idx][:type]
         else
-            return view.ir.new_new_nodes.stmts[idx - length(view.ir.result)][:type]
+            idx -= length(view.ir.result)
+            stmts = view.ir.new_new_nodes.stmts
+            (idx ≤ length(stmts)) || throw(InvalidIRError())
+            return stmts[idx][:type]
         end
     else
         ir = isa(view.ir, IncrementalCompact) ? view.ir.ir : view.ir
         if idx <= length(ir.stmts)
             return ir.stmts[idx][:type]
         else
-            return ir.new_nodes.stmts[idx - length(ir.stmts)][:type]
+            idx -= length(ir.stmts)
+            stmts = ir.new_nodes.stmts
+            (idx ≤ length(stmts)) || throw(InvalidIRError())
+            return stmts[idx][:type]
         end
     end
 end
