@@ -281,8 +281,9 @@ static const char opts[]  =
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
     "                                               than the given value. The value may be specified as a\n"
-    "                                               number of bytes, optionally in units of: B, KB, MB,\n"
-    "                                               GB, TB, or as a percentage of physical memory (%)\n\n"
+    "                                               number of bytes, optionally in units of: B, K (kilobytes),\n"
+    "                                               M (megabytes), G (gigabytes), T (terabytes), or % (percentage\n"
+    "                                               of physical memory).\n\n"
 ;
 
 static const char opts_hidden[]  =

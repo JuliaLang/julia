@@ -396,18 +396,18 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
 ### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
 
-Environment variable equivalent to the `--heap-size-hint` command line option.
+Environment variable equivalent to the `--heap-size-hint=<size>[<unit>]` command line option.
 
 Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
 
-    - b  (bytes)
-    - k  (kibibytes)
-    - m  (mebibytes)
-    - g  (gibibytes)
-    - t  (tebibytes)
+    - B  (bytes)
+    - K  (kibibytes)
+    - M  (mebibytes)
+    - G  (gibibytes)
+    - T  (tebibytes)
     - %  (percentage of physical memory)
 
-which are not case sensitive. For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
+For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
 ## REPL formatting
 
