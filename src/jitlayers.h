@@ -47,7 +47,7 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64 and Linux/aarch64.
-#define JL_FORCE_JITLINK
+//#define JL_FORCE_JITLINK
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
@@ -393,13 +393,13 @@ public:
                             std::unique_ptr<MemoryBuffer> O) override {
             JL_TIMING(LLVM_JIT, JIT_Link);
 #ifndef JL_USE_JITLINK
-            std::lock_guard<std::mutex> lock(EmissionMutex);
+            std::lock_guard<std::recursive_mutex> lock(EmissionMutex);
 #endif
             BaseLayer.emit(std::move(R), std::move(O));
         }
     private:
         orc::ObjectLayer &BaseLayer;
-        std::mutex EmissionMutex;
+        std::recursive_mutex EmissionMutex;
     };
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
@@ -631,7 +631,7 @@ private:
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
     ObjLayerT ObjectLayer;
 #else
-    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    const std::shared_ptr<RTDyldMemoryManager> MemMgr; // shared_ptr protected by LockLayerT.EmissionMutex
     ObjLayerT UnlockedObjectLayer;
     LockLayerT ObjectLayer;
 #endif

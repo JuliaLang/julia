@@ -1173,7 +1173,7 @@ public:
     }
 };
 
-RTDyldMemoryManager* createRTDyldMemoryManager(void);
+RTDyldMemoryManager *createRTDyldMemoryManager(void);
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
@@ -1182,7 +1182,10 @@ private:
 
 public:
     ForwardingMemoryManager(std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr) : MemMgr(MemMgr) {}
-    virtual ~ForwardingMemoryManager() = default;
+    ForwardingMemoryManager(ForwardingMemoryManager &) = delete;
+    virtual ~ForwardingMemoryManager() {
+        assert(!MemMgr);
+    }
     virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
                                      StringRef SectionName) override {
@@ -1220,7 +1223,11 @@ public:
         return MemMgr->deregisterEHFrames();
     }
     virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
-        return MemMgr->finalizeMemory(ErrMsg);
+        bool b = false;
+        if (MemMgr.use_count() == 2)
+            b = MemMgr->finalizeMemory(ErrMsg);
+        MemMgr.reset();
+        return b;
     }
     virtual void notifyObjectLoaded(RuntimeDyld &RTDyld,
                                     const object::ObjectFile &Obj) override {
@@ -1230,8 +1237,7 @@ public:
 
 
 void registerRTDyldJITObject(const object::ObjectFile &Object,
-                             const RuntimeDyld::LoadedObjectInfo &L,
-                             const std::shared_ptr<RTDyldMemoryManager> &MemMgr)
+                             const RuntimeDyld::LoadedObjectInfo &L)
 {
     StringMap<object::SectionRef> loadedSections;
     for (const object::SectionRef &lSection : Object.sections()) {
@@ -1903,7 +1909,7 @@ JuliaOJIT::JuliaOJIT()
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LO) {
-            registerRTDyldJITObject(Object, LO, MemMgr);
+            registerRTDyldJITObject(Object, LO);
         });
 #endif
 
@@ -2075,19 +2081,6 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
-#ifndef JL_USE_JITLINK
-    orc::SymbolLookupSet NewExports;
-    TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
-        for (auto &F : M.global_values()) {
-            if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                auto Name = ES.intern(getMangledName(F.getName()));
-                NewExports.add(std::move(Name));
-            }
-        }
-        assert(!verifyLLVMIR(M));
-    });
-#endif
-
     TSM = selectOptLevel(std::move(TSM));
     TSM = (*Optimizers)(std::move(TSM));
     TSM = (*JITPointers)(std::move(TSM));
@@ -2109,16 +2102,6 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         errs() << "Failed to add objectfile to JIT!\n";
         abort();
     }
-#ifndef JL_USE_JITLINK
-    // force eager compilation (for now), due to memory management specifics
-    // (can't handle compilation recursion)
-    auto Lookups = ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports);
-    if (!Lookups) {
-        ES.reportError(Lookups.takeError());
-        errs() << "Failed to lookup symbols in module!\n";
-        return;
-    }
-#endif
 }
 
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
@@ -2149,6 +2132,7 @@ Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> 
 
 SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
 {
+    // assert(MemMgr.use_count() == 1); (true single-threaded, but slightly race-y to assert it with concurrent threads)
     DenseMap<orc::NonOwningSymbolStringPtr, size_t> Unmangled;
     orc::SymbolLookupSet Exports;
     for (StringRef Name : Names) {
@@ -2348,7 +2332,7 @@ void JuliaOJIT::enablePerfJITEventListener()
 void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (L)
-        ObjectLayer.registerJITEventListener(*L);
+        UnlockedObjectLayer.registerJITEventListener(*L);
 }
 void JuliaOJIT::enableJITDebuggingSupport()
 {

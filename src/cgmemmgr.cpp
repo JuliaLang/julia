@@ -770,7 +770,6 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     RWAllocator rw_alloc;
     std::unique_ptr<ROAllocator<false>> ro_alloc;
     std::unique_ptr<ROAllocator<true>> exe_alloc;
-    bool code_allocated;
     size_t total_allocated;
 
 public:
@@ -780,7 +779,6 @@ public:
           rw_alloc(),
           ro_alloc(),
           exe_alloc(),
-          code_allocated(false),
           total_allocated(0)
     {
 #ifdef _OS_LINUX_
@@ -841,11 +839,6 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     StringRef SectionName)
 {
     // allocating more than one code section can confuse libunwind.
-#if !defined(_COMPILER_MSAN_ENABLED_) && !defined(_COMPILER_ASAN_ENABLED_)
-    // TODO: Figure out why msan and now asan too need this.
-    assert(!code_allocated);
-    code_allocated = true;
-#endif
     total_allocated += Size;
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
     jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, Size);
@@ -886,7 +879,6 @@ void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
 
 bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg)
 {
-    code_allocated = false;
     if (ro_alloc) {
         ro_alloc->finalize();
         assert(exe_alloc);
