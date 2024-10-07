@@ -66,6 +66,19 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         end
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
+    elseif isexpr(stmt, :call) && length(stmt.args) >= 1
+        arg1 = stmt.args[1]
+        if arg1 isa GlobalRef && isdefined(arg1.mod, arg1.name)
+            arg1 = getfield(arg1.mod, arg1.name)
+        end
+        if isa(arg1, Core.IntrinsicFunction)
+            print(io, "intrinsic ")
+        elseif isa(arg1, Core.Builtin)
+            print(io, "builtin ")
+        else
+            print(io, "dynamic ")
+        end
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
     elseif isa(stmt, EnterNode)
         print(io, "enter #", stmt.catch_dest, "")
