@@ -45,12 +45,14 @@ struct NameKey
 end
 
 #-------------------------------------------------------------------------------
-function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex)
+function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
     elseif k == K"BindingId"
         push!(used_bindings, ex.var_id)
+    elseif k == K"alias_binding"
+        push!(alias_bindings, NameKey(ex[2])=>ex[1].var_id)
     elseif is_leaf(ex) || is_quoted(k) ||
             k in KSet"scope_block lambda module toplevel"
         return
@@ -64,10 +66,10 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
         if !(kind(v) in KSet"BindingId globalref outerref Placeholder")
             get!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex[2])
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, ex[2])
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
+            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, e)
         end
     end
 end
@@ -83,8 +85,9 @@ function find_scope_vars(ex)
     globals = Dict{NameKey,ExT}()
     used_names = Set{NameKey}()
     used_bindings = Set{IdTag}()
+    alias_bindings = Vector{Pair{NameKey,IdTag}}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -94,7 +97,7 @@ function find_scope_vars(ex)
     used_names = sort(collect(used_names))
     used_bindings = sort(collect(used_bindings))
 
-    return assignments, locals, globals, used_names, used_bindings
+    return assignments, locals, globals, used_names, used_bindings, alias_bindings
 end
 
 function Base.isless(a::NameKey, b::NameKey)
@@ -137,6 +140,8 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     scope_layers::Vector{ScopeLayer}
     # name=>id mappings for all discovered global vars
     global_vars::Dict{NameKey,IdTag}
+    # Map for rewriting binding aliases
+    alias_map::Dict{IdTag,IdTag}
     # Stack of name=>id mappings for each scope, innermost scope last.
     scope_stack::Vector{ScopeInfo}
     # Variables which were implicitly global due to being assigned to in top
@@ -151,6 +156,7 @@ function ScopeResolutionContext(ctx)
                            ctx.mod,
                            ctx.scope_layers,
                            Dict{NameKey,IdTag}(),
+                           Dict{IdTag,IdTag}(),
                            Vector{ScopeInfo}(),
                            Set{NameKey}())
 end
@@ -200,7 +206,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     in_toplevel_thunk = is_toplevel_global_scope ||
         (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
-    assignments, locals, globals, used, used_bindings = find_scope_vars(ex)
+    assignments, locals, globals, used, used_bindings, alias_bindings = find_scope_vars(ex)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
@@ -336,6 +342,13 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         end
     end
 
+    for (varkey, id) in alias_bindings
+        @assert !haskey(ctx.alias_map, id)
+        ctx.alias_map[id] = get(var_ids, varkey) do
+            lookup_var(ctx, varkey)
+        end
+    end
+
     return ScopeInfo(is_toplevel_global_scope, in_toplevel_thunk, is_soft_scope,
                      is_hard_scope, var_ids, lambda_locals)
 end
@@ -372,11 +385,18 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
     if k == K"Identifier"
         id = lookup_var(ctx, NameKey(ex))
         @ast ctx ex id::K"BindingId"
+    elseif k == K"BindingId"
+        mapped_id = get(ctx.alias_map, ex.var_id, nothing)
+        if isnothing(mapped_id)
+            ex
+        else
+            @ast ctx ex mapped_id::K"BindingId"
+        end
     elseif is_leaf(ex) || is_quoted(ex) || k == K"toplevel"
         ex
     # elseif k == K"global"
     #     ex
-    elseif k == K"local"
+    elseif k == K"local" || k == K"alias_binding"
         makeleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"local_def"
         id = lookup_var(ctx, NameKey(ex[1]))

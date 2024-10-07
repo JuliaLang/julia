@@ -42,6 +42,8 @@ function _register_kinds()
             # Semantic assertions used by lowering. The content of an assertion
             # is not considered to be quoted, so use K"Symbol" etc inside where necessary.
             "assert"
+            # Alias a name to a given binding
+            "alias_binding"
             # Unique identifying integer for bindings (of variables, constants, etc)
             "BindingId"
             # Various heads harvested from flisp lowering.

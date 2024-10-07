@@ -254,6 +254,11 @@ function new_mutable_var(ctx::AbstractLoweringContext, srcref, name; is_always_d
     var
 end
 
+function alias_binding(ctx::AbstractLoweringContext, srcref)
+    id = new_binding(ctx.bindings, BindingInfo("alias", :alias; is_internal=true))
+    makeleaf(ctx, srcref, K"BindingId", var_id=id)
+end
+
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
 function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")

@@ -1,3 +1,13 @@
+using JuliaLowering: JuliaLowering, @ast, @chk
+using JuliaSyntax
+
+function var"@atomic"(__context__::JuliaLowering.MacroContext, ex)
+    @chk kind(ex) == JuliaSyntax.K"Identifier" || kind(ex) == JuliaSyntax.K"::" (ex,
+                                                        "Expected identifier or declaration")
+    @ast __context__ ex [K"atomic" ex]
+end
+
+#*******************************************************************************
 ########################################
 # where expression without type bounds
 A where X
@@ -286,4 +296,102 @@ primitive type P P_nbits() end
 15  (goto label₁₇)
 16  (= TestMod.P %₄)
 17  (return core.nothing)
+
+########################################
+# Basic struct
+struct X
+    a
+    b::T
+    c
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (call core.svec)
+4   (call core.svec :a :b :c)
+5   (call core.svec)
+6   (call core._structtype TestMod :X %₃ %₄ %₅ false 3)
+7   (= slot₁/X %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (isdefined TestMod.X)
+10  (gotoifnot %₉ label₂₀)
+11  TestMod.X
+12  (call core._equiv_typedef %₁₁ %₆)
+13  (gotoifnot %₁₂ label₁₇)
+14  TestMod.X
+15  (= slot₁/X %₁₄)
+16  (goto label₁₉)
+17  slot₁/X
+18  (= TestMod.X %₁₇)
+19  (goto label₂₂)
+20  slot₁/X
+21  (= TestMod.X %₂₀)
+22  slot₁/X
+23  TestMod.T
+24  (call core.svec core.Any %₂₃ core.Any)
+25  (call core._typebody! %₂₂ %₂₄)
+26  (return core.nothing)
+
+########################################
+# Struct with supertype and type params
+struct X{U, S <: V <: T} <: Z
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (= slot₂/U (call core.TypeVar :U))
+4   TestMod.S
+5   TestMod.T
+6   (= slot₃/V (call core.TypeVar :V %₄ %₅))
+7   slot₂/U
+8   slot₃/V
+9   (call core.svec %₇ %₈)
+10  (call core.svec)
+11  (call core.svec)
+12  (call core._structtype TestMod :X %₉ %₁₀ %₁₁ false 0)
+13  (= slot₄/X %₁₂)
+14  TestMod.Z
+15  (call core._setsuper! %₁₂ %₁₄)
+16  (isdefined TestMod.X)
+17  (gotoifnot %₁₆ label₃₇)
+18  TestMod.X
+19  (call core._equiv_typedef %₁₈ %₁₂)
+20  (gotoifnot %₁₉ label₃₄)
+21  TestMod.X
+22  (= slot₄/X %₂₁)
+23  TestMod.X
+24  (call top.getproperty %₂₃ :body)
+25  (call top.getproperty %₂₄ :body)
+26  (call top.getproperty %₂₅ :parameters)
+27  (call top.indexed_iterate %₂₆ 1)
+28  (= slot₂/U (call core.getfield %₂₇ 1))
+29  (= slot₁/iterstate (call core.getfield %₂₇ 2))
+30  slot₁/iterstate
+31  (call top.indexed_iterate %₂₆ 2 %₃₀)
+32  (= slot₃/V (call core.getfield %₃₁ 1))
+33  (goto label₃₆)
+34  slot₄/X
+35  (= TestMod.X %₃₄)
+36  (goto label₃₉)
+37  slot₄/X
+38  (= TestMod.X %₃₇)
+39  slot₄/X
+40  (call core.svec)
+41  (call core._typebody! %₃₉ %₄₀)
+42  (return core.nothing)
+
+########################################
+# Error: Struct not at top level
+function f()
+    struct X
+    end
+end
+#---------------------
+LoweringError:
+function f()
+#   ┌───────
+    struct X
+    end
+#─────┘ ── this syntax is only allowed in top level code
+end
 

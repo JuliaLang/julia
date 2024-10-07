@@ -1486,35 +1486,31 @@ end
 
 # Analyze type signatures such as `A <: B where C`
 #
-# Return (name, params, supertype)
+# Return (name, typevar_names, typevar_stmts, supertype)
 function analyze_type_sig(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
-        return (ex, (), @ast ctx ex "Any"::K"core")
+        name = ex
+        params = ()
+        supertype = @ast ctx ex "Any"::K"core"
     elseif k == K"curly" && numchildren(ex) >= 1 && kind(ex[1]) == K"Identifier"
         # name{params}
-        return (ex[1], ex[2:end], @ast ctx ex "Any"::K"core")
+        name = ex[1]
+        params = ex[2:end]
+        supertype = @ast ctx ex "Any"::K"core"
     elseif k == K"<:" && numchildren(ex) == 2
         if kind(ex[1]) == K"Identifier"
-            return (ex[1], (), ex[2])
+            name = ex[1]
+            params = ()
+            supertype = ex[2]
         elseif kind(ex[1]) == K"curly" && numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"Identifier"
-            return (ex[1][1], ex[1][2:end], ex[2])
+            name = ex[1][1]
+            params = ex[1][2:end]
+            supertype = ex[2]
         end
     end
-    throw(LoweringError(ex, "invalid type signature"))
-end
+    @isdefined(name) || throw(LoweringError(ex, "invalid type signature"))
 
-function expand_abstract_or_primitive_type(ctx, ex)
-    is_abstract = kind(ex) == K"abstract"
-    if is_abstract
-        @chk numchildren(ex) == 1
-    elseif kind(ex) == K"primitive"
-        @chk numchildren(ex) == 2
-        nbits = ex[2]
-    else
-        @assert false
-    end
-    name, params, supertype = analyze_type_sig(ctx, ex[1])
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
     for param in params
@@ -1524,9 +1520,22 @@ function expand_abstract_or_primitive_type(ctx, ex)
         push!(typevar_stmts, @ast ctx param [K"local" n])
         push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
     end
+    return (name, typevar_names, typevar_stmts, supertype)
+end
+
+function expand_abstract_or_primitive_type(ctx, ex)
+    is_abstract = kind(ex) == K"abstract"
+    if is_abstract
+        @chk numchildren(ex) == 1
+    else
+        @assert kind(ex) == K"primitive"
+        @chk numchildren(ex) == 2
+        nbits = ex[2]
+    end
+    name, typevar_names, typevar_stmts, supertype = analyze_type_sig(ctx, ex[1])
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [K"block"
-        [K"scope_block"(scope_type=:neutral)
+        [K"scope_block"(scope_type=:hard)
             [K"block"
                 [K"local_def" name]
                 typevar_stmts...
@@ -1557,6 +1566,172 @@ function expand_abstract_or_primitive_type(ctx, ex)
             ]
             nothing_(ctx, ex)
             [K"=" name newtype_var]
+        ]
+        nothing_(ctx, ex)
+    ]
+end
+
+function _match_struct_field(x0)
+    type=nothing
+    docs=nothing
+    atomic=false
+    _const=false
+    x = x0
+    while true
+        k = kind(x)
+        if k == K"Identifier"
+            return (name=x, type=type, atomic=atomic, _const=_const, docs=docs)
+        elseif k == K"::" && numchildren(x) == 2
+            isnothing(type) || throw(LoweringError(x0, "multiple types in struct field"))
+            type = x[2]
+            x = x[1]
+        elseif k == K"atomic"
+            atomic = true
+            x = x[1]
+        elseif k == K"const"
+            _const = true
+            x = x[1]
+        elseif k == K"doc"
+            docs = x[1]
+            x = x[2]
+        else
+            return nothing
+        end
+    end
+end
+
+function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, defs, exs)
+    for e in exs
+        if kind(e) == K"block"
+            _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
+                                   defs, children(e))
+        elseif kind(e) == K"="
+            throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
+        else
+            m = _match_struct_field(e)
+            if !isnothing(m)
+                # Struct field
+                n = length(field_names)
+                push!(field_names, @ast ctx m.name m.name=>K"Symbol")
+                push!(field_types, isnothing(m.type) ? @ast(ctx, e, "Any"::K"core") : m.type)
+                if m.atomic
+                    push!(field_attrs, @ast ctx e n::K"Integer")
+                    push!(field_attrs, @ast ctx e "atomic"::K"Symbol")
+                end
+                if m._const
+                    push!(field_attrs, @ast ctx e n::K"Integer")
+                    push!(field_attrs, @ast ctx e "const"::K"Symbol")
+                end
+                if !isnothing(m.docs)
+                    push!(field_docs, @ast ctx e n::K"Integer")
+                    push!(field_docs, @ast ctx e m.docs)
+                end
+            else
+                # Inner constructors
+                push!(defs, e)
+            end
+        end
+    end
+end
+
+function _constructor_min_initalized(ex::SyntaxTree)
+    if kind(ex) == K"call" && ((kind(ex[1]) == K"Identifier" && ex[1].name_val == "new") ||
+           (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && ex[1][1].name_val == "new"))
+        numchildren(ex) - 1
+    elseif !is_leaf(ex)
+        _constructor_min_initalized(children(ex))
+    else
+        typemax(Int)
+    end
+end
+
+function _constructor_min_initalized(exs::AbstractVector)
+    minimum((_constructor_min_initalized(e) for e in exs), init=typemax(Int))
+end
+
+function expand_struct_def(ctx, ex, docs)
+    @chk numchildren(ex) == 2
+    type_sig = ex[1]
+    type_body = ex[2]
+    if kind(type_body) != K"block"
+        throw(LoweringError(type_body, "expected block for `struct` fields"))
+    end
+    struct_name, typevar_names, typevar_stmts, supertype = analyze_type_sig(ctx, type_sig)
+    field_names = SyntaxList(ctx)
+    field_types = SyntaxList(ctx)
+    field_attrs = SyntaxList(ctx)
+    field_docs = SyntaxList(ctx)
+    defs = SyntaxList(ctx)
+    _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
+                           defs, children(type_body))
+    is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
+    min_initialized = min(_constructor_min_initalized(defs), length(field_names))
+    newtype_var = ssavar(ctx, ex, "struct_type")
+    outer_struct_var = alias_binding(ctx, struct_name)
+    if !isempty(typevar_names)
+        # Generate expression like `prev_struct.body.body.parameters`
+        prev_typevars = outer_struct_var
+        for _ in 1:length(typevar_names)
+            prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
+        end
+        prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
+    end
+    if isempty(defs)
+    end
+    @ast ctx ex [K"block"
+        [K"global" struct_name]
+        [K"const" struct_name]
+        [K"alias_binding" outer_struct_var struct_name]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
+        [K"scope_block"(scope_type=:hard)
+            [K"block"
+                [K"local_def" struct_name]
+                typevar_stmts...
+                [K"="
+                    newtype_var
+                    [K"call"
+                        "_structtype"::K"core"
+                        ctx.mod::K"Value"
+                        struct_name=>K"Symbol"
+                        [K"call"(type_sig) "svec"::K"core" typevar_names...]
+                        [K"call"(type_body) "svec"::K"core" field_names...]
+                        [K"call"(type_body) "svec"::K"core" field_attrs...]
+                        is_mutable::K"Bool"
+                        min_initialized::K"Integer"
+                    ]
+                ]
+                [K"=" struct_name newtype_var]
+                [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype]
+                [K"if"
+                    [K"isdefined" outer_struct_var]
+                    [K"if"
+                        [K"call" "_equiv_typedef"::K"core" outer_struct_var newtype_var]
+                        [K"block"
+                            # If this is compatible with an old definition, use
+                            # the existing type object and throw away
+                            # NB away the new type
+                            [K"=" struct_name outer_struct_var]
+                            if !isempty(typevar_names)
+                                # And resassign the typevars - these may be
+                                # referenced in the definition of the field
+                                # types below
+                                [K"="
+                                    [K"tuple" typevar_names...]
+                                    prev_typevars
+                                ]
+                            end
+                        ]
+                        # Otherwise do an assignment to trigger an error
+                        [K"=" outer_struct_var struct_name]
+                    ]
+                    [K"=" outer_struct_var struct_name]
+                ]
+                [K"call"(type_body)
+                    "_typebody!"::K"core"
+                    struct_name
+                    [K"call" "svec"::K"core" field_types...]
+                ]
+            ]
         ]
         nothing_(ctx, ex)
     ]
@@ -1851,6 +2026,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         TODO(ex)
     elseif k == K"abstract" || k == K"primitive"
         expand_forms_2(ctx, expand_abstract_or_primitive_type(ctx, ex))
+    elseif k == K"struct"
+        expand_forms_2(ctx, expand_struct_def(ctx, ex, docs))
     elseif k == K"ref"
         if numchildren(ex) > 2
             TODO(ex, "ref expansion")

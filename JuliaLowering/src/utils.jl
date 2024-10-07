@@ -70,7 +70,7 @@ function showprov(x; kws...)
 end
 
 function print_ir(io::IO, ex, indent="")
-    @assert kind(ex) == K"lambda" && kind(ex[1]) == K"block"
+    @assert (kind(ex) == K"lambda" || kind(ex) == K"code_info") && kind(ex[1]) == K"block"
     stmts = children(ex[1])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
