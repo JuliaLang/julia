@@ -2460,11 +2460,12 @@ is_root_module(m::Module) = parentmodule(m) === m || m === Base
 root_module_key(m::Module) = PkgId(m)
 
 function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
-    assert_havelock(require_lock)
+    @lock require_lock begin
     mods = get(loaded_precompiles, key, nothing)
     mods === nothing && return
     for mod in mods
         module_build_id(mod) == buildid && return mod
+    end
     end
 end
 
