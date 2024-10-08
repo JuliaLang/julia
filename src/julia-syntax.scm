@@ -3399,7 +3399,7 @@
 
 ;; this pass records information about variables used by closure conversion.
 ;; finds which variables are assigned or captured, and records variable
-;; type declarations.
+;; type annotations.
 ;; this info is recorded by setting the second argument of `lambda` expressions
 ;; in-place to
 ;;   (var-info-lst captured-var-infos ssavalues static_params)
@@ -3436,12 +3436,12 @@
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)
-         ;; handle var::T declaration by storing the type in the var-info
+         ;; handle var::T annotation by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (begin (if (not (equal? (vinfo:type vi) '(core Any)))
-                          (error (string "multiple type declarations for \""
+                          (error (string "multiple type annotations for \""
                                          (cadr e) "\"")))
                       (if (assq (cadr e) captvars)
                           (error (string "type of \"" (cadr e)
