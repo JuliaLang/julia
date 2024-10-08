@@ -185,7 +185,7 @@ end
     end
     r
 end
-diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
+diagzero(D::Diagonal{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(first(D.diag))
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 @inline function getindex(D::Diagonal, b::BandIndex)
