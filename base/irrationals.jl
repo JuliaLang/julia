@@ -33,11 +33,11 @@ typemax(::Type{T}) where {T<:Irrational} = T()
 
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
-function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
+function show(io::IO, ::MIME"text/plain", x::AbstractIrrational)
     if get(io, :compact, false)::Bool
-        print(io, sym)
+        print(io, x)
     else
-        print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
+        print(io, x, " = ", string(float(x))[1:min(end,15)], "...")
     end
 end
 
@@ -76,16 +76,16 @@ end
 
 float(::Type{<:AbstractIrrational}) = Float64
 
-==(::Irrational{s}, ::Irrational{s}) where {s} = true
+==(::T, ::T) where {T<:AbstractIrrational} = true
 ==(::AbstractIrrational, ::AbstractIrrational) = false
 
-<(::Irrational{s}, ::Irrational{s}) where {s} = false
+<(::T, ::T) where {T<:AbstractIrrational} = false
 function <(x::AbstractIrrational, y::AbstractIrrational)
     Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
     return Float64(x) < Float64(y)
 end
 
-<=(::Irrational{s}, ::Irrational{s}) where {s} = true
+<=(::T, ::T) where {T<:AbstractIrrational} = true
 <=(x::AbstractIrrational, y::AbstractIrrational) = x==y || x<y
 
 # Irrationals, by definition, can't have a finite representation equal them exactly
@@ -165,7 +165,7 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
-round(x::Irrational, r::RoundingMode) = round(float(x), r)
+round(x::AbstractIrrational, r::RoundingMode) = round(float(x), r)
 
 """
     @irrational sym [val] def
