@@ -1088,7 +1088,7 @@ function _growbeg!(a::Vector, delta::Integer)
             newmem = mem
             unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
             for j in offset:newoffset+delta-1
-                @inbounds _unsetindex!(a, j)
+                @inbounds _unsetindex!(mem, j)
             end
         else
             newmem = array_new_memory(mem, newmemlen)
