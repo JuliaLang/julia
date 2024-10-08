@@ -198,11 +198,7 @@ function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
     elseif absn == 1
         return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
     elseif absn <= size(M,1)
-        v = similar(M.dv, size(M,1)-absn)
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
+        return Base.collect_similar(M.dv, (M[BandIndex(n,i)] for i in 1:size(M,1)-absn))
     else
         throw_diag_outofboundserror(n, size(M))
     end
@@ -685,11 +681,7 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
     elseif n == 1
         return copyto!(similar(M.du, length(M.du)), M.du)
     elseif abs(n) <= size(M,1)
-        v = similar(M.d, size(M,1)-abs(n))
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
+        return Base.collect_similar(M.d, (M[BandIndex(n,i)] for i in 1:size(M,1)-abs(n)))
     else
         throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
             lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))

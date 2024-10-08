@@ -757,11 +757,7 @@ function diag(D::Diagonal{T}, k::Integer=0) where T
     if k == 0
         return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
-        v = similar(D.diag, size(D,1)-abs(k))
-        for i in eachindex(v)
-            v[i] = D[BandIndex(k, i)]
-        end
-        return v
+        return Base.collect_similar(D.diag, (D[BandIndex(k,i)] for i in 1:size(D,1)-abs(k)))
     else
         throw(ArgumentError(LazyString(lazy"requested diagonal, $k, must be at least $(-size(D, 1)) ",
             lazy"and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
