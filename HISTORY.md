@@ -119,6 +119,11 @@ New library features
 Standard library changes
 ------------------------
 
+* It's not possible to define `length` for stateful iterators in a generally consistent manner. The
+  potential for silently incorrect results for `Stateful` iterators is addressed by deleting the
+  `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
+  PR: ([#51747]).
+
 #### StyledStrings
 
 * A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
