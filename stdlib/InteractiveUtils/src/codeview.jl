@@ -219,7 +219,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     end
     # get the code for it
     if debuginfo === :default
-        debuginfo = :source
+        debuginfo = :none
     elseif debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
