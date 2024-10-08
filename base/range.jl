@@ -1111,19 +1111,22 @@ function show(io::IO, r::StepRangeLen)
 end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
+    firstindex(r) == firstindex(s) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
 function ==(r::OrdinalRange, s::OrdinalRange)
+    firstindex(r) == firstindex(s) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
 ==(r::AbstractUnitRange, s::AbstractUnitRange) =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+    (firstindex(r) == firstindex(s)) &
+    ((isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s))))
 
 ==(r::OneTo, s::OneTo) = last(r) == last(s)
 
@@ -1138,21 +1141,6 @@ end
 
 _has_length_one(r::OrdinalRange) = first(r) == last(r)
 _has_length_one(r::AbstractRange) = isone(length(r))
-
-function ==(r::AbstractRange, s::AbstractRange)
-    lr = length(r)
-    if lr != length(s)
-        return false
-    elseif iszero(lr)
-        return true
-    end
-    yr, ys = iterate(r), iterate(s)
-    while yr !== nothing
-        yr[1] == ys[1] || return false
-        yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
-    end
-    return true
-end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
 union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
