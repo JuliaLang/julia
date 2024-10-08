@@ -27,6 +27,7 @@ typedef struct {
     jl_method_t *method;
     jl_ptls_t ptls;
     uint8_t relocatability;
+    jl_genericmemory_t *roots_ids; // idset for method root ids; only needed during compression
 } jl_ircode_state;
 
 // type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
@@ -71,21 +72,17 @@ static void tagged_root(rle_reference *rr, jl_ircode_state *s, int i)
 static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     jl_array_t *rs = s->method->roots;
-    int i, l = jl_array_nrows(rs);
-    if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
-        for (i = 0; i < l; i++) {
-            if (jl_array_ptr_ref(rs, i) == v)
-                return tagged_root(rr, s, i);
-        }
+    jl_genericmemory_t *rt = s->roots_ids;
+
+    ssize_t i = jl_idset_peek_bp(rs->ref.mem, rt, v);
+
+    if (i == -1) {
+        i = jl_array_nrows(rs);
+        jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
+        s->roots_ids = rt = jl_idset_put_idx(rs->ref.mem, rt, i);
     }
-    else {
-        for (i = 0; i < l; i++) {
-            if (jl_egal(jl_array_ptr_ref(rs, i), v))
-                return tagged_root(rr, s, i);
-        }
-    }
-    jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-    return tagged_root(rr, s, jl_array_nrows(rs) - 1);
+
+    return tagged_root(rr, s, i);
 }
 
 static void jl_encode_int32(jl_ircode_state *s, int32_t x)
@@ -869,8 +866,13 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         &dest,
         m,
         jl_current_task->ptls,
-        1
+        1,
+        jl_alloc_memory_any(0)
     };
+    // generate hash table to lookup root indexes
+    for (int i = 0; i < jl_array_nrows(m->roots); i++) {
+        s.roots_ids = jl_idset_put_idx(m->roots->ref.mem, s.roots_ids, i);
+    }
 
     uint8_t nargsmatchesmethod = code->nargs == m->nargs;
     jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
@@ -951,7 +953,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         &src,
         m,
         jl_current_task->ptls,
-        1
+        1,
+        NULL
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();
