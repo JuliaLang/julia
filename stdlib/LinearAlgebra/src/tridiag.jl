@@ -183,33 +183,27 @@ issymmetric(S::SymTridiagonal) = true
 
 tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
-@noinline function throw_diag_outofboundserror(n, sz)
-    sz1, sz2 = sz
-    throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-sz1) ",
-            lazy"and at most $sz2 for an $(sz1)-by-$(sz2) matrix")))
-end
+_diagiter(M::SymTridiagonal{<:Number}) = M.dv
+_diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
+_eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
+_eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
 
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        v = similar(M.dv, length(M.dv))
-        return copyto!(v, eltype(M) <: Number ? M.dv : (symmetric(x, :U) for x in M.dv))
+        return copyto!(v, _diagiter(M))
     elseif n == 1
-        v = similar(M.dv, length(M.dv)-1)
         return copyto!(v, _evview(M))
     elseif n == -1
-        v = similar(M.dv, length(M.dv)-1)
-        return copyto!(v, eltype(M) <: Number ? _evview(M) : (transpose(x) for x in _evview(M)))
-    elseif abs(n) <= size(M,1)
-        v = similar(M.dv, size(M,1)-abs(n))
+        return copyto!(v, _eviter_transposed(M))
+    else
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw_diag_outofboundserror(n, size(M))
     end
+    return v
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
