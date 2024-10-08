@@ -389,6 +389,16 @@ function cross(a::AbstractVector, b::AbstractVector)
 end
 
 """
+    similarmutable(A)
+
+Return a mutable `AbstractArray` that shares its structure
+with `similar(A)`. The difference with `similar(A)` is that
+each index of the result corresponding to the stored ones
+of `A` will be mutable.
+"""
+similarmutable(A) = similar(A)
+
+"""
     triu(M)
 
 Upper triangle of a matrix.
@@ -410,7 +420,11 @@ julia> triu(a)
  0.0  0.0  0.0  1.0
 ```
 """
-triu(M::AbstractMatrix) = triu!(copymutable(M))
+function triu(M::AbstractMatrix)
+    A = similarmutable(M)
+    copytrito!(A, M, 'U')
+    triu!(A)
+end
 
 """
     tril(M)
@@ -434,7 +448,11 @@ julia> tril(a)
  1.0  1.0  1.0  1.0
 ```
 """
-tril(M::AbstractMatrix) = tril!(copymutable(M))
+function tril(M::AbstractMatrix)
+    A = similarmutable(M)
+    copytrito!(A, M, 'L')
+    tril!(A)
+end
 
 """
     triu(M, k::Integer)
@@ -465,7 +483,15 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copymutable(M),k)
+function triu(M::AbstractMatrix,k::Integer)
+    d = similar(M)
+    A = triu!(d,k)
+    for col in axes(A,2)
+        rows = firstindex(A,1):min(col-k, lastindex(A,1))
+        A[rows, col] = @view M[rows, col]
+    end
+    return A
+end
 
 """
     tril(M, k::Integer)
@@ -496,7 +522,15 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copymutable(M),k)
+function tril(M::AbstractMatrix,k::Integer)
+    d = similar(M)
+    A = tril!(d,k)
+    for col in axes(A,2)
+        rows = max(firstindex(A,1),col-k):lastindex(A,1)
+        A[rows, col] = @view M[rows, col]
+    end
+    return A
+end
 
 """
     triu!(M)
