@@ -1125,7 +1125,8 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     if (vt == jl_module_type) {
         jl_module_t *m = (jl_module_t*)obj;
         start = (char*)m->usings.items;
-        len = m->usings.len;
+        len = module_usings_length(m);
+        elsize = sizeof(struct _jl_module_using);
     }
     else if (vt == jl_simplevector_type) {
         start = (char*)jl_svec_data(obj);

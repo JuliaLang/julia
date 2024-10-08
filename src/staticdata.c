@@ -811,8 +811,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
         }
     }
 
-    for (size_t i = 0; i < m->usings.len; i++) {
-        jl_queue_for_serialization(s, (jl_value_t*)m->usings.items[i]);
+    for (size_t i = 0; i < module_usings_length(m); i++) {
+        jl_queue_for_serialization(s, module_usings_getmod(m, i));
     }
 }
 
@@ -1266,27 +1266,44 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
     if (m->usings.items == &m->usings._space[0]) {
-        newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
+        // Push these relocations here, to keep them in order. This pairs with the `newm->usings.items = ` below.
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
         size_t i;
-        for (i = 0; i < m->usings.len; i++) {
-            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[i])));
-            arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings._space[i], s->link_ids_relocs));
+        for (i = 0; i < module_usings_length(m); i++) {
+            struct _jl_module_using *newm_data = module_usings_getidx(newm, i);
+            struct _jl_module_using *data = module_usings_getidx(m, i);
+            // TODO: Remove dead entries
+            newm_data->min_world = data->min_world;
+            newm_data->max_world = data->max_world;
+            if (s->incremental) {
+                if (data->max_world != (size_t)-1)
+                    newm_data->max_world = 0;
+                newm_data->min_world = 0;
+            }
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
+            arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
         }
+        newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
     }
     else {
         newm->usings.items = (void**)tot;
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
         size_t i;
-        for (i = 0; i < m->usings.len; i++) {
-            write_pointerfield(s, (jl_value_t*)m->usings.items[i]);
-            tot += sizeof(void*);
+        for (i = 0; i < module_usings_length(m); i++) {
+            struct _jl_module_using *data = module_usings_getidx(m, i);
+            write_pointerfield(s, (jl_value_t*)data->mod);
+            write_uint(s->s, data->min_world);
+            write_uint(s->s, data->max_world);
+            static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
+            tot += sizeof(struct _jl_module_using);
         }
-        for (; i < m->usings.max; i++) {
+        for (; i < module_usings_max(m); i++) {
             write_pointer(s->s);
-            tot += sizeof(void*);
+            write_uint(s->s, 0);
+            write_uint(s->s, 0);
+            tot += sizeof(struct _jl_module_using);
         }
     }
     assert(ios_pos(s->s) - reloc_offset == tot);
