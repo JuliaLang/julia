@@ -1214,7 +1214,7 @@ function bytes2hex(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
-    return Base._unsafe_takestring!(b)
+    return Base.unsafe_takestring(b)
 end
 
 function bytes2hex(io::IO, itr)
