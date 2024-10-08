@@ -3575,7 +3575,6 @@ struct RelocPath
     function RelocPath(path::AbstractString)
         depot, _ = replace_depot_path_impl(path)
         if isnothing(depot)
-            @show DEPOT_PATH
             error("Failed to locate $(path) in any of DEPOT_PATH.")
         end
         subpath = replace(path, depot => ""; count=1)
