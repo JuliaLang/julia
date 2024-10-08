@@ -1196,8 +1196,8 @@ JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, 
     }
     bt_context_t *context = NULL;
     bt_context_t c;
-    int16_t old = -1;
-    while (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid) {
+    int16_t old;
+    for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid; old = -1) {
         int lockret = jl_lock_stackwalk();
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
         if (!jl_thread_suspend_and_get_state(old, 1, &c)) {
