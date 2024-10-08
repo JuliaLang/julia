@@ -17,7 +17,7 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 | `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
 | `codegen.cpp`                    | Top-level of code generation, pass list, lowering builtins         |
 | `debuginfo.cpp`                  | Tracks debug information for JIT code                              |
-| `disasm.cpp`                     | Handles native object file and JIT code diassembly                 |
+| `disasm.cpp`                     | Handles native object file and JIT code disassembly                 |
 | `gf.c`                           | Generic functions                                                  |
 | `intrinsics.cpp`                 | Lowering intrinsics                                                |
 | `jitlayers.cpp`                  | JIT-specific code, ORC compilation layers/utilities                |

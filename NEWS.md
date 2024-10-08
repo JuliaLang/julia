@@ -182,6 +182,10 @@ Standard library changes
 
 #### InteractiveUtils
 
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
+
 Deprecated or removed
 ---------------------
 

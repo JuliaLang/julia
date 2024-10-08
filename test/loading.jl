@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-original_depot_path = copy(Base.DEPOT_PATH)
-
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
+# NOTE: the __LINE__ numbers for these first couple tests are significant, so
+# adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
 macro macro_caller_lineno()
@@ -32,6 +32,9 @@ end
 @test (@emit_LINE) == ((@__LINE__) - 3, @__LINE__)
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
+
+original_depot_path = copy(Base.DEPOT_PATH)
+include("precompile_utils.jl")
 
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
@@ -1601,5 +1604,34 @@ end
         @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
     finally
         copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "require_stdlib loading duplication" begin
+    depot_path = mktempdir()
+    oldBase64 = nothing
+    try
+        push!(empty!(DEPOT_PATH), depot_path)
+        Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
+        oldBase64 = Base.unreference_module(Base64_key)
+        cc = Base.compilecache(Base64_key)
+        @test Base.isprecompiled(Base64_key, cachepaths=String[cc[1]])
+        empty!(DEPOT_PATH)
+        Base.require_stdlib(Base64_key)
+        push!(DEPOT_PATH, depot_path)
+        append!(DEPOT_PATH, original_depot_path)
+        oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
+        Base.unreference_module(Base64_key)
+        empty!(DEPOT_PATH)
+        push!(DEPOT_PATH, depot_path)
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
+        Base.unreference_module(Base64_key)
+    finally
+        oldBase64 === nothing || Base.register_root_module(oldBase64)
+        copy!(DEPOT_PATH, original_depot_path)
+        rm(depot_path, force=true, recursive=true)
     end
 end
