@@ -363,7 +363,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *valu
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
-    small_arraylist_push(&ptls->gc_tls.heap.weak_refs, wr);
+    small_arraylist_push(&ptls->gc_tls_common.heap.weak_refs, wr);
     return wr;
 }
 
@@ -373,8 +373,8 @@ static void clear_weak_refs(void)
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL) {
-            size_t n, l = ptls2->gc_tls.heap.weak_refs.len;
-            void **lst = ptls2->gc_tls.heap.weak_refs.items;
+            size_t n, l = ptls2->gc_tls_common.heap.weak_refs.len;
+            void **lst = ptls2->gc_tls_common.heap.weak_refs.items;
             for (n = 0; n < l; n++) {
                 jl_weakref_t *wr = (jl_weakref_t*)lst[n];
                 if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
@@ -392,8 +392,8 @@ static void sweep_weak_refs(void)
         if (ptls2 != NULL) {
             size_t n = 0;
             size_t ndel = 0;
-            size_t l = ptls2->gc_tls.heap.weak_refs.len;
-            void **lst = ptls2->gc_tls.heap.weak_refs.items;
+            size_t l = ptls2->gc_tls_common.heap.weak_refs.len;
+            void **lst = ptls2->gc_tls_common.heap.weak_refs.items;
             if (l == 0)
                 continue;
             while (1) {
@@ -408,7 +408,7 @@ static void sweep_weak_refs(void)
                 lst[n] = lst[n + ndel];
                 lst[n + ndel] = tmp;
             }
-            ptls2->gc_tls.heap.weak_refs.len -= ndel;
+            ptls2->gc_tls_common.heap.weak_refs.len -= ndel;
         }
     }
 }
@@ -416,18 +416,18 @@ static void sweep_weak_refs(void)
 
 STATIC_INLINE void jl_batch_accum_heap_size(jl_ptls_t ptls, uint64_t sz) JL_NOTSAFEPOINT
 {
-    uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.alloc_acc) + sz;
+    uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc) + sz;
     if (alloc_acc < 16*1024)
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.alloc_acc, alloc_acc);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc, alloc_acc);
     else {
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, alloc_acc);
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.alloc_acc, 0);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc, 0);
     }
 }
 
 STATIC_INLINE void jl_batch_accum_free_size(jl_ptls_t ptls, uint64_t sz) JL_NOTSAFEPOINT
 {
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.free_acc, jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.free_acc) + sz);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.free_acc, jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.free_acc) + sz);
 }
 
 // big value list
@@ -448,10 +448,10 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
         jl_throw(jl_memory_exception);
     gc_invoke_callbacks(jl_gc_cb_notify_external_alloc_t,
         gc_cblist_notify_external_alloc, (v, allocsz));
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + allocsz);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.bigalloc,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.bigalloc) + 1);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocsz);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.bigalloc,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.bigalloc) + 1);
     jl_batch_accum_heap_size(ptls, allocsz);
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
@@ -564,8 +564,8 @@ static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + sz);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + sz);
     jl_batch_accum_heap_size(ptls, sz);
 }
 
@@ -584,18 +584,18 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTS
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls) {
-            dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + gc_num.interval);
-            dest->malloc += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.malloc);
-            dest->realloc += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.realloc);
-            dest->poolalloc += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.poolalloc);
-            dest->bigalloc += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.bigalloc);
-            dest->freed += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.free_acc);
+            dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval);
+            dest->malloc += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc);
+            dest->realloc += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.realloc);
+            dest->poolalloc += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.poolalloc);
+            dest->bigalloc += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.bigalloc);
+            dest->freed += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.free_acc);
             if (update_heap) {
-                uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.alloc_acc);
-                freed_in_runtime += jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.free_acc);
+                uint64_t alloc_acc = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc);
+                freed_in_runtime += jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.free_acc);
                 jl_atomic_store_relaxed(&gc_heap_stats.heap_size, alloc_acc + jl_atomic_load_relaxed(&gc_heap_stats.heap_size));
-                jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.alloc_acc, 0);
-                jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.free_acc, 0);
+                jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc, 0);
+                jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.free_acc, 0);
             }
         }
     }
@@ -611,13 +611,13 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls != NULL) {
             // don't reset `pool_live_bytes` here
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd, -(int64_t)gc_num.interval);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.malloc, 0);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.realloc, 0);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.poolalloc, 0);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.bigalloc, 0);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.alloc_acc, 0);
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.free_acc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.realloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.poolalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.bigalloc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.alloc_acc, 0);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.free_acc, 0);
         }
     }
 }
@@ -660,8 +660,8 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
-            mallocmemory_t **pma = &ptls2->gc_tls.heap.mallocarrays;
+            mallocmemory_t *ma = ptls2->gc_tls_common.heap.mallocarrays;
+            mallocmemory_t **pma = &ptls2->gc_tls_common.heap.mallocarrays;
             while (ma != NULL) {
                 mallocmemory_t *nxt = ma->next;
                 jl_value_t *a = (jl_value_t*)((uintptr_t)ma->a & ~1);
@@ -673,8 +673,8 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
                     *pma = nxt;
                     int isaligned = (uintptr_t)ma->a & 1;
                     jl_gc_free_memory(a, isaligned);
-                    ma->next = ptls2->gc_tls.heap.mafreelist;
-                    ptls2->gc_tls.heap.mafreelist = ma;
+                    ma->next = ptls2->gc_tls_common.heap.mafreelist;
+                    ptls2->gc_tls_common.heap.mafreelist = ma;
                 }
                 gc_time_count_mallocd_memory(bits);
                 ma = nxt;
@@ -735,12 +735,12 @@ STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
     return jl_gc_big_alloc(ptls, osize, NULL);
 #endif
     maybe_collect(ptls);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + osize);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.pool_live_bytes,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.pool_live_bytes) + osize);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.poolalloc,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.poolalloc) + 1);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + osize);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes) + osize);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.poolalloc,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.poolalloc) + 1);
     // first try to use the freelist
     jl_taggedvalue_t *v = p->freelist;
     if (v != NULL) {
@@ -977,8 +977,8 @@ done:
     // instead of adding it to the thread that originally allocated the page, so we can avoid
     // an atomic-fetch-add here.
     size_t delta = (GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.pool_live_bytes,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.pool_live_bytes) + delta);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.pool_live_bytes) + delta);
     jl_atomic_fetch_add_relaxed((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
 }
 
@@ -1271,7 +1271,7 @@ static void gc_sweep_pool(void)
             }
             continue;
         }
-        jl_atomic_store_relaxed(&ptls2->gc_tls.gc_num.pool_live_bytes, 0);
+        jl_atomic_store_relaxed(&ptls2->gc_tls_common.gc_num.pool_live_bytes, 0);
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[i];
             jl_taggedvalue_t *last = p->freelist;
@@ -2881,7 +2881,7 @@ JL_DLLEXPORT int64_t jl_gc_pool_live_bytes(void)
     for (int i = 0; i < n_threads; i++) {
         jl_ptls_t ptls2 = all_tls_states[i];
         if (ptls2 != NULL) {
-            pool_live_bytes += jl_atomic_load_relaxed(&ptls2->gc_tls.gc_num.pool_live_bytes);
+            pool_live_bytes += jl_atomic_load_relaxed(&ptls2->gc_tls_common.gc_num.pool_live_bytes);
         }
     }
     return pool_live_bytes;
@@ -3235,11 +3235,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
             // GC threads should never exit
             assert(!gc_is_collector_thread(t_i));
+            jl_thread_heap_common_t *common_heap = &ptls2->gc_tls_common.heap;
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
-            if (heap->weak_refs.len == 0)
-                small_arraylist_free(&heap->weak_refs);
-            if (heap->live_tasks.len == 0)
-                small_arraylist_free(&heap->live_tasks);
+            if (common_heap->weak_refs.len == 0)
+                small_arraylist_free(&common_heap->weak_refs);
+            if (common_heap->live_tasks.len == 0)
+                small_arraylist_free(&common_heap->live_tasks);
             if (heap->remset.len == 0)
                 arraylist_free(&heap->remset);
             if (ptls2->finalizers.len == 0)
@@ -3308,8 +3309,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd, -(int64_t)gc_num.interval);
+        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + gc_num.interval;
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
         jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
         return;
@@ -3414,6 +3415,7 @@ void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // Per-thread initialization
 void jl_init_thread_heap(jl_ptls_t ptls)
 {
+    jl_thread_heap_common_t *common_heap = &ptls->gc_tls_common.heap;
     jl_thread_heap_t *heap = &ptls->gc_tls.heap;
     jl_gc_pool_t *p = heap->norm_pools;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
@@ -3421,12 +3423,12 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         p[i].freelist = NULL;
         p[i].newpages = NULL;
     }
-    small_arraylist_new(&heap->weak_refs, 0);
-    small_arraylist_new(&heap->live_tasks, 0);
+    small_arraylist_new(&common_heap->weak_refs, 0);
+    small_arraylist_new(&common_heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
-        small_arraylist_new(&heap->free_stacks[i], 0);
-    heap->mallocarrays = NULL;
-    heap->mafreelist = NULL;
+        small_arraylist_new(&common_heap->free_stacks[i], 0);
+    common_heap->mallocarrays = NULL;
+    common_heap->mafreelist = NULL;
     heap->young_generation_of_bigvals = (bigval_t*)calloc_s(sizeof(bigval_t)); // sentinel
     assert(gc_bigval_sentinel_tag != 0); // make sure the sentinel is initialized
     heap->young_generation_of_bigvals->header = gc_bigval_sentinel_tag;
@@ -3452,8 +3454,8 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->array, wsa2);
     arraylist_new(&mq->reclaim_set, 32);
 
-    memset(&ptls->gc_tls.gc_num, 0, sizeof(ptls->gc_tls.gc_num));
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd, -(int64_t)gc_num.interval);
+    memset(&ptls->gc_tls_common.gc_num, 0, sizeof(ptls->gc_tls_common.gc_num));
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
 }
 
 void jl_free_thread_gc_state(jl_ptls_t ptls)
@@ -3640,10 +3642,10 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + sz);
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.malloc,
-            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.malloc) + 1);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + sz);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc) + 1);
         jl_batch_accum_heap_size(ptls, sz);
     }
     return data;
@@ -3657,10 +3659,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + nm*sz);
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.malloc,
-            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.malloc) + 1);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + nm*sz);
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc) + 1);
         jl_batch_accum_heap_size(ptls, sz * nm);
     }
     return data;
@@ -3685,10 +3687,10 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         if (!(sz < old))
-            jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-                jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + (sz - old));
-        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.realloc,
-            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.realloc) + 1);
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+                jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + (sz - old));
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.realloc,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.realloc) + 1);
 
         int64_t diff = sz - old;
         if (diff < 0) {
@@ -3719,10 +3721,10 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     if (b == NULL)
         jl_throw(jl_memory_exception);
 
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + allocsz);
-    jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.malloc,
-        jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.malloc) + 1);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + allocsz);
+    jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.malloc,
+        jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.malloc) + 1);
     jl_batch_accum_heap_size(ptls, allocsz);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
