@@ -145,6 +145,97 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 return Expr(:call, fcn, f,
                             Expr(:call, typesof, map(esc, ex0.args)...), kws...)
             end
+        elseif ex0.head === :ncat || ex0.head === :typed_ncat
+            if ex0.head === :ncat
+                f = Base.hvncat
+                args = ex0.args
+            else
+                f = Base.typed_hvncat
+                args = ex0.args[2:end]
+            end
+            d = args[1]
+            args = args[2:end]
+            xs = []
+            is_row_first = false
+            is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
+            function extract_elements(x)
+                if isa(x, Expr)
+                    if x.head === :nrow
+                        extract_elements.(x.args[2:end])
+                    elseif x.head === :row
+                        is_row_first = true
+                        extract_elements.(x.args)
+                    else
+                        push!(xs, x)
+                    end
+                else
+                    push!(xs, x)
+                end
+            end
+            function get_shape(a, is_row_first, d)
+                function get_next(x)
+                    if !is_row(x) ||
+                        x.head === :nrow && d > x.args[1] + 1 ||
+                        x.head === :row && d > 1
+                        return [x]
+                    elseif x.head === :nrow
+                        return x.args[2:end]
+                    else
+                        return x.args
+                    end
+                end
+                if d == 0 || d == 1 && !is_row_first
+                    return length(a)
+                elseif d == 3 && is_row_first
+                    return get_shape(a, is_row_first, d - 1)
+                else
+                    ashape = map(x -> get_shape(get_next(x), is_row_first, d - 1), a)
+                    if length(ashape) > 1
+                        counts = ashape .|> first
+                        prev_counts = ashape .|> last
+                        return [sum(counts), counts, vcat(map(x -> vcat(x...), prev_counts)...)]
+                    else
+                        return [sum(ashape), ashape]
+                    end
+                end
+            end
+            function get_dims(a, is_row_first, d)
+                if d < 2 && !is_row(a[1])
+                    [length(a)]
+                elseif d == 1
+                    [get_dims(a[1].args, is_row_first, 0)[1]; length(a)]
+                elseif d == 3 && is_row_first
+                    get_dims(a, is_row_first, 2)
+                else
+                    anext = isa(a[1], Expr) && a[1].head === :nrow && d == a[1].args[1] + 1 ?
+                        a[1].args[2:end] :
+                        [a[1]]
+                    [length(a); get_dims(anext, is_row_first, d - 1)]
+                end
+            end
+            is_1d = !any(is_row, args)
+            extract_elements.(args)
+            if is_1d
+                return Expr(:call, fcn, f,
+                            Expr(:call, typesof,
+                                (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
+                                d,
+                                map(esc, xs)...), kws...)
+            else
+                shape = get_shape(args, true, d)
+                is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
+                dimsshape = if is_balanced
+                    get_dims(args, is_row_first, d)
+                else
+                    map(x -> tuple(x...), shape)
+                end
+                return Expr(:call, fcn, f,
+                            Expr(:call, typesof,
+                                (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
+                                Expr(:tuple, dimsshape...),
+                                is_row_first,
+                                map(esc, xs)...), kws...)
+            end
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
