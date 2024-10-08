@@ -197,11 +197,11 @@ diagzero(D::Diagonal{M}, i, j) where {M<:AbstractMatrix} =
 zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
 """
     zeroslike(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
+    zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix}
 
-Return an appropriate zero-ed array similar to `M`, with either
-the axes `ax`, or the `size` `map(length, ax)`.
-This will be used as a structural zero element of a banded matrix. By default, `zeroslike` falls back to
-using the size along each axis to construct the array.
+Return an appropriate zero-ed array similar to `M`, with either the axes `ax` or the size `sz`.
+This will be used as a structural zero element of a matrix-valued banded matrix.
+By default, `zeroslike` falls back to using the size along each axis to construct the array.
 """
 zeroslike(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = zeroslike(M, map(length, ax))
 zeroslike(M::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(M, sz)
