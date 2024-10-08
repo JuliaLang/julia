@@ -665,7 +665,7 @@ true
 ```
 """
 Base.@constprop :aggressive function norm(itr, p::Real=2)
-    isempty(itr) && return float(norm(zero(eltype(itr))))
+    isempty(itr) && return float(norm(zero(eltype(eltype(itr)))))
     v, s = iterate(itr)
     !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
         "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
@@ -1970,19 +1970,24 @@ julia> normalize(0, 1)
 NaN
 ```
 """
-function normalize(a::AbstractArray, p::Real = 2)
-    nrm = norm(a, p)
+normalize(a::AbstractArray, p::Real = 2) = _normalize(a, norm(a, p))
+
+@inline _normalize(a::AbstractArray{T}, nrm) where {T} = _normalize(promote_type(T, typeof(nrm)), a, nrm)
+Base.@constprop :aggressive @inline _normalize(a::AbstractArray{T}, nrm) where {T <: AbstractArray} = _normalize(promote_op(/, T, typeof(nrm)), a, nrm)
+
+Base.@constprop :aggressive @inline function _normalize(T, a::AbstractArray, nrm)
     if !isempty(a)
-        aa = copymutable_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, T)
         return __normalize!(aa, nrm)
     else
-        T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+
 
 """
     copytrito!(B, A, uplo) -> B

@@ -395,6 +395,29 @@ end
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
 end
 
+@testset "normalize for nested arrays" begin
+    for arr in (
+        [ones(2, 1), ones(1, 2)],
+        [ones(2), ones(1, 2)],
+        [ones(Float16, 2, 3), ones(Int16, 2, 3)],
+        [Dual.(randn(2,3), randn(2,3)), Dual.(randn(3,4), randn(3,4))],
+        [OffsetArray([-1 0], (-2,-2)), OffsetArray([-1 0], (-2,-2))]
+    )
+        a = normalize(arr)
+        an = norm(arr)
+        T = promote_type(eltype(arr[1]), typeof(an))
+        S = promote_type(eltype(arr[2]), typeof(an))
+        R = promote_type(T, S)
+        @test eltype(a[1]) == R
+        @test eltype(a[2]) == R
+        @test eltype(a) == Base.promote_op(/, eltype(a), typeof(an))
+        @test size.(a) == size.(arr)
+        @test axes.(a) == axes.(arr)
+    end
+
+    @test typeof(normalize(Vector{Int64}[])) == Vector{Vector{Float64}}
+end
+
 @testset "normalize for scalars" begin
     @test normalize(8.0) == 1.0
     @test normalize(-3.0) == -1.0
