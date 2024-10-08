@@ -77,6 +77,17 @@ function fullname(m::Module)
 end
 
 """
+    moduleloc(m::Module) -> LineNumberNode
+
+Get the location of the `module` definition.
+"""
+function moduleloc(m::Module)
+    line = Ref{Int32}(0)
+    file = ccall(:jl_module_getloc, Ref{Symbol}, (Any, Ref{Int32}), m, line)
+    return LineNumberNode(Int(line[]), file)
+end
+
+"""
     names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
@@ -964,7 +975,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-13-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Type}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -978,6 +989,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000050, :blocks, Int64)
  (0x0000000000000058, :mtime, Float64)
  (0x0000000000000060, :ctime, Float64)
+ (0x0000000000000068, :ioerrno, Int32)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
@@ -2447,7 +2459,7 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t))
-    return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
+    return Core._hasmethod(signature_type(f, t))
 end
 
 function Core.kwcall(kwargs::NamedTuple, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))

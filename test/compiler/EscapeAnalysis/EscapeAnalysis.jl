@@ -2299,4 +2299,21 @@ let result = code_escapes((SafeRef{String},Any)) do x, y
     @test has_all_escape(result.state[Argument(3)])  # y
 end
 
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+@test (@code_escapes scope_folding()) isa EAUtils.EscapeResult
+@test (@code_escapes scope_folding_opt()) isa EAUtils.EscapeResult
+
 end # module test_EA

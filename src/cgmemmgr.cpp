@@ -833,28 +833,6 @@ public:
         mapAddresses(Dyld, ro_alloc);
         mapAddresses(Dyld, exe_alloc);
     }
-#ifdef _OS_WINDOWS_
-    template <typename Alloc>
-    void *lookupWriteAddressFor(void *rt_addr, Alloc &&allocator)
-    {
-        for (auto &alloc: allocator->allocations) {
-            if (alloc.rt_addr == rt_addr) {
-                return alloc.wr_addr;
-            }
-        }
-        return nullptr;
-    }
-    void *lookupWriteAddressFor(void *rt_addr)
-    {
-        if (!ro_alloc)
-            return rt_addr;
-        if (void *ptr = lookupWriteAddressFor(rt_addr, ro_alloc))
-            return ptr;
-        if (void *ptr = lookupWriteAddressFor(rt_addr, exe_alloc))
-            return ptr;
-        return rt_addr;
-    }
-#endif // _OS_WINDOWS_
 };
 
 uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
@@ -946,13 +924,6 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
 #endif
 
 }
-
-#ifdef _OS_WINDOWS_
-void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
-{
-    return ((RTDyldMemoryManagerJL*)memmgr)->lookupWriteAddressFor(rt_addr);
-}
-#endif
 
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {

@@ -1265,6 +1265,17 @@ end
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
+@testset "triple multiplication with a sandwiched BandedMatrix" begin
+    D = Diagonal(StepRangeLen(NaN, 0, 4));
+    B = Bidiagonal(1:4, 1:3, :U)
+    C = D * B * D
+    @test iszero(diag(C, 2))
+    # test associativity
+    C1 = (D * B) * D
+    C2 = D * (B * D)
+    @test diag(C,2) == diag(C1,2) == diag(C2,2)
+end
+
 @testset "diagind" begin
     D = Diagonal(1:4)
     M = Matrix(D)

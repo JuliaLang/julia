@@ -1383,10 +1383,10 @@ end
 
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= maxargs || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-        nargs + 1 >= op_argi || return CallMeta(Any, Any, Effects(), NoCallInfo())
+        nargs - 1 <= maxargs || return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        nargs + 1 >= op_argi || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     else
-        minargs <= nargs <= maxargs || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        minargs <= nargs <= maxargs || return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
     end
     𝕃ᵢ = typeinf_lattice(interp)
     if ff === modifyfield!
@@ -1417,15 +1417,22 @@ end
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=#1)
-        TF2 = tmeet(callinfo.rt, widenconst(TF))
-        if TF2 === Bottom
-            RT = Bottom
-        elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
-            RT = PartialStruct(RT, Any[TF, TF2])
+        TF = Core.Box(TF)
+        RT = Core.Box(RT)
+        return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
+            TF = TF.contents
+            RT = RT.contents
+            TF2 = tmeet(callinfo.rt, widenconst(TF))
+            if TF2 === Bottom
+                RT = Bottom
+            elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
+                RT = PartialStruct(RT, Any[TF, TF2])
+            end
+            info = ModifyOpInfo(callinfo.info)
+            return CallMeta(RT, Any, Effects(), info)
         end
-        info = ModifyOpInfo(callinfo.info)
     end
-    return CallMeta(RT, Any, Effects(), info)
+    return Future(CallMeta(RT, Any, Effects(), info))
 end
 
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
@@ -2895,17 +2902,17 @@ end
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
     UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; nortcall=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
-        return UNKNOWN
+        return Future(UNKNOWN)
     end
 
     tt = widenslotwrapper(argtypes[end])
     if !isa(tt, Const) && !(isType(tt) && !has_free_typevars(tt))
-        return UNKNOWN
+        return Future(UNKNOWN)
     end
 
     af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
     if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
-        return UNKNOWN
+        return Future(UNKNOWN)
     end
 
     if length(argtypes) == 3
@@ -2918,7 +2925,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     if !(isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
             (isconcretetype(aft) && !(aft <: Builtin) && !iskindtype(aft)))
-        return UNKNOWN
+        return Future(UNKNOWN)
     end
 
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
@@ -2926,7 +2933,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
 
     if contains_is(argtypes_vec, Union{})
-        return CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo())
+        return Future(CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo()))
     end
 
     # Run the abstract_call without restricting abstract call
@@ -2935,42 +2942,45 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     if isa(sv, InferenceState)
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
-        sv.restrict_abstract_call_sites = old_restrict
-    else
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     end
-    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
-    rt = widenslotwrapper(call.rt)
-    if isa(rt, Const)
-        # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
-    end
-    rt = widenconst(rt)
-    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
-        # output cannot be improved so it is known for certain
-        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
-    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
-        # conservatively express uncertainty of this result
-        # in two ways: both as being a subtype of this, and
-        # because of LimitedAccuracy causes
-        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
-    elseif isa(tt, Const) || isconstType(tt)
-        # input arguments were known for certain
-        # XXX: this doesn't imply we know anything about rt
-        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
-    elseif isType(rt)
-        return CallMeta(Type{rt}, Union{}, RT_CALL_EFFECTS, info)
-    else
-        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
+    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+    tt = Core.Box(tt)
+    return Future{CallMeta}(call, interp, sv) do call, interp, sv
+        if isa(sv, InferenceState)
+            sv.restrict_abstract_call_sites = old_restrict
+        end
+        info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+        rt = widenslotwrapper(call.rt)
+        if isa(rt, Const)
+            # output was computed to be constant
+            return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
+        end
+        rt = widenconst(rt)
+        if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+            # output cannot be improved so it is known for certain
+            return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
+        elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
+            # conservatively express uncertainty of this result
+            # in two ways: both as being a subtype of this, and
+            # because of LimitedAccuracy causes
+            return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
+        elseif isa(tt.contents, Const) || isconstType(tt.contents)
+            # input arguments were known for certain
+            # XXX: this doesn't imply we know anything about rt
+            return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
+        elseif isType(rt)
+            return CallMeta(Type{rt}, Union{}, RT_CALL_EFFECTS, info)
+        else
+            return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
+        end
     end
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
-    length(argtypes) < 2 && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
+    length(argtypes) < 2 && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+    isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_method_matches(interp, argtypes, atype; max_methods)
@@ -2997,7 +3007,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
         # added that did not intersect with any existing method
         add_uncovered_edges!(sv, matches, atype)
     end
-    return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
+    return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo()))
 end
 add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
 

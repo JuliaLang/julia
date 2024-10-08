@@ -37,6 +37,10 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - Trivial infinite loops (like `while true; end`) are no longer undefined
+   behavior. Infinite loops that actually do things (e.g. have side effects
+   or sleep) were never and are still not undefined behavior. ([#52999])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -59,6 +63,7 @@ variables. ([#53742]).
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
 * `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
+* New `--trace-dispatch` option to report methods that are dynamically dispatched ([#55848]).
 
 Multi-threading changes
 -----------------------
@@ -176,6 +181,10 @@ Standard library changes
 #### DelimitedFiles
 
 #### InteractiveUtils
+
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
 
 Deprecated or removed
 ---------------------
