@@ -398,6 +398,25 @@ hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)
 hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 # TODO unify and allow mixed combinations
 
+### dropdims
+function Base._dropdims(A::Transpose{<:Number}, dims::Tuple{Int})
+    if only(dims) == 1
+        vec(parent(A))
+    elseif only(dims) == 2
+        Base._dropdims(parent(A), (1,))
+    else
+        throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+    end
+end
+function Base._dropdims(A::Adjoint{<:Real}, dims::Tuple{Int})
+    if only(dims) == 1
+        vec(parent(A))
+    elseif only(dims) == 2
+        Base._dropdims(parent(A), (1,))
+    else
+        throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+    end
+end
 
 ### higher order functions
 # preserve Adjoint/Transpose wrapper around vectors
