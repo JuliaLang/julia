@@ -2984,19 +2984,6 @@ static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset
     return false;
 }
 
-// Check if this is a load from an immutable value. The easiest
-// way to do so is to look at the tbaa and see if it derives from
-// jtbaa_immut.
-static bool isLoadFromImmut(LoadInst *LI)
-{
-    if (LI->getMetadata(LLVMContext::MD_invariant_load))
-        return true;
-    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
-    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
-        return true;
-    return false;
-}
-
 static bool isConstGV(GlobalVariable *gv)
 {
     return gv->isConstant() || gv->getMetadata("julia.constgv");
@@ -3008,7 +2995,10 @@ static bool isConstGV(GlobalVariable *gv)
 // task local constants which are constant as far as the code is concerned but aren't
 // global constants. For task local constant `task_local` will be true when this function
 // returns.
-// Unlike this function in llvm-late-gc-lowering, we do not examine PhiNode, as those are not emitted yet
+// Unlike this function in llvm-late-gc-lowering, we do not examine PhiNode, as
+// those are not emitted yet Also unlike that version (which only cares about
+// detecting it is MemSSA), this version needs to make sure there is no local
+// mutation / allocation of the object as well.
 static bool isLoadFromConstGV(LoadInst *LI);
 static bool isLoadFromConstGV(Value *v)
 {
@@ -3028,21 +3018,37 @@ static bool isLoadFromConstGV(Value *v)
         return (isLoadFromConstGV(SL->getTrueValue()) &&
                 isLoadFromConstGV(SL->getFalseValue()));
     if (auto call = dyn_cast<CallInst>(v)) {
-        auto callee = call->getCalledFunction();
-        if (callee && callee->getName() == "julia.typeof") {
-            return true;
+        if (auto callee = call->getCalledFunction()) {
+            if (callee->getName() == "julia.typeof")
+                return true;
+            if (callee->getName() == "julia.get_pgcstack")
+                return true;
+            if (callee->getName() == "julia.gc_loaded")
+                return isLoadFromConstGV(call->getArgOperand(0)) &&
+                       isLoadFromConstGV(call->getArgOperand(1));
+            if (callee->getName().starts_with("julia.call"))
+                return true; // generic calls (via the julia.call stub trampoline) must return fully initialized objects
         }
-        if (callee && callee->getName() == "julia.get_pgcstack") {
-            return true;
-        }
-        if (callee && callee->getName() == "julia.gc_loaded") {
-            return isLoadFromConstGV(call->getArgOperand(0)) &&
-                   isLoadFromConstGV(call->getArgOperand(1));
-        }
+        // TODO: add all known calls (e.g. user and some other intrinsics like boxes) to this list? (e.g. add a custom julia.mayalias return attribute to calls)
     }
     if (isa<Argument>(v)) {
         return true;
     }
+    return false;
+}
+
+// Check if this is a load from an immutable value. The easiest
+// way to do so is to look at the tbaa and see if it derives from
+// jtbaa_immut.
+static bool isLoadFromImmut(LoadInst *LI)
+{
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
+        return true;
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (isTBAA(TBAA, {"jtbaa_const", "jtbaa_datatype"}))
+        return true;
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+        return isLoadFromConstGV(LI->getPointerOperand());
     return false;
 }
 
