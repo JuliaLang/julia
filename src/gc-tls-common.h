@@ -49,4 +49,4 @@ typedef struct {
 }
 #endif
 
-#endif // JL_GC_TLS_H
+#endif // JL_GC_TLS_COMMON_H
