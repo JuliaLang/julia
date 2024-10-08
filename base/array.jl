@@ -984,12 +984,22 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
+    @inline
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i)
+end
+function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
-    memoryrefset!(memoryrefnew(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+    @inline
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i1, i2, I...)
+end
+function _setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
@@ -1760,7 +1770,6 @@ julia> insert!(Any[1:6;], 3, "here")
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
     @inline
-    @_noub_meta
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end

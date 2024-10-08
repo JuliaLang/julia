@@ -1224,8 +1224,8 @@ end
 # high level tests
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Int},Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Any},Int)))
-@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Int},Int,Int)))
-@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Any},Any,Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(setindex!, (Vector{Int},Int,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(Base._setindex!, (Vector{Any},Any,Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Int},Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Any},Int)))
 @test Base.infer_effects((Vector{Int},Int)) do xs, i
