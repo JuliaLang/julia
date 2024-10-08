@@ -324,6 +324,16 @@ end
         @test (x -> 1).(D) == ones(Int,size(D))
         @test all(==(2), ndims.(D))
         @test_throws MethodError size.(D)
+
+        Diag = Diagonal(diag(D))
+        @test D .+ Diag == M .+ Diag
+        @test D .- Diag == M .- Diag
+        @test Diag .- D == Diag .- M
+        # enable when diag(D, 1) works for block matrices
+        # Bidiag = Bidiagonal(diag(D), diag(D,1), :U)
+        # @test D .+ Bidiag == M .+ Bidiag
+        # @test D .- Bidiag == M .- Bidiag
+        # @test Bidiag .- D == Bidiag .- M
     end
     @testset "Diagonal" begin
         @testset "square" begin
@@ -358,10 +368,12 @@ end
         B = Bidiagonal(fill(A,3), fill(A,2), :U)
         standardbroadcastingtests(B, Bidiagonal)
     end
-    @testset "UpperTriangular" begin
+    @testset "AbstractTriangular" begin
         A = [1 3; 2 4]
         U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
         standardbroadcastingtests(U, UpperTriangular)
+        L = LowerTriangular([(i+j)*A for i in 1:3, j in 1:3])
+        standardbroadcastingtests(L, LowerTriangular)
     end
 end
 

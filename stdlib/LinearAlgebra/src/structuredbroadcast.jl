@@ -262,13 +262,26 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     return dest
 end
 
+# We split the loop into two sections: those over the diagonal and super/subdiagonal, and those away from it
+# in the latter loop, we may set banded matrices to the corresponding zero element (if one exists)
+# This avoids branches in the loop and helps with performance
+_preprocess_broadcasted_offdiag(bc::Broadcast.Broadcasted) = Broadcast.broadcasted(bc.f, map(_preprocess_broadcasted_offdiag, bc.args)...)
+# Reduce terms like UpperTrianguar(Diagonal([1,2,3])) to 0 away from the diagonal
+_preprocess_broadcasted_offdiag(U::UpperOrLowerTriangular) = _preprocess_broadcasted_offdiag(parent(U))
+_preprocess_broadcasted_offdiag(D::BandedMatrix) = haszero(eltype(D)) ? (size(D) == (1,1) ? D[1,1] : zero(eltype(D))) : D
+_preprocess_broadcasted_offdiag(x) = x
 function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
-        for i in j:axs[1][end]
-            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
+        @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
+        if j < axs[1][end]
+            @inbounds dest.data[j+1,j] = bc[BandIndex(-1, j)]
+        end
+        for i in j+2:axs[1][end]
+            @inbounds dest.data[i,j] = bc2[CartesianIndex(i, j)]
         end
     end
     return dest
@@ -278,10 +291,15 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
-        for i in 1:j
-            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
+        for i in 1:j-2
+            @inbounds dest.data[i,j] = bc2[CartesianIndex(i, j)]
         end
+        if j > 1
+            @inbounds dest.data[j-1,j] = bc[BandIndex(1, j-1)]
+        end
+        @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
     end
     return dest
 end
