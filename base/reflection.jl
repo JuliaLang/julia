@@ -1181,6 +1181,12 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end
 
+function instance_signature_type(t::Type, @nospecialize(argtypes))
+    argtypes = to_tuple_type(argtypes)
+    u = unwrap_unionall(argtypes)::DataType
+    return rewrap_unionall(Tuple{t,u.parameters...}, argtypes)
+end
+
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -1279,10 +1285,19 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function collect_methods(list, mod)
+    ms = Method[]
+    for m in list::Vector
+        m = m::Core.MethodMatch
+        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
+    end
+    return ms
+end
+
 """
     methods(f, [types], [module])
 
-Return the method table for `f`.
+Return the method list for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
@@ -1298,11 +1313,8 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
+    mm = _methods(f, t, -1, world)
+    ms = collect_methods(mm, mod)
     MethodList(ms, typeof(f).name.mt)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
@@ -1322,6 +1334,68 @@ function methods(@nospecialize(f),
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
+
+function _instancemethods(t::Type, @nospecialize(mt), lim::Int, world::UInt)
+    tt = instance_signature_type(t, mt)
+    return _methods_by_ftype(tt, lim, world)
+end
+
+"""
+    instancemethods(T::Type, [types], [module])
+
+Return the method list for instances of type `T`. In particular, for any
+object `x`, `methods(x)` is the same as `instancemethods(typeof(x))`.
+The key difference is that `instancemethods` allows to retrieve the method
+list for instances of a type without instantiating any object. Another
+difference is that the type `T` need not be concrete.
+
+If `types` is specified, return the methods whose types match.
+If `module` is specified, only return the methods defined in that module.
+Multiple modules can also be specified as an array.
+
+# Example
+
+```julia
+julia> struct A{T}
+    x::T
+end
+
+# making the object callable
+julia> (a::A{Float64})(x::Float64) = a.x + x
+julia> (a::A{String})(x::String) = a.x * x
+
+julia> a = A(1.0)
+A{Float64}(1.0)
+
+julia> methods(a) == instancemethods(A{Float64})
+true
+
+julia> length(instancemethods(A))
+2
+```
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also: [`methods`](@ref).
+"""
+function instancemethods(t::Type, @nospecialize(tmatch),
+                         mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+    world = get_world_counter()
+    mm = _instancemethods(t, tmatch, -1, world)
+    ms = collect_methods(mm, mod)
+    if t in (Any, Function, Core.Builtin)
+        t = DataType
+    end
+    return MethodList(ms, typename(t).mt)
+end
+
+instancemethods(t::Type, @nospecialize(tmatch), mod::Module) =
+    instancemethods(t, tmatch, (mod,))
+
+instancemethods(t::Type,
+                mod::Union{Module,AbstractArray{Module},Nothing}=nothing) =
+    instancemethods(t, Tuple, mod)
 
 function visit(f, mt::Core.MethodTable)
     mt.defs !== nothing && visit(f, mt.defs)
