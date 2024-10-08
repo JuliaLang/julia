@@ -575,21 +575,9 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
         $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
-            a = Array{T,N}(undef, dims)
-            fill!(a, $felt(T))
-            return a
-        end
-        function $fname(::Type{T}, dims::Tuple{}) where {T}
-            a = Array{T}(undef)
-            fill!(a, $felt(T))
-            return a
-        end
-        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
-            a = similar(Array{T,N}, dims)
-            fill!(a, $felt(T))
-            return a
-        end
+        $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N} = fill($felt(T), dims)
+        $fname(::Type{T}, dims::Tuple{}) where {T} = fill($felt(T), dims)
+        $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N} = fill($felt(T), dims)
     end
 end
 
