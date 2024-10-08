@@ -385,8 +385,8 @@ function check_for_hint(s::MIState)
 
     completions, partial, should_complete = try
         complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
-    catch e
-        @debug "error completing line for hint" e=e,catch_backtrace()
+    catch
+        @debug "error completing line for hint" exception=current_exceptions()
         return clear_hint(st)
     end
     isempty(completions) && return clear_hint(st)
