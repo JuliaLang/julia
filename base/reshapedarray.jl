@@ -396,3 +396,6 @@ function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
     end
     return sz, st, n
 end
+
+## ReshapedArrays may forward a mapped function to the parent
+map(f, R::ReshapedArray) = ReshapedArray(map(f, parent(R)), R.dims, R.mi)

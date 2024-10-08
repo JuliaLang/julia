@@ -2154,3 +2154,33 @@ end
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
 end
+
+@testset "map on a ReshapedArray (PR #40678)" begin
+    # Ranges have special map methods for eltype conversion
+    # reshaped ranges may utilize these
+    r = 1:4
+    R = reshape(r, 2, 2)
+    for T in [Float64, BigInt]
+        S = map(T, R)
+        @test eltype(S) == T
+        @test S == R
+        @test parent(S) isa AbstractRange
+    end
+
+    # in general for Arrays, map(f, R) and map(x -> f(x), R) should behave identically
+    # and the result should match map(f, collect(R))
+    R = reshape(reinterpret(Float64, ComplexF64[i for i = 1:4]), 1, :)
+    C = collect(R)
+    for T in [Int, BigInt], f in [T, x -> T(x)]
+        S = map(f, R)
+        @test eltype(S) == T
+        @test S == R
+        @test S == map(f, C)
+    end
+
+    R = reshape(1:4, 4, 1)
+    for f in [CartesianIndex, x -> CartesianIndex(x)]
+        RR = map(f, R)
+        @test RR == map(f, collect(R))
+    end
+end
