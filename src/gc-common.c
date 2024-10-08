@@ -587,16 +587,16 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
     // This is **NOT** a GC safe point.
     mallocmemory_t *ma;
-    if (ptls->gc_tls.heap.mafreelist == NULL) {
+    if (ptls->gc_tls_common.heap.mafreelist == NULL) {
         ma = (mallocmemory_t*)malloc_s(sizeof(mallocmemory_t));
     }
     else {
-        ma = ptls->gc_tls.heap.mafreelist;
-        ptls->gc_tls.heap.mafreelist = ma->next;
+        ma = ptls->gc_tls_common.heap.mafreelist;
+        ptls->gc_tls_common.heap.mafreelist = ma->next;
     }
     ma->a = (jl_genericmemory_t*)((uintptr_t)m | !!isaligned);
-    ma->next = ptls->gc_tls.heap.mallocarrays;
-    ptls->gc_tls.heap.mallocarrays = ma;
+    ma->next = ptls->gc_tls_common.heap.mallocarrays;
+    ptls->gc_tls_common.heap.mallocarrays = ma;
 }
 
 // =========================================================================== //
