@@ -1896,8 +1896,19 @@ function sortperm(A::AbstractArray;
         _sortperm(A; alg, order=ord(lt, by, nothing, order), scratch, dims...)
     end
 end
-function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
-    if order === Forward && isa(A,Vector) && eltype(A)<:Integer
+
+ # for a vector we do special handling
+function _sortperm(A::AbstractVector; alg, order, scratch, dims...)
+    if length(dims) > 1
+        throw(ArgumentError("Multiple dims specified for a vector"))
+    end
+
+    if isone(length(dims)) && !isone(dims[1])
+        throw(ArgumentError("dims needs to be 1 for a vector"))
+    end
+
+    # special case for vectors of few unique integers
+    if order === Forward && eltype(A)<:Integer
         n = length(A)
         if n > 1
             min, max = extrema(A)
@@ -1908,6 +1919,12 @@ function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
             end
         end
     end
+    ix = copymutable(LinearIndices(A))
+    # do not pass dims since the sort! dispatches for vectors does not accept dims
+    sort!(ix; alg, order = Perm(order, vec(A)), scratch)
+end
+
+function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
     ix = copymutable(LinearIndices(A))
     sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
 end
