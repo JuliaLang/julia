@@ -60,6 +60,7 @@ export Period, DatePeriod, TimePeriod,
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
        microsecond, nanosecond,
+       isoweekdate, isoyear, weeksinyear,
        # query.jl
        dayofweek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
        dayofweekofmonth, daysofweekinmonth, monthname, monthabbr,
