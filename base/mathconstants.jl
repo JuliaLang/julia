@@ -68,6 +68,10 @@ true
 
 Euler's constant.
 
+!!! note
+    Even though `MathConstants.γ isa Irrational`, it is not actually known
+    whether Euler's constant is rational.
+
 # Examples
 ```jldoctest
 julia> Base.MathConstants.eulergamma
@@ -102,6 +106,10 @@ true
     catalan
 
 Catalan's constant.
+
+!!! note
+    Even though `MathConstants.catalan isa Irrational`, it is not actually known
+    whether Catalan's constant is rational.
 
 # Examples
 ```jldoctest
