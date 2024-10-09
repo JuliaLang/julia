@@ -435,6 +435,17 @@ end
     @test argmax(sum, Iterators.product(1:5, 1:5)) == (5, 5)
 end
 
+# findextrema
+@testset "findextrema(f, domain)" begin
+    @test findextrema(-, 1:10) == ((-10, 10), (-1, 1))
+    @test findextrema(identity, [1, 2, 3, missing]) === ((missing, 4), (missing, 4))
+    @test findextrema(identity, [1, NaN, 3, missing]) === ((missing, 4), (missing, 4))
+    @test findextrema(identity, [1, missing, NaN, 3]) === ((missing, 2), (missing, 2))
+    @test findextrema(identity, [1, NaN, 3]) === ((NaN, 2), (NaN, 2))
+    @test findextrema(identity, [1, 3, NaN]) === ((NaN, 3), (NaN, 3))
+    @test findextrema(cos, 0:π/2:2π) == ((-1.0, 3), (1.0, 1))
+end
+
 # any & all
 
 @test @inferred(Union{Missing,Bool}, any([])) == false
