@@ -2280,10 +2280,10 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
         call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false), sv, #=max_methods=#1)::Future
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
-            return CallMeta(Nothing, Any, Effects(), FinalizerInfo(call.info, call.effects))
+            return CallMeta(Int, Any, Effects(), FinalizerInfo(call.info, call.effects))
         end
     end
-    return Future(CallMeta(Nothing, Any, Effects(), NoCallInfo()))
+    return Future(CallMeta(Int, Any, Effects(), NoCallInfo()))
 end
 
 function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)

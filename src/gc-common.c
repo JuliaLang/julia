@@ -392,7 +392,7 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     run_finalizers(ct, 1);
 }
 
-void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
+size_t jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE);
     arraylist_t *a = &ptls->finalizers;
@@ -418,6 +418,7 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
     items[oldlen] = v;
     items[oldlen + 1] = f;
     jl_atomic_store_release((_Atomic(size_t)*)&a->len, oldlen + 2);
+    return oldlen;
 }
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
@@ -468,19 +469,57 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
             finalize_object(&ptls2->finalizers, o, &copied_list, jl_atomic_load_relaxed(&ct->tid) != i);
     }
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
-    if (copied_list.len > 0) {
+    if (copied_list.len > 0)
         // This releases the finalizers lock.
         jl_gc_run_finalizers_in_list(ct, &copied_list);
-    }
-    else {
+    else
         JL_UNLOCK_NOGC(&finalizers_lock);
-    }
     arraylist_free(&copied_list);
 }
 
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 {
     jl_finalize_th(jl_current_task, o);
+}
+
+int erase_finalizer_at(arraylist_t *list, jl_value_t *o, size_t idx)
+{
+    void **items = list->items;
+    void *v = items[idx];
+    if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
+        for (size_t j = idx + 2; j < list->len; j += 2) {
+            items[j-2] = items[j];
+            items[j-1] = items[j+1];
+        }
+        list->len = list->len - 2;
+        return 1;
+    }
+    return 0;
+}
+
+int erase_finalizer(arraylist_t *list, jl_value_t *o)
+{
+    for (size_t i = 0; i < list->len; i += 2) {
+        if (erase_finalizer_at(list, o, i))
+            return 1;
+    }
+    return 0;
+}
+
+// Remove the finalizer for `o` from `ct->ptls->finalizers` and cancel that finalizer.
+// `lookup_idx` is the index at which the finalizer was registered in `ct->ptls->finalizers`
+// by `jl_gc_add_finalizer_` (used for the fast path).
+// Note that it is assumed that only a single finalizer exists for `o`.
+void jl_cancel_finalizer(jl_value_t *o, jl_task_t *ct, size_t lookup_idx)
+{
+    arraylist_t *list = &ct->ptls->finalizers;
+    // fast path
+    if (lookup_idx < list->len && erase_finalizer_at(list, o, lookup_idx))
+        return;
+    // slow path
+    if (erase_finalizer(list, o) || erase_finalizer(&finalizer_list_marked, o))
+        return;
+    assert(0 && "finalizer not found");
 }
 
 // =========================================================================== //

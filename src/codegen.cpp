@@ -1650,7 +1650,7 @@ static const auto &builtin_func_map() {
           { jl_f_donotdelete_addr,          new JuliaFunction<>{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
           { jl_f_compilerbarrier_addr,      new JuliaFunction<>{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
           { jl_f_finalizer_addr,            new JuliaFunction<>{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
-          { jl_f_finalize_addr,             new JuliaFunction<>{XSTR(jl_f_finalize), get_func_sig, get_func_attrs} },
+          { jl_f__cancel_finalizer_addr,    new JuliaFunction<>{XSTR(jl_f__cancel_finalizer), get_func_sig, get_func_attrs} },
           { jl_f__svec_ref_addr,            new JuliaFunction<>{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} },
           { jl_f_current_scope_addr,        new JuliaFunction<>{XSTR(jl_f_current_scope), get_func_sig, get_func_attrs} },
         };
