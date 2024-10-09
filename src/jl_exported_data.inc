@@ -33,6 +33,7 @@
     XX(jl_code_info_type) \
     XX(jl_code_instance_type) \
     XX(jl_const_type) \
+    XX(jl_constset_type) \
     XX(jl_core_module) \
     XX(jl_datatype_type) \
     XX(jl_debuginfo_type) \

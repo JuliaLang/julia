@@ -690,10 +690,14 @@ end
 end
 
 @nospecializeinfer function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
-    acp = isa(typea, Const) || isa(typea, PartialTypeVar)
-    bcp = isa(typeb, Const) || isa(typeb, PartialTypeVar)
+    acp = isa(typea, Const) || isa(typea, PartialTypeVar) || isa(typea, ConstSet)
+    bcp = isa(typeb, Const) || isa(typeb, PartialTypeVar) || isa(typeb, ConstSet)
     if acp && bcp
         typea === typeb && return typea
+
+        # if !isa(typea, PartialTypeVar) && !isa(typeb, PartialTypeVar)
+        #     return ConstSet(lattice, typea, typeb)
+        # end
     end
     wl = widenlattice(lattice)
     acp && (typea = widenlattice(wl, typea))
