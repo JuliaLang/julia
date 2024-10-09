@@ -3,14 +3,26 @@ using Test
 using InteractiveUtils
 
 function vcopyto!(a::Array{T}, b::Array{T}) where T
-    stride = natural_vecwidth(T)
-    VT = Vec{stride, T}
+    VT = preferred_vector(T)
+    stride = width(VT)
     @assert length(a) == length(b)
     @assert length(a) % stride == 0
     @inbounds for i in 1:stride:length(a)
         vec = vload(VT, a, i)
         vstore!(b, vec, i)
     end
+end
+
+# todo: noninline/mutable types?
+primitive type I256 256 end
+primitive type I512 512 end
+
+@testset "preferred_vector_width" begin
+    for T in (Int8, Int16, Int32, Int64, Int128, I256)
+        max_width = 32 # avx2
+        @test width(preferred_vector(T)) == max_width ÷ sizeof(T)
+    end
+    @test_throws ErrorException preferred_vector(I526)
 end
 
 @testset "load/store" begin

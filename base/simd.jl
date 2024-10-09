@@ -4,14 +4,31 @@ import Base: VecElement, Memory, MemoryRef
 import Base: @propagate_inbounds, @_propagate_inbounds_meta, @_boundscheck, @_noub_if_noinbounds_meta
 import Base: memoryrefget, memoryrefnew, memoryrefset!
 
+import Core.Intrinsics: preferred_vector_width
+
 export Vec
-export vload, vstore!, natural_vecwidth
+export vload, vstore!, preferred_vector, width
 
 # TODO: See C# and Co Vec type 
 # TODO: Hardware portable vector types...
 
+# TODO: tfunc support for preferred_vector_width does allow for "constant prop"
+#       but the intrinsic is not removed just yet during JIT, we should only need
+#       it for AOT or on a machine with scaleable vector types...
+
 struct Vec{N, T}
     data::NTuple{N, VecElement{T}}
+end
+
+width(::Type{<:Vec{N}}) where N = N
+width(::Vec{N}) where N = N
+
+function preferred_vector(::Type{T}) where T
+    width = preferred_vector_width(T)
+    if width === nothing
+        error("$T has no preferred_vector_width")
+    end
+    return Vec{width, T}
 end
 
 # Constructors
@@ -28,10 +45,6 @@ function Base.show(io::IO, v::Vec{N, T}) where {N, T}
     join(io, [sprint(show, x.value; context=io) for x in v.data], ", ")
     print(io, "]")
 end
-
-# Breaks with multi-versioning
-natural_vecwidth(::Type{Float32}) = 8
-natural_vecwidth(::Type{Float64}) = 4
 
 import Base: +, -, *
 
