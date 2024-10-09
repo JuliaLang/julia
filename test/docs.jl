@@ -101,7 +101,7 @@ end
 
 @test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:g]
 
 
 # issue #11548
