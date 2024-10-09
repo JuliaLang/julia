@@ -7,7 +7,8 @@ A string with metadata, in the form of annotated regions.
 
 More specifically, this is a simple wrapper around any other
 [`AbstractString`](@ref) that allows for regions of the wrapped string to be
-annotated with labeled values.
+annotated with labelled values. The underlying string can be extracted by
+calling a string constructor with the `AnnotatedString` as the argument.
 
 ```text
                            C
@@ -111,7 +112,10 @@ AnnotatedString(s::AnnotatedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Sy
 AnnotatedChar(c::AnnotatedChar, annots::Vector{Pair{Symbol, Any}}) =
     AnnotatedChar(c.char, vcat(c.annotations, annots))
 
-String(s::AnnotatedString{String}) = s.string # To avoid pointless overhead
+# To allow for generically de-annotating a string.
+(::Type{T})(s::AnnotatedString{T}) where {T <: AbstractString} = T(s.string)
+String(s::AnnotatedString{String}) = s.string # To avoid pointless overhead (and avoid ambiguity)
+AnnotatedString(s::AnnotatedString) = s # To resolve an ambiguity
 
 ## Conversion/promotion ##
 
