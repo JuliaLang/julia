@@ -214,35 +214,29 @@ function show(
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
     end
+    limit = max(0, limit-2) # quote chars
 
     # early out for short strings
-    len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
-        return show(io, str)
+    check_textwidth(str, limit) && return show(io, str)
 
     # these don't depend on string data
     units = codeunit(str) == UInt8 ? "bytes" : "code units"
     skip_text(skip) = " ⋯ $skip $units ⋯ "
-    short = length(skip_text("")) + 4 # quote chars
-    chars = max(limit, short + 1) - short # at least 1 digit
 
-    # figure out how many characters to print in elided case
-    chars -= d = ndigits(len - chars) # first adjustment
-    chars += d - ndigits(len - chars) # second if needed
-    chars = max(0, chars)
+    # longest possible replacement string for omitted chars
+    max_replacement = skip_text(ncodeunits(str) * 100) # *100 for 2 inner quote chars
 
-    # find head & tail, avoiding O(length(str)) computation
-    head = nextind(str, 0, 1 + (chars + 1) ÷ 2)
-    tail = prevind(str, len + 1, chars ÷ 2)
+    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center))
 
     # threshold: min chars skipped to make elision worthwhile
-    t = short + ndigits(len - chars) - 1
-    n = tail - head # skipped code units
-    if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
-        skip = skip_text(n)
-        show(io, SubString(str, 1:prevind(str, head)))
-        printstyled(io, skip; color=:light_yellow, bold=true)
-        show(io, SubString(str, tail))
+    afterhead = nextind(str, head)
+    n = tail - afterhead # skipped code units
+    replacement = skip_text(n)
+    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
+    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
+        show(io, str[begin:head])
+        printstyled(io, replacement; color=:light_yellow, bold=true)
+        show(io, str[tail:end])
     else
         show(io, str)
     end
