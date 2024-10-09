@@ -839,6 +839,16 @@ end
         B = Bidiagonal(dv, ev, :U)
         @test B == Matrix{eltype(B)}(B)
     end
+
+    @testset "non-standard axes" begin
+        LinearAlgebra.diagzero(T::Type, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) =
+            zeros(T, ax)
+
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        B = Bidiagonal(fill(s,4), fill(s,3), :U)
+        @test @inferred(B[2,1]) isa typeof(s)
+        @test all(iszero, B[2,1])
+    end
 end
 
 @testset "copyto!" begin

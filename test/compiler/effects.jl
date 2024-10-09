@@ -810,7 +810,12 @@ end
 #        @test !Core.Compiler.is_nothrow(effects)
 #    end
 #end
-#
+
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growbeg!, (Vector{Int}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growbeg!, (Vector{Any}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growend!, (Vector{Int}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growend!, (Vector{Any}, Int)))
+
 # tuple indexing
 # --------------
 

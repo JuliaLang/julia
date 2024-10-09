@@ -2336,6 +2336,12 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
         }
         else {
+            if (trim_may_error(ctx.params->trim)) {
+                // if we know the return type, we can assume the result is of that type
+                errs() << "ERROR: Dynamic call to setfield/modifyfield\n";
+                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+                print_stacktrace(ctx, ctx.params->trim);
+            }
             Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
@@ -4077,6 +4083,12 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
                 rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
             }
             else {
+                if (trim_may_error(ctx.params->trim)) {
+                    // if we know the return type, we can assume the result is of that type
+                    errs() << "ERROR: Dynamic call to setfield/modifyfield\n";
+                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+                    print_stacktrace(ctx, ctx.params->trim);
+                }
                 Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
                 rhs = mark_julia_type(ctx, callval, true, jl_any_type);
             }

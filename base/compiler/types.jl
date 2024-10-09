@@ -1,4 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
+
+const WorkThunk = Any
+# #@eval struct WorkThunk
+#    thunk::Core.OpaqueClosure{Tuple{Vector{Tasks}}, Bool}
+#    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
+# end
+# (p::WorkThunk)() = p.thunk()
 
 """
     AbstractInterpreter
@@ -33,11 +41,14 @@ struct StmtInfo
     used::Bool
 end
 
-struct MethodInfo
+struct SpecInfo
+    nargs::Int
+    isva::Bool
     propagate_inbounds::Bool
     method_for_inference_limit_heuristics::Union{Nothing,Method}
 end
-MethodInfo(src::CodeInfo) = MethodInfo(
+SpecInfo(src::CodeInfo) = SpecInfo(
+    Int(src.nargs), src.isva,
     src.propagate_inbounds,
     src.method_for_inference_limit_heuristics::Union{Nothing,Method})
 

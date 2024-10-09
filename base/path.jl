@@ -614,6 +614,11 @@ for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
 end
 
+# RFC3986 Section 2.1
+percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
+# RFC3986 Section 2.3
+encode_uri_component(s) = replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
+
 """
     uripath(path::AbstractString)
 
@@ -636,10 +641,6 @@ function uripath end
 
 @static if Sys.iswindows()
     function uripath(path::String)
-        percent_escape(s) = # RFC3986 Section 2.1
-            '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
-        encode_uri_component(s) = # RFC3986 Section 2.3
-            replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
         path = abspath(path)
         if startswith(path, "\\\\") # UNC path, RFC8089 Appendix E.3
             unixpath = join(eachsplit(path, path_separator_re, keepempty=false), '/')
@@ -653,10 +654,6 @@ function uripath end
     end
 else
     function uripath(path::String)
-        percent_escape(s) = # RFC3986 Section 2.1
-            '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
-        encode_uri_component(s) = # RFC3986 Section 2.3
-            replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
         localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
         host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
             distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
