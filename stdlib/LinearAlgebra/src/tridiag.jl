@@ -497,6 +497,7 @@ Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev)
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
+        issymmetric(x) || throw(ArgumentError("cannot set a diagonal entry of a SymTridiagonal to an asymmetric value"))
         @inbounds A.dv[i] = x
     else
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
