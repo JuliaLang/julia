@@ -539,7 +539,19 @@ end
 """
     connect([host], port::Integer) -> TCPSocket
 
-Connect to the host `host` on port `port`.
+Connect to the host `host` on port `port`. The default `host` is `localhost`.
+
+# Examples
+```jldoctest
+julia> server = listen(9000);
+
+julia> socket = connect(9000)
+TCPSocket(RawFD(25) open, 0 bytes waiting)
+
+julia> close(socket) # cleanup open socket so that it can be reused
+
+julia> close(server)
+```
 """
 connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
 connect(port::Integer) = connect(localhost, port)
@@ -618,6 +630,12 @@ To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 `backlog` determines how many connections can be pending (not having
 called [`accept`](@ref)) before the server will begin to
 reject them. The default value of `backlog` is 511.
+
+# Examples
+```jldoctest
+julia> server = listen(9876)
+Sockets.TCPServer(RawFD(24) active)
+```
 """
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TCPServer()
@@ -717,7 +735,7 @@ const localhost = ip"127.0.0.1"
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
-The backlog argument defines the maximum length to which the queue of pending connections for sockfd may grow.
+The `backlog` argument defines the maximum length to which the queue of pending connections for sockfd may grow.
 """
 function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
@@ -794,6 +812,16 @@ end
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
 Get the IP address and port that the given socket is bound to.
+
+# Examples
+```jldoctest
+julia> server = listen(8000);
+
+julia> socket = connect(8000);
+
+julia> getsockname(socket)
+(ip"127.0.0.1", 0x98f2)
+```
 """
 getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
 
