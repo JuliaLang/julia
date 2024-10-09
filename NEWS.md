@@ -117,6 +117,9 @@ Standard library changes
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 * `fd` returns a `RawFD` instead of an `Int` ([#55080]).
+* Empty dimensional reductions (e.g., `reduce` and `mapreduce` with the `dims` keyword
+  selecting one or more dimensions) now behave like their whole-array (`dims=:`) counterparts,
+  only returning values in unambiguous cases and erroring otherwise.
 
 #### StyledStrings
 
