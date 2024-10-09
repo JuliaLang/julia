@@ -445,7 +445,12 @@ Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for
 
 ### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
 
-Enable collecting of a heap snapshot during execution via the profiling peek mechanism.
+Enable collecting of a heap snapshot during execution via the profiling peek mechanism. Set to `1` to enable.
+See [Triggered During Execution](@ref).
+
+### [`JULIA_PROFILE_PEEK_TASK_BACKTRACES`](@id JULIA_PROFILE_PEEK_TASK_BACKTRACES)
+
+Disable printing of task backtraces via the profiling peek mechanism. Set to `0` to disable.
 See [Triggered During Execution](@ref).
 
 ### [`JULIA_TIMING_SUBSYSTEMS`](@id JULIA_TIMING_SUBSYSTEMS)
