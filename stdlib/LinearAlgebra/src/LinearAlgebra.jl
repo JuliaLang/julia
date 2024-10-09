@@ -175,6 +175,7 @@ public AbstractTriangular,
         peakflops,
         symmetric,
         symmetric_type,
+        zeroslike,
         matprod_dest
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
