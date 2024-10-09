@@ -2397,12 +2397,11 @@ const module_keys = IdDict{Module,PkgId}() # the reverse of loaded_modules
 root_module_key(m::Module) = @lock require_lock module_keys[m]
 
 function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
-    @lock require_lock begin
+    assert_havelock(require_lock)
     mods = get(loaded_precompiles, key, nothing)
     mods === nothing && return
     for mod in mods
         module_build_id(mod) == buildid && return mod
-    end
     end
 end
 
