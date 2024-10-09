@@ -2154,3 +2154,23 @@ end
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
 end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+    a = [1 2 3; 4 5 6]
+    reshaped_arrays = (
+        reshape(a, 3, 2),
+        reshape(a, (3, 2)),
+        reshape(a, big(3), big(2)),
+        reshape(a, (big(3), big(2))),
+        reshape(a, :, big(2)),
+        reshape(a, (:, big(2))),
+        reshape(a, big(3), :),
+        reshape(a, (big(3), :)),
+    )
+    @test allequal(reshaped_arrays)
+    for b ∈ reshaped_arrays
+        @test b isa Matrix{Int}
+        @test b.ref === a.ref
+    end
+end
