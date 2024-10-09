@@ -590,3 +590,6 @@ end
     names_front, names_last_n = split_rest(names, n, st...)
     return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end
+
+mapreduce(f, op, x::NamedTuple) = reduce(op, map(f, Tuple(x)))
+
