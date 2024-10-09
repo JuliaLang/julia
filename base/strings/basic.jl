@@ -634,6 +634,29 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
+
+# Julia Strings and Arrays are stored in the following way
+# | 8-Byte Type Tag|  8-Byte size   | N-Bytes of UInt8 Code units |
+# |This data is safe to read from   |<- String pointer is address of first codeunit byte
+@inline function _isascii_subqword(bytes::AbstractVector{UInt8},first,n)
+    # Loading bytes before the string is safe because the bytes in front of a string are the sure to be owned by the string object
+    # This is important because those bytes are technically owned by the same object( which if you read past the end may not be the case)
+    n_trash = 8 - n
+    #It would be nice to use reinterpret here but there is no good way to get at a negative index
+    qword = unsafe_load(Ptr{UInt64}(pointer(bytes,first - n_trash)),1)
+    qword >>= n_trash * 8
+    return iszero(qword & UInt64(0x8080808080808080))
+end
+
+@inline function _isascii_qword(qwords::AbstractVector{UInt64},first,last)
+    nqwords= last-first+1
+    rqword = zero(UInt64)
+    for i=0:nqwords-1
+        @inbounds rqword |= qwords[first+i]
+    end
+    return iszero(rqword & UInt64(0x8080808080808080))
+end
+
 #The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
 @inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
@@ -643,6 +666,36 @@ end
     end
     return  _isascii(cu,last-chunk_size+1,last)
 end
+
+function isascii(bytes::AbstractVector{UInt8}, first, last)
+    q_chunk_size = 128
+
+    n = last - first + 1
+    nqwords, epilog_bytes = (n >> 3, n & 0x07) # divrem(n,8)
+    epilog_first = last - epilog_bytes + 1
+    if epilog_bytes > 0
+        _isascii_subqword(bytes,epilog_first,epilog_bytes) || return false
+    end
+    nqwords > 0 || return true
+    nchunks, prolog_qwords = divrem(nqwords,q_chunk_size)
+
+    qwords = @inline reinterpret(UInt64, @inbounds view(bytes, first:(epilog_first - 1)))
+
+    qwords_start = 1
+    if prolog_qwords > 0
+        _isascii_qword(qwords, qwords_start, prolog_qwords) || return false
+        qwords_start = prolog_qwords +1
+    end
+
+    while nchunks > 0
+        _isascii_qword(qwords,qwords_start,qwords_start+q_chunk_size-1) || return false
+        qwords_start += q_chunk_size
+        nchunks -= 1
+    end
+    return true
+end
+isascii(bytes::AbstractVector{UInt8}) = @inline isascii(bytes, firstindex(bytes),lastindex(bytes))
+
 """
     isascii(cu::AbstractVector{CU}) where {CU <: Integer} -> Bool
 
