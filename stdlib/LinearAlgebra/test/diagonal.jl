@@ -109,8 +109,8 @@ Random.seed!(1)
     end
 
     @testset "diag" begin
-        @test_throws ArgumentError diag(D,  n+1)
-        @test_throws ArgumentError diag(D, -n-1)
+        @test isempty(@inferred diag(D,  n+1))
+        @test isempty(@inferred diag(D, -n-1))
         @test (@inferred diag(D))::typeof(dd) == dd
         @test (@inferred diag(D, 0))::typeof(dd) == dd
         @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
