@@ -1071,6 +1071,7 @@ function _growbeg!(a::Vector, delta::Integer)
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline (function()
+        @_terminates_locally_meta
         memlen = length(mem)
         if offset + len - 1 > memlen || offset < 1
             throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
