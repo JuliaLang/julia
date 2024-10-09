@@ -37,6 +37,7 @@ STATISTIC(Emitted_fptrunc, "Number of fptrunc calls emitted");
 STATISTIC(Emitted_fpext, "Number of fpext calls emitted");
 STATISTIC(Emitted_not_int, "Number of not_int calls emitted");
 STATISTIC(Emitted_have_fma, "Number of have_fma calls emitted");
+STATISTIC(Emitted_preferred_vector_width, "Number of prefferred_vector_width calls emitted");
 STATISTIC(EmittedUntypedIntrinsics, "Number of untyped intrinsics emitted");
 
 using namespace JL_I;
@@ -1437,6 +1438,52 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt1Ty(ctx.builder.getContext()));
         auto ret = ctx.builder.CreateCall(intr);
         return mark_julia_type(ctx, ret, false, jl_bool_type);
+    }
+
+    case preferred_vector_width: {
+        ++Emitted_preferred_vector_width;
+        assert(nargs == 1);
+        const jl_cgval_t &x = argv[0];
+        if (!x.constant || !jl_is_datatype(x.constant))
+            return emit_runtime_call(ctx, f, argv, nargs);
+        jl_datatype_t *dt = (jl_datatype_t*) x.constant;
+
+        // select the appropriated overloaded intrinsic
+        std::string intr_name = "julia.cpu.preferred_vector_width.";
+        switch (jl_datatype_size(dt)) {
+            case 1: {
+                intr_name += "b1";
+                break;
+            case 2: {
+                intr_name += "b2";
+                break;
+            }
+            case 4: {
+                intr_name += "b4";
+                break;
+            }
+            case 8: {
+                intr_name += "b8";
+                break;
+            }
+            case 16: {
+                intr_name += "b16";
+                break;
+            }
+            default:
+                return emit_runtime_call(ctx, f, argv, nargs);
+            }
+        }
+
+#ifdef _P64
+        FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt64Ty(ctx.builder.getContext()));
+        auto ret = ctx.builder.CreateCall(intr);
+        return mark_julia_type(ctx, ret, false, jl_int64_type);
+#else
+        FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt32Ty(ctx.builder.getContext()));
+        auto ret = ctx.builder.CreateCall(intr);
+        return mark_julia_type(ctx, ret, false, jl_int32_type);
+#endif
     }
 
     default: {

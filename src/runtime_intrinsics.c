@@ -1766,6 +1766,21 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_false;
 }
 
+JL_DLLEXPORT jl_value_t *jl_preferred_vector_width(jl_value_t *typ)
+{
+    JL_TYPECHK(preferred_vector_width, datatype, typ); // TODO what about float16/bfloat16?
+    jl_datatype_t* dt = (jl_datatype_t*)typ;
+    int sz = jl_datatype_size(dt);
+    int width = 32 / sz;
+    if (width == 0)
+        return jl_nothing;
+#ifdef _P64
+    return jl_box_int64(width);
+#else
+    return jl_box_int32(width);
+#endif
+}
+
 JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
 {
     JL_TYPECHK(add_ptr, pointer, ptr);
