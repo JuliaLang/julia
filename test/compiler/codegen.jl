@@ -870,3 +870,6 @@ function foonopreds()
     pkgid.uuid !== nothing ? pkgid.uuid : false
 end
 @test foonopreds() !== nothing
+
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
