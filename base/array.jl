@@ -984,6 +984,7 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
+    @_propagate_inbounds_meta
     @inline
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i)
@@ -995,6 +996,7 @@ function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+    @_propagate_inbounds_meta
     @inline
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i1, i2, I...)
