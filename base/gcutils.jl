@@ -98,7 +98,7 @@ end
 
 Immediately run finalizers registered for object `x`.
 """
-finalize(@nospecialize(o)) = Core.finalize(o)
+finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Any, Any,), current_task(), o)
 
 """
     Base.GC
