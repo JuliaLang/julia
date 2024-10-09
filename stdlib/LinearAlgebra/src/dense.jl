@@ -560,7 +560,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
 
     # For integer powers, use power_by_squaring
     isinteger(p) && return integerpow(A, p)
-
+    isinteger(p*2) && return A^floor(Integer, p)*sqrt(A)
     # If possible, use diagonalization
     if ishermitian(A)
         return (Hermitian(A)^p)
