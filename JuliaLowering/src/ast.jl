@@ -283,7 +283,7 @@ function _match_srcref(ex)
     end
 end
 
-function _match_kind_ex(defs, srcref, ex)
+function _match_kind(f::Function, srcref, ex)
     kws = []
     if Meta.isexpr(ex, :call)
         kind = esc(ex.args[1])
@@ -296,22 +296,26 @@ function _match_kind_ex(defs, srcref, ex)
             pushfirst!(kws, esc(pop!(args)))
         end
         if length(args) == 1
-            srcref = Symbol("srcref_$(length(defs))")
-            push!(defs, :($srcref = $(_match_srcref(args[1]))))
+            srcref_tmp = gensym("srcref")
+            return quote
+                $srcref_tmp = $(_match_srcref(args[1]))
+                $(f(kind, srcref_tmp, kws))
+            end
         elseif length(args) > 1
             error("Unexpected: extra srcref argument in `$ex`?")
         end
     else
         kind = esc(ex)
     end
-    kind, srcref, kws
+    f(kind, srcref, kws)
 end
 
-function _expand_ast_tree(defs, ctx, srcref, tree)
+function _expand_ast_tree(ctx, srcref, tree)
     if Meta.isexpr(tree, :(::))
         # Leaf node
-        kind, srcref, kws = _match_kind_ex(defs, srcref, tree.args[2])
-        :(makeleaf($ctx, $srcref, $kind, $(esc(tree.args[1])), $(kws...)))
+        _match_kind(srcref, tree.args[2]) do kind, srcref, kws
+            :(makeleaf($ctx, $srcref, $kind, $(esc(tree.args[1])), $(kws...)))
+        end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
@@ -327,20 +331,22 @@ function _expand_ast_tree(defs, ctx, srcref, tree)
                 push!(flatargs, a)
             end
         end
-        kind, srcref, kws = _match_kind_ex(defs, srcref, flatargs[1])
-        children = map(a->_expand_ast_tree(defs, ctx, srcref, a), flatargs[2:end])
-        :(makenode($ctx, $srcref, $kind, $(children...), $(kws...)))
-    elseif Meta.isexpr(tree, :(=))
-        lhs = esc(tree.args[1])
-        rhs = _expand_ast_tree(defs, ctx, srcref, tree.args[2])
-        ssadef = Symbol("ssadef$(length(defs))")
-        push!(defs, :(($lhs, $ssadef) = assign_tmp($ctx, $rhs)))
-        ssadef
-    elseif Meta.isexpr(tree, :if)
-        Expr(:if, esc(tree.args[1]),
-             map(a->_expand_ast_tree(defs, ctx, srcref, a), tree.args[2:end])...)
-    elseif Meta.isexpr(tree, (:block, :tuple))
-        Expr(tree.head, map(a->_expand_ast_tree(defs, ctx, srcref, a), tree.args)...)
+        _match_kind(srcref, flatargs[1]) do kind, srcref, kws
+            children = map(a->_expand_ast_tree(ctx, srcref, a), flatargs[2:end])
+            :(makenode($ctx, $srcref, $kind, $(children...), $(kws...)))
+        end
+    elseif Meta.isexpr(tree, :(:=))
+        lhs = tree.args[1]
+        rhs = _expand_ast_tree(ctx, srcref, tree.args[2])
+        ssadef = gensym("ssadef")
+        quote
+            ($(esc(lhs)), $ssadef) = assign_tmp($ctx, $rhs, $(string(lhs)))
+            $ssadef
+        end
+    elseif Meta.isexpr(tree, :macrocall)
+        esc(tree)
+    elseif tree isa Expr
+        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a), tree.args)...)
     else
         esc(tree)
     end
@@ -359,7 +365,7 @@ The `tree` contains syntax of the following forms:
 * `value :: kind`        - construct a leaf node
 * `ex => kind`           - convert a leaf node to the given `kind`, copying attributes
                            from it and also using `ex` as the source reference.
-* `var=ex`               - Set `var=ssavar(...)` and return an assignment node `\$var=ex`.
+* `var := ex`            - Set `var=ssavar(...)` and return an assignment node `\$var=ex`.
                            `var` may be used outside `@ast`
 * `cond ? ex1 : ex2`     - Conditional; `ex1` and `ex2` will be recursively expanded.
                            `if ... end` and `if ... else ... end` also work with this.
@@ -399,13 +405,10 @@ to indicate that the "primary" location of the source is the location where
 ```
 """
 macro ast(ctx, srcref, tree)
-    defs = []
-    push!(defs, :(ctx = $(esc(ctx))))
-    push!(defs, :(srcref = $(_match_srcref(srcref))))
-    ex = _expand_ast_tree(defs, :ctx, :srcref, tree)
     quote
-        $(defs...)
-        $ex
+        ctx = $(esc(ctx))
+        srcref = $(_match_srcref(srcref))
+        $(_expand_ast_tree(:ctx, :srcref, tree))
     end
 end
 

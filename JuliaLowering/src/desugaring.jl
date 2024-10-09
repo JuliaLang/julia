@@ -516,7 +516,7 @@ function expand_setindex(ctx, ex)
     end
     @ast ctx ex [K"block"
         stmts...
-        expand_forms_2(ctx, @ast ctx ex [K"call"
+        expand_forms_2(ctx, [K"call"
             "setindex!"::K"top"
             arr
             rhs
@@ -707,9 +707,8 @@ function expand_let(ctx, ex)
             lhs = binding[1]
             rhs = binding[2]
             if is_sym_decl(lhs)
-                blk = @ast ctx binding [
-                    K"block"
-                    tmp=rhs
+                blk = @ast ctx binding [K"block"
+                    tmp := rhs
                     [K"scope_block"(ex, scope_type=scope_type)
                         # TODO: Use single child for scope_block?
                         [K"local_def"(lhs) lhs] # TODO: Use K"local" with attr?
@@ -830,10 +829,10 @@ end
 
 function expand_kw_call(ctx, srcref, farg, args, kws)
     @ast ctx srcref [K"block"
-        func = farg
-        kw_container = expand_named_tuple(ctx, srcref, kws;
-                                          field_name="keyword argument",
-                                          element_name="keyword argument")
+        func := farg
+        kw_container := expand_named_tuple(ctx, srcref, kws;
+                                           field_name="keyword argument",
+                                           element_name="keyword argument")
         if all(kind(kw) == K"..." for kw in kws)
             # In this case need to check kws nonempty at runtime
             [K"if"

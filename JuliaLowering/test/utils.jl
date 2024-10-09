@@ -29,13 +29,10 @@ function _source_node(graph, src)
 end
 
 macro ast_(tree)
-    defs = []
-    ex = JuliaLowering._expand_ast_tree(defs, :graph, :srcref, tree)
     quote
         graph = _ast_test_graph()
         srcref = _source_node(graph, $(QuoteNode(__source__)))
-        $(defs...)
-        $ex
+        $(JuliaLowering._expand_ast_tree(:graph, :srcref, tree))
     end
 end
 
