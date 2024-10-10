@@ -447,10 +447,10 @@ function take!(io::GenericIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         nbytes = io.size - io.offset
-        data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
+        data = io.data[io.offset+1:io.offset+nbytes]
     else
         nbytes = bytesavailable(io)
-        data = read!(io, StringVector(nbytes))
+        data = read!(io, Vector{UInt8}(undef, nbytes))
     end
     if io.writable
         io.ptr = 1
@@ -464,16 +464,16 @@ function take!(io::IOBuffer)
     if io.seekable
         nbytes = filesize(io)
         if nbytes == 0 || io.reinit
-            data = StringVector(0)
+            data = UInt8[]
         elseif io.writable
             data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
         else
-            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
+            data = io.data[io.offset+1:io.offset+nbytes]
         end
     else
         nbytes = bytesavailable(io)
         if nbytes == 0
-            data = StringVector(0)
+            data = UInt8[]
         elseif io.writable
             data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
@@ -561,9 +561,9 @@ function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::In
     read_sub(io, b, 1, nr)
     return nr
 end
-read(io::GenericIOBuffer) = read!(io, StringVector(bytesavailable(io)))
+read(io::GenericIOBuffer) = read!(io, Vector{UInt8}(undef, bytesavailable(io)))
 readavailable(io::GenericIOBuffer) = read(io)
-read(io::GenericIOBuffer, nb::Integer) = read!(io, StringVector(min(nb, bytesavailable(io))))
+read(io::GenericIOBuffer, nb::Integer) = read!(io, Vector{UInt8}(undef, min(nb, bytesavailable(io))))
 
 function occursin(delim::UInt8, buf::IOBuffer)
     p = pointer(buf.data, buf.ptr)

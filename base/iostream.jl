@@ -561,7 +561,7 @@ function read(s::IOStream)
     @_lock_ios s begin
         nb = ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
         if nb != -1
-            b = StringVector(nb)
+            b = Vector{UInt8}(undef, nb)
             readbytes_all!(s, b, nb)
         else
             sz = try # filesize is just a hint, so ignore if it fails
@@ -576,7 +576,7 @@ function read(s::IOStream)
                     sz -= pos
                 end
             end
-            b = StringVector(sz < 0 ? 1024 : sz)
+            b = Vector{UInt8}(undef, sz < 0 ? 1024 : sz)
             nr = readbytes_all!(s, b, sz < 0 ? typemax(Int) : sz)
             resize!(b, nr)
         end
