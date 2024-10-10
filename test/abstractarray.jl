@@ -2154,3 +2154,17 @@ end
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
 end
+
+
+macro foo_54417(x,i)
+    quote
+        val = $x
+        @inbounds $x[$i]
+        val
+    end
+end
+
+@testset "inbounds hygien confusion" begin
+    z = [1,2,3]
+    @test (@foo_54417 z 1) == z
+end
