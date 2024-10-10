@@ -542,6 +542,8 @@ _crc32c(x::UInt16, crc::UInt32=0x00000000) =
 _crc32c(x::UInt8, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt8}, Csize_t), crc, x, 1)
 
+function kwdef_defaults end
+
 """
     @kwdef typedef
 
@@ -603,6 +605,7 @@ macro kwdef(expr)
     if !isempty(parameters)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
+            S = T
             sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
             body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
             kwdefs = Expr(:function, sig, body)
@@ -630,6 +633,7 @@ macro kwdef(expr)
     return quote
         $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
+        $(esc(:($Base.kwdef_defaults)))(::Type{$(esc(S))}) = (;$(filter(p -> isexpr(p, :kw), parameters)...))
     end
 end
 
