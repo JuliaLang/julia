@@ -876,9 +876,43 @@ macro nospecializeinfer(ex)
 end
 
 """
-    @propagate_inbounds
+    Base.@propagate_inbounds function f(args...)
+        ...
+    end
+    Base.@propagate_inbounds f(args...) = ...
 
-Tells the compiler to inline a function while retaining the caller's inbounds context.
+Tells the compiler to inline `f` while retaining the caller's `@inbounds` context.
+This macro can be used to pass along the `@inbounds` context within the caller of `f` to
+callee methods that are invoked within `f`. Without the `@propagate_inbounds` annotation,
+the caller's `@inbounds` context propagates only one function call layer deep.
+
+# Example
+
+```julia-repl
+julia> call_func(func, args...) = func(args...);
+
+julia> code_typed((Vector{Any},Int)) do a, i
+           # This `@inbounds` context does not propagate to `getindex`,
+           # and thus the bounds check for `arrayref` is not turned off.
+           @inbounds call_func(getindex, a, i)
+       end |> only
+CodeInfo(
+1 ─ %1 = Base.arrayref(true, a, i)::Any
+└──      return %1
+) => Any
+
+julia> Base.@propagate_inbounds call_func(func, args...) = func(args...);
+
+julia> code_typed((Vector{Any},Int)) do a, i
+           # Now this `@inbounds` context propagates to `getindex`,
+           # and the bounds check for `arrayref` is turned off.
+           @inbounds call_func(getindex, a, i)
+       end |> only
+CodeInfo(
+1 ─ %1 = Base.arrayref(false, a, i)::Any
+└──      return %1
+) => Any
+```
 """
 macro propagate_inbounds(ex)
     if isa(ex, Expr)
