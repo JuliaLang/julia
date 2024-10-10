@@ -1625,19 +1625,16 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     foreach(note_defuse!, defuse.defs)
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
+    # Figure out the exact statement where we're going to inline the finalizer.
+    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
+
+    current_task_ssa = nothing
     if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = reachable_blocks(ir.cfg, finalizer_bb, insert_bb)
 
         # Check #3
-        function check_range_nothrow(s::Int, e::Int)
-            return all(s:e) do sidx::Int
-                sidx == finalizer_idx && return true
-                sidx == alloc_idx && return true
-                return is_nothrow(ir, SSAValue(sidx))
-            end
-        end
         for bb in blocks
             range = ir.cfg.blocks[bb].stmts
             s, e = first(range), last(range)
@@ -1648,18 +1645,33 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
             if bb == finalizer_bb
                 s = finalizer_idx
             end
-            check_range_nothrow(s, e) || return nothing
+            all(s:e) do sidx::Int
+                sidx == finalizer_idx && return true
+                sidx == alloc_idx && return true
+                return is_nothrow(ir, SSAValue(sidx))
+            end && continue
+
+            # An exception may be thrown between the finalizer registration and the point
+            # where the object’s lifetime ends (`insert_idx`): In such cases, we can’t
+            # remove the finalizer registration, but we can still inline the finalizer
+            # with inserting `Core._cancel_finalizer` at the end.
+            # Here, prepare a reference to the current task object that should be passed to
+            # `Core._cancel_finalizer` and insert it into `Core.finalizer` so that the
+            # finalizer is added to the ptls of the current task.
+            current_task_stmt = Expr(:foreigncall, QuoteNode(:jl_get_current_task),
+                Core.Ref{Core.Task}, Core.svec(), 0, QuoteNode(:ccall))
+            newinst = NewInstruction(current_task_stmt, Core.Task)
+            current_task_ssa = insert_node!(ir, finalizer_idx, newinst)
+            push!(finalizer_stmt.args, current_task_ssa)
+            break
         end
     end
 
-    # Ok, legality check complete. Figure out the exact statement where we're
-    # going to inline the finalizer.
     loc = insert_idx === nothing ? first(ir.cfg.blocks[insert_bb].stmts) : insert_idx::Int
     attach_after = insert_idx !== nothing
-
-    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
-    argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
     flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    alloc_obj = finalizer_stmt.args[3]
+    argexprs = Any[finalizer_stmt.args[2], alloc_obj]
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
@@ -1677,8 +1689,16 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
         insert_node!(ir, loc, newinst, attach_after)
     end
-    # Erase the call to `finalizer`
-    ir[SSAValue(finalizer_idx)][:stmt] = nothing
+    cancel_registration = current_task_ssa !== nothing
+    if cancel_registration
+        lookup_idx_ssa = SSAValue(finalizer_idx)
+        finalize_call = Expr(:call, GlobalRef(Core, :_cancel_finalizer), alloc_obj, current_task_ssa, lookup_idx_ssa)
+        newinst = add_flag(NewInstruction(finalize_call, Nothing), flag)
+        insert_node!(ir, loc, newinst, #=attach_after=#true)
+    else
+        # Erase the call to `finalizer`
+        ir[SSAValue(finalizer_idx)][:stmt] = nothing
+    end
     return nothing
 end
 

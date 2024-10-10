@@ -2004,9 +2004,25 @@ JL_CALLABLE(jl_f_compilerbarrier)
 JL_CALLABLE(jl_f_finalizer)
 {
     // NOTE the compiler may temporarily insert additional argument for the later inlining pass
-    JL_NARGS(finalizer, 2, 4);
+    JL_NARGS(finalizer, 2, 5);
+    if (nargs == 5 && jl_is_task(args[4]))
+        // There are cases where the compiler inserts `current_task` as the 5th argument,
+        // and in such cases, the finalizer is added to the `ptls` of that task.
+        // This task is later referenced by `_cancel_finalizer`.
+        return jl_box_long(jl_gc_add_finalizer_(((jl_task_t*)args[4])->ptls, args[1], args[0]));
     jl_task_t *ct = jl_current_task;
-    jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);
+    return jl_box_long(jl_gc_add_finalizer_(ct->ptls, args[1], args[0]));
+}
+
+JL_CALLABLE(jl_f__cancel_finalizer)
+{
+    JL_NARGS(_cancel_finalizer, 3, 3);
+    JL_TYPECHK(_cancel_finalizer, task, args[1])
+    JL_TYPECHK(_cancel_finalizer, long, args[2])
+    jl_value_t *o = args[0];
+    jl_task_t *ct = (jl_task_t*)args[1];
+    size_t lookup_idx = jl_unbox_long(args[2]);
+    jl_cancel_finalizer(o, ct, lookup_idx);
     return jl_nothing;
 }
 
@@ -2442,6 +2458,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
     add_builtin_func("finalizer", jl_f_finalizer);
+    add_builtin_func("_cancel_finalizer", jl_f__cancel_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
     jl_builtin_current_scope = add_builtin_func("current_scope", jl_f_current_scope);
