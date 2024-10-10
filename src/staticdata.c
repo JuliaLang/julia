@@ -913,7 +913,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
-        assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
+        assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v) || jl_is_module(v));
 
     if (layout->npointers == 0) {
         // bitstypes do not require recursion
