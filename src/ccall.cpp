@@ -1606,6 +1606,12 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ctx.builder.CreateCall(pauseinst);
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);
+        } else if (ctx.emission_context.TargetTriple.isPPC64()) {
+            auto hintinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "or 27,27,27",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(hintinst);
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
         } else if (ctx.emission_context.TargetTriple.isAArch64()
                     || (ctx.emission_context.TargetTriple.isARM()
                         && ctx.emission_context.TargetTriple.getSubArch() != Triple::SubArchType::NoSubArch

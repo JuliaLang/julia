@@ -229,6 +229,10 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 #  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
+#elif defined(_CPU_PPC64_)
+#  define jl_cpu_pause() __asm__ volatile ("or 27,27,27" ::: "memory")
+#  define jl_cpu_wake() ((void)0)
+#  define JL_CPU_WAKE_NOOP 1
 #else
 #  define jl_cpu_pause() ((void)0)
 #  define jl_cpu_suspend() ((void)0)
