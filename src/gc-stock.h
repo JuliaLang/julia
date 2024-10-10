@@ -524,7 +524,10 @@ extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
-extern _Atomic(int) gc_n_threads_sweeping;
+extern _Atomic(int) gc_n_threads_sweeping_pools;
+extern _Atomic(int) gc_n_threads_sweeping_stacks;
+extern _Atomic(int) gc_ptls_sweep_idx;
+extern _Atomic(int) gc_stack_free_idx;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -535,7 +538,7 @@ void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
-void sweep_stack_pools(void) JL_NOTSAFEPOINT;
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages
