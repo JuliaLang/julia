@@ -7,7 +7,7 @@ Profiling support.
 
 ## CPU profiling
 - `@profile foo()` to profile a specific call.
-- `Profile.print()` to print the report.
+- `Profile.print()` to print the report. Paths are clickable links in supported terminals and specialized for JULIA_EDITOR etc.
 - `Profile.clear()` to clear the buffer.
 - Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
 
@@ -198,7 +198,9 @@ const META_OFFSET_THREADID = 5
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used.
+will be used. Paths are clickable links in supported terminals and
+specialized for [`JULIA_EDITOR`](@ref) with line numbers, or just file
+links if no editor is set.
 
 The keyword arguments can be any combination of:
 
@@ -807,26 +809,35 @@ end
 # make a terminal-clickable link to the file and linenum.
 # Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
 function editor_link(path::String, linenum::Int)
-    editor = get(ENV, "JULIA_EDITOR", "")
-
-    if editor == "code"
-        return "vscode://file/$path:$linenum"
-    elseif editor == "subl" || editor == "sublime_text"
-        return "subl://$path:$linenum"
-    elseif editor == "idea" || occursin("idea", editor)
-        return "idea://open?file=$path&line=$linenum"
-    elseif editor == "pycharm"
-        return "pycharm://open?file=$path&line=$linenum"
-    elseif editor == "atom"
-        return "atom://core/open/file?filename=$path&line=$linenum"
-    elseif editor == "emacsclient"
-        return "emacs://open?file=$path&line=$linenum"
-    elseif editor == "vim" || editor == "nvim"
-        return "vim://open?file=$path&line=$linenum"
-    else
-        # TODO: convert the path to a generic URI (line numbers are not supported by generic URI)
-        return path
+    # Note: the editor path can include spaces (if escaped) and flags.
+    editor = nothing
+    for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
+        str = get(ENV, var, nothing)
+        str isa String || continue
+        editor = str
+        break
     end
+    path_encoded = Base.Filesystem.encode_uri_component(path)
+    if editor !== nothing
+        if editor == "code"
+            return "vscode://file/$path_encoded:$linenum"
+        elseif editor == "subl" || editor == "sublime_text"
+            return "subl://open?url=file://$path_encoded&line=$linenum"
+        elseif editor == "idea" || occursin("idea", editor)
+            return "idea://open?file=$path_encoded&line=$linenum"
+        elseif editor == "pycharm"
+            return "pycharm://open?file=$path_encoded&line=$linenum"
+        elseif editor == "atom"
+            return "atom://core/open/file?filename=$path_encoded&line=$linenum"
+        elseif editor == "emacsclient" || editor == "emacs"
+            return "emacs://open?file=$path_encoded&line=$linenum"
+        elseif editor == "vim" || editor == "nvim"
+            # Note: Vim/Nvim may not support standard URI schemes without specific plugins
+            return "vim://open?file=$path_encoded&line=$linenum"
+        end
+    end
+    # fallback to generic URI, but line numbers are not supported by generic URI
+    return Base.Filesystem.uripath(path)
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},

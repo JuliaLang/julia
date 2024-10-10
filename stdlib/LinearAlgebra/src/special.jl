@@ -112,6 +112,8 @@ for op in (:+, :-)
     end
 end
 
+(*)(Da::Diagonal, A::BandedMatrix, Db::Diagonal) = _tri_matmul(Da, A, Db)
+
 # disambiguation between triangular and banded matrices, banded ones "dominate"
 _mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))

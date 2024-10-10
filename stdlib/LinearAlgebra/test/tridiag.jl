@@ -505,6 +505,9 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+    A[1,1] = Symmetric(2M)
+    @test A[1,1] == Symmetric(2M)
+    @test_throws ArgumentError A[1,1] = M
 
     @test tr(A) == sum(diag(A))
     @test issymmetric(tr(A))

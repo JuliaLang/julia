@@ -236,7 +236,7 @@ mutable struct InferenceState
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
-    method_info::MethodInfo
+    spec_info::SpecInfo
 
     #= intermediate states for local abstract interpretation =#
     currbb::Int
@@ -251,6 +251,7 @@ mutable struct InferenceState
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
+    tasks::Vector{WorkThunk}
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
@@ -293,7 +294,7 @@ mutable struct InferenceState
         sptypes = sptypes_from_meth_instance(mi)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
-        method_info = MethodInfo(src)
+        spec_info = SpecInfo(src)
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
@@ -328,6 +329,7 @@ mutable struct InferenceState
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
         callstack = AbsIntState[]
+        tasks = WorkThunk[]
 
         valid_worlds = WorldRange(1, get_world_counter())
         bestguess = Bottom
@@ -349,9 +351,9 @@ mutable struct InferenceState
         restrict_abstract_call_sites = isa(def, Module)
 
         this = new(
-            mi, world, mod, sptypes, slottypes, src, cfg, method_info,
+            mi, world, mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
+            tasks, pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
@@ -789,7 +791,7 @@ end
 
 # TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
 mutable struct IRInterpretationState
-    const method_info::MethodInfo
+    const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
     const world::UInt
@@ -800,13 +802,14 @@ mutable struct IRInterpretationState
     const ssa_refined::BitSet
     const lazyreachability::LazyCFGReachability
     valid_worlds::WorldRange
+    const tasks::Vector{WorkThunk}
     const edges::Vector{Any}
     callstack #::Vector{AbsIntState}
     frameid::Int
     parentid::Int
 
     function IRInterpretationState(interp::AbstractInterpreter,
-        method_info::MethodInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
+        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
         world::UInt, min_world::UInt, max_world::UInt)
         curridx = 1
         given_argtypes = Vector{Any}(undef, length(argtypes))
@@ -825,10 +828,11 @@ mutable struct IRInterpretationState
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, valid_worlds, edges, callstack, 0, 0)
+        return new(spec_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, valid_worlds, tasks, edges, callstack, 0, 0)
     end
 end
 
@@ -841,13 +845,12 @@ function IRInterpretationState(interp::AbstractInterpreter,
     else
         isa(src, CodeInfo) || return nothing
     end
-    method_info = MethodInfo(src)
+    spec_info = SpecInfo(src)
     ir = inflate_ir(src, mi)
     argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
-    return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
+    return IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end
-
 
 # AbsIntState
 # ===========
@@ -870,6 +873,7 @@ function print_callstack(frame::AbsIntState)
         print(frame_instance(sv))
         is_cached(sv) || print("  [uncached]")
         sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
+        isempty(callers_in_cycle(sv)) || print(" [cycle=", sv.cycleid, "]")
         println()
         @assert sv.frameid == idx
     end
@@ -922,11 +926,11 @@ is_constproped(::IRInterpretationState) = true
 is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
 is_cached(::IRInterpretationState) = false
 
-method_info(sv::InferenceState) = sv.method_info
-method_info(sv::IRInterpretationState) = sv.method_info
+spec_info(sv::InferenceState) = sv.spec_info
+spec_info(sv::IRInterpretationState) = sv.spec_info
 
-propagate_inbounds(sv::AbsIntState) = method_info(sv).propagate_inbounds
-method_for_inference_limit_heuristics(sv::AbsIntState) = method_info(sv).method_for_inference_limit_heuristics
+propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
+method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
 
 frame_world(sv::InferenceState) = sv.world
 frame_world(sv::IRInterpretationState) = sv.world
@@ -994,7 +998,10 @@ of the same cycle, only if it is part of a cycle with multiple frames.
 function callers_in_cycle(sv::InferenceState)
     callstack = sv.callstack::Vector{AbsIntState}
     cycletop = cycleid = sv.cycleid
-    while cycletop < length(callstack) && (callstack[cycletop + 1]::InferenceState).cycleid == cycleid
+    while cycletop < length(callstack)
+        frame = callstack[cycletop + 1]
+        frame isa InferenceState || break
+        frame.cycleid == cycleid || break
         cycletop += 1
     end
     return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
@@ -1054,6 +1061,7 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
         effects = Effects(effects; effect_free=ALWAYS_TRUE)
     end
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+    nothing
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
@@ -1116,3 +1124,90 @@ function get_max_methods_for_module(mod::Module)
     max_methods < 0 && return nothing
     return max_methods
 end
+
+"""
+    Future{T}
+
+Delayed return value for a value of type `T`, similar to RefValue{T}, but
+explicitly represents completed as a `Bool` rather than as `isdefined`.
+Set once with `f[] = v` and accessed with `f[]` afterwards.
+
+Can also be constructed with the `completed` flag value and a closure to
+produce `x`, as well as the additional arguments to avoid always capturing the
+same couple of values.
+"""
+struct Future{T}
+    later::Union{Nothing,RefValue{T}}
+    now::Union{Nothing,T}
+    Future{T}() where {T} = new{T}(RefValue{T}(), nothing)
+    Future{T}(x) where {T} = new{T}(nothing, x)
+    Future(x::T) where {T} = new{T}(nothing, x)
+end
+isready(f::Future) = f.later === nothing
+getindex(f::Future{T}) where {T} = (later = f.later; later === nothing ? f.now::T : later[])
+setindex!(f::Future, v) = something(f.later)[] = v
+convert(::Type{Future{T}}, x) where {T} = Future{T}(x) # support return type conversion
+convert(::Type{Future{T}}, x::Future) where {T} = x::Future{T}
+function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntState) where {T}
+    if immediate
+        return Future{T}(f(interp, sv))
+    else
+        @assert applicable(f, interp, sv)
+        result = Future{T}()
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(interp, sv)
+            return true
+        end)
+        return result
+    end
+end
+function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntState) where {T, S}
+    later = prev.later
+    if later === nothing
+        return Future{T}(f(prev[], interp, sv))
+    else
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
+        result = Future{T}()
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(later[], interp, sv) # capture just later, instead of all of prev
+            return true
+        end)
+        return result
+    end
+end
+
+
+"""
+    doworkloop(args...)
+
+Run a tasks inside the abstract interpreter, returning false if there are none.
+Tasks will be run in DFS post-order tree order, such that all child tasks will
+be run in the order scheduled, prior to running any subsequent tasks. This
+allows tasks to generate more child tasks, which will be run before anything else.
+Each task will be run repeatedly when returning `false`, until it returns `true`.
+"""
+function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
+    tasks = sv.tasks
+    prev = length(tasks)
+    prev == 0 && return false
+    task = pop!(tasks)
+    completed = task(interp, sv)
+    tasks = sv.tasks # allow dropping gc root over the previous call
+    completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
+    completed || push!(tasks, task)
+    # efficient post-order visitor: items pushed are executed in reverse post order such
+    # that later items are executed before earlier ones, but are fully executed
+    # (including any dependencies scheduled by them) before going on to the next item
+    reverse!(tasks, #=start=#prev)
+    return true
+end
+
+
+#macro workthunk(name::Symbol, body)
+#    name = esc(name)
+#    body = esc(body)
+#    return replace_linenums!(
+#        :(function $name($(esc(interp)), $(esc(sv)))
+#              $body
+#          end), __source__)
+#end
