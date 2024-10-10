@@ -1,3 +1,6 @@
+;; Julia lowering/expansion
+;; entry points at bottom of file
+
 ;; ignored variable name. TODO replace with _?
 (define UNUSED '|#unused#|)
 
@@ -3488,6 +3491,9 @@ end
 f(x) = yt(x)
 |#
 
+(define (typed-box (typ '(core Any)))
+  `(call (core apply_type) (core Box) ,typ))
+
 (define (type-for-closure-parameterized name P names fields types super)
   (let ((n (length P))
         (s (make-ssavalue)))
@@ -3504,7 +3510,7 @@ f(x) = yt(x)
                 (call (core _typebody!) ,s (call (core svec) ,@types))
                 (return (null)))))))))
 
-(define (type-for-closure name fields super)
+(define (type-for-closure name fields types super)
   (let ((s (make-ssavalue)))
     `((thunk ,(linearize `(lambda ()
        (() () 0 ())
@@ -3516,7 +3522,7 @@ f(x) = yt(x)
               (call (core _setsuper!) ,s ,super)
               (const (globalref (thismodule) ,name) ,s)
               (call (core _typebody!) ,s
-                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
+                    (call (core svec) ,@types))
               (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
@@ -3752,7 +3758,7 @@ f(x) = yt(x)
             (map (lambda (arg)
                    (let ((vi (assq arg vis)))
                      (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
-                         `((= ,arg (call (core Box) ,arg)))
+                         `((= ,arg (call ,(typed-box (vinfo:type vi)) ,arg)))
                          '())))
                  args)))))
 
@@ -4017,12 +4023,12 @@ f(x) = yt(x)
           ((local-def) ;; make new Box for local declaration of defined variable
            (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
-                 `(= ,(cadr e) (call (core Box)))
+                 `(= ,(cadr e) (call ,(typed-box (vinfo:type vi))))
                  '(null))))
           ((local) ;; convert local declarations to newvar statements
            (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
-                 `(= ,(cadr e) (call (core Box)))
+                 `(= ,(cadr e) (call ,(typed-box (vinfo:type vi))))
                  (if (vinfo:never-undef vi)
                      '(null)
                      `(newvar ,(cadr e))))))
@@ -4206,14 +4212,15 @@ f(x) = yt(x)
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
-                                                       '(core Box)
+                                                      (let ((vi (assq v (car (lam:vinfo lam)))) (cv (assq v (cadr (lam:vinfo lam)))))
+                                                        (typed-box (vinfo:type (or vi cv))))
                                                        (make-ssavalue)))
                                                  capt-vars))
                                 (para (append closure-param-syms
                                               (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
                            (if (null? para)
-                               (type-for-closure type-name capt-vars '(core Function))
+                               (type-for-closure type-name capt-vars fieldtypes '(core Function))
                                (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
                         (mk-method ;; expression to make the method
                          (if short '()
