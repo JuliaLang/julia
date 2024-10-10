@@ -1523,7 +1523,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     if code isa CodeInstance
         if use_const_api(code)
             # No code in the function - Nothing to do
-            add_inlining_backedge!(et, mi)
+            add_inlining_edge!(et, mi)
             return true
         end
         src = @atomic :monotonic code.inferred
@@ -1538,7 +1538,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     length(src.cfg.blocks) == 1 || return false
 
     # Ok, we're committed to inlining the finalizer
-    add_inlining_backedge!(et, mi)
+    add_inlining_edge!(et, mi)
 
     # TODO: Should there be a special line number node for inlined finalizers?
     inline_at = ir[SSAValue(idx)][:line]

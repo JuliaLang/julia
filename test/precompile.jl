@@ -802,6 +802,7 @@ precompile_test_harness("code caching") do dir
     mispecs = minternal.specializations::Core.SimpleVector
     @test mispecs[1] === mi
     mi = mispecs[2]::Core.MethodInstance
+    mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
     ci = mi.cache
     @test ci.relocatability == 0
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
@@ -1712,7 +1713,7 @@ precompile_test_harness("issue #46296") do load_path
         mi = first(Base.specializations(first(methods(identity))))
         ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), nothing, 0x00,
-                               Core.DebugInfo(mi))
+                               Core.DebugInfo(mi), Core.svec())
 
         __init__() = @assert ci isa Core.CodeInstance
 
