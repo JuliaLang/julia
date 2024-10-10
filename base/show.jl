@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: has_typevar
+using Core.Compiler: has_typevar, userefs, scan_ssa_use!
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -1717,7 +1717,7 @@ end
 
 # show an indented list
 function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::Int=0, enclose_operators::Bool=false,
-                   kw::Bool=false)
+                   kw::Bool=false, unstable_ssa::Union{Nothing, BitSet} = nothing)
     n = length(items)
     n == 0 && return
     indent += indent_width
@@ -1736,6 +1736,8 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
         elseif kw && is_expr(item, :(=), 2)
             item = item::Expr
             show_unquoted_expr_fallback(io, item, indent, quote_level)
+        elseif item isa SSAValue
+            show_unquoted(io, item, indent, parens ? 0 : prec, unstable_ssa)
         else
             show_unquoted(io, item, indent, parens ? 0 : prec, quote_level)
         end
@@ -1744,9 +1746,10 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, quote_level::In
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_level=0, encl_ops=false, kw::Bool=false)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_level=0, encl_ops=false, kw::Bool=false,
+                            unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, op)
-    show_list(io, items, sep, indent, prec, quote_level, encl_ops, kw)
+    show_list(io, items, sep, indent, prec, quote_level, encl_ops, kw, unstable_ssa)
     print(io, cl)
 end
 
@@ -1760,7 +1763,7 @@ end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
-function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
+function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool, unstable_ssa::Union{Nothing, BitSet} = nothing)
     op, cl = expr_calls[head]
     if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
@@ -1782,7 +1785,7 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
         show_list(io, (func_args[1]::Expr).args, ", ", indent, 0, quote_level, false, kw)
         print(io, cl)
     else
-        show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level, false, kw)
+        show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level, false, kw, unstable_ssa)
     end
 end
 
@@ -1802,10 +1805,12 @@ end
 
 ## AST printing ##
 
-function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
+function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     if get(io, :maxssaid, typemax(Int))::Int < val.id
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
+    elseif unstable_ssa != nothing
+        printstyled(io, "%", val.id; color=(val.id in unstable_ssa) ? :light_red : :default, bold=val.id in unstable_ssa)
     else
         print(io, "%", val.id)
     end
@@ -1967,7 +1972,7 @@ function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level:
 end
 
 # TODO: implement interpolated strings
-function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
+function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::Int = 0, unstable_ssa::Union{Nothing, BitSet} = nothing)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
@@ -2122,9 +2127,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true, false, unstable_ssa)
                 else
-                    show_list(io, func_args, sep, indent, func_prec, quote_level, true)
+                    show_list(io, func_args, sep, indent, func_prec, quote_level, true, false, unstable_ssa)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator
@@ -2134,12 +2139,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 print(io, ")")
                 show_enclosed_list(io, op, func_args, ", ", cl, indent, 0, quote_level)
             else
-                show_call(io, head, func, func_args, indent, quote_level, true)
+                show_call(io, head, func, func_args, indent, quote_level, true, unstable_ssa)
             end
 
         # normal function (i.e. "f(x,y)")
         else
-            show_call(io, head, func, func_args, indent, quote_level, true)
+            show_call(io, head, func, func_args, indent, quote_level, true, unstable_ssa)
         end
 
     # new expr

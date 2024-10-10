@@ -2582,6 +2582,52 @@ end
     @test contains(str, "%1 = \e[31m%7")
 end
 
+@testset "issue #54028: Code warntype should show print the unstable SSA values in red" begin
+    io = IOBuffer()
+    ioc = IOContext(io, :color => true)
+
+    using InteractiveUtils
+
+    function foo(x)
+        y = x[1]
+        sin(y)
+    end
+
+    code_warntype(ioc, foo, (Vector{Any},), optimize=true)
+
+    str = String(take!(io))
+
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m)")
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%19\e[22m\e[39m = ")
+
+    function subbar(t, w)
+        return sum(t) + w
+    end
+
+    function bar(x, z)
+        y = x[1] + subbar(x, z)
+        return subbar([sin(y), sin(z)], z)
+    end
+
+    code_warntype(ioc, bar, (Vector{Any}, Int), optimize=true)
+
+    str = String(take!(io))
+
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%19\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%20\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m + \e[91m\e[1m%19\e[22m\e[39m")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%20\e[22m\e[39m)")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m,")
+    @test contains(str, "\e[91m\e[1m%50\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m,")
+    @test contains(str, "\e[91m\e[1m%52\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%53\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%52\e[22m\e[39m,")
+end
+
 @testset "issue #46947: IncrementalCompact double display of just-compacted nodes" begin
     # get some IR
     foo(i) = i == 1 ? 1 : 2
