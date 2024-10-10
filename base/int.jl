@@ -522,6 +522,110 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 <=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
 
 ## integer shifts ##
+"""
+    unsafe_lshr(x, n)
+
+Unsafe logical right bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
+Unlike [`unsafe_ashr`](@ref), the `n` top bits of the result are always unset.
+
+See also: [`>>>`](@ref), [`unsafe_ashr`](@ref)
+
+# Examples
+```jldoctest
+julia> unsafe_lshr(18, 2)
+4
+
+julia> unsafe_lshr(Int32(5), 4)
+0
+
+julia> unsafe_lshr(Int32(-100), 3)
+536870899
+```
+"""
+function unsafe_lshr end
+
+"""
+    unsafe_ashr(x, n)
+
+Unsafe arithmetic right bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
+
+If `x` is nonnegative, the `n` top bits of the result will be unset, if `x` is negative,
+they will be set. This implies the sign of `x` will be preserved.
+
+See also: [`>>`](@ref), [`unsafe_lshr`](@ref)
+
+# Examples
+```jldoctest
+julia> unsafe_ashr(18, 2)
+4
+
+julia> unsafe_ashr(Int32(5), 4)
+0
+
+julia> unsafe_ashr(Int32(-100), 3)
+-13
+```
+"""
+function unsafe_ashr end
+
+"""
+    unsafe_shl(x, n)
+
+Unsafe left bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
+The lowest `n` bits of the result are unset.
+
+See also: [`<<`](@ref), [`unsafe_ashr`](@ref)
+
+# Examples
+```jldoctest
+julia> unsafe_shl(7, 2)
+28
+
+julia> unsafe_shl(Int32(1001), 3)
+8008
+
+julia> unsafe_shl(Int32(9), 28)
+-1879048192
+```
+"""
+function unsafe_shl end
+
+function unsafe_lshr(x::Union{Int8, UInt8, Int16, UInt16}, y::BitInteger)
+    lshr_int(zext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function unsafe_lshr(x::T, y::BitInteger) where {T <: Union{Int32, UInt32, UInt64, Int64, UInt128, Int128}}
+    lshr_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function unsafe_shl(x::Union{Int8, UInt8, Int16, UInt16}, y::BitInteger)
+    shl_int(zext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function unsafe_shl(x::T, y::BitInteger) where {T <: Union{Int32, UInt32, UInt64, Int64, UInt128, Int128}}
+    shl_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function unsafe_ashr(x::Union{Int8, Int16}, y::BitInteger)
+    ashr_int(sext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function unsafe_ashr(x::T, y::BitInteger) where {T <: Union{Int32, Int64, Int128}}
+    ashr_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function unsafe_ashr(x::BitUnsigned, y::BitInteger)
+    @inline unsafe_lshr(x, y)
+end
+
+# For 8-32 bits x, trunc n to u32, & 0x1f, recast back to x
+# For 64
 
 # unsigned shift counts always shift in the same direction
 >>(x::BitSigned,   y::BitUnsigned) = ashr_int(x, y)
