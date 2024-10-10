@@ -390,14 +390,16 @@ _maybe_unwrap_tri(out::UpperTriangular, A::UpperOrUnitUpperTriangular) = parent(
 _maybe_unwrap_tri(out::LowerTriangular, A::LowerOrUnitLowerTriangular) = parent(out), parent(A)
 @inline function __muldiag_nonzeroalpha!(out, D::Diagonal, B::UpperOrLowerTriangular, _add::MulAddMul)
     isunit = B isa Union{UnitUpperTriangular, UnitLowerTriangular}
-    out′, B′ = _maybe_unwrap_tri(out, B)
+    # if both B and out have the same upper/lower triangular structure,
+    # we may directly read and write from the parents
+    out_maybeparent, B_maybeparent = _maybe_unwrap_tri(out, B)
     for j in axes(B, 2)
         if isunit
-            _modify!(_add, D.diag[j] * B[j,j], out′, (j,j))
+            _modify!(_add, D.diag[j] * B[j,j], out, (j,j))
         end
         rowrange = B isa UpperOrUnitUpperTriangular ? (1:min(j-isunit, size(B,1))) : (j+isunit:size(B,1))
         @inbounds @simd for i in rowrange
-            _modify!(_add, D.diag[i] * B′[i,j], out′, (i,j))
+            _modify!(_add, D.diag[i] * B_maybeparent[i,j], out_maybeparent, (i,j))
         end
     end
     out
@@ -430,15 +432,17 @@ end
     # since alpha is multiplied to the diagonal element of D,
     # we may skip alpha in the second multiplication by setting ais1 to true
     _add_aisone = MulAddMul{true,bis0,Bool,typeof(beta)}(true, beta)
-    out′, A′ = _maybe_unwrap_tri(out, A)
+    # if both A and out have the same upper/lower triangular structure,
+    # we may directly read and write from the parents
+    out_maybeparent, A_maybeparent = _maybe_unwrap_tri(out, A)
     @inbounds for j in axes(A, 2)
         dja = _add(D.diag[j])
         if isunit
-            _modify!(_add_aisone, A[j,j] * dja, out′, (j,j))
+            _modify!(_add_aisone, A[j,j] * dja, out, (j,j))
         end
         rowrange = A isa UpperOrUnitUpperTriangular ? (1:min(j-isunit, size(A,1))) : (j+isunit:size(A,1))
         @simd for i in rowrange
-            _modify!(_add_aisone, A′[i,j] * dja, out′, (i,j))
+            _modify!(_add_aisone, A_maybeparent[i,j] * dja, out_maybeparent, (i,j))
         end
     end
     out

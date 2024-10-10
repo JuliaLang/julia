@@ -1212,6 +1212,11 @@ end
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
 
+    # we may write to a Unit triangular if the diagonal is preserved
+    ID = Diagonal(ones(size(UTriA,2)))
+    @test mul!(copy(UTriA), UTriA, ID) == UTriA
+    @test mul!(copy(UTriA), ID, UTriA) == UTriA
+
     @testset "partly filled parents" begin
         M = Matrix{BigFloat}(undef, 2, 2)
         M[1,1] = M[2,2] = 3
@@ -1219,11 +1224,30 @@ end
         M[1+!isupper, 1+isupper] = 3
         D = Diagonal(1:2)
         T = Tri(M)
-        @test T * D == Array(T) * D
-        @test D * T == D * Array(T)
+        TA = Array(T)
+        @test T * D == TA * D
+        @test D * T == D * TA
+        @test mul!(copy(T), T, D, 2, 3) == 2T * D + 3T
+        @test mul!(copy(T), D, T, 2, 3) == 2D * T + 3T
+
         U = UTri(M)
-        @test U * D == Array(U) * D
-        @test D * U == D * Array(U)
+        UA = Array(U)
+        @test U * D == UA * D
+        @test D * U == D * UA
+        @test mul!(copy(T), U, D, 2, 3) == 2 * UA * D + 3TA
+        @test mul!(copy(T), D, U, 2, 3) == 2 * D * UA + 3TA
+
+        M2 = Matrix{BigFloat}(undef, 2, 2)
+        M2[1+!isupper, 1+isupper] = 3
+        U = UTri(M2)
+        UA = Array(U)
+        @test U * D == UA * D
+        @test D * U == D * UA
+        ID = Diagonal(ones(size(U,2)))
+        @test mul!(copy(U), U, ID) == U
+        @test mul!(copy(U), ID, U) == U
+        @test mul!(copy(U), U, ID, 2, -1) == U
+        @test mul!(copy(U), ID, U, 2, -1) == U
     end
 end
 
