@@ -411,26 +411,35 @@ function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vecto
     isa(x, AnySSAValue) && return types(compact)[x]
     return argextype(x, compact, sptypes, compact.ir.argtypes)
 end
-argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
+function argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState})
+    return argextype(x, src, sptypes, src.slottypes::Union{Vector{Any},Nothing})
+end
 function argextype(
     @nospecialize(x), src::Union{IRCode,IncrementalCompact,CodeInfo},
-    sptypes::Vector{VarState}, slottypes::Vector{Any})
+    sptypes::Vector{VarState}, slottypes::Union{Vector{Any},Nothing})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int].typ
+            idx = x.args[1]::Int
+            (1 ≤ idx ≤ length(sptypes)) || throw(InvalidIRError())
+            return sptypes[idx].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
+            length(x.args) == 0 && throw(InvalidIRError())
             return argextype(x.args[1], src, sptypes, slottypes)
         end
         Core.println("argextype called on Expr with head ", x.head,
                      " which is not valid for IR in argument-position.")
         @assert false
     elseif isa(x, SlotNumber)
+        slottypes === nothing && return Any
+        (1 ≤ x.id ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.id]
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x, src)
     elseif isa(x, Argument)
+        slottypes === nothing && return Any
+        (1 ≤ x.n ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.n]
     elseif isa(x, QuoteNode)
         return Const(x.value)
@@ -444,7 +453,15 @@ function argextype(
         return Const(x)
     end
 end
-abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
+function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
+    ssavaluetypes = src.ssavaluetypes
+    if ssavaluetypes isa Int
+        (1 ≤ s.id ≤ ssavaluetypes) || throw(InvalidIRError())
+        return Any
+    else
+        return abstract_eval_ssavalue(s, ssavaluetypes::Vector{Any})
+    end
+end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
