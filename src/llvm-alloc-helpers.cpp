@@ -245,6 +245,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 required.use_info.addrescaped = true;
                 return true;
             }
+            // TODO: gc_loaded
             if (required.pass.typeof_func == callee) {
                 required.use_info.hastypeof = true;
                 assert(use->get() == I);
