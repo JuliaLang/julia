@@ -944,7 +944,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _unsafe_take!(a, newbuf)
     end
     iolock_end()
     return nread

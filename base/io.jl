@@ -1541,3 +1541,7 @@ function countlines(io::IO; eol::AbstractChar='\n')
 end
 
 countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io, eol = eol), f)::Int
+
+# double mutating version of take!
+take!(b::Vector{UInt8}, io::IO) = take!(b, take!(io))
+_unsafe_take!(b::Vector{UInt8}, io::IO) = take!(b, _unsafe_take!(io))
