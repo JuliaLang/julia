@@ -302,6 +302,26 @@ function merge_fallback(a::NamedTuple, b::NamedTuple,
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
 
+function mergewith_fallback(combine, a::NamedTuple, b::NamedTuple,
+                            an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
+    names = merge_names(an, bn)
+    n = length(names)
+    A = Memory{Any}(undef, n)
+    for i=1:n
+        n = names[i]
+        A[i] = if sym_in(n, an) && sym_in(n, bn)
+            combine(getfield(a, n), getfield(b, n))
+        elseif sym_in(n, an)
+            getfield(a, n)
+        elseif sym_in(n, bn)
+            getfield(b, n)
+        end
+    end
+    NamedTuple{names}(A...)
+end
+
 # This is `Experimental.@max_methods 4 function merge end`, which is not
 # defined at this point in bootstrap.
 typeof(function merge end).name.max_methods = UInt8(4)
@@ -380,6 +400,24 @@ function merge(a::NamedTuple, itr)
         end
     end
     merge(a, NamedTuple{(names...,)}((vals...,)))
+end
+
+function mergewith(combine, a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
+    if @generated
+        names = merge_names(an, bn)
+        vals = map(names) do n
+            if sym_in(n, an) && sym_in(n, bn)
+                :(combine(a.$n, b.$n))
+            elseif sym_in(n, an)
+                :(a.$n)
+            elseif sym_in(n, bn)
+                :(b.$n)
+            end
+        end
+        :( NamedTuple{$names}(($(vals...),)) )
+    else
+        mergewith_fallback(combine, a, b, an, bn)
+    end
 end
 
 keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
