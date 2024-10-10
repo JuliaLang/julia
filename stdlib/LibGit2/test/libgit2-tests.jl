@@ -95,7 +95,7 @@ end
     p = ["XXX","YYY"]
     a = Base.cconvert(Ptr{LibGit2.StrArrayStruct}, p)
     b = Base.unsafe_convert(Ptr{LibGit2.StrArrayStruct}, a)
-    @test p == convert(Vector{String}, unsafe_load(b))
+    @test p == collect(unsafe_load(b))
     @noinline gcuse(a) = a
     gcuse(a)
 end
