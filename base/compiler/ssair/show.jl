@@ -14,7 +14,8 @@ end
 
 import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
-using Core.Compiler: VarState, InvalidIRError
+using Core.Compiler: VarState, InvalidIRError, argextype, widenconst, singleton_type,
+                     sptypes_from_meth_instance, EMPTY_SPTYPES
 
 function Base.show(io::IO, cfg::CFG)
     print(io, "CFG with $(length(cfg.blocks)) blocks:")
@@ -38,7 +39,7 @@ function maybe_argextype(
     sptypes::Vector{VarState},
 )
     return try
-        Core.Compiler.argextype(x, src, sptypes)
+        argextype(x, src, sptypes)
     catch err
         !(err isa InvalidIRError) && rethrow()
         nothing
@@ -58,12 +59,12 @@ function builtin_call_has_dispatch(
         # for <builtin>(v::Union{Tuple,NamedTuple,Memory,Array,SimpleVector}...)
         # which perform no dynamic dispatch
         constructort = maybe_argextype(args[3], src, sptypes)
-        if constructort === nothing || !(Core.Compiler.widenconst(constructort) <: Core.Builtin)
+        if constructort === nothing || !(widenconst(constructort) <: Core.Builtin)
             return true
         end
         for arg in args[4:end]
             argt = maybe_argextype(arg, src, sptypes)
-            if argt === nothing || !(Core.Compiler.widenconst(argt) <: inlined_apply_iterate_types)
+            if argt === nothing || !(widenconst(argt) <: inlined_apply_iterate_types)
                 return true
             end
         end
@@ -112,7 +113,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         print(io, ")")
     elseif isexpr(stmt, :call) && length(stmt.args) >= 1
         ft = maybe_argextype(stmt.args[1], code, sptypes)
-        f = Core.Compiler.singleton_type(ft)
+        f = singleton_type(ft)
         if isa(f, Core.IntrinsicFunction)
             printstyled(io, "intrinsic "; color = :light_black)
         elseif isa(f, Core.Builtin)
@@ -126,7 +127,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
             # an out-of-bounds SSAValue or similar
             # (i.e. under normal circumstances, dead code)
             printstyled(io, "unknown "; color = :light_black)
-        elseif Core.Compiler.widenconst(ft) <: Core.Builtin
+        elseif widenconst(ft) <: Core.Builtin
             printstyled(io, "dynamic builtin "; color = :yellow)
         else
             printstyled(io, "dynamic "; color = :yellow)
@@ -981,8 +982,8 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
     cfg = compute_basic_blocks(ci.code)
     parent = ci.parent
     sptypes = if parent isa MethodInstance
-        Core.Compiler.sptypes_from_meth_instance(parent)
-    else Core.Compiler.EMPTY_SPTYPES end
+        sptypes_from_meth_instance(parent)
+    else EMPTY_SPTYPES end
     let io = IOContext(io, :maxssaid=>length(ci.code))
         show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
