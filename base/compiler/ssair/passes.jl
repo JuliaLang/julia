@@ -1256,7 +1256,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # by `stmt.args`. Which have :scope set. In practice, the frontend
                 # does emit these in order, so we could simply go to the last one,
                 # but we want to avoid making that semantic assumption.
-                for i = 1:length(stmt.args)
+                for i in eachindex(stmt.args)
                     scope = stmt.args[i]
                     scope === nothing && continue
                     enter = compact[scope][:inst]
@@ -1546,16 +1546,16 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     ssa_rename = Vector{Any}(undef, length(src.stmts))
-    for idx′ = 1:length(src.stmts)
-        inst = src[SSAValue(idx′)]
+    for idx′ = eachindex(src)
+        inst = src[idx′]
         stmt′ = inst[:stmt]
         isa(stmt′, ReturnNode) && continue
         stmt′ = ssamap(stmt′) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
-        ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(idx′))),
+        ssa_rename[idx′.id] = insert_node!(ir, idx,
+            NewInstruction(inst; stmt=stmt′, line=(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(idx′.id))),
             attach_after)
     end
 

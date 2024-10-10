@@ -124,6 +124,8 @@ is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospeciali
 # MethodInstance/CodeInfo #
 ###########################
 
+MethodInstance() = ccall(:jl_new_method_instance_uninit,Ref{MethodInstance},())
+
 invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
 use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
