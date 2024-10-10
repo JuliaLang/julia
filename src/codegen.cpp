@@ -10371,6 +10371,7 @@ static void init_jit_functions(void)
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
+    add_named_global("__julia_personality", &__julia_personality);
 #if defined(_COMPILER_GCC_)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else
@@ -10396,7 +10397,7 @@ static void init_jit_functions(void)
 }
 
 #ifdef JL_USE_INTEL_JITEVENTS
-char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
+char jl_using_intel_jitevents = 0; // Non-zero if running under Intel VTune Amplifier
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
@@ -10510,9 +10511,6 @@ extern "C" void jl_init_llvm(void)
 #if defined(JL_USE_INTEL_JITEVENTS) || \
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
-#ifdef JL_USE_JITLINK
-#pragma message("JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink")
-#else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
 #if defined(JL_USE_INTEL_JITEVENTS)
@@ -10529,24 +10527,23 @@ extern "C" void jl_init_llvm(void)
 
 #if defined(JL_USE_PERF_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_perf_jitevents= 1;
+        jl_using_perf_jitevents = 1;
     }
 #endif
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
+        jl_ExecutionEngine->enableIntelJITEventListener();
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
     if (jl_using_oprofile_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createOProfileJITEventListener());
+        jl_ExecutionEngine->enableOProfileJITEventListener();
 #endif
 
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
-#endif
+        jl_ExecutionEngine->enablePerfJITEventListener();
 #endif
 #endif
 
