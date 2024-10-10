@@ -156,6 +156,7 @@ Base.modifyproperty!
 Base.setpropertyonce!
 Base.propertynames
 Base.hasproperty
+Base.setindex
 Core.getfield
 Core.setfield!
 Core.modifyfield!

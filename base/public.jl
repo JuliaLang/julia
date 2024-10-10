@@ -38,6 +38,7 @@ public
     rest,
     split_rest,
     tail,
+    setindex,
     checked_length,
     elsize,
 
