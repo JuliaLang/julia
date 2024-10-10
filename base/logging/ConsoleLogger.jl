@@ -106,6 +106,10 @@ end
 function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module, group, id,
                         filepath, line; kwargs...)
     @nospecialize
+    if haskey(kwargs, :save)
+        Core.eval(Main, Expr(:(=), kwargs[:save], message))
+        return
+    end
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts

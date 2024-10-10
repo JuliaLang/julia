@@ -467,3 +467,43 @@ end
 for (k, v) in pairs(original_env)
     ENV[k] = v
 end
+
+# @save
+module AtSaveTestModule
+    using Test
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf_1)
+    xc44f6e16f91ba48824afec66744d3faf_1 = rand(3,3)
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf_1)
+    @save xc44f6e16f91ba48824afec66744d3faf_1
+    @test isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf_1)
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf_1) == xc44f6e16f91ba48824afec66744d3faf_1
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf_1) === xc44f6e16f91ba48824afec66744d3faf_1
+
+    xc44f6e16f91ba48824afec66744d3faf_2 = rand(3,2)
+    xc44f6e16f91ba48824afec66744d3faf_3 = rand(3,1)
+    @save xc44f6e16f91ba48824afec66744d3faf_2 xc44f6e16f91ba48824afec66744d3faf_3 xc44f6e16f91ba48824afec66744d3faf_3=6
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf_2) == xc44f6e16f91ba48824afec66744d3faf_2
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf_3) == 6
+
+    # Malformed arguments throw at lower time
+    for (expr_str, hint) in [
+        ("@save 1+1",     "Invalid @save argument: `1 + 1`. Try `@save x = 1 + 1`."),
+        ("@save a,b,c",   "Invalid @save argument: `(a, b, c)`. Try `@save x = (a, b, c)`."),
+        ("@save a,b=1,2", "Invalid @save argument: `(a, b) = (1, 2)`. The left hand side of assignment operator must be a symbol. Try `@save x = (1, 2)`."),
+    ]
+        # Using Meta.parse instead of quoted exprs discards line numbers, which are out
+        # of scope for this testset and would make the LoadError equality check fail
+        expr = Meta.parse(expr_str)
+        @test_throws LoadError("none", 1, ArgumentError(hint)) Meta.lower(@__MODULE__, expr)
+    end
+
+    # A malformed argument throws without logging anything
+    @test_throws LoadError eval(:(@save xc44f6e16f91ba48824afec66744d3faf_4=0 1+1))
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf_4)
+
+    # Runtime errors are suppressed
+    redirect_stderr(devnull) do
+        @save xc44f6e16f91ba48824afec66744d3faf_5=error()
+    end
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf_5)
+end
