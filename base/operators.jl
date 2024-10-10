@@ -1169,6 +1169,8 @@ A type representing a partially-applied version of a function `f`, with the argu
     available arguments, rather than an absolute ordering on the target function. For example,
     `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
     fixes the first and third arg.
+
+See also [`Base.FixKw`](@ref).
 """
 struct Fix{N,F,T} <: Function
     f::F
@@ -1203,6 +1205,50 @@ Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).
 """
 const Fix2{F,T} = Fix{2,F,T}
 
+"""
+    Base.FixKw(f, kw::NamedTuple) <: Function
+    Base.FixKw(f; kw...) <: Function
+
+Returns a `Function` that calls `f` with the keyword arguments `kw` prepended
+to those given in each call. The fixed keyword arguments cannot be removed,
+but they can be overridden by those specified in the call.
+
+!!! compat "Julia 1.12"
+    `Base.FixKw` requires at least Julia 1.12.
+
+See also [`Base.Fix`](@ref).
+
+# Examples
+```jldoctest
+julia> f(x; a = 0, b = 0, c = 0) = x+a+b+c;
+
+julia> g = Base.FixKw(f, (a = 1, b = 2));
+
+julia> g(0)
+3
+
+julia> g(0; c = 3)
+6
+
+julia> g(0; a = 0, c = 3)
+5
+
+julia> map(Base.FixKw(sum; init = 0), [(), (1,), (1, 2)])
+3-element Vector{Int64}:
+ 0
+ 1
+ 3
+```
+"""
+struct FixKw{F,KW<:NamedTuple} <: Function
+    f::F
+    kw::KW
+    FixKw(f, kw::KW) where KW <: NamedTuple = new{_stable_typeof(f),KW}(f, kw)
+end
+
+FixKw(f; kw...) = FixKw(f, values(kw))
+
+(g::FixKw)(args::Vararg{Any,N}; kw...) where N = g.f(args...; pairs(g.kw)..., kw...)
 
 """
     isequal(x)
