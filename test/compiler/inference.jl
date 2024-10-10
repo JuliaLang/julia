@@ -6048,3 +6048,10 @@ t255751 = Array{Float32, 3}
 
 issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
 @test Base.infer_return_type(issue55882_nfields) <: Int
+
+# issue #55916
+f55916(x) = 1
+f55916(::Vararg{T,T}) where {T} = "2"
+g55916(x) = f55916(x)
+# this shouldn't error
+@test only(code_typed(g55916, (Any,); optimize=false))[2] == Int
