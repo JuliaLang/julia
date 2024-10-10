@@ -185,8 +185,27 @@ end
     end
     r
 end
-diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+"""
+    diagzero(A::AbstractMatrix, i, j)
+
+Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
+"""
+diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
+diagzero(D::Diagonal{M}, i, j) where {M<:AbstractMatrix} =
+    zeroslike(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
+# dispatching on the axes permits specializing on the axis types to return something other than an Array
+zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
+"""
+    zeroslike(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
+    zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix}
+
+Return an appropriate zero-ed array similar to `M`, with either the axes `ax` or the size `sz`.
+This will be used as a structural zero element of a matrix-valued banded matrix.
+By default, `zeroslike` falls back to using the size along each axis to construct the array.
+"""
+zeroslike(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = zeroslike(M, map(length, ax))
+zeroslike(M::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(M, sz)
+zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix} = zeros(eltype(M), sz)
 
 @inline function getindex(D::Diagonal, b::BandIndex)
     @boundscheck checkbounds(D, b)
@@ -751,7 +770,7 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(axes(D), axes(D), perm); D)
 
-function diag(D::Diagonal{T}, k::Integer=0) where T
+function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
     if k == 0

@@ -24,10 +24,10 @@ using ._TOP_MOD:     # Base definitions
     isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
-    Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
+    AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -859,7 +859,7 @@ function add_escape_change!(astate::AnalysisState, @nospecialize(x), xinfo::Esca
     xinfo === ⊥ && return nothing # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if force || !isbitstype(widenconst(argextype(x, astate.ir)))
+        if force || !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, EscapeChange(xidx, xinfo))
         end
     end
@@ -869,7 +869,7 @@ end
 function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::Int)
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if !isbitstype(widenconst(argextype(x, astate.ir)))
+        if !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, LivenessChange(xidx, livepc))
         end
     end

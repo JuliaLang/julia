@@ -1071,13 +1071,14 @@ function _growbeg!(a::Vector, delta::Integer)
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline (function()
+        @_terminates_locally_meta
         memlen = length(mem)
         if offset + len - 1 > memlen || offset < 1
             throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
         end
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
         # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
+        newmemlen = max(overallocation(len), len + 2 * delta + 1)
         newoffset = div(newmemlen - newlen, 2) + 1
         # If there is extra data after the end of the array we can use that space so long as there is enough
         # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
@@ -1086,10 +1087,14 @@ function _growbeg!(a::Vector, delta::Integer)
         if newoffset + newlen < memlen
             newoffset = div(memlen - newlen, 2) + 1
             newmem = mem
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+            for j in offset:newoffset+delta-1
+                @inbounds _unsetindex!(mem, j)
+            end
         else
             newmem = array_new_memory(mem, newmemlen)
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         end
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         if ref !== a.ref
             @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
         end
