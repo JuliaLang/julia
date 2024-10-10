@@ -941,6 +941,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
+        initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
         newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
@@ -951,7 +952,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread

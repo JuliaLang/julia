@@ -355,6 +355,17 @@ copy
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
+# a mutating version of copyto! that results in dst aliasing src afterwards
+function _take!(dst::Array{T,N}, src::Array{T,N}) where {T,N}
+    if getfield(dst, :ref) !== getfield(src, :ref)
+        setfield!(dst, :ref, getfield(src, :ref))
+    end
+    if getfield(dst, :size) !== getfield(src, :size)
+        setfield!(dst, :size, getfield(src, :size))
+    end
+    return dst
+end
+
 ## Constructors ##
 
 similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
