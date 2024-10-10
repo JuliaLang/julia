@@ -112,6 +112,9 @@ New library features
 * `Lockable` is now exported ([#54595])
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
