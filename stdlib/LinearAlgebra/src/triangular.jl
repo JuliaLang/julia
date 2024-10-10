@@ -1160,13 +1160,24 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
         errorbounds(A::$t{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
             LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
 
+
+        # Reciprocal condition numbers
+        function rcond(A::$t{<:BlasFloat}, p::Real=2)
+            checksquare(A)
+            if p == 1
+                return LAPACK.trcon!('O', $uploc, $isunitc, A.data)
+            elseif p == Inf
+                return LAPACK.trcon!('I', $uploc, $isunitc, A.data)
+            else # use fallback
+                return inv(cond(copy_oftype(A, eltype(A)), p))
+            end
+        end
+    
         # Condition numbers
         function cond(A::$t{<:BlasFloat,<:StridedMatrix}, p::Real=2)
             checksquare(A)
-            if p == 1
-                return inv(LAPACK.trcon!('O', $uploc, $isunitc, A.data))
-            elseif p == Inf
-                return inv(LAPACK.trcon!('I', $uploc, $isunitc, A.data))
+            if p == 1 || p == Inf
+                return inv(rcond(A, p))
             else # use fallback
                 return cond(copyto!(similar(parent(A)), A), p)
             end
