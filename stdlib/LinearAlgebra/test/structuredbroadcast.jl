@@ -3,6 +3,10 @@
 module TestStructuredBroadcast
 using Test, LinearAlgebra
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 @testset "broadcast[!] over combinations of scalars, structured matrices, and dense vectors/matrices" begin
     N = 10
     s = rand()
@@ -12,10 +16,11 @@ using Test, LinearAlgebra
     D = Diagonal(rand(N))
     B = Bidiagonal(rand(N), rand(N - 1), :U)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
     U = UpperTriangular(rand(N,N))
     L = LowerTriangular(rand(N,N))
     M = Matrix(rand(N,N))
-    structuredarrays = (D, B, T, U, L, M)
+    structuredarrays = (D, B, T, U, L, M, S)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
         @test (Q = broadcast(sin, X); typeof(Q) == typeof(X) && Q == broadcast(sin, fX))
@@ -166,10 +171,11 @@ end
     D = Diagonal(rand(N))
     B = Bidiagonal(rand(N), rand(N - 1), :U)
     T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    S = SymTridiagonal(rand(N), rand(N - 1))
     U = UpperTriangular(rand(N,N))
     L = LowerTriangular(rand(N,N))
     M = Matrix(rand(N,N))
-    structuredarrays = (M, D, B, T, U, L)
+    structuredarrays = (M, D, B, T, S, U, L)
     fstructuredarrays = map(Array, structuredarrays)
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
         @test (Q = map(sin, X); typeof(Q) == typeof(X) && Q == map(sin, fX))
@@ -362,6 +368,11 @@ end
         A = [1 3; 2 4]
         U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
         standardbroadcastingtests(U, UpperTriangular)
+    end
+    @testset "SymTridiagonal" begin
+        m = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        S = SymTridiagonal(fill(m,4), fill(m,3))
+        standardbroadcastingtests(S, SymTridiagonal)
     end
 end
 
