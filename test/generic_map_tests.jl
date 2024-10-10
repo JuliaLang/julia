@@ -48,6 +48,12 @@ function generic_map_tests(mapf, inplace_mapf=nothing)
         inplace_mapf(x -> x*x, A, A)
         @test A == map(x -> x*x, Float64[1:10...])
 
+        # test inplace map working for non-array iterables
+        A = Float64[1:10...]
+        B = Tuple(1:10)
+        inplace_mapf(x -> x*x, A, B)
+        @test A == collect(map(x -> x*x, B))
+
         # Map to destination collection
         B = inplace_mapf((x,y,z)->x*y*z, A, Float64[1:10...], Float64[1:10...], Float64[1:10...])
         @test A == map(x->x*x*x, Float64[1:10...])
