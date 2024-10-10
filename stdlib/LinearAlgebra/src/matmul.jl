@@ -919,7 +919,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 
 @noinline function _generic_matmatmul!(C::AbstractVecOrMat{R}, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
-                             _add::MulAddMul{ais1,bis0}) where {T,S,R,ais1,bis0}
+                             _add::MulAddMul{ais1}) where {T,S,R,ais1}
     AxM = axes(A, 1)
     AxK = axes(A, 2) # we use two `axes` calls in case of `AbstractVector`
     BxK = axes(B, 1)
