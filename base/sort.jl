@@ -4,7 +4,7 @@ module Sort
 
 using Base.Order
 
-using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
+using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
     sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
@@ -1475,21 +1475,16 @@ InitialOptimizations(next) = SubArrayOptimization(
             Small{10}(
                 IEEEFloatOptimization(
                     next)))))
+
 """
-    DEFAULT_STABLE
+    struct DefaultStable <: Algorithm end
 
-The default sorting algorithm.
+`DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
+algorithm should be used, but does not specify exactly which algorithm.
 
-This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
-equal). It makes an effort to be fast for most inputs.
-
-The algorithms used by `DEFAULT_STABLE` are an implementation detail. See extended help
-for the current dispatch system.
-
-# Extended Help
-
-`DEFAULT_STABLE` is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid
-of Radix, Insertion, Counting, Quick sorts.
+Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
+composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
+Counting, Quick sorts.
 
 We begin with MissingOptimization because it has no runtime cost when it is not
 triggered and can enable other optimizations to be applied later. For example,
@@ -1549,7 +1544,39 @@ stage.
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
 otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
-const DEFAULT_STABLE = InitialOptimizations(
+struct DefaultStable <: Algorithm end
+
+"""
+    DEFAULT_STABLE
+
+The default sorting algorithm.
+
+This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
+equal). It makes an effort to be fast for most inputs.
+
+The algorithms used by `DEFAULT_STABLE` are an implementation detail. See the extended help
+of `Base.Sort.DefaultStable` for the current dispatch system.
+"""
+const DEFAULT_STABLE = DefaultStable()
+
+"""
+    DefaultUnstable <: Algorithm
+
+Like [`DefaultStable`](@ref), but does not guarantee stability.
+"""
+struct DefaultUnstable <: Algorithm end
+
+"""
+    DEFAULT_UNSTABLE
+
+An efficient sorting algorithm which may or may not be stable.
+
+The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
+the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
+"""
+const DEFAULT_UNSTABLE = DefaultUnstable()
+
+const _DEFAULT_ALGORITHMS_FOR_VECTORS = InitialOptimizations(
     IsUIntMappable(
         Small{40}(
             CheckSorted(
@@ -1560,15 +1587,10 @@ const DEFAULT_STABLE = InitialOptimizations(
                                 ScratchQuickSort())))))),
         StableCheckSorted(
             ScratchQuickSort())))
-"""
-    DEFAULT_UNSTABLE
 
-An efficient sorting algorithm.
+_sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw) =
+    _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
-The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
-the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
-"""
-const DEFAULT_UNSTABLE = DEFAULT_STABLE
 const SMALL_THRESHOLD  = 20
 
 function Base.show(io::IO, alg::Algorithm)
@@ -1598,6 +1620,7 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::NTuple) = DEFAULT_STABLE
 
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
@@ -1735,6 +1758,39 @@ julia> v
 ```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+
+function sort(x::NTuple{N,T};
+              alg::Algorithm=defalg(x),
+              lt=isless,
+              by=identity,
+              rev::Union{Bool,Nothing}=nothing,
+              order::Ordering=Forward,
+              scratch::Union{Vector{T}, Nothing}=nothing) where {N,T}
+    _sort(x, alg, ord(lt,by,rev,order), (;scratch))
+end
+# Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
+# or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
+function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
+    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
+    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
+    if length(x) > 9
+        v = copymutable(x)
+        _sort!(v, a, o, kw)
+        typeof(x)(v)
+    else
+        _mergesort(x, o)
+    end
+end
+_mergesort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _mergesort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_mergesort(a, o), _mergesort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
