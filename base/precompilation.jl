@@ -43,7 +43,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
     # Collect all direct dependencies of the project
     for key in ["deps", "weakdeps", "extras"]
-        for (name, _uuid) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
+        for (name, _uuid::String) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
             v = key == "deps" ? project_deps :
                 key == "weakdeps" ? project_weakdeps :
                 key == "extras" ? project_extras :
@@ -107,9 +107,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
     sizehint!(name_to_uuid, length(manifest_d))
     sizehint!(lookup_strategy, length(manifest_d))
 
-    for (name, pkg_infos) in get_deps(manifest_d)
-        pkg_infos = pkg_infos::Vector{Any}
-        for pkg_info in pkg_infos
+    for (name, pkg_infos::Vector{Any}) in get_deps(manifest_d)
+        for pkg_info::Dict{String, Any} in pkg_infos
             m_uuid = UUID(pkg_info["uuid"]::String)
 
             # If we have multiple packages with the same name we will overwrite things here
@@ -141,8 +140,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
-            for (ext, triggers) in deps_pkg
-                triggers = triggers::Union{String, Vector{String}}
+            for (ext, triggers::Union{String, Vector{String}}) in deps_pkg
                 if triggers isa String
                     triggers = [triggers]
                 end
@@ -176,7 +174,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
     if proj_name !== nothing && proj_uuid !== nothing
         deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
         extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
         entry_point = path !== nothing ? path : dirname(envpath)
         lookup_strategy[proj_uuid] = entry_point
     end
