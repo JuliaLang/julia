@@ -911,7 +911,7 @@ function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
 end
 
 const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
-global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
+global Workqueues::Memory{StickyWorkqueue} = Memory{StickyWorkqueue}([StickyWorkqueue()])
 const Workqueues_lock = Threads.SpinLock()
 const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
 
