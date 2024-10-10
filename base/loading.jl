@@ -1350,7 +1350,9 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    run_extension_callbacks(modkey)
+    if !precompiling_extension
+        run_extension_callbacks(modkey)
+    end
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1405,13 +1407,12 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         proj_pkg = project_file_name_uuid(implicit_project_file, pkg.name)
         if pkg == proj_pkg
             d_proj = parsed_toml(implicit_project_file)
-            weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
-            weakdeps === nothing && return
-            if weakdeps isa Dict{String, Any}
-                return _insert_extension_triggers(pkg, extensions, weakdeps)
-            end
+            weakdeps = get(Dict{String, Any}, d_proj, "weakdeps")::Dict{String,Any}
+            deps = get(Dict{String, Any}, d_proj, "deps")::Dict{String,Any}
+            total_deps = merge(weakdeps, deps)
+            return _insert_extension_triggers(pkg, extensions, total_deps)
         end
 
         # Now look in manifest
@@ -1426,27 +1427,35 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
                 uuid === nothing && continue
                 if UUID(uuid) == pkg.uuid
-                    weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps === nothing && return
-                    if weakdeps isa Dict{String, Any}
-                        return _insert_extension_triggers(pkg, extensions, weakdeps)
+                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
+                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+
+                    function expand_deps_list(deps′::Vector{String})
+                        deps′_expanded = Dict{String, Any}()
+                        for (dep_name, entries) in d
+                            dep_name in deps′ || continue
+                            entries::Vector{Any}
+                            if length(entries) != 1
+                                error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
+                            end
+                            entry = first(entries)::Dict{String, Any}
+                            uuid = entry["uuid"]::String
+                            deps′_expanded[dep_name] = uuid
+                        end
+                        return deps′_expanded
                     end
 
-                    d_weakdeps = Dict{String, Any}()
-                    for (dep_name, entries) in d
-                        dep_name in weakdeps || continue
-                        entries::Vector{Any}
-                        if length(entries) != 1
-                            error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
-                        end
-                        entry = first(entries)::Dict{String, Any}
-                        uuid = entry["uuid"]::String
-                        d_weakdeps[dep_name] = uuid
+                    if weakdeps isa Vector{String}
+                        weakdeps = expand_deps_list(weakdeps)
                     end
-                    @assert length(d_weakdeps) == length(weakdeps)
-                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
+                    if deps isa Vector{String}
+                        deps = expand_deps_list(deps)
+                    end
+
+                    total_deps = merge(weakdeps, deps)
+                    return _insert_extension_triggers(pkg, extensions, total_deps)
                 end
             end
         end
@@ -1454,7 +1463,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
-function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, totaldeps::Dict{String, Any})
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
@@ -1468,7 +1477,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         push!(trigger1, gid)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
-            uuid_trigger = UUID(weakdeps[trigger]::String)
+            uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
@@ -1480,6 +1489,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     end
 end
 
+precompiling_package::Bool = false
 loading_extension::Bool = false
 precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
@@ -2172,6 +2182,11 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    if into === Base.__toplevel__ && precompiling_package
+        # this error type needs to match the error type compilecache throws for non-125 errors.
+        error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
+         is not allowed during package precompilation.")
+    end
     if _require_world_age[] != typemax(UInt)
         Base.invoke_in_world(_require_world_age[], __require, into, mod)
     else
@@ -2750,40 +2765,9 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
-"""
-    check_src_module_wrap(srcpath::String)
-
-Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
-"""
-function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
-    load_rgx = r"\b(?:using|import)\s"
-    load_seen = false
-    inside_string = false
-    for s in eachline(srcpath)
-        if count("\"\"\"", s) == 1
-            # ignore module docstrings
-            inside_string = !inside_string
-        end
-        inside_string && continue
-        if contains(s, module_rgx)
-            if load_seen
-                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
-            end
-            return true
-        end
-        if startswith(s, load_rgx)
-            load_seen = true
-        end
-    end
-    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
-end
-
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
-
-    check_src_module_wrap(pkg, input)
 
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
@@ -2811,11 +2795,22 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+    # check that the package defined the expected module so we can give a nice error message if not
+    Base.check_package_module_loaded(pkg)
+end
+
+function check_package_module_loaded(pkg::PkgId)
+    if !haskey(Base.loaded_modules, pkg)
+        # match compilecache error type for non-125 errors
+        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
+            check for typos in package module name")
+    end
+    return nothing
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout, isext::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2884,7 +2879,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
-        Base.precompiling_extension = $(loading_extension)
+        Base.precompiling_extension = $(loading_extension | isext)
+        Base.precompiling_package = true
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
@@ -2941,18 +2937,18 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons, isext)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -2992,7 +2988,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, internal_stderr, internal_stdout)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, internal_stderr, internal_stdout, isext)
 
         if success(p)
             if cache_objects
@@ -3778,10 +3774,17 @@ end
 
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
-            if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
-                record_reason(reasons, "wrong source")
-                return true # cache file was compiled from a different path
+            if !samefile(includes[1].filename, modpath)
+                # In certain cases the path rewritten by `fixup_stdlib_path` may
+                # point to an unreadable directory, make sure we can `stat` the
+                # file before comparing it with `modpath`.
+                stdlib_path = fixup_stdlib_path(includes[1].filename)
+                if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
+                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
+                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
+                    record_reason(reasons, "wrong source")
+                    return true # cache file was compiled from a different path
+                end
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`

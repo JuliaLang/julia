@@ -2164,6 +2164,80 @@ precompile_test_harness("Issue #52063") do load_path
     end
 end
 
+precompile_test_harness("Detecting importing outside of a package module") do load_path
+    io = IOBuffer()
+    write(joinpath(load_path, "ImportBeforeMod.jl"),
+    """
+    import Printf
+    module ImportBeforeMod
+    end #module
+    """)
+    @test_throws r"Failed to precompile ImportBeforeMod" Base.compilecache(Base.identify_package("ImportBeforeMod"), io, io)
+    @test occursin(
+        "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
+        String(take!(io)))
+
+
+    write(joinpath(load_path, "HarmlessComments.jl"),
+    """
+    # import Printf
+    #=
+    import Printf
+    =#
+    module HarmlessComments
+    end #module
+    # import Printf
+    #=
+    import Printf
+    =#
+    """)
+    Base.compilecache(Base.identify_package("HarmlessComments"))
+
+
+    write(joinpath(load_path, "ImportAfterMod.jl"), """
+    module ImportAfterMod
+    end #module
+    import Printf
+    """)
+    @test_throws r"Failed to precompile ImportAfterMod" Base.compilecache(Base.identify_package("ImportAfterMod"), io, io)
+    @test occursin(
+        "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
+        String(take!(io)))
+end
+
+precompile_test_harness("No package module") do load_path
+    io = IOBuffer()
+    write(joinpath(load_path, "NoModule.jl"),
+    """
+    1
+    """)
+    @test_throws r"Failed to precompile NoModule" Base.compilecache(Base.identify_package("NoModule"), io, io)
+    @test occursin(
+        "NoModule [top-level] did not define the expected module `NoModule`, check for typos in package module name",
+        String(take!(io)))
+
+
+    write(joinpath(load_path, "WrongModuleName.jl"),
+    """
+    module DifferentName
+    x = 1
+    end #module
+    """)
+    @test_throws r"Failed to precompile WrongModuleName" Base.compilecache(Base.identify_package("WrongModuleName"), io, io)
+    @test occursin(
+        "WrongModuleName [top-level] did not define the expected module `WrongModuleName`, check for typos in package module name",
+        String(take!(io)))
+
+
+    write(joinpath(load_path, "NoModuleWithImport.jl"), """
+    import Printf
+    """)
+    @test_throws r"Failed to precompile NoModuleWithImport" Base.compilecache(Base.identify_package("NoModuleWithImport"), io, io)
+    @test occursin(
+        "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
+        String(take!(io)))
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)

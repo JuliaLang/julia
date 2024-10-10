@@ -319,9 +319,9 @@ function show_error_hints(io, ex, args...)
     for handler in hinters
         try
             @invokelatest handler(io, ex, args...)
-        catch err
+        catch
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
         end
     end
 end
