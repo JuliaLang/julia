@@ -32,6 +32,48 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
+function maybe_argextype(
+    @nospecialize(x),
+    src::Union{IRCode,IncrementalCompact,CodeInfo},
+    sptypes::Vector{VarState},
+)
+    return try
+        Core.Compiler.argextype(x, src, sptypes)
+    catch err
+        !(err isa InvalidIRError) && rethrow()
+        nothing
+    end
+end
+
+const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
+
+function builtin_call_has_dispatch(
+    @nospecialize(f),
+    args::Vector{Any},
+    src::Union{IRCode,IncrementalCompact,CodeInfo},
+    sptypes::Vector{VarState},
+)
+    if f === Core._apply_iterate && length(args) >= 3
+        # The implementation of _apply_iterate has hand-inlined implementations
+        # for <builtin>(v::Union{Tuple,NamedTuple,Memory,Array,SimpleVector}...)
+        # which perform no dynamic dispatch
+        constructort = maybe_argextype(args[3], src, sptypes)
+        if constructort === nothing || !(Core.Compiler.widenconst(constructort) <: Core.Builtin)
+            return true
+        end
+        for arg in args[4:end]
+            argt = maybe_argextype(arg, src, sptypes)
+            if argt === nothing || !(Core.Compiler.widenconst(argt) <: inlined_apply_iterate_types)
+                return true
+            end
+        end
+    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+        # These apply-like builtins are effectively dynamic calls
+        return true
+    end
+    return false
+end
+
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
                     sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
     if idx in used
@@ -69,29 +111,23 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
     elseif isexpr(stmt, :call) && length(stmt.args) >= 1
-        ft = try
-            Core.Compiler.argextype(stmt.args[1], code, sptypes)
-        catch err
-            !(err isa InvalidIRError) && rethrow()
-            nothing
-        end
+        ft = maybe_argextype(stmt.args[1], code, sptypes)
         f = Core.Compiler.singleton_type(ft)
         if isa(f, Core.IntrinsicFunction)
             printstyled(io, "intrinsic "; color = :light_black)
         elseif isa(f, Core.Builtin)
-            if (f === Core._apply_iterate || f === Core._apply_pure ||
-                f === Core._call_in_world || f === Core._call_in_world_total ||
-                f === Core._call_latest)
-                # These apply-like builtins are effectively dynamic calls
+            if builtin_call_has_dispatch(f, stmt.args, code, sptypes)
                 printstyled(io, "dynamic builtin "; color = :yellow)
             else
                 printstyled(io, "builtin "; color = :light_black)
             end
-        elseif f === nothing
+        elseif ft === nothing
             # This should only happen when, e.g., printing a call that targets
             # an out-of-bounds SSAValue or similar
             # (i.e. under normal circumstances, dead code)
             printstyled(io, "unknown "; color = :light_black)
+        elseif Core.Compiler.widenconst(ft) <: Core.Builtin
+            printstyled(io, "dynamic builtin "; color = :yellow)
         else
             printstyled(io, "dynamic "; color = :yellow)
         end
