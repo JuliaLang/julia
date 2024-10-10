@@ -745,6 +745,7 @@ void NewPM::run(Module &M) {
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
+    registerCallbacks(PIC);
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
@@ -756,6 +757,7 @@ void NewPM::run(Module &M) {
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
+    registerCallbacks(PIC);
     SI.registerCallbacks(PIC, &FAM);
     SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
     LoopAnalysisManager LAM;
@@ -777,6 +779,55 @@ void NewPM::run(Module &M) {
 void NewPM::printTimers() {
     TimePasses.print();
 }
+
+static _jl_timing_event_t* getEvent() {
+    static auto event = jl_timing_event_create("LLVM_JIT", "LLVM_OPT_PASS", "", __FILE__, __LINE__, 0);
+    return event;
+}
+
+void NewPM::registerCallbacks(PassInstrumentationCallbacks &PIC) {
+#ifdef ENABLE_TIMINGS
+    auto isMetaPass = [](StringRef PassID) {
+        auto pass_str = PassID.str();
+        if (pass_str.rfind("PassManager", 0) == 0) return true;
+        std::string end_str = "PassAdaptor";
+        if (pass_str.rfind(end_str) == pass_str.length() - end_str.length()) return true;
+        return false;
+    };
+
+    auto event = getEvent();
+
+    PIC.registerBeforeNonSkippedPassCallback([event, isMetaPass](StringRef PassID, Any IR) {
+        if (isMetaPass(PassID)) return;
+        auto block = (jl_timing_block_t *)malloc(sizeof(jl_timing_block_t));
+        _jl_timing_block_init((char *)block, sizeof(jl_timing_block_t), event);
+        _jl_timing_block_start(block);
+        auto pass_str = PassID.str();
+        jl_timing_puts(block, pass_str.c_str());
+#ifdef USE_TRACY
+        TracyCZoneName(block->tracy_ctx, pass_str.c_str(), strlen(pass_str.c_str()));
+#endif
+    });
+
+    PIC.registerAfterPassCallback([isMetaPass](StringRef PassID, Any IR, const PreservedAnalyses &PassPA) {
+        if (isMetaPass(PassID)) return;
+        if (jl_get_pgcstack() == NULL) return;
+        auto block = jl_current_task->ptls->timing_stack;
+        _jl_timing_block_end(block);
+        free(block);
+    });
+
+    PIC.registerAfterPassInvalidatedCallback([isMetaPass](StringRef PassID, const PreservedAnalyses &PassPA) {
+        if (isMetaPass(PassID)) return;
+        if (jl_get_pgcstack() == NULL) return;
+        auto block = jl_current_task->ptls->timing_stack;
+        _jl_timing_block_end(block);
+        free(block);
+    });
+#endif
+}
+
+
 
 OptimizationLevel getOptLevel(int optlevel) {
     switch (std::min(std::max(optlevel, 0), 3)) {
