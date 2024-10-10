@@ -1154,6 +1154,29 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
+    -f::Function
+
+When the argument of `-` is a function, it returns `(-) ∘ f`.
+
+See also [`!`](@ref) for boolean negation, and [`∘`](@ref).
+
+# Examples
+```jldoctest
+julia> map(-abs2, Tuple(-2:2))
+(-4, -1, 0, -1, -4)
+
+julia> sum(-log10, [1 0.1; 0.01 0.001]; dims=1)
+1×2 Matrix{Float64}:
+ 2.0  4.0
+```
+
+!!! compat "Julia 1.12"
+    This method requires at least Julia 1.12.
+"""
+-(f::Function) = (-) ∘ f
+-(f::ComposedFunction{typeof(-)}) = f.inner #allows -(-f) === f
+
+"""
     Fix{N}(f, x)
 
 A type representing a partially-applied version of a function `f`, with the argument
