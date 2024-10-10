@@ -7,7 +7,7 @@
 # N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
 
-import Core: Const, PartialStruct
+import Core: Const, PartialStruct, ConstSet
 
 """
     struct Const
@@ -17,6 +17,19 @@ import Core: Const, PartialStruct
 The type representing a constant value.
 """
 :(Const)
+
+"""
+    struct ConstSet
+        vals::Vector{Any}
+    end
+
+The type representing a set of constant values
+"""
+:(ConstSet)
+
+function ConstSet(@nospecialize(a), @nospecialize(b))
+    return Core._ConstSet(Any[a, b])
+end
 
 """
     struct PartialStruct
@@ -733,6 +746,7 @@ Widens extended lattice element `x` to native `Type` representation.
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+widenconst(c::ConstSet) = error("unhandled ConstSet") # anymap(v->widenconst(v))
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
