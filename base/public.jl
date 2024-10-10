@@ -67,6 +67,9 @@ public
     isoperator,
     isunaryoperator,
 
+# scalar math
+    uabs,
+
 # C interface
     cconvert,
     unsafe_convert,

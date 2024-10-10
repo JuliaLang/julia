@@ -218,7 +218,7 @@ function ieee754_representation(
 end
 
 """
-    uabs(x::Integer)
+    Base.uabs(x::Integer)
 
 Return the absolute value of `x`, possibly returning a different type should the
 operation be susceptible to overflow. This typically arises when `x` is a two's complement
