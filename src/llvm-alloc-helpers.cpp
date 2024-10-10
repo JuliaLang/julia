@@ -134,12 +134,16 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
       OS << " zeroed";
     OS << '\n';
     OS << "Uses: " << uses.size() << '\n';
-    for (auto inst: uses)
+    for (auto inst: uses) {
         inst->print(OS);
+        OS << '\n';
+    }
     if (!preserves.empty()) {
         OS << "Preserves: " << preserves.size() << '\n';
-        for (auto inst: preserves)
+        for (auto inst: preserves) {
             inst->print(OS);
+            OS << '\n';
+        }
     }
     OS << "MemOps: " << memops.size() << '\n';
     for (auto &field: memops) {
@@ -268,9 +272,12 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 }
                 LLVM_DEBUG(dbgs() << "Unknown call, marking escape\n");
                 REMARK([&]() {
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    inst->print(rso);
                     return OptimizationRemarkMissed(DEBUG_TYPE, "UnknownCall",
                                                     inst)
-                           << "Unknown call, marking escape (" << ore::NV("Call", inst) << ")";
+                           << "Unknown call, marking escape (" << ore::NV("Call", StringRef(str)) << ")";
                 });
                 required.use_info.escaped = true;
                 return false;
@@ -284,9 +291,12 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
                 LLVM_DEBUG(dbgs() << "Object address is stored somewhere, marking escape\n");
                 REMARK([&]() {
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    inst->print(rso);
                     return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
                                                     inst)
-                           << "Object address is stored somewhere, marking escape (" << ore::NV("Store", inst) << ")";
+                           << "Object address is stored somewhere, marking escape (" << ore::NV("Store", StringRef(str)) << ")";
                 });
                 required.use_info.escaped = true;
                 return false;
@@ -310,9 +320,12 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
                 LLVM_DEBUG(dbgs() << "Object address is cmpxchg/rmw-ed somewhere, marking escape\n");
                 REMARK([&]() {
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    inst->print(rso);
                     return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
                                                     inst)
-                           << "Object address is cmpxchg/rmw-ed somewhere, marking escape (" << ore::NV("Store", inst) << ")";
+                           << "Object address is cmpxchg/rmw-ed somewhere, marking escape (" << ore::NV("Store", StringRef(str)) << ")";
                 });
                 required.use_info.escaped = true;
                 return false;
@@ -363,9 +376,12 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         }
         LLVM_DEBUG(dbgs() << "Unknown instruction, marking escape\n");
         REMARK([&]() {
+            std::string str;
+            llvm::raw_string_ostream rso(str);
+            inst->print(rso);
             return OptimizationRemarkMissed(DEBUG_TYPE, "UnknownInst",
                                             inst)
-                   << "Unknown instruction, marking escape (" << ore::NV("Inst", inst) << ")";
+                   << "Unknown instruction, marking escape (" << ore::NV("Inst", StringRef(str)) << ")";
         });
         required.use_info.escaped = true;
         return false;
