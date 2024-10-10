@@ -546,9 +546,9 @@ function get_pkgversion_from_path(path)
     project_file = locate_project_file(path)
     if project_file isa String
         d = parsed_toml(project_file)
-        v = get(d, "version", nothing)
+        v = get(d, "version", nothing)::Union{Nothing, String}
         if v !== nothing
-            return VersionNumber(v::String)
+            return VersionNumber(v)
         end
     end
     return nothing
@@ -574,10 +574,14 @@ function pkgversion(m::Module)
     path = pkgdir(m)
     path === nothing && return nothing
     @lock require_lock begin
-        v = get_pkgversion_from_path(path)
         pkgorigin = get(pkgorigins, PkgId(moduleroot(m)), nothing)
         # Cache the version
-        if pkgorigin !== nothing && pkgorigin.version === nothing
+        if pkgorigin !== nothing && pkgorigin.version !== nothing
+            return pkgorigin.version
+        end
+        v = get_pkgversion_from_path(path)
+        # Cache the version
+        if pkgorigin !== nothing
             pkgorigin.version = v
         end
         return v
