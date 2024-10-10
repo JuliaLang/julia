@@ -985,7 +985,6 @@ function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
     @_propagate_inbounds_meta
-    @inline
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i)
 end
@@ -997,7 +996,6 @@ function _setindex!(A::Array{T}, x::T, i::Int) where {T}
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @_propagate_inbounds_meta
-    @inline
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i1, i2, I...)
 end
@@ -1771,7 +1769,7 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
-    @inline
+    @_propagate_inbounds_meta
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end
