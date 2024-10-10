@@ -52,6 +52,9 @@ This is the list of reserved keywords in Julia:
 `return`, `struct`, `true`, `try`, `using`, `while`.
 Those keywords are not allowed to be used as variable names.
 
+Names starting and ending with double underscores, or dunders, are reserved for use by Julia. This includes macros. Examples of dunder names currently in use include [`__init__`](@ref), [`__source__`]@(ref), [`__module__`](@ref), [`__precompile__`](@ref), [`@__dot__`](@ref), [`@__DIR__`](@ref), [`@__FILE__`](@ref), [`@__LINE__`](@ref), and [`@__MODULE__`](@ref). These reservations are not currently enforced by the parser.
+
+
 The following two-word sequences are reserved:
 `abstract type`, `mutable struct`, `primitive type`.
 However, you can create variables with names:
