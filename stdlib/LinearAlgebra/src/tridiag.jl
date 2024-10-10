@@ -183,44 +183,27 @@ issymmetric(S::SymTridiagonal) = true
 
 tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
-@noinline function throw_diag_outofboundserror(n, sz)
-    sz1, sz2 = sz
-    throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-sz1) ",
-            lazy"and at most $sz2 for an $(sz1)-by-$(sz2) matrix")))
-end
+_diagiter(M::SymTridiagonal{<:Number}) = M.dv
+_diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
+_eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
+_eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
-    # every branch call similar(..., ::Int) to make sure the
-    # same vector type is returned independent of n
-    absn = abs(n)
-    if absn == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
-    elseif absn <= size(M,1)
-        v = similar(M.dv, size(M,1)-absn)
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
-    else
-        throw_diag_outofboundserror(n, size(M))
-    end
-end
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+        return copyto!(v, _diagiter(M))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
+        return copyto!(v, _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
-    elseif n <= size(M,1)
-        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+        return copyto!(v, _eviter_transposed(M))
     else
-        throw_diag_outofboundserror(n, size(M))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
     end
+    return v
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
