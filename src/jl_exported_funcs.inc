@@ -155,6 +155,8 @@
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
     XX(jl_gc_get_max_memory) \
+    XX(jl_gc_heap_increment) \
+    XX(jl_gc_heap_decrement) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
     XX(jl_gc_is_in_finalizer) \

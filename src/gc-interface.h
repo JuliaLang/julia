@@ -147,6 +147,10 @@ JL_DLLEXPORT struct _jl_value_t *jl_gc_small_alloc(struct _jl_tls_states_t *ptls
 // allocation of that type in the allocation profiler.
 JL_DLLEXPORT struct _jl_value_t *jl_gc_big_alloc(struct _jl_tls_states_t *ptls, size_t sz,
                                                  struct _jl_value_t *type);
+// Update the allocation counters as if an allocation occurred.
+JL_DLLEXPORT void jl_gc_heap_increment(size_t sz);
+// Update the allocation counters as if a free occurred.
+JL_DLLEXPORT void jl_gc_heap_decrement(size_t sz);
 // Wrapper around Libc malloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 // Wrapper around Libc calloc that updates Julia allocation counters.
