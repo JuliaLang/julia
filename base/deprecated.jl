@@ -26,6 +26,7 @@ const __internal_changes_list = (
     :miuninferredrm,
     :codeinfonargs,  # #54341
     :ocnopartial,
+    :printcodeinfocalls,
     # Add new change names above this line
 )
 
