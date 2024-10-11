@@ -1602,17 +1602,22 @@ static void emit_error(jl_codectx_t &ctx, const Twine &txt)
 }
 
 // DO NOT PASS IN A CONST CONDITION!
-static void error_unless(jl_codectx_t &ctx, Value *cond, const Twine &msg)
+static void error_unless(jl_codectx_t &ctx, Function *F, Value *cond, const Twine &msg)
 {
     ++EmittedConditionalErrors;
     BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
     ctx.builder.CreateCondBr(cond, passBB, failBB);
     ctx.builder.SetInsertPoint(failBB);
-    just_emit_error(ctx, prepare_call(jlerror_func), msg);
+    just_emit_error(ctx, F, msg);
     ctx.builder.CreateUnreachable();
     passBB->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(passBB);
+}
+
+static void error_unless(jl_codectx_t &ctx, Value *cond, const Twine &msg)
+{
+    error_unless(ctx, prepare_call(jlerror_func), cond, msg);
 }
 
 static void raise_exception(jl_codectx_t &ctx, Value *exc,
@@ -4513,7 +4518,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         overflow |= __builtin_add_overflow(nbytes, nel, &nbytes);
     }
     if (overflow)
-        emit_error(ctx, "invalid GenericMemory size: too large for system address width");
+        emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: too large for system address width");
 
     auto ct = get_current_task(ctx);
     auto ptls = get_current_ptls(ctx);
@@ -4629,8 +4634,10 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
         Value *overflow1 = ctx.builder.CreateExtractValue(add_with_overflow, 1);
         overflow = ctx.builder.CreateOr(overflow, overflow1);
     }
+    Value *negnel = ctx.builder.CreateICmpSLT(nel_unboxed, ConstantInt::get(T_size, 0));
+    overflow = ctx.builder.CreateOr(overflow, negnel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);
-    error_unless(ctx, notoverflow, "invalid GenericMemory size: too large for system address width");
+    error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: too large for system address width");
     // actually allocate
     auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
     auto alloc = ctx.builder.CreateCall(call, { ptls, nbytes, cg_typ});

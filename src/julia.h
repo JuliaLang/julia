@@ -2072,6 +2072,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var);
+JL_DLLEXPORT void JL_NORETURN jl_argument_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,
                                               jl_value_t *t JL_MAYBE_UNROOTED);
