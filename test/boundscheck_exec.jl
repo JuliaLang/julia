@@ -261,7 +261,8 @@ end
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
 llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
+    @test !occursin("call void @ijl_bounds_error_int", llvm_40281)
+    @test !occursin("call void @j_throw_boundserror", llvm_40281)
 end
 
 # Given this is a sub-processed test file, not using @testsets avoids
