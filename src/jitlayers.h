@@ -209,6 +209,7 @@ struct jl_codegen_call_target_t {
     jl_returninfo_t::CallingConv cc;
     unsigned return_roots;
     llvm::Function *decl;
+    llvm::Function *oc;
     bool specsig;
 };
 

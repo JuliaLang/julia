@@ -426,8 +426,8 @@ typedef struct _jl_opaque_closure_t {
     jl_value_t *captures;
     size_t world;
     jl_method_t *source;
-    jl_fptr_args_t invoke;
-    void *specptr;
+    jl_fptr_args_t invoke; // n.b. despite the similar name, this is not an invoke ABI (jl_call_t / julia.call2), but rather the fptr1 (jl_fptr_args_t / julia.call) ABI
+    void *specptr; // n.b. despite the similarity in field name, this is not arbitrary private data for jlcall, but rather the codegen ABI for specsig, and is mandatory if specsig is valid
 } jl_opaque_closure_t;
 
 // This type represents an executable operation
