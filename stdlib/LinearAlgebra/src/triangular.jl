@@ -45,7 +45,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         copy(A::$t) = $t(copy(A.data))
         Base.unaliascopy(A::$t) = $t(Base.unaliascopy(A.data))
 
-        real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
         real(A::$t{<:Complex, <:StridedMaybeAdjOrTransMat}) = $t(real.(A))
     end
