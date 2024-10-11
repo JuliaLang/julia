@@ -139,7 +139,7 @@ function tryparse(::Type{VersionNumber}, v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
+    return @inline VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
 function parse(::Type{VersionNumber}, v::AbstractString)
