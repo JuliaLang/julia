@@ -1677,6 +1677,13 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     attach_after = insert_idx !== nothing
     flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     alloc_obj = finalizer_stmt.args[3]
+    cancel_registration = current_task_ssa !== nothing
+    if cancel_registration
+        lookup_idx_ssa = SSAValue(finalizer_idx)
+        finalize_call = Expr(:call, GlobalRef(Core, :_cancel_finalizer), alloc_obj, current_task_ssa, lookup_idx_ssa)
+        newinst = add_flag(NewInstruction(finalize_call, Nothing), flag)
+        insert_node!(ir, loc, newinst, attach_after)
+    end
     argexprs = Any[finalizer_stmt.args[2], alloc_obj]
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
@@ -1695,13 +1702,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
         insert_node!(ir, loc, newinst, attach_after)
     end
-    cancel_registration = current_task_ssa !== nothing
-    if cancel_registration
-        lookup_idx_ssa = SSAValue(finalizer_idx)
-        finalize_call = Expr(:call, GlobalRef(Core, :_cancel_finalizer), alloc_obj, current_task_ssa, lookup_idx_ssa)
-        newinst = add_flag(NewInstruction(finalize_call, Nothing), flag)
-        insert_node!(ir, loc, newinst, #=attach_after=#true)
-    else
+    if !cancel_registration
         # Erase the call to `finalizer`
         ir[SSAValue(finalizer_idx)][:stmt] = nothing
     end
