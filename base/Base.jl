@@ -53,6 +53,9 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
@@ -224,7 +227,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked
@@ -303,7 +306,6 @@ end
 include("hashing.jl")
 include("rounding.jl")
 include("div.jl")
-include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -421,7 +423,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-using .ScopedValues
 
 # metaprogramming
 include("meta.jl")
@@ -614,6 +615,25 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     nothing
 end
 
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -626,9 +646,9 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(explicit_loaded_modules)
-    @assert isempty(loaded_precompiles)
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     for (mod, key) in module_keys
-        loaded_precompiles[key => module_build_id(mod)] = mod
+        push!(get!(Vector{Module}, loaded_precompiles, key), mod)
     end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
@@ -636,22 +656,7 @@ function __init__()
     # Profiling helper
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        cond = Base.AsyncCondition()
-        Base.uv_unref(cond.handle)
-        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
-        atexit() do
-            # destroy this callback when exiting
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-            # this will prompt any ongoing or pending event to flush also
-            close(cond)
-            # error-propagation is not needed, since the errormonitor will handle printing that better
-            _wait(t)
-        end
-        finalizer(cond) do c
-            # if something goes south, still make sure we aren't keeping a reference in C to this
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        end
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+        start_profile_listener()
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

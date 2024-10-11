@@ -71,6 +71,8 @@ size(a::GenericMemory) = (length(a),)
 
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
+parent(ref::GenericMemoryRef) = ref.mem
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
@@ -188,7 +190,7 @@ function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
     p = unsafe_convert(Ptr{Cvoid}, a)
     T = eltype(a)
-    memset(p, x isa T ? x : convert(T, x), length(a))
+    memset(p, x isa T ? x : convert(T, x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -316,38 +318,15 @@ function indcopy(sz::Dims, I::GenericMemory)
     dst, src
 end
 
-# Wrapping a memory region in an Array
-@eval begin # @eval for the Array construction. Block for the docstring.
-    function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
-        len = Core.checked_dims(dims...)
-        length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
-        ref = memoryref(m)
-        $(Expr(:new, :(Array{T, N}), :ref, :dims))
-    end
-
-    """
-        view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
-
-    Create a vector `v::Vector{T}` backed by the specified indices of `m`. It is only safe to
-    resize `v` if `m` is subseqently not used.
-    """
-    function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
-        isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
-        @boundscheck checkbounds(m, inds)
-        ref = memoryref(m, first(inds)) # @inbounds would be safe here but does not help performance.
-        dims = (Int(length(inds)),)
-        $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-    end
-end
-view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
-
 # get, set(once), modify, swap and replace at index, atomically
 function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return memoryrefget(memref, order, @_boundscheck)
 end
 
 function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return memoryrefset!(
@@ -365,6 +344,7 @@ function setindexonce_atomic!(
     val,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefsetonce!(
@@ -377,11 +357,13 @@ function setindexonce_atomic!(
 end
 
 function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
 end
 
 function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefswap!(
@@ -400,6 +382,7 @@ function replaceindex_atomic!(
     desired,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefreplace!(

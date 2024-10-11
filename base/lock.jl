@@ -51,6 +51,20 @@ end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
+show(io::IO, ::ReentrantLock) = print(io, ReentrantLock, "()")
+
+function show(io::IO, ::MIME"text/plain", l::ReentrantLock)
+    show(io, l)
+    if !(get(io, :compact, false)::Bool)
+        locked_by = l.locked_by
+        if locked_by isa Task
+            print(io, " (locked by ", locked_by === current_task() ? "current " : "", locked_by, ")")
+        else
+            print(io, " (unlocked)")
+        end
+    end
+end
+
 """
     islocked(lock) -> Status (Boolean)
 
@@ -498,10 +512,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    const notify::ThreadSynchronizer
+    const notify::Threads.Condition
     const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
+    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
 function wait(e::Event)

@@ -1676,7 +1676,7 @@ end
 """
     reflectorApply!(x, τ, A)
 
-Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - conj(τ)*[1; x[2:end]]*[1; x[2:end]]')*A`.
 """
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
@@ -2014,20 +2014,12 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     m1,n1 = size(B)
     A = Base.unalias(B, A)
     if uplo == 'U'
-        if n < m
-            (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
-        else
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-        end
+        LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
         for j in 1:n, i in 1:min(j,m)
             @inbounds B[i,j] = A[i,j]
         end
     else # uplo == 'L'
-        if m < n
-            (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
-        else
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-        end
+        LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
         for j in 1:n, i in j:m
             @inbounds B[i,j] = A[i,j]
         end

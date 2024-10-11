@@ -259,7 +259,7 @@ namespace jl_intrinsics {
 
 namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
-    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+    static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
@@ -281,20 +281,20 @@ namespace jl_well_known {
             return addGCAllocAttributes(bigAllocFunc);
         });
 
-    const WellKnownFunctionDescription GCPoolAlloc(
-        GC_POOL_ALLOC_NAME,
+    const WellKnownFunctionDescription GCSmallAlloc(
+        GC_SMALL_ALLOC_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
             auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto poolAllocFunc = Function::Create(
+            auto smallAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
                     { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
-                GC_POOL_ALLOC_NAME);
-            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
-            return addGCAllocAttributes(poolAllocFunc);
+                GC_SMALL_ALLOC_NAME);
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return addGCAllocAttributes(smallAllocFunc);
         });
 
     const WellKnownFunctionDescription GCQueueRoot(

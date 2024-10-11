@@ -202,7 +202,8 @@ macro _total_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -216,7 +217,8 @@ macro _foldable_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -230,7 +232,8 @@ macro _terminates_locally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
 macro _terminates_globally_meta()
@@ -244,7 +247,8 @@ macro _terminates_globally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
 macro _terminates_globally_notaskstate_meta()
@@ -258,7 +262,8 @@ macro _terminates_globally_notaskstate_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
 macro _terminates_globally_noub_meta()
@@ -272,7 +277,8 @@ macro _terminates_globally_noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -286,7 +292,8 @@ macro _effect_free_terminates_locally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow :noub` (supposed to be used for bootstrapping)
 macro _nothrow_noub_meta()
@@ -300,7 +307,8 @@ macro _nothrow_noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -314,7 +322,8 @@ macro _nothrow_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _noub_meta()
@@ -328,7 +337,8 @@ macro _noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
 macro _notaskstate_meta()
@@ -342,7 +352,8 @@ macro _notaskstate_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
 macro _noub_if_noinbounds_meta()
@@ -356,7 +367,8 @@ macro _noub_if_noinbounds_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#true,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -389,7 +401,7 @@ julia> nameof(Base.Broadcast)
 """
 nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
 
-function iterate end
+typeof(function iterate end).name.constprop_heuristic = Core.ITERATE_HEURISTIC
 
 """
     convert(T, x)
@@ -575,15 +587,7 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
-typename(a) = error("typename does not apply to this type")
-typename(a::DataType) = a.name
-function typename(a::Union)
-    ta = typename(a.a)
-    tb = typename(a.b)
-    ta === tb || error("typename does not apply to unions whose components have different typenames")
-    return tb
-end
-typename(union::UnionAll) = typename(union.body)
+import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
@@ -1245,3 +1249,16 @@ that is whether it has an `iterate` method or not.
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
+
+# Special constprop heuristics for various binary opes
+typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function == end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function != end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

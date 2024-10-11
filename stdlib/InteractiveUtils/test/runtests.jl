@@ -394,13 +394,21 @@ let errf = tempname(),
     try
         redirect_stderr(new_stderr)
         @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
         println(new_stderr, "start")
         flush(new_stderr)
-        @test_throws "could not compile the specified method" sprint(code_native, f_broken_code, ())
+        @test_throws "could not compile the specified method" sprint(io -> code_native(io, f_broken_code, (), dump_module=true))
+        Libc.flush_cstdio()
+        println(new_stderr, "middle")
+        flush(new_stderr)
+        @test !isempty(sprint(io -> code_native(io, f_broken_code, (), dump_module=false)))
+        Libc.flush_cstdio()
+        println(new_stderr, "later")
+        flush(new_stderr)
+        @test invokelatest(g_broken_code) == 0
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @test invokelatest(g_broken_code) == 0
     finally
         Libc.flush_cstdio()
         redirect_stderr(old_stderr)
@@ -410,6 +418,14 @@ let errf = tempname(),
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
+            @test occursin("""\nmiddle
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
+            @test occursin("""\nlater
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
             @test endswith(errstr, "\nend\n") || errstr
         end
         rm(errf)
@@ -531,9 +547,9 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
-    code_native(buf, linear_foo, ())
-    output = String(take!(buf))
-    @test occursin(rgx, output)
+    code_native(buf, linear_foo, (), debuginfo = :none)
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
+    @test !occursin(rgx, output)
 
     @testset "binary" begin
         # check the RET instruction (opcode: C3)
@@ -692,7 +708,7 @@ let
         length((@code_lowered sum(1:10)).code)
 end
 
-@testset "@time_imports" begin
+@testset "@time_imports, @trace_compile, @trace_dispatch" begin
     mktempdir() do dir
         cd(dir) do
             try
@@ -701,7 +717,16 @@ end
                 write(foo_file,
                     """
                     module Foo3242
-                    foo() = 1
+                    function foo()
+                        Base.Experimental.@force_compile
+                        foo(1)
+                    end
+                    foo(x) = x
+                    function bar()
+                        Base.Experimental.@force_compile
+                        bar(1)
+                    end
+                    bar(x) = x
                     end
                     """)
 
@@ -718,6 +743,27 @@ end
 
                 @test occursin("ms  Foo3242", String(buf))
 
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_compile @eval Foo3242.foo()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms =# precompile(", String(buf))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_dispatch @eval Foo3242.bar()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("precompile(", String(buf))
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end

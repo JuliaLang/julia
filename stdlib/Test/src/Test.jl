@@ -1838,9 +1838,19 @@ function parse_testset_args(args)
         # a standalone symbol is assumed to be the test set we should use
         # the same is true for a symbol that's not exported from a module
         if isa(arg, Symbol) || Base.isexpr(arg, :.)
+            if testsettype !== nothing
+                msg = """Multiple testset types provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_testset_types; force=true)
+            end
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
+            if desc !== nothing
+                msg = """Multiple descriptions provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_descriptions; force=true)
+            end
             desc = esc(arg)
         # an assignment is an option
         elseif isa(arg, Expr) && arg.head === :(=)
@@ -2077,7 +2087,7 @@ function detect_ambiguities(mods::Module...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -2148,7 +2158,7 @@ function detect_unbound_args(mods...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds

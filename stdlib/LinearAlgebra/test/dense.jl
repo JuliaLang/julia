@@ -1285,4 +1285,20 @@ end
     @test eltype(A) == eltype(T)
 end
 
+@testset "tr" begin
+    @testset "block matrices" begin
+        S = [1 2; 3 4]
+        M = fill(S, 3, 3)
+        @test tr(M) == 3S
+        @test tr(view(M, :, :)) == 3S
+        @test tr(view(M, axes(M)...)) == 3S
+    end
+    @testset "avoid promotion" begin
+        A = Int8[1 3; 2 4]
+        @test tr(A) === Int8(5)
+        @test tr(view(A, :, :)) === Int8(5)
+        @test tr(view(A, axes(A)...)) === Int8(5)
+    end
+end
+
 end # module TestDense

@@ -165,16 +165,23 @@ end
 
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
-    gcdx(a, b)
+    gcdx(a, b...)
 
 Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+
+For more arguments than two, i.e., `gcdx(a, b, c, ...)` the Bézout coefficients are computed
+recursively, returning a solution `(d, u, v, w, ...)` to
+``u*a + v*b + w*c + ... = d = gcd(a, b, c, ...)``.
 
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
+
+!!! compat "Julia 1.12"
+    More or fewer arguments than two require Julia 1.12 or later.
 
 # Examples
 ```jldoctest
@@ -183,6 +190,9 @@ julia> gcdx(12, 42)
 
 julia> gcdx(240, 46)
 (2, -9, 47)
+
+julia> gcdx(15, 12, 20)
+(1, 7, -7, -1)
 ```
 
 !!! note
@@ -215,6 +225,18 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
+gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
+function gcdx(a::Real, b::Real, cs::Real...)
+    # a solution to the 3-arg `gcdx(a,b,c)` problem, `u*a + v*b + w*c = gcd(a,b,c)`, can be
+    # obtained from the 2-arg problem in three steps:
+    #   1. `gcdx(a,b)`: solve `i*a + j*b = d′ = gcd(a,b)` for `(i,j)`
+    #   2. `gcdx(d′,c)`: solve `x*gcd(a,b) + yc = gcd(gcd(a,b),c) = gcd(a,b,c)` for `(x,y)`
+    #   3. return `d = gcd(a,b,c)`, `u = i*x`, `v = j*x`, and `w = y`
+    # the N-arg solution proceeds similarly by recursion
+    d, i, j = gcdx(a, b)
+    d′, x, ys... = gcdx(d, cs...)
+    return d′, i*x, j*x, ys...
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -263,14 +285,16 @@ end
     invmod(n::T) where {T <: Base.BitInteger}
 
 Compute the modular inverse of `n` in the integer ring of type `T`, i.e. modulo
-`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words these
+`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words, these
 methods satisfy the following identities:
 ```
 n * invmod(n) == 1
 (n * invmod(n, T)) % T == 1
 (n % T) * invmod(n, T) == 1
 ```
-Note that `*` here is modular multiplication in the integer ring, `T`.
+Note that `*` here is modular multiplication in the integer ring, `T`.  This will
+throw an error if `n` is even, because then it is not relatively prime with `2^N`
+and thus has no such inverse.
 
 Specifying the modulus implied by an integer type as an explicit value is often
 inconvenient since the modulus is by definition too big to be represented by the
@@ -296,7 +320,11 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -360,7 +388,7 @@ end
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
-const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float16,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # Inline x^2 and x^3 for Val
@@ -978,7 +1006,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k in eachindex(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in 1:length(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
@@ -1237,3 +1265,102 @@ function binomial(x::Number, k::Integer)
     # and instead divide each term by i, to avoid spurious overflow.
     return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end
+
+"""
+    clamp(x, lo, hi)
+
+Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
+are promoted to a common type.
+
+See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
+3-element Vector{BigFloat}:
+ 3.141592653589793238462643383279502884197169399375105820974944592307816406286198
+ 2.0
+ 9.0
+
+julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
+3-element Vector{Int64}:
+  6
+  6
+ 10
+```
+"""
+function clamp(x::X, lo::L, hi::H) where {X,L,H}
+    T = promote_type(X, L, H)
+    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+end
+
+"""
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+
+julia> clamp(-200, Int8)
+-128
+
+julia> trunc(Int, 4pi^2)
+39
+```
+"""
+function clamp(x, ::Type{T}) where {T<:Integer}
+    # delegating to clamp(x, typemin(T), typemax(T)) would promote types
+    # this way, we avoid unnecessary conversions
+    # think of, e.g., clamp(big(2) ^ 200, Int16)
+    lo = typemin(T)
+    hi = typemax(T)
+    return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
+end
+
+
+"""
+    clamp!(array::AbstractArray, lo, hi)
+
+Restrict values in `array` to the specified range, in-place.
+See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> row = collect(-4:4)';
+
+julia> clamp!(row, 0, Inf)
+1×9 adjoint(::Vector{Int64}) with eltype Int64:
+ 0  0  0  0  0  1  2  3  4
+
+julia> clamp.((-4:4)', 0, Inf)
+1×9 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
+```
+"""
+function clamp!(x::AbstractArray, lo, hi)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lo, hi)
+    end
+    x
+end
+
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))

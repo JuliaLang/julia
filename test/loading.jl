@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-original_depot_path = copy(Base.DEPOT_PATH)
-
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
+# NOTE: the __LINE__ numbers for these first couple tests are significant, so
+# adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
 macro macro_caller_lineno()
@@ -32,6 +32,9 @@ end
 @test (@emit_LINE) == ((@__LINE__) - 3, @__LINE__)
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
+
+original_depot_path = copy(Base.DEPOT_PATH)
+include("precompile_utils.jl")
 
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
@@ -167,7 +170,7 @@ end
 
             @test root.uuid == root_uuid
             @test this.uuid == this_uuid
-            @test that == nothing
+            @test that === nothing
 
             write(project_file, """
             name = "Root"
@@ -180,8 +183,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == proj_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
         end
@@ -213,8 +216,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == root_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
 
             @test Base.get_uuid_name(project_file, this_uuid) == "This"
         finally
@@ -273,8 +276,8 @@ end
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
         @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
-    @test identify_package("Baz") == nothing
-    @test identify_package("Qux") == nothing
+    @test identify_package("Baz") === nothing
+    @test identify_package("Qux") === nothing
     @testset "equivalent package names" begin
          classes = [
             ["Foo"],
@@ -793,6 +796,17 @@ import .Foo28190.Libdl; import Libdl
     end
 end
 
+@testset "`::AbstractString` constraint on the path argument to `include`" begin
+    for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        let i = m.include
+            @test !applicable(i, (nothing,))
+            @test !applicable(i, (identity, nothing,))
+            @test !hasmethod(i, Tuple{Nothing})
+            @test !hasmethod(i, Tuple{Function,Nothing})
+        end
+    end
+end
+
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
@@ -848,26 +862,10 @@ end
         proj = joinpath(tmp, "Project.toml")
         touch(proj)
         touch(joinpath(tmp, "Manifest-v1.5.toml"))
-        @test Base.project_file_manifest_path(proj) == nothing
+        @test Base.project_file_manifest_path(proj) === nothing
         touch(joinpath(tmp, "Manifest.toml"))
         man = basename(Base.project_file_manifest_path(proj))
         @test man == "Manifest.toml"
-    end
-end
-
-@testset "error message loading pkg bad module name" begin
-    mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
-                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                    check for typos in package module name") (@eval using BadCase)
-            end
-        finally
-            copy!(LOAD_PATH, old_loadpath)
-        end
     end
 end
 
@@ -1034,6 +1032,16 @@ end
 end
 
 @testset "Extensions" begin
+    test_ext = """
+    function test_ext(parent::Module, ext::Symbol)
+        _ext = Base.get_extension(parent, ext)
+        _ext isa Module || error("expected extension \$ext to be loaded")
+        _pkgdir = pkgdir(_ext)
+        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgversion = pkgversion(_ext)
+        _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
+    end
+    """
     depot_path = mktempdir()
     try
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
@@ -1044,6 +1052,7 @@ end
             cmd = """
             $load_distr
             begin
+                $ew $test_ext
                 $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
                 using HasExtensions
                 $ew using HasExtensions
@@ -1051,6 +1060,7 @@ end
                 $ew HasExtensions.ext_loaded && error("ext_loaded set")
                 using HasDepWithExtensions
                 $ew using HasDepWithExtensions
+                $ew test_ext(HasExtensions, :Extension)
                 $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
                 $ew HasExtensions.ext_loaded || error("ext_loaded not set")
                 $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
@@ -1102,13 +1112,14 @@ end
 
         test_ext_proj = """
         begin
+            $test_ext
             using HasExtensions
             using ExtDep
-            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :Extension)
             using ExtDep2
-            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :ExtensionFolder)
             using ExtDep3
-            Base.get_extension(HasExtensions, :ExtensionDep) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :ExtensionDep)
         end
         """
         for compile in (`--compiled-modules=no`, ``)
@@ -1147,6 +1158,19 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+
+        # Extension with cycles in dependencies
+        code = """
+        using CyclicExtensions
+        Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+        Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+        CyclicExtensions.greet()
+        """
+        proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+        @test occursin("Hello Cycles!", String(read(cmd)))
+
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1253,96 +1277,6 @@ end
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
-end
-
-@testset "checking srcpath modules" begin
-    p = Base.PkgId("Dummy")
-    fpath, _ = mktemp()
-    @testset "valid" begin
-        write(fpath, """
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        baremodule Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        using Foo
-        \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\" Foo \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        \"\"\" module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        @doc let x = 1
-            x
-        end module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        # using foo
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-    end
-    @testset "invalid" begin
-        write(fpath, """
-        # module Foo
-        using Bar
-        # end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        module Foo
-        end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        x = 1
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-    end
 end
 
 @testset "relocatable upgrades #51989" begin
@@ -1584,6 +1518,7 @@ end
 @testset "-m" begin
     rot13proj = joinpath(@__DIR__, "project", "Rot13")
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13.Rot26 --project nowhere ABJURER`) == "--project nowhere ABJURER "
 end
 
 @testset "workspace loading" begin
@@ -1669,5 +1604,34 @@ end
         @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
     finally
         copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "require_stdlib loading duplication" begin
+    depot_path = mktempdir()
+    oldBase64 = nothing
+    try
+        push!(empty!(DEPOT_PATH), depot_path)
+        Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
+        oldBase64 = Base.unreference_module(Base64_key)
+        cc = Base.compilecache(Base64_key)
+        @test Base.isprecompiled(Base64_key, cachepaths=String[cc[1]])
+        empty!(DEPOT_PATH)
+        Base.require_stdlib(Base64_key)
+        push!(DEPOT_PATH, depot_path)
+        append!(DEPOT_PATH, original_depot_path)
+        oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
+        Base.unreference_module(Base64_key)
+        empty!(DEPOT_PATH)
+        push!(DEPOT_PATH, depot_path)
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
+        Base.unreference_module(Base64_key)
+    finally
+        oldBase64 === nothing || Base.register_root_module(oldBase64)
+        copy!(DEPOT_PATH, original_depot_path)
+        rm(depot_path, force=true, recursive=true)
     end
 end

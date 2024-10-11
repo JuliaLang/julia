@@ -15,6 +15,7 @@ JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         ios_t *z, ios_t *s) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_mis_fallback(void *native_code, arraylist_t* MIs) UNAVAILABLE
 
 JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
@@ -106,8 +107,6 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
 {
     return 0;
 }
-
-JL_DLLEXPORT void jl_build_newpm_pipeline_fallback(void *MPM, void *PB, void *config) UNAVAILABLE
 
 JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 

@@ -295,7 +295,10 @@ function maybe_spawn_cache_PATH()
     @lock PATH_cache_lock begin
         PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        PATH_cache_task = Threads.@spawn begin
+            REPLCompletions.cache_PATH()
+            @lock PATH_cache_lock PATH_cache_task = nothing # release memory when done
+        end
         Base.errormonitor(PATH_cache_task)
     end
 end
@@ -553,8 +556,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
-                                 aggressive_constant_propagation=true,
-                                 unoptimize_throw_blocks=false),
+                                 aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
@@ -601,7 +603,7 @@ is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode 
 
 function is_call_graph_uncached(sv::CC.InferenceState)
     CC.is_cached(sv) && return false
-    parent = sv.parent
+    parent = CC.frame_parent(sv)
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
@@ -624,7 +626,7 @@ function is_repl_frame_getproperty(sv::CC.InferenceState)
     def isa Method || return false
     def.name === :getproperty || return false
     CC.is_cached(sv) && return false
-    return is_repl_frame(sv.parent)
+    return is_repl_frame(CC.frame_parent(sv))
 end
 
 # aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
@@ -897,8 +899,11 @@ const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "
 
 # Aux function to detect whether we're right after a using or import keyword
 function get_import_mode(s::String)
+    # allow all of these to start with leading whitespace and macros like @eval and @eval(
+    # ^\s*(?:@\w+\s*(?:\(\s*)?)?
+
     # match simple cases like `using |` and `import  |`
-    mod_import_match_simple = match(r"^\b(using|import)\s*$", s)
+    mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
     if mod_import_match_simple !== nothing
         if mod_import_match_simple[1] == "using"
             return :using_module
@@ -907,7 +912,7 @@ function get_import_mode(s::String)
         end
     end
     # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
-    mod_import_match = match(r"^\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
+    mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
     if mod_import_match !== nothing
         if mod_import_match.captures[1] == "using"
             return :using_module
@@ -916,7 +921,7 @@ function get_import_mode(s::String)
         end
     end
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
-    name_import_match = match(r"^\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
+    name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
     if name_import_match !== nothing
         if name_import_match[1] == "using"
             return :using_name

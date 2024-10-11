@@ -61,9 +61,10 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
+function (*)(a::AbstractVector, B::AbstractMatrix)
+    require_one_based_indexing(a)
+    reshape(a, length(a), 1) * B
+end
 
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
@@ -122,7 +123,15 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(matprod_dest(A, B, TS), A, B)
 end
 
-matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+"""
+    matprod_dest(A, B, T)
+
+Return an appropriate `AbstractArray` with element type `T` that may be used to store the result of `A * B`.
+
+!!! compat
+    This function requires at least Julia 1.11
+"""
+matprod_dest(A, B, T) = similar(B, T, (size(A, 1), size(B, 2)))
 
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})

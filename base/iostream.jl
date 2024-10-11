@@ -47,17 +47,18 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream)
+    fd(stream) -> RawFD
 
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 
-File descriptors should typically be represented as [`RawFD`](@ref) objects, rather
-than as `Int`s, to ensure that they are properly interpreted by Julia functions.
+`RawFD` objects can be passed directly to other languages via the `ccall` interface.
 
-Note that `RawFD` objects can be passed directly to other languages via the `ccall` interface.
+!!! compat "Julia 1.12"
+    Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
+    `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
 """
-fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
@@ -229,8 +230,8 @@ end
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
     if sz == -1
-        err = Libc.errno()
-        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+        # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
+        sz = filesize(stat(s))
     end
     return sz
 end

@@ -9,7 +9,7 @@ using Markdown
 
 empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
 
-@test isassigned(Base.REPL_MODULE_REF)
+@test Base.REPL_MODULE_REF[] === REPL
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
@@ -244,8 +244,9 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
+            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
         write(stdin_write, "\b")
         wait(t)
     end
@@ -1216,9 +1217,9 @@ global some_undef_global
 @test occursin("does not exist", sprint(show, help_result("..")))
 # test that helpmode is sensitive to contextual module
 @test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Base.Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Fix2", Base)))
 
 
@@ -1650,12 +1651,12 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, "foobar\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
-    @test readline(stdout_read) == ""
+    @test readline(stdout_read) == "" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m"
+    @test readline(stdout_read) == "\e[0m" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # generate deeper error
     write(stdin_write, "foo() = foobar\n")
@@ -1965,9 +1966,18 @@ end
 
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
-    withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
+    withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
         prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
         @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    # Issue 55850
+    tmp_55850 = mktempdir()
+    tmp_sym_link = joinpath(tmp_55850, "sym")
+    symlink(tmp_55850, tmp_sym_link; dir_target=true)
+    withenv("JULIA_DEPOT_PATH" => tmp_sym_link * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.projname(REPL.find_project_file()))"`)
+        @test prompt == "@v$(VERSION.major).$(VERSION.minor)"
     end
 
     get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
