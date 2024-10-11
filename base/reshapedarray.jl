@@ -119,19 +119,28 @@ reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
 reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
-@inline function _reshape_uncolon(A, dims)
-    @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
-        "may have at most one omitted dimension specified by `Colon()`")))
-    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
-        "must be divisible by the product of the new dimensions $dims")))
+reshape(parent::AbstractArray, dims::Integer...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Integer,Colon}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+
+@noinline throw1(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
+        " may have at most one omitted dimension specified by `Colon()`")))
+@noinline throw2(lenA, dims) = throw(DimensionMismatch(string("array size ", lenA,
+    " must be divisible by the product of the new dimensions ", dims)))
+if Int == Int64
+    const ReshapeIntTypes = Union{Int8, Int16, Int32, Int64}
+else
+    const ReshapeIntTypes = Union{Int8, Int16, Int32}
+end
+@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{ReshapeIntTypes, Colon}}})
+    dims = map(x -> x isa Colon ? x : Int(x), _dims)
     pre = _before_colon(dims...)::Tuple{Vararg{Int}}
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
@@ -142,14 +151,26 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     else
         let pr = Core.checked_dims(pre..., post...)  # safe product
             if iszero(pr)
-                throw2(A, dims)
+                throw2(len, dims)
             end
             (quo, rem) = divrem(len, pr)
             (Int(quo), iszero(rem))
         end
     end::Tuple{Int,Bool}
-    is_exact || throw2(A, dims)
+    is_exact || throw2(len, dims)
     (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
+end
+@inline function _reshape_uncolon(A, dims::Tuple{Vararg{Union{Integer, Colon}}})
+    pre = _before_colon(dims...)
+    post = _after_colon(dims...)
+    _any_colon(post...) && throw1(dims)
+    len = length(A)
+    pr = prod((pre..., post...))
+    iszero(pr) && throw2(len, dims)
+    (quo, rem) = divrem(len, pr)
+    sz, is_exact = quo, iszero(rem)
+    is_exact || throw2(len, dims)
+    (pre..., sz, post...)
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
