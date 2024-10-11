@@ -55,21 +55,19 @@ It may take optional keyword arguments:
 - `read`, `write`, `append`: restricts operations to the buffer; see `open` for details.
 - `truncate`: truncates the buffer size to zero length.
 - `maxsize`: specifies a size beyond which the buffer may not be grown.
-- `sizehint`: suggests a capacity of the buffer (`data` must implement `sizehint!(data,
-  size)`).
+- `sizehint`: suggests a capacity of the buffer (`data` must implement `sizehint!(data, size)`).
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
-!!! warn "`data` is invalid after being passed to `IOBuffer`"
-    Once `data` is passed to `IOBuffer`, it is best to consider `data` invalid; in effect
-    `IOBuffer` "owns" this array from then on. Any mutations to `data` can lead to undefined
-    behavior when reading from the `IOBuffer`. If `write=true` (or `append=true`) and
-    `maxsize > length(data)`, existing bindings to `data` may reference undefined content.
-    For example, `IOBuffer` may re-allocate the data as required, which may or may
-    not be visible in any outstanding bindings to `array`. There could be unallocated,
-    arbitrary values. Likewise, the ordering of any values written to this array cannot
-    be presumed.
-
+!!! warning "Passing `data` as scratch space to `IOBuffer` with `write=true` may give unexpected behavior"
+    Once `write` is called on an `IOBuffer`, it is best to consider any
+    previous references to `data` invalidated; in effect `IOBuffer` "owns"
+    this data until a call to `take!`. Any indirect mutations to `data`
+    could lead to undefined behavior by breaking the abstractions expected
+    by `IOBuffer`. If `write=true` the IOBuffer may store data at any
+    offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
+    the IOBuffer might re-allocate the data entirely, which
+    may or may not be visible in any outstanding bindings to `array`.
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
