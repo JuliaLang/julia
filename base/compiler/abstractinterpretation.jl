@@ -547,6 +547,7 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{A
             sigt = Bottom
             for j = 1:length(applicable)
                 match = applicable[j]::MethodMatch
+                valid_as_lattice(match.spec_types, true) || continue
                 sigt = sigt ⊔ fieldtype(match.spec_types, i)
             end
             if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
