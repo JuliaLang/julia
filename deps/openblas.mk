@@ -31,6 +31,7 @@ endif
 endif
 
 # 64-bit BLAS interface
+$(error USE_BLAS64: $(USE_BLAS64))
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
