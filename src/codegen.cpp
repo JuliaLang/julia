@@ -820,6 +820,12 @@ static const auto jlerror_func = new JuliaFunction<>{
             {getPointerTy(C)}, false); },
     get_attrs_noreturn,
 };
+static const auto jlargumenterror_func = new JuliaFunction<>{
+    XSTR(jl_argument_error),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {getPointerTy(C)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlatomicerror_func = new JuliaFunction<>{
     XSTR(jl_atomic_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -10357,6 +10363,7 @@ static void init_jit_functions(void)
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
+    add_named_global(jlargumenterror_func, &jl_argument_error);
     add_named_global(jlatomicerror_func, &jl_atomic_error);
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
