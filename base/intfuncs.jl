@@ -36,6 +36,9 @@ julia> gcd(1//3, 2)
 
 julia> gcd(0, 0, 10, 15)
 5
+
+julia> gcd([1//3; 2//3])
+1//3
 ```
 """
 function gcd(a::T, b::T) where T<:Integer
@@ -125,6 +128,9 @@ julia> lcm(1//3, 2)
 
 julia> lcm(1, 3, 5, 7)
 105
+
+julia> lcm([1//3; 2//3])
+2//3
 ```
 """
 function lcm(a::T, b::T) where T<:Integer
@@ -149,8 +155,8 @@ lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
 gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
 lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
-gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
-lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
+gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=abc[1])
+lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=abc[1])
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
