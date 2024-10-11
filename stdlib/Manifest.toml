@@ -2,11 +2,16 @@
 
 julia_version = "1.12.0-DEV"
 manifest_format = "2.0"
-project_hash = "d3a1f6b706609fe0c59521e1d770be6e2b8c489d"
+project_hash = "c59a70b2cde34cfe2cc3e07f856b2c91946c224c"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.2"
+
+[[deps.ArtifactDownloads]]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "Printf", "SHA", "TOML", "Tar", "p7zip_jll"]
+uuid = "6ee59702-05f1-4877-b811-03813c0d76c5"
+version = "1.11.0"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -78,10 +83,10 @@ version = "18.1.7+2"
 [[deps.LLVMLibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "47c5dbc3-30ba-59ef-96a6-123e260183d9"
-version = "12.0.1+0"
+version = "14.0.6+0"
 
 [[deps.LazyArtifacts]]
-deps = ["Artifacts", "Pkg"]
+deps = ["ArtifactDownloads", "Artifacts"]
 uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 version = "1.11.0"
 
@@ -113,7 +118,7 @@ version = "1.11.0+1"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+17"
+version = "2.0.1+18"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]

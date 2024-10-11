@@ -40,7 +40,7 @@ endef
 $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
 
-STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
+STDLIBS = Artifacts ArtifactDownloads Base64 CRC32c Dates FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization \
           SharedArrays Sockets Test TOML Unicode UUIDs \
