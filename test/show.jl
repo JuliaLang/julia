@@ -2582,6 +2582,77 @@ end
     @test contains(str, "%1 = \e[31m%7")
 end
 
+@testset "issue #54028: Code warntype should show print the unstable SSA values in red" begin
+    io = IOBuffer()
+    ioc = IOContext(io, :color => true)
+
+    using InteractiveUtils
+
+    function foo(x)
+        y = x[1]
+        sin(y)
+    end
+
+    code_warntype(ioc, foo, (Vector{Any},), optimize=true)
+
+    str = String(take!(io))
+
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m)")
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%19\e[22m\e[39m = ")
+
+    function subbar(t, w)
+        return sum(t) + w
+    end
+
+    function bar(x, z)
+        y = x[1] + subbar(x, z)
+        return subbar([sin(y), sin(z)], z)
+    end
+
+    code_warntype(ioc, bar, (Vector{Any}, Int), optimize=true)
+
+    str = String(take!(io))
+
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%19\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%20\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%17\e[22m\e[39m + \e[91m\e[1m%19\e[22m\e[39m")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%20\e[22m\e[39m)")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m,")
+    @test contains(str, "\e[91m\e[1m%50\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%21\e[22m\e[39m,")
+    @test contains(str, "\e[91m\e[1m%52\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%53\e[22m\e[39m = ")
+    @test contains(str, "\e[91m\e[1m%52\e[22m\e[39m,")
+end
+@testset "Check PiNode color" begin
+    using InteractiveUtils
+    io = IOBuffer()
+
+    function example_function(x::Union{Int, Float64})
+        if isa(x, Int)
+            y = (x + 1)::Int
+        else
+            y = (x + 1.0)::Float64
+        end
+        return y
+    end
+
+    ioc = IOContext(io, :color => true)
+    code_warntype(ioc, example_function, (Union{Int, Float64},); optimize=true)
+    str_with_color = String(take!(io))
+    @test contains(str_with_color, "\e[90m2 ─\e[39m %3 = π (x, \e[36mInt64\e[39m)")
+    @test contains(str_with_color, "\e[90m3 ─\e[39m %6 = π (x, \e[36mFloat64\e[39m)")
+
+    ioc = IOContext(io, :color => false)
+    code_warntype(ioc, example_function, (Union{Int, Float64},); optimize=true)
+    str_no_color = String(take!(io))
+
+    @test contains(str_no_color, "%3 = π (x, Int64)")
+    @test contains(str_no_color, "%6 = π (x, Float64)")
+end
 @testset "issue #46947: IncrementalCompact double display of just-compacted nodes" begin
     # get some IR
     foo(i) = i == 1 ? 1 : 2
