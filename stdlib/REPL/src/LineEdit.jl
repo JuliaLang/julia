@@ -366,14 +366,7 @@ end
 # Prompt Completions & Hints
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    # suppress stderr/stdout prints during completion computation
-    # i.e. ambiguous qualification warnings that are printed to stderr
-    # TODO: remove this suppression once such warnings are better handled
-    # TODO: but before that change Pipe to devnull once devnull redirects work for JL_STDERR etc.
-    completions_exist = redirect_stdio(;stderr=Pipe(), stdout=Pipe()) do
-        complete_line(state(s), s.key_repeats, s.active_module)
-    end
-    if completions_exist
+    if complete_line(state(s), s.key_repeats, s.active_module)
         return refresh_line(s)
     else
         beep(s)
@@ -391,13 +384,7 @@ function check_for_hint(s::MIState)
     end
 
     completions, partial, should_complete = try
-        # suppress stderr/stdout prints during completion computation
-        # i.e. ambiguous qualification warnings that are printed to stderr
-        # TODO: remove this suppression once such warnings are better handled
-        # TODO: but before that change Pipe to devnull once devnull redirects work for JL_STDERR etc.
-        completions, partial, should_complete = redirect_stdio(;stderr=Pipe(), stdout=Pipe()) do
-            complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
-        end
+        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
     catch
         @debug "error completing line for hint" exception=current_exceptions()
         return clear_hint(st)

@@ -70,7 +70,6 @@ Base.dataids(A::UpperHessenberg) = Base.dataids(parent(A))
 Base.unaliascopy(A::UpperHessenberg) = UpperHessenberg(Base.unaliascopy(parent(A)))
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
-real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 

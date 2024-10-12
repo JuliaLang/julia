@@ -11,13 +11,13 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 
 | File                             | Description                                                        |
 |:-------------------------------- |:------------------------------------------------------------------ |
-| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission           |
+| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission                |
 | `builtins.c`                     | Builtin functions                                                  |
 | `ccall.cpp`                      | Lowering [`ccall`](@ref)                                           |
 | `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
 | `codegen.cpp`                    | Top-level of code generation, pass list, lowering builtins         |
 | `debuginfo.cpp`                  | Tracks debug information for JIT code                              |
-| `disasm.cpp`                     | Handles native object file and JIT code disassembly                 |
+| `disasm.cpp`                     | Handles native object file and JIT code disassembly                |
 | `gf.c`                           | Generic functions                                                  |
 | `intrinsics.cpp`                 | Lowering intrinsics                                                |
 | `jitlayers.cpp`                  | JIT-specific code, ORC compilation layers/utilities                |
