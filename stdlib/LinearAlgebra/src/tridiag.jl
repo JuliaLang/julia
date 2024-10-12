@@ -183,44 +183,27 @@ issymmetric(S::SymTridiagonal) = true
 
 tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
-@noinline function throw_diag_outofboundserror(n, sz)
-    sz1, sz2 = sz
-    throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-sz1) ",
-            lazy"and at most $sz2 for an $(sz1)-by-$(sz2) matrix")))
-end
+_diagiter(M::SymTridiagonal{<:Number}) = M.dv
+_diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
+_eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
+_eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
-    # every branch call similar(..., ::Int) to make sure the
-    # same vector type is returned independent of n
-    absn = abs(n)
-    if absn == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
-    elseif absn <= size(M,1)
-        v = similar(M.dv, size(M,1)-absn)
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
-    else
-        throw_diag_outofboundserror(n, size(M))
-    end
-end
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+        return copyto!(v, _diagiter(M))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
+        return copyto!(v, _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
-    elseif n <= size(M,1)
-        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+        return copyto!(v, _eviter_transposed(M))
     else
-        throw_diag_outofboundserror(n, size(M))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
     end
+    return v
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
@@ -228,6 +211,29 @@ end
 -(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
+function rmul!(A::SymTridiagonal, x::Number)
+    if size(A,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = A[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    A.dv .*= x
+    _evview(A) .*= x
+    return A
+end
+function lmul!(x::Number, B::SymTridiagonal)
+    if size(B,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * B[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv = x * B.dv
+    ev = _evview(B)
+    @. ev = x * ev
+    return B
+end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal{<:Number}, B::SymTridiagonal{<:Number}) =
@@ -296,8 +302,6 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigen(A).vectors
-
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
 
@@ -476,6 +480,7 @@ Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev)
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
+        issymmetric(x) || throw(ArgumentError("cannot set a diagonal entry of a SymTridiagonal to an asymmetric value"))
         @inbounds A.dv[i] = x
     else
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
@@ -654,7 +659,7 @@ issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) 
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
-function diag(M::Tridiagonal{T}, n::Integer=0) where T
+function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
@@ -836,6 +841,30 @@ tr(M::Tridiagonal) = sum(M.d)
 -(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
+function rmul!(T::Tridiagonal, x::Number)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = T[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    T.dl .*= x
+    T.d .*= x
+    T.du .*= x
+    return T
+end
+function lmul!(x::Number, T::Tridiagonal)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * T[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. T.dl = x * T.dl
+    @. T.d = x * T.d
+    @. T.du = x * T.du
+    return T
+end
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
 \(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 

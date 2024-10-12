@@ -324,9 +324,13 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    xT = x isa T ? x : convert(T, x)::T
+    @inline
+    x = x isa T ? x : convert(T, x)::T
+    return _fill!(dest, x)
+end
+function _fill!(dest::Array{T}, x::T) where T
     for i in eachindex(dest)
-        @inbounds dest[i] = xT
+        @inbounds dest[i] = x
     end
     return dest
 end
@@ -415,7 +419,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ref = a.ref
     t = @_gc_preserve_begin ref
     p = unsafe_convert(Ptr{Cvoid}, ref)
-    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -980,12 +984,22 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
+    @_propagate_inbounds_meta
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i)
+end
+function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
-    memoryrefset!(memoryrefnew(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+    @_propagate_inbounds_meta
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i1, i2, I...)
+end
+function _setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
@@ -1071,13 +1085,14 @@ function _growbeg!(a::Vector, delta::Integer)
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline (function()
+        @_terminates_locally_meta
         memlen = length(mem)
         if offset + len - 1 > memlen || offset < 1
             throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
         end
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
         # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
+        newmemlen = max(overallocation(len), len + 2 * delta + 1)
         newoffset = div(newmemlen - newlen, 2) + 1
         # If there is extra data after the end of the array we can use that space so long as there is enough
         # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
@@ -1086,10 +1101,14 @@ function _growbeg!(a::Vector, delta::Integer)
         if newoffset + newlen < memlen
             newoffset = div(memlen - newlen, 2) + 1
             newmem = mem
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+            for j in offset:newoffset+delta-1
+                @inbounds _unsetindex!(mem, j)
+            end
         else
             newmem = array_new_memory(mem, newmemlen)
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         end
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         if ref !== a.ref
             @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
         end
@@ -1262,10 +1281,16 @@ See also [`pushfirst!`](@ref).
 function push! end
 
 function push!(a::Vector{T}, item) where T
+    @inline
     # convert first so we don't grow the array if the assignment won't work
-    itemT = item isa T ? item : convert(T, item)::T
+    # and also to avoid a dynamic dynamic dispatch in the common case that
+    # `item` is poorly-typed and `a` is well-typed
+    item = item isa T ? item : convert(T, item)::T
+    return _push!(a, item)
+end
+function _push!(a::Vector{T}, item::T) where T
     _growend!(a, 1)
-    @_safeindex a[length(a)] = itemT
+    @_safeindex a[length(a)] = item
     return a
 end
 
@@ -1659,7 +1684,11 @@ julia> pushfirst!([1, 2, 3, 4], 5, 6)
 ```
 """
 function pushfirst!(a::Vector{T}, item) where T
+    @inline
     item = item isa T ? item : convert(T, item)::T
+    return _pushfirst!(a, item)
+end
+function _pushfirst!(a::Vector{T}, item::T) where T
     _growbeg!(a, 1)
     @_safeindex a[1] = item
     return a
@@ -1745,12 +1774,16 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
+    @_propagate_inbounds_meta
+    item = item isa T ? item : convert(T, item)::T
+    return _insert!(a, i, item)
+end
+function _insert!(a::Array{T,1}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
-    _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
     # :noub, because _growat! already did bound check
-    @inbounds a[i] = _item
+    @inbounds a[i] = item
     return a
 end
 
