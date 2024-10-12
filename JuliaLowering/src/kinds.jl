@@ -74,6 +74,8 @@ function _register_kinds()
             "SSAValue"
             # Local variable in a `CodeInfo` code object (including lambda arguments)
             "slot"
+            # Static parameter to a `CodeInfo` code object ("type parameters" to methods)
+            "static_parameter"
             # Reference to a global variable within a module
             "globalref"
             # Unconditional goto

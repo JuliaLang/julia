@@ -212,12 +212,19 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     # parent scope.
     var_ids = Dict{NameKey,IdTag}()
 
-    # Add lambda arguments
+    # Add lambda arguments and static parameters
     function add_lambda_args(args, var_kind)
-        for a in args
-            ka = kind(a)
+        for arg in args
+            ka = kind(arg)
             if ka == K"Identifier"
-                varkey = NameKey(a)
+                varkey = NameKey(arg)
+                if haskey(var_ids, varkey)
+                    vk = lookup_binding(ctx, var_ids[varkey]).kind
+                    msg = vk == :argument         && var_kind == vk ? "function argument name not unique"         :
+                          vk == :static_parameter && var_kind == vk ? "function static parameter name not unique" :
+                          "static parameter name not distinct from function argument"
+                    throw(LoweringError(arg, msg))
+                end
                 var_ids[varkey] = init_binding(ctx, varkey, var_kind)
             elseif ka != K"BindingId" && ka != K"Placeholder"
                 throw(LoweringError(a, "Unexpected lambda arg kind"))

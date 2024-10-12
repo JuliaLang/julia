@@ -23,12 +23,12 @@ end
 # Keyword calls
 Base.eval(test_mod, :(
 begin
-    function f(; kws...)
+    function kwtest(; kws...)
         values(kws)
     end
 
-    function f()
-        "non-kw version of f"
+    function kwtest()
+        "non-kw version of kwtest"
     end
 end
 ))
@@ -37,16 +37,16 @@ end
 @test JuliaLowering.include_string(test_mod, """
 let
     kws = (c=3,d=4)
-    f(; kws..., a=1, d=0, e=5)
+    kwtest(; kws..., a=1, d=0, e=5)
 end
 """) == (c=3, d=0, a=1, e=5)
 
 @test JuliaLowering.include_string(test_mod, """
 let
     kws = (;)
-    f(; kws..., kws...)
+    kwtest(; kws..., kws...)
 end
-""") == "non-kw version of f"
+""") == "non-kw version of kwtest"
 
 # literal_pow
 @test JuliaLowering.include_string(test_mod, """
@@ -86,6 +86,19 @@ begin
     (g(1), g(2))
 end
 """) === (42, 255)
+
+# static parameters
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function h(x, y)
+        "fallback"
+    end
+    function h(::Vector{T}, ::S) where {T, S <: T}
+        T, S
+    end
+    (h(1, 2), h(Number[0xff], 1.0), h(Int[1], 1), h(Int[1], 1.0))
+end
+""") === ("fallback", (Number, Float64), (Int, Int), "fallback")
 
 Base.include_string(test_mod,
 """

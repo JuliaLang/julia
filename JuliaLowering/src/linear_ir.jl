@@ -846,19 +846,18 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         if haskey(ssa_rewrites, id)
             makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[id])
         else
-            slot_id = get(slot_rewrites, id, nothing)
-            if !isnothing(slot_id)
-                makeleaf(ctx, ex, K"slot"; var_id=slot_id)
+            new_id = get(slot_rewrites, id, nothing)
+            binfo = lookup_binding(ctx, id)
+            if !isnothing(new_id)
+                sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
+                     binfo.kind == :static_parameter                   ? K"static_parameter" :
+                     throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
+                makeleaf(ctx, ex, sk; var_id=new_id)
             else
-                # TODO: look up any static parameters
-                # TODO: Should we defer rewriting globals to globalref until
-                # CodeInfo generation?
-                info = lookup_binding(ctx, id)
-                if info.kind === :global
-                    makeleaf(ctx, ex, K"globalref", info.name, mod=info.mod)
-                else
-                    TODO(ex, "Bindings of kind $(info.kind)")
+                if binfo.kind !== :global
+                    throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 end
+                makeleaf(ctx, ex, K"globalref", binfo.name, mod=binfo.mod)
             end
         end
     elseif k == K"outerref" || k == K"meta"
@@ -946,9 +945,16 @@ function compile_lambda(outer_ctx, ex)
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
     for id in sort(collect(ex.lambda_locals))
         info = lookup_binding(ctx.bindings, id)
-        @assert info.kind == :local || info.kind == :argument
+        @assert info.kind == :local
         push!(slots, Slot(info.name))
         slot_rewrites[id] = length(slots)
+    end
+    for (i,arg) in enumerate(lambda_info.static_parameters)
+        @assert kind(arg) == K"BindingId"
+        id = arg.var_id
+        info = lookup_binding(ctx.bindings, id)
+        @assert info.kind == :static_parameter
+        slot_rewrites[id] = i
     end
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)

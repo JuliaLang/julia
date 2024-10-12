@@ -199,6 +199,8 @@ function to_lowered_expr(mod, ex)
         QuoteNode(Symbol(ex.name_val))
     elseif k == K"slot"
         Core.SlotNumber(ex.var_id)
+    elseif k == K"static_parameter"
+        Expr(:static_parameter, ex.var_id)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id)
     elseif k == K"return"

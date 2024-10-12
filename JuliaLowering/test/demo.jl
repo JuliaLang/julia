@@ -77,7 +77,7 @@ baremodule M
         @ast __context__ __context__.macroname [K"extension" "locals"::K"Symbol"]
     end
 
-    JuliaLowering.include(M, "demo_include.jl")
+    # JuliaLowering.include(M, "demo_include.jl")
 end
 
 #-------------------------------------------------------------------------------
@@ -526,7 +526,25 @@ end
 """
 
 src = """
-abstract type Abstract1 end
+"some docs"
+function f()
+    println("hi")
+end
+"""
+
+src = """
+struct X{U,V}
+    x::U
+    y::V
+end
+"""
+
+src = """
+function f(::T, ::U, ::S) where T where {U,S}
+    println(T)
+    println(U)
+    println(S)
+end
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
@@ -534,7 +552,8 @@ ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
 @info "Input code" formatsrc(ex)
 
-in_mod = Main
+module MMM end
+in_mod = MMM
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
 @info "Macro expanded" ex_macroexpand formatsrc(ex_macroexpand, color_by=:scope_layer)
 #@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.flattened_provenance(e)[1:end-1])

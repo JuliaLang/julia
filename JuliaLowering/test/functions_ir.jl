@@ -97,6 +97,87 @@ function f(xs..., y)
 end
 
 ########################################
+# Basic static parameters
+function f(::T, ::U, ::V) where T where {U,V}
+    (T,U,V)
+end
+#---------------------
+1   (method :f)
+2   (= slot₂/U (call core.TypeVar :U))
+3   (= slot₃/V (call core.TypeVar :V))
+4   (= slot₁/T (call core.TypeVar :T))
+5   (call core.Typeof %₁)
+6   slot₁/T
+7   slot₂/U
+8   slot₃/V
+9   (call core.svec %₅ %₆ %₇ %₈)
+10  slot₂/U
+11  slot₃/V
+12  slot₁/T
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  (call core.svec %₉ %₁₃ :($(QuoteNode(:(#= line 1 =#)))))
+15  --- method :f %₁₄
+    1   static_parameter₃
+    2   static_parameter₁
+    3   static_parameter₂
+    4   (call core.tuple %₁ %₂ %₃)
+    5   (return %₄)
+16  (return %₁)
+
+########################################
+# Static parameter with bounds and used with apply_type in argument
+function f(::S{T}) where X <: T <: Y
+    T
+end
+#---------------------
+1   (method :f)
+2   TestMod.X
+3   TestMod.Y
+4   (= slot₁/T (call core.TypeVar :T %₂ %₃))
+5   (call core.Typeof %₁)
+6   TestMod.S
+7   slot₁/T
+8   (call core.apply_type %₆ %₇)
+9   (call core.svec %₅ %₈)
+10  slot₁/T
+11  (call core.svec %₁₀)
+12  (call core.svec %₉ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
+13  --- method :f %₁₂
+    1   static_parameter₁
+    2   (return %₁)
+14  (return %₁)
+
+########################################
+# Error: Duplicate function argument names
+function f(x, x)
+end
+#---------------------
+LoweringError:
+function f(x, x)
+#             ╙ ── function argument name not unique
+end
+
+########################################
+# Error: Static parameter name not unique
+function f() where T where T
+end
+#---------------------
+LoweringError:
+function f() where T where T
+#                  ╙ ── function static parameter name not unique
+end
+
+########################################
+# Error: static parameter colliding with argument names
+function f(x::x) where x
+end
+#---------------------
+LoweringError:
+function f(x::x) where x
+#                      ╙ ── static parameter name not distinct from function argument
+end
+
+########################################
 # Return types
 function f(x)::Int
     if x
@@ -217,4 +298,22 @@ x^42.0
 2   TestMod.x
 3   (call %₁ %₂ 42.0)
 4   (return %₃)
+
+########################################
+# Binding docs to functions
+"""
+some docs
+"""
+function f()
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 4 =#)))))
+6   --- method :f %₅
+    1   (return core.nothing)
+7   (call JuliaLowering.bind_docs! %₁ "some docs\n" %₅)
+8   (return %₁)
 

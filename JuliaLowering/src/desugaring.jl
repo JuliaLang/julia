@@ -1259,29 +1259,57 @@ function analyze_function_arg(full_ex)
             is_nospecialize=is_nospecialize)
 end
 
+function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
+    if kind(ex) == K"where" && numchildren(ex) == 2
+        params = kind(ex[2]) == K"braces" ? ex[2][1:end] : ex[2:2]
+        for param in params
+            bounds = analyze_typevar(ctx, param)
+            n = bounds[1]
+            push!(typevar_names, n)
+            push!(typevar_stmts, @ast ctx param [K"local" n])
+            push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
+        end
+        _split_wheres!(ctx, typevar_names, typevar_stmts, ex[1])
+    else
+        ex
+    end
+end
+
 function expand_function_def(ctx, ex, docs)
     @chk numchildren(ex) in (1,2)
     name = ex[1]
-    if kind(name) == K"where"
-        TODO("where handling")
-    end
-    return_type = nothing
-    if kind(name) == K"::"
-        @chk numchildren(name) == 2
-        return_type = name[2]
-        name = name[1]
-    end
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
         if !is_valid_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
         return @ast ctx ex [K"method" name=>K"Symbol"]
-    elseif kind(name) == K"call"
+    end
+
+    typevar_names = SyntaxList(ctx)
+    typevar_stmts = SyntaxList(ctx)
+    if kind(name) == K"where"
+        # `where` vars end up in two places
+        # 1. Argument types - the `T` in `x::T` becomes a `TypeVar` parameter in
+        #    the method sig, eg, `function f(x::T) where T ...`.  These define the
+        #    static parameters of the method.
+        # 2. In the method body - either explicitly or implicitly via the method
+        #    return type or default arguments - where `T` turns up as the *name* of
+        #    a special slot of kind ":static_parameter"
+        name = _split_wheres!(ctx, typevar_names, typevar_stmts, name)
+    end
+
+    return_type = nothing
+    if kind(name) == K"::"
+        @chk numchildren(name) == 2
+        return_type = name[2]
+        name = name[1]
+    end
+    
+    if kind(name) == K"call"
         callex = name
         body = ex[2]
         # TODO
-        # static params
         # nospecialize
         # argument destructuring
         # dotop names
@@ -1325,9 +1353,6 @@ function expand_function_def(ctx, ex, docs)
         end
         args = pushfirst!(collect(args), farg)
 
-        # preamble is arbitrary code which computes
-        # svec(types, sparms, location)
-
         arg_names = SyntaxList(ctx)
         arg_types = SyntaxList(ctx)
         for (i,arg) in enumerate(args)
@@ -1345,19 +1370,6 @@ function expand_function_def(ctx, ex, docs)
             push!(arg_types, atype)
         end
 
-        preamble = @ast ctx callex [
-            K"call"
-            "svec"              ::K"core"
-            [K"call"
-                "svec"          ::K"core"
-                arg_types...
-            ]
-            [K"call"
-                "svec"          ::K"core"
-                # FIXME sparams
-            ]
-            QuoteNode(source_location(LineNumberNode, callex))::K"Value"
-        ]
         if !isnothing(return_type)
             ret_var = ssavar(ctx, return_type, "return_type")
             body = @ast ctx body [
@@ -1368,25 +1380,41 @@ function expand_function_def(ctx, ex, docs)
         else
             ret_var = nothing
         end
-        @ast ctx ex [
-            K"block"
-            func_var_assignment
-            [K"method"
-                function_name
-                preamble
-                [K"lambda"(body, lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
-                    body
+
+        @ast ctx ex [K"scope_block"(scope_type=:hard)
+            [K"block"
+                func_var_assignment
+                typevar_stmts...
+                # metadata contains svec(types, sparms, location)
+                method_metadata := [K"call"(callex)
+                    "svec"              ::K"core"
+                    [K"call"
+                        "svec"          ::K"core"
+                        arg_types...
+                    ]
+                    [K"call"
+                        "svec"          ::K"core"
+                        typevar_names...
+                    ]
+                    QuoteNode(source_location(LineNumberNode, callex))::K"Value"
                 ]
-            ]
-            if !isnothing(docs)
-                [K"call"(docs)
-                    bind_docs!::K"Value"
-                    func_var
-                    docs[1]
+                [K"method"
+                    function_name
                     method_metadata
+                    [K"lambda"(body, lambda_info=LambdaInfo(arg_names, typevar_names, ret_var, false))
+                        body
+                    ]
                 ]
-            end
-            [K"unnecessary" func_var]
+                if !isnothing(docs)
+                    [K"call"(docs)
+                        bind_docs!::K"Value"
+                        func_var
+                        docs[1]
+                        method_metadata
+                    ]
+                end
+                [K"unnecessary" func_var]
+            ]
         ]
     elseif kind(name) == K"tuple"
         TODO(name, "Anon function lowering")
@@ -1485,7 +1513,12 @@ end
 
 # Analyze type signatures such as `A <: B where C`
 #
-# Return (name, typevar_names, typevar_stmts, supertype)
+# Return (name, typevar_names, typevar_stmts, supertype) where
+# - `name` is the name of the type
+# - `typevar_names` are the names of the types's type parameters
+# - `typevar_stmts` are a list of statements to define a `TypeVar` for each
+#   name in `typevar_names`, to be emitted prior to uses of `typevar_names`
+# - `supertype` is the super type of the type
 function analyze_type_sig(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
@@ -1610,7 +1643,7 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
             m = _match_struct_field(e)
             if !isnothing(m)
                 # Struct field
-                push!(field_names, @ast ctx m.name m.name=>K"Symbol")
+                push!(field_names, m.name)
                 n = length(field_names)
                 push!(field_types, isnothing(m.type) ? @ast(ctx, e, "Any"::K"core") : m.type)
                 if m.atomic
@@ -1693,7 +1726,7 @@ function expand_struct_def(ctx, ex, docs)
                         ctx.mod::K"Value"
                         struct_name=>K"Symbol"
                         [K"call"(type_sig) "svec"::K"core" typevar_names...]
-                        [K"call"(type_body) "svec"::K"core" field_names...]
+                        [K"call"(type_body) "svec"::K"core" [n=>K"Symbol" for n in field_names]...]
                         [K"call"(type_body) "svec"::K"core" field_attrs...]
                         is_mutable::K"Bool"
                         min_initialized::K"Integer"
@@ -1711,7 +1744,7 @@ function expand_struct_def(ctx, ex, docs)
                             # NB away the new type
                             [K"=" struct_name outer_struct_var]
                             if !isempty(typevar_names)
-                                # And resassign the typevars - these may be
+                                # And resassign the typevar_names - these may be
                                 # referenced in the definition of the field
                                 # types below
                                 [K"="
@@ -2004,8 +2037,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
     elseif k == K"where"
         expand_forms_2(ctx, expand_wheres(ctx, ex))
-    elseif is_operator(k) && is_leaf(ex)
-        makeleaf(ctx, ex, K"Identifier", ex.name_val)
     elseif k == K"char" || k == K"var"
         @chk numchildren(ex) == 1
         ex[1]
