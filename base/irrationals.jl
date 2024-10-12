@@ -56,10 +56,7 @@ function _irrational_to_rational_at_current_precision(
 ) where {T <: Integer}
     bx = BigFloat(x)
     r = rationalize(T, bx, tol = 0)
-    br_func = let r = r
-        () -> BigFloat(r)
-    end
-    br = setprecision(br_func, BigFloat, precision(BigFloat) + 32)
+    br = BigFloat(r, precision = precision(BigFloat) + 32)
     if eps(bx) < abs(br - bx)
         r
     else
