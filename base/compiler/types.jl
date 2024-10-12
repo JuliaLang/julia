@@ -28,6 +28,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 
 abstract type AbstractLattice end
 
+struct InvalidIRError <: Exception end
+
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
     argtypes::Vector{Any}

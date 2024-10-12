@@ -3114,6 +3114,7 @@ end
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
 
 function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
+    (1 ≤ s.id ≤ length(ssavaluetypes)) || throw(InvalidIRError())
     typ = ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom
