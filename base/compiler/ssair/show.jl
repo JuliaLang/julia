@@ -14,8 +14,6 @@ end
 
 import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
-using Core.Compiler: VarState, InvalidIRError, argextype, widenconst, singleton_type,
-                     sptypes_from_meth_instance, EMPTY_SPTYPES
 
 function Base.show(io::IO, cfg::CFG)
     print(io, "CFG with $(length(cfg.blocks)) blocks:")
@@ -982,7 +980,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    maxssaid = length(ir.stmts) + Core.Compiler.length(ir.new_nodes)
+    maxssaid = length(ir.stmts) + Compiler.length(ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, ir, 1:length(ir.stmts), config, ir.sptypes, used, cfg, 1; pop_new_node!)
     end
@@ -1039,13 +1037,13 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         still_to_be_inserted = (last(input_bb.stmts) - compact.idx) + count
 
         result_bb = result_bbs[compact.active_result_bb]
-        result_bbs[compact.active_result_bb] = Core.Compiler.BasicBlock(result_bb,
-            Core.Compiler.StmtRange(first(result_bb.stmts), compact.result_idx+still_to_be_inserted))
+        result_bbs[compact.active_result_bb] = Compiler.BasicBlock(result_bb,
+            Compiler.StmtRange(first(result_bb.stmts), compact.result_idx+still_to_be_inserted))
     end
     compact_cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
 
     pop_new_node! = new_nodes_iter(compact)
-    maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
+    maxssaid = length(compact.result) + Compiler.length(compact.new_new_nodes)
     bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact, 1:compact.result_idx-1, config, compact.ir.sptypes,
                       used_compacted, compact_cfg, 1; pop_new_node!)
@@ -1066,8 +1064,8 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     inputs_bbs = copy(cfg.blocks)
     for (i, bb) in enumerate(inputs_bbs)
         if bb.stmts.stop < bb.stmts.start
-            inputs_bbs[i] = Core.Compiler.BasicBlock(bb,
-                Core.Compiler.StmtRange(last(bb.stmts), last(bb.stmts)))
+            inputs_bbs[i] = Compiler.BasicBlock(bb,
+                Compiler.StmtRange(last(bb.stmts), last(bb.stmts)))
             # this is not entirely correct, and will result in the bb starting again,
             # but is the best we can do without changing how `finish_current_bb!` works.
         end
@@ -1075,7 +1073,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     uncompacted_cfg = CFG(inputs_bbs, Int[first(inputs_bbs[i].stmts) for i in 2:length(inputs_bbs)])
 
     pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
-    maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
+    maxssaid = length(compact.ir.stmts) + Compiler.length(compact.ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
         # first show any new nodes to be attached after the last compacted statement
         if compact.idx > 1

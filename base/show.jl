@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: has_typevar
+using .Compiler: has_typevar
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -1356,10 +1356,7 @@ function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
 end
 
 # These sometimes show up as Const-values in InferenceFrameInfo signatures
-show(io::IO, r::Core.Compiler.UnitRange) = show(io, r.start : r.stop)
-show(io::IO, mime::MIME{Symbol("text/plain")}, r::Core.Compiler.UnitRange) = show(io, mime, r.start : r.stop)
-
-function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
+function show(io::IO, mi_info::Compiler.Timings.InferenceFrameInfo)
     mi = mi_info.mi
     def = mi.def
     if isa(def, Method)
@@ -1380,8 +1377,8 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
     end
 end
 
-function show(io::IO, tinf::Core.Compiler.Timings.Timing)
-    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
+function show(io::IO, tinf::Compiler.Timings.Timing)
+    print(io, "Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
@@ -2821,21 +2818,14 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 module IRShow
-    const Compiler = Core.Compiler
+    import ..Compiler
     using Core.IR
     import ..Base
     import .Compiler: IRCode, CFG, scan_ssa_use!,
         isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx
-    Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
-    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
-    Base.first(r::Compiler.StmtRange) = Compiler.first(r)
-    Base.last(r::Compiler.StmtRange) = Compiler.last(r)
-    Base.length(is::Compiler.InstructionStream) = Compiler.length(is)
-    Base.iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
-    Base.getindex(is::Compiler.InstructionStream, idx::Int) = Compiler.getindex(is, idx)
-    Base.getindex(node::Compiler.Instruction, fld::Symbol) = Compiler.getindex(node, fld)
-    Base.getindex(ir::IRCode, ssa::SSAValue) = Compiler.getindex(ir, ssa)
+        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
+        VarState, InvalidIRError, argextype, widenconst, singleton_type,
+        sptypes_from_meth_instance, EMPTY_SPTYPES
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
@@ -2863,12 +2853,12 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
-function show(io::IO, inferred::Core.Compiler.InferenceResult)
+function show(io::IO, inferred::Compiler.InferenceResult)
     mi = inferred.linfo
     tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
-    if isa(rettype, Core.Compiler.InferenceState)
+    if isa(rettype, Compiler.InferenceState)
         rettype = rettype.bestguess
     end
     if isa(mi.def, Method)
@@ -2878,19 +2868,19 @@ function show(io::IO, inferred::Core.Compiler.InferenceResult)
     end
 end
 
-show(io::IO, sv::Core.Compiler.InferenceState) =
+show(io::IO, sv::Compiler.InferenceState) =
     (print(io, "InferenceState for "); show(io, sv.linfo))
 
-show(io::IO, ::Core.Compiler.NativeInterpreter) =
+show(io::IO, ::Compiler.NativeInterpreter) =
     print(io, "Core.Compiler.NativeInterpreter(...)")
 
-show(io::IO, cache::Core.Compiler.CachedMethodTable) =
-    print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
+show(io::IO, cache::Compiler.CachedMethodTable) =
+    print(io, typeof(cache), "(", Compiler.length(cache.cache), " entries)")
 
-function show(io::IO, limited::Core.Compiler.LimitedAccuracy)
-    print(io, "Core.Compiler.LimitedAccuracy(")
+function show(io::IO, limited::Compiler.LimitedAccuracy)
+    print(io, "Compiler.LimitedAccuracy(")
     show(io, limited.typ)
-    print(io, ", #= ", Core.Compiler.length(limited.causes), " cause(s) =#)")
+    print(io, ", #= ", Compiler.length(limited.causes), " cause(s) =#)")
 end
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)

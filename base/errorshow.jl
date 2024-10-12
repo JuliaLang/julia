@@ -448,7 +448,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !Core.Compiler.has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end

@@ -5,7 +5,7 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions, completion_text
 
 using Core: Const
-const CC = Core.Compiler
+const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
 using Base.Filesystem: _readdirx
