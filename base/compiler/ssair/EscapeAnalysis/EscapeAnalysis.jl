@@ -22,15 +22,16 @@ using ._TOP_MOD:     # Base definitions
     @nospecialize, @specialize, BitSet, Callable, Csize_t, IdDict, IdSet, UnitRange, Vector,
     copy, delete!, empty!, enumerate, error, first, get, get!, haskey, in, isassigned,
     isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
-    unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
-using Core.Compiler: # Core.Compiler specific definitions
+    unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆,
+    hasintersect
+using ..Compiler: # Core.Compiler specific definitions
     AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
+    argextype, fieldcount_noerror, has_flag, intrinsic_nothrow,
     is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
-    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, Compiler
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
-if _TOP_MOD === Core.Compiler
+if _TOP_MOD === Compiler
     include("compiler/ssair/EscapeAnalysis/disjoint_set.jl")
 else
     include("disjoint_set.jl")

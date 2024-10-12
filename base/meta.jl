@@ -449,7 +449,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !Core.Compiler.is_meta_expr_head(head)
+        elseif !Base.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
