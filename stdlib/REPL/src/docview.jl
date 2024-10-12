@@ -7,7 +7,7 @@ using Markdown
 using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, namify, bindingexpr,
     defined, resolve, getdoc, meta, aliasof, signature
 
-import Base.Docs: doc, formatdoc, parsedoc, apropos
+import Base.Docs: formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
@@ -206,44 +206,22 @@ function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}
     other
 end
 
-function doc(binding::Binding, sig::Type = Union{})
+function doc_as_md(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
     end
-    results, groups = DocStr[], MultiDoc[]
-    # Lookup `binding` and `sig` for matches in all modules of the docsystem.
-    for mod in modules
-        dict = meta(mod; autoinit=false)
-        isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            push!(groups, multidoc)
-            for msig in multidoc.order
-                sig <: msig && push!(results, multidoc.docs[msig])
-            end
-        end
-    end
-    if isempty(groups)
-        # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
-        # is an alias of some other `Binding`. When it is we then re-run `doc` with that
-        # `Binding`, otherwise if it's not an alias then we generate a summary for the
-        # `binding` and display that to the user instead.
-        alias = aliasof(binding)
-        alias == binding ? summarize(alias, sig) : doc(alias, sig)
+    result = Base.Docs.doc(binding, sig)
+    if result === nothing
+        return summarize(binding, sig)
     else
-        # There was at least one match for `binding` while searching. If there weren't any
-        # matches for `sig` then we concatenate *all* the docs from the matching `Binding`s.
-        if isempty(results)
-            for group in groups, each in group.order
-                push!(results, group.docs[each])
-            end
+        if !(result isa Vector)
+            result = [result]
         end
-        # Get parsed docs and concatenate them.
-        md = catdoc(mapany(parsedoc, results)...)
+        md = catdoc(mapany(parsedoc, result)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
-            md.meta[:results] = results
+            md.meta[:results] = result
             md.meta[:binding] = binding
             md.meta[:typesig] = sig
         end
@@ -251,10 +229,8 @@ function doc(binding::Binding, sig::Type = Union{})
     end
 end
 
-# Some additional convenience `doc` methods that take objects rather than `Binding`s.
-doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
-doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
-doc(object, sig...)              = doc(object, Tuple{sig...})
+doc_as_md(obj::UnionAll) = doc_as_md(Base.unwrap_unionall(obj))
+doc_as_md(object, sig::Type = Union{}) = doc_as_md(aliasof(object, typeof(object)), sig)
 
 function lookup_doc(ex)
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
@@ -266,7 +242,7 @@ function lookup_doc(ex)
     elseif Meta.isexpr(ex, :incomplete)
         return :($(Markdown.md"No documentation found."))
     elseif !isa(ex, Expr) && !isa(ex, Symbol)
-        return :($(doc)($(typeof)($(esc(ex)))))
+        return :($(doc_as_md)($(typeof)($(esc(ex)))))
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
@@ -287,10 +263,14 @@ function lookup_doc(ex)
     binding = esc(bindingexpr(namify(ex)))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
-        :($(doc)($binding, $sig))
+        :($(doc_as_md)($binding, $sig))
     else
-        :($(doc)($binding))
+        :($(doc_as_md)($binding))
     end
+end
+
+macro showdoc(ex)
+    lookup_doc(ex)
 end
 
 # Object Summaries.
@@ -570,7 +550,7 @@ isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isem
 
 repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
 repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
-repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
+repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:($REPL.@showdoc $other)) # TODO: track internal_accesses
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
 repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
@@ -629,7 +609,7 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
         end
     end
     #docs = lookup_doc(x) # TODO
-    docs = esc(:(@doc $x))
+    docs = esc(:($REPL.@showdoc $x))
     docs = if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
@@ -983,7 +963,7 @@ apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
-        docsearch(doc(mod), needle) && println(io, mod)
+        docsearch(doc_as_md(mod), needle) && println(io, mod)
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
         for (k, v) in dict
