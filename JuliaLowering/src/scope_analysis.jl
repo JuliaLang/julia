@@ -199,10 +199,10 @@ end
 # Analyze identifier usage within a scope, adding all newly discovered
 # identifiers to ctx.bindings and returning a lookup table from identifier
 # names to their variable IDs
-function analyze_scope(ctx, ex, scope_type, lambda_info)
+function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
+                       lambda_args=nothing, lambda_static_parameters=nothing)
     parentscope = isempty(ctx.scope_stack) ? nothing : ctx.scope_stack[end]
     is_outer_lambda_scope = kind(ex) == K"lambda"
-    is_toplevel_global_scope = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
     in_toplevel_thunk = is_toplevel_global_scope ||
         (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
@@ -231,9 +231,9 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
             end
         end
     end
-    if !isnothing(lambda_info)
-        add_lambda_args(lambda_info.args, :argument)
-        add_lambda_args(lambda_info.static_parameters, :static_parameter)
+    if !isnothing(lambda_args)
+        add_lambda_args(lambda_args, :argument)
+        add_lambda_args(lambda_static_parameters, :static_parameter)
     end
 
     global_keys = Set(first(g) for g in globals)
@@ -410,20 +410,26 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         update_binding!(ctx, id; is_always_defined=true)
         makeleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
-        lambda_info = ex.lambda_info
-        scope = analyze_scope(ctx, ex, nothing, lambda_info)
+        is_toplevel_thunk = ex.is_toplevel_thunk
+        scope = analyze_scope(ctx, ex, nothing, is_toplevel_thunk,
+                              children(ex[1]), children(ex[2]))
+
         push!(ctx.scope_stack, scope)
-        arg_bindings = _resolve_scopes(ctx, lambda_info.args)
-        sparm_bindings = _resolve_scopes(ctx, lambda_info.static_parameters)
-        body = _resolve_scopes(ctx, only(children(ex)))
+        arg_bindings = _resolve_scopes(ctx, ex[1])
+        sparm_bindings = _resolve_scopes(ctx, ex[2])
+        body = _resolve_scopes(ctx, ex[3])
+        ret_var = numchildren(ex) == 4 ? _resolve_scopes(ctx, ex[4]) : nothing
         pop!(ctx.scope_stack)
-        # TODO: add a lambda locals field to lambda_info or make a new struct
-        # containing the additional info ??
-        new_info = LambdaInfo(arg_bindings, sparm_bindings,
-                              lambda_info.ret_var, lambda_info.is_toplevel_thunk)
-        makenode(ctx, ex, K"lambda", body; lambda_info=new_info, lambda_locals=scope.lambda_locals)
+
+        @ast ctx ex [K"lambda"(lambda_locals=scope.lambda_locals,
+                               is_toplevel_thunk=is_toplevel_thunk)
+            arg_bindings
+            sparm_bindings
+            body
+            ret_var
+        ]
     elseif k == K"scope_block"
-        scope = analyze_scope(ctx, ex, ex.scope_type, nothing)
+        scope = analyze_scope(ctx, ex, ex.scope_type)
         push!(ctx.scope_stack, scope)
         body = SyntaxList(ctx)
         for e in children(ex)
@@ -521,8 +527,11 @@ function _resolve_scopes(ctx, exs::AbstractVector)
 end
 
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
-    thunk = makenode(ctx, ex, K"lambda", ex;
-                     lambda_info=LambdaInfo(SyntaxList(ctx), SyntaxList(ctx), nothing, true))
+    thunk = @ast ctx ex [K"lambda"(is_toplevel_thunk=true)
+        [K"block"]
+        [K"block"]
+        ex
+    ]
     return _resolve_scopes(ctx, thunk)
 end
 

@@ -1,13 +1,5 @@
 # Lowering Pass 2 - syntax desugaring 
 
-struct LambdaInfo
-    # TODO: Make SyntaxList concretely typed?
-    args::SyntaxList
-    static_parameters::SyntaxList
-    ret_var::Union{Nothing,SyntaxTree}
-    is_toplevel_thunk::Bool
-end
-
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings
@@ -22,7 +14,7 @@ function DesugaringContext(ctx)
                               value=Any, name_val=String,
                               scope_type=Symbol, # :hard or :soft
                               var_id=IdTag,
-                              lambda_info=LambdaInfo)
+                              is_toplevel_thunk=Bool)
     DesugaringContext(graph, ctx.bindings, ctx.scope_layers, ctx.current_layer.mod)
 end
 
@@ -1324,11 +1316,10 @@ function expand_function_def(ctx, ex, docs)
         if kind(name) == K"::"
             if numchildren(name) == 1
                 farg = @ast ctx name [K"::"
-                    new_mutable_var(ctx, name, "#self#")
+                    "#self#"::K"Placeholder"
                     name[1]
                 ]
             else
-                TODO("Fixme type")
                 farg = name
             end
         else
@@ -1340,7 +1331,7 @@ function expand_function_def(ctx, ex, docs)
                 func_var_assignment = @ast ctx name [K"=" func_var [K"method" function_name]]
             end
             farg = @ast ctx name [K"::"
-                new_mutable_var(ctx, name, "#self#")
+                "#self#"::K"Placeholder"
                 [K"call"
                     "Typeof"::K"core"
                     func_var
@@ -1401,8 +1392,11 @@ function expand_function_def(ctx, ex, docs)
                 [K"method"
                     function_name
                     method_metadata
-                    [K"lambda"(body, lambda_info=LambdaInfo(arg_names, typevar_names, ret_var, false))
+                    [K"lambda"(body, is_toplevel_thunk=false)
+                        [K"block" arg_names...]
+                        [K"block" typevar_names...]
                         body
+                        ret_var  # might be `nothing` and hence removed
                     ]
                 ]
                 if !isnothing(docs)

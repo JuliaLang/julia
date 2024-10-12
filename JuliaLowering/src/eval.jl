@@ -99,7 +99,7 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex, mod, funcname, nargs, slots)
+function to_code_info(ex, mod, funcname, slots)
     input_code = children(ex)
     code = Any[to_lowered_expr(mod, ex) for ex in input_code]
 
@@ -111,6 +111,7 @@ function to_code_info(ex, mod, funcname, nargs, slots)
     # - call site @assume_effects
     ssaflags = zeros(UInt32, length(code))
 
+    nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
     slot_rename_inds = Dict{String,Int}()
     slotflags = Vector{UInt8}(undef, length(slots))
@@ -212,12 +213,11 @@ function to_lowered_expr(mod, ex)
             TODO(ex, "Convert SyntaxTree to Expr")
         end
     elseif k == K"code_info"
-        funcname = ex.lambda_info.is_toplevel_thunk ?
+        funcname = ex.is_toplevel_thunk ?
             "top-level scope" :
             "none"              # FIXME
-        nargs = length(ex.lambda_info.args)
-        ir = to_code_info(ex[1], mod, funcname, nargs, ex.slots)
-        if ex.lambda_info.is_toplevel_thunk
+        ir = to_code_info(ex[1], mod, funcname, ex.slots)
+        if ex.is_toplevel_thunk
             Expr(:thunk, ir)
         else
             ir

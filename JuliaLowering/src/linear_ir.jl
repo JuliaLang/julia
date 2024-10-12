@@ -919,26 +919,29 @@ end
 
 struct Slot
     name::String
+    kind::Symbol
     # <- todo: flags here etc
 end
 
 function compile_lambda(outer_ctx, ex)
-    lambda_info = ex.lambda_info
-    # TODO: Add assignments for reassigned arguments to body using lambda_info.args
-    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, ex.lambda_locals, lambda_info.ret_var)
-    compile_body(ctx, ex[1])
+    lambda_args = ex[1]
+    static_parameters = ex[2]
+    ret_var = numchildren(ex) == 4 ? ex[4] : nothing
+    # TODO: Add assignments for reassigned arguments to body using lambda_args
+    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, ex.lambda_locals, ret_var)
+    compile_body(ctx, ex[3])
     slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
-    for arg in lambda_info.args
+    for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val))
+            push!(slots, Slot(arg.name_val, :argument))
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
             info = lookup_binding(ctx.bindings, id)
             @assert info.kind == :local || info.kind == :argument
-            push!(slots, Slot(info.name))
+            push!(slots, Slot(info.name, :argument))
             slot_rewrites[id] = length(slots)
         end
     end
@@ -946,10 +949,10 @@ function compile_lambda(outer_ctx, ex)
     for id in sort(collect(ex.lambda_locals))
         info = lookup_binding(ctx.bindings, id)
         @assert info.kind == :local
-        push!(slots, Slot(info.name))
+        push!(slots, Slot(info.name, :local))
         slot_rewrites[id] = length(slots)
     end
-    for (i,arg) in enumerate(lambda_info.static_parameters)
+    for (i,arg) in enumerate(children(static_parameters))
         @assert kind(arg) == K"BindingId"
         id = arg.var_id
         info = lookup_binding(ctx.bindings, id)
@@ -960,7 +963,7 @@ function compile_lambda(outer_ctx, ex)
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"code_info",
              makenode(ctx, ex[1], K"block", code),
-             lambda_info=lambda_info,
+             is_toplevel_thunk=ex.is_toplevel_thunk,
              slots=slots
             )
 end
