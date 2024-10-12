@@ -927,7 +927,7 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 # purely abstract recursion should not taint :terminates
 # https://github.com/JuliaLang/julia/issues/48983
 abstractly_recursive1() = abstractly_recursive2()
-abstractly_recursive2() = (Core.Compiler._return_type(abstractly_recursive1, Tuple{}); 1)
+abstractly_recursive2() = (Base._return_type(abstractly_recursive1, Tuple{}); 1)
 abstractly_recursive3() = abstractly_recursive2()
 @test_broken Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
 actually_recursive1(x) = actually_recursive2(x)

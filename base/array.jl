@@ -769,28 +769,15 @@ end
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                T = ($I).f
-            else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
-            end
-            promote_typejoin_union(T)
+macro default_eltype(itr)
+    I = esc(itr)
+    return quote
+        if $I isa Generator && ($I).f isa Type
+            T = ($I).f
+        else
+            T = Base._return_type(_iterator_upper_bound, Tuple{typeof($I)})
         end
-    end
-else
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
-            else
-                Any
-            end
-        end
+        promote_typejoin_union(T)
     end
 end
 
