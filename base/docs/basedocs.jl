@@ -187,7 +187,8 @@ baremodule Mod
 using Base
 
 eval(x) = Core.eval(Mod, x)
-include(p) = Base.include(Mod, p)
+include(p::AbstractString) = Base.include(Mod, p)
+include(f::Function, p::AbstractString) = Base.include(f, Mod, p)
 
 ...
 
