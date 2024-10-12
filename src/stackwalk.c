@@ -933,7 +933,7 @@ extern bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT;
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
 {
 #if (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
-    https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
+    // https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
     return 0;
 #elif defined(_OS_WINDOWS_)
     _JUMP_BUFFER* _ctx = (_JUMP_BUFFER*)mctx;
@@ -1049,7 +1049,7 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->regs[28] = (*_ctx)[9];
     mc->regs[29] = (*_ctx)[10]; // aka fp
     mc->regs[30] = (*_ctx)[11]; // aka lr
-    // Yes, they did skip 12 why writing the code originally; and, no, I do not know why.
+    // Yes, they did skip 12 when writing the code originally; and, no, I do not know why.
     mc->sp = (*_ctx)[13];
     mcfp->vregs[7] = (*_ctx)[14]; // aka d8
     mcfp->vregs[8] = (*_ctx)[15]; // aka d9
