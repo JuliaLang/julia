@@ -1036,33 +1036,100 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia-repl
-julia> a = rand(2, 1); A = rand(2, 3);
+```jldoctest broadcasting
+julia> A = [1, 2]
+2-element Vector{Int64}:
+ 1
+ 2
 
-julia> repeat(a, 1, 3) + A
-2×3 Array{Float64,2}:
- 1.20813  1.82068  1.25387
- 1.56851  1.86401  1.67846
+julia> B = [10 20 30; 40 50 60]
+2×3 Matrix{Int64}:
+ 10  20  30
+ 40  50  60
+
+julia> repeat(A, 1, 3) + B
+2×3 Matrix{Int64}:
+ 11  21  31
+ 42  52  62
 ```
 
-This is wasteful when dimensions get large, so Julia provides [`broadcast`](@ref), which expands
-singleton dimensions in array arguments to match the corresponding dimension in the other array
-without using extra memory, and applies the given function elementwise:
+This is wasteful because it creates a temporary array with the repeated elements
+of `A`. To avoid that, Julia provides [`broadcast`](@ref) that virtually repeats
+the elements without memory allocations so that its array arguments have the
+same size and thus an elementwise operation can be performed. A function to be
+applied is given as the first argument of `broadcast`, followed by array
+arguments:
 
-```julia-repl
-julia> broadcast(+, a, A)
-2×3 Array{Float64,2}:
- 1.20813  1.82068  1.25387
- 1.56851  1.86401  1.67846
+```jldoctest broadcasting
+julia> broadcast(+, A, B)
+2×3 Matrix{Int64}:
+ 11  21  31
+ 42  52  62
+```
 
-julia> b = rand(1,2)
-1×2 Array{Float64,2}:
- 0.867535  0.00457906
+Broadcasting takes several conceptual steps. First, it aligns dimensions in
+array arguments starting with the leading ones[^2] by filling lacking dimensions
+with a singleton dimension if needed, to make sure that the argument arrays have
+the same number of dimensions.  Then, it expands singleton dimensions to match
+the corresponding dimension in the other array without using extra memory, and
+finally applies the given function elementwise.  In the example above, the
+[`size`](@ref)s of array `A` and `B` are `(2,)` and `(2, 3)`, respectively.
+Therefore, broadcasting `A` and `B` fills the second dimension of `A` with one
+and then expands it to three, resulting in the same size `(2, 3)`, as depicted
+in the following diagram.
 
-julia> broadcast(+, a, b)
-2×2 Array{Float64,2}:
- 1.71056  0.847604
- 1.73659  0.873631
+[^2]: This is the opposite direction of that of NumPy, which aligns dimensions from the last to the first.
+
+```
+           align        expand
+A: (2,)    --->  (2, 1)  --->  (2, 3)
+B: (2, 3)  --->  (2, 3)  --->  (2, 3)
+```
+
+Broadcasting can be performed among more than two arrays. The following example
+shows a broadcasting of three-dimensional array `C` in addition to `A` and `B`.
+
+```jldoctest broadcasting
+julia> C = [100;;; 200;;; 300;;; 400]
+1×1×4 Array{Int64, 3}:
+[:, :, 1] =
+ 100
+
+[:, :, 2] =
+ 200
+
+[:, :, 3] =
+ 300
+
+[:, :, 4] =
+ 400
+
+julia> broadcast(+, A, B, C)
+2×3×4 Array{Int64, 3}:
+[:, :, 1] =
+ 111  121  131
+ 142  152  162
+
+[:, :, 2] =
+ 211  221  231
+ 242  252  262
+
+[:, :, 3] =
+ 311  321  331
+ 342  352  362
+
+[:, :, 4] =
+ 411  421  431
+ 442  452  462
+```
+
+The broadcasting of `A`, `B` and `C` happens in the following way:
+
+```
+              align           expand
+A: (2,)       --->  (2, 1, 1)  --->  (2, 3, 4)
+B: (2, 3)     --->  (2, 3, 1)  --->  (2, 3, 4)
+C: (1, 1, 4)  --->  (1, 1, 4)  --->  (2, 3, 4)
 ```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
