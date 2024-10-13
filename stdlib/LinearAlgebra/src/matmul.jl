@@ -955,7 +955,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
         ta = t(_add.alpha)
         for i in AxM
             mul!(tmp, pB, view(pA, :, i))
-            C[ci,:] .+= t.(ta .* tmp)
+            @views C[ci,:] .+= t.(ta .* tmp)
             ci += 1
         end
     else
