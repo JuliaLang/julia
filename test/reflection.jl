@@ -1298,3 +1298,11 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# sealing
+f_sealed(x::Int64) = x+1
+Base.seal_methodtable(Base.methods(f_sealed).mt)
+@test_throws(
+    ErrorException("cannot add methods to or modify methods of a sealed function"),
+    @eval f_sealed(x::Float64) = x+2
+)
