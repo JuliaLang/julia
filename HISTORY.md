@@ -989,6 +989,7 @@ Tooling Improvements
 [#43919]: https://github.com/JuliaLang/julia/issues/43919
 [#44080]: https://github.com/JuliaLang/julia/issues/44080
 [#44136]: https://github.com/JuliaLang/julia/issues/44136
+[#45064]: https://github.com/JuliaLang/julia/issues/45064
 
 Julia v1.7 Release Notes
 ========================
