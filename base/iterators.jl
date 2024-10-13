@@ -986,7 +986,13 @@ cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
-IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite() # XXX: this is false if iterator ever becomes empty
+function IteratorSize(::Type{Cycle{I}}) where I
+    # TODO: find a better way of communicating the size of a cycle
+    # IsInfinite() would be false if iterator ever becomes empty
+    IteratorSize(I) === IsInfinite() ? IsInfinite() : SizeUnknown()
+end
+IteratorSize(it::Cycle) = isempty(it.xs) ? HasLength() : IsInfinite()
+length(it::Cycle) = isempty(it.xs) ? 0 : throw(ArgumentError("Cannot compute length of infinite iterator"))
 
 iterate(it::Cycle) = iterate(it.xs)
 isdone(it::Cycle) = isdone(it.xs)
