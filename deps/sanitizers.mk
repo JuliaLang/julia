@@ -7,12 +7,16 @@ endif
 
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch_all
-$(eval _result := $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2))))))
-$(if $(_result),$(_result),$(error No matches found for '$(1)' in $(2)))
+$(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 endef
 
 define copy_sanitizer_lib
 install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_shlibdir)
+	@result=$$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)); \
+	if [ -z "$$$$result" ]; then \
+		echo "Sanitizer library $(1) not found in $$(SANITIZER_LIB_PATH)"; \
+		exit 1; \
+	fi
 $$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(dir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH))),$(2)) | $$(build_shlibdir)
 	-cp $$< $$@
 	$(if $(filter $(OS), Linux), \
