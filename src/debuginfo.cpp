@@ -42,6 +42,13 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "debug-registry.h"
 
+#ifdef _COMPILER_GCC_
+// GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overread"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+
 static JITDebugInfoRegistry *DebugRegistry = new JITDebugInfoRegistry;
 
 static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
@@ -1644,3 +1651,7 @@ uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
     jl_unlock_profile();
     return ipstart;
 }
+
+#ifdef _COMPILER_GCC_
+#pragma GCC diagnostic pop
+#endif
