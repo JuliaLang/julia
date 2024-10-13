@@ -1311,38 +1311,6 @@ function expand_function_def(ctx, ex, docs)
         # Add self argument where necessary
         args = callex[2:end]
         name = callex[1]
-        function_name = nothing
-        func_var = ssavar(ctx, name, "func_var")
-        if kind(name) == K"::"
-            if numchildren(name) == 1
-                farg = @ast ctx name [K"::"
-                    "#self#"::K"Placeholder"
-                    name[1]
-                ]
-            else
-                farg = name
-            end
-        else
-            if !is_valid_name(name)
-                throw(LoweringError(name, "Invalid function name"))
-            end
-            if is_identifier_like(name)
-                function_name = @ast ctx name name=>K"Symbol"
-                func_var_assignment = @ast ctx name [K"=" func_var [K"method" function_name]]
-            end
-            farg = @ast ctx name [K"::"
-                "#self#"::K"Placeholder"
-                [K"call"
-                    "Typeof"::K"core"
-                    func_var
-                ]
-            ]
-        end
-        if isnothing(function_name)
-            function_name = nothing_(ctx, name)
-            func_var_assignment = @ast ctx name [K"=" func_var name]
-        end
-        args = pushfirst!(collect(args), farg)
 
         arg_names = SyntaxList(ctx)
         arg_types = SyntaxList(ctx)
@@ -1359,6 +1327,38 @@ function expand_function_def(ctx, ex, docs)
                 atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
             end
             push!(arg_types, atype)
+        end
+
+        function_name = nothing
+        func_var = ssavar(ctx, name, "func_var")
+        if kind(name) == K"::"
+            if numchildren(name) == 1
+                farg_name = @ast ctx name "#self#"::K"Placeholder"
+                farg_type = name[1]
+            else
+                @chk numchildren(name) == 2
+                farg_name = name[1]
+                farg_type = name[2]
+            end
+        else
+            if !is_valid_name(name)
+                throw(LoweringError(name, "Invalid function name"))
+            end
+            if is_identifier_like(name)
+                function_name = @ast ctx name name=>K"Symbol"
+                func_var_assignment = @ast ctx name [K"=" func_var [K"method" function_name]]
+            end
+            farg_name = @ast ctx callex "#self#"::K"Placeholder"
+            farg_type = @ast ctx callex [K"call"
+                "Typeof"::K"core"
+                func_var
+            ]
+        end
+        pushfirst!(arg_names, farg_name)
+        pushfirst!(arg_types, farg_type)
+        if isnothing(function_name)
+            function_name = nothing_(ctx, name)
+            func_var_assignment = @ast ctx name [K"=" func_var name]
         end
 
         if !isnothing(return_type)
