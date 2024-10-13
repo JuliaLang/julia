@@ -1968,7 +1968,7 @@ void JuliaOJIT::enableJITDebuggingSupport()
 void JuliaOJIT::enableIntelJITEventListener()
 {
 #if JL_LLVM_VERSION >= 190000
-    if (TT.isOSBinFormatELF()) {
+    if (TM->getTargetTriple().isOSBinFormatELF()) {
         orc::SymbolMap VTuneFunctions;
         auto RegisterImplAddr = addAbsoluteToMap(VTuneFunctions,llvm_orc_registerVTuneImpl);
         auto UnregisterImplAddr = addAbsoluteToMap(VTuneFunctions,llvm_orc_unregisterVTuneImpl);
