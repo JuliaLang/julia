@@ -2321,6 +2321,7 @@ Tooling Improvements
 [#32534]: https://github.com/JuliaLang/julia/issues/32534
 [#32600]: https://github.com/JuliaLang/julia/issues/32600
 [#32628]: https://github.com/JuliaLang/julia/issues/32628
+[#32651]: https://github.com/JuliaLang/julia/issues/32651
 [#32653]: https://github.com/JuliaLang/julia/issues/32653
 [#32729]: https://github.com/JuliaLang/julia/issues/32729
 [#32814]: https://github.com/JuliaLang/julia/issues/32814
@@ -2330,6 +2331,7 @@ Tooling Improvements
 [#32851]: https://github.com/JuliaLang/julia/issues/32851
 [#32872]: https://github.com/JuliaLang/julia/issues/32872
 [#32875]: https://github.com/JuliaLang/julia/issues/32875
+[#32918]: https://github.com/JuliaLang/julia/issues/32918
 
 Julia v1.2 Release Notes
 ========================
