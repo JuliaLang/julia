@@ -207,6 +207,38 @@ end
 7   (return %₁)
 
 ########################################
+# Callable type
+function (::T)(x)
+    x
+end
+#---------------------
+1   TestMod.T
+2   TestMod.T
+3   (call core.svec %₂ core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   slot₂/x
+    2   (return %₁)
+7   (return %₁)
+
+########################################
+# Callable type with instance
+function (y::T)(x)
+    (y, x)
+end
+#---------------------
+1   TestMod.T
+2   TestMod.T
+3   (call core.svec %₂ core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   (call core.tuple slot₁/y slot₂/x)
+    2   (return %₁)
+7   (return %₁)
+
+########################################
 # Function with module ref in name
 function A.f()
 end

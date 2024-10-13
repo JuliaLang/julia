@@ -1340,13 +1340,18 @@ function expand_function_def(ctx, ex, docs)
                 farg_name = name[1]
                 farg_type = name[2]
             end
+            function_name = nothing_(ctx, name)
+            function_obj = farg_type
         else
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
             end
             if is_identifier_like(name)
                 function_name = @ast ctx name name=>K"Symbol"
-                func_var_assignment = @ast ctx name [K"=" func_var [K"method" function_name]]
+                function_obj = @ast ctx name [K"method" function_name]
+            else
+                function_name = nothing_(ctx, name)
+                function_obj = name
             end
             farg_name = @ast ctx callex "#self#"::K"Placeholder"
             farg_type = @ast ctx callex [K"call"
@@ -1356,10 +1361,6 @@ function expand_function_def(ctx, ex, docs)
         end
         pushfirst!(arg_names, farg_name)
         pushfirst!(arg_types, farg_type)
-        if isnothing(function_name)
-            function_name = nothing_(ctx, name)
-            func_var_assignment = @ast ctx name [K"=" func_var name]
-        end
 
         if !isnothing(return_type)
             ret_var = ssavar(ctx, return_type, "return_type")
@@ -1374,7 +1375,7 @@ function expand_function_def(ctx, ex, docs)
 
         @ast ctx ex [K"scope_block"(scope_type=:hard)
             [K"block"
-                func_var_assignment
+                [K"=" func_var function_obj]
                 typevar_stmts...
                 # metadata contains svec(types, sparms, location)
                 method_metadata := [K"call"(callex)
