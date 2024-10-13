@@ -6,6 +6,8 @@ libblastrampoline.v5.11.1+0.aarch64-linux-gnu.tar.gz/md5/aad5e3585f585d54d9ebcf8
 libblastrampoline.v5.11.1+0.aarch64-linux-gnu.tar.gz/sha512/11ff9227e16898895ad6cbd36853093941b243a49962785a5ab8b7dc2426831a2750ab5882ee814e3a662e8b9f8aecb273d750b88a4ea5a213e20c93cb121ce1
 libblastrampoline.v5.11.1+0.aarch64-linux-musl.tar.gz/md5/462639b4b21f5b7626febfdd1ae1f824
 libblastrampoline.v5.11.1+0.aarch64-linux-musl.tar.gz/sha512/866004e3fcdb5ab7418c8a2cae8f820c5739a511b9d0b32d0013ef72ff99f87396f5912d8fbd6bf4d01d7432715c6971ad1a5419c34fa7b048d0fbbe0f8520d2
+libblastrampoline.v5.11.1+0.aarch64-unknown-freebsd.tar.gz/md5/b6ce7d6d46d2ae772d4c3f629e754486
+libblastrampoline.v5.11.1+0.aarch64-unknown-freebsd.tar.gz/sha512/b2e7990cd0f7bb1bc376118955e397599c44aa3d09b0e87524ed8fed4bbb1d6a2b9c1bc02806bbeb86812ab0083c8016fe3c38894e0eb339025cf30f0cd64ffc
 libblastrampoline.v5.11.1+0.armv6l-linux-gnueabihf.tar.gz/md5/8a48cc8243257362dbc920dcadc42a22
 libblastrampoline.v5.11.1+0.armv6l-linux-gnueabihf.tar.gz/sha512/bb4048c0e1ebbb89fc82b7cdabb0a4d9263b5344390c934b66c3a227631661ae956287870e4b156935f0a3c322049ceed3138fc033c92561fccf3675317af5b8
 libblastrampoline.v5.11.1+0.armv6l-linux-musleabihf.tar.gz/md5/53c12d04337b63d18f4a5469a36132b6
