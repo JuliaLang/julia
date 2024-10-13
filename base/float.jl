@@ -14,6 +14,8 @@ const Inf16 = bitcast(Float16, 0x7c00)
     NaN16
 
 A not-a-number value of type [`Float16`](@ref).
+
+See also: [`NaN`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """
@@ -26,6 +28,8 @@ const Inf32 = bitcast(Float32, 0x7f800000)
     NaN32
 
 A not-a-number value of type [`Float32`](@ref).
+
+See also: [`NaN`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -69,9 +73,23 @@ NaN
 julia> Inf - Inf
 NaN
 
-julia> NaN == NaN, isequal(NaN, NaN), NaN === NaN
+julia> NaN == NaN, isequal(NaN, NaN), isnan(NaN)
 (false, true, true)
 ```
+
+!!! note
+    Always use [`isnan`](@ref) or [`isequal`](@ref) for checking for `NaN`.
+    Using `x === NaN` may give unexpected results:
+    ```julia-repl
+    julia> reinterpret(UInt32, NaN32)
+    0x7fc00000
+
+    julia> NaN32p1 = reinterpret(Float32, 0x7fc00001)
+    NaN32
+
+    julia> NaN32p1 === NaN32, isequal(NaN32p1, NaN32), isnan(NaN32p1)
+    (false, true, true)
+    ```
 """
 NaN, NaN64
 
@@ -445,6 +463,19 @@ round(x::IEEEFloat, ::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
+
+rounds_up(x, ::RoundingMode{:Down}) = false
+rounds_up(x, ::RoundingMode{:Up}) = true
+rounds_up(x, ::RoundingMode{:ToZero}) = signbit(x)
+rounds_up(x, ::RoundingMode{:FromZero}) = !signbit(x)
+function _round_convert(::Type{T}, x_integer, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
+    x_t = convert(T, x_integer)
+    if rounds_up(x, r)
+        x_t < x ? nextfloat(x_t) : x_t
+    else
+        x_t > x ? prevfloat(x_t) : x_t
+    end
+end
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -839,12 +870,12 @@ number of significand digits in that base.
 """
 function precision end
 
-_precision(::Type{Float16}) = 11
-_precision(::Type{Float32}) = 24
-_precision(::Type{Float64}) = 53
-function _precision(x, base::Integer=2)
+_precision_with_base_2(::Type{Float16}) = 11
+_precision_with_base_2(::Type{Float32}) = 24
+_precision_with_base_2(::Type{Float64}) = 53
+function _precision(x, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
-    p = _precision(x)
+    p = _precision_with_base_2(x)
     return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
@@ -1017,11 +1048,22 @@ isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Int
     floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
+end
+
+eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+
+function eps(x::T) where T<:IEEEFloat
+    # For isfinite(x), toggling the LSB will produce either prevfloat(x) or
+    # nextfloat(x) but will never change the sign or exponent.
+    # For !isfinite(x), this will map Inf to NaN and NaN to NaN or Inf.
+    y = reinterpret(T, reinterpret(Unsigned, x) ⊻ true)
+    # The absolute difference between these values is eps(x). This is true even
+    # for Inf/NaN values.
+    return abs(x - y)
 end
 
 """

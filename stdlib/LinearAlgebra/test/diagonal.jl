@@ -18,6 +18,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -47,10 +50,27 @@ Random.seed!(1)
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
+
+        # diagonal matrices may be converted to Diagonal
+        local A = [1 0; 0 2]
+        local DA = convert(Diagonal{Float32,Vector{Float32}}, A)
+        @test DA isa Diagonal{Float32,Vector{Float32}}
+        @test DA == A
+
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
+
+        # Test reversing
+        # Test reversing along rows
+        @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+
+        # Test reversing along columns
+        @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+
+        # Test reversing the entire matrix
+        @test reverse(D)::Diagonal == reverse(Matrix(D)) == reverse!(copy(D))
     end
 
     @testset "Basic properties" begin
@@ -597,6 +617,15 @@ end
             @test_throws ArgumentError D[i, j] = 1
         end
     end
+    # setindex should return the destination
+    @test setindex!(D, 1, 1, 1) === D
+end
+
+@testset "Test reverse" begin
+    D = Diagonal(randn(5))
+    @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+    @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+    @test reverse(D)::Diagonal == reverse(Matrix(D))
 end
 
 @testset "inverse" begin
@@ -752,6 +781,9 @@ end
     @test transpose(Dherm) == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
     @test adjoint(Dsym) == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
     @test transpose(Dsym) == Dsym
+    @test diag(D, 0) == diag(D) == [[1 2; 3 4], [1 2; 3 4]]
+    @test diag(D, 1) == diag(D, -1) == [zeros(Int,2,2)]
+    @test diag(D, 2) == diag(D, -2) == []
 
     v = [[1, 2], [3, 4]]
     @test Dherm' * v == Dherm * v
@@ -777,6 +809,18 @@ end
     for n in 0:1
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
+    end
+
+    S = SizedArray{(2,3)}(reshape([1:6;],2,3))
+    D = Diagonal(fill(S,3))
+    @test D * fill(S,2,3)' == fill(S * S', 3, 2)
+    @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
+
+    @testset "indexing with non-standard-axes" begin
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        D = Diagonal(fill(s,3))
+        @test @inferred(D[1,2]) isa typeof(s)
+        @test all(iszero, D[1,2])
     end
 end
 
@@ -811,7 +855,7 @@ end
     @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
-@testset "multiplication with Symmetric/Hermitian" begin
+@testset "multiplication/division with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
@@ -824,6 +868,10 @@ end
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
             @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
+            @test (transform1(H)/D) * D ≈ transform1(H)
+            @test (transform1(S)/D) * D ≈ transform1(S)
+            @test D * (D\transform2(H)) ≈ transform2(H)
+            @test D * (D\transform2(S)) ≈ transform2(S)
         end
     end
 end
@@ -1195,6 +1243,11 @@ Base.size(::SMatrix1) = (1, 1)
     @test C isa Matrix{SMatrix1{String}}
 end
 
+@testset "show" begin
+    @test repr(Diagonal([1,2])) == "Diagonal([1, 2])"  # 2-arg show
+    @test contains(repr(MIME"text/plain"(), Diagonal([1,2])), "⋅  2")  # 3-arg show
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())
@@ -1217,6 +1270,125 @@ end
 
     # currently falls back to two-term *
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
+end
+
+@testset "triple multiplication with a sandwiched BandedMatrix" begin
+    D = Diagonal(StepRangeLen(NaN, 0, 4));
+    B = Bidiagonal(1:4, 1:3, :U)
+    C = D * B * D
+    @test iszero(diag(C, 2))
+    # test associativity
+    C1 = (D * B) * D
+    C2 = D * (B * D)
+    @test diag(C,2) == diag(C1,2) == diag(C2,2)
+end
+
+@testset "diagind" begin
+    D = Diagonal(1:4)
+    M = Matrix(D)
+    @testset for k in -4:4
+        @test D[diagind(D,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    D = Diagonal([1:2;])
+    @test S * D == A * D
+    @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test D * sv == D * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, D, sv) == mul!(C2, D, v)
+    @test mul!(C1, D, sv, 1, 2) == mul!(C2, D, v, 1 ,2)
+end
+
+@testset "copy" begin
+    @test copy(Diagonal(1:5)) === Diagonal(1:5)
+end
+
+@testset "kron! for Diagonal" begin
+    a = Diagonal([2,2])
+    b = Diagonal([1,1])
+    c = Diagonal([0,0,0,0])
+    kron!(c,b,a)
+    @test c == Diagonal([2,2,2,2])
+    c=Diagonal(Vector{Float64}(undef, 4))
+    kron!(c,a,b)
+    @test c == Diagonal([2,2,2,2])
+end
+
+@testset "uppertriangular/lowertriangular" begin
+    D = Diagonal([1,2])
+    @test LinearAlgebra.uppertriangular(D) === D
+    @test LinearAlgebra.lowertriangular(D) === D
+end
+
+@testset "mul/div with an adjoint vector" begin
+    A = [1.0;;]
+    x = [1.0]
+    yadj = Diagonal(A) \ x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+    yadj = Diagonal(A) * x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    @testset "$(nameof(typeof(B)))" for B in (
+                            Bidiagonal(rand(4), rand(3), :L),
+                            Tridiagonal(rand(3), rand(4), rand(3))
+                    )
+        BA = Array(B)
+        D = Diagonal(rand(size(B,1)))
+        DA = Array(D)
+        @test rmul!(copy(B), D) ≈ B * D ≈ BA * DA
+        @test lmul!(D, copy(B)) ≈ D * B ≈ DA * BA
+    end
+end
+
+@testset "rmul!/lmul! with numbers" begin
+    D = Diagonal(rand(4))
+    @test rmul!(copy(D), 0.2) ≈ rmul!(Array(D), 0.2)
+    @test lmul!(0.2, copy(D)) ≈ lmul!(0.2, Array(D))
+    @test_throws ArgumentError rmul!(D, NaN)
+    @test_throws ArgumentError lmul!(NaN, D)
+    D = Diagonal(rand(1))
+    @test all(isnan, rmul!(copy(D), NaN))
+    @test all(isnan, lmul!(NaN, copy(D)))
+end
+
+@testset "+/- with block Symmetric/Hermitian" begin
+    for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
+        m = SizedArrays.SizedArray{(2,2)}(p)
+        D = Diagonal(fill(m, 2))
+        for T in (Symmetric, Hermitian)
+            S = T(fill(m, 2, 2))
+            @test D + S == Array(D) + Array(S)
+            @test S + D == Array(S) + Array(D)
+        end
+    end
+end
+
+@testset "bounds-check with CartesianIndex ranges" begin
+    D = Diagonal(1:typemax(Int))
+    @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
 end
 
 end # module TestDiagonal

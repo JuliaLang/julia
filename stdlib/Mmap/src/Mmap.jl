@@ -86,6 +86,8 @@ grow!(::Anonymous,o::Integer,l::Integer) = return
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
+    # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
+    filelen == 0 && !isfile(io) && return
     if filelen < offset + len
         failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
@@ -211,14 +213,12 @@ function mmap(io::IO,
     szfile = convert(Csize_t, len + offset)
     requestedSizeLarger = false
     if !(io isa Mmap.Anonymous)
-        @static if !Sys.isapple()
-            requestedSizeLarger = szfile > filesize(io)
-        end
+        requestedSizeLarger = szfile > filesize(io)
     end
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        if requestedSizeLarger
+        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
             if iswrite
                 if grow
                     grow!(io, offset, len)
@@ -228,9 +228,6 @@ function mmap(io::IO,
             else
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
             end
-        end
-        @static if Sys.isapple()
-            iswrite && grow && grow!(io, offset, len)
         end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
@@ -256,7 +253,7 @@ function mmap(io::IO,
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A) do x
+    finalizer(A.ref.mem) do x
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else

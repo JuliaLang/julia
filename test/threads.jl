@@ -288,18 +288,16 @@ close(proc.in)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(100) do _
+        timer = Timer(200) do _
             timeout = true
-            for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
-                for _ in 1:1000
+            for sig in (Base.SIGQUIT, Base.SIGKILL)
+                for _ in 1:3
                     kill(proc, sig)
+                    sleep(1)
                     if done[]
-                        if sig != Base.SIGTERM
-                            @warn "Terminating `$script` required signal $sig"
-                        end
+                        @warn "Terminating `$script` required signal $sig"
                         return
                     end
-                    sleep(0.001)
                 end
             end
         end
@@ -309,16 +307,11 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        if ( !success(proc) ) || ( timeout )
+        if !success(proc) || timeout
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows() || Sys.isapple()
-            # Known failure: https://github.com/JuliaLang/julia/issues/43124
-            @test_skip success(proc)
-        else
-            @test success(proc)
-            @test !timeout
-        end
+        @test success(proc)
+        @test !timeout
     end
 end
 
@@ -336,4 +329,48 @@ end
     @test @ccall(jl_get_num_stack_mappings()::Cint) >= 1
     # There must be at least two: one for the root test task and one for the async task:
     @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
+end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
+    end
+end
+
+# Make sure default number of BLAS threads respects CPU affinity: issue #55572.
+@testset "LinearAlgebra number of default threads" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -E 'using LinearAlgebra; BLAS.get_num_threads()'`,
+                     # Remove all variables which could affect the default number of threads
+                     "OPENBLAS_NUM_THREADS"=>nothing,
+                     "GOTO_NUM_THREADS"=>nothing,
+                     "OMP_NUM_THREADS"=>nothing)
+        for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
+            @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
+        end
+    end
 end

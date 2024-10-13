@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
+"""
+The `Unicode` module provides essential functionality for managing Unicode characters and strings.
+It includes validation, category determination, normalization, case transformation, and grapheme segmentation,
+enabling effective Unicode data handling.
+"""
 module Unicode
 
 export graphemes, isequal_normalized
@@ -208,11 +212,18 @@ end
 
 using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
 
-function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, options::Integer)
-    ret = @ccall utf8proc_decompose_char(codepoint::UInt32, dest::Ptr{UInt32}, length(dest)::Int, options::Cint, C_NULL::Ptr{Cint})::Int
+function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, offset::Integer, options::Integer)
+    ret = GC.@preserve dest @ccall utf8proc_decompose_char(codepoint::UInt32, pointer(dest, 1+offset)::Ptr{UInt32}, (length(dest)-offset)::Int, options::Cint, C_NULL::Ptr{Cint})::Int
     ret < 0 && utf8proc_error(ret)
     return ret
 end
+
+# would be good to have higher-level accessor functions in utf8proc.  alternatively,
+# we could mirror the whole utf8proc_property_t struct in Julia, but that is annoying
+# because of the bitfields.
+combining_class(uc::Integer) =
+    0x000301 ≤ uc ≤ 0x10ffff ? unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (UInt32,), uc), 2) : 0x0000
+combining_class(c::AbstractChar) = ismalformed(c) ? 0x0000 : combining_class(UInt32(c))
 
 """
     isequal_normalized(s1::AbstractString, s2::AbstractString; casefold=false, stripmark=false, chartransform=identity)
@@ -224,6 +235,9 @@ and other combining characters.
 As with [`Unicode.normalize`](@ref), you can also pass an arbitrary
 function via the `chartransform` keyword (mapping `Integer` codepoints to codepoints)
 to perform custom normalizations, such as [`Unicode.julia_chartransform`](@ref).
+
+!!! compat "Julia 1.8"
+    The `isequal_normalized` function was added in Julia 1.8.
 
 # Examples
 
@@ -251,29 +265,78 @@ julia> isequal_normalized(s1, "NOËL", casefold=true)
 true
 ```
 """
-function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false, chartransform=identity)
-    function decompose_next_char!(c, state, d, options, s)
-        n = _decompose_char!(c, d, options)
-        if n > length(d) # may be possible in future Unicode versions?
-            n = _decompose_char!(c, resize!(d, n), options)
+isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false, chartransform=identity) =
+    _isequal_normalized!(s1, s2, Vector{UInt32}(undef, 4), Vector{UInt32}(undef, 4), chartransform; casefold, stripmark)
+
+# like isequal_normalized, but takes pre-allocated codepoint buffers as arguments, and chartransform is a positional argument
+function _isequal_normalized!(s1::AbstractString, s2::AbstractString,
+                              d1::Vector{UInt32}, d2::Vector{UInt32}, chartransform::F=identity;
+                              casefold::Bool=false, stripmark::Bool=false) where {F}
+    function decompose_next_chars!(state, d, options, s)
+        local n
+        offset = 0
+        @inbounds while true
+            # read a char and decompose it to d
+            c = chartransform(UInt32(state[1]))
+            state = iterate(s, state[2])
+            if c < 0x80 # fast path for common ASCII case
+                n = 1 + offset
+                n > length(d) && resize!(d, 2n)
+                d[n] = casefold ? (0x41 ≤ c ≤ 0x5A ? c+0x20 : c) : c
+                break # ASCII characters are all zero combining class
+            else
+                while true
+                    n = _decompose_char!(c, d, offset, options) + offset
+                    if n > length(d)
+                        resize!(d, 2n)
+                        continue
+                    end
+                    break
+                end
+            end
+
+            # decomposed chars must be sorted in ascending order of combining class,
+            # which means we need to keep fetching chars until we get to non-combining
+            (iszero(combining_class(d[n])) || isnothing(state)) && break # non-combining
+            offset = n
         end
-        return 1, n, iterate(s, state)
+
+        # sort by combining class
+        if n < 32 # almost always true
+            for j1 = 2:n # insertion sort
+                cc = combining_class(d[j1])
+                iszero(cc) && continue # don't re-order non-combiners
+                for j2 = j1:-1:2
+                    combining_class(d[j2-1]) ≤ cc && break
+                    d[j2-1], d[j2] = d[j2], d[j2-1]
+                end
+            end
+        else # avoid n^2 complexity in crazy large-n case
+            j = 1
+            @views while j < n
+                j₀ = j + something(findnext(iszero ∘ combining_class, d[j+1:n], 1), n+1-j)
+                sort!(d[j:j₀-1], by=combining_class)
+                j = j₀
+            end
+        end
+
+        # split return statement to help type inference:
+        return state === nothing ? (1, n, nothing) : (1, n, state)
     end
     options = UTF8PROC_DECOMPOSE
     casefold && (options |= UTF8PROC_CASEFOLD)
     stripmark && (options |= UTF8PROC_STRIPMARK)
     i1,i2 = iterate(s1),iterate(s2)
-    d1,d2 = Vector{UInt32}(undef, 4), Vector{UInt32}(undef, 4) # codepoint buffers
     n1 = n2 = 0 # lengths of codepoint buffers
     j1 = j2 = 1 # indices in d1, d2
     while true
         if j1 > n1
             i1 === nothing && return i2 === nothing && j2 > n2
-            j1, n1, i1 = decompose_next_char!(chartransform(UInt32(i1[1])), i1[2], d1, options, s1)
+            j1, n1, i1 = decompose_next_chars!(i1, d1, options, s1)
         end
         if j2 > n2
             i2 === nothing && return false
-            j2, n2, i2 = decompose_next_char!(chartransform(UInt32(i2[1])), i2[2], d2, options, s2)
+            j2, n2, i2 = decompose_next_chars!(i2, d2, options, s2)
         end
         d1[j1] == d2[j2] || return false
         j1 += 1; j2 += 1

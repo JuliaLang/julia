@@ -7,51 +7,28 @@ include("irutils.jl")
 
 using Test
 const CC = Core.Compiler
-import Core: MethodInstance, CodeInstance
-import .CC: WorldRange, WorldView
 
-struct InvalidationTesterCache
-    dict::IdDict{MethodInstance,CodeInstance}
-end
-InvalidationTesterCache() = InvalidationTesterCache(IdDict{MethodInstance,CodeInstance}())
-
-const INVALIDATION_TESTER_CACHE = InvalidationTesterCache()
+struct InvalidationTesterToken end
 
 struct InvalidationTester <: CC.AbstractInterpreter
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::InvalidationTesterCache
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::CC.InferenceParams = CC.InferenceParams(),
                                 opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                                code_cache::InvalidationTesterCache = INVALIDATION_TESTER_CACHE)
-        return new(world, inf_params, opt_params, inf_cache, code_cache)
+                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+        return new(world, inf_params, opt_params, inf_cache)
     end
-end
-
-struct InvalidationTesterCacheView
-    dict::IdDict{MethodInstance,CodeInstance}
 end
 
 CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
 CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
-CC.get_world_counter(interp::InvalidationTester) = interp.world
+CC.get_inference_world(interp::InvalidationTester) = interp.world
 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
-CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp.code_cache.dict), WorldRange(interp.world))
-CC.get(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-CC.getindex(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-CC.haskey(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-function CC.setindex!(wvc::WorldView{InvalidationTesterCacheView}, ci::CodeInstance, mi::MethodInstance)
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.dict, replaced)
-        # Core.println("[InvalidationTester] ", replaced) # debug
-    end
-    setindex!(wvc.cache.dict, ci, mi)
-end
+CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
 
 # basic functionality test
 # ------------------------
@@ -63,32 +40,54 @@ basic_caller(x) = basic_callee(x)
 @test Base.return_types((Float64,); interp=InvalidationTester()) do x
     basic_caller(x)
 end |> only === Float64
-@test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_callee
+
+let mi = Base.method_instance(basic_callee, (Float64,))
+    ci = mi.cache
+    @test !isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
 end
-@test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_caller
+
+let mi = Base.method_instance(basic_caller, (Float64,))
+    ci = mi.cache
+    @test !isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
 end
 
 # this redefinition below should invalidate the cache
+const BASIC_CALLER_WORLD = Base.get_world_counter()
 basic_callee(x) = x, x
-@test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_callee
-end
-@test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_caller
+@test !isdefined(Base.method_instance(basic_callee, (Float64,)), :cache)
+let mi = Base.method_instance(basic_caller, (Float64,))
+    ci = mi.cache
+    @test !isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == BASIC_CALLER_WORLD
 end
 
 # re-run inference and check the result is updated (and new cache exists)
 @test Base.return_types((Float64,); interp=InvalidationTester()) do x
     basic_caller(x)
 end |> only === Tuple{Float64,Float64}
-@test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_callee
+let mi = Base.method_instance(basic_callee, (Float64,))
+    ci = mi.cache
+    @test !isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
 end
-@test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-    mi.def.name === :basic_caller
+
+let mi = Base.method_instance(basic_caller, (Float64,))
+    ci = mi.cache
+    @test isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world == typemax(UInt)
+    ci = ci.next
+    @test !isdefined(ci, :next)
+    @test ci.owner === InvalidationTesterToken()
+    @test ci.max_world != typemax(UInt)
 end
+
 
 # backedge optimization
 # ---------------------
@@ -115,24 +114,49 @@ begin take!(GLOBAL_BUFFER)
         @test rt === Any
         @test any(iscall((src, pr48932_callee)), src.code)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee
+
+    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee))))
+        # Base.method_instance(pr48932_callee, (Any,))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
+
+        # In cache due to Base.return_types(pr48932_callee, (Any,))
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world == typemax(UInt)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller
+    let mi = Base.method_instance(pr48932_caller, (Int,))
+        ci = mi.cache
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
     end
+
     @test 42 == pr48932_caller(42)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we didn't add the backedge from `pr48932_callee` to `pr48932_caller`:
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
-    @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee
+
+    @test length(Base.methods(pr48932_callee)) == 2
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
+    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
+        # Base.method_instance(pr48932_callee, (Any,))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world == typemax(UInt)
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller
-    end
+
     @test isnothing(pr48932_caller(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
@@ -159,23 +183,41 @@ begin take!(GLOBAL_BUFFER)
         @test rt === Nothing
         @test any(iscall((src, pr48932_callee_inferable)), src.code)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferable
+
+    let mi = only(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable))))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world == typemax(UInt)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller_unuse
+    let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
+        ci = mi.cache
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
     end
+
     @test isnothing(pr48932_caller_unuse(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we didn't add the backedge from `pr48932_callee_inferable` to `pr48932_caller_unuse`:
     # this redefinition below should invalidate the cache of `pr48932_callee_inferable` but not that of `pr48932_caller_unuse`
     pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, "foo"); x)
-    @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inferable
-    end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller_unuse
+
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable, Tuple{Any}))))
+    let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world == typemax(UInt)
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
@@ -201,24 +243,43 @@ begin take!(GLOBAL_BUFFER)
         @test rt === Any
         @test any(isinvoke(:pr48932_callee_inlined), src.code)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inlined
+
+    let mi = Base.method_instance(pr48932_callee_inlined, (Int,))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world == typemax(UInt)
     end
-    @test any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller_inlined
+    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+        ci = mi.cache
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
     end
+
     @test 42 == pr48932_caller_inlined(42)
     @test "42" == String(take!(GLOBAL_BUFFER))
 
     # test that we added the backedge from `pr48932_callee_inlined` to `pr48932_caller_inlined`:
     # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
-    @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_callee_inlined
+
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
+    let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
+        ci = mi.cache
+        @test isdefined(ci, :next)
+        @test ci.owner === nothing
+        @test ci.max_world != typemax(UInt)
+        ci = ci.next
+        @test !isdefined(ci, :next)
+        @test ci.owner === InvalidationTesterToken()
+        @test ci.max_world != typemax(UInt)
     end
-    @test !any(INVALIDATION_TESTER_CACHE.dict) do (mi, ci)
-        mi.def.name === :pr48932_caller_inlined
-    end
+
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 end

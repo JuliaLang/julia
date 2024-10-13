@@ -379,7 +379,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: `b` not defined
+ERROR: UndefVarError: `b` not defined in `Main`
 [...]
 
 julia> a = 1; b = 2;
@@ -397,7 +397,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 
 julia> eval(ex)
 1
@@ -629,6 +629,15 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+julia> @showarg(1)        # Numeric literal
+1
+
+julia> @showarg("Yo!")    # String literal
+"Yo!"
+
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.

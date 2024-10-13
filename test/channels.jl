@@ -12,6 +12,9 @@ using Base: n_avail
     end
     @test wait(a) == "success"
     @test fetch(t) == "finished"
+
+    # Test printing
+    @test repr(a) == "Condition()"
 end
 
 @testset "wait first behavior of wait on Condition" begin
@@ -40,6 +43,8 @@ end
     c = Channel()
     @test eltype(c) == Any
     @test c.sz_max == 0
+    @test isempty(c) == true  # Nothing in it
+    @test isfull(c) == true   # But no more room
 
     c = Channel(1)
     @test eltype(c) == Any
@@ -48,6 +53,11 @@ end
     @test take!(c) == 1
     @test isready(c) == false
     @test eltype(Channel(1.0)) == Any
+
+    c = Channel(1)
+    @test isfull(c) == false
+    put!(c, 1)
+    @test isfull(c) == true
 
     c = Channel{Int}(1)
     @test eltype(c) == Int
@@ -375,7 +385,7 @@ end
         """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t._state = 66
+    @atomic t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -493,7 +503,7 @@ end
     c = Channel(1)
     close(c)
     @test !isopen(c)
-    c.excp == nothing # to trigger the branch
+    c.excp === nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 
@@ -559,7 +569,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end
@@ -630,4 +640,12 @@ end
                                 try wait(t2) catch end
         @test n_avail(c) == 0
     end
+end
+
+@testset "Task properties" begin
+    f() = rand(2,2)
+    t = Task(f)
+    message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
+    @test_throws ErrorException(message) t.scope
+    @test t.state == :runnable
 end

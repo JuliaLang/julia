@@ -7,6 +7,7 @@
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/MemoryBufferRef.h>
 #include <llvm/IR/Function.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringMap.h>
@@ -222,10 +223,20 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
 #endif
 
 void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
-                        std::function<uint64_t(const StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress)
+                        std::function<uint64_t(const StringRef &)> getLoadAddress)
 {
     object::section_iterator EndSection = Object.section_end();
+
+    bool anyfunctions = false;
+    for (const object::SymbolRef &sym_iter : Object.symbols()) {
+        object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
+        if (SymbolType != object::SymbolRef::ST_Function)
+            continue;
+        anyfunctions = true;
+        break;
+    }
+    if (!anyfunctions)
+        return;
 
 #ifdef _CPU_ARM_
     // ARM does not have/use .eh_frame
@@ -280,14 +291,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #if defined(_OS_WINDOWS_)
     uint64_t SectionAddrCheck = 0;
     uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
-    uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
     uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
     uint8_t *catchjmp = NULL;
     for (const object::SymbolRef &sym_iter : Object.symbols()) {
         StringRef sName = cantFail(sym_iter.getName());
         if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
-            uint64_t Addr = cantFail(sym_iter.getAddress());
+            uint64_t Addr = cantFail(sym_iter.getAddress()); // offset into object (including section offset)
             auto Section = cantFail(sym_iter.getSection());
             assert(Section != EndSection && Section->isText());
             uint64_t SectionAddr = Section->getAddress();
@@ -299,10 +309,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                         SectionLoadCheck == SectionLoadAddr);
             SectionAddrCheck = SectionAddr;
             SectionLoadCheck = SectionLoadAddr;
-            SectionWriteCheck = SectionLoadAddr;
-            if (lookupWriteAddress)
-                SectionWriteCheck = (uintptr_t)lookupWriteAddress((void*)SectionLoadAddr);
-            Addr += SectionWriteCheck - SectionLoadCheck;
+            Addr += SectionLoadAddr - SectionAddr;
             if (sName.equals("__UnwindData")) {
                 UnwindData = (uint8_t*)Addr;
             }
@@ -313,30 +320,16 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
     }
     assert(catchjmp);
     assert(UnwindData);
-    assert(SectionAddrCheck);
     assert(SectionLoadCheck);
-    assert(!memcmp(catchjmp, "\0\0\0\0\0\0\0\0\0\0\0\0", 12) &&
-            !memcmp(UnwindData, "\0\0\0\0\0\0\0\0\0\0\0\0", 12));
-    catchjmp[0] = 0x48;
-    catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
-    *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
-    catchjmp[10] = 0xff;
-    catchjmp[11] = 0xe0; // jmp RAX
-    UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-    UnwindData[1] = 4;    // size of prolog (bytes)
-    UnwindData[2] = 2;    // count of unwind codes (slots)
-    UnwindData[3] = 0x05; // frame register (rbp) = rsp
-    UnwindData[4] = 4;    // second instruction
-    UnwindData[5] = 0x03; // mov RBP, RSP
-    UnwindData[6] = 1;    // first instruction
-    UnwindData[7] = 0x50; // push RBP
-    *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
-    UnwindData -= SectionWriteCheck - SectionLoadCheck;
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
+    SmallVector<uint8_t, 0> packed;
+    compression::zlib::compress(ArrayRef<uint8_t>((uint8_t*)Object.getData().data(), Object.getData().size()), packed, compression::zlib::DefaultCompression);
+    jl_jit_add_bytes(packed.size());
+    auto ObjectCopy = new LazyObjectInfo{packed, Object.getData().size()}; // intentionally leaked so that we don't need to ref-count it, intentionally copied so that we exact-size the allocation (since no shrink_to_fit function)
     auto symbols = object::computeSymbolSizes(Object);
-    bool first = true;
+    bool hassection = false;
     for (const auto &sym_size : symbols) {
         const object::SymbolRef &sym_iter = sym_size.first;
         object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
@@ -348,7 +341,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         uint64_t SectionAddr = Section->getAddress();
         StringRef secName = cantFail(Section->getName());
         uint64_t SectionLoadAddr = getLoadAddress(secName);
-        Addr -= SectionAddr - SectionLoadAddr;
+        Addr += SectionLoadAddr - SectionAddr;
         StringRef sName = cantFail(sym_iter.getName());
         uint64_t SectionSize = Section->getSize();
         size_t Size = sym_size.second;
@@ -374,34 +367,34 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         }
         jl_method_instance_t *mi = NULL;
         if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
             // Non-opaque-closure MethodInstances are considered globally rooted
             // through their methods, but for OC, we need to create a global root
             // here.
             if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
                 linfomap[Addr] = std::make_pair(Size, mi);
-            if (first) {
-                objectmap[SectionLoadAddr] = {&Object,
-                    (size_t)SectionSize,
-                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    *Section,
-                    nullptr,
-                    };
-                first = false;
-            }
+            hassection = true;
+            objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
+                ObjectCopy,
+                (size_t)SectionSize,
+                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                Section->getIndex()
+                }});
         });
     }
+    if (!hassection) // clang-sa demands that we do this to fool cplusplus.NewDeleteLeaks
+        delete ObjectCopy;
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress)
+                            std::function<uint64_t(const StringRef &)> getLoadAddress)
 {
-    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
+    getJITDebugRegistry().registerJITObject(Object, getLoadAddress);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -1136,7 +1129,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
     // Assume we only need base address for sysimg for now
-    if (!inimage || !image_info.fptrs.base)
+    if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
     get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
@@ -1179,9 +1172,8 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         JITDebugInfoRegistry::image_info_t image;
         bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
         if (isImage && saddr && inimage) {
-            intptr_t diff = (uintptr_t)saddr - (uintptr_t)image.fptrs.base;
             for (size_t i = 0; i < image.fptrs.nclones; i++) {
-                if (diff == image.fptrs.clone_offsets[i]) {
+                if (saddr == image.fptrs.clone_ptrs[i]) {
                     uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
                     if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
                         frame0->linfo = image.fvars_linfo[idx];
@@ -1189,7 +1181,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
                 }
             }
             for (size_t i = 0; i < image.fvars_n; i++) {
-                if (diff == image.fptrs.offsets[i]) {
+                if (saddr == image.fptrs.ptrs[i]) {
                     frame0->linfo = image.fvars_linfo[i];
                     break;
                 }
@@ -1213,11 +1205,33 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
     auto fit = objmap.lower_bound(fptr);
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         *slide = fit->second.slide;
-        *Section = fit->second.Section;
-        if (context) {
-            if (fit->second.context == nullptr)
-                fit->second.context = DWARFContext::create(*fit->second.object).release();
-            *context = fit->second.context;
+        auto lazyobject = fit->second.object;
+        if (!lazyobject->object && !lazyobject->data.empty()) {
+            if (lazyobject->uncompressedsize) {
+                SmallVector<uint8_t, 0> unpacked;
+                Error E = compression::zlib::decompress(lazyobject->data, unpacked, lazyobject->uncompressedsize);
+                if (E)
+                    lazyobject->data.clear();
+                else
+                    lazyobject->data = std::move(unpacked);
+                jl_jit_add_bytes(lazyobject->data.size() - lazyobject->uncompressedsize);
+                lazyobject->uncompressedsize = 0;
+            }
+            if (!lazyobject->data.empty()) {
+                auto obj = object::ObjectFile::createObjectFile(MemoryBufferRef(StringRef((const char*)lazyobject->data.data(), lazyobject->data.size()), "jit.o"));
+                if (obj)
+                    lazyobject->object = std::move(*obj);
+                else
+                    lazyobject->data.clear();
+            }
+        }
+        if (lazyobject->object) {
+            *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
+            if (context) {
+                if (lazyobject->context == nullptr)
+                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                *context = lazyobject->context.get();
+            }
         }
         found = 1;
     }
@@ -1363,7 +1377,7 @@ enum DW_EH_PE : uint8_t {
 // Parse the CIE and return the type of encoding used by FDE
 static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 {
-    // http://www.airs.com/blog/archives/460
+    // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
     uint32_t cie_size = *(const uint32_t*)Addr;
     const uint8_t *cie_addr = Addr + 4;

@@ -188,7 +188,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
         dlopen = (dlopen_prototype*)dlsym(RTLD_NEXT, "dlopen");
         if (!dlopen)
             return NULL;
-        void *libdl_handle = dlopen("libdl.so", RTLD_NOW | RTLD_NOLOAD);
+        void *libdl_handle = dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
         assert(libdl_handle);
         dlopen = (dlopen_prototype*)dlsym(libdl_handle, "dlopen");
         dlclose(libdl_handle);
@@ -309,7 +309,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     */
     if (!abspath && !is_atpath && jl_base_module != NULL) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"), 0);
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_get_binding_value(b) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_nrows(DL_LOAD_PATH); j++) {

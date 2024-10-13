@@ -97,13 +97,12 @@ Finally, the [`Meta.lower`](@ref) function gives the `lowered` form of any expre
 particular interest for understanding how language constructs map to primitive operations such
 as assignments, branches, and calls:
 
-```jldoctest
+```jldoctest; setup = (using Base: +, sin)
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
-    @ none within `top-level scope`
-1 ─ %1 = 1 + 2
-│   %2 = sin(0.5)
-│   %3 = Base.vect(%1, %2)
+1 ─ %1 =   dynamic 1 + 2
+│   %2 =   dynamic sin(0.5)
+│   %3 =   dynamic Base.vect(%1, %2)
 └──      return %3
 ))))
 ```
@@ -147,7 +146,7 @@ debug information printed.
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:87 within `+`
-1 ─ %1 = Base.add_int(x, y)::Int64
+1 ─ %1 = intrinsic Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64
 ```
