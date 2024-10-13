@@ -221,6 +221,7 @@ Tooling Improvements
 [#35856]: https://github.com/JuliaLang/julia/issues/35856
 [#38064]: https://github.com/JuliaLang/julia/issues/38064
 [#43845]: https://github.com/JuliaLang/julia/issues/43845
+[#45641]: https://github.com/JuliaLang/julia/issues/45641
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
 [#47354]: https://github.com/JuliaLang/julia/issues/47354
 [#47679]: https://github.com/JuliaLang/julia/issues/47679
@@ -238,6 +239,7 @@ Tooling Improvements
 [#50661]: https://github.com/JuliaLang/julia/issues/50661
 [#50795]: https://github.com/JuliaLang/julia/issues/50795
 [#50797]: https://github.com/JuliaLang/julia/issues/50797
+[#50864]: https://github.com/JuliaLang/julia/issues/50864
 [#50958]: https://github.com/JuliaLang/julia/issues/50958
 [#51229]: https://github.com/JuliaLang/julia/issues/51229
 [#51416]: https://github.com/JuliaLang/julia/issues/51416
@@ -251,12 +253,10 @@ Tooling Improvements
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929
-[#52049]: https://github.com/JuliaLang/julia/issues/52049
 [#52096]: https://github.com/JuliaLang/julia/issues/52096
 [#52123]: https://github.com/JuliaLang/julia/issues/52123
 [#52139]: https://github.com/JuliaLang/julia/issues/52139
 [#52180]: https://github.com/JuliaLang/julia/issues/52180
-[#52196]: https://github.com/JuliaLang/julia/issues/52196
 [#52400]: https://github.com/JuliaLang/julia/issues/52400
 [#52413]: https://github.com/JuliaLang/julia/issues/52413
 [#52461]: https://github.com/JuliaLang/julia/issues/52461
@@ -270,6 +270,7 @@ Tooling Improvements
 [#52898]: https://github.com/JuliaLang/julia/issues/52898
 [#52957]: https://github.com/JuliaLang/julia/issues/52957
 [#53262]: https://github.com/JuliaLang/julia/issues/53262
+[#53352]: https://github.com/JuliaLang/julia/issues/53352
 
 
 Julia v1.10 Release Notes
