@@ -47,7 +47,7 @@ following meanings:
   * `ALWAYS_TRUE`: this method is guaranteed to not execute any undefined behavior (for any input).
   * `ALWAYS_FALSE`: this method may execute undefined behavior.
   * `NOUB_IF_NOINBOUNDS`: this method is guaranteed to not execute any undefined behavior
-    under the assumption that its `@checkbounds` code is not elided (which happens when the
+    under the assumption that its `@boundscheck` code is not elided (which happens when the
     caller does not set nor propagate the `@inbounds` context)
   Note that undefined behavior may technically cause the method to violate any other effect
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
