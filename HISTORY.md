@@ -2474,6 +2474,7 @@ External dependencies
 [#31009]: https://github.com/JuliaLang/julia/issues/31009
 [#31125]: https://github.com/JuliaLang/julia/issues/31125
 [#31211]: https://github.com/JuliaLang/julia/issues/31211
+[#31223]: https://github.com/JuliaLang/julia/issues/31223
 [#31230]: https://github.com/JuliaLang/julia/issues/31230
 [#31235]: https://github.com/JuliaLang/julia/issues/31235
 [#31310]: https://github.com/JuliaLang/julia/issues/31310
