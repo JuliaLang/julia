@@ -1397,14 +1397,41 @@
             (if (eq? word 'quote)
                 (list 'quote blk)
                 blk))))
-       ((while)  (begin0 (list 'while (parse-cond s) (append (parse-block s) (list (line-number-node s))))
-                         (expect-end s word)))
+       ((while)
+        (let* ((con  (parse-cond s))
+               (body (parse-block s))
+               (nxt  (require-token s)))
+          (take-token s)
+          (case nxt
+            ((end)
+             `(while ,con
+                     ,(append body (list (line-number-node s)))))
+            ((else)
+             (let ((else-body (parse-block s)))
+               (expect-end s word)
+               `(while ,con
+                       ,body
+                       ,(append else-body (list (line-number-node s))))))
+            (else
+             (error (string "unexpected \"" nxt "\""))))))
        ((for)
         (let* ((ranges (parse-comma-separated-iters s))
-               (body   (parse-block s)))
-          (expect-end s word)
-          `(for ,(if (length= ranges 1) (car ranges) (cons 'block ranges))
-                ,(append body (list (line-number-node s))))))
+               (ranges (if (length= ranges 1) (car ranges) (cons 'block ranges)))
+               (body   (parse-block s))
+               (nxt    (require-token s)))
+          (take-token s)
+          (case nxt
+            ((end)
+             `(for ,ranges
+                   ,(append body (list (line-number-node s)))))
+            ((else)
+             (let ((else-body (parse-block s)))
+               (expect-end s word)
+               `(for ,ranges
+                     ,body
+                     ,(append else-body (list (line-number-node s))))))
+            (else
+             (error (string "unexpected \"" nxt "\""))))))
 
        ((let)
         (let ((binds (if (memv (peek-token s) '(#\newline #\;))
