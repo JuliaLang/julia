@@ -521,7 +521,7 @@ function _crc32c(a::AbstractVector{UInt8}, crc::UInt32=0x00000000)
     # 3-way parallel SIMD code in the underlying jl_crc32c C function.
     last = lastindex(a)
     nb = length(a)
-    buf = Vector{UInt8}(undef, min(nb, 24576))
+    buf = Memory{UInt8}(undef, Int(min(nb, 24576)))
     while nb > 0
         n = min(nb, 24576)
         copyto!(buf, 1, a, last - nb + 1, n)

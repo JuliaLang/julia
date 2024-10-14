@@ -75,9 +75,10 @@ function test_crc32c(crc32c)
         view([0x01, 0x02], UInt(1):UInt(2)),
         Fill(0x00, UInt(100)),
         Fill(0x00, big(100)),
+        reinterpret(UInt8, BitVector((true, false, true, false))),
     ]
     for a in weird_vectors
-        @test crc32c(a) == crc32c(collect(vec(a)))
+        @test crc32c(a) == crc32c(collect(a))
     end
 end
 unsafe_crc32c_sw(a, n, crc) =
