@@ -162,7 +162,7 @@ above, or if you want to see the LLVM IR yourself and get extra verification run
 ```
 ./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -S -verify-each plus.ll
 ```
-(note on MacOS this would be `libjulia-codegen.dynlib` and on Windows, you should probably use WSL)
+(note on MacOS this would be `libjulia-codegen.dylib` and on Windows `libjulia-codegen.dll`)
 
 ## Running the LLVM test suite
 
