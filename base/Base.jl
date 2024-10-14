@@ -425,7 +425,8 @@ include("weakkeydict.jl")
 include("scopedvalues.jl")
 
 # used by task.jl
-const Workqueue_sched_times = ScopedValues.ScopedValue{Vector{UInt}}()
+const task_times_per_thread = ScopedValues.ScopedValue{Vector{UInt}}()
+const sleep_times_per_thread = ScopedValues.ScopedValue{Vector{UInt}}()
 
 # metaprogramming
 include("meta.jl")

@@ -196,10 +196,10 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, wall_time_sched=0,
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, sched_time_avg=0,
                     newline=false; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    wall_time_sched_perc = wall_time_sched / (elapsedtime / 1e9)
+    wall_time_sched_perc = sched_time_avg / (elapsedtime / 1e9)
     sched_thresh = 0.1
     str = sprint() do io
         if msg isa String
@@ -354,7 +354,7 @@ macro time(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, ret.wall_time_sched, true; msg=_msg_str)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, ret.sched_time_avg, true; msg=_msg_str)
         ret.value
     end
 end
@@ -608,7 +608,7 @@ julia> stats.recompile_time
 macro timed(ex)
     quote
         Experimental.@force_compile
-        ScopedValues.@with Workqueue_sched_times => zeros(UInt, Threads.maxthreadid()) begin
+        ScopedValues.@with task_times_per_thread => zeros(UInt, Threads.maxthreadid())  sleep_times_per_thread => zeros(UInt, Threads.maxthreadid()) begin
             Experimental.@force_compile
             Threads.lock_profiling(true)
             local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
@@ -624,9 +624,15 @@ macro timed(ex)
                 Threads.lock_profiling(false))
             )
             local diff = GC_Diff(gc_num(), stats)
-            # filter out zeros which can only happen if nothing was scheduled
-            local sched_times = Int.(filter(>(0), Workqueue_sched_times[]))
-            local wall_time_sched = isempty(sched_times) ? 0 : sum(Int(elapsedtime) .- sched_times) / length(sched_times)
+            local sched_times = Int[]
+            for i in 1:Threads.maxthreadid()
+                # filter out zeros in task timers which can only happen if nothing was scheduled
+                if task_times_per_thread[][i] != 0
+                    # subtract task and sleep times from global elapsed time to get scheduling time per thread
+                    push!(sched_times, Int(elapsedtime) - Int(task_times_per_thread[][i]) - Int(sleep_times_per_thread[][i]))
+                end
+            end
+            local sched_time_avg = isempty(sched_times) ? 0 : sum(sched_times) / length(sched_times)
 
             (
                 value=val,
@@ -637,7 +643,7 @@ macro timed(ex)
                 lock_conflicts=lock_conflicts,
                 compile_time=compile_elapsedtimes[1]/1e9,
                 recompile_time=compile_elapsedtimes[2]/1e9,
-                wall_time_sched=wall_time_sched/1e9
+                sched_time_avg=sched_time_avg/1e9
             )
         end
     end
