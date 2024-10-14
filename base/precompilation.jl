@@ -672,7 +672,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             n_print_rows = 0
             while !printloop_should_exit
                 lock(print_lock) do
-                    term_size = Base.displaysize(io)::Tuple{Int,Int}
+                    term_size = Base.displaysize_(io)
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -687,7 +687,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         bar.max = n_total - n_already_precomp
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
+                        termwidth = Base.displaysize_(io)[2] - 4
                         if !final_loop
                             str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
