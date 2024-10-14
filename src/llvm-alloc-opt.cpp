@@ -220,7 +220,6 @@ void Optimizer::optimizeAll()
     while (!worklist.empty()) {
         auto item = worklist.pop_back_val();
         auto orig = item.first;
-        orig->print(dbgs());
         size_t sz = item.second;
         checkInst(orig);
         if (use_info.escaped) {
