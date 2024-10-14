@@ -1549,12 +1549,16 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
 #if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::none());
 #else
         FnAttrs.addAttribute(Attribute::ReadNone);
 #endif
-        FnAttrs.addAttribute(Attribute::NoUnwind);
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),

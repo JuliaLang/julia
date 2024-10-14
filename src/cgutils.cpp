@@ -4547,26 +4547,13 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         auto cg_tot = ConstantInt::get(T_size, tot);
         auto call = prepare_call(jl_alloc_obj_func);
         alloc = ctx.builder.CreateCall(call, { ct, cg_tot, track_pjlvalue(ctx, cg_typ)});
-        dbgs() << "alloc: ";
-        alloc->print(dbgs(), NULL);
-        // set data (jl_alloc_genericmemory_unchecked_func doesn't have it)
         decay_alloc = decay_derived(ctx, alloc);
-        //dbgs() << "\ndecay_alloc: ";
-        decay_alloc->print(dbgs(), NULL);
         ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        //dbgs() << "\nptr_field: ";
-        //ptr_field->print(dbgs(), NULL);
         auto objref = emit_pointer_from_objref(ctx, alloc);
-        //dbgs() << "\nobjref: ";
-        //objref->print(dbgs(), NULL);
-        
         Value *data = track_pjlvalue(ctx, emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT));
-        //dbgs() << "\ndata: ";
-        //data->print(dbgs(), NULL);
-        //dbgs() << "\n";
         ctx.builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
     } else { // just use the dynamic length version since the malloc will be slow anyway
-		auto ptls = get_current_ptls(ctx);
+        auto ptls = get_current_ptls(ctx);
         auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
         alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
         decay_alloc = maybe_decay_tracked(ctx, alloc);
