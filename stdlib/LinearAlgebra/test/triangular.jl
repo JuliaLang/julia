@@ -1359,6 +1359,8 @@ end
             # See https://github.com/JuliaLang/julia/pull/55312
             @test_broken B - B' == M - M'
             @test_broken B + B' == M + M'
+            @test B - copy(B') == M - M'
+            @test B + copy(B') == M + M'
             C = MyTriangular(B)
             @test C - C' == M - M'
             @test C + C' == M + M'
