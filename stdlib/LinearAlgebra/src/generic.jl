@@ -399,63 +399,7 @@ of `A` will be mutable.
 similarmutable(A) = similar(A)
 
 """
-    triu(M)
-
-Upper triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> triu(a)
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 0.0  1.0  1.0  1.0
- 0.0  0.0  1.0  1.0
- 0.0  0.0  0.0  1.0
-```
-"""
-function triu(M::AbstractMatrix)
-    A = similarmutable(M)
-    copytrito!(A, M, 'U')
-    triu!(A)
-end
-
-"""
-    tril(M)
-
-Lower triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> tril(a)
-4×4 Matrix{Float64}:
- 1.0  0.0  0.0  0.0
- 1.0  1.0  0.0  0.0
- 1.0  1.0  1.0  0.0
- 1.0  1.0  1.0  1.0
-```
-"""
-function tril(M::AbstractMatrix)
-    A = similarmutable(M)
-    copytrito!(A, M, 'L')
-    tril!(A)
-end
-
-"""
-    triu(M, k::Integer)
+    triu(M, k::Integer = 0)
 
 Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
@@ -483,7 +427,7 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-function triu(M::AbstractMatrix,k::Integer)
+function triu(M::AbstractMatrix, k::Integer = 0)
     d = similar(M)
     A = triu!(d,k)
     for col in axes(A,2)
@@ -494,7 +438,7 @@ function triu(M::AbstractMatrix,k::Integer)
 end
 
 """
-    tril(M, k::Integer)
+    tril(M, k::Integer = 0)
 
 Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
@@ -522,7 +466,7 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-function tril(M::AbstractMatrix,k::Integer)
+function tril(M::AbstractMatrix,k::Integer=0)
     d = similar(M)
     A = tril!(d,k)
     for col in axes(A,2)

@@ -728,36 +728,56 @@ end
     @test det(A) == det(M)
 end
 
-@testset "tril/triu with partly initialized matrices" begin
-    function test_triu(M, k=nothing)
-        M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
-        if isnothing(k)
-            MU = triu(M)
-        else
-            MU = triu(M, k)
+@testset "tril/triu" begin
+    @testset "with partly initialized matrices" begin
+        function test_triu(M, k=nothing)
+            M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
+            if isnothing(k)
+                MU = triu(M)
+            else
+                MU = triu(M, k)
+            end
+            @test iszero(MU[2,1])
+            @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
         end
-        @test iszero(MU[2,1])
-        @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
-    end
-    test_triu(Matrix{BigInt}(undef, 2, 3))
-    test_triu(Matrix{BigInt}(undef, 2, 3), 0)
-    test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
-    test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+        test_triu(Matrix{BigInt}(undef, 2, 3))
+        test_triu(Matrix{BigInt}(undef, 2, 3), 0)
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
 
-    function test_tril(M, k=nothing)
-        M[1,1] = M[2,2] = M[2,1] = 3
-        if isnothing(k)
-            ML = tril(M)
-        else
-            ML = tril(M, k)
+        function test_tril(M, k=nothing)
+            M[1,1] = M[2,2] = M[2,1] = 3
+            if isnothing(k)
+                ML = tril(M)
+            else
+                ML = tril(M, k)
+            end
+            @test ML[1,2] == ML[1,3] == ML[2,3] == 0
+            @test ML[1,1] == ML[2,2] == ML[2,1] == 3
         end
-        @test ML[1,2] == ML[1,3] == ML[2,3] == 0
-        @test ML[1,1] == ML[2,2] == ML[2,1] == 3
+        test_tril(Matrix{BigInt}(undef, 2, 3))
+        test_tril(Matrix{BigInt}(undef, 2, 3), 0)
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
     end
-    test_tril(Matrix{BigInt}(undef, 2, 3))
-    test_tril(Matrix{BigInt}(undef, 2, 3), 0)
-    test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
-    test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+
+    @testset "block arrays" begin
+        for nrows in 0:3, ncols in 0:3
+            M = [randn(2,2) for _ in 1:nrows, _ in 1:ncols]
+            Mu = triu(M)
+            for col in axes(M,2)
+                rowcutoff = min(col, size(M,1))
+                @test @views Mu[1:rowcutoff, col] == M[1:rowcutoff, col]
+                @test @views Mu[rowcutoff+1:end, col] == zero.(M[rowcutoff+1:end, col])
+            end
+            Ml = tril(M)
+            for col in axes(M,2)
+                @test @views Ml[col:end, col] == M[col:end, col]
+                rowcutoff = min(col-1, size(M,1))
+                @test @views Ml[1:rowcutoff, col] == zero.(M[1:rowcutoff, col])
+            end
+        end
+    end
 end
 
 end # module TestGeneric
