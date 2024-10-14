@@ -188,17 +188,6 @@ _diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
 _eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
 _eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
 
-# function diagzero(A::SymTridiagonal{<:AbstractMatrix}, i, j)
-#     Tel = eltype(A)
-#     # if i < j
-#     #     return zeroslike(Tel, axes(A.ev[i],1), axes(A.ev[j-1],2))
-#     # elseif j < i
-#     #     return zeroslike(Tel, axes(A.ev[j],1), axes(A.ev[i-1],2))
-#     # else
-#     return zeroslike(Tel, axes(A.dv[i],1), axes(A.dv[j],2))
-#     # end
-# end
-
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
