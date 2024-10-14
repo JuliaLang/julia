@@ -523,10 +523,8 @@ for TM in (:LowerTriangular, :UpperTriangular)
     @eval -(A::$TM{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast(-, A)
 end
 
-tr(A::LowerTriangular) = tr(A.data)
-tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
-tr(A::UpperTriangular) = tr(A.data)
-tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperOrLowerTriangular) = tr(A.data)
+tr(A::Union{UnitLowerTriangular, UnitUpperTriangular}) = size(A, 1) * oneunit(eltype(A))
 
 for T in (:UpperOrUnitUpperTriangular, :LowerOrUnitLowerTriangular)
     @eval @propagate_inbounds function copyto!(dest::$T, U::$T)
