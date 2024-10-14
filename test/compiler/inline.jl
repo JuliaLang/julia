@@ -553,13 +553,13 @@ end
         @test any(isinvoke(:inlined_explicit), code)
     end
     let code = get_code(M.force_noinline_block_explicit, (Int,))
-        @test count(isinvoke(:inlined_explicit), code) == 2
+        @test count(isinvoke(:inlined_explicit), code) == 1
     end
     let code = get_code(M.force_noinline_implicit, (Int,))
         @test any(isinvoke(:inlined_implicit), code)
     end
     let code = get_code(M.force_noinline_block_implicit, (Int,))
-        @test count(isinvoke(:inlined_implicit), code) == 2
+        @test count(isinvoke(:inlined_implicit), code) == 1
     end
 
     let code = get_code(M.force_inline_constprop_explicit)
