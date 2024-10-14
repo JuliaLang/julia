@@ -293,7 +293,9 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc), compiling
 new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+where a [`ReentrantLock`](@ref) had to wait are shown as a count. If the time spent on
+scheduling tasks (not including sleeping/waiting) is more than 10% of the total time it
+is also shown as a percentage.
 
 Optionally provide a description string to print before the time report.
 
@@ -316,6 +318,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 
 !!! compat "Julia 1.11"
     The reporting of any lock conflicts was added in Julia 1.11.
+
+!!! compat "Julia 1.12"
+    The reporting of excessive scheduling time was added in Julia 1.12.
 
 ```julia-repl
 julia> x = rand(10,10);
