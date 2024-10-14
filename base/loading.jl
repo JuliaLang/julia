@@ -2831,10 +2831,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
 
-    @show output_o
-    @show cpu_target
-    @show julia_cmd(;cpu_target)
-
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
                              $(flags)
