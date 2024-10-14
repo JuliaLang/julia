@@ -91,18 +91,70 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
-# This avoids hashing and probing twice and it works the same as
-# in!(x, s::Set) = in(x, s) ? true : (push!(s, x); false)
+"""
+    in!(x, s::AbstractSet) -> Bool
+
+If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
+This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
+more efficient implementation.
+
+See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
+
+!!! compat "Julia 1.11"
+    This function requires at least 1.11.
+
+# Examples
+```jldoctest; filter = r"^  [1234]\$"
+julia> s = Set{Any}([1, 2, 3]); in!(4, s)
+false
+
+julia> length(s)
+4
+
+julia> in!(0x04, s)
+true
+
+julia> s
+Set{Any} with 4 elements:
+  4
+  2
+  3
+  1
+```
+"""
+function in!(x, s::AbstractSet)
+    x ∈ s ? true : (push!(s, x); false)
+end
+
 function in!(x, s::Set)
-    idx, sh = ht_keyindex2_shorthash!(s.dict, x)
+    xT = convert(eltype(s), x)
+    idx, sh = ht_keyindex2_shorthash!(s.dict, xT)
     idx > 0 && return true
-    _setindex!(s.dict, nothing, x, -idx, sh)
+    _setindex!(s.dict, nothing, xT, -idx, sh)
     return false
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+
+function pop!(s::Set, x, default)
+    dict = s.dict
+    index = ht_keyindex(dict, x)
+    if index > 0
+        @inbounds key = dict.keys[index]
+        _delete!(dict, index)
+        return key
+    else
+        return default
+    end
+end
+
+function pop!(s::Set, x)
+    index = ht_keyindex(s.dict, x)
+    index < 1 && throw(KeyError(x))
+    result = @inbounds s.dict.keys[index]
+    _delete!(s.dict, index)
+    result
+end
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
@@ -117,11 +169,13 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
+sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
 iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
+
+@propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
 # In case the size(s) is smaller than size(t) its more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
@@ -147,7 +201,7 @@ end
     unique(itr)
 
 Return an array containing only the unique elements of collection `itr`,
-as determined by [`isequal`](@ref), in the order that the first of each
+as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
@@ -382,7 +436,7 @@ end
 """
     unique!(A::AbstractVector)
 
-Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+Remove duplicate items as determined by [`isequal`](@ref) and [`hash`](@ref), then return the modified `A`.
 `unique!` will return the elements of `A` in the order that they occur. If you do not care
 about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
 more efficient as long as the elements of `A` can be sorted.
@@ -425,10 +479,20 @@ end
 
 """
     allunique(itr) -> Bool
+    allunique(f, itr) -> Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
+Or if all of `[f(x) for x in itr]` are distinct, for the second method.
+
+Note that `allunique(f, itr)` may call `f` fewer than `length(itr)` times.
+The precise number of calls is regarded as an implementation detail.
+
+`allunique` may use a specialized implementation when the input is sorted.
 
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
+
+!!! compat "Julia 1.11"
+    The method `allunique(f, itr)` requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -443,6 +507,9 @@ false
 
 julia> allunique([NaN, 2.0, NaN, 4.0])
 false
+
+julia> allunique(abs, [1, -1, 2])
+false
 ```
 """
 function allunique(C)
@@ -453,8 +520,10 @@ function allunique(C)
     return _hashed_allunique(C)
 end
 
+allunique(f, xs) = allunique(Generator(f, xs))
+
 function _hashed_allunique(C)
-    seen = Set{eltype(C)}()
+    seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
@@ -476,7 +545,31 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+function allunique(A::StridedArray)
+    if length(A) < 32
+        _indexed_allunique(A)
+    elseif OrderStyle(eltype(A)) === Ordered()
+        a1, rest1 = Iterators.peel(A)
+        a2, rest = Iterators.peel(rest1)
+        if !isequal(a1, a2)
+            compare = isless(a1, a2) ? isless : (a,b) -> isless(b,a)
+            for a in rest
+                if compare(a2, a)
+                    a2 = a
+                elseif isequal(a2, a)
+                    return false
+                else
+                    return _hashed_allunique(A)
+                end
+            end
+        else # isequal(a1, a2)
+            return false
+        end
+        return true
+    else
+        _hashed_allunique(A)
+    end
+end
 
 function _indexed_allunique(A)
     length(A) < 2 && return true
@@ -502,15 +595,29 @@ function allunique(t::Tuple)
 end
 allunique(t::Tuple{}) = true
 
+function allunique(f::F, t::Tuple) where {F}
+    length(t) < 2 && return true
+    length(t) < 32 || return _hashed_allunique(Generator(f, t))
+    return allunique(map(f, t))
+end
+
 """
     allequal(itr) -> Bool
+    allequal(f, itr) -> Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+Or if all of `[f(x) for x in itr]` are equal, for the second method.
+
+Note that `allequal(f, itr)` may call `f` fewer than `length(itr)` times.
+The precise number of calls is regarded as an implementation detail.
 
 See also: [`unique`](@ref), [`allunique`](@ref).
 
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
+
+!!! compat "Julia 1.11"
+    The method `allequal(f, itr)` requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -528,13 +635,35 @@ false
 
 julia> allequal(Dict(:a => 1, :b => 1))
 false
+
+julia> allequal(abs2, [1, -1])
+true
 ```
 """
-allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+function allequal(itr)
+    if haslength(itr)
+        length(itr) <= 1 && return true
+    end
+    pl = Iterators.peel(itr)
+    isnothing(pl) && return true
+    a, rest = pl
+    return all(isequal(a), rest)
+end
 
 allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
 
 allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
+
+allequal(f, xs) = allequal(Generator(f, xs))
+
+function allequal(f, xs::Tuple)
+    length(xs) <= 1 && return true
+    f1 = f(xs[1])
+    for x in tail(xs)
+        isequal(f1, f(x)) || return false
+    end
+    return true
+end
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

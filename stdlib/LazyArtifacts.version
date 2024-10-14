@@ -1,0 +1,4 @@
+LAZYARTIFACTS_BRANCH = main
+LAZYARTIFACTS_SHA1 = e9a36338d5d0dfa4b222f4e11b446cbb7ea5836c
+LAZYARTIFACTS_GIT_URL := https://github.com/JuliaPackaging/LazyArtifacts.jl.git
+LAZYARTIFACTS_TAR_URL = https://api.github.com/repos/JuliaPackaging/LazyArtifacts.jl/tarball/$1

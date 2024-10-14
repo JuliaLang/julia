@@ -12,7 +12,7 @@ The entropy is obtained from the operating system.
 """
 struct RandomDevice <: AbstractRNG; end
 RandomDevice(seed::Nothing) = RandomDevice()
-seed!(rng::RandomDevice) = rng
+seed!(rng::RandomDevice, ::Nothing) = rng
 
 rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
 rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
@@ -44,7 +44,7 @@ const MT_CACHE_I = 501 << 4 # number of bytes in the UInt128 cache
 @assert dsfmt_get_min_array_size() <= MT_CACHE_F
 
 mutable struct MersenneTwister <: AbstractRNG
-    seed::Vector{UInt32}
+    seed::Any
     state::DSFMT_state
     vals::Vector{Float64}
     ints::Vector{UInt128}
@@ -70,7 +70,7 @@ mutable struct MersenneTwister <: AbstractRNG
     end
 end
 
-MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
+MersenneTwister(seed, state::DSFMT_state) =
     MersenneTwister(seed, state,
                     Vector{Float64}(undef, MT_CACHE_F),
                     Vector{UInt128}(undef, MT_CACHE_I >> 4),
@@ -83,28 +83,26 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 Create a `MersenneTwister` RNG object. Different RNG objects can have
 their own seeds, which may be useful for generating different streams
 of random numbers.
-The `seed` may be a non-negative integer or a vector of
-`UInt32` integers. If no seed is provided, a randomly generated one
-is created (using entropy from the system).
-See the [`seed!`](@ref) function for reseeding an already existing
-`MersenneTwister` object.
+The `seed` may be an integer, a string, or a vector of `UInt32` integers.
+If no seed is provided, a randomly generated one is created (using entropy from the system).
+See the [`seed!`](@ref) function for reseeding an already existing `MersenneTwister` object.
 
+!!! compat "Julia 1.11"
+    Passing a negative integer seed requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> rng = MersenneTwister(123);
 
 julia> x1 = rand(rng, 2)
 2-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
+ 0.37453777969575874
+ 0.8735343642013971
 
-julia> rng = MersenneTwister(1234);
-
-julia> x2 = rand(rng, 2)
+julia> x2 = rand(MersenneTwister(123), 2)
 2-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
+ 0.37453777969575874
+ 0.8735343642013971
 
 julia> x1 == x2
 true
@@ -115,7 +113,7 @@ MersenneTwister(seed=nothing) =
 
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
-    copyto!(resize!(dst.seed, length(src.seed)), src.seed)
+    dst.seed = src.seed
     copy!(dst.state, src.state)
     copyto!(dst.vals, src.vals)
     copyto!(dst.ints, src.ints)
@@ -129,7 +127,7 @@ function copy!(dst::MersenneTwister, src::MersenneTwister)
 end
 
 copy(src::MersenneTwister) =
-    MersenneTwister(copy(src.seed), copy(src.state), copy(src.vals), copy(src.ints),
+    MersenneTwister(src.seed, copy(src.state), copy(src.vals), copy(src.ints),
                     src.idxF, src.idxI, src.adv, src.adv_jump, src.adv_vals, src.adv_ints)
 
 
@@ -144,12 +142,10 @@ hash(r::MersenneTwister, h::UInt) =
 
 function show(io::IO, rng::MersenneTwister)
     # seed
-    seed = from_seed(rng.seed)
-    seed_str = seed <= typemax(Int) ? string(seed) : "0x" * string(seed, base=16) # DWIM
     if rng.adv_jump == 0 && rng.adv == 0
-        return print(io, MersenneTwister, "(", seed_str, ")")
+        return print(io, MersenneTwister, "(", repr(rng.seed), ")")
     end
-    print(io, MersenneTwister, "(", seed_str, ", (")
+    print(io, MersenneTwister, "(", repr(rng.seed), ", (")
     # state
     adv = Integer[rng.adv_jump, rng.adv]
     if rng.adv_vals != -1 || rng.adv_ints != -1
@@ -277,68 +273,125 @@ end
 
 ### seeding
 
-#### make_seed()
+#### random_seed() & hash_seed()
 
-# make_seed produces values of type Vector{UInt32}, suitable for MersenneTwister seeding
-function make_seed()
+# random_seed tries to produce a random seed of type UInt128 from system entropy
+function random_seed()
     try
-        return rand(RandomDevice(), UInt32, 4)
+        # as MersenneTwister prints its seed when `show`ed, 128 bits is a good compromise for
+        # almost surely always getting distinct seeds, while having them printed reasonably tersely
+        return rand(RandomDevice(), UInt128)
     catch ex
         ex isa IOError || rethrow()
         @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
-        return make_seed(Libc.rand())
+        return Libc.rand()
     end
 end
 
-function make_seed(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
-    seed = UInt32[]
+function hash_seed(seed::Integer)
+    ctx = SHA.SHA2_256_CTX()
+    neg = signbit(seed)
+    if neg
+        seed = ~seed
+    end
+    @assert seed >= 0
     while true
-        push!(seed, n & 0xffffffff)
-        n >>= 32
-        if n == 0
-            return seed
-        end
+        word = (seed % UInt32) & 0xffffffff
+        seed >>>= 32
+        SHA.update!(ctx, reinterpret(NTuple{4, UInt8}, word))
+        iszero(seed) && break
     end
+    # make sure the hash of negative numbers is different from the hash of positive numbers
+    neg && SHA.update!(ctx, (0x01,))
+    SHA.digest!(ctx)
 end
 
-# inverse of make_seed(::Integer)
-from_seed(a::Vector{UInt32})::BigInt = sum(a[i] * big(2)^(32*(i-1)) for i in 1:length(a))
+function hash_seed(seed::Union{AbstractArray{UInt32}, AbstractArray{UInt64}})
+    ctx = SHA.SHA2_256_CTX()
+    for xx in seed
+        SHA.update!(ctx, reinterpret(NTuple{8, UInt8}, UInt64(xx)))
+    end
+    # discriminate from hash_seed(::Integer)
+    SHA.update!(ctx, (0x10,))
+    SHA.digest!(ctx)
+end
 
+function hash_seed(str::AbstractString)
+    ctx = SHA.SHA2_256_CTX()
+    # convert to String such that `codeunits(str)` below is consistent between equal
+    # strings of different types
+    str = String(str)
+    SHA.update!(ctx, codeunits(str))
+    # signature for strings: so far, all hash_seed functions end-up hashing a multiple
+    # of 4 bytes of data, and add the signature (1 byte) at the end; so hash as many
+    # bytes as necessary to have a total number of hashed bytes equal to 0 mod 4 (padding),
+    # and then hash the signature 0x05; in order for strings of different lengths to have
+    # different hashes, padding bytes are set equal to the number of padding bytes
+    pad = 4 - mod(ncodeunits(str), 4)
+    for _=1:pad
+        SHA.update!(ctx, (pad % UInt8,))
+    end
+    SHA.update!(ctx, (0x05,))
+    SHA.digest!(ctx)
+end
+
+
+"""
+    hash_seed(seed) -> AbstractVector{UInt8}
+
+Return a cryptographic hash of `seed` of size 256 bits (32 bytes).
+`seed` can currently be of type
+`Union{Integer, AbstractString, AbstractArray{UInt32}, AbstractArray{UInt64}}`,
+but modules can extend this function for types they own.
+
+`hash_seed` is "injective" : if `n != m`, then `hash_seed(n) != `hash_seed(m)`.
+Moreover, if `n == m`, then `hash_seed(n) == hash_seed(m)`.
+
+This is an internal function subject to change.
+"""
+hash_seed
 
 #### seed!()
 
-function seed!(r::MersenneTwister, seed::Vector{UInt32})
-    copyto!(resize!(r.seed, length(seed)), seed)
-    dsfmt_init_by_array(r.state, r.seed)
+function initstate!(r::MersenneTwister, data::StridedVector, seed)
+    # we deepcopy `seed` because the caller might mutate it, and it's useful
+    # to keep it constant inside `MersenneTwister`; but multiple instances
+    # can share the same seed without any problem (e.g. in `copy`)
+    r.seed = deepcopy(seed)
+    dsfmt_init_by_array(r.state, reinterpret(UInt32, data))
     reset_caches!(r)
     r.adv = 0
     r.adv_jump = 0
     return r
 end
 
-seed!(r::MersenneTwister) = seed!(r, make_seed())
-seed!(r::MersenneTwister, n::Integer) = seed!(r, make_seed(n))
+# when a seed is not provided, we generate one via `RandomDevice()` in `random_seed()` rather
+# than calling directly `initstate!` with `rand(RandomDevice(), UInt32, whatever)` because the
+# seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
+# small overhead compared to `initstate!`, so this simple solution is fine
+seed!(r::MersenneTwister, ::Nothing) = seed!(r, random_seed())
+seed!(r::MersenneTwister, seed) = initstate!(r, hash_seed(seed), seed)
 
 
 ### Global RNG
 
-struct _GLOBAL_RNG <: AbstractRNG
-    global const GLOBAL_RNG = _GLOBAL_RNG.instance
-end
-
-# GLOBAL_RNG currently uses TaskLocalRNG
-typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
-
 """
-    default_rng() -> rng
+    Random.default_rng() -> rng
 
-Return the default global random number generator (RNG).
+Return the default global random number generator (RNG), which is used by `rand`-related functions when
+no explicit RNG is provided.
+
+When the `Random` module is loaded, the default RNG is _randomly_ seeded, via [`Random.seed!()`](@ref):
+this means that each time a new julia session is started, the first call to `rand()` produces a different
+result, unless `seed!(seed)` is called first.
+
+It is thread-safe: distinct threads can safely call `rand`-related functions on `default_rng()` concurrently,
+e.g. `rand(default_rng())`.
 
 !!! note
-    What the default RNG is is an implementation detail.  Across different versions of
-    Julia, you should not expect the default RNG to be always the same, nor that it will
-    return the same stream of random numbers for a given seed.
+    The type of the default RNG is an implementation detail. Across different versions of
+    Julia, you should not expect the default RNG to always have the same type, nor that it will
+    produce the same stream of random numbers for a given seed.
 
 !!! compat "Julia 1.3"
     This function was introduced in Julia 1.3.
@@ -346,48 +399,36 @@ Return the default global random number generator (RNG).
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()
 
-copy!(dst::Xoshiro, ::_GLOBAL_RNG) = copy!(dst, default_rng())
-copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
-copy(::_GLOBAL_RNG) = copy(default_rng())
+# defined only for backward compatibility with pre-v1.3 code when `default_rng()` didn't exist;
+# `GLOBAL_RNG` was never really documented, but was appearing in the docstring of `rand`
+const GLOBAL_RNG = default_rng()
 
-GLOBAL_SEED = 0
-set_global_seed!(seed) = global GLOBAL_SEED = seed
+# In v1.0, the GLOBAL_RNG was storing the seed which was used to initialize it; this seed was used to implement
+# the following feature of `@testset`:
+# > Before the execution of the body of a `@testset`, there is an implicit
+# > call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
+# But the global RNG is now `TaskLocalRNG()` and doesn't store its seed; in order to not break `@testset`,
+# in a call like `seed!(seed)` *without* an explicit RNG, we now store the state of `TaskLocalRNG()` in
+# `task_local_storage()`
 
-function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
-    global GLOBAL_SEED = seed
+# GLOBAL_SEED is used as a fall-back when no tls seed is found
+# only `Random.__init__` is allowed to set it
+const GLOBAL_SEED = Xoshiro(0, 0, 0, 0, 0)
+
+get_tls_seed() = get!(() -> copy(GLOBAL_SEED), task_local_storage(),
+                      :__RANDOM_GLOBAL_RNG_SEED_uBlmfA8ZS__)::Xoshiro
+
+# seed the default RNG
+function seed!(seed=nothing)
     seed!(default_rng(), seed)
-end
-
-seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
-
-seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
-    seed!(GLOBAL_RNG, seed)
-
-rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
-rand(::_GLOBAL_RNG, sp::SamplerBoolBitInteger) = rand(default_rng(), sp)
-for T in (:(SamplerTrivial{UInt52Raw{UInt64}}),
-          :(SamplerTrivial{UInt2x52Raw{UInt128}}),
-          :(SamplerTrivial{UInt104Raw{UInt128}}),
-          :(SamplerTrivial{CloseOpen01_64}),
-          :(SamplerTrivial{CloseOpen12_64}),
-          :(SamplerUnion(Int64, UInt64, Int128, UInt128)),
-          :(SamplerUnion(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)),
-         )
-    @eval rand(::_GLOBAL_RNG, x::$T) = rand(default_rng(), x)
-end
-
-rand!(::_GLOBAL_RNG, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
-rand!(::_GLOBAL_RNG, A::Array{Float64}, I::SamplerTrivial{<:FloatInterval_64}) = rand!(default_rng(), A, I)
-for T in (Float16, Float32)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen12{$T}}) = rand!(default_rng(), A, I)
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerTrivial{CloseOpen01{$T}}) = rand!(default_rng(), A, I)
-end
-for T in BitInteger_types
-    @eval rand!(::_GLOBAL_RNG, A::Array{$T}, I::SamplerType{$T}) = rand!(default_rng(), A, I)
+    copy!(get_tls_seed(), default_rng())
+    default_rng()
 end
 
 function __init__()
-    seed!(GLOBAL_RNG)
+    # do not call no-arg `seed!()` to not update `task_local_storage()` unnecessarily at startup
+    seed!(default_rng())
+    copy!(GLOBAL_SEED, TaskLocalRNG())
     ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
@@ -701,7 +742,7 @@ end
 function _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X)
     adv = r.adv
     adv_jump = r.adv_jump
-    s = MersenneTwister(copy(r.seed), DSFMT.dsfmt_jump(r.state, jumppoly))
+    s = MersenneTwister(r.seed, DSFMT.dsfmt_jump(r.state, jumppoly))
     reset_caches!(s)
     s.adv = adv
     s.adv_jump = adv_jump
@@ -729,13 +770,13 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
 # 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{6,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{6,Integer}) =
     advance!(MersenneTwister(seed), advance...)
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{4,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{4,Integer}) =
     MersenneTwister(seed, (advance..., 0, 0))
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{2,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{2,Integer}) =
     MersenneTwister(seed, (advance..., 0, 0, 0, 0))
 
 # advances raw state (per fill_array!) of r by n steps (Float64 values)

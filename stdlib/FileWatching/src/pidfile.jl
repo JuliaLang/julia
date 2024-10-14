@@ -4,20 +4,19 @@ module Pidfile
 export mkpidlock, trymkpidlock
 
 using Base:
-    IOError, UV_EEXIST, UV_ESRCH,
+    IOError, UV_EEXIST, UV_ESRCH, UV_ENOENT,
     Process
-
-using Base.Libc: rand
 
 using Base.Filesystem:
     File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
     rename, samefile, path_separator
 
-using ..FileWatching: watch_file
+using ..FileWatching: FileMonitor
 using Base.Sys: iswindows
 
 """
-    mkpidlock([f::Function], at::String, [pid::Cint, proc::Process]; kwopts...)
+    mkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
+    mkpidlock(at::String, proc::Process; kwopts...)
 
 Create a pidfile lock for the path "at" for the current process
 or the process identified by pid or proc. Can take a function to execute once locked,
@@ -32,7 +31,8 @@ Optional keyword arguments:
  - `mode`: file access mode (modified by the process umask). Defaults to world-readable.
  - `poll_interval`: Specify the maximum time to between attempts (if `watch_file` doesn't work)
  - `stale_age`: Delete an existing pidfile (ignoring the lock) if it is older than this many seconds, based on its mtime.
-     The file won't be deleted until 25x longer than this if the pid in the file appears that it may be valid.
+     The file won't be deleted until 5x longer than this if the pid in the file appears that it may be valid.
+     Or 25x longer if `refresh` is overridden to 0 to disable lock refreshing.
      By default this is disabled (`stale_age` = 0), but a typical recommended value would be about 3-5x an
      estimated normal completion time.
  - `refresh`: Keeps a lock from becoming stale by updating the mtime every interval of time that passes.
@@ -42,13 +42,13 @@ Optional keyword arguments:
 function mkpidlock end
 
 """
-    trymkpidlock([f::Function], at::String, [pid::Cint, proc::Process]; kwopts...)
+    trymkpidlock([f::Function], at::String, [pid::Cint]; kwopts...)
+    trymkpidlock(at::String, proc::Process; kwopts...)
 
 Like `mkpidlock` except returns `false` instead of waiting if the file is already locked.
 
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
-
 """
 function trymkpidlock end
 
@@ -63,7 +63,7 @@ mutable struct LockMonitor
         atdir, atname = splitdir(at)
         isempty(atdir) && (atdir = pwd())
         at = realpath(atdir) * path_separator * atname
-        fd = open_exclusive(at; stale_age=stale_age, kwopts...)
+        fd = open_exclusive(at; stale_age, refresh, kwopts...)
         update = nothing
         try
             write_pidfile(fd, pid)
@@ -75,6 +75,7 @@ mutable struct LockMonitor
             lock = new(at, fd, update)
             finalizer(close, lock)
         catch ex
+            update === nothing || close(update)
             tryrmopenfile(at)
             close(fd)
             rethrow(ex)
@@ -98,10 +99,13 @@ end
 function mkpidlock(at::String, proc::Process; kwopts...)
     lock = mkpidlock(at, getpid(proc); kwopts...)
     closer = @async begin
-        wait(proc)
-        close(lock)
+        try
+            wait(proc)
+        finally
+            close(lock)
+        end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(closer)
+    Base.errormonitor(closer)
     return lock
 end
 
@@ -184,15 +188,16 @@ function isvalidpid(hostname::AbstractString, pid::Cuint)
 end
 
 """
-    stale_pidfile(path::String, stale_age::Real) :: Bool
+    stale_pidfile(path::String, stale_age::Real, refresh::Real) :: Bool
 
 Helper function for `open_exclusive` for deciding if a pidfile is stale.
 """
-function stale_pidfile(path::String, stale_age::Real)
+function stale_pidfile(path::String, stale_age::Real, refresh::Real)
     pid, hostname, age = parse_pidfile(path)
     age < -stale_age && @warn "filesystem time skew detected" path=path
+    longer_factor = refresh == 0 ? 25 : 5
     if age > stale_age
-        if (age > stale_age * 25) || !isvalidpid(hostname, pid)
+        if (age > stale_age * longer_factor) || !isvalidpid(hostname, pid)
             return true
         end
     end
@@ -219,7 +224,7 @@ struct PidlockedError <: Exception
 end
 
 """
-    open_exclusive(path::String; mode, poll_interval, wait, stale_age) :: File
+    open_exclusive(path::String; mode, poll_interval, wait, stale_age, refresh) :: File
 
 Create a new a file for read-write advisory-exclusive access.
 If `wait` is `false` then error out if the lock files exist
@@ -231,13 +236,14 @@ function open_exclusive(path::String;
                         mode::Integer = 0o444 #= read-only =#,
                         poll_interval::Real = 10 #= seconds =#,
                         wait::Bool = true #= return on failure if false =#,
-                        stale_age::Real = 0 #= disabled =#)
+                        stale_age::Real = 0 #= disabled =#,
+                        refresh::Real = stale_age/2)
     # fast-path: just try to open it
     file = tryopen_exclusive(path, mode)
     file === nothing || return file
     if !wait
         if file === nothing && stale_age > 0
-            if stale_age > 0 && stale_pidfile(path, stale_age)
+            if stale_age > 0 && stale_pidfile(path, stale_age, refresh)
                 @warn "attempting to remove probably stale pidfile" path=path
                 tryrmopenfile(path)
             end
@@ -250,20 +256,44 @@ function open_exclusive(path::String;
         end
     end
     # fall-back: wait for the lock
-
+    watch = Lockable(Core.Box(nothing))
     while true
-        # start the file-watcher prior to checking for the pidfile existence
-        t = @async try
-            watch_file(path, poll_interval)
+        # now try again to create it
+        # try to start the file-watcher prior to checking for the pidfile existence
+        watch = try
+            FileMonitor(path)
         catch ex
             isa(ex, IOError) || rethrow(ex)
-            sleep(poll_interval) # if the watch failed, convert to just doing a sleep
+            ex.code != UV_ENOENT # if the file was deleted in the meantime, don't sleep at all, even if the lock fails
         end
-        # now try again to create it
-        file = tryopen_exclusive(path, mode)
-        file === nothing || return file
-        Base.wait(t) # sleep for a bit before trying again
-        if stale_age > 0 && stale_pidfile(path, stale_age)
+        timeout = nothing
+        if watch isa FileMonitor && stale_age > 0
+            let watch = watch
+                timeout = Timer(stale_age) do t
+                    close(watch)
+                end
+            end
+        end
+        try
+            file = tryopen_exclusive(path, mode)
+            file === nothing || return file
+            if watch isa FileMonitor
+                try
+                    Base.wait(watch) # will time-out after stale_age passes
+                catch ex
+                    isa(ex, EOFError) || isa(ex, IOError) || rethrow(ex)
+                end
+            end
+            if watch === true # if the watch failed, convert to just doing a sleep
+                sleep(poll_interval)
+            end
+        finally
+            # something changed about the path, so watch is now possibly monitoring the wrong file handle
+            # it will need to be recreated just before the next tryopen_exclusive attempt
+            timeout isa Timer && close(timeout)
+            watch isa FileMonitor && close(watch)
+        end
+        if stale_age > 0 && stale_pidfile(path, stale_age, refresh)
             # if the file seems stale, try to remove it before attempting again
             # set stale_age to zero so we won't attempt again, even if the attempt fails
             stale_age -= stale_age
@@ -274,7 +304,7 @@ function open_exclusive(path::String;
 end
 
 function _rand_filename(len::Int=4) # modified from Base.Libc
-    slug = Base.StringVector(len)
+    slug = Base.StringMemory(len)
     chars = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]

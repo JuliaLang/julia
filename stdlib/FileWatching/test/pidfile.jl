@@ -203,18 +203,33 @@ end
 
 @assert !ispath("pidfile")
 @testset "open_exclusive: break lock" begin
-    # test for stale_age
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
-    try
-        write_pidfile(f, getpid())
-    finally
+    @testset "using stale_age without lock refreshing" begin
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10, refresh=0)::File
+        try
+            write_pidfile(f, getpid())
+        finally
+            close(f)
+        end
+        @test t < 2
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1, refresh=0)::File
         close(f)
+        @test 20 < t < 50
+        rm("pidfile")
     end
-    @test t < 2
-    t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=1)::File
-    close(f)
-    @test 20 < t < 50
-    rm("pidfile")
+
+    @testset "using stale_age with lock refreshing on (default)" begin
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
+        try
+            write_pidfile(f, getpid())
+        finally
+            close(f)
+        end
+        @test t < 2
+        t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=5)::File
+        close(f)
+        @test 20 < t < 50
+        rm("pidfile")
+    end
 
     t = @elapsed f = open_exclusive("pidfile", poll_interval=3, stale_age=10)::File
     close(f)

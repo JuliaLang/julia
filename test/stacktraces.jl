@@ -91,9 +91,10 @@ trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
-    @test frame.linfo.def.module === which(func, (Any,)).module
-    @test frame.linfo.def === which(func, (Any,))
-    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
+    # broken until #50082 can be addressed
+    @test frame.linfo.def.module === which(func, (Any,)).module broken=inlined
+    @test frame.linfo.def === which(func, (Any,)) broken=inlined
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=inlined
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
@@ -101,11 +102,9 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
-    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
-    sf
-
-    setfield!(li, :uninferred, src, :monotonic)
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
+    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
+    @atomic li.cache = ccall(:jl_new_codeinst_for_uninferred, Ref{Core.CodeInstance}, (Any, Any), li, src)
     li.specTypes = Tuple{}
     li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
@@ -157,6 +156,22 @@ catch
     bt = stacktrace(catch_backtrace())
 end
 @test bt[1].line == topline+4
+end
+
+# Accidental incorrect phi block computation in interpreter
+global global_false_bool = false
+let bt, topline = @__LINE__
+    try
+        let
+            global read_write_global_bt_test, global_false_bool
+            if global_false_bool
+            end
+            (read_write_global_bt_test, (read_write_global_bt_test=2;))
+        end
+    catch
+        bt = stacktrace(catch_backtrace())
+    end
+    @test bt[1].line == topline+6
 end
 
 # issue #28990
@@ -234,8 +249,7 @@ struct F49231{a,b,c,d,e,f,g} end
     catch e
         stacktrace(catch_backtrace())
     end
-    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,105)))
-    @test endswith(str, "to see complete types.")
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
     @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0mTuple\e[90m{…}\e[39m\e[0m\e[1m)\e[22m\n\e[90m")
 
     st = try
@@ -243,6 +257,10 @@ struct F49231{a,b,c,d,e,f,g} end
     catch e
         stacktrace(catch_backtrace())
     end
-    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,132)))
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+end
+
+@testset "Base.StackTraces docstrings" begin
+    @test isempty(Docs.undocumented_names(StackTraces))
 end

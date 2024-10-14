@@ -40,4 +40,5 @@ fastcheck-ittapi: #none
 check-ittapi: #none
 
 clean-ittapi:
-	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
+	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled
+	-rm -f $(build_libdir)/libittnotify.a $(build_libdir)/libjitprofiling.a

@@ -142,8 +142,28 @@ abstract type AbstractDateTime <: TimeType end
 """
     DateTime
 
-`DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
-Gregorian calendar.
+`DateTime` represents a point in time according to the proleptic Gregorian calendar.
+The finest resolution of the time is millisecond (i.e., microseconds or
+nanoseconds cannot be represented by this type). The type supports fixed-point
+arithmetic, and thus is prone to underflowing (and overflowing). A notable
+consequence is rounding when adding a `Microsecond` or a `Nanosecond`:
+
+```jldoctest
+julia> dt = DateTime(2023, 8, 19, 17, 45, 32, 900)
+2023-08-19T17:45:32.900
+
+julia> dt + Millisecond(1)
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(1000) # 1000us == 1ms
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(999) # 999us rounded to 1000us
+2023-08-19T17:45:32.901
+
+julia> dt + Microsecond(1499) # 1499 rounded to 1000us
+2023-08-19T17:45:32.901
+```
 """
 struct DateTime <: AbstractDateTime
     instant::UTInstant{Millisecond}
@@ -183,7 +203,7 @@ function totaldays(y, m, d)
 end
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
-isleapyear(y) = (y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0))
+isleapyear(y::Integer) = (y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0))
 
 # Number of days in month
 const DAYSINMONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -472,3 +492,8 @@ end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()
+
+# minimal Base.TOML support
+Date(d::Base.TOML.Date) = Date(d.year, d.month, d.day)
+Time(t::Base.TOML.Time) = Time(t.hour, t.minute, t.second, t.ms)
+DateTime(dt::Base.TOML.DateTime) = DateTime(Date(dt.date), Time(dt.time))

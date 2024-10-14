@@ -2,6 +2,20 @@
 
 SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
 
+@testset "textwidth" begin
+    for (c, w) in [('x', 1), ('α', 1), ('🍕', 2), ('\0', 0), ('\u0302', 0), ('\xc0', 1)]
+        @test textwidth(c) == w
+        @test textwidth(c^3) == w*3
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
+    for i in 0x00:0x7f # test all ASCII chars (which have fast path)
+        w = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
+        c = Char(i)
+        @test textwidth(c) == w
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
+end
+
 @testset "padding (lpad and rpad)" begin
     @test lpad("foo", 2) == "foo"
     @test rpad("foo", 2) == "foo"
@@ -53,6 +67,52 @@ SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
 end
 
+@testset "string truncation (ltruncate, rtruncate, ctruncate)" begin
+    @test ltruncate("foo", 4) == "foo"
+    @test ltruncate("foo", 3) == "foo"
+    @test ltruncate("foo", 2) == "…o"
+    @test ltruncate("🍕🍕 I love 🍕", 10) == "…I love 🍕" # handle wide emojis
+    @test ltruncate("🍕🍕 I love 🍕", 10, "[…]") == "[…]love 🍕"
+    # when the replacement string is longer than the trunc
+    # trust that the user wants the replacement string rather than erroring
+    @test ltruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred ltruncate("xxx", 4)
+    @inferred ltruncate("xxx", 2)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test rtruncate("foo", 4) == "foo"
+    @test rtruncate("foo", 3) == "foo"
+    @test rtruncate("foo", 2) == "f…"
+    @test rtruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 I lo…"
+    @test rtruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕 I […]"
+    @test rtruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred rtruncate("xxx", 4)
+    @inferred rtruncate("xxx", 2)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test ctruncate("foo", 4) == "foo"
+    @test ctruncate("foo", 3) == "foo"
+    @test ctruncate("foo", 2) == "f…"
+    @test ctruncate("foo", 2; prefer_left=true) == "f…"
+    @test ctruncate("foo", 2; prefer_left=false) == "…o"
+    @test ctruncate("foobar", 6) == "foobar"
+    @test ctruncate("foobar", 5) == "fo…ar"
+    @test ctruncate("foobar", 4) == "fo…r"
+    @test ctruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
+    @test ctruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
+    @test ctruncate("abc", 2, "xxxxxx") == "xxxxxx"
+    @test ctruncate("🍕🍕🍕🍕🍕🍕xxxxxxxxxxx", 9) == "🍕🍕…xxxx"
+
+    @inferred ctruncate("xxxxx", 5)
+    @inferred ctruncate("xxxxx", 3)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 5)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 3)
+end
+
 # string manipulation
 @testset "lstrip/rstrip/strip" begin
     @test strip("") == ""
@@ -89,6 +149,10 @@ end
     @test rstrip(isnumeric, "abc0123") == "abc"
     @test lstrip("ello", ['e','o']) == "llo"
     @test rstrip("ello", ['e','o']) == "ell"
+
+    @test_throws ArgumentError strip("", "")
+    @test_throws ArgumentError lstrip("", "")
+    @test_throws ArgumentError rstrip("", "")
 end
 
 @testset "partition" begin
@@ -206,6 +270,28 @@ end
           split("α β γ", isspace) == rsplit("α β γ", isspace) == ["α","β","γ"]
     @test split("ö.", ".") == rsplit("ö.", ".") == ["ö",""]
     @test split("α β γ", "β") == rsplit("α β γ", "β") == ["α "," γ"]
+end
+
+@testset "eachrsplit" begin
+    @test collect(eachrsplit("", 'a')) == [""]
+    @test collect(eachrsplit("", isspace; limit=3)) == [""]
+    @test collect(eachrsplit("b c  d"; limit=2)) == ["d", "b c "]
+    @test collect(eachrsplit("a.b.c", '.'; limit=1)) == ["a.b.c"]
+    @test collect(eachrsplit("a..b..c", '.')) == ["c", "", "b", "", "a"]
+    @test collect(eachrsplit("ax  b  c")) == ["c", "b", "ax"]
+    @test collect(eachrsplit(" a 12 4 v ", isnumeric)) == [" v ", " ", "", " a "]
+    @test collect(eachrsplit("ba", 'a')) == ["", "b"]
+    @test collect(eachrsplit("   ")) == []
+    @test collect(eachrsplit("aaaa", 'a'; keepempty=false)) == []
+    @test collect(eachrsplit("aaaa", 'a'; limit=2)) == ["", "aaa"]
+    @test collect(eachrsplit("abcdef", ['b', 'e'])) == ["f", "cd", "a"]
+    @test collect(eachrsplit("abc", isletter)) == ["", "", "", ""]
+
+    # This behaviour is quite surprising, but is consistent with split
+    # See issue 45916
+    @test collect(eachrsplit("a  b"; limit=2)) == ["b", "a "] # only one trailing space
+    @test collect(eachrsplit("a "; limit=1)) == ["a "]
+    @test collect(eachrsplit("  a  b  c  d"; limit=3)) == ["d", "c", "  a  b "]
 end
 
 @testset "replace" begin

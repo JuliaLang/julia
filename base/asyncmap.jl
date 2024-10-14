@@ -9,6 +9,8 @@ Uses multiple concurrent tasks to map `f` over a collection (or multiple
 equal length collections). For multiple collection arguments, `f` is
 applied elementwise.
 
+The output is guaranteed to be the same order as the elements of the collection(s) `c`.
+
 `ntasks` specifies the number of tasks to run concurrently.
 Depending on the length of the collections, if `ntasks` is unspecified,
 up to 100 tasks will be used for concurrent mapping.
@@ -394,6 +396,8 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))

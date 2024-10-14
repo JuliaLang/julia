@@ -100,7 +100,7 @@ elseif Sys.iswindows()
         pdata == C_NULL && return cleanup(:GlobalAlloc)
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         plock == C_NULL && return cleanup(:GlobalLock)
-        GC.@preserve x_u16 memcpy(plock, Base.unsafe_convert(Ptr{UInt16}, x_u16), sizeof(x_u16))
+        GC.@preserve x_u16 memcpy(plock, Base.unsafe_convert(Ptr{UInt16}, Base.cconvert(Ptr{UInt16}, x_u16)), sizeof(x_u16))
         unlock = ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
         (unlock == 0 && Libc.GetLastError() == 0) || return cleanup(:GlobalUnlock) # this should never fail
         pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata) # CF_UNICODETEXT

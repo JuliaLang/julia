@@ -30,6 +30,9 @@ using Test
     @test sign(t) == sign(t2) == 1
     @test sign(-t) == sign(-t2) == -1
     @test sign(Dates.Year(0)) == 0
+    @test signbit(t) == signbit(t2) == false
+    @test signbit(-t) == signbit(-t2) == true
+    @test signbit(Dates.Year(0)) == false
 end
 @testset "div/mod/gcd/lcm/rem" begin
     @test Dates.Year(10) % Dates.Year(4) == Dates.Year(2)
@@ -329,6 +332,14 @@ end
     @test Dates.default(Dates.Nanosecond) == zero(Dates.Nanosecond)
 end
 @testset "Conversions" begin
+    @test Dates.toms(1499 * us) == 1
+    @test Dates.toms(501 * us) == 1
+    @test Dates.toms(us) == 0
+
+    @test Dates.toms(1_499_999 * ns) == 1
+    @test Dates.toms(500_001 * ns) == 1
+    @test Dates.toms(ns) == 0
+
     @test Dates.toms(ms) == Dates.value(Dates.Millisecond(ms)) == 1
     @test Dates.toms(s)  == Dates.value(Dates.Millisecond(s)) == 1000
     @test Dates.toms(mi) == Dates.value(Dates.Millisecond(mi)) == 60000

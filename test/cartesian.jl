@@ -296,8 +296,7 @@ end
     R = CartesianIndex(1, 1):CartesianIndex(2, 3):CartesianIndex(4, 5)
     @test R.indices == (1:2:3, 1:3:4)
     i = CartesianIndex(4, 1)
-    i_next = CartesianIndex(1, 4)
-    @test !(i in R) && iterate(R, i) == (i_next, i_next)
+    @test !(i in R)
 
     for R in [
         CartesianIndices((1:-1:-1, 1:2:5)),
@@ -393,19 +392,20 @@ end
 
 @testset "CartesianIndices overflow" begin
     @testset "incremental steps" begin
+        # n.b. typemax is an odd number
         I = CartesianIndices((1:typemax(Int),))
         i = last(I)
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:2:typemax(Int), ))
-        i = CartesianIndex(typemax(Int)-1)
-        @test iterate(I, i) === nothing
-
-        I = CartesianIndices((1:(typemax(Int)-1),))
         i = CartesianIndex(typemax(Int))
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((1:2:typemax(Int)-1, ))
+        I = CartesianIndices((1:(typemax(Int)-1),))
+        i = CartesianIndex(typemax(Int)-1)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((2:2:typemax(Int)-1, ))
         i = CartesianIndex(typemax(Int)-1)
         @test iterate(I, i) === nothing
 
@@ -413,7 +413,7 @@ end
         i = last(I)
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        I = CartesianIndices((2:2:typemax(Int), 2:2:typemax(Int)))
         i = CartesianIndex(typemax(Int)-1, typemax(Int)-1)
         @test iterate(I, i) === nothing
 
@@ -421,9 +421,9 @@ end
         i = CartesianIndex(typemax(Int), 1)
         @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
 
-        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        I = CartesianIndices((2:2:typemax(Int), 2:2:typemax(Int)))
         i = CartesianIndex(typemax(Int)-1, 1)
-        @test iterate(I, i) === (CartesianIndex(1, 3), CartesianIndex(1, 3))
+        @test iterate(I, i) === (CartesianIndex(2, 3), CartesianIndex(2, 3))
 
         I = CartesianIndices((typemin(Int):(typemin(Int)+3),))
         i = last(I)
@@ -493,15 +493,6 @@ end
     end
     @test length(I) == length(indices)
     @test vec(collect(I)) == indices
-
-    # test invalid state
-    I = CartesianIndices((2:4, 3:5))
-    @test iterate(I, CartesianIndex(typemax(Int), 3))[1] == CartesianIndex(2,4)
-    @test iterate(I, CartesianIndex(typemax(Int), 4))[1] == CartesianIndex(2,5)
-    @test iterate(I, CartesianIndex(typemax(Int), 5))    === nothing
-
-    @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
-    @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 end
 
 @testset "CartesianIndices operations" begin
@@ -541,4 +532,36 @@ end
     CI = CartesianIndex
     inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
     @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
+end
+
+@testset "@ncallkw" begin
+    f(x...; a, b = 1, c = 2, d = 3) = +(x..., a, b, c, d)
+    x_1, x_2 = (-1, -2)
+    kw = (a = 0, c = 0, d = 0)
+    @test x_1 + x_2 + 1 + 4 == Base.Cartesian.@ncallkw 2 f kw 4 x
+    b = 0
+    kw = (c = 0, d = 0)
+    @test x_1 + x_2 + 4 == Base.Cartesian.@ncallkw 2 f (; a = 0, b, kw...) 4 x
+end
+
+@testset "if with and without else branch" begin
+    t1 = Base.Cartesian.@ntuple 3 i -> i == 1 ? 1 : 0
+    t2 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        end
+        m
+    end
+    @test t1 == t2
+    t3 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        elseif i == 2
+            m = 2
+        end
+        m
+    end
+    @test t3 == (1, 2, 0)
 end

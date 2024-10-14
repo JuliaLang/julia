@@ -3,5 +3,6 @@
 using Test, Libdl, libLLVM_jll
 
 @testset "libLLVM_jll" begin
-    @test dlsym(libLLVM_jll.libLLVM_handle, :LLVMInitializeTarget; throw_error=false) !== nothing
+    # Try to find a symbol from the C API of libLLVM as a simple sanity check.
+    @test dlsym(libLLVM_jll.libLLVM_handle, :LLVMContextCreate; throw_error=false) !== nothing
 end

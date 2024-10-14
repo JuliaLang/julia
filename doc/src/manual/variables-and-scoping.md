@@ -16,17 +16,58 @@ introduce a "soft scope", which affects whether
 [shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
 a global variable by the same name is allowed or not.
 
-### [Scope constructs](@id man-scope-table)
+!!! info "Summary"
+    Variables defined in global scope may be undefined in inner local scopes,
+    depending on where the code is run, in order to balance safety and convenience.
+    The hard and soft local scoping rules define the interplay between global and local variables.
+
+    However, variables defined only in local scope behave consistently in all contexts.
+    If the variable is already defined, it will be reused. If the variable is not defined,
+    it will be made available to the current and inner scopes (but not outer scopes).
+
+!!! tip "A Common Confusion"
+    If you run into an unexpectedly undefined variable,
+
+    ```julia
+    # Print the numbers 1 through 5
+    i = 0
+    while i < 5
+        i += 1     # ERROR: UndefVarError: `i` not defined
+        println(i)
+    end
+    ```
+
+    a simple fix is to change all global variable definitions into local definitions
+    by wrapping the code in a `let` block or `function`.
+
+    ```julia
+    # Print the numbers 1 through 5
+    let i = 0
+        while i < 5
+            i += 1     # Now outer `i` is defined in the inner scope of the while loop
+            println(i)
+        end
+    end
+    ```
+
+    This is a common source of confusion when writing procedural scripts,
+    but it becomes a non-issue if code is moved inside functions
+    or executed interactively in the REPL.
+
+    See also the [`global`](@ref) and [`local`](@ref) keywords
+    to explicitly achieve any desired scoping behavior.
+
+### [Scope Constructs](@id man-scope-table)
 
 The constructs introducing scope blocks are:
 
-| Construct | Scope type | Allowed within |
-|:----------|:-----------|:---------------|
+| Construct | Scope Type Introduced | Scope Types Able to Contain Construct |
+|:----------|:----------------------|:--------------------------------------|
 | [`module`](@ref), [`baremodule`](@ref) | global | global |
 | [`struct`](@ref) | local (soft) | global |
-| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
 | [`macro`](@ref) | local (hard) | global |
-| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
@@ -67,31 +108,7 @@ Each module introduces a new global scope, separate from the global scope of all
 is no all-encompassing global scope. Modules can introduce variables of other modules into their
 scope through the [using or import](@ref modules) statements or through qualified access using the
 dot-notation, i.e. each module is a so-called *namespace* as well as a first-class data structure
-associating names with values. Note that while variable bindings can be read externally, they can only
-be changed within the module to which they belong. As an escape hatch, you can always evaluate code
-inside that module to modify a variable; this guarantees, in particular, that module bindings cannot
-be modified externally by code that never calls `eval`.
-
-```jldoctest
-julia> module A
-           a = 1 # a global in A's scope
-       end;
-
-julia> module B
-           module C
-               c = 2
-           end
-           b = C.c    # can access the namespace of a nested global scope
-                      # through a qualified access
-           import ..A # makes module A available
-           d = A.a
-       end;
-
-julia> module D
-           b = a # errors as D's global scope is separate from A's
-       end;
-ERROR: UndefVarError: `a` not defined
-```
+associating names with values.
 
 If a top-level expression contains a variable declaration with keyword `local`,
 then that variable is not accessible outside that expression.
@@ -187,7 +204,7 @@ julia> greet()
 hello
 
 julia> x # global
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 ```
 
 Inside of the `greet` function, the assignment `x = "hello"` causes `x` to be a new local variable
@@ -256,7 +273,7 @@ julia> sum_to(10)
 55
 
 julia> s # global
-ERROR: UndefVarError: `s` not defined
+ERROR: UndefVarError: `s` not defined in `Main`
 ```
 
 Since `s` is local to the function `sum_to`, calling the function has no effect on the global
@@ -343,7 +360,7 @@ hello
 hello
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 ```
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
@@ -408,7 +425,7 @@ julia> code = """
 julia> include_string(Main, code)
 ┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 └ @ string:4
-ERROR: LoadError: UndefVarError: `s` not defined
+ERROR: LoadError: UndefVarError: `s` not defined in local scope
 ```
 
 Here we use [`include_string`](@ref), to evaluate `code` as though it were the contents of a file.
@@ -559,7 +576,7 @@ julia> let x = 1, z
            println("z: $z") # errors as z has not been assigned yet but is local
        end
 x: 1, y: -1
-ERROR: UndefVarError: `z` not defined
+ERROR: UndefVarError: `z` not defined in local scope
 ```
 
 The assignments are evaluated in order, with each right-hand side evaluated in the scope before
@@ -726,7 +743,7 @@ ERROR: invalid redefinition of constant x
 julia> const y = 1.0
 1.0
 
-julia> y = 2.0
+julia> const y = 2.0
 WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
 2.0
 ```
@@ -738,34 +755,13 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies to immutable objects even if the variable binding would change, e.g.:
-```julia-repl
-julia> const s1 = "1"
-"1"
-
-julia> s2 = "1"
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x00000000132c9638
- Ptr{UInt8} @0x0000000013dd3d18
-
-julia> s1 = s2
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x0000000013dd3d18
- Ptr{UInt8} @0x0000000013dd3d18
-```
-However, for mutable objects the warning is printed as expected:
+* if an assignment would change the mutable object to which the variable points (regardless of whether those two objects are deeply equal), a warning is printed:
 ```jldoctest
 julia> const a = [1]
 1-element Vector{Int64}:
  1
 
-julia> a = [1]
+julia> const a = [1]
 WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
 1-element Vector{Int64}:
  1
@@ -786,7 +782,7 @@ f (generic function with 1 method)
 julia> f()
 1
 
-julia> x = 2
+julia> const x = 2
 WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
 2
 

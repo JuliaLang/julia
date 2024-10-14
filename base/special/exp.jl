@@ -250,7 +250,7 @@ end
             twopk = (k + UInt64(53)) << 52
             return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
-        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+        k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
@@ -460,7 +460,7 @@ function expm1(x::Float32)
     end
     x = Float64(x)
     N_float = round(x*Ln2INV(Float64))
-    N = unsafe_trunc(UInt64, N_float)
+    N = unsafe_trunc(Int64, N_float)
     r = muladd(N_float, Ln2(Float64), x)
     hi = evalpoly(r, (1.0, .5, 0.16666667546642386, 0.041666183019487026,
                       0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
@@ -477,7 +477,7 @@ function expm1(x::Float16)
         return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
     end
     N_float = round(x*Ln2INV(Float32))
-    N = unsafe_trunc(UInt32, N_float)
+    N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, Ln2(Float32), x)
     hi = evalpoly(r, (1f0, .5f0, 0.16666667f0, 0.041665863f0, 0.008333111f0, 0.0013981499f0, 0.00019983904f0))
     small_part = r*hi

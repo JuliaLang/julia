@@ -15,14 +15,14 @@ has a `TypeName`.
 
 ## [Function calls](@id Function-calls)
 
-Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
+Given the call `f(x, y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
 Note that the type of the function itself is the first element. This is because the type might
 have parameters, and so needs to take part in dispatch. This tuple type is looked up in the method
 table.
 
 This dispatch process is performed by `jl_apply_generic`, which takes two arguments: a pointer
-to an array of the values f, x, and y, and the number of values (in this case 3).
+to an array of the values `f`, `x`, and `y`, and the number of values (in this case 3).
 
 Throughout the system, there are two kinds of APIs that handle functions and argument lists: those
 that accept the function and arguments separately, and those that accept a single argument structure.
@@ -214,16 +214,16 @@ use keyword arguments are dispatched directly to the called function's kwsorter.
 call:
 
 ```julia
-circle((0,0), 1.0, color = red; other...)
+circle((0, 0), 1.0, color = red; other...)
 ```
 
 is lowered to:
 
 ```julia
-kwcall(merge((color = red,), other), circle, (0,0), 1.0)
+kwcall(merge((color = red,), other), circle, (0, 0), 1.0)
 ```
 
- `kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
+`kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
 The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
 This function further unpacks each *element* of `other`, expecting each one to contain two values
 (a symbol and a value).
@@ -267,7 +267,7 @@ element instead of the second.
 The front end generates type declarations for all closures. Initially, this was implemented by
 generating normal type declarations. However, this produced an extremely large number of constructors,
 all of which were trivial (simply passing all arguments through to [`new`](@ref)). Since methods are partially
-ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep
+ordered, inserting all of these methods is O(n²), plus there are just too many of them to keep
 around. This was optimized by generating `struct_type` expressions directly (bypassing default
 constructor generation), and using `new` directly to create closure instances. Not the prettiest
 thing ever, but you do what you gotta do.

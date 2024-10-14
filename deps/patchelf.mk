@@ -20,7 +20,7 @@ $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: XC_HOST:=$(BUILD_MACHINE)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)" MAKE=$(MAKE)
 	echo 1 > $@
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured

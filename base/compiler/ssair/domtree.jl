@@ -82,6 +82,8 @@ struct DFSTree
     # (preorder number -> preorder number)
     # Storing it this way saves a few lookups in the snca_compress! algorithm
     to_parent_pre::Vector{PreNumber}
+
+    _worklist::Vector{Tuple{BBNumber, PreNumber, Bool}}
 end
 
 function DFSTree(n_blocks::Int)
@@ -89,14 +91,16 @@ function DFSTree(n_blocks::Int)
                    Vector{BBNumber}(undef, n_blocks),
                    zeros(PostNumber, n_blocks),
                    Vector{BBNumber}(undef, n_blocks),
-                   zeros(PreNumber, n_blocks))
+                   zeros(PreNumber, n_blocks),
+                   Vector{Tuple{BBNumber, PreNumber, Bool}}())
 end
 
 copy(D::DFSTree) = DFSTree(copy(D.to_pre),
                            copy(D.from_pre),
                            copy(D.to_post),
                            copy(D.from_post),
-                           copy(D.to_parent_pre))
+                           copy(D.to_parent_pre),
+                           copy(D._worklist))
 
 function copy!(dst::DFSTree, src::DFSTree)
     copy!(dst.to_pre, src.to_pre)
@@ -106,17 +110,26 @@ function copy!(dst::DFSTree, src::DFSTree)
     copy!(dst.to_parent_pre, src.to_parent_pre)
     return dst
 end
+function resize!(D::DFSTree, n::Integer)
+    resize!(D.to_pre, n)
+    resize!(D.from_pre, n)
+    resize!(D.to_post, n)
+    resize!(D.from_post, n)
+    resize!(D.to_parent_pre, n)
+end
 
 length(D::DFSTree) = length(D.from_pre)
 
 function DFS!(D::DFSTree, blocks::Vector{BasicBlock}, is_post_dominator::Bool)
-    copy!(D, DFSTree(length(blocks)))
+    resize!(D, length(blocks))
+    fill!(D.to_pre, 0)
+    to_visit = D._worklist # always starts empty
     if is_post_dominator
         # TODO: We're using -1 as the virtual exit node here. Would it make
         #       sense to actually have a real BB for the exit always?
-        to_visit = Tuple{BBNumber, PreNumber, Bool}[(-1, 0, false)]
+        push!(to_visit, (-1, 0, false))
     else
-        to_visit = Tuple{BBNumber, PreNumber, Bool}[(1, 0, false)]
+        push!(to_visit, (1, 0, false))
     end
     pre_num = is_post_dominator ? 0 : 1
     post_num = 1
@@ -189,7 +202,7 @@ DFS(blocks::Vector{BasicBlock}, is_post_dominator::Bool=false) = DFS!(DFSTree(0)
 """
 Keeps the per-BB state of the Semi NCA algorithm. In the original formulation,
 there are three separate length `n` arrays, `label`, `semi` and `ancestor`.
-Instead, for efficiency, we use one array in a array-of-structs style setup.
+Instead, for efficiency, we use one array in an array-of-structs style setup.
 """
 struct SNCAData
     semi::PreNumber
@@ -332,10 +345,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
     ancestors = copy(D.to_parent_pre)
     relevant_blocks = IsPostDom ? (1:max_pre) : (2:max_pre)
     for w::PreNumber in reverse(relevant_blocks)
-        # LLVM initializes this to the parent, the paper initializes this to
-        # `w`, but it doesn't really matter (the parent is a predecessor, so at
-        # worst we'll discover it below). Save a memory reference here.
-        semi_w = typemax(PreNumber)
+        semi_w = ancestors[w]
         last_linked = PreNumber(w + 1)
         for v ∈ dom_edges(domtree, blocks, D.from_pre[w])
             # For the purpose of the domtree, ignore virtual predecessors into
@@ -596,7 +606,7 @@ dominates(domtree::DomTree, bb1::BBNumber, bb2::BBNumber) =
     _dominates(domtree, bb1, bb2)
 
 """
-    postdominates(domtree::DomTree, bb1::Int, bb2::Int) -> Bool
+    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int) -> Bool
 
 Checks if `bb1` post-dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.
@@ -647,6 +657,8 @@ end
 Compute the nearest common (post-)dominator of `a` and `b`.
 """
 function nearest_common_dominator(domtree::GenericDomTree, a::BBNumber, b::BBNumber)
+    a == 0 && return a
+    b == 0 && return b
     alevel = domtree.nodes[a].level
     blevel = domtree.nodes[b].level
     # W.l.g. assume blevel <= alevel
