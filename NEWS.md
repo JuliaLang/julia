@@ -101,6 +101,8 @@ New library features
   content is fully written, then call `closewrite` manually to avoid
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
+* `@time` now shows if the time spent on scheduling tasks (not including sleeping/waiting) is more
+  than 10% of the total time, as a percentage. ([#55103])
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `escape_string` takes additional keyword arguments `ascii=true` (to escape all
   non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers

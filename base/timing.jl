@@ -568,8 +568,9 @@ end
 
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
-counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+counters, compilation time in seconds, with recompilation time in seconds, any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait as a count, and the average time spent on
+scheduling tasks (not including sleeping/waiting) across threads.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
@@ -609,6 +610,9 @@ julia> stats.recompile_time
 
 !!! compat "Julia 1.11"
     The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
+
+!!! compat "Julia 1.12"
+    The `sched_time_avg` field was added in Julia 1.11.
 """
 macro timed(ex)
     quote
