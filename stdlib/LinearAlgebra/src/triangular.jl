@@ -898,12 +898,16 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
 function +(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular)
-    Ap = _triangularize(A)(parent(A))
-    Bp = _triangularize(B)(parent(B))
-    if A isa UnitUpperOrUnitLowerTriangular
+    Aisunit = A isa UnitUpperOrUnitLowerTriangular
+    Bisunit = B isa UnitUpperOrUnitLowerTriangular
+    Aisupper = A isa UpperOrUnitUpperTriangular
+    Bisupper = B isa UpperOrUnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), Aisunit ? (Aisupper ? 1 : -1) : 0)
+    Bp = _triangularize(B)(parent(B), Bisunit ? (Bisupper ? 1 : -1) : 0)
+    if Aisunit
         Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
     end
-    if B isa UnitUpperOrUnitLowerTriangular
+    if Bisunit
         Bp[diagind(Bp, IndexStyle(Bp))] = @view B[diagind(B, IndexStyle(B))]
     end
     Ap + Bp
@@ -943,12 +947,16 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
     LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 end
 function -(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular)
-    Ap = _triangularize(A)(parent(A))
-    Bp = _triangularize(B)(parent(B))
-    if A isa UnitUpperOrUnitLowerTriangular
+    Aisunit = A isa UnitUpperOrUnitLowerTriangular
+    Bisunit = B isa UnitUpperOrUnitLowerTriangular
+    Aisupper = A isa UpperOrUnitUpperTriangular
+    Bisupper = B isa UpperOrUnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), Aisunit ? (Aisupper ? 1 : -1) : 0)
+    Bp = _triangularize(B)(parent(B), Bisunit ? (Bisupper ? 1 : -1) : 0)
+    if Aisunit
         Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
     end
-    if B isa UnitUpperOrUnitLowerTriangular
+    if Bisunit
         Bp[diagind(Bp, IndexStyle(Bp))] = @view B[diagind(B, IndexStyle(B))]
     end
     Ap - Bp
