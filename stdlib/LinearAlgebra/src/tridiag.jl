@@ -725,7 +725,7 @@ end
     elseif b.band == 1
         return @inbounds A.du[b.index]
     else
-        return diagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, b)
     end
 end
 

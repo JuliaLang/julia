@@ -193,6 +193,7 @@ Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `
 diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
 diagzero(D::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
     zeroslike(M, axes(D[BandIndex(0,i)], 1), axes(D[BandIndex(0,j)], 2))
+diagzero(A::AbstractMatrix, b::BandIndex) = diagzero(A, Tuple(_cartinds(b))...)
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
 zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
 """
@@ -212,7 +213,7 @@ zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatr
     if b.band == 0
         @inbounds r = D.diag[b.index]
     else
-        r = diagzero(D, Tuple(_cartinds(b))...)
+        r = diagzero(D, b)
     end
     r
 end

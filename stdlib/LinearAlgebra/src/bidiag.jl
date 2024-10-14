@@ -161,7 +161,7 @@ end
         # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
-        return diagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, b)
     end
 end
 
