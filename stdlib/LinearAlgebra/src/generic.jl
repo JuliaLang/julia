@@ -389,16 +389,6 @@ function cross(a::AbstractVector, b::AbstractVector)
 end
 
 """
-    similarmutable(A)
-
-Return a mutable `AbstractArray` that shares its structure
-with `similar(A)`. The difference with `similar(A)` is that
-each index of the result corresponding to the stored ones
-of `A` will be mutable.
-"""
-similarmutable(A) = similar(A)
-
-"""
     triu(M, k::Integer = 0)
 
 Return the upper triangle of `M` starting from the `k`th superdiagonal.

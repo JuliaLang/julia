@@ -157,8 +157,6 @@ axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
-similarmutable(S::SymTridiagonal) = Tridiagonal(similar(_evview(S)), similar(S.dv), similar(_evview(S)))
-
 # copyto! for matching axes
 _copyto_banded!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
