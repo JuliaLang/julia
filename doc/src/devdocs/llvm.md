@@ -160,7 +160,7 @@ end
 These files can be processed the same way as the unoptimized sysimg IR shown
 above, or if you want to see the LLVM IR yourself and get extra verification run, you can use
 ```
-./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -S -verifiy-each plus.ll
+./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -S -verify-each plus.ll
 ```
 (note on MacOS this would be `libjulia-codegen.dynlib` and on Windows, you should probably use WSL)
 
