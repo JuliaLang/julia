@@ -21,7 +21,7 @@ function Tridiagonal(A::Bidiagonal)
     Tridiagonal(A.uplo == 'U' ? z : A.ev, A.dv, A.uplo == 'U' ? A.ev : z)
 end
 
-_diagview(S::SymTridiagonal{<:Number}) = @view S.dv[1:end]
+_diagview(S::SymTridiagonal{<:Number}) = S.dv
 _diagview(S::SymTridiagonal) = view(S, diagind(S, IndexStyle(S)))
 
 # conversions from SymTridiagonal to other special matrix types
