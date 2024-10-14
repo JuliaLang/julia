@@ -51,6 +51,7 @@
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \
+    XX(jl_binding_partition_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
     XX(jl_enternode_type) \
@@ -138,6 +139,7 @@
     XX(jl_uint8_type) \
     XX(jl_undefref_exception) \
     XX(jl_undefvarerror_type) \
+    XX(jl_fielderror_type) \
     XX(jl_unionall_type) \
     XX(jl_uniontype_type) \
     XX(jl_upsilonnode_type) \

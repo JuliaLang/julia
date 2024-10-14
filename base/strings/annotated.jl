@@ -39,13 +39,6 @@ the combined range.
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
-!!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedString` are not. This is to allow for potential future
-    changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
-
 # Constructors
 
 ```julia
@@ -80,13 +73,6 @@ More specifically, this is a simple wrapper around any other
 
 See also: [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 and `annotate!`.
-
-!!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedChar` are not. This it to allow for potential future
-    changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
 
 # Constructors
 
@@ -164,7 +150,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
+        AnnotatedChar(s.string[i], Pair{Symbol, Any}[last(x) for x in annotations(s, i)])
     else
         string_index_err(s, i)
     end
@@ -384,7 +370,7 @@ a vector of region–annotation tuples.
 In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
-See also: `annotate!`.
+See also: [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 
@@ -593,6 +579,7 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{U
         for i in reverse(axes(annotations, 1))
             annot = annotations[i]
             first(first(annot)) == 1 || continue
+            i <= length(io.annotations) || continue
             if last(annot) == last(last(io.annotations))
                 valid_run = true
                 for runlen in 1:i
@@ -638,7 +625,7 @@ read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar}
     pos = position(io)
     char = read(io.io, T)
-    annots = [annot for (range, annot) in io.annotations if pos+1 in range]
+    annots = Pair{Symbol, Any}[annot for (range, annot) in io.annotations if pos+1 in range]
     AnnotatedChar(char, annots)
 end
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{AbstractChar}}) = read(io, AnnotatedChar{Char})

@@ -79,8 +79,6 @@ macro stable_muladdmul(expr)
     for (i, e) in enumerate(expr.args)
         e isa Expr || continue
         if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
-            e.args[2] isa Symbol || continue
-            e.args[3] isa Symbol || continue
             local asym = e.args[2]
             local bsym = e.args[3]
 
@@ -666,8 +664,11 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -808,7 +809,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -1086,7 +1087,7 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A)
     checksquare(A)
     sum(diag(A))
 end
@@ -1675,7 +1676,7 @@ end
 """
     reflectorApply!(x, τ, A)
 
-Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - conj(τ)*[1; x[2:end]]*[1; x[2:end]]')*A`.
 """
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
@@ -2011,19 +2012,21 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     BLAS.chkuplo(uplo)
     m,n = size(A)
     m1,n1 = size(B)
-    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    A = Base.unalias(B, A)
     if uplo == 'U'
-        for j=1:n
-            for i=1:min(j,m)
-                @inbounds B[i,j] = A[i,j]
-            end
+        LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
+        for j in 1:n, i in 1:min(j,m)
+            @inbounds B[i,j] = A[i,j]
         end
-    else  # uplo == 'L'
-        for j=1:n
-            for i=j:m
-                @inbounds B[i,j] = A[i,j]
-            end
+    else # uplo == 'L'
+        LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
+        for j in 1:n, i in j:m
+            @inbounds B[i,j] = A[i,j]
         end
     end
     return B
+end
+# Forward LAPACK-compatible strided matrices to lacpy
+function copytrito!(B::StridedMatrixStride1{T}, A::StridedMatrixStride1{T}, uplo::AbstractChar) where {T<:BlasFloat}
+    LAPACK.lacpy!(B, A, uplo)
 end

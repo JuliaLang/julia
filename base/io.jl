@@ -247,7 +247,7 @@ The endianness of the written value depends on the endianness of the host system
 Convert to/from a fixed endianness when writing/reading (e.g. using  [`htol`](@ref) and
 [`ltoh`](@ref)) to get results that are consistent across platforms.
 
-You can write multiple values with the same `write` call. i.e. the following are equivalent:
+You can write multiple values with the same `write` call, i.e. the following are equivalent:
 
     write(io, x, y...)
     write(io, x) + write(io, y...)
@@ -543,8 +543,8 @@ julia> rm("my_file.txt")
 ```
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
-readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...)))
+readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)))
 readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
@@ -617,7 +617,7 @@ Logan
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
 readline(s::IO=stdin; keep::Bool=false) =
-    String(_unsafe_take!(copyline(IOBuffer(sizehint=70), s; keep)))
+    String(_unsafe_take!(copyline(IOBuffer(sizehint=16), s; keep)))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -1111,7 +1111,7 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? resize!(StringVector(70), 0) : Vector{T}())
+    out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
@@ -1426,7 +1426,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$T not marked"))
+    ismarked(io) || throw(ArgumentError(LazyString(T, " not marked")))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

@@ -514,6 +514,154 @@ function rpad(
 end
 
 """
+    rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = rtruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 I lo…"
+
+julia> textwidth(s)
+10
+
+julia> rtruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
+    if isnothing(ret)
+        return string(str)
+    else
+        left, _ = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement
+    end
+end
+
+"""
+    ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = ltruncate("🍕🍕 I love 🍕", 10)
+"…I love 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ltruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
+    if isnothing(ret)
+        return string(str)
+    else
+        _, right = ret::Tuple{Int,Int}
+        @views return replacement * str[right:end]
+    end
+end
+
+"""
+    ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
+with `replacement` if necessary. The default replacement string is "…". By default, the truncation
+prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
+
+# Examples
+```jldoctest
+julia> s = ctruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 …e 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ctruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
+"""
+function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
+    if isnothing(ret)
+        return string(str)
+    else
+        left, right = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement * str[right:end]
+    end
+end
+
+function string_truncate_boundaries(
+            str::AbstractString,
+            maxwidth::Integer,
+            replacement::Union{AbstractString,AbstractChar},
+            ::Val{mode},
+            prefer_left::Bool = true) where {mode}
+
+    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
+
+    # check efficiently for early return if str is less wide than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && break
+    end
+    total_width <= maxwidth && return nothing
+
+    l0, _ = left, right = firstindex(str), lastindex(str)
+    width = textwidth(replacement)
+    # used to balance the truncated width on either side
+    rm_width_left, rm_width_right, force_other = 0, 0, false
+    @inbounds while true
+        if mode === :left || (mode === :center && (!prefer_left || left > l0))
+            rm_width = textwidth(str[right])
+            if mode === :left || (rm_width_right <= rm_width_left || force_other)
+                force_other = false
+                (width += rm_width) <= maxwidth || break
+                rm_width_right += rm_width
+                right = prevind(str, right)
+            else
+                force_other = true
+            end
+        end
+        if mode ∈ (:right, :center)
+            rm_width = textwidth(str[left])
+            if mode === :left || (rm_width_left <= rm_width_right || force_other)
+                force_other = false
+                (width += textwidth(str[left])) <= maxwidth || break
+                rm_width_left += rm_width
+                left = nextind(str, left)
+            else
+                force_other = true
+            end
+        end
+    end
+    return prevind(str, left), nextind(str, right)
+end
+
+"""
     eachsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
     eachsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 

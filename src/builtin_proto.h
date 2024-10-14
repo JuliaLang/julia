@@ -69,6 +69,7 @@ DECLARE_BUILTIN(svec);
 DECLARE_BUILTIN(swapfield);
 DECLARE_BUILTIN(swapglobal);
 DECLARE_BUILTIN(throw);
+DECLARE_BUILTIN(throw_methoderror);
 DECLARE_BUILTIN(tuple);
 DECLARE_BUILTIN(typeassert);
 DECLARE_BUILTIN(typeof);
@@ -79,7 +80,6 @@ JL_CALLABLE(jl_f__primitivetype);
 JL_CALLABLE(jl_f__setsuper);
 JL_CALLABLE(jl_f__equiv_typedef);
 JL_CALLABLE(jl_f_get_binding_type);
-JL_CALLABLE(jl_f_set_binding_type);
 JL_CALLABLE(jl_f__compute_sparams);
 JL_CALLABLE(jl_f__svec_ref);
 #ifdef __cplusplus

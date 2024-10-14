@@ -77,11 +77,10 @@ JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line)
     return allocLine(mallocData[filename], line);
 }
 
-// Resets the malloc counts.
-extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+static void clear_log_data(logdata_t &logData, int resetValue)
 {
-    logdata_t::iterator it = mallocData.begin();
-    for (; it != mallocData.end(); it++) {
+    logdata_t::iterator it = logData.begin();
+    for (; it != logData.end(); it++) {
         SmallVector<logdata_block*, 0> &bytes = (*it).second;
         SmallVector<logdata_block*, 0>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
@@ -89,12 +88,24 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
                 logdata_block &data = **itb;
                 for (int i = 0; i < logdata_blocksize; i++) {
                     if (data[i] > 0)
-                        data[i] = 1;
+                        data[i] = resetValue;
                 }
             }
         }
     }
     jl_gc_sync_total_bytes(0);
+}
+
+// Resets the malloc counts.
+extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+{
+    clear_log_data(mallocData, 1);
+}
+
+// Resets the code coverage
+extern "C" JL_DLLEXPORT void jl_clear_coverage_data(void)
+{
+    clear_log_data(coverageData, 0);
 }
 
 static void write_log_data(logdata_t &logData, const char *extension)
@@ -196,7 +207,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
-        if (output_pattern.endswith(".info"))
+        if (output_pattern.ends_with(".info"))
             write_lcov_data(coverageData, jl_format_filename(output_pattern.str().c_str()));
     }
     else {

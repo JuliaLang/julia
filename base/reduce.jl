@@ -472,8 +472,8 @@ elements are not reordered if you use an ordered collection.
 julia> reduce(*, [2; 3; 4])
 24
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(*, Int[]; init=1)
+1
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
@@ -638,11 +638,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+        for i in start:4:simdstop
+            v1 = _fast(op, v1, f(@inbounds(A[i+0])))
+            v2 = _fast(op, v2, f(@inbounds(A[i+1])))
+            v3 = _fast(op, v3, f(@inbounds(A[i+2])))
+            v4 = _fast(op, v4, f(@inbounds(A[i+3])))
         end
         checkbounds(A, simdstop+3)
         start += chunk_len

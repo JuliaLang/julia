@@ -386,7 +386,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...)
     return result
 end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
-    throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+    throw(ArgumentError(LazyString("cannot parse ", repr(s[startpos:endpos]), " as ", T)))
 
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)

@@ -223,7 +223,8 @@ end
     end
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
-    @test getnameinfo(ip"203.0.113.1") == "203.0.113.1"
+    # Temporarily broken due to a DNS issue. See https://github.com/JuliaLang/julia/issues/55008
+    @test_skip getnameinfo(ip"203.0.113.1") == "203.0.113.1"
     @test getnameinfo(ip"0.1.1.1") == "0.1.1.1"
     @test getnameinfo(ip"::ffff:0.1.1.1") == "::ffff:0.1.1.1"
     @test getnameinfo(ip"::ffff:192.0.2.1") == "::ffff:192.0.2.1"
@@ -452,6 +453,8 @@ end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            elseif Sys.isapple() && isa(e, Base.IOError) && Base.uverrorname(e.code) == "EHOSTUNREACH"
+                @warn "UDP IPv4 broadcast test skipped (local network access not granted?)"
             else
                 rethrow()
             end

@@ -114,6 +114,13 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
@@ -149,20 +156,10 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
-const _state_index = findfirst(==(:_state), fieldnames(Task))
-@eval function load_state_acquire(t)
-    # TODO: Replace this by proper atomic operations when available
-    @GC.preserve t llvmcall($("""
-        %rv = load atomic i8, i8* %0 acquire, align 8
-        ret i8 %rv
-        """), UInt8, Tuple{Ptr{UInt8}},
-        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
-end
-
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = load_state_acquire(t)
+        st = @atomic :acquire t._state
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -216,7 +213,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
+istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -260,7 +257,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
+istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -313,6 +310,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
@@ -367,7 +365,6 @@ in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed ta
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
 function wait(t::Task; throw=true)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
@@ -728,7 +725,7 @@ Print an error log to `stderr` if task `t` fails.
 
 # Examples
 ```julia-repl
-julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+julia> wait(errormonitor(Threads.@spawn error("task failed")); throw = false)
 Unhandled Task ERROR: task failed
 Stacktrace:
 [...]
@@ -806,6 +803,17 @@ macro sync_add(expr)
     end
 end
 
+function repl_backend_task()
+    @isdefined(active_repl_backend) || return
+    backend = active_repl_backend
+    isdefined(backend, :backend_task) || return
+    backend_task = getfield(active_repl_backend, :backend_task)::Task
+    if backend_task._state === task_state_runnable && getfield(backend, :in_eval)
+        return backend_task
+    end
+    return
+end
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
@@ -827,10 +835,9 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        if isa(result, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, result)
         end
     end
     # Clear sigatomic before waiting
@@ -841,14 +848,11 @@ function task_done_hook(t::Task)
         # If an InterruptException happens while blocked in the event loop, try handing
         # the exception to the REPL task since the current task is done.
         # issue #19467
-        if Threads.threadid() == 1 &&
-            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, e)
-        else
-            rethrow()
+        if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, e)
         end
+        rethrow() # this will terminate the program
     end
 end
 
@@ -991,6 +995,13 @@ the woken task.
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
     See [the API reference](@ref low-level-schedule-wait) for more information.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
@@ -1015,7 +1026,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        t.queue === nothing || Base.list_deletefirst!(t.queue::IntrusiveLinkedList{Task}, t)
+        q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -1039,7 +1050,7 @@ function yield()
     try
         wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end

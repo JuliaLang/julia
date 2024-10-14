@@ -271,15 +271,29 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
 !!! info "Windows"
     Note that on Windows, the secret might be displayed as it is typed; see
     `Base.winprompt` for securely retrieving username/password pairs from a
     graphical interface.
+
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
+# Examples
+
+```julia-repl
+julia> Base.getpass("Secret")
+Secret: SecretBuffer("*******")
+
+julia> Base.getpass("Secret> "; with_suffix=false)
+Secret> SecretBuffer("*******")
+```
 """
 function getpass end
 
@@ -339,11 +353,13 @@ function with_raw_tty(f::Function, input::TTY)
     end
 end
 
-function getpass(input::TTY, output::IO, prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bool=true)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     with_raw_tty(stdin) do
-        print(output, prompt, ": ")
+        print(output, prompt)
+        with_suffix && print(output, ": ")
         flush(output)
+
         s = SecretBuffer()
         plen = 0
         while true
@@ -364,7 +380,7 @@ end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -491,8 +507,10 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+
+function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
 
 function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c(s, sizeof(s) % Csize_t, crc)

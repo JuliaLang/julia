@@ -223,8 +223,8 @@ end
 
         @testset "linalg unary ops" begin
             @testset "tr" begin
-                @test tr(asym) == tr(Symmetric(asym))
-                @test tr(aherm) == tr(Hermitian(aherm))
+                @test tr(asym) ≈ tr(Symmetric(asym))
+                @test tr(aherm) ≈ tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin
@@ -559,6 +559,25 @@ end
     end
 end
 
+@testset "Reverse operation on Symmetric" begin
+    for uplo in (:U, :L)
+        A = Symmetric(randn(5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Symmetric == reverse(Matrix(A))
+    end
+end
+
+@testset "Reverse operation on Hermitian" begin
+    for uplo in (:U, :L)
+        A = Hermitian(randn(ComplexF64, 5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Hermitian == reverse(Matrix(A))
+    end
+end
+
+
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
 # or any number type where conj(a)*conj(b) ≠ conj(a*b):
 @testset "dot Hermitian quaternion #52318" begin
@@ -578,6 +597,15 @@ end
     A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
     @test A == Symmetric(A) && B == Symmetric(B)
     @test kron(A, B) ≈ kron(Symmetric(A), Symmetric(B))
+end
+
+@testset "kron with symmetric/hermitian matrices of matrices" begin
+    M = fill(ones(2,2), 2, 2)
+    for W in (Symmetric, Hermitian)
+        for (t1, t2) in ((W(M, :U), W(M, :U)), (W(M, :U), W(M, :L)), (W(M, :L), W(M, :L)))
+            @test kron(t1, t2) ≈ kron(Matrix(t1), Matrix(t2))
+        end
+    end
 end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
@@ -692,6 +720,22 @@ end
     end
 end
 
+@testset "eigendecomposition Algorithms" begin
+    using LinearAlgebra: DivideAndConquer, QRIteration, RobustRepresentations
+    for T in (Float64, ComplexF64, Float32, ComplexF32)
+        n = 4
+        A = T <: Real ? Symmetric(randn(T, n, n)) : Hermitian(randn(T, n, n))
+        d, v = eigen(A)
+        for alg in (DivideAndConquer(), QRIteration(), RobustRepresentations())
+            @test (@inferred eigvals(A, alg)) ≈ d
+            d2, v2 = @inferred eigen(A, alg)
+            @test d2 ≈ d
+            @test A * v2 ≈ v2 * Diagonal(d2)
+        end
+    end
+end
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
 using .Main.ImmutableArrays
 
@@ -1051,6 +1095,69 @@ end
         B2 = copy(B)
         @test copyto!(A, B) == B2
     end
+end
+
+@testset "copyto with incompatible sizes" begin
+    A = zeros(3,3); B = zeros(2,2)
+    @testset "copyto with incompatible sizes" begin
+        for T in (Symmetric, Hermitian)
+            @test_throws BoundsError copyto!(T(B), T(A))
+            @test_throws "Cannot set a non-diagonal index" copyto!(T(A), T(B))
+        end
+    end
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for ST in (Symmetric, Hermitian)
+        S = ST(M)
+        @test_throws "invalid index" S[true, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
+@testset "tr for block matrices" begin
+    m = [1 2; 3 4]
+    for b in (m, m * (1 + im))
+        M = fill(b, 3, 3)
+        for ST in (Symmetric, Hermitian)
+            S = ST(M)
+            @test tr(S) == sum(diag(S))
+        end
+    end
+end
+
+@testset "setindex! returns the destination" begin
+    M = rand(2,2)
+    for T in (Symmetric, Hermitian)
+        S = T(M)
+        @test setindex!(S, 0, 2, 2) === S
+    end
+end
+
+@testset "partly iniitalized matrices" begin
+    a = Matrix{BigFloat}(undef, 2,2)
+    a[1] = 1; a[3] = 1; a[4] = 1
+    h = Hermitian(a)
+    s = Symmetric(a)
+    d = Diagonal([1,1])
+    symT = SymTridiagonal([1 1;1 1])
+    @test h+d == Array(h) + Array(d)
+    @test h+symT == Array(h) + Array(symT)
+    @test s+d == Array(s) + Array(d)
+    @test s+symT == Array(s) + Array(symT)
+    @test h-d == Array(h) - Array(d)
+    @test h-symT == Array(h) - Array(symT)
+    @test s-d == Array(s) - Array(d)
+    @test s-symT == Array(s) - Array(symT)
+    @test d+h == Array(d) + Array(h)
+    @test symT+h == Array(symT) + Array(h)
+    @test d+s == Array(d) + Array(s)
+    @test symT+s == Array(symT) + Array(s)
+    @test d-h == Array(d) - Array(h)
+    @test symT-h == Array(symT) - Array(h)
+    @test d-s == Array(d) - Array(s)
+    @test symT-s == Array(symT) - Array(s)
 end
 
 end # module TestSymmetric

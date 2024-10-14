@@ -61,9 +61,10 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
+function (*)(a::AbstractVector, B::AbstractMatrix)
+    require_one_based_indexing(a)
+    reshape(a, length(a), 1) * B
+end
 
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
@@ -122,7 +123,15 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(matprod_dest(A, B, TS), A, B)
 end
 
-matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+"""
+    matprod_dest(A, B, T)
+
+Return an appropriate `AbstractArray` with element type `T` that may be used to store the result of `A * B`.
+
+!!! compat
+    This function requires at least Julia 1.11
+"""
+matprod_dest(A, B, T) = similar(B, T, (size(A, 1), size(B, 2)))
 
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
@@ -293,14 +302,23 @@ true
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) = _mul!(C, A, B, α, β)
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
-    generic_matmatmul!(
+    generic_matmatmul_wrapper!(
         C,
         wrapper_char(A),
         wrapper_char(B),
         _unwrap(A),
         _unwrap(B),
-        α, β
+        α, β,
+        Val(wrapper_char_NTC(A) & wrapper_char_NTC(B))
     )
+
+# this indirection allows is to specialize on the types of the wrappers of A and B to some extent,
+# even though the wrappers are stripped off in mul!
+# By default, we ignore the wrapper info and forward the arguments to generic_matmatmul!
+Base.@constprop :aggressive function generic_matmatmul_wrapper!(C, tA, tB, A, B, α, β, @nospecialize(val))
+    generic_matmatmul!(C, tA, tB, A, B, α, β)
+end
+
 
 """
     rmul!(A, B)
@@ -368,9 +386,36 @@ julia> lmul!(F.Q, B)
 """
 lmul!(A, B)
 
-# THE one big BLAS dispatch
-Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number) where {T<:BlasFloat}
+# We may inline the matmul2x2! and matmul3x3! calls for `α == true`
+# to simplify the @stable_muladdmul branches
+function matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β)
+    if size(C) == size(A) == size(B) == (2,2)
+        matmul2x2!(C, tA, tB, A, B, α, β)
+        return true
+    end
+    if size(C) == size(A) == size(B) == (3,3)
+        matmul3x3!(C, tA, tB, A, B, α, β)
+        return true
+    end
+    return false
+end
+function matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α::Bool, β)
+    if size(C) == size(A) == size(B) == (2,2)
+        Aelements, Belements = _matmul2x2_elements(C, tA, tB, A, B)
+        @stable_muladdmul _modify2x2!(Aelements, Belements, C, MulAddMul(true, β))
+        return true
+    end
+    if size(C) == size(A) == size(B) == (3,3)
+        Aelements, Belements = _matmul3x3_elements(C, tA, tB, A, B)
+        @stable_muladdmul _modify3x3!(Aelements, Belements, C, MulAddMul(true, β))
+        return true
+    end
+    return false
+end
+
+# THE one big BLAS dispatch. This is split into two methods to improve latency
+Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+                                    α::Number, β::Number, ::Val{true}) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
@@ -379,29 +424,37 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
         end
         return _rmul_or_fill!(C, β)
     end
-    if size(C) == size(A) == size(B) == (2,2)
-        return @stable_muladdmul matmul2x2!(C, tA, tB, A, B, MulAddMul(α, β))
-    end
-    if size(C) == size(A) == size(B) == (3,3)
-        return @stable_muladdmul matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
-    end
+    matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β) && return C
     # We convert the chars to uppercase to potentially unwrap a WrapperChar,
     # and extract the char corresponding to the wrapper type
     tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
-    if all(map(in(('N', 'T', 'C')), (tA_uc, tB_uc)))
-        if tA_uc == 'T' && tB_uc == 'N' && A === B
-            return syrk_wrapper!(C, 'T', A, α, β)
-        elseif tA_uc == 'N' && tB_uc == 'T' && A === B
-            return syrk_wrapper!(C, 'N', A, α, β)
-        elseif tA_uc == 'C' && tB_uc == 'N' && A === B
-            return herk_wrapper!(C, 'C', A, α, β)
-        elseif tA_uc == 'N' && tB_uc == 'C' && A === B
-            return herk_wrapper!(C, 'N', A, α, β)
-        else
-            return gemm_wrapper!(C, tA, tB, A, B, α, β)
-        end
+    if tA_uc == 'T' && tB_uc == 'N' && A === B
+        return syrk_wrapper!(C, 'T', A, α, β)
+    elseif tA_uc == 'N' && tB_uc == 'T' && A === B
+        return syrk_wrapper!(C, 'N', A, α, β)
+    elseif tA_uc == 'C' && tB_uc == 'N' && A === B
+        return herk_wrapper!(C, 'C', A, α, β)
+    elseif tA_uc == 'N' && tB_uc == 'C' && A === B
+        return herk_wrapper!(C, 'N', A, α, β)
+    else
+        return gemm_wrapper!(C, tA, tB, A, B, α, β)
     end
+end
+Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+                                    α::Number, β::Number, ::Val{false}) where {T<:BlasFloat}
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+    if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch(lazy"C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
+        return _rmul_or_fill!(C, β)
+    end
+    matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β) && return C
+    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
+    # and extract the char corresponding to the wrapper type
+    tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         if tA_uc == 'S' && tB_uc == 'N'
@@ -421,18 +474,13 @@ Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::S
         _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
-# Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
-Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
-                    α::Number, β::Number) where {T<:BlasReal}
-    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
-    # and extract the char corresponding to the wrapper type
-    tA_uc, tB_uc = uppercase(tA), uppercase(tB)
-    # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
-    if all(map(in(('N', 'T', 'C')), (tA_uc, tB_uc)))
-        gemm_wrapper!(C, tA, tB, A, B, α, β)
-    else
-        _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
-    end
+function generic_matmatmul_wrapper!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                    α::Number, β::Number, ::Val{true}) where {T<:BlasReal}
+    gemm_wrapper!(C, tA, tB, A, B, α, β)
+end
+Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                    α::Number, β::Number, ::Val{false}) where {T<:BlasReal}
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
 # legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
@@ -459,16 +507,11 @@ Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, t
     A
 end
 
-_fullstride2(A) = abs(stride(A, 2)) >= size(A, 1)
+_fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
 # We specialize the function for certain StridedArray subtypes
-
-# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
-const NonConstRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}, StepRange{<:BitInteger, <:BitInteger}}
-# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
-StridedSubArrayStandard{T,N,A,
-    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseArray,Base.StridedReshapedArray,Base.StridedReinterpretArray,StridedSubArrayStandard}) = true
+_fullstride2(A::StridedArrayStdSubArray, ::typeof(abs)) = true
+_fullstride2(A::StridedArrayStdSubArrayIncr, ::typeof(identity)) = true
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
                 A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -483,7 +526,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && _fullstride2(A) &&
+        stride(A, 1) == 1 && _fullstride2(A, abs) &&
         !iszero(stride(x, 1)) && # We only check input's stride here.
         if tA_uc in ('N', 'T', 'C')
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
@@ -514,7 +557,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-            stride(A, 1) == 1 && _fullstride2(A) &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
             stride(y, 1) == 1 && tA_uc == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
             !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
@@ -538,7 +581,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-            stride(A, 1) == 1 && _fullstride2(A) &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
             !iszero(stride(x, 1)) && tA_uc in ('N', 'T', 'C')
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
@@ -576,10 +619,9 @@ Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::Abst
     if iszero(beta) || issymmetric(C)
         α, β = promote(alpha, beta, zero(T))
         if (alpha isa Union{Bool,T} &&
-            beta isa Union{Bool,T} &&
-            stride(A, 1) == stride(C, 1) == 1 &&
-            stride(A, 2) >= size(A, 1) &&
-            stride(C, 2) >= size(C, 1))
+                beta isa Union{Bool,T} &&
+                stride(A, 1) == stride(C, 1) == 1 &&
+                _fullstride2(A) && _fullstride2(C))
             return copytri!(BLAS.syrk!('U', tA, alpha, A, beta, C), 'U')
         end
     end
@@ -612,10 +654,9 @@ Base.@constprop :aggressive function herk_wrapper!(C::Union{StridedMatrix{T}, St
     if iszero(β) || issymmetric(C)
         alpha, beta = promote(α, β, zero(T))
         if (alpha isa Union{Bool,T} &&
-            beta isa Union{Bool,T} &&
-            stride(A, 1) == stride(C, 1) == 1 &&
-            stride(A, 2) >= size(A, 1) &&
-            stride(C, 2) >= size(C, 1))
+                beta isa Union{Bool,T} &&
+                stride(A, 1) == stride(C, 1) == 1 &&
+                _fullstride2(A) && _fullstride2(C))
             return copytri!(BLAS.herk!('U', tA, alpha, A, beta, C), 'U', true)
         end
     end
@@ -663,11 +704,9 @@ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Ab
 
     alpha, beta = promote(α, β, zero(T))
     if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1))
+            beta isa Union{Bool,T} &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
@@ -699,11 +738,9 @@ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{Complex{T}
 
     # Make-sure reinterpret-based optimization is BLAS-compatible.
     if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1) && tA_uc == 'N')
+            beta isa Union{Bool,T} &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C) && tA_uc == 'N')
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
@@ -996,15 +1033,20 @@ Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
 end
 Base.@constprop :aggressive __matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
 
-Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
-    (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements(C, tA, tB, A, B)
+function _modify2x2!(Aelements, Belements, C, _add)
+    (A11, A12, A21, A22), (B11, B12, B21, B22) = Aelements, Belements
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
     _modify!(_add, A21*B11 + A22*B21, C, (2,1))
     _modify!(_add, A11*B12 + A12*B22, C, (1,2))
     _modify!(_add, A21*B12 + A22*B22, C, (2,2))
     end # inbounds
+    C
+end
+Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    α = true, β = false)
+    Aelements, Belements = _matmul2x2_elements(C, tA, tB, A, B)
+    @stable_muladdmul _modify2x2!(Aelements, Belements, C, MulAddMul(α, β))
     C
 end
 
@@ -1061,12 +1103,9 @@ Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
 end
 Base.@constprop :aggressive __matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
 
-Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
-
+function _modify3x3!(Aelements, Belements, C, _add)
     (A11, A12, A13, A21, A22, A23, A31, A32, A33),
-        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = _matmul3x3_elements(C, tA, tB, A, B)
-
+        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = Aelements, Belements
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
     _modify!(_add, A21*B11 + A22*B21 + A23*B31, C, (2,1))
@@ -1080,6 +1119,13 @@ Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::Ab
     _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
     _modify!(_add, A31*B13 + A32*B23 + A33*B33, C, (3,3))
     end # inbounds
+    C
+end
+Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    α = true, β = false)
+
+    Aelements, Belements = _matmul3x3_elements(C, tA, tB, A, B)
+    @stable_muladdmul _modify3x3!(Aelements, Belements, C, MulAddMul(α, β))
     C
 end
 

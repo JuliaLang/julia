@@ -269,6 +269,7 @@ function init_active_project()
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
@@ -277,19 +278,25 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
+        env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@scriptdir")
+        if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)
                 dir = dirname(PROGRAM_FILE)
             else
-                cmds = unsafe_load_commands(opts.commands)
-                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                cmds = unsafe_load_commands(JLOptions().commands)
+                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
                     # Usage error. The user did not pass a script.
                     return nothing
                 end
                 dir = dirname(ARGS[1])
             end
-            return abspath(replace(env, "@scriptdir" => dir))
+            if env == "@script"  # complete match, not startswith, so search upwards
+                return current_project(dir)
+            else
+                # starts with, so assume relative path is after
+                return abspath(replace(env, "@script" => dir))
+            end
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -431,6 +438,11 @@ function atexit(f::Function)
 end
 
 function _atexit(exitcode::Cint)
+    # this current task shouldn't be scheduled anywhere, but if it was (because
+    # this exit came from a signal for example), then try to clear that state
+    # to minimize scheduler issues later
+    ct = current_task()
+    q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we

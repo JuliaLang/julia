@@ -1010,6 +1010,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_GC_POP();
     if (metadata) {
         code->parent = metadata->def;
+        jl_gc_wb(code, code->parent);
+        code->rettype = metadata->rettype;
+        jl_gc_wb(code, code->rettype);
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
     }
 
     return code;

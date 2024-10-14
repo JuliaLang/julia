@@ -9,11 +9,10 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
-    :const => 1:1,
+    :const => 1:2,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
-    :enter => 1:2,
     :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
@@ -23,9 +22,10 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
+    :globaldecl => 2:2,
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects), args..., roots...
     :cfunction => 5:5,
-    :isdefined => 1:1,
+    :isdefined => 1:2,
     :code_coverage_effect => 0:0,
     :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),
@@ -34,10 +34,11 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :throw_undef_if_not => 2:2,
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
-    :new_opaque_closure => 4:typemax(Int),
+    :new_opaque_closure => 5:typemax(Int),
     :import => 1:typemax(Int),
     :using => 1:typemax(Int),
     :export => 1:typemax(Int),
+    :public => 1:typemax(Int),
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -147,7 +148,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :enter || head === :leave || head === :pop_exception ||
+                head === :const || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
@@ -256,7 +257,9 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast, :new_opaque_closure)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call,
+        :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast,
+        :new_opaque_closure)
         return true
     end
     return false

@@ -68,7 +68,7 @@ import .CC:
 using Core:
     CodeInstance, MethodInstance, CodeInfo
 using .CC:
-    InferenceResult, OptimizationState, IRCode
+    InferenceResult, InferenceState, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
 struct EAToken end
@@ -116,12 +116,14 @@ CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
 CC.cache_owner(::EscapeAnalyzer) = EAToken()
 
-function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::InferenceResult)
+function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationState,
+                                   ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized
-    nargs = let def = caller.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    nargs = Int(opt.src.nargs)
+    𝕃ₒ = CC.optimizer_lattice(interp)
     get_escape_cache = GetEscapeCache(interp)
     estate = try
-        analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), get_escape_cache)
+        analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache)
     catch err
         @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
         Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
@@ -133,7 +135,8 @@ function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::I
     end
     record_escapes!(interp, caller, estate, ir)
 
-    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, caller::InferenceResult)
+    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                      ir::IRCode, caller::InferenceResult)
 end
 
 function record_escapes!(interp::EscapeAnalyzer,
@@ -158,12 +161,12 @@ struct FailedAnalysis
     get_escape_cache::GetEscapeCache
 end
 
-function CC.cache_result!(interp::EscapeAnalyzer, inf_result::InferenceResult)
-    ecacheinfo = CC.traverse_analysis_results(inf_result) do @nospecialize result
+function CC.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=CC.may_discard_trees(interp))
+    ecacheinfo = CC.traverse_analysis_results(state.result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
-    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[inf_result.linfo] = ecacheinfo)
-    return @invoke CC.cache_result!(interp::AbstractInterpreter, inf_result::InferenceResult)
+    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[state.linfo] = ecacheinfo)
+    return @invoke CC.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
 end
 
 # printing
@@ -288,7 +291,7 @@ function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
     bb_idx_prev = bb_idx = 1
     for idx = 1:length(ir.stmts)
         preprint(io, idx)
-        bb_idx = Base.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, used, ir.cfg, bb_idx)
+        bb_idx = Base.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, ir.sptypes, used, ir.cfg, bb_idx)
         postprint(io, idx, bb_idx != bb_idx_prev)
         bb_idx_prev = bb_idx
     end

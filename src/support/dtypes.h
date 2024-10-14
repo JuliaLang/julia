@@ -123,6 +123,13 @@ typedef intptr_t ssize_t;
 #define STATIC_INLINE static inline
 #define FORCE_INLINE static inline __attribute__((always_inline))
 
+#ifdef _OS_WINDOWS_
+#define EXTERN_INLINE_DECLARE inline
+#else
+#define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
+#endif
+#define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
+
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)
 #  define NOINLINE_DECL(f) __declspec(noinline) f
