@@ -139,7 +139,9 @@ Standard library changes
 * The number of default BLAS threads now respects process affinity, instead of
   using total number of logical threads available on the system ([#55574]).
 * A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
-  Custom array types may specialize this function to return an appropriate result. ([#55252])
+  Custom array types may specialize this function to return an appropriate result ([#55252]).
+* The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
+  This function is now public ([#55537]).
 
 #### Logging
 
