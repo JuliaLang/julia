@@ -1323,8 +1323,9 @@ end
 end
 
 @testset "addition/subtraction of mixed triangular" begin
-    for A in (Hermitian(rand(4, 4)), Diagonal(ones(4)))
-        for T in (UpperTriangular, LowerTriangular)
+    for A in (Hermitian(rand(4, 4)), Diagonal(rand(5)))
+        for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
             B = T(A)
             M = Matrix(B)
             R = B - B'
