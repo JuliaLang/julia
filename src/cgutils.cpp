@@ -4543,15 +4543,20 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
 
     int pooled = tot <= GC_MAX_SZCLASS;
     Value *alloc, *decay_alloc, *ptr_field;
+    jl_aliasinfo_t aliasinfo;
     if (pooled) {
         auto cg_tot = ConstantInt::get(T_size, tot);
         auto call = prepare_call(jl_alloc_obj_func);
         alloc = ctx.builder.CreateCall(call, { ct, cg_tot, track_pjlvalue(ctx, cg_typ)});
         decay_alloc = decay_derived(ctx, alloc);
         ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        setName(ctx.emission_context, ptr_field, "memory_ptr");
         auto objref = emit_pointer_from_objref(ctx, alloc);
-        Value *data = track_pjlvalue(ctx, emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT));
-        ctx.builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+        Value *data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
+        auto *store = ctx.builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(store);
+        setName(ctx.emission_context, data, "memory_data");
     } else { // just use the dynamic length version since the malloc will be slow anyway
         auto ptls = get_current_ptls(ctx);
         auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
@@ -4560,7 +4565,10 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     }
     // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
     Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
-    ctx.builder.CreateStore(cg_nel, len_field);
+    auto *len_store = ctx.builder.CreateAlignedStore(cg_nel, len_field, Align(sizeof(void*)));
+    aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
+    aliasinfo.decorateInst(len_store);
+
     // zeroinit pointers and unions
     if (zi) {
         ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
@@ -4644,7 +4652,9 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
     auto decay_alloc = maybe_decay_tracked(ctx, alloc);
     auto len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
-    ctx.builder.CreateStore(nel_unboxed, len_field);
+    ctx.builder.CreateAlignedStore(nel_unboxed, len_field, Align(sizeof(void*)));
+    auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
+    aliasinfo.decorateInst(len_store);
     // zeroinit pointers and unions
     if (zi) {
         Value *ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);

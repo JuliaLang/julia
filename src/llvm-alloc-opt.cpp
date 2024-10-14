@@ -753,7 +753,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 return;
             }
             if (pass.gc_loaded_func == callee) {
-                call->replaceAllUsesWith(new_i);
+                call->replaceAllUsesWith(prolog_builder.CreateAddrSpaceCast(new_i, call->getCalledFunction()->getReturnType()));
                 call->eraseFromParent();
                 return;
             }
