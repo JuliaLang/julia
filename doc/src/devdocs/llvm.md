@@ -142,9 +142,9 @@ cc -shared -o sys.so sys.o
 ```
 To generate a system image with the new pass manager, one could do:
 ```
-opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
-llc -o sys.o opt.bc
-cc -shared -o sys.so sys.o
+./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
+./usr/tools/llc -o sys.o opt.bc
+./usr/tools/cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
 
@@ -154,11 +154,15 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default, false))
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, true, true, :att, optimize, :default, false))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
-above.
+above, or if you want to see the LLVM IR yourself and get extra verification run, you can use
+```
+./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -S -verfiy-each plus.ll
+```
+(note on MacOS this would be `libjulia-codegen.dynlib` and on Windows, you should probably use WSL)
 
 ## Running the LLVM test suite
 
