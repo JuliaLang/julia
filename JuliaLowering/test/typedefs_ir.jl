@@ -298,6 +298,46 @@ primitive type P P_nbits() end
 17  (return core.nothing)
 
 ########################################
+# Empty struct
+struct X
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (call core.svec)
+4   (call core.svec)
+5   (call core.svec)
+6   (call core._structtype TestMod :X %₃ %₄ %₅ false 0)
+7   (= slot₁/X %₆)
+8   (call core._setsuper! %₆ core.Any)
+9   (isdefined TestMod.X)
+10  (gotoifnot %₉ label₂₀)
+11  TestMod.X
+12  (call core._equiv_typedef %₁₁ %₆)
+13  (gotoifnot %₁₂ label₁₇)
+14  TestMod.X
+15  (= slot₁/X %₁₄)
+16  (goto label₁₉)
+17  slot₁/X
+18  (= TestMod.X %₁₇)
+19  (goto label₂₂)
+20  slot₁/X
+21  (= TestMod.X %₂₀)
+22  slot₁/X
+23  (call core.svec)
+24  (call core._typebody! %₂₂ %₂₃)
+25  TestMod.X
+26  (call core.apply_type core.Type %₂₅)
+27  (call core.svec %₂₆)
+28  (call core.svec)
+29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
+30  --- method core.nothing %₂₉
+    1   TestMod.X
+    2   (new %₁)
+    3   (return %₂)
+31  (return core.nothing)
+
+########################################
 # Basic struct
 struct X
     a
@@ -330,7 +370,39 @@ end
 23  TestMod.T
 24  (call core.svec core.Any %₂₃ core.Any)
 25  (call core._typebody! %₂₂ %₂₄)
-26  (return core.nothing)
+26  TestMod.T
+27  (call core.=== core.Any %₂₆)
+28  (gotoifnot %₂₇ label₃₀)
+29  (goto label₃₆)
+30  TestMod.X
+31  (call core.apply_type core.Type %₃₀)
+32  (call core.svec %₃₁ core.Any core.Any core.Any)
+33  (call core.svec)
+34  (call core.svec %₃₂ %₃₃ :($(QuoteNode(:(#= line 1 =#)))))
+35  --- method core.nothing %₃₄
+    1   (call core.fieldtype slot₁/#ctor-self# 2)
+    2   slot₃/b
+    3   (= slot₅/tmp %₂)
+    4   slot₅/tmp
+    5   (call core.isa %₄ %₁)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₀)
+    8   slot₅/tmp
+    9   (= slot₅/tmp (call top.convert %₁ %₈))
+    10  slot₅/tmp
+    11  (new slot₁/#ctor-self# slot₂/a %₁₀ slot₄/c)
+    12  (return %₁₁)
+36  TestMod.X
+37  (call core.apply_type core.Type %₃₆)
+38  TestMod.T
+39  (call core.svec %₃₇ core.Any %₃₈ core.Any)
+40  (call core.svec)
+41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
+42  --- method core.nothing %₄₁
+    1   TestMod.X
+    2   (new %₁ slot₂/a slot₃/b slot₄/c)
+    3   (return %₂)
+43  (return core.nothing)
 
 ########################################
 # Struct with supertype and type params
@@ -378,7 +450,22 @@ end
 39  slot₄/X
 40  (call core.svec)
 41  (call core._typebody! %₃₉ %₄₀)
-42  (return core.nothing)
+42  slot₂/U
+43  slot₃/V
+44  TestMod.X
+45  slot₂/U
+46  slot₃/V
+47  (call core.apply_type %₄₄ %₄₅ %₄₆)
+48  (call core.apply_type core.Type %₄₇)
+49  (call core.UnionAll %₄₃ %₄₈)
+50  (call core.UnionAll %₄₂ %₄₉)
+51  (call core.svec %₅₀)
+52  (call core.svec)
+53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 1 =#)))))
+54  --- method core.nothing %₅₃
+    1   (new slot₁/#ctor-self#)
+    2   (return %₁)
+55  (return core.nothing)
 
 ########################################
 # Struct with const and atomic fields
@@ -412,7 +499,16 @@ end
 22  slot₁/X
 23  (call core.svec core.Any core.Any core.Any)
 24  (call core._typebody! %₂₂ %₂₃)
-25  (return core.nothing)
+25  TestMod.X
+26  (call core.apply_type core.Type %₂₅)
+27  (call core.svec %₂₆ core.Any core.Any core.Any)
+28  (call core.svec)
+29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
+30  --- method core.nothing %₂₉
+    1   TestMod.X
+    2   (new %₁ slot₂/a slot₃/b slot₄/c)
+    3   (return %₂)
+31  (return core.nothing)
 
 ########################################
 # Documented struct
@@ -450,15 +546,24 @@ end
 22  slot₁/X
 23  (call core.svec core.Any core.Any)
 24  (call core._typebody! %₂₂ %₂₃)
-25  JuliaLowering.bind_docs!
-26  (call core.tuple :field_docs)
-27  (call core.apply_type core.NamedTuple %₂₆)
-28  (call core.svec 1 "field a docs" 2 "field b docs")
-29  (call core.tuple %₂₈)
-30  (call %₂₇ %₂₉)
-31  TestMod.X
-32  (call core.kwcall %₃₀ %₂₅ %₃₁ "X docs\n" :($(QuoteNode(:(#= line 4 =#)))))
-33  (return core.nothing)
+25  TestMod.X
+26  (call core.apply_type core.Type %₂₅)
+27  (call core.svec %₂₆ core.Any core.Any)
+28  (call core.svec)
+29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 4 =#)))))
+30  --- method core.nothing %₂₉
+    1   TestMod.X
+    2   (new %₁ slot₂/a slot₃/b)
+    3   (return %₂)
+31  JuliaLowering.bind_docs!
+32  (call core.tuple :field_docs)
+33  (call core.apply_type core.NamedTuple %₃₂)
+34  (call core.svec 1 "field a docs" 2 "field b docs")
+35  (call core.tuple %₃₄)
+36  (call %₃₃ %₃₅)
+37  TestMod.X
+38  (call core.kwcall %₃₆ %₃₁ %₃₇ "X docs\n" :($(QuoteNode(:(#= line 4 =#)))))
+39  (return core.nothing)
 
 ########################################
 # Error: Struct not at top level

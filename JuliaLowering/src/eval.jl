@@ -246,6 +246,7 @@ function to_lowered_expr(mod, ex)
         # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
         # foreigncall new_opaque_closure lambda
         head = k == K"call"   ? :call   :
+               k == K"new"    ? :new    :
                k == K"="      ? :(=)    :
                k == K"global" ? :global :
                k == K"const"  ? :const  :

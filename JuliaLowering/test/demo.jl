@@ -533,6 +533,27 @@ end
 """
 
 src = """
+function f(::T, ::U, ::S) where T where {U,S}
+    println(T)
+    println(U)
+    println(S)
+end
+"""
+
+src = """
+function (x::XXX)(y)
+    println("hi", " ", x, " ", y)
+end
+"""
+
+src = """
+struct X
+    x
+    y::String
+end
+"""
+
+src = """
 struct X{U,V}
     x::U
     y::V
@@ -540,10 +561,7 @@ end
 """
 
 src = """
-function f(::T, ::U, ::S) where T where {U,S}
-    println(T)
-    println(U)
-    println(S)
+struct X
 end
 """
 
@@ -554,6 +572,7 @@ ex = ensure_attributes(ex, var_id=Int)
 
 module MMM end
 in_mod = MMM
+# in_mod=Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
 @info "Macro expanded" ex_macroexpand formatsrc(ex_macroexpand, color_by=:scope_layer)
 #@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.flattened_provenance(e)[1:end-1])

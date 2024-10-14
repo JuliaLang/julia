@@ -1330,18 +1330,19 @@ function expand_function_def(ctx, ex, docs)
         end
 
         function_name = nothing
-        func_var = ssavar(ctx, name, "func_var")
+        func_self = ssavar(ctx, name, "func_self")
         if kind(name) == K"::"
             if numchildren(name) == 1
                 farg_name = @ast ctx name "#self#"::K"Placeholder"
-                farg_type = name[1]
+                farg_type_ = name[1]
             else
                 @chk numchildren(name) == 2
                 farg_name = name[1]
-                farg_type = name[2]
+                farg_type_ = name[2]
             end
             function_name = nothing_(ctx, name)
-            function_obj = farg_type
+            function_obj = farg_type_
+            farg_type = func_self
         else
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
@@ -1356,7 +1357,7 @@ function expand_function_def(ctx, ex, docs)
             farg_name = @ast ctx callex "#self#"::K"Placeholder"
             farg_type = @ast ctx callex [K"call"
                 "Typeof"::K"core"
-                func_var
+                func_self
             ]
         end
         pushfirst!(arg_names, farg_name)
@@ -1375,7 +1376,7 @@ function expand_function_def(ctx, ex, docs)
 
         @ast ctx ex [K"scope_block"(scope_type=:hard)
             [K"block"
-                [K"=" func_var function_obj]
+                [K"=" func_self function_obj]
                 typevar_stmts...
                 # metadata contains svec(types, sparms, location)
                 method_metadata := [K"call"(callex)
@@ -1403,12 +1404,12 @@ function expand_function_def(ctx, ex, docs)
                 if !isnothing(docs)
                     [K"call"(docs)
                         bind_docs!::K"Value"
-                        func_var
+                        func_self
                         docs[1]
                         method_metadata
                     ]
                 end
-                [K"unnecessary" func_var]
+                [K"unnecessary" func_self]
             ]
         ]
     elseif kind(name) == K"tuple"
@@ -1661,6 +1662,110 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
     end
 end
 
+# generate call to `convert()` for `(call new ...)` expressions
+function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, val)
+    if kind(field_type) == K"core" && field_type.name_val == "Any"
+        return val
+    end
+    # kt = kind(field_type)
+    # FIXME: Allow kt == K"Identifier" && kt in static_params to avoid fieldtype call
+    @ast ctx field_type [K"block"
+        tmp_type := [K"call"
+            "fieldtype"::K"core"
+            full_struct_type
+            field_index::K"Integer"
+        ]
+        convert_for_type_decl(ctx, field_type, val, tmp_type, false)
+    ]
+end
+
+function default_inner_constructors(ctx, srcref, outer_struct_var,
+                                    typevar_names, field_names, field_types)
+    # TODO: Consider using srcref = @HERE ?
+    exact_ctor = if isempty(typevar_names)
+        # Definition with exact types for all arguments
+        field_decls = SyntaxList(ctx)
+        @ast ctx srcref [K"function"
+            [K"call"
+                [K"::" [K"curly" "Type"::K"core" outer_struct_var]]
+                [[K"::" n t] for (n,t) in zip(field_names, field_types)]...
+            ]
+            [K"new"
+                outer_struct_var
+                field_names...
+            ]
+        ]
+    end
+    maybe_non_Any_field_types = filter(field_types) do ft
+        !(kind(ft) == K"core" && ft.name_val == "Any")
+    end
+    converting_ctor = if !isempty(typevar_names) || !isempty(maybe_non_Any_field_types)
+        # Definition which takes `Any` for all arguments and uses
+        # `Base.convert()` to convert those to the exact field type. Only
+        # defined if at least one field type is not Any.
+        ctor_self = new_mutable_var(ctx, srcref, "#ctor-self#"; kind=:argument)
+        @ast ctx srcref [K"function"
+            [K"call"
+                 [K"::"
+                     ctor_self
+                     if isempty(typevar_names)
+                         [K"curly" "Type"::K"core" outer_struct_var]
+                     else
+                         # `Type{S{X,Y}} where {X, Y}` but with X and Y already allocated `TypeVar`s
+                         body = [K"curly"
+                             "Type"::K"core"
+                             [K"curly"
+                                 outer_struct_var 
+                                 typevar_names...
+                             ]
+                         ]
+                         for v in reverse(typevar_names)
+                             body = [K"call" "UnionAll"::K"core" v body]
+                         end
+                         body
+                     end
+                ]
+                field_names...
+            ]
+            [K"block"
+                [K"new"
+                    ctor_self
+                    [_new_call_convert_arg(ctx, ctor_self, type, i, name)
+                     for (i, (name,type)) in enumerate(zip(field_names, field_types))]...
+                ]
+            ]
+        ]
+    end
+    if isnothing(exact_ctor)
+        converting_ctor
+    else
+        if isnothing(converting_ctor)
+            exact_ctor
+        else
+            @ast ctx srcref [K"block"
+                [K"if"
+                    # Only define converting_ctor if at least one field type is not Any.
+                    mapfoldl(t     -> [K"call" "==="::K"core" "Any"::K"core" t],
+                             (t,u) -> [K"&&" u t],
+                             maybe_non_Any_field_types)
+                    [K"block"]
+                    converting_ctor
+                ]
+                exact_ctor
+            ]
+        end
+    end
+end
+
+function _new_call(ctx, ex, typevar_names, field_names, field_types)
+    if has_keywords(ex)
+        throw(LoweringError(""))
+    end
+end
+
+function _rewrite_constructor_new_calls(ctx, ex, typevar_names, field_names, field_types)
+end
+
 function _constructor_min_initalized(ex::SyntaxTree)
     if kind(ex) == K"call" && ((kind(ex[1]) == K"Identifier" && ex[1].name_val == "new") ||
            (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && ex[1][1].name_val == "new"))
@@ -1705,6 +1810,9 @@ function expand_struct_def(ctx, ex, docs)
     end
     if isempty(defs)
     end
+
+    default_constructor_args = similar_identifiers(ctx, field_names)
+
     @ast ctx ex [K"block"
         [K"global" struct_name]
         [K"const" struct_name]
@@ -1758,15 +1866,12 @@ function expand_struct_def(ctx, ex, docs)
                     struct_name
                     [K"call" "svec"::K"core" field_types...]
                 ]
+                # Inner constructors
+                default_inner_constructors(ctx, ex, outer_struct_var,
+                                           typevar_names, field_names, field_types)
             ]
         ]
-        # Inner constructors
-        # TODO
-        # [K"scope_block"(scope_type=:hard)
-        #     [K"block"
-        #         [K"global" struct_name]
-        #     ]
-        # ]
+        
         if !isnothing(docs) || !isempty(field_docs)
             [K"call"(isnothing(docs) ? ex : docs)
                 bind_docs!::K"Value"

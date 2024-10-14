@@ -50,4 +50,70 @@ end
 @test fieldtypes(test_mod.S1{Int,String}) == (Int, String, Any)
 @test supertype(test_mod.S1) == test_mod.A
 
+# Inner constructors: one field non-Any
+@test JuliaLowering.include_string(test_mod, """
+struct S2
+    x::Int
+    y
+end
+""") === nothing
+@test length(methods(test_mod.S2)) == 2
+let s = test_mod.S2(42, "hi")
+    # exact types
+    @test s.x === 42
+    @test s.y == "hi"
+end
+let s = test_mod.S2(42.0, "hi")
+    # converted types
+    @test s.x === 42
+    @test s.y == "hi"
+end
+
+# Constructors: All fields Any
+@test JuliaLowering.include_string(test_mod, """
+struct S3
+    x
+    y
+end
+""") === nothing
+@test length(methods(test_mod.S3)) == 1
+let s = test_mod.S3(42, "hi")
+    @test s.x === 42
+    @test s.y == "hi"
+end
+
+# Inner constructors: All fields Any; dynamically tested against whatever
+# S4_Field resolves to
+@test JuliaLowering.include_string(test_mod, """
+S4_Field = Any # actually Any!
+
+struct S4
+    x::S4_Field
+    y
+end
+""") === nothing
+@test length(methods(test_mod.S4)) == 1
+let s = test_mod.S4(42, "hi")
+    @test s.x === 42
+    @test s.y == "hi"
+end
+
+# Inner constructors; parameterized types
+@test JuliaLowering.include_string(test_mod, """
+struct S5{U}
+    x::U
+    y
+end
+""") === nothing
+@test length(methods(test_mod.S5)) == 0
+@test length(methods(test_mod.S5{Int})) == 1
+let s = test_mod.S5{Int}(42.0, "hi")
+    @test s.x === 42
+    @test s.y == "hi"
+end
+let s = test_mod.S5{Any}(42.0, "hi")
+    @test s.x === 42.0
+    @test s.y == "hi"
+end
+
 end

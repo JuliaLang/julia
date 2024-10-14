@@ -613,3 +613,26 @@ end
 function Base.copy(v::SyntaxList)
     SyntaxList(v.graph, copy(v.ids))
 end
+
+function Base.filter(f, exs::SyntaxList)
+    out = SyntaxList(syntax_graph(exs))
+    for ex in exs
+        if f(ex)
+            push!(out, ex)
+        end
+    end
+    out
+end
+
+# Would like the following to be an overload of Base.map() ... but need
+# somewhat arcane trickery to ensure that this only tries to collect into a
+# SyntaxList when `f` yields a SyntaxTree.
+#
+# function mapsyntax(f, exs::SyntaxList)
+#     out = SyntaxList(syntax_graph(exs))
+#     for ex in exs
+#         push!(out, f(ex))
+#     end
+#     out
+# end
+

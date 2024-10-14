@@ -213,14 +213,13 @@ function (::T)(x)
 end
 #---------------------
 1   TestMod.T
-2   TestMod.T
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+2   (call core.svec %₁ core.Any)
+3   (call core.svec)
+4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 1 =#)))))
+5   --- method core.nothing %₄
     1   slot₂/x
     2   (return %₁)
-7   (return %₁)
+6   (return %₁)
 
 ########################################
 # Callable type with instance
@@ -229,14 +228,13 @@ function (y::T)(x)
 end
 #---------------------
 1   TestMod.T
-2   TestMod.T
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+2   (call core.svec %₁ core.Any)
+3   (call core.svec)
+4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 1 =#)))))
+5   --- method core.nothing %₄
     1   (call core.tuple slot₁/y slot₂/x)
     2   (return %₁)
-7   (return %₁)
+6   (return %₁)
 
 ########################################
 # Function with module ref in name

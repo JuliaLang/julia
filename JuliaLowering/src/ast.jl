@@ -244,9 +244,11 @@ function add_lambda_local!(ctx::AbstractLoweringContext, id)
     # empty - early passes don't need to record lambda locals
 end
 
-# Create a new local mutable variable
-function new_mutable_var(ctx::AbstractLoweringContext, srcref, name; is_always_defined=false)
-    id = new_binding(ctx.bindings, BindingInfo(name, :local; is_internal=true,
+# Create a new local mutable variable or lambda argument
+# (TODO: rename this?)
+function new_mutable_var(ctx::AbstractLoweringContext, srcref, name; is_always_defined=false, kind=:local)
+    @assert kind == :local || kind == :argument
+    id = new_binding(ctx.bindings, BindingInfo(name, kind; is_internal=true,
                                                is_always_defined=is_always_defined))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
@@ -582,5 +584,24 @@ end
 
 function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
+end
+
+function new_scope_layer(ctx)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, true)
+    push!(ctx.scope_layers, new_layer)
+    new_layer.id
+end
+
+# Create new local variable names with the same names as `names`, but with a
+# new scope_layer so that they become independent variables during scope
+# resolution.
+function similar_identifiers(ctx, names)
+    scope_layer = new_scope_layer(ctx)
+    new_names = SyntaxList(ctx)
+    for name in names
+        @assert kind(name) == K"Identifier"
+        push!(new_names, makeleaf(ctx, name, name, kind=K"Identifier", scope_layer=scope_layer))
+    end
+    new_names
 end
 
