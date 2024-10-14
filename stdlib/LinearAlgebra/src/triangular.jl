@@ -208,33 +208,33 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
-_isforwardedindex(U::UpperTriangular, row::Integer, col::Integer) = row <= col
-_isforwardedindex(U::LowerTriangular, row::Integer, col::Integer) = row >= col
-_isforwardedindex(U::UnitUpperTriangular, row::Integer, col::Integer) = row < col
-_isforwardedindex(U::UnitLowerTriangular, row::Integer, col::Integer) = row > col
+_shouldforwardindex(U::UpperTriangular, row::Integer, col::Integer) = row <= col
+_shouldforwardindex(U::LowerTriangular, row::Integer, col::Integer) = row >= col
+_shouldforwardindex(U::UnitUpperTriangular, row::Integer, col::Integer) = row < col
+_shouldforwardindex(U::UnitLowerTriangular, row::Integer, col::Integer) = row > col
 
 Base.isassigned(A::UpperOrLowerTriangular, i::Int, j::Int) =
-    _isforwardedindex(A, i, j) ? isassigned(A.data, i, j) : true
+    _shouldforwardindex(A, i, j) ? isassigned(A.data, i, j) : true
 
 Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
-    _isforwardedindex(A, i, j) ? Base.isstored(A.data, i, j) : false
+    _shouldforwardindex(A, i, j) ? Base.isstored(A.data, i, j) : false
 
 @propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
-    _isforwardedindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
-    _isforwardedindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
 
-_isforwardedindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
-_isforwardedindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
-_isforwardedindex(U::UnitUpperTriangular, b::BandIndex) = b.band > 0
-_isforwardedindex(U::UnitLowerTriangular, b::BandIndex) = b.band < 0
+_shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
+_shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
+_shouldforwardindex(U::UnitUpperTriangular, b::BandIndex) = b.band > 0
+_shouldforwardindex(U::UnitLowerTriangular, b::BandIndex) = b.band < 0
 
 # these specialized getindex methods enable constant-propagation of the band
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, b::BandIndex) where {T}
-    _isforwardedindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+    _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
-    _isforwardedindex(A, b) ? A.data[b] : _zero(A.data, b)
+    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
