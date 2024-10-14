@@ -154,7 +154,7 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, true, true, :att, optimize, :default, false))
+    code_llvm(file, fun, T; raw=true, dump_module=true, optimize)
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
