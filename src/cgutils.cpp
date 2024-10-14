@@ -4521,7 +4521,6 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: too large for system address width");
 
     auto ct = get_current_task(ctx);
-    auto ptls = get_current_ptls(ctx);
     auto T_size = ctx.types().T_size;
     auto int8t = getInt8Ty(ctx.builder.getContext());
     auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
@@ -4554,6 +4553,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         Value *data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, alloc), JL_SMALL_BYTE_ALIGNMENT);
         ctx.builder.CreateStore(data, ptr_field);
     } else { // just use the dynamic length version since the malloc will be slow anyway
+		auto ptls = get_current_ptls(ctx);
         auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
         alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
         decay_alloc = maybe_decay_tracked(ctx, alloc);
