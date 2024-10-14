@@ -281,7 +281,7 @@ the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
     n == 0 && return dest
-    unsafe_copyto!(memoryref(dest.ref, doffs), memoryref(src.ref, soffs), n)
+    @inbounds unsafe_copyto!(memoryref(dest.ref, doffs), memoryref(src.ref, soffs), n)
     return dest
 end
 

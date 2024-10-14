@@ -328,6 +328,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 macro _boundscheck() Expr(:boundscheck) end
+macro _propagate_inbounds_meta() Expr(:meta, :inline, :propagate_inbounds) end
 
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
@@ -590,8 +591,8 @@ memoryref(mem::GenericMemory) = memoryrefnew(mem)
 memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
-GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = (@_propagate_inbounds_meta; memoryref(mem, i))
+GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = (@_propagate_inbounds_meta; memoryref(mem, i))
 
 const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
 const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
