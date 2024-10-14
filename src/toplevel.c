@@ -213,6 +213,10 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         form = NULL;
     }
 
+    newm->file = jl_symbol(filename);
+    jl_gc_wb_knownold(newm, newm->file);
+    newm->line = lineno;
+
     for (int i = 0; i < jl_array_nrows(exprs); i++) {
         // process toplevel form
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);

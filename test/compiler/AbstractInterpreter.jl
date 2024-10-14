@@ -409,15 +409,19 @@ end
 CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
 CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
+CC.add_uncovered_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo, @nospecialize(atype)) = CC.add_uncovered_edges!(edges, info.info, atype)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
     arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
-    if sv.mod in noinline_modules(interp)
-        return CC.CallMeta(ret.rt, ret.exct, ret.effects, NoinlineCallInfo(ret.info))
+    return CC.Future{CC.CallMeta}(ret, interp, sv) do ret, interp, sv
+        if sv.mod in noinline_modules(interp)
+            (;rt, exct, effects, info) = ret
+            return CC.CallMeta(rt, exct, effects, NoinlineCallInfo(info))
+        end
+        return ret
     end
-    return ret
 end
 function CC.src_inlining_policy(interp::NoinlineInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
@@ -431,6 +435,8 @@ end
 @inline function inlined_usually(x, y, z)
     return x * y + z
 end
+foo_split(x::Float64) = 1
+foo_split(x::Int) = 2
 
 # check if the inlining algorithm works as expected
 let src = code_typed1((Float64,Float64,Float64)) do x, y, z
@@ -444,6 +450,7 @@ let NoinlineModule = Module()
     main_func(x, y, z) = inlined_usually(x, y, z)
     @eval NoinlineModule noinline_func(x, y, z) = $inlined_usually(x, y, z)
     @eval OtherModule other_func(x, y, z) = $inlined_usually(x, y, z)
+    @eval NoinlineModule bar_split_error() = $foo_split(Core.compilerbarrier(:type, nothing))
 
     interp = NoinlineInterpreter(Set((NoinlineModule,)))
 
@@ -473,12 +480,12 @@ let NoinlineModule = Module()
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
-end
 
-# Make sure that Core.Compiler has enough NamedTuple infrastructure
-# to properly give error messages for basic kwargs...
-Core.eval(Core.Compiler, quote f(;a=1) = a end)
-@test_throws MethodError Core.Compiler.f(;b=2)
+    let src = code_typed1(NoinlineModule.bar_split_error)
+        @test count(iscall((src, foo_split)), src.code) == 0
+        @test count(iscall((src, Core.throw_methoderror)), src.code) > 0
+    end
+end
 
 # custom inferred data
 # ====================

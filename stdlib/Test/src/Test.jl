@@ -2087,7 +2087,7 @@ function detect_ambiguities(mods::Module...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -2158,7 +2158,7 @@ function detect_unbound_args(mods...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds

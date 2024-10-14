@@ -464,6 +464,30 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
     scheduler_delete_thread(ptls);
+    // need to clear pgcstack and eh, but we can clear everything now too
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_task_frame_noreturn(ct);
+    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
+        // the system will probably free this stack memory soon
+        // so prevent any other thread from accessing it later
+        if (ct != ptls->root_task)
+            jl_task_frame_noreturn(ptls->root_task);
+    }
+    else {
+        // Uh oh. The user cleared the sticky bit so it started running
+        // elsewhere, then called pthread_exit on this thread from another
+        // Task, which will free the stack memory of that root task soon. This
+        // is not recoverable. Though we could just hang here, a fatal message
+        // is likely better.
+        jl_safe_printf("fatal: thread exited from wrong Task.\n");
+        abort();
+    }
+    ptls->previous_exception = NULL;
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    jl_free_thread_gc_state(ptls);
+    // park in safe-region from here on (this may run GC again)
+    (void)jl_gc_safe_enter(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -502,21 +526,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
-    // need to clear pgcstack and eh, but we can clear everything now too
-    jl_task_frame_noreturn(jl_atomic_load_relaxed(&ptls->current_task));
-    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
-        // the system will probably free this stack memory soon
-        // so prevent any other thread from accessing it later
-        jl_task_frame_noreturn(ptls->root_task);
-    }
-    else {
-        // Uh oh. The user cleared the sticky bit so it started running
-        // elsewhere, then called pthread_exit on this thread. This is not
-        // recoverable. Though we could just hang here, a fatal message is better.
-        jl_safe_printf("fatal: thread exited from wrong Task.\n");
-        abort();
-    }
-    jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
+    jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();
@@ -529,12 +539,6 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #endif
     free(ptls->bt_data);
     small_arraylist_free(&ptls->locks);
-    ptls->previous_exception = NULL;
-    // allow the page root_task is on to be freed
-    ptls->root_task = NULL;
-    jl_free_thread_gc_state(ptls);
-    // then park in safe-region
-    (void)jl_gc_safe_enter(ptls);
 }
 
 //// debugging hack: if we are exiting too fast for error message printing on threads,

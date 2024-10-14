@@ -2768,3 +2768,8 @@ let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
     topmi.def = Main
     @test contains(repr(topmi), "Toplevel MethodInstance")
 end
+
+@testset "show(<do-block expr>) no trailing whitespace" begin
+    do_expr1 = :(foo() do; bar(); end)
+    @test !contains(sprint(show, do_expr1), " \n")
+end

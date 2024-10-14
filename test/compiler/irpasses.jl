@@ -576,7 +576,6 @@ let # lifting `isa` through Core.ifelse
     @test count(iscall((src, isa)), src.code) == 0
 end
 
-
 let # lifting `isdefined` through PhiNode
     src = code_typed1((Bool,Some{Int},)) do c, x
         y = c ? x : nothing
@@ -1035,8 +1034,7 @@ exc39508 = ErrorException("expected")
 end
 @test test39508() === exc39508
 
-let
-    # `typeassert` elimination after SROA
+let # `typeassert` elimination after SROA
     # NOTE we can remove this optimization once inference is able to reason about memory-effects
     src = @eval Module() begin
         mutable struct Foo; x; end
@@ -1051,8 +1049,7 @@ let
     @test count(iscall((src, typeassert)), src.code) == 0
 end
 
-let
-    # Test for https://github.com/JuliaLang/julia/issues/43402
+let # Test for https://github.com/JuliaLang/julia/issues/43402
     # Ensure that structs required not used outside of the ccall,
     # still get listed in the ccall_preserves
 

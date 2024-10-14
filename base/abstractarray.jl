@@ -1101,11 +1101,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
-                ret = iterate(iterdest, state)
+            for (Idest, Isrc) in zip(iterdest, itersrc)
+                @inbounds dest[Idest] = src[Isrc]
             end
         end
     end

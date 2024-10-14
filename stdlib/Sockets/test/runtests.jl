@@ -453,6 +453,8 @@ end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            elseif Sys.isapple() && isa(e, Base.IOError) && Base.uverrorname(e.code) == "EHOSTUNREACH"
+                @warn "UDP IPv4 broadcast test skipped (local network access not granted?)"
             else
                 rethrow()
             end

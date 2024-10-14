@@ -695,8 +695,15 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<i
     return Number;
 }
 
-void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses) {
+void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F) {
     // Short circuit to avoid having to deal with vectors of constants, etc.
+//#ifndef NDEBUG
+//    if (isa<PointerType>(V->getType())) {
+//        if (isSpecialPtr(V->getType()))
+//            if (isa<UndefValue>(V) && !isa<PoisonValue>(V))
+//                F.dump();
+//    }
+//#endif
     if (isa<Constant>(V))
         return;
     if (isa<PointerType>(V->getType())) {
@@ -718,9 +725,9 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
     }
 }
 
-void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, User &UI) {
+void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, Instruction &UI) {
     for (Use &U : UI.operands()) {
-        NoteUse(S, BBS, U);
+        NoteUse(S, BBS, U, *UI.getFunction());
     }
 }
 
@@ -1377,7 +1384,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     unsigned nIncoming = Phi->getNumIncomingValues();
                     for (unsigned i = 0; i < nIncoming; ++i) {
                         BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
-                        NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
+                        NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts, F);
                     }
                 } else if (tracked.count) {
                     // We need to insert extra phis for the GC roots
@@ -1403,7 +1410,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
                 if (AI->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked) {
-                    S.Allocas.push_back(AI);
+                    S.ArrayAllocas[AI] = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
                 }
             }
         }
@@ -1494,18 +1501,17 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
     return Ptrs;
 }
 
-unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
-    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
-    for (unsigned i = 0; i < Ptrs.size(); ++i) {
-        Value *Elem = Ptrs[i];
-        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
-        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
-        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
-        // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    }
-    return Ptrs.size();
-}
-
+//static unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
+//    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
+//    for (unsigned i = 0; i < Ptrs.size(); ++i) {
+//        Value *Elem = Ptrs[i];
+//        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
+//        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
+//        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
+//        // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+//    }
+//    return Ptrs.size();
+//}
 
 // turn a memcpy into a set of loads
 void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
@@ -2321,7 +2327,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             MaxColor = C;
 
     // Insert instructions for the actual gc frame
-    if (MaxColor != -1 || !S.Allocas.empty() || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
+    if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::newGCFrame),
@@ -2333,6 +2339,43 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
         pushGcframe->insertAfter(pgcstack);
+
+        // we don't run memsetopt after this, so run a basic approximation of it
+        // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
+        Instruction *toerase = nullptr;
+        for (auto &I : F->getEntryBlock()) {
+            if (toerase)
+                toerase->eraseFromParent();
+            toerase = nullptr;
+            Value *ptr;
+            Value *value;
+            bool isvolatile;
+            if (auto *SI = dyn_cast<StoreInst>(&I)) {
+                ptr = SI->getPointerOperand();
+                value = SI->getValueOperand();
+                isvolatile = SI->isVolatile();
+            }
+            else if (auto *MSI = dyn_cast<MemSetInst>(&I)) {
+                ptr = MSI->getDest();
+                value = MSI->getValue();
+                isvolatile = MSI->isVolatile();
+            }
+            else {
+                continue;
+            }
+            ptr = ptr->stripInBoundsOffsets();
+            AllocaInst *AI = dyn_cast<AllocaInst>(ptr);
+            if (isa<GetElementPtrInst>(ptr))
+                break;
+            if (!S.ArrayAllocas.count(AI))
+                continue;
+            if (isvolatile || !isa<Constant>(value) || !cast<Constant>(value)->isNullValue())
+                break; // stop once we reach a pointer operation that couldn't be analyzed or isn't a null store
+            toerase = &I;
+        }
+        if (toerase)
+            toerase->eraseFromParent();
+        toerase = nullptr;
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2367,11 +2410,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             AI->eraseFromParent();
             AI = NULL;
         };
-        for (AllocaInst *AI : S.Allocas) {
-            auto ns = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-            replace_alloca(AI);
-            AllocaSlot += ns;
-        }
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
             AllocaSlot += AI.second;
