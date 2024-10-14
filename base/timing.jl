@@ -633,12 +633,12 @@ macro timed(ex)
                 Threads.lock_profiling(false))
             )
             local diff = GC_Diff(gc_num(), stats)
-            local sched_times = Int[]
-            for i in 1:Threads.maxthreadid()
+            local sched_times = Int64[]
+            for i in 1:length(task_times_per_thread[])
                 # filter out zeros in task timers which can only happen if nothing was scheduled
                 if task_times_per_thread[][i] != 0
                     # subtract task and sleep times from global elapsed time to get scheduling time per thread
-                    push!(sched_times, Int(elapsedtime) - Int(task_times_per_thread[][i]) - Int(sleep_times_per_thread[][i]))
+                    push!(sched_times, Int64(elapsedtime) - Int64(task_times_per_thread[][i]) - Int64(sleep_times_per_thread[][i]))
                 end
             end
             local sched_time_avg = isempty(sched_times) ? 0 : sum(sched_times) / length(sched_times)
