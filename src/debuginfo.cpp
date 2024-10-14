@@ -296,7 +296,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
     uint8_t *catchjmp = NULL;
     for (const object::SymbolRef &sym_iter : Object.symbols()) {
         StringRef sName = cantFail(sym_iter.getName());
-        if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
+        if (sName == "__UnwindData" || sName == "__catchjmp") {
             uint64_t Addr = cantFail(sym_iter.getAddress()); // offset into object (including section offset)
             auto Section = cantFail(sym_iter.getSection());
             assert(Section != EndSection && Section->isText());
@@ -310,10 +310,10 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             SectionAddrCheck = SectionAddr;
             SectionLoadCheck = SectionLoadAddr;
             Addr += SectionLoadAddr - SectionAddr;
-            if (sName.equals("__UnwindData")) {
+            if (sName == "__UnwindData") {
                 UnwindData = (uint8_t*)Addr;
             }
-            else if (sName.equals("__catchjmp")) {
+            else if (sName == "__catchjmp") {
                 catchjmp = (uint8_t*)Addr;
             }
         }

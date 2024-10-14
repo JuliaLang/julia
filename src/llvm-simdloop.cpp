@@ -178,9 +178,9 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         if (S) {
             LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
             if (S->getString().starts_with("julia")) {
-                if (S->getString().equals("julia.simdloop"))
+                if (S->getString() == "julia.simdloop")
                     simd = true;
-                if (S->getString().equals("julia.ivdep"))
+                if (S->getString() == "julia.ivdep")
                     ivdep = true;
                 continue;
             }

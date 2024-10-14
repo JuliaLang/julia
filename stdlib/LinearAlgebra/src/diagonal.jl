@@ -773,18 +773,15 @@ permutedims(D::Diagonal, perm) = (Base.checkdims_perm(axes(D), axes(D), perm); D
 function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
+    v = similar(D.diag, max(0, length(D.diag)-abs(k)))
     if k == 0
-        return copyto!(similar(D.diag, length(D.diag)), D.diag)
-    elseif -size(D,1) <= k <= size(D,1)
-        v = similar(D.diag, size(D,1)-abs(k))
+        copyto!(v, D.diag)
+    else
         for i in eachindex(v)
             v[i] = D[BandIndex(k, i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $k, must be at least $(-size(D, 1)) ",
-            lazy"and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
     end
+    return v
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)
