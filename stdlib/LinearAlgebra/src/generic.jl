@@ -420,9 +420,13 @@ julia> triu(a,-3)
 function triu(M::AbstractMatrix, k::Integer = 0)
     d = similar(M)
     A = triu!(d,k)
-    for col in axes(A,2)
-        rows = firstindex(A,1):min(col-k, lastindex(A,1))
-        A[rows, col] = @view M[rows, col]
+    if iszero(k)
+        copytrito!(A, M, 'U')
+    else
+        for col in axes(A,2)
+            rows = firstindex(A,1):min(col-k, lastindex(A,1))
+            A[rows, col] = @view M[rows, col]
+        end
     end
     return A
 end
@@ -459,9 +463,13 @@ julia> tril(a,-3)
 function tril(M::AbstractMatrix,k::Integer=0)
     d = similar(M)
     A = tril!(d,k)
-    for col in axes(A,2)
-        rows = max(firstindex(A,1),col-k):lastindex(A,1)
-        A[rows, col] = @view M[rows, col]
+    if iszero(k)
+        copytrito!(A, M, 'L')
+    else
+        for col in axes(A,2)
+            rows = max(firstindex(A,1),col-k):lastindex(A,1)
+            A[rows, col] = @view M[rows, col]
+        end
     end
     return A
 end
