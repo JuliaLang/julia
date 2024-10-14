@@ -33,7 +33,9 @@ Bidiagonal(A::SymTridiagonal{<:Number}) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 function Bidiagonal(A::SymTridiagonal)
-    iszero(A.ev) ? Bidiagonal(diag(A), diag(A,1), :U) :
+    dv = view(A, diagind(A, IndexStyle(A)))
+    ev = view(A, diagind(A, 1, IndexStyle(A)))
+    iszero(A.ev) ? Bidiagonal(dv, ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 end
 Tridiagonal(A::SymTridiagonal{<:Number}) =
