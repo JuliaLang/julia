@@ -103,6 +103,7 @@
 // for outputting assembly
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/AsmPrinterHandler.h>
+#include <llvm/CodeGen/DebugHandlerBase.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/Passes.h>
 #include <llvm/CodeGen/TargetPassConfig.h>
@@ -920,11 +921,17 @@ static void jl_dump_asm_internal(
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     std::unique_ptr<MCStreamer> Streamer(
-            TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                         /*useDwarfDirectory*/ true,
-                                         IP.release(),
-                                         std::move(CE), std::move(MAB),
-                                         /*ShowInst*/ false));
+#if JL_LLVM_VERSION >= 190000
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream),
+
+                                     IP.release(), std::move(CE), std::move(MAB))
+#else
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/ true,
+                                     /*useDwarfDirectory*/ true, IP.release(),
+                                     std::move(CE), std::move(MAB),
+                                     /*ShowInst*/ false)
+#endif
+    );
     Streamer->initSections(true, *STI);
 
     // Make the MemoryObject wrapper
@@ -1148,7 +1155,11 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     return &MMIWP->getMMI().getContext();
 }
 
+#if JL_LLVM_VERSION >= 190000
+class LineNumberPrinterHandler : public DebugHandlerBase {
+#else
 class LineNumberPrinterHandler : public AsmPrinterHandler {
+#endif
     MCStreamer &S;
     LineNumberAnnotatedWriter LinePrinter;
     std::string Buffer;
@@ -1157,7 +1168,11 @@ class LineNumberPrinterHandler : public AsmPrinterHandler {
 
 public:
     LineNumberPrinterHandler(AsmPrinter &Printer, const char *debuginfo)
-        : S(*Printer.OutStreamer),
+        :
+#if JL_LLVM_VERSION >= 190000
+          DebugHandlerBase(&Printer),
+#endif
+          S(*Printer.OutStreamer),
           LinePrinter("; ", true, debuginfo),
           RawStream(Buffer),
           Stream(RawStream) {}
@@ -1176,12 +1191,20 @@ public:
     //virtual void beginModule(Module *M) override {}
     virtual void endModule() override {}
     /// note that some AsmPrinter implementations may not call beginFunction at all
+#if JL_LLVM_VERSION >= 190000
+    virtual void beginFunctionImpl(const MachineFunction *MF) override {
+#else
     virtual void beginFunction(const MachineFunction *MF) override {
+#endif
         LinePrinter.emitFunctionAnnot(&MF->getFunction(), Stream);
         emitAndReset();
     }
     //virtual void markFunctionEnd() override {}
+#if JL_LLVM_VERSION >= 190000
+    virtual void endFunctionImpl(const MachineFunction *MF) override {
+#else
     virtual void endFunction(const MachineFunction *MF) override {
+#endif
         LinePrinter.emitEnd(Stream);
         emitAndReset();
     }
@@ -1257,15 +1280,23 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-                *Context, std::move(FOut), true,
-                true, InstPrinter,
-                std::move(MCE), std::move(MAB),
-                false));
+#if JL_LLVM_VERSION >= 190000
+                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)
+#else
+                *Context, std::move(FOut), true, true, InstPrinter, std::move(MCE),
+                std::move(MAB), false
+#endif
+                    ));
             std::unique_ptr<AsmPrinter> Printer(
                 TM->getTarget().createAsmPrinter(*TM, std::move(S)));
+#if JL_LLVM_VERSION >= 190000
+            Printer->addDebugHandler(
+                        std::make_unique<LineNumberPrinterHandler>(*Printer, debuginfo));
+#else
             Printer->addAsmPrinterHandler(AsmPrinter::HandlerInfo(
                         std::unique_ptr<AsmPrinterHandler>(new LineNumberPrinterHandler(*Printer, debuginfo)),
                         "emit", "Debug Info Emission", "Julia", "Julia::LineNumberPrinterHandler Markup"));
+#endif
             if (!Printer)
                 return jl_an_empty_string;
             PM.add(Printer.release());

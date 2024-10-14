@@ -337,7 +337,8 @@ macro _noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
 macro _notaskstate_meta()

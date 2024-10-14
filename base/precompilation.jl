@@ -43,7 +43,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
     # Collect all direct dependencies of the project
     for key in ["deps", "weakdeps", "extras"]
-        for (name, _uuid) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
+        for (name, _uuid::String) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
             v = key == "deps" ? project_deps :
                 key == "weakdeps" ? project_weakdeps :
                 key == "extras" ? project_extras :
@@ -107,9 +107,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
     sizehint!(name_to_uuid, length(manifest_d))
     sizehint!(lookup_strategy, length(manifest_d))
 
-    for (name, pkg_infos) in get_deps(manifest_d)
-        pkg_infos = pkg_infos::Vector{Any}
-        for pkg_info in pkg_infos
+    for (name, pkg_infos::Vector{Any}) in get_deps(manifest_d)
+        for pkg_info::Dict{String, Any} in pkg_infos
             m_uuid = UUID(pkg_info["uuid"]::String)
 
             # If we have multiple packages with the same name we will overwrite things here
@@ -141,8 +140,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
-            for (ext, triggers) in deps_pkg
-                triggers = triggers::Union{String, Vector{String}}
+            for (ext, triggers::Union{String, Vector{String}}) in deps_pkg
                 if triggers isa String
                     triggers = [triggers]
                 end
@@ -176,7 +174,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
     if proj_name !== nothing && proj_uuid !== nothing
         deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
         extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
         entry_point = path !== nothing ? path : dirname(envpath)
         lookup_strategy[proj_uuid] = entry_point
     end
@@ -299,7 +297,8 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     end
     termwidth = @something termwidth displaysize(io)[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
-    n_filled = ceil(Int, max_progress_width * perc / 100)
+    n_filled = floor(Int, max_progress_width * perc / 100)
+    partial_filled = (max_progress_width * perc / 100) - n_filled
     n_left = max_progress_width - n_filled
     headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
@@ -308,8 +307,15 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
         printstyled(io, join(headers[2:end], ' '))
         print(io, " ")
         printstyled(io, "━"^n_filled; color=p.color)
-        printstyled(io, perc >= 95 ? "━" : "╸"; color=p.color)
-        printstyled(io, "━"^n_left, " "; color=:light_black)
+        if n_left > 0
+            if partial_filled > 0.5
+                printstyled(io, "╸"; color=p.color) # More filled, use ╸
+            else
+                printstyled(io, "╺"; color=:light_black) # Less filled, use ╺
+            end
+            printstyled(io, "━"^(n_left-1); color=:light_black)
+        end
+        printstyled(io, " "; color=:light_black)
         print(io, progress_text)
         carriagereturn && print(io, "\r")
     end
