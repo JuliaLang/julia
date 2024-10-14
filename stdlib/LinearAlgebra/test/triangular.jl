@@ -1322,4 +1322,26 @@ end
     end
 end
 
+@testset "addition/subtraction of mixed triangular" begin
+    for A in (Hermitian(rand(4, 4)), Diagonal(ones(4)))
+        for T in (UpperTriangular, LowerTriangular)
+            B = T(A)
+            M = Matrix(B)
+            R = B - B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M - M'
+            R = B + B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
+    end
+end
+
 end # module TestTriangular
