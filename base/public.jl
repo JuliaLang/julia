@@ -110,4 +110,5 @@ public
     notnothing,
     runtests,
     text_colors,
-    depwarn
+    depwarn,
+    donotdelete
