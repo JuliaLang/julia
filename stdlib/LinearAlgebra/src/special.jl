@@ -29,15 +29,15 @@ Diagonal(A::SymTridiagonal) = Diagonal(_diagview(A))
 
 # These can fail when ev has the same length as dv
 # TODO: Revisit when a good solution for #42477 is found
-function Bidiagonal(A::SymTridiagonal{<:Number})
+Bidiagonal(A::SymTridiagonal{<:Number}) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-end
 function Bidiagonal(A::SymTridiagonal)
     iszero(A.ev) ? Bidiagonal(diag(A), diag(A,1), :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 end
-Tridiagonal(A::SymTridiagonal{<:Number}) = Tridiagonal(A.ev, A.dv, A.ev)
+Tridiagonal(A::SymTridiagonal{<:Number}) =
+    Tridiagonal(A.ev, A.dv, A.ev)
 
 # conversions from Tridiagonal to other special matrix types
 Diagonal(A::Tridiagonal) = Diagonal(A.d)
