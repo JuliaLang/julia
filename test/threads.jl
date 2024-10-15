@@ -398,11 +398,9 @@ end
 
         """
         proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`), wait=false)
-        sleep(10) # Is there a better way to do this?
-        if process_running(proc)
-            kill(proc)
-            throw(ErrorException("Process did not exit in time"))
-        end
+        t = Timer(60) do t; kill(proc); end;
+        @test success(proc)
+        close(t)
         return true
     end
     @test io_thread_test()
