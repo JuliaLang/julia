@@ -87,16 +87,16 @@ macro stable_muladdmul(expr)
             local bsym = e.args[3]
 
             local e_sub11 = copy(expr)
-            e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub11.args[i] = :(MulAddMul{true, true}($asym, $bsym))
 
             local e_sub10 = copy(expr)
-            e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub10.args[i] = :(MulAddMul{true, false}($asym, $bsym))
 
             local e_sub01 = copy(expr)
-            e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub01.args[i] = :(MulAddMul{false, true}($asym, $bsym))
 
             local e_sub00 = copy(expr)
-            e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub00.args[i] = :(MulAddMul{false, false}($asym, $bsym))
 
             local e_out = quote
                 if isone($asym)
