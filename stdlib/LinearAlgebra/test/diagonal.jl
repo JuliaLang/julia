@@ -1323,4 +1323,14 @@ end
     @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
 end
 
+@testset "zeros in kron with block matrices" begin
+    D = Diagonal(1:2)
+    B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
+    @test kron(D, B) == kron(Array(D), B)
+    @test kron(B, D) == kron(B, Array(D))
+    D2 = Diagonal([ones(2,2), ones(3,3)])
+    @test kron(D, D2) == Diagonal([diag(D2); 2diag(D2)])
+    @test kron(D2, D) == Diagonal([ones(2,2), fill(2.0,2,2), ones(3,3), fill(2.0,3,3)])
+end
+
 end # module TestDiagonal
