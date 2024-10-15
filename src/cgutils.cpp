@@ -4401,7 +4401,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     ctx.builder.SetInsertPoint(promotion_point);
                 if (strct) {
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-                    ai.decorateInst(ctx.builder.CreateMemSet(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
+                    promotion_point = ai.decorateInst(ctx.builder.CreateMemSet(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                                                                 jl_datatype_size(ty), MaybeAlign(jl_datatype_align(ty))));
                 }
                 ctx.builder.restoreIP(savedIP);
