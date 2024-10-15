@@ -1322,10 +1322,17 @@ end
     end
 end
 
-@testset "indexing for a block matrix" begin
-    M = reshape([zeros(2,2), zeros(4,2), zeros(2,3), zeros(4,3)],2,2)
-    U = UpperTriangular(M)
-    @test [size(x) for x in U] == [size(x) for x in M]
+@testset "indexing uses diagzero" begin
+    @testset "block matrix" begin
+        M = reshape([zeros(2,2), zeros(4,2), zeros(2,3), zeros(4,3)],2,2)
+        U = UpperTriangular(M)
+        @test [size(x) for x in U] == [size(x) for x in M]
+    end
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,4,4)
+        U = UpperTriangular(M)
+        @test iszero(U[3,1])
+    end
 end
 
 end # module TestTriangular
