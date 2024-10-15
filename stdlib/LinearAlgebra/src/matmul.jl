@@ -919,7 +919,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 
 @noinline function _generic_matmatmul!(C::AbstractVecOrMat{R}, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
-                             _add::MulAddMul) where {T,S,R}
+                             _add::MulAddMul{ais1}) where {T,S,R,ais1}
     AxM = axes(A, 1)
     AxK = axes(A, 2) # we use two `axes` calls in case of `AbstractVector`
     BxK = axes(B, 1)
@@ -935,11 +935,13 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
     if BxN != CxN
         throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
+    _rmul_alpha = MulAddMul{ais1,true,typeof(_add.alpha),Bool}(_add.alpha,false)
     if isbitstype(R) && sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
         _rmul_or_fill!(C, _add.beta)
         (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
         @inbounds for n in BxN, k in BxK
-            Balpha = B[k,n]*_add.alpha
+            # Balpha = B[k,n] * alpha, but we skip the multiplication in case isone(alpha)
+            Balpha = _rmul_alpha(B[k,n])
             @simd for m in AxM
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
