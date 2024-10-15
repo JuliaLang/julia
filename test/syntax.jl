@@ -3865,6 +3865,29 @@ end
     end
 end
 
+let src = Meta.@lower let
+    try
+        try
+            return 1
+        catch
+        end
+    finally
+        nothing
+    end
+end
+    code = src.args[1].code
+    for stmt in code
+        if Meta.isexpr(stmt, :leave) && length(stmt.args) > 1
+            # Expr(:leave, ...) should list the arguments to pop from
+            # inner-most scope to outer-most
+            @test issorted(Int[
+                (arg::Core.SSAValue).id
+                for arg in stmt.args
+            ]; rev=true)
+        end
+    end
+end
+
 # Test that globals can be `using`'d even if they are not yet defined
 module UndefGlobal54954
     global theglobal54954::Int
