@@ -186,12 +186,12 @@ end
     r
 end
 """
-    diagzero(A::AbstractMatrix, i::Int, j::Int)
+    diagzero(A::AbstractMatrix, i, j)
 
 Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
 """
-diagzero(A::AbstractMatrix, i::Int, j::Int) = zero(eltype(A))
-diagzero(A::AbstractMatrix{M}, i::Int, j::Int) where {M<:AbstractMatrix} =
+diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
+diagzero(A::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
     zeroslike(M, axes(A[i,i], 1), axes(A[j,j], 2))
 diagzero(A::AbstractMatrix, inds...) = diagzero(A, to_indices(A, inds)...)
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
