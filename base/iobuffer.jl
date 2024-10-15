@@ -194,11 +194,30 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     adv = min(avail, nb)
-    GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
+    unsafe_read!(p, from.data, from.ptr, adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
     end
+    nothing
+end
+
+function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
+    for i in 1:nbytes
+        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
+    end
+end
+
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
+
+function unsafe_read!(dest::Ptr{UInt8}, src::DenseBytes, so::Integer, nbytes::UInt)
+    GC.@preserve src unsafe_copyto!(dest, pointer(src, so), nbytes)
     nothing
 end
 
