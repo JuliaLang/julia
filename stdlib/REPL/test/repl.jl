@@ -1698,6 +1698,35 @@ finally
     empty!(Base.Experimental._hint_handlers)
 end
 
+try # test the functionality of `UndefVarError_hint` against import clashes
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    @eval module X
+
+    module A
+    export x
+    x = 1
+    end # A
+
+    module B
+    export x
+    x = 2
+    end # B
+
+    using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1781,9 +1810,18 @@ end
 
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
-    withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
+    withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
         prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
         @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    # Issue 55850
+    tmp_55850 = mktempdir()
+    tmp_sym_link = joinpath(tmp_55850, "sym")
+    symlink(tmp_55850, tmp_sym_link; dir_target=true)
+    withenv("JULIA_DEPOT_PATH" => tmp_sym_link * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.projname(REPL.find_project_file()))"`)
+        @test prompt == "@v$(VERSION.major).$(VERSION.minor)"
     end
 
     get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)

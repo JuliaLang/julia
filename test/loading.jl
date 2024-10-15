@@ -855,22 +855,6 @@ end
     end
 end
 
-@testset "error message loading pkg bad module name" begin
-    mktempdir() do tmp
-        old_loadpath = copy(LOAD_PATH)
-        try
-            push!(LOAD_PATH, tmp)
-            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
-                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                    check for typos in package module name") (@eval using BadCase)
-            end
-        finally
-            copy!(LOAD_PATH, old_loadpath)
-        end
-    end
-end
-
 @testset "Preferences loading" begin
     mktempdir() do dir
         this_uuid = uuid4()
@@ -1070,6 +1054,9 @@ end
                 using ExtDep2
                 $ew using ExtDep2
                 $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+                using ExtDep3
+                $ew using ExtDep3
+                $ew HasExtensions.ext_dep_loaded || error("ext_dep_loaded not set")
             end
             """
             return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
@@ -1118,6 +1105,8 @@ end
             test_ext(HasExtensions, :Extension)
             using ExtDep2
             test_ext(HasExtensions, :ExtensionFolder)
+            using ExtDep3
+            test_ext(HasExtensions, :ExtensionDep)
         end
         """
         for compile in (`--compiled-modules=no`, ``)
@@ -1156,6 +1145,19 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+
+        # Extension with cycles in dependencies
+        code = """
+        using CyclicExtensions
+        Base.get_extension(CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+        Base.get_extension(CyclicExtensions, :ExtB) isa Module || error("expected extension to load")
+        CyclicExtensions.greet()
+        """
+        proj = joinpath(@__DIR__, "project", "Extensions", "CyclicExtensions")
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+        @test occursin("Hello Cycles!", String(read(cmd)))
+
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1262,96 +1264,6 @@ end
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
-end
-
-@testset "checking srcpath modules" begin
-    p = Base.PkgId("Dummy")
-    fpath, _ = mktemp()
-    @testset "valid" begin
-        write(fpath, """
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        baremodule Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        using Foo
-        \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\" Foo \"\"\"
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        \"\"\"
-        Foo
-        \"\"\" module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        @doc let x = 1
-            x
-        end module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        # using foo
-        module Foo
-        using Bar
-        end
-        """)
-        @test Base.check_src_module_wrap(p, fpath)
-    end
-    @testset "invalid" begin
-        write(fpath, """
-        # module Foo
-        using Bar
-        # end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        module Foo
-        end
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        using Bar
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-
-        write(fpath, """
-        x = 1
-        """)
-        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
-    end
 end
 
 @testset "relocatable upgrades #51989" begin

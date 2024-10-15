@@ -336,11 +336,6 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                     // the owner will still be NULL, so it can be later imported or defined
                     tempb = jl_get_module_binding(m, var, 1);
                     tempb->usingfailed = 1;
-                    jl_printf(JL_STDERR,
-                              "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
-                              jl_symbol_name(owner->name),
-                              jl_symbol_name(imp->name), jl_symbol_name(var),
-                              jl_symbol_name(m->name));
                 }
                 return NULL;
             }
