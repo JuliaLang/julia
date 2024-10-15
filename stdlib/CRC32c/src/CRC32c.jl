@@ -7,7 +7,7 @@ See [`CRC32c.crc32c`](@ref) for more information.
 """
 module CRC32c
 
-import Base: DenseArrayType
+import Base: DenseBytes
 
 export crc32c
 
@@ -35,8 +35,22 @@ but note that the result may be endian-dependent.
 """
 function crc32c end
 
+function crc32c(a::AbstractVector{UInt8}, crc::UInt32=0x00000000)
+    # use block size 24576=8192*3, since that is the threshold for
+    # 3-way parallel SIMD code in the underlying jl_crc32c C function.
+    last = lastindex(a)
+    nb = length(a)
+    buf = Memory{UInt8}(undef, Int(min(nb, 24576)))
+    while nb > 0
+        n = min(nb, 24576)
+        copyto!(buf, 1, a, last - nb + 1, n)
+        crc = Base.unsafe_crc32c(buf, n % Csize_t, crc)
+        nb -= n
+    end
+    return crc
+end
 
-function crc32c(a::Union{DenseArrayType{UInt8}, AbstractVector{UInt8}}, crc::UInt32=0x00000000)
+function crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     Base._crc32c(a, crc)
 end
 
