@@ -2041,7 +2041,7 @@ function _find_params_log_quasitriu!(A)
 
     # Find s0, the smallest s such that the ρ(triu(A)^(1/2^s) - I) ≤ theta[tmax], where ρ(X)
     # is the spectral radius of X
-    d = complex.(@view(A[diagind(A)]))
+    d = complex.(diagview(A))
     dm1 = d .- 1
     s = 0
     while norm(dm1, Inf) > theta[tmax] && s < maxsqrt

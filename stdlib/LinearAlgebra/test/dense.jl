@@ -1024,6 +1024,15 @@ end
     @test diag(zeros(0,1),2) == []
 end
 
+@testset "diagview" begin
+    for sz in ((3,3), (3,5), (5,3))
+        A = rand(sz...)
+        for k in -5:5
+            @test diagview(A,k) == diag(A,k)
+        end
+    end
+end
+
 @testset "issue #39857" begin
     @test lyap(1.0+2.0im, 3.0+4.0im) == -1.5 - 2.0im
 end
