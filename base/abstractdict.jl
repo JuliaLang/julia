@@ -392,6 +392,10 @@ Dict{String, Float64} with 3 entries:
 
 julia> ans == mergewith(+)(a, b)
 true
+
+julia> mergewith(-, Dict(), Dict(:a=>1))  # Combining function only used if key is present in both
+Dict{Any, Any} with 1 entry:
+  :a => 1
 ```
 """
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =

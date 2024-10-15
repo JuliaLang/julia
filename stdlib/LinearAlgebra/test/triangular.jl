@@ -6,7 +6,7 @@ debug = false
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
-    mul!, rdiv!, rmul!, lmul!
+    mul!, rdiv!, rmul!, lmul!, BandIndex
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -1048,6 +1048,9 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            if MT == LowerTriangular
+                @test isa(kron(L,L), MT)
+            end
             @test kron(L,L) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
@@ -1070,6 +1073,9 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            if MT == UpperTriangular
+                @test isa(kron(U,U), MT)
+            end
             @test kron(U,U) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
@@ -1081,7 +1087,17 @@ end
     for T in (UpperTriangular, LowerTriangular)
         t = T(fill(ones(2,2), 2, 2))
         m = Matrix(t)
+        @test isa(kron(t,t), T)
         @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
+@testset "kron with triangular matrices of mixed eltypes" begin
+    for T in (UpperTriangular, LowerTriangular)
+        U = T(Matrix{Union{Missing,Int}}(fill(2, 2, 2)))
+        U[1, 1] = missing
+        @test kron(U, U)[2, 3] == 0
+        @test kron(U, U)[3, 2] == 0
     end
 end
 
@@ -1267,6 +1283,42 @@ end
             @test istriu(U, k) == istriu(A, k)
             @test istril(U, k) == istril(A, k)
         end
+    end
+end
+
+@testset "indexing with a BandIndex" begin
+    # these tests should succeed even if the linear index along
+    # the band isn't a constant, or type-inferred at all
+    M = rand(Int,2,2)
+    f(A,j, v::Val{n}) where {n} = Val(A[BandIndex(n,j)])
+    function common_tests(M, ind)
+        j = ind[]
+        @test @inferred(f(UpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(-1))) == Val(0)
+        @test @inferred(f(UnitUpperTriangular(M), j, Val(0))) == Val(1)
+        @test @inferred(f(LowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(1))) == Val(0)
+        @test @inferred(f(UnitLowerTriangular(M), j, Val(0))) == Val(1)
+    end
+    common_tests(M, Any[1])
+
+    M = Diagonal([1,2])
+    common_tests(M, Any[1])
+    # extra tests for banded structure of the parent
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(1))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-1))) == Val(0)
+    end
+
+    M = Tridiagonal([1,2], [1,2,3], [1,2])
+    common_tests(M, Any[1])
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(2))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
     end
 end
 

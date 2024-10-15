@@ -319,9 +319,9 @@ function show_error_hints(io, ex, args...)
     for handler in hinters
         try
             @invokelatest handler(io, ex, args...)
-        catch err
+        catch
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
         end
     end
 end
@@ -478,6 +478,19 @@ function make_io_thread()
     @ccall uv_thread_detach(tid::Ptr{UInt})::Cint
     err == 0 || Base.uv_error("uv_thread_detach", err)
     # n.b. this does not wait for the thread to start or to take ownership of the event loop
+end
+
+"""
+    Base.Experimental.entrypoint(f, argtypes::Tuple)
+
+Mark a method for inclusion when the `--trim` option is specified.
+"""
+function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    entrypoint(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function entrypoint(@nospecialize(argt::Type))
+    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
     nothing
 end
 

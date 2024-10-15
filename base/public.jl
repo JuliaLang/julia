@@ -21,14 +21,7 @@ public
     ImmutableDict,
     OneTo,
     LogRange,
-    AnnotatedString,
-    AnnotatedChar,
     UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
 
 # Semaphores
     Semaphore,
@@ -109,6 +102,7 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
 
 # filesystem operations
     rename,

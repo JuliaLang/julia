@@ -116,7 +116,7 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
 end
 
 function term(io::IO, md::Code, columns)
-    code = if md.language ∈ ("", "julia")
+    code = if md.language == "julia"
         highlight(md.code)
     elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
         hl = AnnotatedString(md.code)
