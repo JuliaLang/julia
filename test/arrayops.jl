@@ -3286,3 +3286,21 @@ end
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
 end
+
+@testset "Array/Memory escape analysis" begin
+    function no_allocate(T::Type{<:Union{Memory, Vector}})
+        v = T(undef, 2)
+        v[1] = 2
+        v[2] = 3
+        return v[1] + v[2]
+    end
+    function test_alloc(T)
+        @test (@allocated no_allocate(T)) == 0
+    end
+    for T in [Memory, Vector]
+        for ET in [Int,]# still broken: Union{Int, Nothing}, Union{Int, String}]
+            no_allocate(T{ET}) #compile
+            test_alloc(T{ET})
+        end
+    end
+end
