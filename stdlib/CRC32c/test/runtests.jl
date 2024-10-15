@@ -90,19 +90,8 @@ function crc32c_sw(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c_sw(s, sizeof(s), crc)
 end
 
-function crc32c_sw(a::AbstractVector{UInt8}, crc::UInt32=0x00000000)
-    last = lastindex(a)
-    nb = length(a)
-    buf = Vector{UInt8}(undef, min(nb, 24576))
-    while nb > 0
-        n = min(nb, 24576)
-        copyto!(buf, 1, a, last - nb + 1, n)
-        crc = unsafe_crc32c_sw(buf, n % Csize_t, crc)
-        nb -= n
-    end
-    return crc
-end
-
+crc32c_sw(a::AbstractVector{UInt8}, crc::UInt32=0x00000000) =
+    crc32c_sw(copyto!(Vector{UInt8}(undef, length(a)), a))
 function crc32c_sw(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     buf = Vector{UInt8}(undef, min(nb, 24576))
