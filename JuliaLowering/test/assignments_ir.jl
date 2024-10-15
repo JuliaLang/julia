@@ -34,7 +34,7 @@ end
 3   (call core.svec %₂)
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 2 =#)))))
-6   --- method :b %₅
+6   --- method core.nothing %₅
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)

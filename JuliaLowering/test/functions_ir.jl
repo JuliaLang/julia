@@ -9,7 +9,7 @@ end
 3   (call core.svec %₂ core.Any core.Any core.Any)
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method :f %₅
+6   --- method core.nothing %₅
     1   TestMod.+
     2   (call %₁ slot₂/x slot₄/y)
     3   (return %₂)
@@ -27,7 +27,7 @@ end
 4   (call core.svec %₂ %₃ core.Any)
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method :f %₆
+7   --- method core.nothing %₆
     1   slot₃/x
     2   (return %₁)
 8   (return %₁)
@@ -44,7 +44,7 @@ end
 4   (call core.svec %₂ core.Any %₃)
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method :f %₆
+7   --- method core.nothing %₆
     1   TestMod.body
     2   (return %₁)
 8   (return %₁)
@@ -61,7 +61,7 @@ end
 4   (call core.svec %₂ core.Any %₃)
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method :f %₆
+7   --- method core.nothing %₆
     1   TestMod.body
     2   (return %₁)
 8   (return %₁)
@@ -79,7 +79,7 @@ end
 5   (call core.svec %₂ core.Any %₄)
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
-8   --- method :f %₇
+8   --- method core.nothing %₇
     1   TestMod.body
     2   (return %₁)
 9   (return %₁)
@@ -116,7 +116,7 @@ end
 12  slot₁/T
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  (call core.svec %₉ %₁₃ :($(QuoteNode(:(#= line 1 =#)))))
-15  --- method :f %₁₄
+15  --- method core.nothing %₁₄
     1   static_parameter₃
     2   static_parameter₁
     3   static_parameter₂
@@ -142,7 +142,7 @@ end
 10  slot₁/T
 11  (call core.svec %₁₀)
 12  (call core.svec %₉ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
-13  --- method :f %₁₂
+13  --- method core.nothing %₁₂
     1   static_parameter₁
     2   (return %₁)
 14  (return %₁)
@@ -191,7 +191,7 @@ end
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method :f %₅
+6   --- method core.nothing %₅
     1   TestMod.Int
     2   (gotoifnot slot₂/x label₃)
     3   (= slot₃/tmp 0xff)
@@ -342,7 +342,7 @@ end
 3   (call core.svec %₂)
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 4 =#)))))
-6   --- method :f %₅
+6   --- method core.nothing %₅
     1   (return core.nothing)
 7   (call JuliaLowering.bind_docs! %₁ "some docs\n" %₅)
 8   (return %₁)

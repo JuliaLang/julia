@@ -40,7 +40,7 @@ end
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 2 =#)))))
-8   --- method :f %₇
+8   --- method core.nothing %₇
     1   (call core.tuple false true true)
     2   (return %₁)
 9   (return %₃)
@@ -83,7 +83,7 @@ end
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method :f %₅
+6   --- method core.nothing %₅
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (isdefined slot₂/z)

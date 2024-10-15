@@ -1329,30 +1329,29 @@ function expand_function_def(ctx, ex, docs)
             push!(arg_types, atype)
         end
 
-        function_name = nothing
         func_self = ssavar(ctx, name, "func_self")
         if kind(name) == K"::"
             if numchildren(name) == 1
+                # function (::T)() ...
                 farg_name = @ast ctx name "#self#"::K"Placeholder"
                 farg_type_ = name[1]
             else
+                # function (f::T)() ...
                 @chk numchildren(name) == 2
                 farg_name = name[1]
                 farg_type_ = name[2]
             end
-            function_name = nothing_(ctx, name)
-            function_obj = farg_type_
+            func_self_val = farg_type_ # Here we treat the type itself as the function
             farg_type = func_self
         else
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
-            end
-            if is_identifier_like(name)
-                function_name = @ast ctx name name=>K"Symbol"
-                function_obj = @ast ctx name [K"method" function_name]
+            elseif is_identifier_like(name)
+                # function f() ...
+                func_self_val = @ast ctx name [K"method" name=>K"Symbol"]
             else
-                function_name = nothing_(ctx, name)
-                function_obj = name
+                # function A.B.f() ...
+                func_self_val = name
             end
             farg_name = @ast ctx callex "#self#"::K"Placeholder"
             farg_type = @ast ctx callex [K"call"
@@ -1374,9 +1373,11 @@ function expand_function_def(ctx, ex, docs)
             ret_var = nothing
         end
 
+        method_table = nothing_(ctx, name) # TODO: method overlays
+
         @ast ctx ex [K"scope_block"(scope_type=:hard)
             [K"block"
-                [K"=" func_self function_obj]
+                [K"=" func_self func_self_val]
                 typevar_stmts...
                 # metadata contains svec(types, sparms, location)
                 method_metadata := [K"call"(callex)
@@ -1392,7 +1393,7 @@ function expand_function_def(ctx, ex, docs)
                     QuoteNode(source_location(LineNumberNode, callex))::K"Value"
                 ]
                 [K"method"
-                    function_name
+                    method_table
                     method_metadata
                     [K"lambda"(body, is_toplevel_thunk=false)
                         [K"block" arg_names...]
@@ -1668,7 +1669,7 @@ function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, v
         return val
     end
     # kt = kind(field_type)
-    # FIXME: Allow kt == K"Identifier" && kt in static_params to avoid fieldtype call
+    # TODO: Allow kt == K"Identifier" && kt in static_params to avoid fieldtype call?
     @ast ctx field_type [K"block"
         tmp_type := [K"call"
             "fieldtype"::K"core"
