@@ -183,11 +183,19 @@ cmp(a::AbstractString, b::AnnotatedString) = cmp(a, b.string)
 # To avoid method ambiguity
 cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 
+# Annotated strings are equal if their strings and annotations are equal
 ==(a::AnnotatedString, b::AnnotatedString) =
     a.string == b.string && a.annotations == b.annotations
 
 ==(a::AnnotatedString, b::AbstractString) = isempty(a.annotations) && a.string == b
 ==(a::AbstractString, b::AnnotatedString) = isempty(b.annotations) && a == b.string
+
+# Annotated chars are equal if their chars and annotations are equal
+==(a::AnnotatedChar, b::AnnotatedChar) =
+    a.char == b.char && a.annotations == b.annotations
+
+==(a::AnnotatedChar, b::AbstractChar) = isempty(a.annotations) && a.char == b
+==(a::AbstractChar, b::AnnotatedChar) = isempty(b.annotations) && a == b.char
 
 # To prevent substring equality from hitting the generic fallback
 
