@@ -10,7 +10,6 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
@@ -53,8 +52,9 @@ julia> I(2)
  ⋅  1
 ```
 
-Note that a one-column matrix is not treated like a vector, but instead calls the
-method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+!!! note
+    A one-column matrix is not treated like a vector, but instead calls the
+    method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
 
 ```jldoctest
 julia> A = transpose([7.0 13.0])
@@ -72,31 +72,36 @@ Diagonal(V::AbstractVector)
 """
     Diagonal(A::AbstractMatrix)
 
-Construct a matrix from the diagonal of `A`.
+Construct a matrix from the principal diagonal of `A`.
+The input matrix `A` may be rectangular, but the output will
+be square.
 
 # Examples
 ```jldoctest
-julia> A = permutedims(reshape(1:15, 5, 3))
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> D = Diagonal(A)
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  4
+
+julia> A = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
 julia> Diagonal(A)
-3×3 Diagonal{$Int, Vector{$Int}}:
- 1  ⋅   ⋅
- ⋅  7   ⋅
- ⋅  ⋅  13
-
-julia> diag(A, 2)
-3-element Vector{$Int}:
-  3
-  9
- 15
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  5
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+Diagonal{T,V}(A::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(A))
 function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     checksquare(A)
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
@@ -107,14 +112,17 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
+AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
+Matrix(D::Diagonal{Any}) = Matrix{Any}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
-    n = size(D, 1)
-    B = Matrix{T}(undef, n, n)
-    n > 1 && fill!(B, zero(T))
-    @inbounds for i in 1:n
-        B[i,i] = D.diag[i]
+    B = Matrix{T}(undef, size(D))
+    if haszero(T) # optimized path for types with zero(T) defined
+        size(B,1) > 1 && fill!(B, zero(T))
+        copyto!(view(B, diagind(B)), D.diag)
+    else
+        copyto!(B, D)
     end
     return B
 end
@@ -129,16 +137,12 @@ Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, 
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(D.diag, T, dims)
 
-copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
+# copyto! for matching axes
+_copyto_banded!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
-function size(D::Diagonal,d::Integer)
-    if d<1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    end
-    return d<=2 ? length(D.diag) : 1
-end
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
 
 @inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(Bool, D, i, j) || return false
@@ -150,6 +154,28 @@ end
     r
 end
 
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
+end
+
+function Base.minimum(D::Diagonal{T}) where T <: Number
+    mindiag = minimum(D.diag)
+    size(D, 1) > 1 && return (min(zero(T), mindiag))
+    return mindiag
+end
+
+function Base.maximum(D::Diagonal{T}) where T <: Number
+    maxdiag = Base.maximum(D.diag)
+    size(D, 1) > 1 && return (max(zero(T), maxdiag))
+    return maxdiag
+end
+
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
@@ -159,17 +185,46 @@ end
     end
     r
 end
-diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+"""
+    diagzero(A::AbstractMatrix, i, j)
+
+Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
+"""
+diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
+diagzero(D::Diagonal{M}, i, j) where {M<:AbstractMatrix} =
+    zeroslike(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
+# dispatching on the axes permits specializing on the axis types to return something other than an Array
+zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
+"""
+    zeroslike(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
+    zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix}
+
+Return an appropriate zero-ed array similar to `M`, with either the axes `ax` or the size `sz`.
+This will be used as a structural zero element of a matrix-valued banded matrix.
+By default, `zeroslike` falls back to using the size along each axis to construct the array.
+"""
+zeroslike(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = zeroslike(M, map(length, ax))
+zeroslike(M::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(M, sz)
+zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix} = zeros(eltype(M), sz)
+
+@inline function getindex(D::Diagonal, b::BandIndex)
+    @boundscheck checkbounds(D, b)
+    if b.band == 0
+        @inbounds r = D.diag[b.index]
+    else
+        r = diagzero(D, Tuple(_cartinds(b))...)
+    end
+    r
+end
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
         @inbounds D.diag[i] = v
     elseif !iszero(v)
-        throw(ArgumentError("cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
+        throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
     end
-    return v
+    return D
 end
 
 
@@ -177,10 +232,20 @@ end
 function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::AbstractString)
     i==j ? s : Base.replace_with_centered_mark(s)
 end
+function Base.show(io::IO, A::Diagonal)
+    print(io, "Diagonal(")
+    show(io, A.diag)
+    print(io, ")")
+end
 
 parent(D::Diagonal) = D.diag
 
-ishermitian(D::Diagonal{<:Real}) = true
+copy(D::Diagonal) = Diagonal(copy(D.diag))
+
+Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
+Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
+
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
@@ -196,8 +261,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
-istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
@@ -212,8 +277,8 @@ end
 function tril!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag, zero(T))
     end
@@ -225,23 +290,28 @@ end
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-for f in (:+, :-)
-    @eval function $f(D::Diagonal, S::Symmetric)
-        return Symmetric($f(D, S.data), sym_uplo(S.uplo))
-    end
-    @eval function $f(S::Symmetric, D::Diagonal)
-        return Symmetric($f(S.data, D), sym_uplo(S.uplo))
-    end
-    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
-        return Hermitian($f(D, H.data), sym_uplo(H.uplo))
-    end
-    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
-        return Hermitian($f(H.data, D), sym_uplo(H.uplo))
-    end
-end
-
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+function lmul!(x::Number, D::Diagonal)
+    if size(D,1) > 1
+        # ensure that zeros are preserved on scaling
+        y = D[2,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. D.diag = x * D.diag
+    return D
+end
+function rmul!(D::Diagonal, x::Number)
+    if size(D,1) > 1
+        # ensure that zeros are preserved on scaling
+        y = x * D[2,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. D.diag *= x
+    return D
+end
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 (\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
 (^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
@@ -251,59 +321,79 @@ Base.literal_pow(::typeof(^), D::Diagonal, valp::Val) =
     Diagonal(Base.literal_pow.(^, D.diag, valp)) # for speed
 Base.literal_pow(::typeof(^), D::Diagonal, ::Val{-1}) = inv(D) # for disambiguation
 
-function _muldiag_size_check(A, B)
-    nA = size(A, 2)
-    mB = size(B, 1)
-    @noinline throw_dimerr(::AbstractMatrix, nA, mB) = throw(DimensionMismatch("second dimension of A, $nA, does not match first dimension of B, $mB"))
-    @noinline throw_dimerr(::AbstractVector, nA, mB) = throw(DimensionMismatch("second dimension of D, $nA, does not match length of V, $mB"))
-    nA == mB || throw_dimerr(B, nA, mB)
+function _muldiag_size_check(szA::NTuple{2,Integer}, szB::Tuple{Integer,Vararg{Integer}})
+    nA = szA[2]
+    mB = szB[1]
+    @noinline throw_dimerr(szB::NTuple{2}, nA, mB) = throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match first dimension of B, $mB"))
+    @noinline throw_dimerr(szB::NTuple{1}, nA, mB) = throw(DimensionMismatch(lazy"second dimension of D, $nA, does not match length of V, $mB"))
+    nA == mB || throw_dimerr(szB, nA, mB)
     return nothing
 end
 # the output matrix should have the same size as the non-diagonal input matrix or vector
-@noinline throw_dimerr(szC, szA) = throw(DimensionMismatch("output matrix has size: $szC, but should have size $szA"))
-_size_check_out(C, ::Diagonal, A) = _size_check_out(C, A)
-_size_check_out(C, A, ::Diagonal) = _size_check_out(C, A)
-_size_check_out(C, A::Diagonal, ::Diagonal) = _size_check_out(C, A)
-function _size_check_out(C, A)
-    szA = size(A)
-    szC = size(C)
-    szA == szC || throw_dimerr(szC, szA)
-    return nothing
+@noinline throw_dimerr(szC, szA) = throw(DimensionMismatch(lazy"output matrix has size: $szC, but should have size $szA"))
+function _size_check_out(szC::NTuple{2}, szA::NTuple{2}, szB::NTuple{2})
+    (szC[1] == szA[1] && szC[2] == szB[2]) || throw_dimerr(szC, (szA[1], szB[2]))
 end
-function _muldiag_size_check(C, A, B)
-    _muldiag_size_check(A, B)
-    _size_check_out(C, A, B)
+function _size_check_out(szC::NTuple{1}, szA::NTuple{2}, szB::NTuple{1})
+    szC[1] == szA[1] || throw_dimerr(szC, (szA[1],))
+end
+function _muldiag_size_check(szC::Tuple{Vararg{Integer}}, szA::Tuple{Vararg{Integer}}, szB::Tuple{Vararg{Integer}})
+    _muldiag_size_check(szA, szB)
+   _size_check_out(szC, szA, szB)
 end
 
 function (*)(Da::Diagonal, Db::Diagonal)
-    _muldiag_size_check(Da, Db)
+    _muldiag_size_check(size(Da), size(Db))
     return Diagonal(Da.diag .* Db.diag)
 end
 
 function (*)(D::Diagonal, V::AbstractVector)
-    _muldiag_size_check(D, V)
+    _muldiag_size_check(size(D), size(V))
     return D.diag .* V
 end
 
-(*)(A::AbstractMatrix, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
-(*)(A::HermOrSym, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
-(*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
-(*)(D::Diagonal, A::HermOrSym) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
-
-rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
-
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    rmul!(Ac, D)
+function rmul!(A::AbstractMatrix, D::Diagonal)
+    _muldiag_size_check(size(A), size(D))
+    for I in CartesianIndices(A)
+        row, col = Tuple(I)
+        @inbounds A[row, col] *= D.diag[col]
+    end
+    return A
 end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    lmul!(D, Ac)
+# T .= T * D
+function rmul!(T::Tridiagonal, D::Diagonal)
+    _muldiag_size_check(size(T), size(D))
+    (; dl, d, du) = T
+    d[1] *= D.diag[1]
+    for i in axes(dl,1)
+        dl[i] *= D.diag[i]
+        du[i] *= D.diag[i+1]
+        d[i+1] *= D.diag[i+1]
+    end
+    return T
+end
+
+function lmul!(D::Diagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(size(D), size(B))
+    for I in CartesianIndices(B)
+        row = I[1]
+        @inbounds B[I] = D.diag[row] * B[I]
+    end
+    return B
+end
+
+# in-place multiplication with a diagonal
+# T .= D * T
+function lmul!(D::Diagonal, T::Tridiagonal)
+    _muldiag_size_check(size(D), size(T))
+    (; dl, d, du) = T
+    d[1] = D.diag[1] * d[1]
+    for i in axes(dl,1)
+        dl[i] = D.diag[i+1] * dl[i]
+        du[i] = D.diag[i] * du[i]
+        d[i+1] = D.diag[i+1] * d[i+1]
+    end
+    return T
 end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
@@ -387,7 +477,7 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0})
 end
 
 function _mul_diag!(out, A, B, _add)
-    _muldiag_size_check(out, A, B)
+    _muldiag_size_check(size(out), size(A), size(B))
     __muldiag!(out, A, B, _add)
     return out
 end
@@ -404,19 +494,18 @@ _mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
     _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
-    _muldiag_size_check(Da, A)
-    _muldiag_size_check(A, Db)
+    _muldiag_size_check(size(Da), size(A))
+    _muldiag_size_check(size(A), size(Db))
     return broadcast(*, Da.diag, A, permutedims(Db.diag))
 end
 
 function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
-    _muldiag_size_check(Da, Db)
-    _muldiag_size_check(Db, Dc)
+    _muldiag_size_check(size(Da), size(Db))
+    _muldiag_size_check(size(Db), size(Dc))
     return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
-/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -425,7 +514,7 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     dd = D.diag
     m, n = size(A, 1), size(A, 2)
     if (k = length(dd)) != n
-        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+        throw(DimensionMismatch(lazy"left hand side has $n columns but D is $k by $k"))
     end
     @inbounds for j in 1:n
         ddj = dd[j]
@@ -442,8 +531,7 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
-\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -452,8 +540,8 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     d = length(dd)
     m, n = size(A, 1), size(A, 2)
     m′, n′ = size(B, 1), size(B, 2)
-    m == d || throw(DimensionMismatch("right hand side has $m rows but D is $d by $d"))
-    (m, n) == (m′, n′) || throw(DimensionMismatch("expect output to be $m by $n, but got $m′ by $n′"))
+    m == d || throw(DimensionMismatch(lazy"right hand side has $m rows but D is $d by $d"))
+    (m, n) == (m′, n′) || throw(DimensionMismatch(lazy"expect output to be $m by $n, but got $m′ by $n′"))
     j = findfirst(iszero, D.diag)
     isnothing(j) || throw(SingularException(j))
     @inbounds for j = 1:n, i = 1:m
@@ -462,12 +550,9 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
     B
 end
 
-# Optimizations for \, / between Diagonals
-\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
-/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Da.diag)
-    n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    n == k || throw(DimensionMismatch(lazy"left hand side has $n columns but D is $k by $k"))
     j = findfirst(iszero, Da.diag)
     isnothing(j) || throw(SingularException(j))
     Dc.diag .= Db.diag ./ Da.diag
@@ -495,10 +580,10 @@ function ldiv!(T::Tridiagonal, D::Diagonal, S::Union{SymTridiagonal,Tridiagonal}
     m = size(S, 1)
     dd = D.diag
     if (k = length(dd)) != m
-        throw(DimensionMismatch("diagonal matrix is $k by $k but right hand side has $m rows"))
+        throw(DimensionMismatch(lazy"diagonal matrix is $k by $k but right hand side has $m rows"))
     end
     if length(T.d) != m
-        throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
+        throw(DimensionMismatch(lazy"target matrix size $(size(T)) does not match input matrix size $(size(S))"))
     end
     m == 0 && return T
     j = findfirst(iszero, dd)
@@ -527,15 +612,15 @@ function (/)(S::SymTridiagonal, D::Diagonal)
     dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
-(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(matprod_dest(T, D, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
     n = size(S, 2)
     dd = D.diag
     if (k = length(dd)) != n
-        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+        throw(DimensionMismatch(lazy"left hand side has $n columns but D is $k by $k"))
     end
     if length(T.d) != n
-        throw(DimensionMismatch("target matrix size $(size(T)) does not match input matrix size $(size(S))"))
+        throw(DimensionMismatch(lazy"target matrix size $(size(T)) does not match input matrix size $(size(S))"))
     end
     n == 0 && return T
     j = findfirst(iszero, dd)
@@ -601,15 +686,32 @@ for Tri in (:UpperTriangular, :LowerTriangular)
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
+    valA = A.diag; mA, nA = size(A)
+    valB = B.diag; mB, nB = size(B)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
-        throw(DimensionMismatch("expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+        throw(DimensionMismatch(lazy"expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     @inbounds for i = 1:nA, j = 1:nB
         idx = (i-1)*nB+j
         C[idx, idx] = valA[i] * valB[j]
+    end
+    if !zerofilled
+        for j in 1:nA, i in 1:mA
+            Δrow, Δcol = (i-1)*mB, (j-1)*nB
+            for k in 1:nB, l in 1:mB
+                i == j && k == l && continue
+                C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
+            end
+        end
     end
     return C
 end
@@ -624,9 +726,9 @@ function kron(A::Diagonal, B::SymTridiagonal)
 end
 function kron(A::Diagonal, B::Tridiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
-    kd = _makevector(kron(diag(A), B.d))
-    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
-    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    kd = convert(Vector, kron(diag(A), B.d))
+    kdl = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.du))))
     Tridiagonal(kdl, kd, kdu)
 end
 
@@ -636,8 +738,16 @@ end
     (mB, nB) = size(B)
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
-        throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+        throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
     @inbounds for j = 1:nA
         A_jj = A[j,j]
@@ -647,6 +757,18 @@ end
                 m += 1
             end
             m += (nA - 1) * mB
+        end
+        if !zerofilled
+            # populate the zero elements
+            for i in 1:mA
+                i == j && continue
+                A_ij = A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in 1:nB, l in 1:nA
+                    B_lk = B[l, k]
+                    C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m += mB
     end
@@ -659,17 +781,36 @@ end
     (mB, nB) = size(B)
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
-        throw(DimensionMismatch("expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+        throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
     @inbounds for j = 1:nA
         for l = 1:mB
             Bll = B[l,l]
-            for k = 1:mA
-                C[m] = A[k,j] * Bll
+            for i = 1:mA
+                C[m] = A[i,j] * Bll
                 m += nB
             end
             m += 1
+        end
+        if !zerofilled
+            for i in 1:mA
+                A_ij = A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in 1:nB, l in 1:mB
+                    l == k && continue
+                    B_lk = B[l, k]
+                    C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m -= nB
     end
@@ -683,19 +824,20 @@ adjoint(D::Diagonal{<:Number}) = Diagonal(vec(adjoint(D.diag)))
 adjoint(D::Diagonal{<:Number,<:Base.ReshapedArray{<:Number,1,<:Adjoint}}) = Diagonal(adjoint(parent(D.diag)))
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
-permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
+permutedims(D::Diagonal, perm) = (Base.checkdims_perm(axes(D), axes(D), perm); D)
 
-function diag(D::Diagonal{T}, k::Integer=0) where T
+function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
+    v = similar(D.diag, max(0, length(D.diag)-abs(k)))
     if k == 0
-        return copyto!(similar(D.diag, length(D.diag)), D.diag)
-    elseif -size(D,1) <= k <= size(D,1)
-        return fill!(similar(D.diag, size(D,1)-abs(k)), zero(T))
+        copyto!(v, D.diag)
     else
-        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
-            "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
+        for i in eachindex(v)
+            v[i] = D[BandIndex(k, i)]
+        end
     end
+    return v
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)
@@ -712,6 +854,9 @@ for f in (:exp, :cis, :log, :sqrt,
           :acosh, :asinh, :atanh, :acsch, :asech, :acoth)
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
+
+# Cube root of a real-valued diagonal matrix
+cbrt(A::Diagonal{<:Real}) = Diagonal(cbrt.(A.diag))
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
@@ -758,11 +903,32 @@ function pinv(D::Diagonal{T}, tol::Real) where T
     Diagonal(Di)
 end
 
+# TODO Docstrings for eigvals, eigvecs, eigen all mention permute, scale, sortby as keyword args
+# but not all of them below provide them. Do we need to fix that?
 #Eigensystem
 eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
+    reduce(vcat, eigvals(x) for x in D.diag) #For block matrices, etc.
+function eigvecs(D::Diagonal{T}) where T<:AbstractMatrix
+    diag_vecs = [ eigvecs(x) for x in D.diag ]
+    matT = reduce((a,b) -> promote_type(typeof(a),typeof(b)), diag_vecs)
+    ncols_diag = [ size(x, 2) for x in D.diag ]
+    nrows = size(D, 1)
+    vecs = Matrix{Vector{eltype(matT)}}(undef, nrows, sum(ncols_diag))
+    for j in axes(D, 2), i in axes(D, 1)
+        jj = sum(view(ncols_diag,1:j-1))
+        if i == j
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = diag_vecs[i][:,k]
+            end
+        else
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = zeros(eltype(T), ncols_diag[i])
+            end
+        end
+    end
+    return vecs
+end
 function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -777,7 +943,20 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
             evecs[p[i],i] = one(Td)
         end
     else
-        evecs = Matrix{Td}(I, size(D))
+        evecs = Diagonal(ones(Td, length(λ)))
+    end
+    Eigen(λ, evecs)
+end
+function eigen(D::Diagonal{<:AbstractMatrix}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
+    if any(any(!isfinite, x) for x in D.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    λ = eigvals(D)
+    evecs = eigvecs(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p]
+        evecs = evecs[:,p]
     end
     Eigen(λ, evecs)
 end
@@ -823,9 +1002,6 @@ function svd(D::Diagonal{T}) where {T<:Number}
     return SVD(U, S, Vt)
 end
 
-# disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
-*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 /(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
@@ -838,15 +1014,15 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
 function dot(D::Diagonal, B::AbstractMatrix)
-    size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
-    return dot(D.diag, view(B, diagind(B)))
+    size(D) == size(B) || throw(DimensionMismatch(lazy"Matrix sizes $(size(D)) and $(size(B)) differ"))
+    return dot(D.diag, view(B, diagind(B, IndexStyle(B))))
 end
 
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
     if !(length(x) == length(D.diag) == length(y))
-        throw(DimensionMismatch("x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
     end
     if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
@@ -871,6 +1047,36 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && checkpositivedefinite(convert(BlasInt, -1))
+    else
+        d = A.diag
+        n = length(d)
+        info = 0
+        rank = n
+        p = sortperm(d, rev = true, by = real)
+        tol = tol < 0 ? n*eps(eltype(A))*real(d[p[1]]) : tol # LAPACK behavior
+        permute!(d, p)
+        @inbounds for i in eachindex(d)
+            di = d[i]
+            rootdi, j = _cholpivoted!(di, tol)
+            if j == 0
+                d[i] = rootdi
+            else
+                rank = i - 1
+                info = 1
+                break
+            end
+        end
+        C = CholeskyPivoted(A, 'U', p, convert(BlasInt, rank), tol, convert(BlasInt, info))
+        check && chkfullrank(C)
+    end
+    return C
+end
 
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
@@ -909,3 +1115,6 @@ end
 function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
     Diagonal(A.diag .* B.diag .+ z.diag)
 end
+
+uppertriangular(D::Diagonal) = D
+lowertriangular(D::Diagonal) = D

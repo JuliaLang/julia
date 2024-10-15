@@ -4,10 +4,10 @@ export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
 """
-    Threads.threadid() -> Int
+    Threads.threadid([t::Task]) -> Int
 
-Get the ID number of the current thread of execution. The master thread has
-ID `1`.
+Get the ID number of the current thread of execution, or the thread of task
+`t`. The master thread has ID `1`.
 
 # Examples
 ```julia-repl
@@ -21,12 +21,15 @@ julia> Threads.@threads for i in 1:4
 2
 5
 4
+
+julia> Threads.threadid(Threads.@spawn "foo")
+2
 ```
 
 !!! note
     The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
-    For this reason in most cases it is not safe to use `threadid()` to index into, say, a vector of buffer or stateful objects.
-
+    For this reason in most cases it is not safe to use `threadid([task])` to index into, say, a vector of buffers or stateful
+    objects.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -44,8 +47,9 @@ maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cin
 """
     Threads.nthreads(:default | :interactive) -> Int
 
-Get the current number of threads within the specified thread pool. The threads in default
-have id numbers `1:nthreads(:default)`.
+Get the current number of threads within the specified thread pool. The threads in `:interactive`
+have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in
+`nthreads(:interactive) .+ (1:nthreads(:default))`.
 
 See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref
 man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
@@ -63,8 +67,10 @@ function _tpid_to_sym(tpid::Int8)
         return :interactive
     elseif tpid == 1
         return :default
+    elseif tpid == -1
+        return :foreign
     else
-        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool id ", tpid)))
     end
 end
 
@@ -73,19 +79,39 @@ function _sym_to_tpid(tp::Symbol)
         return Int8(0)
     elseif tp === :default
         return Int8(1)
+    elseif tp == :foreign
+        return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool name `", tp, "`")))
     end
 end
 
 """
     Threads.threadpool(tid = threadid()) -> Symbol
 
-Returns the specified thread's threadpool; either `:default` or `:interactive`.
+Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
     return _tpid_to_sym(tpid)
+end
+
+"""
+    Threads.threadpooldescription(tid = threadid()) -> String
+
+Returns the specified thread's threadpool name with extended description where appropriate.
+"""
+function threadpooldescription(tid = threadid())
+    threadpool_name = threadpool(tid)
+    if threadpool_name == :foreign
+        # TODO: extend tls to include a field to add a description to a foreign thread and make this more general
+        n_others = nthreads(:interactive) + nthreads(:default)
+        # Assumes GC threads come first in the foreign thread pool
+        if tid > n_others && tid <= n_others + ngcthreads()
+            return "foreign: gc"
+        end
+    end
+    return string(threadpool_name)
 end
 
 """
@@ -108,6 +134,8 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
+    elseif pool == :foreign
+        error("Threadpool size of `:foreign` is indeterminant")
     else
         error("invalid threadpool specified")
     end
@@ -146,7 +174,14 @@ function threading_run(fun, static)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        if static
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        else
+            # TODO: this should be the current pool (except interactive) if there
+            # are ever more than two pools.
+            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+            @assert _result == 1
+        end
         tasks[i] = t
         schedule(t)
     end
@@ -163,9 +198,46 @@ end
 function _threadsfor(iter, lbody, schedule)
     lidx = iter.args[1]         # index
     range = iter.args[2]
+    esc_range = esc(range)
+    func = if schedule === :greedy
+        greedy_func(esc_range, lidx, lbody)
+    else
+        default_func(esc_range, lidx, lbody)
+    end
     quote
         local threadsfor_fun
-        let range = $(esc(range))
+        $func
+        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
+            threading_run(threadsfor_fun, false)
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+            error("`@threads :static` cannot be used concurrently or nested")
+        else # :static
+            threading_run(threadsfor_fun, true)
+        end
+        nothing
+    end
+end
+
+function greedy_func(itr, lidx, lbody)
+    quote
+        let c = Channel{eltype($itr)}(0,spawn=true) do ch
+            for item in $itr
+                put!(ch, item)
+            end
+        end
+        function threadsfor_fun(tid)
+            for item in c
+                local $(esc(lidx)) = item
+                $(esc(lbody))
+            end
+        end
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody)
+    quote
+        let range = $itr
         function threadsfor_fun(tid = 1; onethread = false)
             r = range # Load into local variable
             lenr = length(r)
@@ -203,14 +275,6 @@ function _threadsfor(iter, lbody, schedule)
             end
         end
         end
-        if $(schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
-            threading_run(threadsfor_fun, true)
-        end
-        nothing
     end
 end
 
@@ -276,6 +340,20 @@ microseconds).
 !!! compat "Julia 1.8"
     The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
 
+### `:greedy`
+
+`:greedy` scheduler spawns up to [`Threads.threadpoolsize()`](@ref) tasks, each greedily working on
+the given iterated values as they are produced. As soon as one task finishes its work, it takes
+the next value from the iterator. Work done by any individual task is not necessarily on
+contiguous values from the iterator. The given iterator may produce values forever, only the
+iterator interface is required (no indexing).
+
+This scheduling option is generally a good choice if the workload of individual iterations
+is not uniform/has a large spread.
+
+!!! compat "Julia 1.11"
+    The `:greedy` option for the `schedule` argument is available as of Julia 1.11.
+
 ### `:static`
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
@@ -289,7 +367,7 @@ thread other than 1.
     In newly written library functions, `:static` scheduling is discouraged because the
     functions using this option cannot be called from arbitrary worker threads.
 
-## Example
+## Examples
 
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
@@ -331,7 +409,7 @@ macro threads(args...)
             # for now only allow quoted symbols
             sched = nothing
         end
-        if sched !== :static && sched !== :dynamic
+        if sched !== :static && sched !== :dynamic && sched !== :greedy
             throw(ArgumentError("unsupported schedule argument in @threads"))
         end
     elseif na == 1
@@ -351,10 +429,11 @@ end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
     tpid = _sym_to_tpid(tp)
-    if _nthreads_in_pool(tpid) == 0
+    if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert _result == 1
     nothing
 end
 
@@ -406,7 +485,7 @@ macro spawn(args...)
         if ttype isa QuoteNode
             ttype = ttype.value
             if ttype !== :interactive && ttype !== :default
-                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+                throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
         else

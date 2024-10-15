@@ -252,10 +252,9 @@ end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
-typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("arrayref(false", typed_40281)
-    @test !occursin("arrayref(true", typed_40281)
+    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
 end
 
 # Given this is a sub-processed test file, not using @testsets avoids

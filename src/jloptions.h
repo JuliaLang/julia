@@ -38,6 +38,7 @@ typedef struct {
     int8_t can_inline;
     int8_t polly;
     const char *trace_compile;
+    const char *trace_dispatch;
     int8_t fast_math;
     int8_t worker;
     const char *cookie;
@@ -61,6 +62,8 @@ typedef struct {
     int8_t strip_ir;
     int8_t permalloc_pkgimg;
     uint64_t heap_size_hint;
+    int8_t trace_compile_timing;
+    int8_t trim;
 } jl_options_t;
 
 #endif

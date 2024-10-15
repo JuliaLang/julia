@@ -99,5 +99,6 @@ for op in (:rem, :mod)
     end
 end
 Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val(2))
+Base.muladd(x::Furlong, y::Furlong, z::Furlong) = x*y + z
 
 end

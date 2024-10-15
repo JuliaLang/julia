@@ -36,6 +36,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if Meta.isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -102,6 +106,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                        $(kws...))
             end
         elseif ex0.head === :call
+            if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
+                return Expr(:call, fcn, :(Base.literal_pow),
+                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
+                                 esc(Val(ex0.args[3]))))
+            end
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...),
                         kws...)
@@ -247,6 +256,28 @@ macro time_imports(ex)
     end
 end
 
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
+        end
+    end
+end
+
 """
     @functionloc
 
@@ -297,6 +328,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_typed optimize=true foo(x)
 
 to control whether additional optimizations, such as inlining, are also applied.
+
+See also: [`code_typed`](@ref), [`@code_warntype`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_typed
 
@@ -305,6 +338,8 @@ to control whether additional optimizations, such as inlining, are also applied.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_lowered`](@ref) on the resulting expression.
+
+See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_lowered
 
@@ -313,6 +348,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_warntype`](@ref) on the resulting expression.
+
+See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_warntype
 
@@ -331,6 +368,8 @@ by putting them and their value before the function call, like this:
 `raw` makes all metadata and dbg.* calls visible.
 `debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
+
+See also: [`code_llvm`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_native`](@ref).
 """
 :@code_llvm
 
@@ -350,7 +389,7 @@ by putting it before the function call, like this:
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
-See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and [`@code_lowered`](@ref)
+See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
 """
 :@code_native
 
@@ -392,3 +431,36 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch

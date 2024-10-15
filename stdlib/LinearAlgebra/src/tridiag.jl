@@ -9,7 +9,7 @@ struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
     function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
-            throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
+            throw(DimensionMismatch(lazy"subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
         new{T, V}(dv, ev)
     end
@@ -70,9 +70,14 @@ julia> A[2,1]
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
 function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
-    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+    d = convert(AbstractVector{T}, dv)::AbstractVector{T}
+    e = convert(AbstractVector{T}, ev)::AbstractVector{T}
+    typeof(d) == typeof(e) ?
+        SymTridiagonal{T}(d, e) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
+SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S}) where {T,S} =
+    SymTridiagonal{promote_type(T, S)}(d, e)
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -103,8 +108,12 @@ julia> SymTridiagonal(B)
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
-        SymTridiagonal(diag(A, 0), diag(A, 1))
+    checksquare(A)
+    du = diag(A, 1)
+    d  = diag(A)
+    dl = diag(A, -1)
+    if all(((x, y),) -> x == transpose(y), zip(du, dl)) && all(issymmetric, d)
+        SymTridiagonal(d, du)
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -116,43 +125,40 @@ SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
-AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+AbstractMatrix{T}(S::SymTridiagonal{T}) where {T} = copy(S)
+
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
     n == 0 && return Mf
-    n > 2 && fill!(Mf, zero(T))
-    @inbounds for i = 1:n-1
-        Mf[i,i] = symmetric(M.dv[i], :U)
-        Mf[i+1,i] = transpose(M.ev[i])
-        Mf[i,i+1] = M.ev[i]
+    if haszero(T) # optimized path for types with zero(T) defined
+        n > 2 && fill!(Mf, zero(T))
+        @inbounds for i = 1:n-1
+            Mf[i,i] = symmetric(M.dv[i], :U)
+            Mf[i+1,i] = transpose(M.ev[i])
+            Mf[i,i+1] = M.ev[i]
+        end
+        Mf[n,n] = symmetric(M.dv[n], :U)
+    else
+        copyto!(Mf, M)
     end
-    Mf[n,n] = symmetric(M.dv[n], :U)
     return Mf
 end
 Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
-size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
-function size(A::SymTridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d<=2
-        return length(A.dv)
-    else
-        return 1
-    end
-end
+size(A::SymTridiagonal) = (n = length(A.dv); (n, n))
+axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
-copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
+# copyto! for matching axes
+_copyto_banded!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
 
 #Elementary operations
@@ -161,11 +167,13 @@ for func in (:conj, :copy, :real, :imag)
 end
 
 transpose(S::SymTridiagonal) = S
-adjoint(S::SymTridiagonal{<:Real}) = S
-adjoint(S::SymTridiagonal) = Adjoint(S)
+adjoint(S::SymTridiagonal{<:Number}) = SymTridiagonal(vec(adjoint(S.dv)), vec(adjoint(S.ev)))
+adjoint(S::SymTridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    SymTridiagonal(adjoint(parent(S.dv)), adjoint(parent(S.ev)))
+
 permutedims(S::SymTridiagonal) = S
 function permutedims(S::SymTridiagonal, perm)
-    Base.checkdims_perm(S, S, perm)
+    Base.checkdims_perm(axes(S), axes(S), perm)
     NTuple{2}(perm) == (2, 1) ? permutedims(S) : S
 end
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
@@ -173,38 +181,29 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
-tr(S::SymTridiagonal) = sum(S.dv)
+tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
-    # every branch call similar(..., ::Int) to make sure the
-    # same vector type is returned independent of n
-    absn = abs(n)
-    if absn == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
-    elseif absn <= size(M,1)
-        return fill!(similar(M.dv, size(M,1)-absn), zero(T))
-    else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
-    end
-end
+_diagiter(M::SymTridiagonal{<:Number}) = M.dv
+_diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
+_eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
+_eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
+
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+        return copyto!(v, _diagiter(M))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
+        return copyto!(v, _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
-    elseif n <= size(M,1)
-        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+        return copyto!(v, _eviter_transposed(M))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
     end
+    return v
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
@@ -212,6 +211,29 @@ end
 -(A::SymTridiagonal) = SymTridiagonal(-A.dv, -A.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
+function rmul!(A::SymTridiagonal, x::Number)
+    if size(A,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = A[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    A.dv .*= x
+    _evview(A) .*= x
+    return A
+end
+function lmul!(x::Number, B::SymTridiagonal)
+    if size(B,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * B[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv = x * B.dv
+    ev = _evview(B)
+    @. ev = x * ev
+    return B
+end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal{<:Number}, B::SymTridiagonal{<:Number}) =
@@ -280,8 +302,6 @@ eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(A::SymTridiagonal) = eigen(A).vectors
-
 """
     eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
 
@@ -327,7 +347,7 @@ end
 
 # tril and triu
 
-function istriu(M::SymTridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::SymTridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -336,7 +356,7 @@ function istriu(M::SymTridiagonal, k::Integer=0)
         return iszero(_evview(M)) && iszero(M.dv)
     end
 end
-istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
+Base.@constprop :aggressive istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) =  iszero(_evview(M)) && iszero(M.dv)
 isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) =  iszero(_evview(M))
@@ -345,8 +365,8 @@ isdiag(M::SymTridiagonal) =  iszero(_evview(M))
 function tril!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.ev, zero(T))
         fill!(M.dv, zero(T))
@@ -356,7 +376,7 @@ function tril!(M::SymTridiagonal{T}, k::Integer=0) where T
         return Tridiagonal(M.ev,M.dv,zero(M.ev))
     elseif k == 0
         return Tridiagonal(M.ev,M.dv,zero(M.ev))
-    elseif k >= 1
+    else # if k >= 1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
 end
@@ -364,8 +384,8 @@ end
 function triu!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.ev, zero(T))
         fill!(M.dv, zero(T))
@@ -375,7 +395,7 @@ function triu!(M::SymTridiagonal{T}, k::Integer=0) where T
         return Tridiagonal(zero(M.ev),M.dv,M.ev)
     elseif k == 0
         return Tridiagonal(zero(M.ev),M.dv,M.ev)
-    elseif k <= -1
+    else # if k <= -1
         return Tridiagonal(M.ev,M.dv,copy(M.ev))
     end
 end
@@ -427,7 +447,20 @@ logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shif
     end
 end
 
-@inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
+@inline function Base.isstored(A::SymTridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.dv, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.ev, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.ev, i)
+    else
+        return false
+    end
+end
+
+@inline function getindex(A::SymTridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
@@ -440,14 +473,19 @@ end
     end
 end
 
+Base._reverse(A::SymTridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::SymTridiagonal, dims::Colon) = SymTridiagonal(reverse(A.dv), reverse(A.ev))
+Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev); A)
+
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
+        issymmetric(x) || throw(ArgumentError("cannot set a diagonal entry of a SymTridiagonal to an asymmetric value"))
         @inbounds A.dv[i] = x
     else
-        throw(ArgumentError("cannot set off-diagonal entry ($i, $j)"))
+        throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
     end
-    return x
+    return A
 end
 
 ## Tridiagonal matrices ##
@@ -460,17 +498,17 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         require_one_based_indexing(dl, d, du)
         n = length(d)
         if (length(dl) != n-1 || length(du) != n-1) && !(length(d) == 0 && length(dl) == 0 && length(du) == 0)
-            throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
+            throw(ArgumentError(LazyString("cannot construct Tridiagonal from incompatible ",
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
-                "($(length(dl)), $(length(d)), $(length(du)))")))
+                lazy"($(length(dl)), $(length(d)), $(length(du)))")))
         end
-        new{T,V}(dl, d, du)
+        new{T,V}(dl, d, Base.unalias(dl, du))
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du, du2)
         # length checks?
-        new{T,V}(dl, d, du, du2)
+        new{T,V}(dl, d, Base.unalias(dl, du), du2)
     end
 end
 
@@ -482,6 +520,10 @@ respectively. The result is of type `Tridiagonal` and provides efficient special
 solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+!!! note
+    The subdiagonal `dl` and the superdiagonal `du` must not be aliased to each other.
+    If aliasing is detected, the constructor will use a copy of `du` as its argument.
 
 # Examples
 ```jldoctest
@@ -501,11 +543,21 @@ julia> Tridiagonal(dl, d, du)
 """
 Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
 Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}) where {T,S,U} =
+    Tridiagonal{promote_type(T, S, U)}(dl, d, du)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}, du2::AbstractVector{V}) where {T,S,U,V} =
+    Tridiagonal{promote_type(T, S, U, V)}(dl, d, du, du2)
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+    l, d, u = map(x->convert(AbstractVector{T}, x), (dl, d, du))
+    typeof(l) == typeof(d) == typeof(u) ?
+        Tridiagonal(l, d, u) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
-function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    Tridiagonal{T,V}(A.dl, A.d, A.du)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    l, d, u, u2 = map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))
+    typeof(l) == typeof(d) == typeof(u) == typeof(u2) ?
+        Tridiagonal(l, d, u, u2) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 
 """
@@ -536,37 +588,36 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x)::AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(dl, d, du)
+    end
+end
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    dl, d, du = map(x -> convert(V, x)::V, (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2)::V)
+    else
+        Tridiagonal{T,V}(dl, d, du)
     end
 end
 
-size(M::Tridiagonal) = (length(M.d), length(M.d))
-function size(M::Tridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.d)
-    else
-        return 1
-    end
-end
+size(M::Tridiagonal) = (n = length(M.d); (n, n))
+axes(M::Tridiagonal) = (ax = axes(M.d,1); (ax, ax))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
-    n = length(M.d)
-    n == 0 && return A
-    n > 2 && fill!(A, zero(T))
-    for i in 1:n-1
-        A[i,i] = M.d[i]
-        A[i+1,i] = M.dl[i]
-        A[i,i+1] = M.du[i]
+    if haszero(T) # optimized path for types with zero(T) defined
+        size(A,1) > 2 && fill!(A, zero(T))
+        copyto!(view(A, diagind(A)), M.d)
+        copyto!(view(A, diagind(A,1)), M.du)
+        copyto!(view(A, diagind(A,-1)), M.dl)
+    else
+        copyto!(A, M)
     end
-    A[n,n] = M.d[n]
     A
 end
 Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
@@ -576,7 +627,13 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
-copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
+# copyto! for matching axes
+function _copyto_banded!(dest::Tridiagonal, src::Tridiagonal)
+    copyto!(dest.dl, src.dl)
+    copyto!(dest.d, src.d)
+    copyto!(dest.du, src.du)
+    dest
+end
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -585,13 +642,13 @@ for func in (:conj, :copy, :real, :imag)
     end
 end
 
-adjoint(S::Tridiagonal) = Adjoint(S)
-transpose(S::Tridiagonal) = Transpose(S)
-adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
+adjoint(S::Tridiagonal{<:Number}) = Tridiagonal(vec(adjoint(S.du)), vec(adjoint(S.d)), vec(adjoint(S.dl)))
+adjoint(S::Tridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    Tridiagonal(adjoint(parent(S.du)), adjoint(parent(S.d)), adjoint(parent(S.dl)))
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
 function permutedims(T::Tridiagonal, perm)
-    Base.checkdims_perm(T, T, perm)
+    Base.checkdims_perm(axes(T), axes(T), perm)
     NTuple{2}(perm) == (2, 1) ? permutedims(T) : T
 end
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
@@ -602,25 +659,26 @@ issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) 
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
-function diag(M::Tridiagonal{T}, n::Integer=0) where T
+function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.d, max(0, length(M.d)-abs(n)))
     if n == 0
-        return copyto!(similar(M.d, length(M.d)), M.d)
+        copyto!(v, M.d)
     elseif n == -1
-        return copyto!(similar(M.dl, length(M.dl)), M.dl)
+        copyto!(v, M.dl)
     elseif n == 1
-        return copyto!(similar(M.du, length(M.du)), M.du)
+        copyto!(v, M.du)
     elseif abs(n) <= size(M,1)
-        return fill!(similar(M.d, size(M,1)-abs(n)), zero(T))
-    else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
     end
+    return v
 end
 
 @inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
-    @boundscheck checkbounds(A, i, j)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
     if i == j
         return @inbounds isassigned(A.d, i)
     elseif i == j + 1
@@ -632,7 +690,20 @@ end
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
+@inline function Base.isstored(A::Tridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds Base.isstored(A.d, i)
+    elseif i == j + 1
+        return @inbounds Base.isstored(A.dl, j)
+    elseif i + 1 == j
+        return @inbounds Base.isstored(A.du, i)
+    else
+        return false
+    end
+end
+
+@inline function getindex(A::Tridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.d[i]
@@ -640,6 +711,19 @@ end
         return @inbounds A.dl[j]
     elseif i + 1 == j
         return @inbounds A.du[i]
+    else
+        return zero(T)
+    end
+end
+
+@inline function getindex(A::Tridiagonal{T}, b::BandIndex) where T
+    @boundscheck checkbounds(A, b)
+    if b.band == 0
+        return @inbounds A.d[b.index]
+    elseif b.band == -1
+        return @inbounds A.dl[b.index]
+    elseif b.band == 1
+        return @inbounds A.du[b.index]
     else
         return zero(T)
     end
@@ -654,10 +738,10 @@ end
     elseif j - i == 1
         @inbounds A.du[i] = x
     elseif !iszero(x)
-        throw(ArgumentError(string("cannot set entry ($i, $j) off ",
-            "the tridiagonal band to a nonzero value ($x)")))
+        throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off ",
+            lazy"the tridiagonal band to a nonzero value ($x)")))
     end
-    return x
+    return A
 end
 
 ## structured matrix methods ##
@@ -665,12 +749,25 @@ function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::Ab
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
+# reverse
+
+Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
+function Base._reverse!(A::Tridiagonal, dims::Colon)
+    n = length(A.du) # == length(A.dl), & always 1-based
+    # reverse and swap A.dl and A.du:
+    @inbounds for i in 1:n
+        A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
+    end
+    reverse!(A.d)
+    return A
+end
 
 #tril and triu
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-function istriu(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Tridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -681,7 +778,7 @@ function istriu(M::Tridiagonal, k::Integer=0)
         return iszero(M.dl) && iszero(M.d) && iszero(M.du)
     end
 end
-function istril(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Tridiagonal, k::Integer=0)
     if k >= 1
         return true
     elseif k == 0
@@ -697,8 +794,8 @@ isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 function tril!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.dl, zero(T))
         fill!(M.d, zero(T))
@@ -715,8 +812,8 @@ end
 function triu!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.dl, zero(T))
         fill!(M.d, zero(T))
@@ -741,6 +838,30 @@ tr(M::Tridiagonal) = sum(M.d)
 -(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
+function rmul!(T::Tridiagonal, x::Number)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = T[3,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    T.dl .*= x
+    T.d .*= x
+    T.du .*= x
+    return T
+end
+function lmul!(x::Number, T::Tridiagonal)
+    if size(T,1) > 2
+        # ensure that zeros are preserved on scaling
+        y = x * T[3,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (3, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. T.dl = x * T.dl
+    @. T.d = x * T.d
+    @. T.du = x * T.du
+    return T
+end
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
 \(B::Number, A::Tridiagonal) = Tridiagonal(B\A.dl, B\A.d, B\A.du)
 
@@ -755,6 +876,7 @@ end
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+AbstractMatrix{T}(M::Tridiagonal{T}) where {T} = copy(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
     if issymmetric(M)
@@ -865,6 +987,113 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
         check && checkpositivedefinite(-1)
         return Cholesky(S, 'U', convert(BlasInt, -1))
     end
-    T = choltype(eltype(S))
+    T = choltype(S)
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
+end
+
+# See dgtsv.f
+"""
+    ldiv!(A::Tridiagonal, B::AbstractVecOrMat) -> B
+
+Compute `A \\ B` in-place by Gaussian elimination with partial pivoting and store the result
+in `B`, returning the result. In the process, the diagonals of `A` are overwritten as well.
+
+!!! compat "Julia 1.11"
+    `ldiv!` for `Tridiagonal` left-hand sides requires at least Julia 1.11.
+"""
+function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
+    LinearAlgebra.require_one_based_indexing(B)
+    n = size(A, 1)
+    if n != size(B,1)
+        throw(DimensionMismatch(lazy"matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
+    nrhs = size(B, 2)
+
+    # Initialize variables
+    dl = A.dl
+    d = A.d
+    du = A.du
+
+    @inbounds begin
+        for i in 1:n-1
+            # pivot or not?
+            if abs(d[i]) >= abs(dl[i])
+                # No interchange
+                if d[i] != 0
+                    fact = dl[i]/d[i]
+                    d[i+1] -= fact*du[i]
+                    for j in 1:nrhs
+                        B[i+1,j] -= fact*B[i,j]
+                    end
+                else
+                    checknonsingular(i)
+                end
+                i < n-1 && (dl[i] = 0)
+            else
+                # Interchange
+                fact = d[i]/dl[i]
+                d[i] = dl[i]
+                tmp = d[i+1]
+                d[i+1] = du[i] - fact*tmp
+                du[i] = tmp
+                if i < n-1
+                    dl[i] = du[i+1]
+                    du[i+1] = -fact*dl[i]
+                end
+                for j in 1:nrhs
+                    temp = B[i,j]
+                    B[i,j] = B[i+1,j]
+                    B[i+1,j] = temp - fact*B[i+1,j]
+                end
+            end
+        end
+        iszero(d[n]) && checknonsingular(n)
+        # backward substitution
+        for j in 1:nrhs
+            B[n,j] /= d[n]
+            if n > 1
+                B[n-1,j] = (B[n-1,j] - du[n-1]*B[n,j])/d[n-1]
+            end
+            for i in n-2:-1:1
+                B[i,j] = (B[i,j] - du[i]*B[i+1,j] - dl[i]*B[i+2,j]) / d[i]
+            end
+        end
+    end
+    return B
+end
+
+# combinations of Tridiagonal and Symtridiagonal
+# copyto! for matching axes
+function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
+    Bev = _evview(B)
+    A.du .= Bev
+    # Broadcast identity for numbers to access the faster copyto! path
+    # This uses the fact that transpose(x::Number) = x and symmetric(x::Number) = x
+    A.dl .= (eltype(B) <: Number ? identity : transpose).(Bev)
+    A.d .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    return A
+end
+function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal"))
+    A.dv .= B.d
+    _evview(A) .= B.du
+    return A
+end
+
+# display
+function show(io::IO, T::Tridiagonal)
+    print(io, "Tridiagonal(")
+    show(io, T.dl)
+    print(io, ", ")
+    show(io, T.d)
+    print(io, ", ")
+    show(io, T.du)
+    print(io, ")")
+end
+function show(io::IO, S::SymTridiagonal)
+    print(io, "SymTridiagonal(")
+    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    print(io, ", ")
+    show(io, S.ev)
+    print(io, ")")
 end

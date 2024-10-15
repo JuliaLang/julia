@@ -8,7 +8,7 @@ using Test
     sig = Tuple{typeof(*), Any, Any}
     result1 = Core.Compiler.findall(sig, table; limit=-1)
     result2 = Core.Compiler.findall(sig, table; limit=Core.Compiler.InferenceParams().max_methods)
-    @test result1 !== nothing && !Core.Compiler.isempty(result1.matches)
+    @test result1 !== nothing && !Core.Compiler.isempty(result1)
     @test result2 === nothing
 end
 
@@ -16,6 +16,19 @@ end
     bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
     Core.Compiler.push!(bsbmp, 2)
     Core.Compiler.push!(bsbmp, 2)
+    iterateok = true
+    cnt = 0
+    @eval Core.Compiler for v in $bsbmp
+        if cnt == 0
+            iterateok &= v == 2
+        elseif cnt == 1
+            iterateok &= v == 5
+        else
+            iterateok = false
+        end
+        cnt += 1
+    end
+    @test iterateok
     @test Core.Compiler.popfirst!(bsbmp) == 2
     Core.Compiler.push!(bsbmp, 1)
     @test Core.Compiler.popfirst!(bsbmp) == 1

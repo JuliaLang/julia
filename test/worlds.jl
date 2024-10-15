@@ -2,8 +2,7 @@
 
 # tests for accurate updating of method tables
 
-using Base: get_world_counter
-tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
@@ -258,15 +257,13 @@ end
 # avoid adding this to Base
 function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
     return ci1.code == ci2.code &&
-           ci1.codelocs == ci2.codelocs &&
+           ci1.debuginfo == ci2.debuginfo &&
            ci1.ssavaluetypes == ci2.ssavaluetypes &&
            ci1.ssaflags == ci2.ssaflags &&
            ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
-           ci1.linetable == ci2.linetable &&
            ci1.slotnames == ci2.slotnames &&
            ci1.slotflags == ci2.slotflags &&
-           ci1.slottypes == ci2.slottypes &&
-           ci1.rettype == ci2.rettype
+           ci1.slottypes == ci2.slottypes
 end
 equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
 
@@ -419,3 +416,87 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     which(mc48954, (AbstractFloat, Int)),
     "jl_method_table_insert"
 ]
+
+# issue #50091 -- missing invoke edge affecting nospecialized dispatch
+module ExceptionUnwrapping
+@nospecialize
+unwrap_exception(@nospecialize(e)) = e
+unwrap_exception(e::Base.TaskFailedException) = e.task.exception
+@noinline function _summarize_task_exceptions(io::IO, exc, prefix = nothing)
+    _summarize_exception((;prefix,), io, exc)
+    nothing
+end
+@noinline function _summarize_exception(kws, io::IO, e::TaskFailedException)
+    _summarize_task_exceptions(io, e.task, kws.prefix)
+end
+# This is the overload that prints the actual exception that occurred.
+result = Bool[]
+@noinline function _summarize_exception(kws, io::IO, @nospecialize(exc))
+    global result
+    push!(result, unwrap_exception(exc) === exc)
+    if unwrap_exception(exc) !== exc # something uninferrable
+        return _summarize_exception(kws, io, unwrap_exception(exc))
+    end
+end
+struct X; x; end
+end
+let e = ExceptionUnwrapping.X(nothing)
+    @test ExceptionUnwrapping.unwrap_exception(e) === e
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [true]
+    empty!(ExceptionUnwrapping.result)
+end
+ExceptionUnwrapping.unwrap_exception(e::ExceptionUnwrapping.X) = e.x
+let e = ExceptionUnwrapping.X(nothing)
+    @test !(ExceptionUnwrapping.unwrap_exception(e) === e)
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [false, true]
+    empty!(ExceptionUnwrapping.result)
+end
+
+fshadow() = 1
+gshadow() = fshadow()
+@test fshadow() === 1
+@test gshadow() === 1
+fshadow_m1 = which(fshadow, ())
+fshadow() = 2
+fshadow() = 3
+@test fshadow() === 3
+@test gshadow() === 3
+fshadow_m3 = which(fshadow, ())
+Base.delete_method(fshadow_m1)
+@test fshadow() === 3
+@test gshadow() === 3
+Base.delete_method(fshadow_m3)
+fshadow_m2 = which(fshadow, ())
+@test fshadow() === 2
+@test gshadow() === 2
+Base.delete_method(fshadow_m2)
+@test_throws MethodError(fshadow, (), Base.tls_world_age()) gshadow()
+@test Base.morespecific(fshadow_m3, fshadow_m2)
+@test Base.morespecific(fshadow_m2, fshadow_m1)
+@test Base.morespecific(fshadow_m3, fshadow_m1)
+@test !Base.morespecific(fshadow_m2, fshadow_m3)
+
+# Generated functions without edges must have min_world = 1.
+# N.B.: If changing this, move this test to precompile and make sure
+# that the specialization survives revalidation.
+function generated_no_edges_gen(world, args...)
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
+    src.code = Any[Core.ReturnNode(nothing)]
+    src.slotnames = Symbol[:self]
+    src.slotflags = UInt8[0x00]
+    src.ssaflags = UInt32[0x00]
+    src.ssavaluetypes = 1
+    src.nargs = 1
+    src.min_world = first(Base._methods(generated_no_edges, Tuple{}, -1, world)).method.primary_world
+
+    return src
+end
+
+@eval function generated_no_edges()
+    $(Expr(:meta, :generated, generated_no_edges_gen))
+    $(Expr(:meta, :generated_only))
+end
+
+@test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()

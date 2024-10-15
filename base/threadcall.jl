@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Base.Condition, Nothing}[nothing for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Event, Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
+const threadcall_lock = Threads.SpinLock()
 
 """
     @threadcall((cfunc, clib), rettype, (argtypes...), argvals...)
@@ -81,8 +82,11 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, cfptr::Ptr{Cvoid}, rettype::Type, ar
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = findfirst(isequal(nothing), thread_notifiers)::Int
-    thread_notifiers[idx] = Base.Condition()
+    idx = -1
+    @lock threadcall_lock begin
+        idx = findfirst(isequal(nothing), thread_notifiers)::Int
+        thread_notifiers[idx] = Event()
+    end
 
     GC.@preserve args_arr ret_arr roots begin
         # queue up the work to be done
@@ -92,7 +96,9 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, cfptr::Ptr{Cvoid}, rettype::Type, ar
 
         # wait for a result & return it
         wait(thread_notifiers[idx])
-        thread_notifiers[idx] = nothing
+        @lock threadcall_lock begin
+            thread_notifiers[idx] = nothing
+        end
         release(threadcall_restrictor)
 
         r = unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))

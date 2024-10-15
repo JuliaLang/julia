@@ -50,7 +50,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     for (ii, lq_obj) in enumerate(lqa)
                         @test ref_obs[ii] == lq_obj
                     end
-                    @test_throws ErrorException lqa.Z
+                    @test_throws FieldError lqa.Z
                     @test Array(copy(adjoint(lqa))) ≈ a'
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
                     @test l*q ≈ a
@@ -206,14 +206,14 @@ end
     show(bf, "text/plain", lq(Matrix(I, 4, 4)))
     seekstart(bf)
     @test String(take!(bf)) == """
-LinearAlgebra.LQ{Float64, Matrix{Float64}, Vector{Float64}}
+$(LinearAlgebra.LQ){Float64, Matrix{Float64}, Vector{Float64}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
-Q factor: 4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}"""
+Q factor: 4×4 $(LinearAlgebra.LQPackedQ){Float64, Matrix{Float64}, Vector{Float64}}"""
 end
 
 @testset "adjoint of LQ" begin
