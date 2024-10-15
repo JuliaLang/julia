@@ -1586,7 +1586,8 @@ namespace {
             size_t PoolIdx;
             if (auto opt_level = M.getModuleFlag("julia.optlevel")) {
                 PoolIdx = cast<ConstantInt>(cast<ConstantAsMetadata>(opt_level)->getValue())->getZExtValue();
-            } else {
+            }
+            else {
                 PoolIdx = jl_options.opt_level;
             }
             assert(PoolIdx < N && "Invalid optimization level for compiler!");
@@ -1893,10 +1894,6 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-#ifdef _COMPILER_ASAN_ENABLED_
-int64_t ___asan_globals_registered;
-#endif
-
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
@@ -2070,14 +2067,20 @@ JuliaOJIT::JuliaOJIT()
     #endif
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
+#if JL_LLVM_VERSION < 190000
 #ifdef _COMPILER_ASAN_ENABLED_
+    // this is a hack to work around a bad assertion:
+    //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
+    // hopefully fixed upstream by e7698a13e319a9919af04d3d693a6f6ea7168a44
+    static int64_t jl___asan_globals_registered;
     orc::SymbolMap asan_crt;
     #if JL_LLVM_VERSION >= 170000
-    asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&___asan_globals_registered), JITSymbolFlags::Exported};
+    asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     #else
-    asan_crt[mangle("___asan_globals_registered")] = JITEvaluatedSymbol::fromPointer(&___asan_globals_registered, JITSymbolFlags::Exported);
+    asan_crt[mangle("___asan_globals_registered")] = JITEvaluatedSymbol::fromPointer(&jl___asan_globals_registered, JITSymbolFlags::Common | JITSymbolFlags::Exported);
     #endif
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
+#endif
 #endif
 }
 
@@ -2136,8 +2139,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
-    if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error
-            {
+    if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error {
             if (M.getDataLayout().isDefault())
                 M.setDataLayout(DL);
             if (M.getDataLayout() != DL)
@@ -2146,9 +2148,10 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
                     M.getDataLayout().getStringRepresentation() + " (module) vs " +
                     DL.getStringRepresentation() + " (jit)",
                 inconvertibleErrorCode());
-
+            // OrcJIT requires that all modules / files have unique names:
+            M.setModuleIdentifier((M.getModuleIdentifier() + Twine("-") + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str());
             return Error::success();
-            }))
+        }))
         return Err;
     //if (ShouldOptimize)
     //    return OptimizeLayer.add(JD, std::move(TSM));
@@ -2157,6 +2160,11 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
 
 Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) {
     assert(Obj && "Can not add null object");
+    // OrcJIT requires that all modules / files have unique names:
+    // https://llvm.org/doxygen/namespacellvm_1_1orc.html#a1f5a1bc60c220cdccbab0f26b2a425e1
+    // so we have to force a copy here
+    std::string Name = ("jitted-" + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str();
+    Obj = Obj->getMemBufferCopy(Obj->getBuffer(), Name);
     return ObjectLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
 }
 
@@ -2402,7 +2410,7 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
 
 size_t JuliaOJIT::getTotalBytes() const
 {
-    auto bytes = jit_bytes_size.load(std::memory_order_relaxed);
+    auto bytes = jl_atomic_load_relaxed(&jit_bytes_size);
 #ifndef JL_USE_JITLINK
     size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT;
     bytes += getRTDyldMemoryManagerTotalBytes(MemMgr.get());
@@ -2412,7 +2420,7 @@ size_t JuliaOJIT::getTotalBytes() const
 
 void JuliaOJIT::addBytes(size_t bytes)
 {
-    jit_bytes_size.fetch_add(bytes, std::memory_order_relaxed);
+    jl_atomic_fetch_add_relaxed(&jit_bytes_size, bytes);
 }
 
 void JuliaOJIT::printTimers()

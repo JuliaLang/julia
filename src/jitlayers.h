@@ -627,7 +627,8 @@ private:
     std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
-    std::atomic<size_t> jit_bytes_size{0};
+    _Atomic(size_t) jit_bytes_size{0};
+    _Atomic(size_t) jitcounter{0};
 #ifdef JL_USE_JITLINK
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
     ObjLayerT ObjectLayer;

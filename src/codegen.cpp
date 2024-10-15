@@ -1610,7 +1610,7 @@ static const auto jltuple_func = new JuliaFunction<>{XSTR(jl_f_tuple), get_func_
 static const auto jlintrinsic_func = new JuliaFunction<>{XSTR(jl_f_intrinsic_call), get_func3_sig, get_func_attrs};
 
 static const auto &builtin_func_map() {
-    static std::map<jl_fptr_args_t, JuliaFunction<>*> builtins = {
+    static auto builtins = new DenseMap<jl_fptr_args_t, JuliaFunction<>*> {
           { jl_f_is_addr,                 new JuliaFunction<>{XSTR(jl_f_is), get_func_sig, get_func_attrs} },
           { jl_f_typeof_addr,             new JuliaFunction<>{XSTR(jl_f_typeof), get_func_sig, get_func_attrs} },
           { jl_f_sizeof_addr,             new JuliaFunction<>{XSTR(jl_f_sizeof), get_func_sig, get_func_attrs} },
@@ -1653,18 +1653,18 @@ static const auto &builtin_func_map() {
           { jl_f__svec_ref_addr,          new JuliaFunction<>{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} },
           { jl_f_current_scope_addr,      new JuliaFunction<>{XSTR(jl_f_current_scope), get_func_sig, get_func_attrs} },
         };
-    return builtins;
+    return *builtins;
 }
 
 static const auto &may_dispatch_builtins() {
-    static std::unordered_set<jl_fptr_args_t> builtins(
+    static auto builtins = new DenseSet<jl_fptr_args_t>(
         {jl_f__apply_iterate_addr,
         jl_f__apply_pure_addr,
         jl_f__call_in_world_addr,
         jl_f__call_in_world_total_addr,
         jl_f__call_latest_addr,
         });
-    return builtins;
+    return *builtins;
 }
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
@@ -10138,14 +10138,14 @@ jl_llvm_functions_t jl_emit_codeinst(
 }
 
 // --- initialization ---
-SmallVector<std::pair<jl_value_t**, JuliaVariable*>, 0> gv_for_global;
+static auto gv_for_global = new SmallVector<std::pair<jl_value_t**, JuliaVariable*>, 0>();
 static void global_jlvalue_to_llvm(JuliaVariable *var, jl_value_t **addr)
 {
-    gv_for_global.push_back(std::make_pair(addr, var));
+    gv_for_global->push_back(std::make_pair(addr, var));
 }
 static JuliaVariable *julia_const_gv(jl_value_t *val)
 {
-    for (auto &kv : gv_for_global) {
+    for (auto &kv : *gv_for_global) {
         if (*kv.first == val)
             return kv.second;
     }
