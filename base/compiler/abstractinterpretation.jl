@@ -547,6 +547,7 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{A
             sigt = Bottom
             for j = 1:length(applicable)
                 match = applicable[j]::MethodMatch
+                valid_as_lattice(match.spec_types, true) || continue
                 sigt = sigt ⊔ fieldtype(match.spec_types, i)
             end
             if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
@@ -3113,6 +3114,7 @@ end
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
 
 function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
+    (1 ≤ s.id ≤ length(ssavaluetypes)) || throw(InvalidIRError())
     typ = ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom

@@ -11,13 +11,13 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 
 | File                             | Description                                                        |
 |:-------------------------------- |:------------------------------------------------------------------ |
-| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission           |
+| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission                |
 | `builtins.c`                     | Builtin functions                                                  |
 | `ccall.cpp`                      | Lowering [`ccall`](@ref)                                           |
 | `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
 | `codegen.cpp`                    | Top-level of code generation, pass list, lowering builtins         |
 | `debuginfo.cpp`                  | Tracks debug information for JIT code                              |
-| `disasm.cpp`                     | Handles native object file and JIT code disassembly                 |
+| `disasm.cpp`                     | Handles native object file and JIT code disassembly                |
 | `gf.c`                           | Generic functions                                                  |
 | `intrinsics.cpp`                 | Lowering intrinsics                                                |
 | `jitlayers.cpp`                  | JIT-specific code, ORC compilation layers/utilities                |
@@ -30,7 +30,6 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 | `llvm-julia-licm.cpp`            | Custom LLVM pass to hoist/sink Julia-specific intrinsics           |
 | `llvm-late-gc-lowering.cpp`      | Custom LLVM pass to root GC-tracked values                         |
 | `llvm-lower-handlers.cpp`        | Custom LLVM pass to lower try-catch blocks                         |
-| `llvm-muladd.cpp`                | Custom LLVM pass for fast-match FMA                                |
 | `llvm-multiversioning.cpp`       | Custom LLVM pass to generate sysimg code on multiple architectures |
 | `llvm-propagate-addrspaces.cpp`  | Custom LLVM pass to canonicalize addrspaces                        |
 | `llvm-ptls.cpp`                  | Custom LLVM pass to lower TLS operations                           |
@@ -142,9 +141,9 @@ cc -shared -o sys.so sys.o
 ```
 To generate a system image with the new pass manager, one could do:
 ```
-opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
-llc -o sys.o opt.bc
-cc -shared -o sys.so sys.o
+./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
+./usr/tools/llc -o sys.o opt.bc
+./usr/tools/cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
 
@@ -154,11 +153,15 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default, false))
+    code_llvm(file, fun, T; raw=true, dump_module=true, optimize)
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
-above.
+above, or if you want to see the LLVM IR yourself and get extra verification run, you can use
+```
+./usr/tools/opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -S -verify-each plus.ll
+```
+(note on MacOS this would be `libjulia-codegen.dylib` and on Windows `libjulia-codegen.dll`)
 
 ## Running the LLVM test suite
 

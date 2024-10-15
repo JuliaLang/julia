@@ -796,6 +796,34 @@ end
 @test foo21900 == 10
 @test bar21900 == 11
 
+let f = g -> x -> g(x)
+    @test f(Int)(1.0) === 1
+    @test @inferred(f(Int)) isa Function
+    @test fieldtype(typeof(f(Int)), 1) === Type{Int}
+    @test @inferred(f(Rational{Int})) isa Function
+    @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
+    @test_broken @inferred(f(Rational)) isa Function
+    @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}
+    @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
+    @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
+end
+let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
+    @test f() isa Function
+    @test Base.infer_return_type(f()) == DataType
+    @test fieldtype(typeof(f()), 1) === DataType
+    t = f()()
+    @test t isa DataType
+    @test t.name.wrapper == Rational
+    @test length(t.parameters) == 1
+    @test t.parameters[1] isa Core.TypeVar
+end
+function issue23618(a::AbstractVector)
+    T = eltype(a)
+    b = Vector{T}()
+    return [Set{T}() for x in a]
+end
+@test Base.infer_return_type(issue23618, (Vector{Int},)) == Vector{Set{Int}}
+
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 

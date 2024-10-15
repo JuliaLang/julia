@@ -491,6 +491,8 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                         if (consistent_overlay) li->purity.overrides.ipo_consistent_overlay = consistent_overlay;
                         int8_t nortcall = jl_unbox_bool(jl_exprarg(ma, 10));
                         if (nortcall) li->purity.overrides.ipo_nortcall = nortcall;
+                    } else {
+                        assert(jl_expr_nargs(ma) == 0);
                     }
                 }
                 else
