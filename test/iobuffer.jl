@@ -277,6 +277,7 @@ end
     c = zeros(UInt8,8)
     @test bytesavailable(bstream) == 8
     @test !eof(bstream)
+    @test Base.reseteof(bstream) === nothing # TODO: Actually test intended effect
     read!(bstream,c)
     @test c == a[3:10]
     @test closewrite(bstream) === nothing
@@ -350,7 +351,7 @@ end
     a = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
     mark(a) # mark at position 0
     write(a, "Hello!")
-    @test Base.compact(a) == nothing # because pointer > mark
+    @test Base.compact(a) === nothing # because pointer > mark
     close(a)
     b = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
     write(b, "Hello!")

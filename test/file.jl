@@ -442,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -824,6 +823,303 @@ mktempdir() do tmpdir
     rm(b_tmpdir)
 end
 
+@testset "rename" begin
+    # some of the windows specific behavior may be fixed in new versions of julia
+    mktempdir() do dir
+        # see if can make symlinks
+        local can_symlink = try
+            symlink("foo", joinpath(dir, "link"))
+            rm(joinpath(dir, "link"))
+            true
+        catch
+            false
+        end
+        local f1 = joinpath(dir, "file1")
+        local f2 = joinpath(dir, "file2")
+        local d1 = joinpath(dir, "dir1")
+        local d2 = joinpath(dir, "dir2")
+        local subd1f1 = joinpath(d1, "file1")
+        local subd1f2 = joinpath(d1, "file2")
+        local subd2f1 = joinpath(d2, "file1")
+        local subd2f2 = joinpath(d2, "file2")
+        local h1 = joinpath(dir, "hlink1")
+        local h2 = joinpath(dir, "hlink2")
+        local s1 = joinpath(dir, "slink1")
+        local s2 = joinpath(dir, "slink2")
+        @testset "renaming to non existing newpath in same directory" begin
+            # file, make sure isexecutable is copied
+            for mode in (0o644, 0o755)
+                write(f1, b"data")
+                chmod(f1, mode)
+                Base.rename(f1, f2)
+                @test !isfile(f1)
+                @test isfile(f2)
+                @test read(f2) == b"data"
+                if mode == 0o644
+                    @test !isexecutable(f2)
+                else
+                    @test isexecutable(f2)
+                end
+                rm(f2)
+            end
+            # empty directory
+            mkdir(d1)
+            Base.rename(d1, d2)
+            @test !isdir(d1)
+            @test isdir(d2)
+            @test isempty(readdir(d2))
+            rm(d2)
+            # non empty directory
+            mkdir(d1)
+            write(subd1f1, b"data")
+            chmod(subd1f1, 0o644)
+            write(subd1f2, b"exe")
+            chmod(subd1f2, 0o755)
+            Base.rename(d1, d2)
+            @test !isdir(d1)
+            @test isdir(d2)
+            @test read(subd2f1) == b"data"
+            @test read(subd2f2) == b"exe"
+            @test !isexecutable(subd2f1)
+            @test isexecutable(subd2f2)
+            rm(d2; recursive=true)
+            # hardlink
+            write(f1, b"data")
+            hardlink(f1, h1)
+            Base.rename(h1, h2)
+            @test isfile(f1)
+            @test !isfile(h1)
+            @test isfile(h2)
+            @test read(h2) == b"data"
+            write(h2, b"data2")
+            @test read(f1) == b"data2"
+            rm(h2)
+            rm(f1)
+            # symlink
+            if can_symlink
+                symlink("foo", s1)
+                Base.rename(s1, s2)
+                @test !islink(s1)
+                @test islink(s2)
+                @test readlink(s2) == "foo"
+                rm(s2)
+            end
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+
+        # Get the error code from failed rename, or nothing if it worked
+        function rename_errorcodes(oldpath, newpath)
+            try
+                Base.rename(oldpath, newpath)
+                nothing
+            catch e
+                e.code
+            end
+        end
+        @testset "errors" begin
+            # invalid paths
+            @test_throws ArgumentError Base.rename(f1*"\0", "")
+            @test Base.UV_ENOENT == rename_errorcodes("", "")
+            write(f1, b"data")
+            @test Base.UV_ENOENT == rename_errorcodes(f1, "")
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes("", f1)
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes(f2, f1)
+            @test read(f1) == b"data"
+            @test Base.UV_ENOENT == rename_errorcodes(f1, subd1f1)
+            @test read(f1) == b"data"
+            rm(f1)
+            # attempt to make a directory a subdirectory of itself
+            mkdir(d1)
+            if Sys.iswindows()
+                @test rename_errorcodes(d1, joinpath(d1, "subdir")) ∈ (Base.UV_EINVAL, Base.UV_EBUSY)
+            else
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(d1, "subdir"))
+            end
+            rm(d1)
+            # rename to child of a file
+            mkdir(d1)
+            write(f2, "foo")
+            if Sys.iswindows()
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            else
+                @test Base.UV_ENOTDIR == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            end
+            # replace a file with a directory
+            if !Sys.iswindows()
+                @test Base.UV_ENOTDIR == rename_errorcodes(d1, f2)
+            else
+                # this should work on windows
+                Base.rename(d1, f2)
+                @test isdir(f2)
+                @test !ispath(d1)
+            end
+            rm(f2; force=true)
+            rm(d1; force=true)
+            # symlink loop
+            if can_symlink
+                symlink(s1, s2)
+                symlink(s2, s1)
+                @test Base.UV_ELOOP == rename_errorcodes(joinpath(s1, "foo"), f2)
+                write(f2, b"data")
+                @test Base.UV_ELOOP == rename_errorcodes(f2, joinpath(s1, "foo"))
+                rm(s1)
+                rm(s2)
+                rm(f2)
+            end
+            # newpath is a nonempty directory
+            mkdir(d1)
+            mkdir(d2)
+            write(subd2f1, b"data")
+            write(f1, b"otherdata")
+            if Sys.iswindows()
+                @test Base.UV_EACCES == rename_errorcodes(f1, d1)
+                @test Base.UV_EACCES == rename_errorcodes(f1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(d1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(subd2f1, d2)
+            else
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d1)
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d2)
+                @test rename_errorcodes(d1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST)
+                @test rename_errorcodes(subd2f1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST, Base.UV_EISDIR)
+            end
+            rm(f1)
+            rm(d1)
+            rm(d2; recursive=true)
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+
+        @testset "replacing existing file" begin
+            write(f2, b"olddata")
+            chmod(f2, 0o755)
+            write(f1, b"newdata")
+            chmod(f1, 0o644)
+            @test isexecutable(f2)
+            @test !isexecutable(f1)
+            Base.rename(f1, f2)
+            @test !ispath(f1)
+            @test read(f2) == b"newdata"
+            @test !isexecutable(f2)
+            rm(f2)
+        end
+
+        @testset "replacing file with itself" begin
+            write(f1, b"data")
+            Base.rename(f1, f1)
+            @test read(f1) == b"data"
+            hardlink(f1, h1)
+            Base.rename(f1, h1)
+            if Sys.iswindows()
+                # On Windows f1 gets deleted
+                @test !ispath(f1)
+            else
+                @test read(f1) == b"data"
+            end
+            @test read(h1) == b"data"
+            rm(h1)
+            rm(f1; force=true)
+        end
+
+        @testset "replacing existing file in different directories" begin
+            mkdir(d1)
+            mkdir(d2)
+            write(subd2f2, b"olddata")
+            chmod(subd2f2, 0o755)
+            write(subd1f1, b"newdata")
+            chmod(subd1f1, 0o644)
+            @test isexecutable(subd2f2)
+            @test !isexecutable(subd1f1)
+            Base.rename(subd1f1, subd2f2)
+            @test !ispath(subd1f1)
+            @test read(subd2f2) == b"newdata"
+            @test !isexecutable(subd2f2)
+            @test isdir(d1)
+            @test isdir(d2)
+            rm(d1; recursive=true)
+            rm(d2; recursive=true)
+        end
+
+        @testset "rename with open files" begin
+            # both open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f1) do handle1
+                open(f2) do handle2
+                    if Sys.iswindows()
+                        # currently this doesn't work on windows
+                        @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                    else
+                        Base.rename(f1, f2)
+                        @test !ispath(f1)
+                        @test read(f2) == b"newdata"
+                    end
+                    # rename doesn't break already opened files
+                    @test read(handle1) == b"newdata"
+                    @test read(handle2) == b"olddata"
+                end
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+
+            # oldpath open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f1) do handle1
+                if Sys.iswindows()
+                    # currently this doesn't work on windows
+                    @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
+                else
+                    Base.rename(f1, f2)
+                    @test !ispath(f1)
+                    @test read(f2) == b"newdata"
+                end
+                # rename doesn't break already opened files
+                @test read(handle1) == b"newdata"
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+
+            # newpath open
+            write(f2, b"olddata")
+            write(f1, b"newdata")
+            open(f2) do handle2
+                if Sys.iswindows()
+                    # currently this doesn't work on windows
+                    @test Base.UV_EACCES == rename_errorcodes(f1, f2)
+                else
+                    Base.rename(f1, f2)
+                    @test !ispath(f1)
+                    @test read(f2) == b"newdata"
+                end
+                # rename doesn't break already opened files
+                @test read(handle2) == b"olddata"
+            end
+            rm(f1; force=true)
+            rm(f2; force=true)
+        end
+
+        @testset "replacing empty directory with directory" begin
+            mkdir(d1)
+            mkdir(d2)
+            write(subd1f1, b"data")
+            if Sys.iswindows()
+                # currently this doesn't work on windows
+                @test Base.UV_EACCES == rename_errorcodes(d1, d2)
+                rm(d1; recursive=true)
+                rm(d2)
+            else
+                Base.rename(d1, d2)
+                @test isdir(d2)
+                @test read(subd2f1) == b"data"
+                @test !ispath(d1)
+                rm(d2; recursive=true)
+            end
+        end
+        @test isempty(readdir(dir)) # make sure everything got cleaned up
+    end
+end
+
 # issue #10506 #10434
 ## Tests for directories and links to directories
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
@@ -1032,7 +1328,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1473,7 +1769,7 @@ rm(dir)
 
 
 ##################
-# Return values of mkpath, mkdir, cp, mv and touch
+# Return values of mkpath, mkdir, cp, mv, rename and touch
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
@@ -1490,8 +1786,11 @@ mktempdir() do dir
     @test cp(name2, name1) == name1
     @test isfile(name1)
     @test isfile(name2)
+    @test Base.rename(name1, name2) == name2
+    @test !ispath(name1)
+    @test isfile(name2)
     namedir = joinpath(dir, "chalk")
-    namepath = joinpath(dir, "chalk","cheese","fresh")
+    namepath = joinpath(dir, "chalk", "cheese", "fresh")
     @test !ispath(namedir)
     @test mkdir(namedir) == namedir
     @test isdir(namedir)
@@ -1500,7 +1799,12 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
+    namepath_dirpath = joinpath(dir, "x", "y", "z", "")
+    @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+@test mkpath("") == ""
+@test mkpath("/") == "/"
 
 # issue #30588
 @test realpath(".") == realpath(pwd())
@@ -1601,6 +1905,26 @@ end
         @test startswith(tmpdir, tmpdirbase)
         @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
         @test sizeof(basename(tmpdir)) == 6
+    end
+end
+
+@testset "pwd tests" begin
+    mktempdir() do dir
+        cd(dir) do
+            withenv("OLDPWD" => nothing) do
+                io = IOBuffer()
+                Base.repl_cmd(@cmd("cd"), io)
+                Base.repl_cmd(@cmd("cd -"), io)
+                @test realpath(pwd()) == realpath(dir)
+                if !Sys.iswindows()
+                    # Delete the working directory and check we can cd out of it
+                    # Cannot delete the working directory on Windows
+                    rm(dir)
+                    @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+                    Base.repl_cmd(@cmd("cd \\~"), io)
+                end
+            end
+        end
     end
 end
 
@@ -1749,7 +2073,17 @@ end
     @test s.blocks isa Int64
     @test s.mtime isa Float64
     @test s.ctime isa Float64
+
+    @test s === stat((f,))
+    @test s === lstat((f,))
+    @test s === stat(".", f)
+    @test s === lstat(".", f)
 end
+
+mutable struct URI50890; f::String; end
+Base.joinpath(x::URI50890) = URI50890(x.f)
+@test_throws "stat not implemented" stat(URI50890("."))
+@test_throws "lstat not implemented" lstat(URI50890("."))
 
 @testset "StatStruct show's extended details" begin
     f, io = mktemp()
@@ -1794,6 +2128,16 @@ end
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+    s = Base.Filesystem.StatStruct()
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"\" ENOENT: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"\"\n ENOENT: ") && !endswith(stat_show_str_multi, r"\s")
+    s = Base.Filesystem.StatStruct("my/test", Ptr{UInt8}(0), Int32(Base.UV_ENOTDIR))
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"my/test\" ENOTDIR: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"my/test\"\n ENOTDIR: ") && !endswith(stat_show_str_multi, r"\s")
 end
 
 @testset "diskstat() works" begin

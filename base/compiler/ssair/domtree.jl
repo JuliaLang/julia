@@ -657,6 +657,8 @@ end
 Compute the nearest common (post-)dominator of `a` and `b`.
 """
 function nearest_common_dominator(domtree::GenericDomTree, a::BBNumber, b::BBNumber)
+    a == 0 && return a
+    b == 0 && return b
     alevel = domtree.nodes[a].level
     blevel = domtree.nodes[b].level
     # W.l.g. assume blevel <= alevel

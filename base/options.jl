@@ -34,6 +34,7 @@ struct JLOptions
     can_inline::Int8
     polly::Int8
     trace_compile::Ptr{UInt8}
+    trace_dispatch::Ptr{UInt8}
     fast_math::Int8
     worker::Int8
     cookie::Ptr{UInt8}
@@ -57,6 +58,8 @@ struct JLOptions
     strip_ir::Int8
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
+    trace_compile_timing::Int8
+    trim::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

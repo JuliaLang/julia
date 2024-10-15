@@ -237,11 +237,9 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
                     if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
                         jl_binding_t *b = jl_get_binding(me_mod, me_sym);
-                        if (b && b->constp) {
-                            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-                            if (v && jl_is_module(v))
-                                return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
-                        }
+                        jl_value_t *v = jl_get_binding_value_if_const(b);
+                        if (v && jl_is_module(v))
+                            return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
                     }
                 }
             }
@@ -254,7 +252,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (jl_binding_resolved_p(fe_mod, fe_sym)) {
                     // look at some known called functions
                     jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-                    if (b && b->constp && jl_atomic_load_relaxed(&b->value) == jl_builtin_tuple) {
+                    if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
                         size_t j;
                         for (j = 1; j < nargs; j++) {
                             if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -470,15 +468,31 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
                     if (jl_expr_nargs(ma) == NUM_EFFECTS_OVERRIDES) {
-                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
-                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
-                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
-                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
-                        li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
-                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
-                        li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
-                        li->purity.overrides.ipo_noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
+                        // N.B. this code allows multiple :purity expressions to be present in a single `:meta` node
+                        int8_t consistent = jl_unbox_bool(jl_exprarg(ma, 0));
+                        if (consistent) li->purity.overrides.ipo_consistent = consistent;
+                        int8_t effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
+                        if (effect_free) li->purity.overrides.ipo_effect_free = effect_free;
+                        int8_t nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
+                        if (nothrow) li->purity.overrides.ipo_nothrow = nothrow;
+                        int8_t terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
+                        if (terminates_globally) li->purity.overrides.ipo_terminates_globally = terminates_globally;
+                        int8_t terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                        if (terminates_locally) li->purity.overrides.ipo_terminates_locally = terminates_locally;
+                        int8_t notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        if (notaskstate) li->purity.overrides.ipo_notaskstate = notaskstate;
+                        int8_t inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
+                        if (inaccessiblememonly) li->purity.overrides.ipo_inaccessiblememonly = inaccessiblememonly;
+                        int8_t noub = jl_unbox_bool(jl_exprarg(ma, 7));
+                        if (noub) li->purity.overrides.ipo_noub = noub;
+                        int8_t noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
+                        if (noub_if_noinbounds) li->purity.overrides.ipo_noub_if_noinbounds = noub_if_noinbounds;
+                        int8_t consistent_overlay = jl_unbox_bool(jl_exprarg(ma, 9));
+                        if (consistent_overlay) li->purity.overrides.ipo_consistent_overlay = consistent_overlay;
+                        int8_t nortcall = jl_unbox_bool(jl_exprarg(ma, 10));
+                        if (nortcall) li->purity.overrides.ipo_nortcall = nortcall;
+                    } else {
+                        assert(jl_expr_nargs(ma) == 0);
                     }
                 }
                 else
@@ -616,9 +630,8 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->sparam_vals = jl_emptysvec;
     mi->backedges = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
-    mi->inInference = 0;
     mi->cache_with_orig = 0;
-    jl_atomic_store_relaxed(&mi->precompiled, 0);
+    jl_atomic_store_relaxed(&mi->flags, 0);
     return mi;
 }
 
@@ -627,7 +640,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     jl_task_t *ct = jl_current_task;
     jl_code_info_t *src =
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
-                                       jl_code_info_type);
+                                     jl_code_info_type);
     src->code = NULL;
     src->debuginfo = NULL;
     src->ssavaluetypes = NULL;
@@ -636,6 +649,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
+    src->rettype = (jl_value_t*)jl_any_type;
     src->parent = (jl_method_instance_t*)jl_nothing;
     src->min_world = 1;
     src->max_world = ~(size_t)0;
@@ -715,8 +729,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, j
     return newci;
 }
 
-
-
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t world, jl_code_instance_t **cache)
@@ -782,15 +794,30 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         // If this generated function has an opaque closure, cache it for
-        // correctness of method identity
+        // correctness of method identity. In particular, other methods that call
+        // this method may end up referencing it in a PartialOpaque lattice element
+        // type. If the method identity were to change (for the same world age)
+        // in between invocations of this method, that return type inference would
+        // no longer be correct.
         int needs_cache_for_correctness = 0;
         for (int i = 0; i < jl_array_nrows(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
+                if (jl_expr_nargs(stmt) >= 4 && jl_is_bool(jl_exprarg(stmt, 3)) && !jl_unbox_bool(jl_exprarg(stmt, 3))) {
+                    // If this new_opaque_closure is prohibited from sourcing PartialOpaque,
+                    // there is no problem
+                    continue;
+                }
                 if (jl_options.incremental && jl_generating_output())
                     jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
                 needs_cache_for_correctness = 1;
                 break;
+            }
+        }
+
+        if (func->edges == jl_nothing && func->max_world == ~(size_t)0) {
+            if (func->min_world != 1) {
+                jl_error("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`");
             }
         }
 
@@ -1097,29 +1124,24 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     return m;
 }
 
-// empty generic function def
-JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
-                                                 jl_module_t *module,
-                                                 _Atomic(jl_value_t*) *bp,
-                                                 jl_binding_t *bnd)
+JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 {
-    jl_value_t *gf = NULL;
-
-    assert(name && bp);
-    if (bnd && jl_atomic_load_relaxed(&bnd->value) != NULL && !bnd->constp)
+    if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
-    gf = jl_atomic_load_relaxed(bp);
-    if (gf != NULL) {
-        if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
-            jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+}
+
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
+{
+    jl_value_t *gf = jl_get_binding_value_if_const(b);
+    if (gf) {
+        jl_check_gf(gf, b->globalref->name);
+        return gf;
     }
-    if (bnd)
-        bnd->constp = 1; // XXX: use jl_declare_constant and jl_checked_assignment
-    if (gf == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name, module);
-        jl_atomic_store(bp, gf); // TODO: fix constp assignment data race
-        if (bnd) jl_gc_wb(bnd, gf);
-    }
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (!jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction))))
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    gf = (jl_value_t*)jl_new_generic_function(name, mod);
+    jl_declare_constant_val(b, mod, name, gf);
     return gf;
 }
 

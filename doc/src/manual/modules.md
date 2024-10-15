@@ -108,7 +108,11 @@ To mark a name as public without exporting it into the namespace of folks who ca
 one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
 but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
 and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
-[Compat](https://github.com/JuliaLang/Compat.jl) package.
+[Compat](https://github.com/JuliaLang/Compat.jl) package, or the version-aware construct
+
+```julia
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
+```
 
 ### Standalone `using` and `import`
 
@@ -289,14 +293,14 @@ julia> module B
 B
 ```
 
-The statement `using .A, .B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get an error with a hint
 
 ```jldoctest module_manual
 julia> using .A, .B
 
 julia> f
-WARNING: both B and A export "f"; uses of it in module Main must be qualified
 ERROR: UndefVarError: `f` not defined in `Main`
+Hint: It looks like two or more modules export different bindings with this name, resulting in ambiguity. Try explicitly importing it from a particular module, or qualifying the name with the module it should come from.
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:

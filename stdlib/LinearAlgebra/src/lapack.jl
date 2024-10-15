@@ -61,9 +61,13 @@ macro chkvalidparam(position::Int, param, validvalues)
     :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
 end
 function chkvalidparam(position::Int, var::String, val, validvals)
+    # mimic `repr` for chars without explicitly calling it
+    # This is because `repr` introduces dynamic dispatch
+    _repr(c::AbstractChar) = "'$c'"
+    _repr(c) = c
     if val ∉ validvals
         throw(ArgumentError(
-            lazy"argument #$position: $var must be one of $validvals, but $(repr(val)) was passed"))
+            lazy"argument #$position: $var must be one of $validvals, but $(_repr(val)) was passed"))
     end
     return val
 end
@@ -5325,7 +5329,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkuplo(uplo)
@@ -5425,7 +5429,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5522,7 +5526,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5635,7 +5639,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -6448,7 +6452,7 @@ for (gees, gges, gges3, elty) in
                     resize!(work, lwork)
                 end
             end
-            A, vs, iszero(wi) ? wr : complex.(wr, wi)
+            iszero(wi) ? (A, vs, wr) : (A, vs, complex.(wr, wi))
         end
 
         # *     .. Scalar Arguments ..
@@ -6829,7 +6833,7 @@ for (trexc, trsen, tgsen, elty) in
                     resize!(iwork, liwork)
                 end
             end
-            T, Q, iszero(wi) ? wr : complex.(wr, wi), s[], sep[]
+            iszero(wi) ? (T, Q, wr, s[], sep[]) : (T, Q, complex.(wr, wi), s[], sep[])
         end
         trsen!(select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)
@@ -7160,19 +7164,11 @@ for (fn, elty) in ((:dlacpy_, :Float64),
             m, n = size(A)
             m1, n1 = size(B)
             if uplo == 'U'
-                if n < m
-                    (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
-                else
-                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-                end
+                lacpy_size_check((m1, n1), (n < m ? n : m, n))
             elseif uplo == 'L'
-                if m < n
-                    (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
-                else
-                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-                end
+                lacpy_size_check((m1, n1), (m, m < n ? m : n))
             else
-                (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                lacpy_size_check((m1, n1), (m, n))
             end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
@@ -7184,6 +7180,9 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         end
     end
 end
+
+# The noinline annotation reduces latency
+@noinline lacpy_size_check((m1, n1), (m, n)) = (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
 
 """
     lacpy!(B, A, uplo) -> B

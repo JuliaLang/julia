@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#include "gc-common.h"
+#include "gc-stock.h"
 #include "julia.h"
 #include <inttypes.h>
 #include <stddef.h>
@@ -99,7 +100,7 @@ static arraylist_t bits_save[4];
 static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
     jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
-    jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
+    jl_gc_pool_t *pool = &ptls2->gc_tls.heap.norm_pools[pg->pool_n];
     jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
     while ((char*)pv <= lim) {
@@ -114,7 +115,7 @@ static void gc_clear_mark_outer(int bits)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
         while (pg != NULL) {
             gc_clear_mark_page(pg, bits);
             pg = pg->next;
@@ -134,7 +135,7 @@ static void clear_mark(int bits)
     }
     bigval_t *v;
     for (int i = 0; i < gc_n_threads; i++) {
-        v = gc_all_tls_states[i]->heap.big_objects;
+        v = gc_all_tls_states[i]->gc_tls.heap.young_generation_of_bigvals;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!gc_verifying)
@@ -144,7 +145,7 @@ static void clear_mark(int bits)
         }
     }
 
-    v = big_objects_marked;
+    v = oldest_generation_of_bigvals;
     while (v != NULL) {
         void *gcv = &v->header;
         if (!gc_verifying)
@@ -172,7 +173,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         return;
     do {
         jl_gc_markqueue_t mq;
-        jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+        jl_gc_markqueue_t *mq2 = &ptls->gc_tls.mark_queue;
         ws_queue_t *cq = &mq.chunk_queue;
         ws_queue_t *q = &mq.ptr_queue;
         jl_atomic_store_relaxed(&cq->top, 0);
@@ -232,7 +233,7 @@ void gc_verify(jl_ptls_t ptls)
         return;
     }
     jl_gc_markqueue_t mq;
-    jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+    jl_gc_markqueue_t *mq2 = &ptls->gc_tls.mark_queue;
     ws_queue_t *cq = &mq.chunk_queue;
     ws_queue_t *q = &mq.ptr_queue;
     jl_atomic_store_relaxed(&cq->top, 0);
@@ -291,7 +292,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
-    jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
+    jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[p_n];
     int osize = pg->osize;
     char *data = pg->data;
     char *page_begin = data + GC_PAGE_OFFSET;
@@ -353,7 +354,7 @@ static void gc_verify_tags_pagestack(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_page_stack_t *pgstk = &ptls2->page_metadata_allocd;
+        jl_gc_page_stack_t *pgstk = &ptls2->gc_tls.page_metadata_allocd;
         jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
         while (pg != NULL) {
             gc_verify_tags_page(pg);
@@ -369,7 +370,7 @@ void gc_verify_tags(void)
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             // for all pools, iterate its freelist
-            jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
+            jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[i];
             jl_taggedvalue_t *next = p->freelist;
             jl_taggedvalue_t *last = NULL;
             char *allocating = gc_page_data(next);
@@ -536,13 +537,13 @@ static void gc_scrub_task(jl_task_t *ta)
 
     char *low;
     char *high;
-    if (ta->copy_stack && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
+    if (ta->ctx.copy_stack && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
         low  = (char*)ptls2->stackbase - ptls2->stacksize;
         high = (char*)ptls2->stackbase;
     }
-    else if (ta->stkbuf) {
-        low  = (char*)ta->stkbuf;
-        high = (char*)ta->stkbuf + ta->bufsz;
+    else if (ta->ctx.stkbuf) {
+        low  = (char*)ta->ctx.stkbuf;
+        high = (char*)ta->ctx.stkbuf + ta->ctx.bufsz;
     }
     else
         return;
@@ -573,90 +574,6 @@ void jl_gc_debug_print_status(void)
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
                    pool_count + big_count, pool_count, big_count, gc_num.pause);
-}
-#endif
-
-#ifdef OBJPROFILE
-static htable_t obj_counts[3];
-static htable_t obj_sizes[3];
-void objprofile_count(void *ty, int old, int sz)
-{
-    if (gc_verifying) return;
-    if ((intptr_t)ty <= 0x10) {
-        ty = (void*)jl_buff_tag;
-    }
-    else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
-             jl_is_datatype(ty) && jl_is_datatype_singleton((jl_datatype_t*)ty)) {
-        ty = jl_singleton_tag;
-    }
-    void **bp = ptrhash_bp(&obj_counts[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)2;
-    else
-        (*((intptr_t*)bp))++;
-    bp = ptrhash_bp(&obj_sizes[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)(intptr_t)(1 + sz);
-    else
-        *((intptr_t*)bp) += sz;
-}
-
-void objprofile_reset(void)
-{
-    for (int g = 0; g < 3; g++) {
-        htable_reset(&obj_counts[g], 0);
-        htable_reset(&obj_sizes[g], 0);
-    }
-}
-
-static void objprofile_print(htable_t nums, htable_t sizes)
-{
-    for(int i=0; i < nums.size; i+=2) {
-        if (nums.table[i+1] != HT_NOTFOUND) {
-            void *ty = nums.table[i];
-            int num = (intptr_t)nums.table[i + 1] - 1;
-            size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
-            static const int ptr_hex_width = 2 * sizeof(void*);
-            if (sz > 2e9) {
-                jl_safe_printf(" %6d : %*.1f GB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e6) {
-                jl_safe_printf(" %6d : %*.1f MB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e3) {
-                jl_safe_printf(" %6d : %*.1f kB of (%*p) ",
-                               num, 6, ((double)sz) / 1024,
-                               ptr_hex_width, ty);
-            }
-            else {
-                jl_safe_printf(" %6d : %*d  B of (%*p) ",
-                          num, 6, (int)sz, ptr_hex_width, ty);
-            }
-            if (ty == (void*)jl_buff_tag)
-                jl_safe_printf("#<buffer>");
-            else if (ty == jl_malloc_tag)
-                jl_safe_printf("#<malloc>");
-            else if (ty == jl_singleton_tag)
-                jl_safe_printf("#<singletons>");
-            else
-                jl_static_show(JL_STDERR, (jl_value_t*)ty);
-            jl_safe_printf("\n");
-        }
-    }
-}
-
-void objprofile_printall(void)
-{
-    jl_safe_printf("Transient mark :\n");
-    objprofile_print(obj_counts[0], obj_sizes[0]);
-    jl_safe_printf("Perm mark :\n");
-    objprofile_print(obj_counts[1], obj_sizes[1]);
-    jl_safe_printf("Remset :\n");
-    objprofile_print(obj_counts[2], obj_sizes[2]);
 }
 #endif
 
@@ -895,8 +812,8 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
     int64_t remset_nptr = 0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        last_remset_len += ptls2->heap.last_remset->len;
-        remset_nptr = ptls2->heap.remset_nptr;
+        last_remset_len += ptls2->gc_tls.heap.last_remset->len;
+        remset_nptr = ptls2->gc_tls.heap.remset_nptr;
     }
     jl_safe_printf("GC mark pause %.2f ms | "
                    "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
@@ -993,13 +910,6 @@ void jl_gc_debug_init(void)
     arraylist_new(&lostval_parents_done, 0);
 #endif
 
-#ifdef OBJPROFILE
-    for (int g = 0; g < 3; g++) {
-        htable_new(&obj_counts[g], 0);
-        htable_new(&obj_sizes[g], 0);
-    }
-#endif
-
 #ifdef GC_FINAL_STATS
     process_t0 = jl_hrtime();
 #endif
@@ -1008,113 +918,138 @@ void jl_gc_debug_init(void)
 // GC summary stats
 
 #ifdef MEMPROFILE
-// TODO repair this and possibly merge with `gc_count_pool`
-static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
-                         size_t *pnold)
-{
-    jl_taggedvalue_t *halfpages = p->newpages;
-    size_t osize = p->osize;
-    size_t nused=0, nfree=0, npgs=0, nold=0;
 
-    if (halfpages != NULL) {
-        npgs++;
-        char *v = gc_page_data(halfpages) + GC_PAGE_OFFSET;
-        char *lim = (char*)halfpages - 1;
-        int i = 0;
-        while (v <= lim) {
-            if (!gc_marked(((jl_taggedvalue_t*)v)->bits.gc)) {
-                nfree++;
-            }
-            else {
-                nused++;
-                if (((jl_taggedvalue_t*)v)->bits.gc == GC_OLD_MARKED) {
-                    nold++;
-                }
-            }
-            v = v + osize;
-            i++;
-        }
-        // only the first page is allocated on
-    }
-    *pwaste = npgs * GC_PAGE_SZ - (nused * p->osize);
-    *np = npgs;
-    *pnold = nold;
-    if (npgs != 0) {
-        jl_safe_printf("%4d : %7lld/%7lld objects (%3lld%% old), %5lld pages, %5lld kB, %5lld kB waste\n",
-                       p->osize,
-                       (long long)nused,
-                       (long long)(nused + nfree),
-                       (long long)(nused ? (nold * 100) / nused : 0),
-                       (long long)npgs,
-                       (long long)((nused * p->osize) / 1024),
-                       (long long)(*pwaste / 1024));
-    }
-    return nused*p->osize;
-}
+typedef struct _gc_memprofile_stat_t {
+    size_t nfree; // for pool only
+    size_t npgs;  // for pool only
+    size_t nused;
+    size_t nbytes_used;
+    size_t nused_old;
+    size_t nbytes_used_old;
+} gc_memprofile_stat_t;
 
 void gc_stats_all_pool(void)
 {
-    size_t nb=0, w, tw=0, no=0, tp=0, nold=0, noldbytes=0, np, nol;
-    for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-            size_t b = pool_stats(&ptls2->heap.norm_pools[i], &w, &np, &nol);
-            nb += b;
-            no += (b / ptls2->heap.norm_pools[i].osize);
-            tw += w;
-            tp += np;
-            nold += nol;
-            noldbytes += nol * ptls2->heap.norm_pools[i].osize;
+    gc_memprofile_stat_t stat[JL_GC_N_POOLS];
+    memset(stat, 0, sizeof(stat));
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_gc_page_stack_t *pgstk = &ptls2->gc_tls.page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
+        while (pg != NULL) {
+            assert(gc_alloc_map_is_set(pg->data));
+            int pool_n = pg->pool_n;
+            jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[pool_n];
+            char *data = pg->data;
+            // compute the start of the data area in this page
+            jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+            // compute the limit of valid data in this page
+            char *lim = data + GC_PAGE_SZ - pg->osize;
+            char *lim_newpages = data + GC_PAGE_SZ;
+            if (gc_page_data((char*)p->newpages - 1) == data) {
+                lim_newpages = (char*)p->newpages;
+            }
+            char *v = (char*)v0;
+            gc_memprofile_stat_t *stat_n = &stat[pool_n];
+            while (v <= lim) {
+                uint8_t bits = ((jl_taggedvalue_t*)v)->bits.gc;
+                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                    stat_n->nfree++;
+                }
+                else {
+                    if (gc_old(bits)) {
+                        assert(bits == GC_OLD_MARKED);
+                        stat_n->nused_old++;
+                        stat_n->nbytes_used_old += pg->osize;
+                    }
+                    else {
+                        stat_n->nused++;
+                        stat_n->nbytes_used += pg->osize;
+                    }
+                }
+                v = v + pg->osize;
+            }
+            stat_n->npgs++;
+            pg = pg->next;
         }
     }
-    jl_safe_printf("%lld objects (%lld%% old), %lld kB (%lld%% old) total allocated, "
-                   "%lld total fragments (%lld%% overhead), in %lld pages\n",
-                   (long long)no,
-                   (long long)(no ? (nold * 100) / no : 0),
-                   (long long)(nb / 1024),
-                   (long long)(nb ? (noldbytes * 100) / nb : 0),
-                   (long long)tw,
-                   (long long)(nb ? (tw * 100) / nb : 0),
-                   (long long)tp);
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        jl_ptls_t ptls = jl_current_task->ptls;
+        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[i];
+        gc_memprofile_stat_t *s = &stat[i];
+        jl_safe_printf("%4d : %7lld/%7lld objects (%3lld%% old), %5lld pages, %5lld kB, %5lld kB waste\n",
+            p->osize,
+            (long long)(s->nused + s->nused_old),
+            (long long)(s->nused + s->nused_old + s->nfree),
+            (long long)((s->nused + s->nused_old) ? (s->nused_old * 100) / (s->nused + s->nused_old) : 0),
+            (long long)s->npgs,
+            (long long)(((s->nused + s->nused_old) * p->osize) / 1024),
+            (long long)((GC_PAGE_SZ * s->npgs - s->nused * p->osize) / 1024));
+    }
 }
 
 void gc_stats_big_obj(void)
 {
-    size_t nused=0, nbytes=0, nused_old=0, nbytes_old=0;
+    gc_memprofile_stat_t stat;
+    memset(&stat, 0, sizeof(stat));
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        bigval_t *v = ptls2->heap.big_objects;
+        if (ptls2 == NULL) {
+            continue;
+        }
+        bigval_t *v = ptls2->gc_tls.heap.young_generation_of_bigvals;
+        v = v->next; // skip the sentinel
         while (v != NULL) {
             if (gc_marked(v->bits.gc)) {
-                nused++;
-                nbytes += v->sz & ~3;
+                if (gc_old(v->bits.gc)) {
+                    assert(v->bits.gc == GC_OLD_MARKED);
+                    stat.nused_old++;
+                    stat.nbytes_used_old += v->sz;
+                }
+                else {
+                    stat.nused++;
+                    stat.nbytes_used += v->sz;
+                }
             }
             v = v->next;
         }
-        v = big_objects_marked;
+        v = oldest_generation_of_bigvals;
+        v = v->next; // skip the sentinel
         while (v != NULL) {
-            if (gc_marked(v->bits.gc)) {
-                nused_old++;
-                nbytes_old += v->sz & ~3;
-            }
+            assert(v->bits.gc == GC_OLD_MARKED);
+            stat.nused_old++;
+            stat.nbytes_used_old += v->sz;
             v = v->next;
         }
 
-        mallocarray_t *ma = ptls2->heap.mallocarrays;
+        mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
         while (ma != NULL) {
-            if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
-                nused++;
-                nbytes += jl_genericmemory_nbytes((jl_genericmemory_t*)ma->a);
+            uint8_t bits =jl_astaggedvalue(ma->a)->bits.gc;
+            if (gc_marked(bits)) {
+                jl_genericmemory_t *m = (jl_genericmemory_t*)ma->a;
+                m = (jl_genericmemory_t*)((uintptr_t)m & ~(uintptr_t)1);
+                size_t sz = jl_genericmemory_nbytes(m);
+                if (gc_old(bits)) {
+                    assert(bits == GC_OLD_MARKED);
+                    stat.nused_old++;
+                    stat.nbytes_used_old += sz;
+                }
+                else {
+                    stat.nused++;
+                    stat.nbytes_used += sz;
+                }
             }
             ma = ma->next;
         }
     }
-
     jl_safe_printf("%lld kB (%lld%% old) in %lld large objects (%lld%% old)\n",
-                   (long long)((nbytes + nbytes_old) / 1024),
-                   (long long)(nbytes + nbytes_old ? (nbytes_old * 100) / (nbytes + nbytes_old) : 0),
-                   (long long)(nused + nused_old),
-                   (long long)(nused + nused_old ? (nused_old * 100) / (nused + nused_old) : 0));
+                   (long long)((stat.nbytes_used + stat.nbytes_used_old) / 1024),
+                   (long long)(stat.nbytes_used + stat.nbytes_used_old ? (stat.nbytes_used_old * 100) / (stat.nbytes_used + stat.nbytes_used_old) : 0),
+                   (long long)(stat.nused + stat.nused_old),
+                   (long long)(stat.nused + stat.nused_old ? (stat.nused_old * 100) / (stat.nused + stat.nused_old) : 0));
 }
 #endif //MEMPROFILE
 
@@ -1146,7 +1081,7 @@ static void gc_count_pool_pagetable(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
         while (pg != NULL) {
             if (gc_alloc_map_is_set(pg->data)) {
                 gc_count_pool_page(pg);

@@ -59,7 +59,7 @@ dimg  = randn(n)/2
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
         lua   = factorize(a)
-        @test_throws ErrorException lua.Z
+        @test_throws FieldError lua.Z
         l,u,p = lua.L, lua.U, lua.p
         ll,ul,pl = @inferred lu(a)
         @test ll * ul ≈ a[pl,:]
@@ -88,7 +88,7 @@ dimg  = randn(n)/2
         lud = @inferred lu(d)
         @test LinearAlgebra.issuccess(lud)
         @test @inferred(lu(lud)) == lud
-        @test_throws ErrorException lud.Z
+        @test_throws FieldError lud.Z
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d

@@ -77,6 +77,17 @@ function fullname(m::Module)
 end
 
 """
+    moduleloc(m::Module) -> LineNumberNode
+
+Get the location of the `module` definition.
+"""
+function moduleloc(m::Module)
+    line = Ref{Int32}(0)
+    file = ccall(:jl_module_getloc, Ref{Symbol}, (Any, Ref{Int32}), m, line)
+    return LineNumberNode(Int(line[]), file)
+end
+
+"""
     names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
@@ -207,10 +218,33 @@ function _fieldnames(@nospecialize t)
     return t.name.names
 end
 
+const BINDING_KIND_GLOBAL       = 0x0
+const BINDING_KIND_CONST        = 0x1
+const BINDING_KIND_CONST_IMPORT = 0x2
+const BINDING_KIND_IMPLICIT     = 0x3
+const BINDING_KIND_EXPLICIT     = 0x4
+const BINDING_KIND_IMPORTED     = 0x5
+const BINDING_KIND_FAILED       = 0x6
+const BINDING_KIND_DECLARED     = 0x7
+const BINDING_KIND_GUARD        = 0x8
+
+function lookup_binding_partition(world::UInt, b::Core.Binding)
+    ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
+end
+
+binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
+
 """
     fieldname(x::DataType, i::Integer)
 
 Get the name of field `i` of a `DataType`.
+
+The return type is `Symbol`, except when `x <: Tuple`, in which case the index of the field is returned, of type `Int`.
 
 # Examples
 ```jldoctest
@@ -219,6 +253,9 @@ julia> fieldname(Rational, 1)
 
 julia> fieldname(Rational, 2)
 :den
+
+julia> fieldname(Tuple{String,Int}, 2)
+2
 ```
 """
 function fieldname(t::DataType, i::Integer)
@@ -246,6 +283,9 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
+Each name is a `Symbol`, except when `x <: Tuple`, in which case each name (actually the
+index of the field) is an `Int`.
+
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 
 # Examples
@@ -255,6 +295,9 @@ julia> fieldnames(Rational)
 
 julia> fieldnames(typeof(1+im))
 (:re, :im)
+
+julia> fieldnames(Tuple{String,Int})
+(1, 2)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
@@ -535,6 +578,17 @@ function datatype_nfields(dt::DataType)
 end
 
 """
+    Base.datatype_npointers(dt::DataType) -> Int
+
+Return the number of pointers in the layout of a datatype.
+"""
+function datatype_npointers(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+end
+
+"""
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
@@ -542,9 +596,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
-    return npointers == 0
+    return datatype_npointers(dt) == 0
 end
 
 """
@@ -810,7 +862,8 @@ end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-has_free_typevars(@nospecialize(t)) = (@_total_meta; ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0)
+
+using Core: has_free_typevars
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
@@ -923,7 +976,7 @@ use it in the following manner to summarize information about a struct:
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
-13-element Vector{Tuple{UInt64, Symbol, Type}}:
+14-element Vector{Tuple{UInt64, Symbol, Type}}:
  (0x0000000000000000, :desc, Union{RawFD, String})
  (0x0000000000000008, :device, UInt64)
  (0x0000000000000010, :inode, UInt64)
@@ -937,6 +990,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000050, :blocks, Int64)
  (0x0000000000000058, :mtime, Float64)
  (0x0000000000000060, :ctime, Float64)
+ (0x0000000000000068, :ioerrno, Int32)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
@@ -976,7 +1030,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: type Foo has no field z
+ERROR: FieldError: type Foo has no field `z`, available fields: `x`, `y`
 Stacktrace:
 [...]
 
@@ -1159,7 +1213,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)::CodeInfo
+                code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -1179,11 +1233,17 @@ hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
-unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
-unionlen(@nospecialize(x)) = 1
+unionlen(@nospecialize(x)) = x isa Union ? unionlen(x.a) + unionlen(x.b) : 1
 
-_uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
-_uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
+function _uniontypes(@nospecialize(x), ts::Array{Any,1})
+    if x isa Union
+        _uniontypes(x.a, ts)
+        _uniontypes(x.b, ts)
+    else
+        push!(ts, x)
+    end
+    return ts
+end
 uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
 function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
@@ -1458,6 +1518,13 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
+    If enabled, only provably reachable code (from functions marked with `entrypoint`) is included
+    in the output system image. Errors or warnings can be given for call sites too dynamic to handle.
+    The option is disabled by default. (0=>disabled, 1=>safe (static errors), 2=>unsafe, 3=>unsafe plus warnings)
+    """
+    trim::Cint
+
+    """
     A pointer of type
 
     typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
@@ -1472,14 +1539,14 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0),
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt),
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim),
             lookup)
     end
 end
@@ -1660,12 +1727,12 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
+        code = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
-            push!(asts, code => ty)
+            push!(asts, code => code.rettype)
         end
     end
     return asts
@@ -1682,14 +1749,19 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
                 mi = Core.Compiler.specialize_method(m, tt, Core.svec())
                 interp = Core.Compiler.NativeInterpreter(m.primary_world)
-                return Core.Compiler.typeinf_code(interp, mi, optimize)
+                code = Core.Compiler.typeinf_code(interp, mi, optimize)
+                if code isa CodeInfo
+                    return Pair{CodeInfo, Any}(code, code.rettype)
+                end
+                error("inference not successful")
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
+            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
             return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
         end
     else
@@ -2209,7 +2281,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
+        code = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
@@ -2388,7 +2460,7 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t))
-    return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
+    return Core._hasmethod(signature_type(f, t))
 end
 
 function Core.kwcall(kwargs::NamedTuple, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))
@@ -2411,7 +2483,7 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    kwnames = Symbol[kwnames[i] for i in 1:length(kwnames)]
+    kwnames = collect(kwnames)
     return issubset(kwnames, kws)
 end
 

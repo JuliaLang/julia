@@ -110,7 +110,7 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
 # Conservative assessment of types that have zero(T) defined for themselves
 haszero(::Type) = false
 haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
-@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+@propagate_inbounds _zero(M::AbstractArray{T}, inds...) where {T} = haszero(T) ? zero(T) : zero(M[inds...])
 
 """
     triu!(M, k::Integer)
@@ -370,13 +370,10 @@ julia> diagm([1,2,3])
 diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
-function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    @inbounds @simd for i in 1:n
-        t += A[i,i]
-    end
-    t
+function tr(A::StridedMatrix{T}) where T
+    checksquare(A)
+    isempty(A) && return zero(T)
+    reduce(+, (A[i] for i in diagind(A, IndexStyle(A))))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
@@ -565,9 +562,6 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
 
     # If possible, use diagonalization
-    if issymmetric(A)
-        return (Symmetric(A)^p)
-    end
     if ishermitian(A)
         return (Hermitian(A)^p)
     end
@@ -1387,15 +1381,14 @@ end
     factorize(A)
 
 Compute a convenient factorization of `A`, based upon the type of the input matrix.
-`factorize` checks `A` to see if it is symmetric/triangular/etc. if `A` is passed
-as a generic matrix. `factorize` checks every element of `A` to verify/rule out
-each property. It will short-circuit as soon as it can rule out symmetry/triangular
-structure. The return value can be reused for efficient solving of multiple
-systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
+If `A` is passed as a generic matrix, `factorize` checks to see if it is
+symmetric/triangular/etc. To this end, `factorize` may check every element of `A` to
+verify/rule out each property. It will short-circuit as soon as it can rule out
+symmetry/triangular structure. The return value can be reused for efficient solving
+of multiple systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholesky`](@ref))  |
 | Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bunchkaufman`](@ref)) |
 | Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
@@ -1405,9 +1398,6 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Symmetric real tridiagonal | LDLt (see [`ldlt`](@ref))      |
 | General square             | LU (see [`lu`](@ref))            |
 | General non-square         | QR (see [`qr`](@ref))            |
-
-If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
-will return a Cholesky factorization.
 
 # Examples
 ```jldoctest
@@ -1427,8 +1417,9 @@ julia> factorize(A) # factorize will check to see that A is already factorized
   ⋅    ⋅    ⋅   1.0  1.0
   ⋅    ⋅    ⋅    ⋅   1.0
 ```
-This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
-(e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
+
+This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra
+functions (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
 function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
@@ -1490,12 +1481,7 @@ function factorize(A::AbstractMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A; check = false)
-            if cf.info == 0
-                return cf
-            else
-                return factorize(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))

@@ -17,11 +17,6 @@ Core.String(::AbstractString)
 Base.SubString
 Base.LazyString
 Base.@lazy_str
-Base.AnnotatedString
-Base.AnnotatedChar
-Base.annotatedstring
-Base.annotations
-Base.annotate!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
@@ -48,6 +43,9 @@ Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
+Base.ltruncate
+Base.rtruncate
+Base.ctruncate
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
@@ -97,4 +95,18 @@ Base.isxdigit
 Base.escape_string
 Base.escape_raw_string
 Base.unescape_string
+```
+
+## `AnnotatedString`s
+
+!!! note
+    The API for AnnotatedStrings is considered experimental and is subject to change between
+    Julia versions.
+
+```@docs
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
+Base.annotations
+Base.annotate!
 ```

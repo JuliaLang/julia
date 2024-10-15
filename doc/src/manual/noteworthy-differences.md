@@ -82,6 +82,9 @@ may trip up Julia users accustomed to MATLAB:
     provides the higher order functions [`filter`](@ref) and [`filter!`](@ref), allowing users
     to write `filter(z->z>3, x)` and `filter!(z->z>3, x)` as alternatives to the corresponding transliterations
     `x[x.>3]` and `x = x[x.>3]`. Using [`filter!`](@ref) reduces the use of temporary arrays.
+  * Following on from the previous point, to replace values that meet specific criteria, for example a
+    thresholding operation on all elements in a matrix, could be achieved in Matlab as follows `A(A < threshold) = 0`.
+    The Julia equivalent would be `A[A .< threshold] .= 0`.
   * The analogue of extracting (or "dereferencing") all elements of a cell array, e.g. in `vertcat(A{:})`
     in MATLAB, is written using the splat operator in Julia, e.g. as `vcat(A...)`.
   * In Julia, the `adjoint` function performs conjugate transposition; in MATLAB, `adjoint` provides the
@@ -217,8 +220,8 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Unlike Python, Julia allows [AbstractArrays with arbitrary indexes](https://julialang.org/blog/2017/04/offset-arrays/).
     Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
     `a[end]` and `a[end-1]` in Julia.
-  * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
-  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
+  * Julia requires `end` for indexing until the last element. `x[2:end]` in Julia is equivalent to `x[1:]` in Python.
+  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is the same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
   * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
     in array-indexing. The `range` function is also supported.

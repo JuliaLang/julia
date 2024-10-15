@@ -30,8 +30,9 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.GenericMemory
 Base.Memory
-Base.MemoryRef
+Base.memoryref
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -78,6 +79,7 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
+Base.Broadcast.BroadcastFunction
 ```
 
 For specializing broadcast on custom types, see
@@ -136,6 +138,7 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
+Base.insertdims
 Base.dropdims
 Base.vec
 Base.SubArray

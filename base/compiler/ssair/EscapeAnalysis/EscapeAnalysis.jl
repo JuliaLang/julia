@@ -24,10 +24,10 @@ using ._TOP_MOD:     # Base definitions
     isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
-    Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
+    AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -732,11 +732,13 @@ function compute_frameinfo(ir::IRCode)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if isa(stmt, EnterNode)
-            @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
-            tryregions === nothing && (tryregions = UnitRange{Int}[])
             leave_block = stmt.catch_dest
-            leave_pc = first(ir.cfg.blocks[leave_block].stmts)
-            push!(tryregions, idx:leave_pc)
+            if leave_block ≠ 0
+                @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
+                tryregions === nothing && (tryregions = UnitRange{Int}[])
+                leave_pc = first(ir.cfg.blocks[leave_block].stmts)
+                push!(tryregions, idx:leave_pc)
+            end
         elseif arrayinfo !== nothing
             # TODO this super limited alias analysis is able to handle only very simple cases
             # this should be replaced with a proper forward dimension analysis
@@ -857,7 +859,7 @@ function add_escape_change!(astate::AnalysisState, @nospecialize(x), xinfo::Esca
     xinfo === ⊥ && return nothing # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if force || !isbitstype(widenconst(argextype(x, astate.ir)))
+        if force || !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, EscapeChange(xidx, xinfo))
         end
     end
@@ -867,7 +869,7 @@ end
 function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::Int)
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if !isbitstype(widenconst(argextype(x, astate.ir)))
+        if !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, LivenessChange(xidx, livepc))
         end
     end
@@ -1213,6 +1215,7 @@ escape_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
 escape_builtin!(::typeof(isdefined), _...) = false
 escape_builtin!(::typeof(throw), _...) = false
+escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
