@@ -1323,7 +1323,7 @@ end
 end
 
 @testset "indexing for a block matrix" begin
-    M = reshape([zeros(2,2), zeros(3,2), zeros(2,3), zeros(3,3)],2,2)
+    M = reshape([zeros(2,2), zeros(4,2), zeros(2,3), zeros(4,3)],2,2)
     U = UpperTriangular(M)
     @test [size(x) for x in U] == [size(x) for x in M]
 end
