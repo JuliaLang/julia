@@ -4650,9 +4650,9 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
     auto alloc = ctx.builder.CreateCall(call, { ptls, nbytes, cg_typ});
     // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
-    auto decay_alloc = maybe_decay_tracked(ctx, alloc);
+    auto decay_alloc = decay_derived(ctx, alloc);
     auto len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
-    ctx.builder.CreateAlignedStore(nel_unboxed, len_field, Align(sizeof(void*)));
+    auto len_store = ctx.builder.CreateAlignedStore(nel_unboxed, len_field, Align(sizeof(void*)));
     auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
     aliasinfo.decorateInst(len_store);
     // zeroinit pointers and unions
