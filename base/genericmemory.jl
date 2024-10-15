@@ -242,6 +242,7 @@ function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
 end
 
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
+    @_propagate_inbounds_meta
     val = x isa T ? x : convert(T,x)::T
     return _setindex!(A, val, i1)
 end
