@@ -292,12 +292,12 @@ syntaxes:
 
 ```jldoctest
 julia> x -> x^2 + 2x - 1
-#1 (generic function with 1 method)
+#2 (generic function with 1 method)
 
 julia> function (x)
            x^2 + 2x - 1
        end
-#3 (generic function with 1 method)
+#5 (generic function with 1 method)
 ```
 
 Each statement creates a function taking one argument `x` and returning the value of the polynomial `x^2 +

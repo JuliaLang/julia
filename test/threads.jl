@@ -359,3 +359,18 @@ end
         @test jl_setaffinity(0, mask, cpumasksize) == 0
     end
 end
+
+# Make sure default number of BLAS threads respects CPU affinity: issue #55572.
+@testset "LinearAlgebra number of default threads" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -E 'using LinearAlgebra; BLAS.get_num_threads()'`,
+                     # Remove all variables which could affect the default number of threads
+                     "OPENBLAS_NUM_THREADS"=>nothing,
+                     "GOTO_NUM_THREADS"=>nothing,
+                     "OMP_NUM_THREADS"=>nothing)
+        for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
+            @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
+        end
+    end
+end

@@ -25,8 +25,6 @@ else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),OpenBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
-else ifeq ($(OS),Darwin)
-LOADER_LDFLAGS += -lSystem
 endif
 
 # Build list of dependent libraries that must be opened

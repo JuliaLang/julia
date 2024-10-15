@@ -109,8 +109,8 @@ Random.seed!(1)
     end
 
     @testset "diag" begin
-        @test_throws ArgumentError diag(D,  n+1)
-        @test_throws ArgumentError diag(D, -n-1)
+        @test isempty(@inferred diag(D,  n+1))
+        @test isempty(@inferred diag(D, -n-1))
         @test (@inferred diag(D))::typeof(dd) == dd
         @test (@inferred diag(D, 0))::typeof(dd) == dd
         @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
@@ -815,6 +815,13 @@ end
     D = Diagonal(fill(S,3))
     @test D * fill(S,2,3)' == fill(S * S', 3, 2)
     @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
+
+    @testset "indexing with non-standard-axes" begin
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        D = Diagonal(fill(s,3))
+        @test @inferred(D[1,2]) isa typeof(s)
+        @test all(iszero, D[1,2])
+    end
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin
@@ -1265,6 +1272,17 @@ end
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
+@testset "triple multiplication with a sandwiched BandedMatrix" begin
+    D = Diagonal(StepRangeLen(NaN, 0, 4));
+    B = Bidiagonal(1:4, 1:3, :U)
+    C = D * B * D
+    @test iszero(diag(C, 2))
+    # test associativity
+    C1 = (D * B) * D
+    C2 = D * (B * D)
+    @test diag(C,2) == diag(C1,2) == diag(C2,2)
+end
+
 @testset "diagind" begin
     D = Diagonal(1:4)
     M = Matrix(D)
@@ -1345,6 +1363,17 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    D = Diagonal(rand(4))
+    @test rmul!(copy(D), 0.2) ≈ rmul!(Array(D), 0.2)
+    @test lmul!(0.2, copy(D)) ≈ lmul!(0.2, Array(D))
+    @test_throws ArgumentError rmul!(D, NaN)
+    @test_throws ArgumentError lmul!(NaN, D)
+    D = Diagonal(rand(1))
+    @test all(isnan, rmul!(copy(D), NaN))
+    @test all(isnan, lmul!(NaN, copy(D)))
+end
+
 @testset "+/- with block Symmetric/Hermitian" begin
     for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
         m = SizedArrays.SizedArray{(2,2)}(p)
@@ -1360,6 +1389,16 @@ end
 @testset "bounds-check with CartesianIndex ranges" begin
     D = Diagonal(1:typemax(Int))
     @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
+end
+
+@testset "zeros in kron with block matrices" begin
+    D = Diagonal(1:2)
+    B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
+    @test kron(D, B) == kron(Array(D), B)
+    @test kron(B, D) == kron(B, Array(D))
+    D2 = Diagonal([ones(2,2), ones(3,3)])
+    @test kron(D, D2) == kron(D, Array{eltype(D2)}(D2))
+    @test kron(D2, D) == kron(Array{eltype(D2)}(D2), D)
 end
 
 end # module TestDiagonal

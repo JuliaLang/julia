@@ -145,8 +145,7 @@ public:
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
-                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress);
+                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress);
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;

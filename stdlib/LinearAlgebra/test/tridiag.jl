@@ -287,8 +287,8 @@ end
             @test (@inferred diag(A, 1))::typeof(d) == (mat_type == Tridiagonal ? du : dl)
             @test (@inferred diag(A, -1))::typeof(d) == dl
             @test (@inferred diag(A, n-1))::typeof(d) == zeros(elty, 1)
-            @test_throws ArgumentError diag(A, -n - 1)
-            @test_throws ArgumentError diag(A, n + 1)
+            @test isempty(@inferred diag(A, -n - 1))
+            @test isempty(@inferred diag(A, n + 1))
             GA = mat_type == Tridiagonal ? mat_type(GenericArray.((dl, d, du))...) : mat_type(GenericArray.((d, dl))...)
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
@@ -501,10 +501,14 @@ end
     @test @inferred diag(A, 1) == fill(M, n-1)
     @test @inferred diag(A, 0) == fill(Symmetric(M), n)
     @test @inferred diag(A, -1) == fill(transpose(M), n-1)
-    @test_throws ArgumentError diag(A, -2)
-    @test_throws ArgumentError diag(A, 2)
-    @test_throws ArgumentError diag(A, n+1)
-    @test_throws ArgumentError diag(A, -n-1)
+    @test_broken diag(A, -2) == fill(M, n-2)
+    @test_broken diag(A, 2) == fill(M, n-2)
+    @test isempty(@inferred diag(A, n+1))
+    @test isempty(@inferred diag(A, -n-1))
+
+    A[1,1] = Symmetric(2M)
+    @test A[1,1] == Symmetric(2M)
+    @test_throws ArgumentError A[1,1] = M
 
     @test tr(A) == sum(diag(A))
     @test issymmetric(tr(A))
@@ -516,10 +520,10 @@ end
     @test @inferred diag(A, 1) == fill(M, n-1)
     @test @inferred diag(A, 0) == fill(M, n)
     @test @inferred diag(A, -1) == fill(M, n-1)
-    @test_throws MethodError diag(A, -2)
-    @test_throws MethodError diag(A, 2)
-    @test_throws ArgumentError diag(A, n+1)
-    @test_throws ArgumentError diag(A, -n-1)
+    @test_broken diag(A, -2) == fill(M, n-2)
+    @test_broken diag(A, 2) == fill(M, n-2)
+    @test isempty(@inferred diag(A, n+1))
+    @test isempty(@inferred diag(A, -n-1))
 
     for n in 0:2
         dv, ev = fill(M, n), fill(M, max(n-1,0))
@@ -529,6 +533,13 @@ end
         A = Tridiagonal(ev, dv, ev)
         @test A == Matrix{eltype(A)}(A)
     end
+
+    M = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    S = SymTridiagonal(fill(M,4), fill(M,3))
+    @test diag(S,2) == fill(zero(M), 2)
+    @test diag(S,-2) == fill(zero(M), 2)
+    @test isempty(diag(S,4))
+    @test isempty(diag(S,-4))
 end
 
 @testset "Issue 12068" begin
@@ -935,6 +946,19 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    for T in (SymTridiagonal(rand(4), rand(3)), Tridiagonal(rand(3), rand(4), rand(3)))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (SymTridiagonal(rand(2), rand(1)), Tridiagonal(rand(1), rand(2), rand(1)))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
 @testset "mul with empty arrays" begin
     A = zeros(5,0)
     T = Tridiagonal(zeros(0), zeros(0), zeros(0))
@@ -968,6 +992,77 @@ end
     @test sprint(show, T) == "Tridiagonal($(repr(diag(T,-1))), $(repr(diag(T))), $(repr(diag(T,1))))"
     S = SymTridiagonal(fill(m,3), fill(m,2))
     @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
+end
+
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        for T in (
+                Tridiagonal(rand(max(n-1,0)), rand(n), rand(max(n-1,0))),
+                SymTridiagonal(rand(n), rand(max(n-1,0))),
+                )
+            M = Matrix(T)
+            @test T * T ≈ M * M
+            @test mul!(similar(T, size(T)), T, T) ≈ M * M
+            @test mul!(ones(size(T)), T, T, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AR = rand(n,m)
+                AL = rand(m,n)
+                @test AL * T ≈ AL * M
+                @test T * AR ≈ M * AR
+                @test mul!(similar(AL), AL, T) ≈ AL * M
+                @test mul!(similar(AR), T, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, T, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), T, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            v = rand(n)
+            @test T * v ≈ M * v
+            @test mul!(similar(v), T, v) ≈ M * v
+
+            D = Diagonal(rand(n))
+            @test T * D ≈ M * D
+            @test D * T ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), D, T) ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), T, D) ≈ M * D
+            @test mul!(similar(T, size(T)), D, T) ≈ D * M
+            @test mul!(similar(T, size(T)), T, D) ≈ M * D
+            @test mul!(ones(size(T)), D, T, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(T)), T, D, 2, 4) ≈ M * D * 2 .+ 4
+
+            for uplo in (:U, :L)
+                B = Bidiagonal(rand(n), rand(max(0, n-1)), uplo)
+                @test T * B ≈ M * B
+                @test B * T ≈ B * M
+                if n <= 2
+                    @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
+                    @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+                end
+                @test mul!(similar(T, size(T)), B, T) ≈ B * M
+                @test mul!(similar(T, size(T)), T, B) ≈ M * B
+                @test mul!(ones(size(T)), B, T, 2, 4) ≈ B * M * 2 .+ 4
+                @test mul!(ones(size(T)), T, B, 2, 4) ≈ M * B * 2 .+ 4
+            end
+        end
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for T in (
+            SymTridiagonal(fill(arr,n), fill(arr,n-1)),
+            Tridiagonal(fill(arr,n-1), fill(arr,n), fill(arr,n-1)),
+            )
+        @test T * T ≈ Matrix(T) * Matrix(T)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * T ≈ Matrix(BL) * Matrix(T)
+        @test BU * T ≈ Matrix(BU) * Matrix(T)
+        @test T * BL ≈ Matrix(T) * Matrix(BL)
+        @test T * BU ≈ Matrix(T) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * T ≈ Matrix(D) * Matrix(T)
+        @test T * D ≈ Matrix(T) * Matrix(D)
+    end
 end
 
 end # module TestTridiagonal

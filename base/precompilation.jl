@@ -43,7 +43,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
     # Collect all direct dependencies of the project
     for key in ["deps", "weakdeps", "extras"]
-        for (name, _uuid) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
+        for (name, _uuid::String) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
             v = key == "deps" ? project_deps :
                 key == "weakdeps" ? project_weakdeps :
                 key == "extras" ? project_extras :
@@ -107,9 +107,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
     sizehint!(name_to_uuid, length(manifest_d))
     sizehint!(lookup_strategy, length(manifest_d))
 
-    for (name, pkg_infos) in get_deps(manifest_d)
-        pkg_infos = pkg_infos::Vector{Any}
-        for pkg_info in pkg_infos
+    for (name, pkg_infos::Vector{Any}) in get_deps(manifest_d)
+        for pkg_info::Dict{String, Any} in pkg_infos
             m_uuid = UUID(pkg_info["uuid"]::String)
 
             # If we have multiple packages with the same name we will overwrite things here
@@ -141,8 +140,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
-            for (ext, triggers) in deps_pkg
-                triggers = triggers::Union{String, Vector{String}}
+            for (ext, triggers::Union{String, Vector{String}}) in deps_pkg
                 if triggers isa String
                     triggers = [triggers]
                 end
@@ -176,7 +174,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
     if proj_name !== nothing && proj_uuid !== nothing
         deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
         extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
         entry_point = path !== nothing ? path : dirname(envpath)
         lookup_strategy[proj_uuid] = entry_point
     end
@@ -299,7 +297,8 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     end
     termwidth = @something termwidth displaysize(io)[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
-    n_filled = ceil(Int, max_progress_width * perc / 100)
+    n_filled = floor(Int, max_progress_width * perc / 100)
+    partial_filled = (max_progress_width * perc / 100) - n_filled
     n_left = max_progress_width - n_filled
     headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
@@ -308,8 +307,15 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
         printstyled(io, join(headers[2:end], ' '))
         print(io, " ")
         printstyled(io, "━"^n_filled; color=p.color)
-        printstyled(io, perc >= 95 ? "━" : "╸"; color=p.color)
-        printstyled(io, "━"^n_left, " "; color=:light_black)
+        if n_left > 0
+            if partial_filled > 0.5
+                printstyled(io, "╸"; color=p.color) # More filled, use ╸
+            else
+                printstyled(io, "╺"; color=:light_black) # Less filled, use ╺
+            end
+            printstyled(io, "━"^(n_left-1); color=:light_black)
+        end
+        printstyled(io, " "; color=:light_black)
         print(io, progress_text)
         carriagereturn && print(io, "\r")
     end
@@ -434,51 +440,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
     # consider exts of direct deps to be direct deps so that errors are reported
     append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
-
-    # An extension effectively depends on another extension if it has all the the
-    # dependencies of that other extension
-    function expand_dependencies(depsmap)
-        function visit!(visited, node, all_deps)
-            if node in visited
-                return
-            end
-            push!(visited, node)
-            for dep in get(Set{Base.PkgId}, depsmap, node)
-                if !(dep in all_deps)
-                    push!(all_deps, dep)
-                    visit!(visited, dep, all_deps)
-                end
-            end
-        end
-
-        depsmap_transitive = Dict{Base.PkgId, Set{Base.PkgId}}()
-        for package in keys(depsmap)
-            # Initialize a set to keep track of all dependencies for 'package'
-            all_deps = Set{Base.PkgId}()
-            visited = Set{Base.PkgId}()
-            visit!(visited, package, all_deps)
-            # Update depsmap with the complete set of dependencies for 'package'
-            depsmap_transitive[package] = all_deps
-        end
-        return depsmap_transitive
-    end
-
-    depsmap_transitive = expand_dependencies(depsmap)
-
-    for (_, extensions_1) in pkg_exts_map
-        for extension_1 in extensions_1
-            deps_ext_1 = depsmap_transitive[extension_1]
-            for (_, extensions_2) in pkg_exts_map
-                for extension_2 in extensions_2
-                    extension_1 == extension_2 && continue
-                    deps_ext_2 = depsmap_transitive[extension_2]
-                    if issubset(deps_ext_2, deps_ext_1)
-                        push!(depsmap[extension_1], extension_2)
-                    end
-                end
-            end
-        end
-    end
 
     @debug "precompile: deps collected"
     # this loop must be run after the full depsmap has been populated
@@ -711,7 +672,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             n_print_rows = 0
             while !printloop_should_exit
                 lock(print_lock) do
-                    term_size = Base.displaysize(io)::Tuple{Int,Int}
+                    term_size = Base.displaysize_(io)
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -726,7 +687,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         bar.max = n_total - n_already_precomp
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
+                        termwidth = Base.displaysize_(io)[2] - 4
                         if !final_loop
                             str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
@@ -852,7 +813,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags)
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags, isext = haskey(exts, pkg))
                                 end
                             end
                             if ret isa Base.PrecompilableError
