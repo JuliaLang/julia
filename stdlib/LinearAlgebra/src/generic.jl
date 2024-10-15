@@ -33,18 +33,22 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
-@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+function MulAddMul{ais1,bis0}(alpha::TA, beta::TB) where {ais1,bis0,TA,TB}
+    MulAddMul{ais1,bis0,TA,TB}(alpha,beta)
+end
+
+@inline function MulAddMul(alpha, beta)
     if isone(alpha)
         if iszero(beta)
-            return MulAddMul{true,true,TA,TB}(alpha, beta)
+            return MulAddMul{true,true}(alpha, beta)
         else
-            return MulAddMul{true,false,TA,TB}(alpha, beta)
+            return MulAddMul{true,false}(alpha, beta)
         end
     else
         if iszero(beta)
-            return MulAddMul{false,true,TA,TB}(alpha, beta)
+            return MulAddMul{false,true}(alpha, beta)
         else
-            return MulAddMul{false,false,TA,TB}(alpha, beta)
+            return MulAddMul{false,false}(alpha, beta)
         end
     end
 end
