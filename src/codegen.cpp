@@ -233,7 +233,6 @@ STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
 STATISTIC(EmittedInvokes, "Number of invokes emitted");
 STATISTIC(EmittedCalls, "Number of calls emitted");
 STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
-STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
 STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
 STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
 STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");

@@ -153,7 +153,7 @@ static int jl_add_to_ee(
         orc::ThreadSafeModule &M,
         const StringMap<orc::ThreadSafeModule*> &NewExports,
         DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        SmallVectorImpl<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT;
+        SmallVectorImpl<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 #endif
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
 
@@ -963,7 +963,7 @@ static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAF
         opt_level = std::min(opt_level, N_optlevels - 1);
         M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
     });
-    return std::move(TSM);
+    return TSM;
 }
 static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
     return selectOptLevel(std::move(TSM));
@@ -1205,7 +1205,7 @@ public:
     }
 };
 
-RTDyldMemoryManager *createRTDyldMemoryManager(void);
+RTDyldMemoryManager *createRTDyldMemoryManager(void) JL_NOTSAFEPOINT;
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
@@ -1267,9 +1267,10 @@ public:
     }
 };
 
-
-void registerRTDyldJITObject(const object::ObjectFile &Object,
-                             const RuntimeDyld::LoadedObjectInfo &L)
+#ifndef JL_USE_JITLINK
+static void registerRTDyldJITObject(orc::MaterializationResponsibility &MR,
+                                    const object::ObjectFile &Object,
+                                    const RuntimeDyld::LoadedObjectInfo &L)
 {
     StringMap<object::SectionRef> loadedSections;
     for (const object::SectionRef &lSection : Object.sections()) {
@@ -1291,6 +1292,8 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     auto DebugObject = L.getObjectForDebug(Object); // ELF requires us to make a copy to mutate the header with the section load addresses. On other platforms this is a no-op.
     jl_register_jit_object(DebugObject.getBinary() ? *DebugObject.getBinary() : Object, getLoadAddress);
 }
+#endif
+
 namespace {
     static std::unique_ptr<TargetMachine> createTargetMachine() JL_NOTSAFEPOINT {
         TargetOptions options = TargetOptions();
@@ -1627,7 +1630,7 @@ struct JuliaOJIT::JITPointersT {
             if (!M.functions().empty())
                 jl_decorate_module(M);
         });
-        return std::move(TSM);
+        return TSM;
     }
     Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
         return operator()(std::move(TSM));
@@ -1937,12 +1940,7 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(jit_bytes_size));
 #else
-    UnlockedObjectLayer.setNotifyLoaded(
-        [this](orc::MaterializationResponsibility &MR,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LO) {
-            registerRTDyldJITObject(Object, LO);
-        });
+    UnlockedObjectLayer.setNotifyLoaded(registerRTDyldJITObject);
 #endif
 
     std::string ErrorStr;
@@ -2310,6 +2308,7 @@ void JuliaOJIT::enableJITDebuggingSupport()
     addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBAllocAction);
     auto registerJITLoaderGDBWrapper = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBWrapper);
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
+    (void)registerJITLoaderGDBWrapper;
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
 #ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
@@ -2345,12 +2344,12 @@ void JuliaOJIT::enableOProfileJITEventListener()
 void JuliaOJIT::enablePerfJITEventListener()
 {
 #if JL_LLVM_VERSION >= 180000
-    orc::SymbolMap PerfFunctions;
-    auto StartAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfStart);
-    auto EndAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfEnd);
-    auto ImplAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfImpl);
-    cantFail(JD.define(orc::absoluteSymbols(PerfFunctions)));
     if (TM->getTargetTriple().isOSBinFormatELF()) {
+        orc::SymbolMap PerfFunctions;
+        auto StartAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfStart);
+        auto EndAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfEnd);
+        auto ImplAddr = addAbsoluteToMap(PerfFunctions,llvm_orc_registerJITLoaderPerfImpl);
+        cantFail(JD.define(orc::absoluteSymbols(PerfFunctions)));
         ObjectLayer.addPlugin(cantFail(DebugInfoPreservationPlugin::Create()));
         //ObjectLayer.addPlugin(cantFail(PerfSupportPlugin::Create(
         //    ES.getExecutorProcessControl(), *JD, true, true)));
