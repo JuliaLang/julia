@@ -3297,8 +3297,8 @@ end
     function test_alloc(T)
         @test (@allocated no_allocate(T)) == 0
     end
-    for T in [Memory, Vector]
-        for ET in [Int,]# still broken: Union{Int, Nothing}, Union{Int, String}]
+    @testset "$T" for T in [Memory, Vector]
+        @testset "$ET" for ET in [Int, Union{Int, Float64}]# still broken: , Union{Int, BigInt}]
             no_allocate(T{ET}) #compile
             test_alloc(T{ET})
         end
