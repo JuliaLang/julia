@@ -560,6 +560,8 @@ typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
+    // saved floating-point control state
+    uint64_t fpctrl;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
 #ifdef USE_TRACY

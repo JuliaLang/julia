@@ -84,6 +84,15 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
+// RAII scope for running in the architectural default fp environment.
+struct jl_fpctrl_default_scope {
+    uint64_t saved;
+    jl_fpctrl_default_scope() JL_NOTSAFEPOINT : saved(jl_fpctrl_enter_default()) {}
+    ~jl_fpctrl_default_scope() JL_NOTSAFEPOINT { jl_fpctrl_restore(saved); }
+    jl_fpctrl_default_scope(const jl_fpctrl_default_scope&) = delete;
+    jl_fpctrl_default_scope &operator=(const jl_fpctrl_default_scope&) = delete;
+};
+
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;

@@ -880,6 +880,7 @@ static void printIR(raw_ostream &OS, Any IR) JL_NOTSAFEPOINT {
 }
 
 void NewPM::run(Module &M) {
+    jl_fpctrl_default_scope fpctrl_scope;
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
