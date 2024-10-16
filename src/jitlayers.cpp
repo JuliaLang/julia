@@ -148,13 +148,6 @@ void jl_dump_llvm_opt_impl(void *s)
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
 }
 
-#ifndef JL_USE_JITLINK
-static int jl_add_to_ee(
-        orc::ThreadSafeModule &M,
-        const StringMap<orc::ThreadSafeModule*> &NewExports,
-        DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        SmallVectorImpl<orc::ThreadSafeModule*> &Stack) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
-#endif
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
@@ -273,7 +266,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
     std::swap(params.workqueue, edges);
     for (auto &it : edges) {
         jl_code_instance_t *codeinst = it.first;
-        auto proto = it.second;
+        auto &proto = it.second;
         // try to emit code for this item from the workqueue
         StringRef invokeName = "";
         StringRef preal_decl = "";
@@ -316,38 +309,38 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
             // if we have a prototype emitted, compare it to what we emitted earlier
             Module *mod = proto.decl->getParent();
             assert(proto.decl->isDeclaration());
-            Function *preal = nullptr;
-            if (proto.specsig != preal_specsig || preal_decl.empty()) {
-                isedge = false;
+            Function *pinvoke = nullptr;
+            if (preal_decl.empty()) {
                 if (invoke != nullptr && invokeName.empty()) {
-                    if (invoke == jl_fptr_args_addr)
-                        invokeName = "jl_fptr_args";
-                    else if (invoke == jl_fptr_sparam_addr)
+                    assert(invoke != jl_fptr_args_addr);
+                    if (invoke == jl_fptr_sparam_addr)
                         invokeName = "jl_fptr_sparam";
                     else if (invoke == jl_f_opaque_closure_call_addr)
                         invokeName = "jl_f_opaque_closure_call";
                     else
                         invokeName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, invoke, codeinst);
                 }
-                preal = emit_tojlinvoke(codeinst, invokeName, mod, params);
-                if (proto.specsig) {
-                    // emit specsig-to-(jl)invoke conversion
-                    proto.decl->setLinkage(GlobalVariable::InternalLinkage);
-                    //protodecl->setAlwaysInline();
-                    jl_init_function(proto.decl, params.TargetTriple);
-                    // TODO: maybe this can be cached in codeinst->specfptr?
-                    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
-                    jl_method_instance_t *mi = codeinst->def;
-                    size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
-                    bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
-                    emit_cfunc_invalidate(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, preal, 0, 0);
-                    jl_gc_unsafe_leave(ct->ptls, gc_state);
-                    preal_decl = ""; // no need to fixup the name
-                }
-                else {
-                    // emit jlcall1-to-(jl)invoke conversion
-                    preal_decl = preal->getName();
-                }
+                pinvoke = emit_tojlinvoke(codeinst, invokeName, mod, params);
+                if (!proto.specsig)
+                    proto.decl->replaceAllUsesWith(pinvoke);
+                isedge = false;
+            }
+            if (proto.specsig && !preal_specsig) {
+                // get or build an fptr1 that can invoke codeinst
+                if (pinvoke == nullptr)
+                    pinvoke = get_or_emit_fptr1(preal_decl, mod);
+                // emit specsig-to-(jl)invoke conversion
+                proto.decl->setLinkage(GlobalVariable::InternalLinkage);
+                //protodecl->setAlwaysInline();
+                jl_init_function(proto.decl, params.TargetTriple);
+                // TODO: maybe this can be cached in codeinst->specfptr?
+                int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
+                jl_method_instance_t *mi = codeinst->def;
+                size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
+                bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+                emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke, 0, 0);
+                jl_gc_unsafe_leave(ct->ptls, gc_state);
+                preal_decl = ""; // no need to fixup the name
             }
             if (!preal_decl.empty()) {
                 // merge and/or rename this prototype to the real function
@@ -359,26 +352,34 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                     proto.decl->setName(preal_decl);
                 }
             }
-            if (proto.oc) { // additionally, if we are dealing with an oc, then we might also need to fix up the fptr1 reference too
+            if (proto.oc) { // additionally, if we are dealing with an OC constructor, then we might also need to fix up the fptr1 reference too
                 assert(proto.specsig);
                 StringRef ocinvokeDecl = invokeName;
                 if (invoke != nullptr && ocinvokeDecl.empty()) {
-                    if (invoke == jl_fptr_args_addr)
-                        ocinvokeDecl = "jl_fptr_args";
-                    else if (invoke == jl_fptr_sparam_addr)
-                        ocinvokeDecl = "jl_fptr_sparam";
+                    // check for some special tokens used by opaque_closure.c and convert those to their real functions
+                    assert(invoke != jl_fptr_args_addr);
+                    assert(invoke != jl_fptr_sparam_addr);
+                    if (invoke == jl_fptr_interpret_call_addr)
+                        ocinvokeDecl = "jl_fptr_interpret_call";
+                    else if (invoke == jl_fptr_const_return_addr)
+                        ocinvokeDecl = "jl_fptr_const_return";
                     else if (invoke == jl_f_opaque_closure_call_addr)
                         ocinvokeDecl = "jl_f_opaque_closure_call";
+                    //else if (invoke == jl_interpret_opaque_closure_addr)
                     else
                         ocinvokeDecl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, invoke, codeinst);
                 }
                 // if OC expected a specialized specsig dispatch, but we don't have it, use the inner trampoline here too
                 // XXX: this invoke translation logic is supposed to exactly match new_opaque_closure
-                if (ocinvokeDecl == "jl_fptr_args")
-                    ocinvokeDecl = preal->getName(); // TODO: use the original preal_decl it computed from specsig
-                else if (!preal_specsig || ocinvokeDecl == "jl_fptr_sparam" || ocinvokeDecl == "jl_f_opaque_closure_call" || ocinvokeDecl == "jl_fptr_interpret_call" || ocinvokeDecl == "jl_fptr_const_return")
-                    ocinvokeDecl = preal->getName();
+                if (!preal_specsig || ocinvokeDecl == "jl_f_opaque_closure_call" || ocinvokeDecl == "jl_fptr_interpret_call" || ocinvokeDecl == "jl_fptr_const_return") {
+                    if (pinvoke == nullptr)
+                        ocinvokeDecl = get_or_emit_fptr1(preal_decl, mod)->getName();
+                    else
+                        ocinvokeDecl = pinvoke->getName();
+                }
                 assert(!ocinvokeDecl.empty());
+                assert(ocinvokeDecl != "jl_fptr_args");
+                assert(ocinvokeDecl != "jl_fptr_sparam");
                 // merge and/or rename this prototype to the real function
                 if (Value *specfun = mod->getNamedValue(ocinvokeDecl)) {
                     if (proto.oc != specfun)
@@ -2664,74 +2665,6 @@ static void jl_decorate_module(Module &M) {
     }
 #undef ASM_USES_ELF
 }
-
-#ifndef JL_USE_JITLINK
-// Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
-static int jl_add_to_ee(
-        orc::ThreadSafeModule &M,
-        const StringMap<orc::ThreadSafeModule*> &NewExports,
-        DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        SmallVectorImpl<orc::ThreadSafeModule*> &Stack)
-{
-    // First check if the TSM is empty (already compiled)
-    if (!M)
-        return 0;
-    // Next check and record if it is on the stack somewhere
-    {
-        auto &Id = Queued[&M];
-        if (Id)
-            return Id;
-        Stack.push_back(&M);
-        Id = Stack.size();
-    }
-    // Finally work out the SCC
-    int depth = Stack.size();
-    int MergeUp = depth;
-    SmallVector<orc::ThreadSafeModule*, 0> Children;
-    M.withModuleDo([&](Module &m) JL_NOTSAFEPOINT {
-        for (auto &F : m.global_objects()) {
-            if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                auto Callee = NewExports.find(F.getName());
-                if (Callee != NewExports.end()) {
-                    auto *CM = Callee->second;
-                    if (*CM && CM != &M) {
-                        auto Down = Queued.find(CM);
-                        if (Down != Queued.end())
-                            MergeUp = std::min(MergeUp, Down->second);
-                        else
-                            Children.push_back(CM);
-                    }
-                }
-            }
-        }
-    });
-    assert(MergeUp > 0);
-    for (auto *CM : Children) {
-        int Down = jl_add_to_ee(*CM, NewExports, Queued, Stack);
-        assert(Down <= (int)Stack.size());
-        if (Down)
-            MergeUp = std::min(MergeUp, Down);
-    }
-    if (MergeUp < depth)
-        return MergeUp;
-    while (1) {
-        // Not in a cycle (or at the top of it)
-        // remove SCC state and merge every CM from the cycle into M
-        orc::ThreadSafeModule *CM = Stack.back();
-        auto it = Queued.find(CM);
-        assert(it->second == (int)Stack.size());
-        Queued.erase(it);
-        Stack.pop_back();
-        if ((int)Stack.size() < depth) {
-            assert(&M == CM);
-            break;
-        }
-        jl_merge_module(M, std::move(*CM));
-    }
-    jl_ExecutionEngine->addModule(std::move(M));
-    return 0;
-}
-#endif
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
 void add_named_global(StringRef name, void *addr)
