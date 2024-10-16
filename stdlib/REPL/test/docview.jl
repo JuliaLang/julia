@@ -136,6 +136,17 @@ end
 # Issue #51344, don't print "internal binding" warning for non-existent bindings.
 @test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"
 
+module AliasUsingTests
+    using Base: sum as sun
+
+    using Test, REPL
+    @testset "alias in using" begin
+        docstring(input) = string(eval(REPL.helpmode(IOBuffer(), input, @__MODULE__)))
+        @test contains(docstring("sun"), "sum")
+        @test contains(docstring("Base.sun"), "No documentation found.")
+    end
+end
+
 module TestSuggestPublic
     export dingo
     public dango
