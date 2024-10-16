@@ -93,7 +93,7 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     underline = _header_underlines[l]
     pre = ' '^margin
     local line_width
-    with_output_annotations(io, :face => face) do io
+    with_output_annotations(io, :face => getface(face)) do io
         headline = annotprint(terminline, md.text)
         lines = wraplines(headline, columns - 4margin)
         for (i, line) in enumerate(lines)
@@ -111,7 +111,7 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     header_width = max(0, line_width)
     if underline != ' ' && header_width > 0
         print(io, '\n', ' '^(margin))
-        with_output_annotations(io -> print(io, underline^header_width), io, :face => face)
+        with_output_annotations(io -> print(io, underline^header_width), io, :face => getface(face))
     end
 end
 
@@ -178,11 +178,11 @@ function terminline(io::IO, md::AbstractString)
 end
 
 function terminline(io::AnnotIO, md::Bold)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => :bold)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => getface(:bold))
 end
 
 function terminline(io::AnnotIO, md::Italic)
-    with_output_annotations(io -> terminline(io, md.text), io, :face => :italic)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => getface(:italic))
 end
 
 function terminline(io::IO, md::LineBreak)
@@ -199,9 +199,9 @@ end
 
 function terminline(io::AnnotIO, md::Link)
     annots = if occursin(r"^(https?|file)://", md.url)
-        (:face => :markdown_link, :link => md.url)
+        (:face => getface(:markdown_link), :link => md.url)
     else
-        (:face => :markdown_link,)
+        (:face => getface(:markdown_link),)
     end
     with_output_annotations(io -> terminline(io, md.text), io, annots...)
 end
