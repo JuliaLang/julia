@@ -30,6 +30,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 macro _boundscheck() Expr(:boundscheck) end
+macro _propagate_inbounds_meta() Expr(:meta, :inline, :propagate_inbounds) end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x

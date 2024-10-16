@@ -238,12 +238,13 @@ getindex(A::Memory, c::Colon) = copy(A)
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
     val = x isa T ? x : convert(T,x)::T
     ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
+    # boundscheck emitted by `memoryrefnew` also checks the index for memoryrefset!
+    memoryrefset!(ref, val, :not_atomic, false)
     return A
 end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
-    @inline
+    @_propagate_inbounds_meta
     @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
     setindex!(A, x, i1)
 end
