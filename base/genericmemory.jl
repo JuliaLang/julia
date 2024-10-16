@@ -235,11 +235,16 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-function setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
+function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
     ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
+    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
     return A
+end
+
+function setindex!(A::Memory{T}, x, i1::Int) where {T}
+    @_propagate_inbounds_meta
+    val = x isa T ? x : convert(T,x)::T
+    return _setindex!(A, val, i1)
 end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
