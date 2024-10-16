@@ -331,7 +331,7 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
     while (!workqueue.empty()) {
         auto it = workqueue.pop_back_val();
         codeinst = it.first;
-        auto proto = it.second;
+        auto &proto = it.second;
         // try to emit code for this item from the workqueue
         StringRef invokeName = "";
         StringRef preal_decl = "";
@@ -370,30 +370,31 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
         // patch up the prototype we emitted earlier
         Module *mod = proto.decl->getParent();
         assert(proto.decl->isDeclaration());
-        Function *preal = nullptr;
-        if (proto.specsig != preal_specsig || preal_decl.empty()) {
+        Function *pinvoke = nullptr;
+        if (preal_decl.empty()) {
             if (invokeName.empty() && params.params->trim) {
                 errs() << "Bailed out to invoke when compiling:";
                 jl_(codeinst->def);
                 abort();
             }
-            preal = emit_tojlinvoke(codeinst, invokeName, mod, params);
-            if (proto.specsig) {
-                // emit specsig-to-(jl)invoke conversion
-                proto.decl->setLinkage(GlobalVariable::InternalLinkage);
-                //protodecl->setAlwaysInline();
-                jl_init_function(proto.decl, params.TargetTriple);
-                jl_method_instance_t *mi = codeinst->def;
-                size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
-                bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
-                // TODO: maybe this can be cached in codeinst->specfptr?
-                emit_cfunc_invalidate(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, preal, 0, 0);
-                preal_decl = ""; // no need to fixup the name
-            }
-            else {
-                // emit jlcall1-to-(jl)invoke conversion
-                preal_decl = preal->getName();
-            }
+            pinvoke = emit_tojlinvoke(codeinst, invokeName, mod, params);
+            if (!proto.specsig)
+                proto.decl->replaceAllUsesWith(pinvoke);
+        }
+        if (proto.specsig && !preal_specsig) {
+            // get or build an fptr1 that can invoke codeinst
+            if (pinvoke == nullptr)
+                pinvoke = get_or_emit_fptr1(preal_decl, mod);
+            // emit specsig-to-(jl)invoke conversion
+            proto.decl->setLinkage(GlobalVariable::InternalLinkage);
+            //protodecl->setAlwaysInline();
+            jl_init_function(proto.decl, params.TargetTriple);
+            jl_method_instance_t *mi = codeinst->def;
+            size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
+            bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+            // TODO: maybe this can be cached in codeinst->specfptr?
+            emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke, 0, 0);
+            preal_decl = ""; // no need to fixup the name
         }
         if (!preal_decl.empty()) {
             // merge and/or rename this prototype to the real function
@@ -410,11 +411,11 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
             StringRef ocinvokeDecl = invokeName;
             // if OC expected a specialized specsig dispatch, but we don't have it, use the inner trampoline here too
             // XXX: this invoke translation logic is supposed to exactly match new_opaque_closure
-            if (ocinvokeDecl == "jl_fptr_args")
-                ocinvokeDecl = preal->getName(); // TODO: use the original preal_decl it computed from specsig
-            else if (!preal_specsig || ocinvokeDecl == "jl_fptr_sparam" || ocinvokeDecl == "jl_f_opaque_closure_call" || ocinvokeDecl == "jl_fptr_interpret_call" || ocinvokeDecl == "jl_fptr_const_return")
-                ocinvokeDecl = preal->getName();
+            if (!preal_specsig || ocinvokeDecl == "jl_f_opaque_closure_call" || ocinvokeDecl == "jl_fptr_interpret_call" || ocinvokeDecl == "jl_fptr_const_return")
+                ocinvokeDecl = pinvoke->getName();
             assert(!ocinvokeDecl.empty());
+            assert(ocinvokeDecl != "jl_fptr_args");
+            assert(ocinvokeDecl != "jl_fptr_sparam");
             // merge and/or rename this prototype to the real function
             if (Value *specfun = mod->getNamedValue(ocinvokeDecl)) {
                 if (proto.oc != specfun)
