@@ -1886,7 +1886,7 @@ end
 
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TestShowType.TypeA)
-    @test String(take!(b)) == "$(@__MODULE__).TestShowType.TypeA"
+    @test String(take!(b)) == "TestShowType.TypeA"
 
     b = IOBuffer()
     show(IOContext(b, :module => TestShowType), TestShowType.TypeA)
