@@ -1160,4 +1160,12 @@ end
     @test symT-s == Array(symT) - Array(s)
 end
 
+@testset "show" begin
+    A = rand(2,2)
+    H = Hermitian(A)
+    S = Symmetric(A)
+    @test sprint(show, H) == "Hermitian([$(H[1,1]) $(H[1,2]); $(H[2,1]) $(H[2,2])])"
+    @test sprint(show, S) == "Symmetric([$(S[1,1]) $(S[1,2]); $(S[2,1]) $(S[2,2])])"
+end
+
 end # module TestSymmetric

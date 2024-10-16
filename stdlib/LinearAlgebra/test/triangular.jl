@@ -851,8 +851,10 @@ end
 
     # don't access non-structural elements while displaying
     M = Matrix{BigFloat}(undef, 2, 2)
-    @test sprint(show, UpperTriangular(M)) == "BigFloat[#undef #undef; 0.0 #undef]"
-    @test sprint(show, LowerTriangular(M)) == "BigFloat[#undef 0.0; #undef #undef]"
+    @test sprint(show, UpperTriangular(M)) == "UpperTriangular(BigFloat[#undef #undef; 0.0 #undef])"
+    @test sprint(show, LowerTriangular(M)) == "LowerTriangular(BigFloat[#undef 0.0; #undef #undef])"
+    @test sprint(show, UnitUpperTriangular(M)) == "UnitUpperTriangular(BigFloat[1.0 #undef; 0.0 1.0])"
+    @test sprint(show, UnitLowerTriangular(M)) == "UnitLowerTriangular(BigFloat[1.0 0.0; #undef 1.0])"
 end
 
 @testset "adjoint/transpose triangular/vector multiplication" begin
