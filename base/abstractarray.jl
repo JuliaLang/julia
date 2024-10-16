@@ -3045,6 +3045,15 @@ function cmp(A::AbstractVector, B::AbstractVector)
 end
 
 """
+    isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+
+Return `true` when the only element of `A` is less than the only element of `B`.
+"""
+function isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+    isless(only(A), only(B))
+end
+
+"""
     isless(A::AbstractVector, B::AbstractVector)
 
 Return `true` when `A` is less than `B` in lexicographic order.
