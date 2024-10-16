@@ -3300,7 +3300,7 @@ end
     @testset "$T" for T in [Memory, Vector]
         @testset "$ET" for ET in [Int, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            test_alloc(T{ET}, broken=xor(T==Memory, ET==Union{Int, Float64}))
+            test_alloc(T{ET}, broken=(T==Memory && ET==Union{Int, Float64}))
         end
     end
 end

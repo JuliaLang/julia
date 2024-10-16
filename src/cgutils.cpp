@@ -4542,21 +4542,21 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
     int pooled = tot <= GC_MAX_SZCLASS;
-    Value *alloc, *decay_alloc, *ptr_field;
+    Value *alloc, *decay_alloc, *memory_ptr;
     jl_aliasinfo_t aliasinfo;
     if (pooled) {
         auto cg_tot = ConstantInt::get(T_size, tot);
         auto call = prepare_call(jl_alloc_obj_func);
         alloc = ctx.builder.CreateCall(call, { ct, cg_tot, track_pjlvalue(ctx, cg_typ)});
         decay_alloc = decay_derived(ctx, alloc);
-        ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        setName(ctx.emission_context, ptr_field, "memory_ptr");
+        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        setName(ctx.emission_context, memory_ptr, "memory_ptr");
         auto objref = emit_pointer_from_objref(ctx, alloc);
-        Value *data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
-        auto *store = ctx.builder.CreateAlignedStore(data, ptr_field, Align(sizeof(void*)));
+        Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
+        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
         aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
         aliasinfo.decorateInst(store);
-        setName(ctx.emission_context, data, "memory_data");
+        setName(ctx.emission_context, memory_data, "memory_data");
     } else { // just use the dynamic length version since the malloc will be slow anyway
         auto ptls = get_current_ptls(ctx);
         auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
@@ -4571,9 +4571,11 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
 
     // zeroinit pointers and unions
     if (zi) {
-        ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        Value *mem_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, ptr_field, Align(sizeof(void*)));
-        ctx.builder.CreateMemSet(mem_ptr, ConstantInt::get(int8t, 0), cg_nbytes, Align(sizeof(void*)));
+        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(load);
+        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), cg_nbytes, Align(sizeof(void*)));
     }
 
     setName(ctx.emission_context, alloc, arg_typename);
@@ -4657,9 +4659,11 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     aliasinfo.decorateInst(len_store);
     // zeroinit pointers and unions
     if (zi) {
-        Value *ptr_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        Value *mem_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, ptr_field, Align(sizeof(void*)));
-        ctx.builder.CreateMemSet(mem_ptr, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
+        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(load);
+        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
     }
 
     setName(ctx.emission_context, alloc, arg_typename);

@@ -384,8 +384,11 @@ default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    @boundscheck Core.Intrinsics.ult_int(i, A.length)
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
