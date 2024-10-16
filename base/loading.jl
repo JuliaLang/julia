@@ -2900,6 +2900,9 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
+# Const global for GC root
+const newly_inferred = CodeInstance[]
+
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
@@ -2919,8 +2922,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
-    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
-    Core.Compiler.track_newly_inferred.x = true
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -2928,10 +2930,15 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
-        Core.Compiler.track_newly_inferred.x = false
+        ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     Base.check_package_module_loaded(pkg)
+
+    # Re-populate the runtime's newly-inferred array, which will be included
+    # in the output. We removed it above to avoid including any code we may
+    # have compiled for error handling and validation.
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
 end
 
 function check_package_module_loaded(pkg::PkgId)
