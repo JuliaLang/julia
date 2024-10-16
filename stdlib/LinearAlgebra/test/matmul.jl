@@ -1139,8 +1139,8 @@ end
     Base.zero(::Thing)       = Thing(0.)
     Base.one(::Type{Thing})  = Thing(1.)
     Base.one(::Thing)        = Thing(1.)
-    Base.:+(t::Thing...)     = +(getfield.(t, :data)...)
-    Base.:*(t::Thing...)     = *(getfield.(t, :data)...)
+    Base.:+(t1::Thing, t::Thing...) = +(getfield.((t1, t...), :data)...)
+    Base.:*(t1::Thing, t::Thing...) = *(getfield.((t1, t...), :data)...)
 
     M = Float64[1 2; 3 4]
     A = Thing.(M)
