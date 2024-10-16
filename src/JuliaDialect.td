@@ -1,5 +1,13 @@
 include "llvm-dialects/Dialect/Dialect.td"
 
+def Speculatable : LlvmEnumAttributeTrait<"Speculatable">;
+
+
+def NonNull : LlvmEnumAttributeTrait<"NonNull">;
+def NoUndef : LlvmEnumAttributeTrait<"NoUndef">;
+def NoCapture : LlvmEnumAttributeTrait<"NoCapture">;
+def ReadNone : LlvmEnumAttributeTrait<"ReadNone">;
+
 def JuliaDialect : Dialect {
   let name = "julia";
   let cppNamespace = "julia";
@@ -48,3 +56,22 @@ def GetPGCStackOrNew : JuliaOp<"get_pgcstack_or_new",
   let description = [{}];
 }
 
+def GCLoaded : JuliaOp<"gc_loaded",
+                    [Memory<[]>, NoSync, NoUnwind, Speculatable, WillReturn, NoRecurse]> {
+    let results = (outs LoadedPtr:$result);
+    let arguments = (ins TrackedPtr:$base, Ptr:$tracked);
+    let summary = "";
+    let description = [{}];
+}
+
+    // declare nonnull noundef ptr(Loaded) @"julia.gc_loaded"(ptr(Tracked) nocapture nonnull noundef readnone, ptr nonnull noundef readnone)
+
+
+//         AttrBuilder RetAttrs(C);
+//         RetAttrs.addAttribute(Attribute::NonNull);
+//         RetAttrs.addAttribute(Attribute::NoUndef);
+//         return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
+//                 { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
+//                   Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
+//                   },
+// };

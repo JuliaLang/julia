@@ -1512,35 +1512,6 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto gc_loaded_func = new JuliaFunction<>{
-    "julia.gc_loaded",
-    // # memory(none) nosync nounwind speculatable willreturn norecurse
-    // declare nonnull noundef ptr(Loaded) @"julia.gc_loaded"(ptr(Tracked) nocapture nonnull noundef readnone, ptr nonnull noundef readnone)
-    //  top:
-    //   %metadata GC base pointer is ptr(Tracked)
-    //   ret addrspacecast ptr to ptr(Loaded)
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addAttribute(Attribute::NoSync);
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::Speculatable);
-        FnAttrs.addAttribute(Attribute::WillReturn);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-#if JL_LLVM_VERSION >= 160000
-        FnAttrs.addMemoryAttr(MemoryEffects::none());
-#else
-        FnAttrs.addAttribute(Attribute::ReadNone);
-#endif
-        AttrBuilder RetAttrs(C);
-        RetAttrs.addAttribute(Attribute::NonNull);
-        RetAttrs.addAttribute(Attribute::NoUndef);
-        return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
-                { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
-                  Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
-                  },
-};
 
 // julia.call represents a call with julia calling convention, it is used as
 //

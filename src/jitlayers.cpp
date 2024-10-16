@@ -45,6 +45,9 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Object/SymbolSize.h>
 
+#include <llvm-dialects/Dialect/ContextExtension.h>
+#include <JuliaDialect.h>
+
 using namespace llvm;
 
 #include "jitlayers.h"
@@ -209,6 +212,7 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
+    auto dialectContext = llvm_dialects::DialectContext::make<julia::JuliaDialect>(params.getContext());
     params.cache = true;
     params.imaging_mode = imaging_default();
     params.debug_level = jl_options.debug_level;
@@ -1566,6 +1570,7 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
+        auto dialectContext = llvm_dialects::DialectContext::make<julia::JuliaDialect>(*ctx);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(*ctx);
         #endif

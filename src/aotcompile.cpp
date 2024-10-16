@@ -46,6 +46,8 @@
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
+#include <llvm-dialects/Dialect/ContextExtension.h>
+#include <JuliaDialect.h>
 
 using namespace llvm;
 
@@ -1491,6 +1493,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         for (unsigned i = 0; i < threads; i++) {
             std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
+                auto dialectContext = llvm_dialects::DialectContext::make<julia::JuliaDialect>(ctx);
                 #if JL_LLVM_VERSION < 170000
                 SetOpaquePointer(ctx);
                 #endif
@@ -1702,6 +1705,7 @@ void jl_dump_native_impl(void *native_code,
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
+        auto dialectContext = llvm_dialects::DialectContext::make<julia::JuliaDialect>(Context);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif
@@ -1849,6 +1853,7 @@ void jl_dump_native_impl(void *native_code,
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
+        auto dialectContext = llvm_dialects::DialectContext::make<julia::JuliaDialect>(Context);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif

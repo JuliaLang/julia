@@ -32,15 +32,8 @@ static constexpr std::nullopt_t None = std::nullopt;
 
 #endif
 
-enum AddressSpace {
-    Generic = 0,
-    Tracked = 10,
-    Derived = 11,
-    CalleeRooted = 12,
-    Loaded = 13,
-    FirstSpecial = Tracked,
-    LastSpecial = Loaded,
-};
+#include "JuliaDialect.h"
+using namespace julia;
 
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
