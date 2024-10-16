@@ -308,6 +308,21 @@ function find_package(arg) # ::Union{Nothing,String}
     return locate_package(pkg, env)
 end
 
+# is there a better/faster ground truth?
+function is_stdlib(pkgid::PkgId)
+    pkgid.name in readdir(Sys.STDLIB) || return false
+    stdlib_root = joinpath(Sys.STDLIB, pkgid.name)
+    project_file = locate_project_file(stdlib_root)
+    if project_file isa String
+        d = parsed_toml(project_file)
+        uuid = get(d, "uuid", nothing)
+        if uuid !== nothing
+            return UUID(uuid) == pkgid.uuid
+        end
+    end
+    return false
+end
+
 """
     Base.identify_package_env(name::String)::Union{Tuple{PkgId, String}, Nothing}
     Base.identify_package_env(where::Union{Module,PkgId}, name::String)::Union{Tuple{PkgId, Union{String, Nothing}}, Nothing}
@@ -336,6 +351,12 @@ function identify_package_env(where::PkgId, name::String)
             end
             break # found in implicit environment--return "not found"
         end
+        if pkg_env === nothing && is_stdlib(where)
+            # if not found it could be that manifests are from a different julia version/commit
+            # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
+            # as a fallback
+            pkg_env = identify_stdlib_project_dep(where, name)
+        end
     end
     if cache !== nothing
         cache.identified_where[(where, name)] = pkg_env
@@ -360,6 +381,22 @@ function identify_package_env(name::String)
         cache.identified[name] = pkg_env
     end
     return pkg_env
+end
+
+function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
+    @debug """
+    Stdlib $(repr("text/plain", stdlib)) is trying to load `$depname`
+    which is not listed as a dep in the load path manifests, so resorting to search
+    in the stdlib Project.tomls for true deps"""
+    stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
+    stdlib_projfile === nothing && return nothing
+    found = explicit_project_deps_get(stdlib_projfile, depname)
+    if found !== nothing
+        @debug "$(repr("text/plain", stdlib)) indeed depends on $depname in project $stdlib_projfile"
+        pkgid = PkgId(found, depname)
+        return pkgid, stdlib_projfile
+    end
+    return nothing
 end
 
 _nothing_or_first(x) = x === nothing ? nothing : first(x)
