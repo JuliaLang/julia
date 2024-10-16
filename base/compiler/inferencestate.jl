@@ -1128,24 +1128,35 @@ end
 """
     Future{T}
 
-Delayed return value for a value of type `T`, similar to RefValue{T}, but
-explicitly represents completed as a `Bool` rather than as `isdefined`.
-Set once with `f[] = v` and accessed with `f[]` afterwards.
+Assign-once delayed return value for a value of type `T`, similar to RefValue{T}.
+Can be constructed in one of three ways:
 
-Can also be constructed with the `completed` flag value and a closure to
-produce `x`, as well as the additional arguments to avoid always capturing the
-same couple of values.
+1. With an immediate as `Future{T}(val)`
+2. As an assign-once storage location with `Future{T}()`. Assigned (once) using `f[] = val`.
+3. As a delayed computation with `Future{T}(callback, dep, interp, sv)` to have
+   `sv` arrange to call the `callback` with the result of `dep` when it is ready.
+
+Use `isready` to check if the value is ready, and `getindex` to get the value.
 """
 struct Future{T}
     later::Union{Nothing,RefValue{T}}
     now::Union{Nothing,T}
-    Future{T}() where {T} = new{T}(RefValue{T}(), nothing)
+    function Future{T}() where {T}
+        later = RefValue{T}()
+        @assert !isassigned(later) "Future{T}() is not allowed for inlinealloc T"
+        new{T}(later, nothing)
+    end
     Future{T}(x) where {T} = new{T}(nothing, x)
     Future(x::T) where {T} = new{T}(nothing, x)
 end
-isready(f::Future) = f.later === nothing
+isready(f::Future) = f.later === nothing || isassigned(f.later)
 getindex(f::Future{T}) where {T} = (later = f.later; later === nothing ? f.now::T : later[])
-setindex!(f::Future, v) = something(f.later)[] = v
+function setindex!(f::Future, v)
+    later = something(f.later)
+    @assert !isassigned(later)
+    later[] = v
+    return f
+end
 convert(::Type{Future{T}}, x) where {T} = Future{T}(x) # support return type conversion
 convert(::Type{Future{T}}, x::Future) where {T} = x::Future{T}
 function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntState) where {T}
@@ -1176,7 +1187,6 @@ function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntSt
     end
 end
 
-
 """
     doworkloop(args...)
 
@@ -1189,12 +1199,16 @@ Each task will be run repeatedly when returning `false`, until it returns `true`
 function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
     tasks = sv.tasks
     prev = length(tasks)
+    prevcallstack = length(sv.callstack)
     prev == 0 && return false
     task = pop!(tasks)
     completed = task(interp, sv)
     tasks = sv.tasks # allow dropping gc root over the previous call
     completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
-    completed || push!(tasks, task)
+    if !completed
+        @assert (length(tasks) >= prev || length(sv.callstack) > prevcallstack) "Task did not complete, but also did not create any child tasks"
+        push!(tasks, task)
+    end
     # efficient post-order visitor: items pushed are executed in reverse post order such
     # that later items are executed before earlier ones, but are fully executed
     # (including any dependencies scheduled by them) before going on to the next item
