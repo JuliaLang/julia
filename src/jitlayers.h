@@ -58,6 +58,10 @@
 # define JL_USE_JITLINK
 #endif
 
+#if defined(_CPU_RISCV64_)
+# define JL_USE_JITLINK
+#endif
+
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
@@ -257,9 +261,18 @@ struct jl_codegen_params_t {
     bool external_linkage = false;
     bool imaging_mode;
     int debug_level;
+    bool use_swiftcc = true;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
-        : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
-            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging_mode(imaging_default()) {}
+      : tsctx(std::move(ctx)),
+        tsctx_lock(tsctx.getLock()),
+        DL(std::move(DL)),
+        TargetTriple(std::move(triple)),
+        imaging_mode(imaging_default())
+    {
+        // LLVM's RISC-V back-end currently does not support the Swift calling convention
+        if (TargetTriple.isRISCV())
+            use_swiftcc = false;
+    }
 };
 
 jl_llvm_functions_t jl_emit_code(
