@@ -294,7 +294,7 @@ end
 
 function populate_def_use_map!(tpdum::TwoPhaseDefUseMap, scanner::BBScanner)
     scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
-        for ur in userefs(inst)
+        for ur in userefs(inst[:stmt])
             val = ur[]
             if isa(val, SSAValue)
                 push!(tpdum[val.id], inst.idx)

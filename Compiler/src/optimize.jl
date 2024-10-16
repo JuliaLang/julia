@@ -861,10 +861,12 @@ function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
     if iscall_with_boundscheck(stmt, sv)
-        for i = 1:(length(stmt.args)-1)
+        for i = 1:length(stmt.args) # explore all args -- don't assume boundscheck is not an SSA
             val = stmt.args[i]
             if isa(val, SSAValue)
-                stmt_inconsistent |= val.id in inconsistent
+                if i < length(stmt.args)  # not the boundscheck argument (which is last)
+                    stmt_inconsistent |= val.id in inconsistent
+                end
                 count!(tpdum, val)
             end
         end
@@ -891,7 +893,7 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
-        return nothing
+        return true # don't bail out early -- can cause tpdum counts to be off
     end
 
     scan_non_dataflow_flags!(inst, sv)
@@ -937,10 +939,11 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
         end
     end
 
-    # bail out early if there are no possibilities to refine the effects
-    if !any_refinable(sv)
-        return nothing
-    end
+    # Do not bail out early, as this can cause tpdum counts to be off.
+    # # bail out early if there are no possibilities to refine the effects
+    # if !any_refinable(sv)
+    #     return nothing
+    # end
 
     return true
 end
@@ -968,9 +971,9 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
         stmt = inst[:stmt]
         if iscall_with_boundscheck(stmt, sv)
             any_non_boundscheck_inconsistent = false
-            for i = 1:(length(stmt.args)-1)
+            for i = 1:length(stmt.args)
                 val = stmt.args[i]
-                if isa(val, SSAValue)
+                if isa(val, SSAValue) && i < length(stmt.args)  # not the boundscheck argument (which is last)
                     any_non_boundscheck_inconsistent |= val.id in inconsistent
                     any_non_boundscheck_inconsistent && break
                 end
