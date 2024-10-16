@@ -1,0 +1,44 @@
+diff --git a/include/libunwind-common.h.in b/include/libunwind-common.h.in
+index 893fdd69..80ab9648 100644
+--- a/include/libunwind-common.h.in
++++ b/include/libunwind-common.h.in
+@@ -340,5 +340,6 @@ extern int unw_get_elf_filename_by_ip (unw_addr_space_t, unw_word_t, char *,
+ extern const char *unw_strerror (int);
+ extern int unw_backtrace (void **, int);
+ extern int unw_backtrace2 (void **, int, unw_context_t*, int);
++extern int unw_ensure_tls (void);
+ 
+ extern unw_addr_space_t unw_local_addr_space;
+diff --git a/src/dwarf/Gparser.c b/src/dwarf/Gparser.c
+index 7a5d7e1f..8453ffb0 100644
+--- a/src/dwarf/Gparser.c
++++ b/src/dwarf/Gparser.c
+@@ -623,7 +623,7 @@ get_rs_cache (unw_addr_space_t as, intrmask_t *saved_maskp)
+ #if defined(HAVE___CACHE_PER_THREAD) && HAVE___CACHE_PER_THREAD
+   if (likely (caching == UNW_CACHE_PER_THREAD))
+     {
+-      static _Thread_local struct dwarf_rs_cache tls_cache __attribute__((tls_model("initial-exec")));
++      static _Thread_local struct dwarf_rs_cache tls_cache;
+       Debug (16, "using TLS cache\n");
+       cache = &tls_cache;
+     }
+diff --git a/src/mi/init.c b/src/mi/init.c
+index e4431eeb..07cae852 100644
+--- a/src/mi/init.c
++++ b/src/mi/init.c
+@@ -82,3 +82,15 @@ mi_init (void)
+   unw_init_page_size();
+   assert(sizeof(struct cursor) <= sizeof(unw_cursor_t));
+ }
++
++int
++unw_ensure_tls (void)
++{
++#if defined(HAVE___CACHE_PER_THREAD) && HAVE___CACHE_PER_THREAD
++  static _Thread_local int alloc_trigger;
++  alloc_trigger = 1;
++  return alloc_trigger;
++#else
++  return 0;
++#endif
++}

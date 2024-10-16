@@ -9,16 +9,6 @@ include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
-function make_ci(code)
-    ci = (Meta.@lower 1 + 1).args[1]
-    ci.code = code
-    nstmts = length(ci.code)
-    ci.ssavaluetypes = nstmts
-    ci.codelocs = fill(Int32(1), nstmts)
-    ci.ssaflags = fill(Int32(0), nstmts)
-    return ci
-end
-
 # TODO: this test is broken
 #let code = Any[
 #        GotoIfNot(SlotNumber(2), 4),
@@ -38,7 +28,6 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -73,8 +62,8 @@ let cfg = CFG(BasicBlock[
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks),
         correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
-        @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
-        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
+        @test Compiler.construct_domtree(cfg).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -85,8 +74,8 @@ let cfg = CFG(BasicBlock[
                 c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
-                @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
-                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
+                @test Compiler.construct_domtree(cfg′).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′).idoms_bb == correct_pidoms
             end
         end
     end
@@ -113,8 +102,9 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
+    insts = Compiler.InstructionStream([], [], Core.Compiler.CallInfo[], Int32[], UInt32[])
+    di = Compiler.DebugInfoStream(insts.line)
+    ir = Compiler.IRCode(insts, cfg, di, Any[], Expr[], Compiler.VarState[])
     compact = Compiler.IncrementalCompact(ir, true)
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
@@ -229,13 +219,97 @@ let code = Any[
     ]
     ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # issue #37919
-let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
+let ci = only(code_lowered(()->@isdefined(_not_def_37919_), ()))
     ir = Core.Compiler.inflate_ir(ci)
     @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 4)
+        # block 2
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
+        # block 3
+        ReturnNode(Argument(3))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1) == 1
+    @test_throws "potential throw" oc(true, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 3)
+        # block 2
+        ReturnNode(Argument(3))
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(true, 1) == 1
+    @test_throws "potential throw" oc(false, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 5)
+        # block 2
+        GotoNode(3)
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode()
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4))
+        GotoNode(7)
+        # block 5
+        ReturnNode(SSAValue(5))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∈ visited
+    @test 5 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1, 1) == 2
+    @test_throws "potential throw" oc(true, 1, 1)
+
+    let buf = IOBuffer()
+        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
+        try
+            oc(true, 1, 1)
+        catch
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
+    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the
@@ -263,7 +337,7 @@ let cfg = CFG(BasicBlock[
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
     ], Int[])
-    domtree = Compiler.construct_domtree(cfg.blocks)
+    domtree = Compiler.construct_domtree(cfg)
     @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
@@ -417,7 +491,7 @@ let
 
     # this isn't valid code, we just care about looking at a variety of IR nodes
     body = Any[
-        Expr(:enter, 11),
+        EnterNode(11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
         Expr(:leave, Core.SSAValue(1)),
@@ -457,7 +531,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # domination analysis
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     @test Core.Compiler.dominates(domtree, 1, 2)
     @test Core.Compiler.dominates(domtree, 1, 3)
     @test Core.Compiler.dominates(domtree, 1, 4)
@@ -468,7 +542,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # post domination analysis
-    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    post_domtree = Core.Compiler.construct_postdomtree(ir)
     @test Core.Compiler.postdominates(post_domtree, 4, 1)
     @test Core.Compiler.postdominates(post_domtree, 4, 2)
     @test Core.Compiler.postdominates(post_domtree, 4, 3)
@@ -513,27 +587,6 @@ end
     @test length(ir.stmts) == instructions
 
     @test show(devnull, ir) === nothing
-end
-
-@testset "IncrementalCompact statefulness" begin
-    foo(i) = i == 1 ? 1 : 2
-    ir = only(Base.code_ircode(foo, (Int,)))[1]
-    compact = Core.Compiler.IncrementalCompact(ir)
-
-    # set up first iterator
-    x = Core.Compiler.iterate(compact)
-    x = Core.Compiler.iterate(compact, x[2])
-
-    # set up second iterator
-    x = Core.Compiler.iterate(compact)
-
-    # consume remainder
-    while x !== nothing
-        x = Core.Compiler.iterate(compact, x[2])
-    end
-
-    ir = Core.Compiler.complete(compact)
-    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # insert_node! operations
@@ -678,4 +731,89 @@ end
             end
         end
     end
+end
+
+# Test that things don't break if one branch of the frontend PhiNode becomes unreachable
+const global_error_switch_const1::Bool = false
+function gen_unreachable_phinode_edge1(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const1),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
+    return ci
+end
+@eval function f_unreachable_phinode_edge1(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge1))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge1(1, 2) == 1
+
+const global_error_switch_const2::Bool = true
+function gen_unreachable_phinode_edge2(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const2),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
+    return ci
+end
+@eval function f_unreachable_phinode_edge2(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge2))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge2(1, 2) == 2
+
+global global_error_switch::Bool = true
+function gen_must_throw_phinode_edge(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, error, "This error is expected"),
+        # block 3
+        PhiNode(Int32[2, 3], Any[1, 2]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
+    return ci
+end
+@eval function f_must_throw_phinode_edge()
+    $(Expr(:meta, :generated, gen_must_throw_phinode_edge))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+let ir = first(only(Base.code_ircode(f_must_throw_phinode_edge)))
+    @test !any(@nospecialize(x)->isa(x,PhiNode), ir.stmts.stmt)
+end
+@test_throws ErrorException f_must_throw_phinode_edge()
+global global_error_switch = false
+@test f_must_throw_phinode_edge() == 1
+
+# Test roundtrip of debuginfo compression
+let cl = Int32[32, 1, 1, 1000, 240, 230]
+    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
+    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
+    @test cl == cl2
 end

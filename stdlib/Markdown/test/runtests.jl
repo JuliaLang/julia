@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Markdown
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+using Test, Markdown, StyledStrings
+import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
 # Basics
@@ -233,7 +233,7 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 
 # multiple whitespace is ignored
 @test sprint(term, md"a  b") == "  a b"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](https://julialang.org)") == "  x"
 @test sprint(term, md"[x](@ref)") == "  x"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
@@ -298,6 +298,7 @@ end
 let doc =
     md"""
     1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
     2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
     """
     str = sprint(term, doc, 50)
@@ -376,8 +377,8 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
-    @test sprint(show, "text/plain", md"#") == "  " # edge case of empty header
+        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n    •  list2"
+    @test sprint(show, "text/plain", md"#") == "" # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -1157,7 +1158,7 @@ let buf = IOBuffer()
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m"
+    @test String(take!(buf)) in ("  \e[3memph\e[23m", "  \e[4memph\e[24m")
 end
 
 let word = "Markdown" # disable underline when wrapping lines
@@ -1166,8 +1167,8 @@ let word = "Markdown" # disable underline when wrapping lines
     long_italic_text = Markdown.parse('_' * join(fill(word, 10), ' ') * '_')
     show(ctx, MIME("text/plain"), long_italic_text)
     lines = split(String(take!(buf)), '\n')
-    @test endswith(lines[begin], Base.disable_text_style[:underline])
-    @test startswith(lines[begin+1], ' '^Markdown.margin * Base.text_colors[:underline])
+    @test endswith(lines[begin], r"\e\[2[34]m")
+    @test startswith(lines[begin+1], Regex(' '^Markdown.margin * "\e\\[[34]m"))
 end
 
 let word = "Markdown" # pre is of size Markdown.margin when wrapping title
@@ -1176,7 +1177,9 @@ let word = "Markdown" # pre is of size Markdown.margin when wrapping title
     long_title = Markdown.parse("# " * join(fill(word, 3)))
     show(ctx, MIME("text/plain"), long_title)
     lines = split(String(take!(buf)), '\n')
-    @test all(startswith(Base.text_colors[:bold] * ' '^Markdown.margin), lines)
+    @test all(l -> startswith(l, ' '^Markdown.margin * StyledStrings.ANSI_STYLE_CODES.bold_weight) ||
+                   startswith(l, StyledStrings.ANSI_STYLE_CODES.bold_weight * ' '^Markdown.margin),
+              lines)
 end
 
 struct Struct49454 end
@@ -1259,8 +1262,9 @@ end
     s = @md_str """
        Misc:\\
        - line\\
+         break
        """
-    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line"
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
 end
 
 @testset "pullrequest #41552: a code block has \\end{verbatim}" begin
@@ -1296,4 +1300,15 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Markdown))
+end
+
+@testset "Non-Markdown" begin
+    # https://github.com/JuliaLang/julia/issues/37765
+    @test isa(insert_hlines(Text("foo")), Text)
+    # https://github.com/JuliaLang/julia/issues/37757
+    @test insert_hlines(nothing) === nothing
+end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end

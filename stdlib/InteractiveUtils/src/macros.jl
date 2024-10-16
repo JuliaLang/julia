@@ -106,6 +106,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                        $(kws...))
             end
         elseif ex0.head === :call
+            if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
+                return Expr(:call, fcn, :(Base.literal_pow),
+                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
+                                 esc(Val(ex0.args[3]))))
+            end
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...),
                         kws...)
@@ -247,6 +252,28 @@ macro time_imports(ex)
             $(esc(ex))
         finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
         end
     end
 end
@@ -404,3 +431,36 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch

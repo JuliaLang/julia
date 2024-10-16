@@ -32,7 +32,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     (:)(start, [step], stop)
 
 Range operator. `a:b` constructs a range from `a` to `b` with a step size
-equal to 1, which produces:
+equal to +1, which produces:
 
 * a [`UnitRange`](@ref) when `a` and `b` are integers, or
 * a [`StepRange`](@ref) when `a` and `b` are characters, or
@@ -40,6 +40,9 @@ equal to 1, which produces:
 
 `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref) or
 [`StepRangeLen`](@ref)). See also [`range`](@ref) for more control.
+
+To create a descending range, use `reverse(a:b)` or a negative step size, e.g. `b:-1:a`.
+Otherwise, when `b < a`, an empty range will be constructed and normalized to `a:a-1`.
 
 The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 
@@ -66,8 +69,12 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
-* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+  to be positive one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be positive one.
+
+To construct a descending range, specify a negative step size, e.g. `range(5, 1; step = -1)` => [5,4,3,2,1]. Otherwise,
+a `stop` value less than the `start` value, with the default `step` of `+1`, constructs an empty range. Empty ranges
+are normalized such that the `stop` is one less than the `start`, e.g. `range(5, 1) == 5:4`.
 
 See Extended Help for additional details on the returned type.
 See also [`logrange`](@ref) for logarithmically spaced points.
@@ -1287,6 +1294,9 @@ promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
 OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
 OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
+promote_rule(a::Type{OneTo{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
+    promote_rule(UnitRange{T1}, UR)
+
 promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     promote_rule(a, UnitRange{eltype(UR)})
 UnitRange{T}(r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
@@ -1475,7 +1485,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).

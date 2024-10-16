@@ -1,5 +1,115 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Internal changes mechanism.
+# Instructions for Julia Core Developers:
+# 1. When making a breaking change that is known to be depnedet upon by an
+#    important and closely coupled package, decide on a unique `change_name`
+#    for your PR and add it to the list below. In general, is is better to
+#    err on the side of caution and assign a `change_name` even if it is not
+#    clear that it is required. `change_name`s may also be assigned after the
+#    fact in a separate PR. (Note that this may cause packages to misbehave
+#    on versions in between the change and the assignment of the `change_name`,
+#    but this is often still better than the alternative of misbehaving on unknown
+#    versions).
+
+# Instructions for Release Managers:
+# 1. Upon tagging any release, clear the list of internal changes.
+# 2. Upon tagging an -alpha version
+#    a. On master, set __next_removal_version to v"1.(x+1)-alpha"
+#    b. On the release branch, set __next_removal_version to v"1.x" (no -alpha)
+# 3. Upong tagging a release candidate, clear the list of internal changes and
+#    set __next_removal_version to `nothing`.
+const __next_removal_version = v"1.12-alpha"
+const __internal_changes_list = (
+    :invertedlinetables,
+    :codeinforefactor,
+    :miuninferredrm,
+    :codeinfonargs,  # #54341
+    :ocnopartial,
+    :printcodeinfocalls,
+    # Add new change names above this line
+)
+
+if !isempty(__internal_changes_list)
+    if VERSION == __next_removal_version
+        error("You have tagged a new release without clearing the internal changes list.")
+    end
+elseif __next_removal_version === nothing
+    error("You have tagged a new release candidate without clearing the internal changes list.")
+end
+
+"""
+    __has_internal_change(version_or::VersionNumber, change_name::Symbol)
+
+Some Julia packages have known dependencies on Julia internals (e.g. for introspection of
+internal julia datastructures). To ease the co-development of such packages with julia,
+a `change_name` is assigned on a best-effort basis or when explicitly requested.
+This `change_name` can be used to probe whether or not the particular pre-release build of julia has
+a particular change. In particular this function tests change scheduled for `version_or`
+is present in our current julia build, either because our current version
+is greater than `version_or` or because we're running a pre-release build that
+includes the change.
+
+Using this mechanism is a superior alternative to commit-number based `VERSION`
+comparisons, which can be brittle during pre-release stages when there are multiple
+actively developed branches.
+
+The list of changes is cleared twice during the release process:
+1. With the release of the first alpha
+2. For the first release candidate
+
+No new `change_name`s will be added during release candidates or bugfix releases
+(so in particular on any released version, the list of changes will be empty and
+`__has_internal_change` will always be equivalent to a version comparison.
+
+# Example
+
+Julia version `v"1.12.0-DEV.173"` changed the internal representation of line number debug info.
+Several debugging packages have custom code to display this information and need to be changed
+accordingly. In previous practice, this would often be accomplished with something like the following
+```
+@static if VERSION > v"1.12.0-DEV.173"
+    # Code to handle new format
+else
+    # Code to handle old format
+end
+```
+
+However, because such checks cannot be introduced until a VERSION number is assigned
+(which also automatically pushes out the change to all nightly users), there was a builtin period
+of breakage. With `__has_internal_change`, this can instead be written as:
+
+```
+@static if __has_internal_change(v"1.12-alpha", :invertedlinenames)
+    # Code to handle new format
+else
+    # Code to handle old format
+end
+```
+
+To find out the correct verrsion to use as the first argument, you may use
+`Base.__next_removal_version`, which is set to the next version number in which
+the list of changes will be cleared.
+
+The primary advantage of this approach is that it allows a new version of the
+package to be tagged and released *in advance* of the break on the nightly
+build, thus ensuring continuity of package operation for nightly users.
+
+!!! warning
+
+    This functionality is intended to help package developers which make use of
+    internal julia functionality. Doing so is explicitly discouraged unless absolutely
+    required and comes with the explicit understanding that the package will break.
+    In particular, this is not a generic feature-testing mechanism, but only a
+    simple, courtesy coordination mechanism for changes that are known (or found) to
+    be breaking a package depending on julia internals.
+"""
+function __has_internal_change(version_or::VersionNumber, change_name::Symbol)
+    VERSION > version_or && return true
+    change_name in __internal_changes_list
+end
+export __has_internal_change
+
 # Deprecated functions and objects
 #
 # Please add new deprecations at the bottom of the file.
@@ -10,9 +120,7 @@
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
-# and call depwarn() directly from inside it. The symbol depwarn() expects is
-# the name of the function, which is used to ensure that the deprecation warning
-# is only printed the first time for each call place.
+# and call depwarn() directly from inside it.
 
 """
     @deprecate old new [export_old=true]
@@ -21,6 +129,8 @@ Deprecate method `old` and specify the replacement call `new`, defining a new me
 with the specified signature in the process.
 
 To prevent `old` from being exported, set `export_old` to `false`.
+
+See also [`Base.depwarn()`](@ref).
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -118,6 +228,26 @@ macro deprecate(old, new, export_old=true)
     end
 end
 
+"""
+    Base.depwarn(msg::String, funcsym::Symbol; force=false)
+
+Print `msg` as a deprecation warning. The symbol `funcsym` should be the name
+of the calling function, which is used to ensure that the deprecation warning is
+only printed the first time for each call place. Set `force=true` to force the
+warning to always be shown, even if Julia was started with `--depwarn=no` (the
+default).
+
+See also [`@deprecate`](@ref).
+
+# Examples
+```julia
+function deprecated_func()
+    Base.depwarn("Don't use `deprecated_func()`!", :deprecated_func)
+
+    1 + 1
+end
+```
+"""
 @nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
     @nospecialize
     # N.B. With this use of `@invokelatest`, we're preventing the addition of backedges from
@@ -303,7 +433,8 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
 
 # the plan is to eventually overload getproperty to access entries of the dict
 @noinline function getproperty(x::Pairs, s::Symbol)
-    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    s == :data && depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
+    s == :itr && depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
     return getfield(x, s)
 end
 
@@ -397,3 +528,9 @@ end
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
 # END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+@deprecate stat(fd::Integer) stat(RawFD(fd))
+
+# END 1.12 deprecations

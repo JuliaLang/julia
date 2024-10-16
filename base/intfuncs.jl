@@ -165,16 +165,23 @@ end
 
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
-    gcdx(a, b)
+    gcdx(a, b...)
 
 Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+
+For more arguments than two, i.e., `gcdx(a, b, c, ...)` the Bézout coefficients are computed
+recursively, returning a solution `(d, u, v, w, ...)` to
+``u*a + v*b + w*c + ... = d = gcd(a, b, c, ...)``.
 
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
+
+!!! compat "Julia 1.12"
+    More or fewer arguments than two require Julia 1.12 or later.
 
 # Examples
 ```jldoctest
@@ -183,6 +190,9 @@ julia> gcdx(12, 42)
 
 julia> gcdx(240, 46)
 (2, -9, 47)
+
+julia> gcdx(15, 12, 20)
+(1, 7, -7, -1)
 ```
 
 !!! note
@@ -198,6 +208,7 @@ julia> gcdx(240, 46)
 """
 Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
+    a == b == 0 && return (zero(T), zero(T), zero(T))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
@@ -214,6 +225,18 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
+gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
+function gcdx(a::Real, b::Real, cs::Real...)
+    # a solution to the 3-arg `gcdx(a,b,c)` problem, `u*a + v*b + w*c = gcd(a,b,c)`, can be
+    # obtained from the 2-arg problem in three steps:
+    #   1. `gcdx(a,b)`: solve `i*a + j*b = d′ = gcd(a,b)` for `(i,j)`
+    #   2. `gcdx(d′,c)`: solve `x*gcd(a,b) + yc = gcd(gcd(a,b),c) = gcd(a,b,c)` for `(x,y)`
+    #   3. return `d = gcd(a,b,c)`, `u = i*x`, `v = j*x`, and `w = y`
+    # the N-arg solution proceeds similarly by recursion
+    d, i, j = gcdx(a, b)
+    d′, x, ys... = gcdx(d, cs...)
+    return d′, i*x, j*x, ys...
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -262,14 +285,16 @@ end
     invmod(n::T) where {T <: Base.BitInteger}
 
 Compute the modular inverse of `n` in the integer ring of type `T`, i.e. modulo
-`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words these
+`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words, these
 methods satisfy the following identities:
 ```
 n * invmod(n) == 1
 (n * invmod(n, T)) % T == 1
 (n % T) * invmod(n, T) == 1
 ```
-Note that `*` here is modular multiplication in the integer ring, `T`.
+Note that `*` here is modular multiplication in the integer ring, `T`.  This will
+throw an error if `n` is even, because then it is not relatively prime with `2^N`
+and thus has no such inverse.
 
 Specifying the modulus implied by an integer type as an explicit value is often
 inconvenient since the modulus is by definition too big to be represented by the
@@ -295,19 +320,23 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
 @noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nMake x or ", p, " a float by adding a zero decimal ",
-    "(e.g., 2.0^", p, " or 2^", float(p), " instead of 2^", p, ")",
+    "(e.g., 2.0^", p, " or 2^", float(p), " instead of 2^", p, ") ",
     "or write 1/x^", -p, ", float(x)^", p, ", x^float(", p, ") or (x//1)^", p, ".")))
 @noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer matrix x to a negative power ", p, ".",
     "\nMake x a float matrix by adding a zero decimal ",
-    "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
+    "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ") ",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
 # The * keyword supports `*=checked_mul` for `checked_pow`
 @assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
@@ -359,7 +388,7 @@ end
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
-const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float16,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # Inline x^2 and x^3 for Val
@@ -742,7 +771,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 function bin(x::Unsigned, pad::Int, neg::Bool)
     m = top_set_bit(x)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
     # end
@@ -769,7 +798,7 @@ end
 function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i > neg
         @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
@@ -844,7 +873,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    a = StringVector(n)
+    a = StringMemory(n)
     append_c_digits_fast(n, x, a, 1)
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
@@ -853,7 +882,7 @@ end
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i >= 2
         b = (x % UInt8)::UInt8
@@ -880,7 +909,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
     n = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     @inbounds while i > neg
         if b > 0
@@ -940,7 +969,8 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a primitive type.
+A string giving the literal bit representation of a primitive type
+(in bigendian order, i.e. most-significant bit first).
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -954,9 +984,9 @@ julia> bitstring(2.2)
 ```
 """
 function bitstring(x::T) where {T}
-    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
-    str = StringVector(sz)
+    str = StringMemory(sz)
     i = sz
     @inbounds while i >= 4
         b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
@@ -976,7 +1006,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in 1:length(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
@@ -1054,7 +1084,7 @@ julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
     2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
-        throw(ArgumentError("type $T too small for base $base"))
+        throw(ArgumentError(LazyString("type ", T, " too small for base ", base)))
     isempty(a) && return a
 
     if base > 0
@@ -1203,6 +1233,7 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)
@@ -1234,3 +1265,102 @@ function binomial(x::Number, k::Integer)
     # and instead divide each term by i, to avoid spurious overflow.
     return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end
+
+"""
+    clamp(x, lo, hi)
+
+Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
+are promoted to a common type.
+
+See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
+3-element Vector{BigFloat}:
+ 3.141592653589793238462643383279502884197169399375105820974944592307816406286198
+ 2.0
+ 9.0
+
+julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
+3-element Vector{Int64}:
+  6
+  6
+ 10
+```
+"""
+function clamp(x::X, lo::L, hi::H) where {X,L,H}
+    T = promote_type(X, L, H)
+    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+end
+
+"""
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+
+julia> clamp(-200, Int8)
+-128
+
+julia> trunc(Int, 4pi^2)
+39
+```
+"""
+function clamp(x, ::Type{T}) where {T<:Integer}
+    # delegating to clamp(x, typemin(T), typemax(T)) would promote types
+    # this way, we avoid unnecessary conversions
+    # think of, e.g., clamp(big(2) ^ 200, Int16)
+    lo = typemin(T)
+    hi = typemax(T)
+    return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
+end
+
+
+"""
+    clamp!(array::AbstractArray, lo, hi)
+
+Restrict values in `array` to the specified range, in-place.
+See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> row = collect(-4:4)';
+
+julia> clamp!(row, 0, Inf)
+1×9 adjoint(::Vector{Int64}) with eltype Int64:
+ 0  0  0  0  0  1  2  3  4
+
+julia> clamp.((-4:4)', 0, Inf)
+1×9 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
+```
+"""
+function clamp!(x::AbstractArray, lo, hi)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lo, hi)
+    end
+    x
+end
+
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))

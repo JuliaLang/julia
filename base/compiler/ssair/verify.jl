@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main)
+    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
+    else
+        Core.show(ir)
     end
 end
 
@@ -25,6 +27,7 @@ is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || he
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
+        op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
@@ -111,8 +114,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
         @verify_error "IR info length is invalid $(length(ir.stmts.info)) / $(length(ir.stmts))"
         error("")
     end
-    if length(ir.stmts.line) != length(ir.stmts)
-        @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts))"
+    if length(ir.stmts.line) != length(ir.stmts) * 3
+        @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts) * 3)"
         error("")
     end
     if length(ir.stmts.flag) != length(ir.stmts)
@@ -325,24 +328,16 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
-            @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
-            error("")
-        else
-            if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
-                if (stmt isa ReturnNode)
-                    if isdefined(stmt, :val)
-                        # TODO: Disallow unreachable returns?
-                        # bb_unreachable(domtree, Int64(edge))
-                    else
-                        #@verify_error "Missing line number information for statement $idx of $ir"
-                    end
-                end
-                if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
-                    if ir.stmts[idx][:line] <= 0
-                    end
-                end
+        elseif isterminator(stmt)
+            if idx != last(ir.cfg.blocks[bb].stmts)
+                @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
+                error("")
             end
+            if !isa(stmt, ReturnNode) && ir[SSAValue(idx)][:type] !== Any
+                @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
+                error("")
+            end
+        else
             isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
@@ -352,6 +347,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[2] isa GlobalRef
                         # undefined GlobalRef as assignment RHS is OK
+                        continue
+                    end
+                elseif stmt.head === :isdefined
+                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                        @verify_error "malformed isdefined"
+                        error("")
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in isdefined
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end
@@ -397,12 +401,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
     end
 end
 
-function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)
-    for i in 1:length(linetable)
-        line = linetable[i]
-        if i <= line.inlined_at
-            @verify_error "Misordered linetable"
-            error("")
+function verify_linetable(di::DebugInfoStream, nstmts::Int, print::Bool=true)
+    @assert 3nstmts == length(di.codelocs)
+    for i in 1:nstmts
+        edge = di.codelocs[3i-1]
+        if !(edge == 0 || get(di.edges, edge, nothing) isa DebugInfo)
+            @verify_error "Malformed debuginfo index into edges"
         end
     end
 end

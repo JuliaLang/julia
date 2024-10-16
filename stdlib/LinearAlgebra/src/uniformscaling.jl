@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
+import Base: copy, adjoint, getindex, show, transpose, one, zero, inv, float,
              hcat, vcat, hvcat, ^
 
 """
@@ -124,6 +124,8 @@ conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 real(J::UniformScaling) = UniformScaling(real(J.λ))
 imag(J::UniformScaling) = UniformScaling(imag(J.λ))
 
+float(J::UniformScaling) = UniformScaling(float(J.λ))
+
 transpose(J::UniformScaling) = J
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
 
@@ -159,7 +161,7 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
 
 # matrix functions
-for f in ( :exp,   :log,
+for f in ( :exp,   :log, :cis,
            :expm1, :log1p,
            :sqrt,  :cbrt,
            :sin,   :cos,   :tan,
@@ -171,6 +173,9 @@ for f in ( :exp,   :log,
            :csch,  :sech,  :coth,
            :acsch, :asech, :acoth )
     @eval Base.$f(J::UniformScaling) = UniformScaling($f(J.λ))
+end
+for f in (:sincos, :sincosd)
+    @eval Base.$f(J::UniformScaling) = map(UniformScaling, $f(J.λ))
 end
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
@@ -397,6 +402,16 @@ function copyto!(A::Tridiagonal, J::UniformScaling)
     A.d .= J.λ
     return A
 end
+
+"""
+    copy!(dest::AbstractMatrix, src::UniformScaling)
+
+Copies a [`UniformScaling`](@ref) onto a matrix.
+
+!!! compat "Julia 1.12"
+    This method is available as of Julia 1.12.
+"""
+Base.copy!(A::AbstractMatrix, J::UniformScaling) = copyto!(A, J)
 
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))

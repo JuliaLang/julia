@@ -203,6 +203,15 @@ let trace = try
     @test trace[1].func === Symbol("top-level scope")
 end
 let trace = try
+        eval(Expr(:toplevel, LineNumberNode(3, :a_filename), Expr(:error, 1)))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
+    @test trace[1].line == 3
+end
+let trace = try
         include_string(@__MODULE__,
             """
 
@@ -253,10 +262,14 @@ let code = """
                   if ip isa Base.InterpreterIP && ip.code isa Core.MethodInstance]
     num_fs = sum(meth_names .== :f29695)
     num_gs = sum(meth_names .== :g29695)
-    print(num_fs, ' ', num_gs)
+    if num_fs != 1000 || num_gs != 1000
+        Base.show_backtrace(stderr, bt)
+        error("Expected 1000 frames each, got \$num_fs, \$num_fs")
+    end
+    exit()
     """
 
-    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "1000 1000"
+    @test success(pipeline(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`; stderr))
 end
 
 # Test that modules make it into InterpreterIP for top-level code

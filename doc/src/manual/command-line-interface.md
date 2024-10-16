@@ -42,8 +42,8 @@ See also [Scripting](@ref man-scripting) for more information on writing Julia s
 ## The `Main.main` entry point
 
 As of Julia, 1.11, `Base` exports the macro `@main`. This macro expands to the symbol `main`,
-but at the conclusion of executing a script or expression, `julia` will attempt to execute the function
-`Main.main(ARGS)` if such a function has been defined and this behavior was opted into
+but at the conclusion of executing a script or expression, `julia` will attempt to execute
+`Main.main(Base.ARGS)` if such a function `Main.main` has been defined and this behavior was opted into
 by using the `@main` macro.
 
 This feature is intended to aid in the unification
@@ -59,7 +59,7 @@ expression.
 To see this feature in action, consider the following definition, which will execute the print function despite there being no explicit call to `main`:
 
 ```
-$ julia -e '(@main)(ARGS) = println("Hello World!")'
+$ julia -e '(@main)(args) = println("Hello World!")'
 Hello World!
 $
 ```
@@ -70,19 +70,19 @@ the macro `@main` was used within the defining module.
 For example, using `hello` instead of `main` will not result in the `hello` function executing:
 
 ```
-$ julia -e 'hello(ARGS) = println("Hello World!")'
+$ julia -e 'hello(args) = println("Hello World!")'
 $
 ```
 
 and neither will a plain definition of `main`:
 ```
-$ julia -e 'main(ARGS) = println("Hello World!")'
+$ julia -e 'main(args) = println("Hello World!")'
 $
 ```
 
 However, the opt-in need not occur at definition time:
 ```
-$ julia -e 'main(ARGS) = println("Hello World!"); @main'
+$ julia -e 'main(args) = println("Hello World!"); @main'
 Hello World!
 $
 ```
@@ -93,7 +93,7 @@ The `main` binding may be imported from a package. A *hello world* package defin
 module Hello
 
 export main
-(@main)(ARGS) = println("Hello from the package!")
+(@main)(args) = println("Hello from the package!")
 
 end
 ```
@@ -164,44 +164,47 @@ The following is a complete list of command-line switches available when launchi
 |Switch                                 |Description|
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
-|`-h`, `--help`                         |Print command-line options (this message).|
-|`--help-hidden`                        |Uncommon options not shown by `-h`|
-|`--project[={<dir>\|@.}]`              |Set `<dir>` as the active project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`-h`, `--help`                         |Print command-line options (this message)|
+|`--help-hidden`                        |Print uncommon options not shown by `-h`|
+|`--project[={<dir>\|@temp\|@.}]`       |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
-|`--compiled-modules={yes*\|no\|existing|strict}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files. The `strict` option is similar, but will error if no precompile file is found. |
-|`--pkgimages={yes*\|no|existing}`               |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
+|`--compiled-modules={yes*\|no\|existing\|strict}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files. The `strict` option is similar, but will error if no precompile file is found. |
+|`--pkgimages={yes*\|no\|existing}`     |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
+|`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
-|`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
-| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
+|`-t`, `--threads {auto\|N[,auto\|M]}`  |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
+| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
-|`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
+|`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
-|`--banner={yes\|no\|auto*}`            |Enable or disable startup banner|
+|`--banner={yes\|no\|short\|auto*}`     |Enable or disable startup banner|
 |`--color={yes\|no\|auto*}`             |Enable or disable color text|
 |`--history-file={yes*\|no}`            |Load or save history|
 |`--depwarn={yes\|no*\|error}`          |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
 |`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
 |`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
-|`-O`, `--optimize={0,1,2*,3}`          |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
-|`--min-optlevel={0*,1,2,3}`            |Set the lower bound on per-module optimization|
-|`-g`, `--debug-info={0,1*,2}`          |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
+|`-O`, `--optimize={0\|1\|2*\|3}`       |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
+|`--min-optlevel={0*\|1\|2\|3}`         |Set the lower bound on per-module optimization|
+|`-g`, `--debug-info={0\|1*\|2}`        |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
-|`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
+|`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
+|`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
 |`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
 |`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
+|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|
 |`--output-ji <name>`                   |Generate a system image data file (.ji)|
@@ -211,10 +214,12 @@ The following is a complete list of command-line switches available when launchi
 |`--output-bc <name>`                   |Generate LLVM bitcode (.bc)|
 |`--output-asm <name>`                  |Generate an assembly file (.s)|
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
-|`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
+|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
+|`--trace-compile-timing`               |If --trace-compile is enabled show how long each took to compile in ms|
+|`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
 |`--image-codegen`                      |Force generate code in imaging mode|
-|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %.|
-
+|`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
+|`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|
 
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root

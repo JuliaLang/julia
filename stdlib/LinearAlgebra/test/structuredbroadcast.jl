@@ -59,6 +59,61 @@ using Test, LinearAlgebra
             @test broadcast!(*, Z, X, Y) == broadcast(*, fX, fY)
         end
     end
+    UU = UnitUpperTriangular(rand(N,N))
+    UL = UnitLowerTriangular(rand(N,N))
+    unittriangulars = (UU, UL)
+    Ttris = typeof.((UpperTriangular(parent(UU)), LowerTriangular(parent(UU))))
+    funittriangulars = map(Array, unittriangulars)
+    for (X, fX, Ttri) in zip(unittriangulars, funittriangulars, Ttris)
+        @test (Q = broadcast(sin, X); typeof(Q) == Ttri && Q == broadcast(sin, fX))
+        @test broadcast!(sin, Z, X) == broadcast(sin, fX)
+        @test (Q = broadcast(cos, X); Q isa Matrix && Q == broadcast(cos, fX))
+        @test broadcast!(cos, Z, X) == broadcast(cos, fX)
+        @test (Q = broadcast(*, s, X); typeof(Q) == Ttri && Q == broadcast(*, s, fX))
+        @test broadcast!(*, Z, s, X) == broadcast(*, s, fX)
+        @test (Q = broadcast(+, fV, fA, X); Q isa Matrix && Q == broadcast(+, fV, fA, fX))
+        @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
+        @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
+        @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
+
+        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
+        @test X .* 2.0 isa Ttri
+        @test X .* (2.0,) isa Ttri
+        @test isequal(X .* Inf, fX .* Inf)
+
+        two = 2
+        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
+        @test X .^ 2 isa typeof(X) # special cased, as isstructurepreserving
+        @test X .^ (2,) isa Ttri
+        @test X .^ two isa Ttri
+        @test X .^ 0 == fX .^ 0
+        @test X .^ -1 == fX .^ -1
+
+        for (Y, fY) in zip(unittriangulars, funittriangulars)
+            @test broadcast(+, X, Y) == broadcast(+, fX, fY)
+            @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)
+            @test broadcast(*, X, Y) == broadcast(*, fX, fY)
+            @test broadcast!(*, Z, X, Y) == broadcast(*, fX, fY)
+        end
+    end
+
+    @testset "type-stability in Bidiagonal" begin
+        B2 = @inferred (B -> .- B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == -1 * B
+        B2 = @inferred (B -> B .* 2)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B + B
+        B2 = @inferred (B -> 2 .* B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B + B
+        B2 = @inferred (B -> B ./ 1)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B
+        B2 = @inferred (B -> 1 .\ B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B
+    end
 end
 
 @testset "broadcast! where the destination is a structured matrix" begin
@@ -242,5 +297,72 @@ end
 
 # structured broadcast with function returning non-number type
 @test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
+
+@testset "Broadcast with missing (#54467)" begin
+    select_first(x, y) = x
+    diag = Diagonal([1,2])
+    @test select_first.(diag, missing) == diag
+    @test select_first.(diag, missing) isa Diagonal{Int}
+    @test isequal(select_first.(missing, diag), fill(missing, 2, 2))
+    @test select_first.(missing, diag) isa Matrix{Missing}
+end
+
+@testset "broadcast over structured matrices with matrix elements" begin
+    function standardbroadcastingtests(D, T)
+        M = [x for x in D]
+        Dsum = D .+ D
+        @test Dsum isa T
+        @test Dsum == M .+ M
+        Dcopy = copy.(D)
+        @test Dcopy isa T
+        @test Dcopy == D
+        Df = float.(D)
+        @test Df isa T
+        @test Df == D
+        @test eltype(eltype(Df)) <: AbstractFloat
+        @test (x -> (x,)).(D) == (x -> (x,)).(M)
+        @test (x -> 1).(D) == ones(Int,size(D))
+        @test all(==(2), ndims.(D))
+        @test_throws MethodError size.(D)
+    end
+    @testset "Diagonal" begin
+        @testset "square" begin
+            A = [1 3; 2 4]
+            D = Diagonal([A, A])
+            standardbroadcastingtests(D, Diagonal)
+            @test sincos.(D) == sincos.(Matrix{eltype(D)}(D))
+            M = [x for x in D]
+            @test cos.(D) == cos.(M)
+        end
+
+        @testset "different-sized square blocks" begin
+            D = Diagonal([ones(3,3), fill(3.0,2,2)])
+            standardbroadcastingtests(D, Diagonal)
+        end
+
+        @testset "rectangular blocks" begin
+            D = Diagonal([ones(Bool,3,4), ones(Bool,2,3)])
+            standardbroadcastingtests(D, Diagonal)
+        end
+
+        @testset "incompatible sizes" begin
+            A = reshape(1:12, 4, 3)
+            B = reshape(1:12, 3, 4)
+            D1 = Diagonal(fill(A, 2))
+            D2 = Diagonal(fill(B, 2))
+            @test_throws DimensionMismatch D1 .+ D2
+        end
+    end
+    @testset "Bidiagonal" begin
+        A = [1 3; 2 4]
+        B = Bidiagonal(fill(A,3), fill(A,2), :U)
+        standardbroadcastingtests(B, Bidiagonal)
+    end
+    @testset "UpperTriangular" begin
+        A = [1 3; 2 4]
+        U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
+        standardbroadcastingtests(U, UpperTriangular)
+    end
+end
 
 end

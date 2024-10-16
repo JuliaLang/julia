@@ -532,6 +532,11 @@ end
     @test String(take!(io)) == "transpose(::Matrix{Float64})"
 end
 
+@testset "show" begin
+    @test repr(adjoint([1,2,3])) == "adjoint([1, 2, 3])"
+    @test repr(transpose([1f0,2f0])) == "transpose(Float32[1.0, 2.0])"
+end
+
 @testset "strided transposes" begin
     for t in (Adjoint, Transpose)
         @test strides(t(rand(3))) == (3, 1)
@@ -701,6 +706,16 @@ end
     B = zero.(At)
     LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
     @test B == At
+end
+
+@testset "error message in transpose" begin
+    v = zeros(2)
+    A = zeros(1,1)
+    B = zeros(2,3)
+    for (t1, t2) in Any[(A, v), (v, A), (A, B)]
+        @test_throws "axes of the destination are incompatible with that of the source" transpose!(t1, t2)
+        @test_throws "axes of the destination are incompatible with that of the source" adjoint!(t1, t2)
+    end
 end
 
 end # module TestAdjointTranspose

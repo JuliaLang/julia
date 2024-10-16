@@ -15,20 +15,25 @@ Diagonal(A::Bidiagonal) = Diagonal(A.dv)
 SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-Tridiagonal(A::Bidiagonal) =
-    Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
-                A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
+function Tridiagonal(A::Bidiagonal)
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(A.ev, zero(A.ev))
+    Tridiagonal(A.uplo == 'U' ? z : A.ev, A.dv, A.uplo == 'U' ? A.ev : z)
+end
+
+_diagview(S::SymTridiagonal{<:Number}) = S.dv
+_diagview(S::SymTridiagonal) = view(S, diagind(S, IndexStyle(S)))
 
 # conversions from SymTridiagonal to other special matrix types
-Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
+Diagonal(A::SymTridiagonal) = Diagonal(_diagview(A))
 
 # These can fail when ev has the same length as dv
 # TODO: Revisit when a good solution for #42477 is found
-Bidiagonal(A::SymTridiagonal) =
+Bidiagonal(A::SymTridiagonal{<:Number}) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
-Tridiagonal(A::SymTridiagonal) =
-    Tridiagonal(copy(A.ev), A.dv, A.ev)
+Tridiagonal(A::SymTridiagonal{<:Number}) =
+    Tridiagonal(A.ev, A.dv, A.ev)
 
 # conversions from Tridiagonal to other special matrix types
 Diagonal(A::Tridiagonal) = Diagonal(A.d)
@@ -107,11 +112,13 @@ for op in (:+, :-)
     end
 end
 
+(*)(Da::Diagonal, A::BandedMatrix, Db::Diagonal) = _tri_matmul(Da, A, Db)
+
 # disambiguation between triangular and banded matrices, banded ones "dominate"
 _mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
@@ -161,26 +168,45 @@ function (-)(A::Diagonal, B::Bidiagonal)
     Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
 end
 
+# Return a SymTridiagonal if the elements of `newdv` are
+# statically known to be symmetric. Return a Tridiagonal otherwise
+function _symtri_or_tri(dl, d, du)
+    new_du = oftype(d, du)
+    new_dl = oftype(d, dl)
+    if symmetric_type(eltype(d)) == eltype(d)
+        SymTridiagonal(d, new_du)
+    else
+        Tridiagonal(new_dl, d, new_du)
+    end
+end
+
 @commutative function (+)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag + B.dv
-    SymTridiagonal(A.diag + B.dv, typeof(newdv)(B.ev))
+    newdv = A.diag + _diagview(B)
+    _symtri_or_tri(_evview_transposed(B), newdv, _evview(B))
 end
 
 function (-)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag - B.dv
-    SymTridiagonal(newdv, typeof(newdv)(-B.ev))
+    newdv = A.diag - _diagview(B)
+    _symtri_or_tri(-_evview_transposed(B), newdv, -_evview(B))
 end
 
 function (-)(A::SymTridiagonal, B::Diagonal)
-    newdv = A.dv - B.diag
-    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+    newdv = _diagview(A) - B.diag
+    _symtri_or_tri(_evview_transposed(A), newdv, _evview(A))
 end
 
 # this set doesn't have the aforementioned problem
-
-@commutative (+)(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+_evview(B), A.d+B.dv, A.du+_evview(B))
--(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-_evview(B), A.d-B.dv, A.du-_evview(B))
--(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(_evview(A)-B.dl, A.dv-B.d, _evview(A)-B.du)
+_evview_transposed(S::SymTridiagonal{<:Number}) = _evview(S)
+_evview_transposed(S::SymTridiagonal) = transpose.(_evview(S))
+@commutative function (+)(A::Tridiagonal, B::SymTridiagonal)
+    Tridiagonal(A.dl+_evview_transposed(B), A.d+_diagview(B), A.du+_evview(B))
+end
+function -(A::Tridiagonal, B::SymTridiagonal)
+    Tridiagonal(A.dl-_evview_transposed(B), A.d-_diagview(B), A.du-_evview(B))
+end
+function -(A::SymTridiagonal, B::Tridiagonal)
+    Tridiagonal(_evview_transposed(A)-B.dl, _diagview(A)-B.d, _evview(A)-B.du)
+end
 
 @commutative function (+)(A::Diagonal, B::Tridiagonal)
     newdv = A.diag + B.d
@@ -213,18 +239,18 @@ function (-)(A::Tridiagonal, B::Bidiagonal)
 end
 
 @commutative function (+)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv + B.dv
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(_evview(B)), A.dv+B.dv, A.ev+_evview(B)) : (A.ev+_evview(B), A.dv+B.dv, typeof(newdv)(_evview(B))))...)
+    newdv = A.dv + _diagview(B)
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(_evview_transposed(B)), newdv, A.ev+_evview(B)) : (A.ev+_evview_transposed(B), newdv, typeof(newdv)(_evview(B))))...)
 end
 
 function (-)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv - B.dv
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview(B), newdv, typeof(newdv)(-_evview(B))))...)
+    newdv = A.dv - _diagview(B)
+    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview_transposed(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview_transposed(B), newdv, typeof(newdv)(-_evview(B))))...)
 end
 
 function (-)(A::SymTridiagonal, B::Bidiagonal)
-    newdv = A.dv - B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
+    newdv = _diagview(A) - B.dv
+    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview_transposed(A)), newdv, _evview(A)-B.ev) : (_evview_transposed(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
 @commutative function (+)(A::Tridiagonal, B::UniformScaling)
@@ -254,7 +280,7 @@ function (-)(A::UniformScaling, B::Tridiagonal)
 end
 function (-)(A::UniformScaling, B::SymTridiagonal)
     dv = Ref(A) .- B.dv
-    SymTridiagonal(dv, convert(typeof(dv), -B.ev))
+    SymTridiagonal(dv, convert(typeof(dv), -_evview(B)))
 end
 function (-)(A::UniformScaling, B::Bidiagonal)
     dv = Ref(A) .- B.dv
@@ -262,6 +288,25 @@ function (-)(A::UniformScaling, B::Bidiagonal)
 end
 function (-)(A::UniformScaling, B::Diagonal)
     Diagonal(Ref(A) .- B.diag)
+end
+
+for f in (:+, :-)
+    @eval function $f(D::Diagonal{<:Number}, S::Symmetric)
+        uplo = sym_uplo(S.uplo)
+        return Symmetric(parentof_applytri($f, Symmetric(D, uplo), S), uplo)
+    end
+    @eval function $f(S::Symmetric, D::Diagonal{<:Number})
+        uplo = sym_uplo(S.uplo)
+        return Symmetric(parentof_applytri($f, S, Symmetric(D, uplo)), uplo)
+    end
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+        uplo = sym_uplo(H.uplo)
+        return Hermitian(parentof_applytri($f, Hermitian(D, uplo), H), uplo)
+    end
+    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+        uplo = sym_uplo(H.uplo)
+        return Hermitian(parentof_applytri($f, H, Hermitian(D, uplo)), uplo)
+    end
 end
 
 ## Diagonal construction from UniformScaling
@@ -284,10 +329,17 @@ _small_enough(A::Union{Diagonal, Bidiagonal}) = size(A, 1) <= 1
 _small_enough(A::Tridiagonal) = size(A, 1) <= 2
 _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 
-function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
+function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal}, x)
     xT = convert(eltype(A), x)
     (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
-    throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
+    throw(ArgumentError(lazy"array of type $(typeof(A)) and size $(size(A)) can
+    not be filled with $x, since some of its entries are constrained."))
+end
+function fill!(A::SymTridiagonal, x)
+    issymmetric(x) || throw(ArgumentError("cannot fill a SymTridiagonal with an asymmetric value"))
+    xT = convert(eltype(A), x)
+    (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
+    throw(ArgumentError(lazy"array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
 
@@ -307,11 +359,97 @@ isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
 dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
 
+# O(N) implementations using the banded structure
+function copyto!(dest::BandedMatrix, src::BandedMatrix)
+    if axes(dest) == axes(src)
+        _copyto_banded!(dest, src)
+    else
+        @invoke copyto!(dest::AbstractMatrix, src::AbstractMatrix)
+    end
+    return dest
+end
+function _copyto_banded!(T::Tridiagonal, D::Diagonal)
+    T.d .= D.diag
+    T.dl .= view(D, diagind(D, -1, IndexStyle(D)))
+    T.du .= view(D, diagind(D,  1, IndexStyle(D)))
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, D::Diagonal)
+    issymmetric(D) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal"))
+    SymT.dv .= D.diag
+    _ev = _evview(SymT)
+    _ev .= view(D, diagind(D,  1, IndexStyle(D)))
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, D::Diagonal)
+    B.dv .= D.diag
+    B.ev .= view(D, diagind(D,  B.uplo == 'U' ? 1 : -1, IndexStyle(D)))
+    return B
+end
+function _copyto_banded!(D::Diagonal, B::Bidiagonal)
+    isdiag(B) ||
+        throw(ArgumentError("cannot copy a Bidiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= B.dv
+    return D
+end
+function _copyto_banded!(D::Diagonal, T::Tridiagonal)
+    isdiag(T) ||
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= T.d
+    return D
+end
+function _copyto_banded!(D::Diagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    D.diag .= _symmetric.(SymT.dv)
+    return D
+end
+function _copyto_banded!(T::Tridiagonal, B::Bidiagonal)
+    T.d .= B.dv
+    if B.uplo == 'U'
+        T.du .= B.ev
+        T.dl .= view(B, diagind(B, -1, IndexStyle(B)))
+    else
+        T.dl .= B.ev
+        T.du .= view(B, diagind(B,  1, IndexStyle(B)))
+    end
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, B::Bidiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Bidiagonal matrix to a SymTridiagonal"))
+    SymT.dv .= B.dv
+    _ev = _evview(SymT)
+    _ev .= B.ev
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, T::Tridiagonal)
+    if B.uplo == 'U' && !iszero(T.dl)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero subdiagonal to a Bidiagonal with uplo=:U"))
+    elseif B.uplo == 'L' && !iszero(T.du)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero superdiagonal to a Bidiagonal with uplo=:L"))
+    end
+    B.dv .= T.d
+    B.ev .= B.uplo == 'U' ? T.du : T.dl
+    return B
+end
+function _copyto_banded!(B::Bidiagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Bidiagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    B.dv .= _symmetric.(SymT.dv)
+    return B
+end
+
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 
 ==(A::Diagonal, B::Bidiagonal) = iszero(B.ev) && A.diag == B.dv
-==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == B.dv
+==(A::Diagonal, B::SymTridiagonal) = iszero(_evview(B)) && A.diag == _diagview(B)
 ==(B::Bidiagonal, A::Diagonal) = A == B
 ==(A::Diagonal, B::Tridiagonal) = iszero(B.dl) && iszero(B.du) && A.diag == B.d
 ==(B::Tridiagonal, A::Diagonal) = A == B
@@ -325,7 +463,7 @@ function ==(A::Bidiagonal, B::Tridiagonal)
 end
 ==(B::Tridiagonal, A::Bidiagonal) = A == B
 
-==(A::Bidiagonal, B::SymTridiagonal) = iszero(_evview(B)) && iszero(A.ev) && A.dv == B.dv
+==(A::Bidiagonal, B::SymTridiagonal) = iszero(_evview(B)) && iszero(A.ev) && A.dv == _diagview(B)
 ==(B::SymTridiagonal, A::Bidiagonal) = A == B
 
 # TODO: remove these deprecations (used by SparseArrays in the past)
@@ -446,7 +584,11 @@ end
 
 # factorizations
 function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)
-    T = choltype(eltype(S))
+    T = choltype(S)
     B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end
+
+# istriu/istril for triangular wrappers of structured matrices
+_istril(A::LowerTriangular{<:Any, <:BandedMatrix}, k) = istril(parent(A), k)
+_istriu(A::UpperTriangular{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)

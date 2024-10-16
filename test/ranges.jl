@@ -292,15 +292,10 @@ end
 
     rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
 
-    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
-
     # For this test the `BigFloat` mantissa needs to be just a bit
     # larger than the `Float64` mantissa
     setprecision(BigFloat, 70) do
         n = 10
-        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
-            rand_twiceprecision_is_ok(T)
-        end
         @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
             twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
         end
@@ -313,6 +308,13 @@ end
         @testset "twiceprecision normalization 2: Float32 to Float64" for i ∈ 1:n
             twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
         end
+    end
+
+    @testset "displaying a complex range (#52713)" begin
+        r = 1.0*(1:5) .+ im
+        @test startswith(repr(r), repr(first(r)))
+        @test endswith(repr(r), repr(last(r)))
+        @test occursin(repr(step(r)), repr(r))
     end
 end
 @testset "ranges" begin
@@ -430,17 +432,17 @@ end
     @testset "findfirst" begin
         @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
-        @test findfirst(==(0), Base.OneTo(10)) == nothing
-        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(0), Base.OneTo(10)) === nothing
+        @test findfirst(==(11), Base.OneTo(10)) === nothing
         @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
-        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
-        @test findfirst(isequal(8), 3:7) == nothing
+        @test findfirst(==(2), Int16(3):Int16(7)) === nothing
+        @test findfirst(isequal(8), 3:7) === nothing
         @test findfirst(isequal(7), 1:2:10) == 4
         @test findfirst(==(7), 1:2:10) == 4
-        @test findfirst(==(10), 1:2:10) == nothing
-        @test findfirst(==(11), 1:2:10) == nothing
+        @test findfirst(==(10), 1:2:10) === nothing
+        @test findfirst(==(11), 1:2:10) === nothing
         @test findfirst(==(-7), 1:-1:-10) == 9
-        @test findfirst(==(2),1:-1:2) == nothing
+        @test findfirst(==(2),1:-1:2) === nothing
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -2376,13 +2378,46 @@ end
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
 
-@testset "Indexing OneTo with IdentityUnitRange" begin
-    for endpt in Any[10, big(10), UInt(10)]
-        r = Base.OneTo(endpt)
-        inds = Base.IdentityUnitRange(3:5)
-        rs = r[inds]
-        @test rs === inds
-        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+@testset "IdentityUnitRange indexing" begin
+    @testset "Indexing into an IdentityUnitRange" begin
+        @testset for r in Any[-1:20, Base.OneTo(20)]
+            ri = Base.IdentityUnitRange(r)
+            @test_throws "invalid index" ri[true]
+            @testset for s in Any[Base.OneTo(6), Base.OneTo{BigInt}(6), 3:6, big(3):big(6), 3:2:7]
+                @test mapreduce(==, &, ri[s], ri[s[begin]]:step(s):ri[s[end]])
+                @test axes(ri[s]) == axes(s)
+                @test eltype(ri[s]) == eltype(ri)
+            end
+        end
+        @testset "Bool indices" begin
+            r = 1:1
+            @test Base.IdentityUnitRange(r)[true:true] == r[true:true]
+            @test Base.IdentityUnitRange(r)[true:true:true] == r[true:true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true:true]
+        end
+    end
+    @testset "Indexing with IdentityUnitRange" begin
+        @testset "OneTo" begin
+            @testset for endpt in Any[10, big(12), UInt(11)]
+                r = Base.OneTo(endpt)
+                inds = Base.IdentityUnitRange(3:5)
+                rs = r[inds]
+                @test rs == inds
+                @test axes(rs) == axes(inds)
+                @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+            end
+        end
+        @testset "IdentityUnitRange" begin
+            @testset for r in Any[Base.IdentityUnitRange(1:4), Base.IdentityUnitRange(Base.OneTo(4)), Base.Slice(1:4), Base.Slice(Base.OneTo(4))]
+                @testset for s in Any[Base.IdentityUnitRange(3:3), Base.IdentityUnitRange(Base.OneTo(2)), Base.Slice(3:3), Base.Slice(Base.OneTo(2))]
+                    rs = r[s]
+                    @test rs == s
+                    @test axes(rs) == axes(s)
+                end
+                @test_throws BoundsError r[Base.IdentityUnitRange(first(r):last(r) + 1)]
+            end
+        end
     end
 end
 
@@ -2685,4 +2720,17 @@ end
     @test Base._log_twice64_unchecked(-1.23).lo isa Float64
     @test Base._log_twice64_unchecked(NaN).lo isa Float64
     @test Base._log_twice64_unchecked(Inf).lo isa Float64
+end
+
+@testset "OneTo promotion" begin
+    struct MyUnitRange{T} <: AbstractUnitRange{T}
+        range::UnitRange{T}
+    end
+    Base.first(r::MyUnitRange) = first(r.range)
+    Base.last(r::MyUnitRange) = last(r.range)
+    Base.size(r::MyUnitRange) = size(r.range)
+    Base.length(r::MyUnitRange) = length(r.range)
+    Base.getindex(r::MyUnitRange, i::Int) = getindex(r.range, i)
+    @test promote(MyUnitRange(2:3), Base.OneTo(3)) == (2:3, 1:3)
+    @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
 end

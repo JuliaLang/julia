@@ -11,7 +11,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildKiteTestJSON
+using .BuildkiteTestJSON
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -438,9 +438,9 @@ cd(@__DIR__) do
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
-        println("    \033[32;1mSUCCESS\033[0m")
+        printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
-        println("    \033[31;1mFAILURE\033[0m\n")
+        printstyled("    FAILURE\n\n"; bold=true, color=:red)
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
         println("The global RNG seed was 0x$(string(seed, base = 16)).\n")

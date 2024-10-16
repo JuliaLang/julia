@@ -149,6 +149,39 @@ end
     HT = Hermitian(Tridiagonal(ev, dv, ev))
     λ, V = eigen(HT)
     @test HT * V ≈ V * Diagonal(λ)
+    HT = Hermitian(Tridiagonal(ComplexF16.(ev), ComplexF16.(dv), ComplexF16.(ev)))
+    F = eigen(HT)
+    @test F isa Eigen{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
+    λ, V = F
+    @test HT * V ≈ V * Diagonal(λ)
+end
+
+@testset "Float16" begin
+    A = rand(Float16, 3, 3)
+    A = Symmetric(A*A')
+    B = eigen(A)
+    B32 = eigen(Symmetric(Float32.(A)))
+    @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}}
+    @test B.values ≈ B32.values
+    @test B.vectors ≈ B32.vectors
+    C = randn(ComplexF16, 3, 3)
+    C = Hermitian(C*C')
+    D = eigen(C)
+    D32 = eigen(Hermitian(ComplexF32.(C)))
+    @test D isa Eigen{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
+    @test D.values ≈ D32.values
+    @test D.vectors ≈ D32.vectors
+
+    # ensure that different algorithms dispatch correctly
+    λ, V = eigen(C, LinearAlgebra.QRIteration())
+    @test λ isa Vector{Float16}
+    @test C * V ≈ V * Diagonal(λ)
+end
+
+@testset "complex Symmetric" begin
+    S = Symmetric(rand(ComplexF64,2,2))
+    λ, v = eigen(S)
+    @test S * v ≈ v * Diagonal(λ)
 end
 
 end # module TestSymmetricEigen
