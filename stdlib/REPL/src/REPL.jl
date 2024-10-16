@@ -494,9 +494,6 @@ mutable struct LimitIO{IO_t <: IO} <: IO
 end
 LimitIO(io::IO, maxbytes) = LimitIO(io, maxbytes, 0)
 
-# Forward `ioproperties` onwards (for interop with IOContext)
-Base.ioproperties(io::LimitIO) = Base.ioproperties(io.io)
-
 struct LimitIOException <: Exception
     maxbytes::Int
 end
@@ -528,7 +525,7 @@ function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
     # We won't hit the limit so we'll write the full `nb` bytes
     bytes_written = Base.unsafe_write(limiter.io, p, nb)
     limiter.n += bytes_written
-    return bytes_written::Union{UInt, Int}
+    return bytes_written
 end
 
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
@@ -540,7 +537,7 @@ function show_limited(io::IO, mime::MIME, x)
         # We wrap in a LimitIO to limit the amount of printing.
         # We unpack `IOContext`s, since we will pass the properties on the outside.
         inner = io isa IOContext ? io.io : io
-        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), Base.ioproperties(io))
+        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), io)
         # `show_repl` to allow the hook with special syntax highlighting
         show_repl(wrapped_limiter, mime, x)
     catch e
