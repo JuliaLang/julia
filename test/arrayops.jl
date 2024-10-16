@@ -3294,13 +3294,13 @@ end
         v[2] = 3
         return v[1] + v[2]
     end
-    function test_alloc(T)
-        @test (@allocated no_allocate(T)) == 0
+    function test_alloc(T; broken=false)
+        @test (@allocated no_allocate(T)) == 0 broken=broken
     end
     @testset "$T" for T in [Memory, Vector]
-        @testset "$ET" for ET in [Int, Union{Int, Float64}]# still broken: , Union{Int, BigInt}]
+        @testset "$ET" for ET in [Int, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            test_alloc(T{ET})
+            test_alloc(T{ET}, broken=xor(T==Memory, ET==Union{Int, Float64}))
         end
     end
 end
