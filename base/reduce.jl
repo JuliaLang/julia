@@ -297,7 +297,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+mapreduce(f, op, itr, itrs...; kw...) = reduce(op, Generator(f, itr, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -472,8 +472,8 @@ elements are not reordered if you use an ordered collection.
 julia> reduce(*, [2; 3; 4])
 24
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(*, Int[]; init=1)
+1
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
@@ -638,11 +638,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+        for i in start:4:simdstop
+            v1 = _fast(op, v1, f(@inbounds(A[i+0])))
+            v2 = _fast(op, v2, f(@inbounds(A[i+1])))
+            v3 = _fast(op, v3, f(@inbounds(A[i+2])))
+            v4 = _fast(op, v4, f(@inbounds(A[i+3])))
         end
         checkbounds(A, simdstop+3)
         start += chunk_len
@@ -1118,7 +1118,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -1156,7 +1156,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest

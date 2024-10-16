@@ -5,7 +5,7 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Logging/docs/sr
 # [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
-computation as a log of events.  Events are created by inserting a logging
+computation as a log of events. Events are created by inserting a logging
 statement into the source code, for example:
 
 ```julia
@@ -15,17 +15,17 @@ statement into the source code, for example:
 ```
 
 The system provides several advantages over peppering your source code with
-calls to `println()`.  First, it allows you to control the visibility and
-presentation of messages without editing the source code.  For example, in
+calls to `println()`. First, it allows you to control the visibility and
+presentation of messages without editing the source code. For example, in
 contrast to the `@warn` above
 
 ```julia
 @debug "The sum of some values $(sum(rand(100)))"
 ```
 
-will produce no output by default.  Furthermore, it's very cheap to leave debug
+will produce no output by default. Furthermore, it's very cheap to leave debug
 statements like this in the source code because the system avoids evaluating
-the message if it would later be ignored.  In this case `sum(rand(100))` and
+the message if it would later be ignored. In this case `sum(rand(100))` and
 the associated string processing will never be executed unless debug logging is
 enabled.
 
@@ -92,7 +92,7 @@ The system also generates some standard information for each event:
   fairly stable even if the source code of the file changes, as long as the
   logging statement itself remains the same.
 * A `group` for the event, which is set to the base name of the file by default,
-  without extension.  This can be used to group messages into categories more
+  without extension. This can be used to group messages into categories more
   finely than the log level (for example, all deprecation warnings have group
   `:depwarn`), or into logical groupings across or within modules.
 
@@ -124,7 +124,7 @@ user configurable code to see the event. All loggers must be subtypes of
 [`AbstractLogger`](@ref).
 
 When an event is triggered, the appropriate logger is found by looking for a
-task-local logger with the global logger as fallback.  The idea here is that
+task-local logger with the global logger as fallback. The idea here is that
 the application code knows how log events should be processed and exists
 somewhere at the top of the call stack. So we should look up through the call
 stack to discover the logger — that is, the logger should be *dynamically
@@ -134,11 +134,11 @@ simple global variable. In such a system it's awkward to control logging while
 composing functionality from multiple modules.)
 
 The global logger may be set with [`global_logger`](@ref), and task-local
-loggers controlled using [`with_logger`](@ref).  Newly spawned tasks inherit
+loggers controlled using [`with_logger`](@ref). Newly spawned tasks inherit
 the logger of the parent task.
 
 There are three logger types provided by the library.  [`ConsoleLogger`](@ref)
-is the default logger you see when starting the REPL.  It displays events in a
+is the default logger you see when starting the REPL. It displays events in a
 readable text format and tries to give simple but user friendly control over
 formatting and filtering.  [`NullLogger`](@ref) is a convenient way to drop all
 messages where necessary; it is the logging equivalent of the [`devnull`](@ref)
@@ -154,14 +154,14 @@ When an event occurs, a few steps of early filtering occur to avoid generating
 messages that will be discarded:
 
 1. The message log level is checked against a global minimum level (set via
-   [`disable_logging`](@ref)).  This is a crude but extremely cheap global
+   [`disable_logging`](@ref)). This is a crude but extremely cheap global
    setting.
 2. The current logger state is looked up and the message level checked against the
    logger's cached minimum level, as found by calling [`Logging.min_enabled_level`](@ref).
    This behavior can be overridden via environment variables (more on this later).
 3. The [`Logging.shouldlog`](@ref) function is called with the current logger, taking
    some minimal information (level, module, group, id) which can be computed
-   statically.  Most usefully, `shouldlog` is passed an event `id` which can be
+   statically. Most usefully, `shouldlog` is passed an event `id` which can be
    used to discard events early based on a cached predicate.
 
 If all these checks pass, the message and key--value pairs are evaluated in full
@@ -170,9 +170,9 @@ and passed to the current logger via the [`Logging.handle_message`](@ref) functi
 event to the screen, save it to a file, etc.
 
 Exceptions that occur while generating the log event are captured and logged
-by default.  This prevents individual broken events from crashing the
+by default. This prevents individual broken events from crashing the
 application, which is helpful when enabling little-used debug events in a
-production system.  This behavior can be customized per logger type by
+production system. This behavior can be customized per logger type by
 extending [`Logging.catch_exceptions`](@ref).
 
 ## Testing log events

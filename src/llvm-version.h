@@ -15,7 +15,11 @@
 #endif
 
 #if JL_LLVM_VERSION >= 160000
-#define JL_LLVM_OPAQUE_POINTERS 1
+    #define JL_LLVM_OPAQUE_POINTERS 1
+#endif
+
+#if JL_LLVM_VERSION < 19000 && defined(_CPU_RISCV64_)
+    #error Only LLVM versions >= 19.0.0 are supported by Julia on RISC-V
 #endif
 
 #ifdef __cplusplus

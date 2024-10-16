@@ -7,7 +7,11 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Host.h>
+#else
 #include <llvm/Support/Host.h>
+#endif
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -158,7 +162,11 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
+            #if JL_LLVM_VERSION >= 170000
+            cnt += llvm::popcount(eles[i]);
+            #else
             cnt += llvm::countPopulation(eles[i]);
+            #endif
         return cnt;
     }
     inline bool empty() const
@@ -970,8 +978,12 @@ static std::string jl_get_cpu_name_llvm(void)
 
 static std::string jl_get_cpu_features_llvm(void)
 {
+#if JL_LLVM_VERSION >= 190000
+    auto HostFeatures = llvm::sys::getHostCPUFeatures();
+#else
     llvm::StringMap<bool> HostFeatures;
     llvm::sys::getHostCPUFeatures(HostFeatures);
+#endif
     std::string attr;
     for (auto &ele: HostFeatures) {
         if (ele.getValue()) {

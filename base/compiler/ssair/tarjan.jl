@@ -247,6 +247,9 @@ function enqueue_if_unreachable!(reach::CFGReachability, cfg::CFG, bb::Int)
         # target is a reducible CFG node
         # this node lives iff it still has an incoming forward edge
         for pred in cfg.blocks[bb].preds
+            # virtual edge does not count - if the enter is dead, that edge is
+            # not taken.
+            pred == 0 && continue
             !dominates(domtree, bb, pred) && return false # forward-edge
         end
         scc[bb] = 0

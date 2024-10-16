@@ -458,14 +458,17 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
 }
 
 static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
-                                            uint8_t nospecializeinfer, uint8_t inlining, uint8_t constprop)
+                                            uint8_t nospecializeinfer, uint8_t isva,
+                                            uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod)
 {
     jl_code_info_flags_t flags;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
     flags.bits.nospecializeinfer = nospecializeinfer;
+    flags.bits.isva = isva;
     flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
+    flags.bits.nargsmatchesmethod = nargsmatchesmethod;
     return flags;
 }
 
@@ -821,7 +824,7 @@ static int codelocs_nstmts(jl_string_t *cl) JL_NOTSAFEPOINT
 }
 #endif
 
-#define IR_DATASIZE_FLAGS         sizeof(uint8_t)
+#define IR_DATASIZE_FLAGS         sizeof(uint16_t)
 #define IR_DATASIZE_PURITY        sizeof(uint16_t)
 #define IR_DATASIZE_INLINING_COST sizeof(uint16_t)
 #define IR_DATASIZE_NSLOTS        sizeof(int32_t)
@@ -832,6 +835,16 @@ typedef enum {
     ir_offset_nslots        = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY + IR_DATASIZE_INLINING_COST,
     ir_offset_slotflags     = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY + IR_DATASIZE_INLINING_COST + IR_DATASIZE_NSLOTS
 } ir_offset;
+
+// static_assert is technically a declaration, so shenanigans are required to
+// open an inline declaration context. `sizeof` is the traditional way to do this,
+// but this pattern is illegal in C++, which some compilers warn about, so use
+// `offsetof` instead.
+#define declaration_context(what) (void)offsetof(struct{what; int dummy_;}, dummy_)
+
+// Checks (at compile time) that sizeof(data) == macro_size
+#define checked_size(data, macro_size) \
+    (declaration_context(static_assert(sizeof(data) == macro_size, #macro_size " does not match written size")), data)
 
 JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
@@ -859,24 +872,28 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         1
     };
 
+    uint8_t nargsmatchesmethod = code->nargs == m->nargs;
     jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
-                                                 code->nospecializeinfer, code->inlining, code->constprop);
-    write_uint8(s.s, flags.packed);
-    static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
-    write_uint16(s.s, code->purity.bits);
-    static_assert(sizeof(code->purity.bits) == IR_DATASIZE_PURITY, "ir_datasize_purity is mismatched with the actual size");
-    write_uint16(s.s, code->inlining_cost);
-    static_assert(sizeof(code->inlining_cost) == IR_DATASIZE_INLINING_COST, "ir_datasize_inlining_cost is mismatched with the actual size");
+                                                 code->nospecializeinfer, code->isva,
+                                                 code->inlining, code->constprop,
+                                                 nargsmatchesmethod);
+    write_uint16(s.s, checked_size(flags.packed, IR_DATASIZE_FLAGS));
+    write_uint16(s.s, checked_size(code->purity.bits, IR_DATASIZE_PURITY));
+    write_uint16(s.s, checked_size(code->inlining_cost, IR_DATASIZE_INLINING_COST));
 
-    int32_t nslots = jl_array_nrows(code->slotflags);
+    size_t nslots = jl_array_nrows(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
-    write_int32(s.s, nslots);
-    static_assert(sizeof(nslots) == IR_DATASIZE_NSLOTS, "ir_datasize_nslots is mismatched with the actual size");
+    write_int32(s.s, checked_size((int32_t)nslots, IR_DATASIZE_NSLOTS));
     ios_write(s.s, jl_array_data(code->slotflags, const char), nslots);
 
     // N.B.: The layout of everything before this point is explicitly referenced
     // by the various jl_ir_ accessors. Make sure to adjust those if you change
     // the data layout.
+    if (!nargsmatchesmethod) {
+        size_t nargs = code->nargs;
+        assert(nargs < INT32_MAX);
+        write_int32(s.s, (int32_t)nargs);
+    }
 
     for (i = 0; i < 5; i++) {
         int copy = 1;
@@ -892,6 +909,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     if (m->is_for_opaque_closure)
         jl_encode_value_(&s, code->slottypes, 1);
 
+    // Slotnames. For regular methods, we require that m->slot_syms matches the
+    // CodeInfo's slotnames, so we do not need to save it here.
     if (m->generator)
         // can't optimize generated functions
         jl_encode_value_(&s, (jl_value_t*)jl_compress_argnames(code->slotnames), 1);
@@ -937,18 +956,26 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 
     jl_code_info_t *code = jl_new_code_info_uninit();
     jl_code_info_flags_t flags;
-    flags.packed = read_uint8(s.s);
+    flags.packed = read_uint16(s.s);
     code->inlining = flags.bits.inlining;
     code->constprop = flags.bits.constprop;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
+    code->isva = flags.bits.isva;
     code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
-    size_t nslots = read_int32(&src);
+
+    size_t nslots = read_int32(s.s);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
+
+    if (flags.bits.nargsmatchesmethod) {
+        code->nargs = m->nargs;
+    } else {
+        code->nargs = read_int32(s.s);
+    }
 
     for (i = 0; i < 5; i++) {
         if (i == 1)  // skip debuginfo
@@ -983,6 +1010,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_GC_POP();
     if (metadata) {
         code->parent = metadata->def;
+        jl_gc_wb(code, code->parent);
+        code->rettype = metadata->rettype;
+        jl_gc_wb(code, code->rettype);
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
     }
 
     return code;
@@ -1234,7 +1266,6 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstline, jl_value_t *co
 #undef SETMIN
 #undef SETMAX
     }
-    min.line = min.to = min.pc = firstline <= 0 ? INT32_MAX : firstline;
     int32_t header[3];
     header[0] = min.line > max.line ? 0 : min.line;
     header[1] = min.line > max.line ? 0 : max.line - min.line;

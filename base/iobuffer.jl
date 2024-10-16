@@ -59,6 +59,15 @@ It may take optional keyword arguments:
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
+!!! warning "Passing `data` as scratch space to `IOBuffer` with `write=true` may give unexpected behavior"
+    Once `write` is called on an `IOBuffer`, it is best to consider any
+    previous references to `data` invalidated; in effect `IOBuffer` "owns"
+    this data until a call to `take!`. Any indirect mutations to `data`
+    could lead to undefined behavior by breaking the abstractions expected
+    by `IOBuffer`. If `write=true` the IOBuffer may store data at any
+    offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
+    the IOBuffer might re-allocate the data entirely, which
+    may or may not be visible in any outstanding bindings to `array`.
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -219,7 +228,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbitstype(T) && isa(a,Array)
+    if isa(a, MutableDenseArrayType{UInt8})
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -260,22 +269,32 @@ bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 position(io::GenericIOBuffer) = io.ptr - io.offset - 1
 
 function skip(io::GenericIOBuffer, n::Integer)
-    seekto = io.ptr + n
-    n < 0 && return seek(io, seekto-1) # Does error checking
-    io.ptr = min(seekto, io.size+1)
-    return io
+    skip(io, clamp(n, Int))
+end
+function skip(io::GenericIOBuffer, n::Int)
+    if signbit(n)
+        seekto = clamp(widen(position(io)) + widen(n), Int)
+        seek(io, seekto) # Does error checking
+    else
+        n_max = io.size + 1 - io.ptr
+        io.ptr += min(n, n_max)
+        io
+    end
 end
 
 function seek(io::GenericIOBuffer, n::Integer)
+    seek(io, clamp(n, Int))
+end
+function seek(io::GenericIOBuffer, n::Int)
     if !io.seekable
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
     #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
-    #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
-    #io.ptr = n+1
-    io.ptr = min(max(0, n)+io.offset, io.size)+1
+    #(n < 0 || n > io.size - io.offset) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n + io.offset + 1
+    io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
     return io
 end
 
@@ -456,16 +475,16 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.offset + 1), nbytes)
+            data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
         else
-            data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
+            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
     else
         nbytes = bytesavailable(io)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.ptr), nbytes)
+            data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
             data = read!(io, data)
         end
@@ -493,8 +512,8 @@ Array allocation), as well as omits some checks.
 """
 _unsafe_take!(io::IOBuffer) =
     wrap(Array, io.size == io.offset ?
-        MemoryRef(Memory{UInt8}()) :
-        MemoryRef(io.data, io.offset + 1),
+        memoryref(Memory{UInt8}()) :
+        memoryref(io.data, io.offset + 1),
         io.size - io.offset)
 
 function write(to::IO, from::GenericIOBuffer)
@@ -542,8 +561,8 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)

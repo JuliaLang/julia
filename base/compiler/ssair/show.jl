@@ -14,6 +14,8 @@ end
 
 import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
+using Core.Compiler: VarState, InvalidIRError, argextype, widenconst, singleton_type,
+                     sptypes_from_meth_instance, EMPTY_SPTYPES
 
 function Base.show(io::IO, cfg::CFG)
     print(io, "CFG with $(length(cfg.blocks)) blocks:")
@@ -31,7 +33,50 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
+function maybe_argextype(
+    @nospecialize(x),
+    src::Union{IRCode,IncrementalCompact,CodeInfo},
+    sptypes::Vector{VarState},
+)
+    return try
+        argextype(x, src, sptypes)
+    catch err
+        !(err isa InvalidIRError) && rethrow()
+        nothing
+    end
+end
+
+const inlined_apply_iterate_types = Union{Array,Memory,Tuple,NamedTuple,Core.SimpleVector}
+
+function builtin_call_has_dispatch(
+    @nospecialize(f),
+    args::Vector{Any},
+    src::Union{IRCode,IncrementalCompact,CodeInfo},
+    sptypes::Vector{VarState},
+)
+    if f === Core._apply_iterate && length(args) >= 3
+        # The implementation of _apply_iterate has hand-inlined implementations
+        # for <builtin>(v::Union{Tuple,NamedTuple,Memory,Array,SimpleVector}...)
+        # which perform no dynamic dispatch
+        constructort = maybe_argextype(args[3], src, sptypes)
+        if constructort === nothing || !(widenconst(constructort) <: Core.Builtin)
+            return true
+        end
+        for arg in args[4:end]
+            argt = maybe_argextype(arg, src, sptypes)
+            if argt === nothing || !(widenconst(argt) <: inlined_apply_iterate_types)
+                return true
+            end
+        end
+    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+        # These apply-like builtins are effectively dynamic calls
+        return true
+    end
+    return false
+end
+
+function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
+                    sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
@@ -51,13 +96,13 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
-        print(io, "invoke ")
-        linfo = stmt.args[1]::Core.MethodInstance
+        printstyled(io, "   invoke "; color = :light_black)
+        mi = stmt.args[1]::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = linfo.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(linfo.specTypes).parameters::Core.SimpleVector
+        sig = mi.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(mi.specTypes).parameters::Core.SimpleVector
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
@@ -66,6 +111,28 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         end
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
+    elseif isexpr(stmt, :call) && length(stmt.args) >= 1 && label_dynamic_calls
+        ft = maybe_argextype(stmt.args[1], code, sptypes)
+        f = singleton_type(ft)
+        if isa(f, Core.IntrinsicFunction)
+            printstyled(io, "intrinsic "; color = :light_black)
+        elseif isa(f, Core.Builtin)
+            if builtin_call_has_dispatch(f, stmt.args, code, sptypes)
+                printstyled(io, "dynamic builtin "; color = :yellow)
+            else
+                printstyled(io, "  builtin "; color = :light_black)
+            end
+        elseif ft === nothing
+            # This should only happen when, e.g., printing a call that targets
+            # an out-of-bounds SSAValue or similar
+            # (i.e. under normal circumstances, dead code)
+            printstyled(io, "  unknown "; color = :light_black)
+        elseif widenconst(ft) <: Core.Builtin
+            printstyled(io, "dynamic builtin "; color = :yellow)
+        else
+            printstyled(io, "  dynamic "; color = :yellow)
+        end
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
     elseif isa(stmt, EnterNode)
         print(io, "enter #", stmt.catch_dest, "")
@@ -327,7 +394,7 @@ Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 # utility function to extract the file name from a DebugInfo object
-function debuginfo_file1(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
+function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
     def = debuginfo.def
     if def isa MethodInstance
         def = def.def
@@ -342,7 +409,7 @@ function debuginfo_file1(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
 end
 
 # utility function to extract the first line number and file of a block of code
-function debuginfo_firstline(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
+function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
     linetable = debuginfo.linetable
     while linetable != nothing
         debuginfo = linetable
@@ -375,7 +442,7 @@ function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospe
             line < 0 && (doupdate = false; line = 0) # broken debug info
             push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
         else
-            doupdate = append_scopes!(scopes, line, debuginfo.linetable::Core.DebugInfo, def) && doupdate
+            doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
         end
         inl_to == 0 && return doupdate
         def = :var"macro expansion"
@@ -563,16 +630,28 @@ end
 - `should_print_stmt(idx::Int) -> Bool`: whether the statement at index `idx` should be
   printed as part of the IR or not
 - `bb_color`: color used for printing the basic block brackets on the left
+- `label_dynamic_calls`: whether to label calls as dynamic / builtin / intrinsic
 """
 struct IRShowConfig
     line_info_preprinter
     line_info_postprinter
     should_print_stmt
     bb_color::Symbol
-    function IRShowConfig(line_info_preprinter, line_info_postprinter=default_expr_type_printer;
-                          should_print_stmt=Returns(true), bb_color::Symbol=:light_black)
-        return new(line_info_preprinter, line_info_postprinter, should_print_stmt, bb_color)
-    end
+    label_dynamic_calls::Bool
+
+    IRShowConfig(
+        line_info_preprinter,
+        line_info_postprinter=default_expr_type_printer;
+        should_print_stmt=Returns(true),
+        bb_color::Symbol=:light_black,
+        label_dynamic_calls=true
+    ) = new(
+        line_info_preprinter,
+        line_info_postprinter,
+        should_print_stmt,
+        bb_color,
+        label_dynamic_calls
+    )
 end
 
 struct _UNDEF
@@ -628,13 +707,14 @@ end
 #   at index `idx`. This function is repeatedly called until it returns `nothing`.
 #   to iterate nodes that are to be inserted after the statement, set `attach_after=true`.
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
+                      sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color)
+                        sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
 end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
+                      sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
+                      bb_color=:light_black, label_dynamic_calls::Bool=true)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -693,7 +773,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         show_type = should_print_ssa_type(new_node_inst)
         let maxlength_idx=maxlength_idx, show_type=show_type
             with_output_color(:green, io) do io′
-                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+                print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
             end
         end
 
@@ -722,7 +802,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        print_stmt(io, idx, stmt, code, sptypes, used, maxlength_idx, true, show_type, label_dynamic_calls)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
@@ -881,10 +961,10 @@ end
 default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
-                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
     for idx in inds
         if config.should_print_stmt(ir, idx, used)
-            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
+            bb_idx = show_ir_stmt(io, ir, idx, config, sptypes, used, cfg, bb_idx; pop_new_node!)
         elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
             bb_idx += 1
         end
@@ -904,7 +984,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
     cfg = ir.cfg
     maxssaid = length(ir.stmts) + Core.Compiler.length(ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
-        show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
+        show_ir_stmts(io, ir, 1:length(ir.stmts), config, ir.sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
 end
@@ -913,8 +993,12 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
     cfg = compute_basic_blocks(ci.code)
+    parent = ci.parent
+    sptypes = if parent isa MethodInstance
+        sptypes_from_meth_instance(parent)
+    else EMPTY_SPTYPES end
     let io = IOContext(io, :maxssaid=>length(ci.code))
-        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+        show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
 end
@@ -963,8 +1047,8 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     pop_new_node! = new_nodes_iter(compact)
     maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
     bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
-        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted,
-                      compact_cfg, 1; pop_new_node!)
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, compact.ir.sptypes,
+                      used_compacted, compact_cfg, 1; pop_new_node!)
     end
 
 
@@ -995,13 +1079,13 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     let io = IOContext(io, :maxssaid=>maxssaid)
         # first show any new nodes to be attached after the last compacted statement
         if compact.idx > 1
-            show_ir_stmt(io, compact.ir, compact.idx-1, config, used_uncompacted,
-                        uncompacted_cfg, bb_idx; pop_new_node!, only_after=true)
+            show_ir_stmt(io, compact.ir, compact.idx-1, config, compact.ir.sptypes,
+                         used_uncompacted, uncompacted_cfg, bb_idx; pop_new_node!, only_after=true)
         end
 
         # then show the actual uncompacted IR
-        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted,
-                      uncompacted_cfg, bb_idx; pop_new_node!)
+        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, compact.ir.sptypes,
+                      used_uncompacted, uncompacted_cfg, bb_idx; pop_new_node!)
     end
 
     finish_show_ir(io, uncompacted_cfg, config)
@@ -1048,8 +1132,11 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :noub, 'u'); color=effectbits_color(e, :noub))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :nonoverlayed, 'o'); color=effectbits_color(e, :nonoverlayed))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :nortcall, 'r'); color=effectbits_color(e, :nortcall))
     print(io, ')')
-    e.nonoverlayed || printstyled(io, '′'; color=:red)
 end
 
 @specialize

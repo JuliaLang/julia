@@ -11,7 +11,7 @@
 
 // This nesting is required to allow compilation on musl
 #define USE_DYN_GETAUXVAL
-#if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
 #  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
 #elif defined(__GLIBC_PREREQ)
@@ -737,7 +737,16 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(USE_DYN_GETAUXVAL)
+#if defined(_OS_FREEBSD_)
+static inline unsigned long jl_getauxval(unsigned long type)
+{
+    unsigned long val;
+    if (elf_aux_info((int)type, &val, sizeof(val)) != 0) {
+        return 0;
+    }
+    return val;
+}
+#elif defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);
@@ -830,7 +839,7 @@ template<typename T, typename F>
 static inline bool try_read_procfs_line(llvm::StringRef line, const char *prefix, T &out,
                                         bool &flag, F &&reset)
 {
-    if (!line.startswith(prefix))
+    if (!line.starts_with(prefix))
         return false;
     if (flag)
         reset();
@@ -1890,12 +1899,56 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
+#ifndef __clang_gcanalyzer__
 llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
-    if (jit_targets.empty())
-        jl_error("JIT targets not initialized");
+
+    auto &cmdline = get_cmdline_targets();
+    check_cmdline(cmdline, true);
+    llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
+    for (auto &arg: cmdline) {
+        auto data = arg_target_data(arg, image_targets.empty());
+        image_targets.push_back(std::move(data));
+    }
+    auto ntargets = image_targets.size();
+    if (image_targets.empty())
+        jl_error("No targets specified");
     llvm::SmallVector<jl_target_spec_t, 0> res;
-    for (auto &target: jit_targets) {
+    // Now decide the clone condition.
+    for (size_t i = 1; i < ntargets; i++) {
+        auto &t = image_targets[i];
+        if (t.en.flags & JL_TARGET_CLONE_ALL)
+            continue;
+        auto &features0 = image_targets[t.base].en.features;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
+        // The most useful one in general...
+        t.en.flags |= JL_TARGET_CLONE_LOOP;
+#ifdef _CPU_ARM_
+        static constexpr uint32_t clone_math[] = {Feature::vfp3, Feature::vfp4, Feature::neon};
+        for (auto fe: clone_math) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_MATH;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_simd[] = {Feature::neon};
+        for (auto fe: clone_simd) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_SIMD;
+                break;
+            }
+        }
+#endif
+    }
+    for (auto &target: image_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;
         for (auto &fename: feature_names) {
@@ -1915,6 +1968,8 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
     }
     return res;
 }
+
+#endif
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {

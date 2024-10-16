@@ -2,7 +2,7 @@
 
 The following table lists Unicode characters that can be entered via
 tab completion of LaTeX-like abbreviations in the Julia REPL (and
-in various other editing environments).  You can also get information on how to
+in various other editing environments). You can also get information on how to
 type a symbol by entering it in the REPL help, i.e. by typing `?` and then
 entering the symbol in the REPL (e.g., by copy-paste from somewhere you saw
 the symbol).

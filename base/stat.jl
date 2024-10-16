@@ -63,10 +63,11 @@ struct StatStruct
     blocks  :: Int64
     mtime   :: Float64
     ctime   :: Float64
+    ioerrno :: Int32
 end
 
 @eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-  $(let ex = true
+    $(let ex = true
         for fld in fieldnames(StatStruct)[2:end]
             ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
         end
@@ -74,28 +75,29 @@ end
     end)
 end
 @eval function Base.hash(obj::StatStruct, h::UInt)
-  $(quote
+    $(quote
         $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
         return h
     end)
 end
 
-StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct("", buf)
-StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
+StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Base.UV_ENOENT)
+StatStruct(buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct("", buf, ioerrno)
+StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct(
     desc isa OS_HANDLE ? desc : String(desc),
-    ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno
 )
 
 function iso_datetime_with_relative(t, tnow)
@@ -130,35 +132,41 @@ end
 function show_statstruct(io::IO, st::StatStruct, oneline::Bool)
     print(io, oneline ? "StatStruct(" : "StatStruct for ")
     show(io, st.desc)
-    oneline || print(io, "\n  ")
-    print(io, " size: ", st.size, " bytes")
-    oneline || print(io, "\n")
-    print(io, " device: ", st.device)
-    oneline || print(io, "\n ")
-    print(io, " inode: ", st.inode)
-    oneline || print(io, "\n  ")
-    print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
-    oneline || print(io, "\n ")
-    print(io, " nlink: ", st.nlink)
-    oneline || print(io, "\n   ")
-    print(io, " uid: $(st.uid)")
-    username = getusername(st.uid)
-    username === nothing || print(io, " (", username, ")")
-    oneline || print(io, "\n   ")
-    print(io, " gid: ", st.gid)
-    groupname = getgroupname(st.gid)
-    groupname === nothing || print(io, " (", groupname, ")")
-    oneline || print(io, "\n  ")
-    print(io, " rdev: ", st.rdev)
-    oneline || print(io, "\n ")
-    print(io, " blksz: ", st.blksize)
-    oneline || print(io, "\n")
-    print(io, " blocks: ", st.blocks)
-    tnow = round(UInt, time())
-    oneline || print(io, "\n ")
-    print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
-    oneline || print(io, "\n ")
-    print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    code = st.ioerrno
+    if code != 0
+        print(io, oneline ? " " : "\n ")
+        print(io, Base.uverrorname(code), ": ", Base.struverror(code))
+    else
+        oneline || print(io, "\n  ")
+        print(io, " size: ", st.size, " bytes")
+        oneline || print(io, "\n")
+        print(io, " device: ", st.device)
+        oneline || print(io, "\n ")
+        print(io, " inode: ", st.inode)
+        oneline || print(io, "\n  ")
+        print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
+        oneline || print(io, "\n ")
+        print(io, " nlink: ", st.nlink)
+        oneline || print(io, "\n   ")
+        print(io, " uid: $(st.uid)")
+        username = getusername(st.uid)
+        username === nothing || print(io, " (", username, ")")
+        oneline || print(io, "\n   ")
+        print(io, " gid: ", st.gid)
+        groupname = getgroupname(st.gid)
+        groupname === nothing || print(io, " (", groupname, ")")
+        oneline || print(io, "\n  ")
+        print(io, " rdev: ", st.rdev)
+        oneline || print(io, "\n ")
+        print(io, " blksz: ", st.blksize)
+        oneline || print(io, "\n")
+        print(io, " blocks: ", st.blocks)
+        tnow = round(UInt, time())
+        oneline || print(io, "\n ")
+        print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
+        oneline || print(io, "\n ")
+        print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    end
     oneline && print(io, ")")
     return nothing
 end
@@ -168,31 +176,32 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 # stat & lstat functions
 
+checkstat(s::StatStruct) = Int(s.ioerrno) in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL) ? s : uv_error(string("stat(", repr(s.desc), ")"), s.ioerrno)
+
 macro stat_call(sym, arg1type, arg)
     return quote
-        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+        stat_buf = fill!(Memory{UInt8}(undef, Int(ccall(:jl_sizeof_stat, Int32, ()))), 0x00)
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
-        if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            uv_error(string("stat(", repr($(esc(arg))), ")"), r)
-        end
-        st = StatStruct($(esc(arg)), stat_buf)
-        if ispath(st) != (r == 0)
-            error("stat returned zero type for a valid path")
-        end
-        return st
+        return checkstat(StatStruct($(esc(arg)), stat_buf, r))
     end
 end
 
 stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
-stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
-lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
+function stat(path::AbstractString)
+    # @info "stat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    @stat_call jl_stat  Cstring path
+end
+function lstat(path::AbstractString)
+    # @info "lstat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    @stat_call jl_lstat Cstring path
+end
 if RawFD !== OS_HANDLE
     global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
 end
-stat(fd::Integer)           = stat(RawFD(fd))
 
 """
     stat(file)
+    stat(joinpath...)
 
 Return a structure whose fields contain information about the file.
 The fields of the structure are:
@@ -213,16 +222,19 @@ The fields of the structure are:
 | mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
 | ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
 """
+stat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("stat not implemented for $(typeof(path))") : stat(path2))
 stat(path...) = stat(joinpath(path...))
 
 """
     lstat(file)
+    lstat(joinpath...)
 
 Like [`stat`](@ref), but for symbolic links gets the info for the link
 itself rather than the file it refers to.
 This function must be called on a file path rather than a file object or a file
 descriptor.
 """
+lstat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("lstat not implemented for $(typeof(path))") : lstat(path2))
 lstat(path...) = lstat(joinpath(path...))
 
 # some convenience functions
@@ -325,7 +337,7 @@ Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
 This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
-ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+ispath(st::StatStruct) = st.ioerrno == 0
 function ispath(path::String)
     # We use `access()` and `F_OK` to determine if a given path exists. `F_OK` comes from `unistd.h`.
     F_OK = 0x00

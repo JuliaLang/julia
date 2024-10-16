@@ -12,9 +12,14 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/Statistic.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -96,11 +101,11 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
                 }
                 if (auto callee = call->getCalledFunction()) {
                     auto name = callee->getName();
-                    if (name.startswith("llvm.muladd.") || name.startswith("llvm.fma.")) {
+                    if (name.starts_with("llvm.muladd.") || name.starts_with("llvm.fma.")) {
                         flag |= JL_TARGET_CLONE_MATH;
                     }
-                    else if (name.startswith("julia.cpu.")) {
-                        if (name.startswith("julia.cpu.have_fma.")) {
+                    else if (name.starts_with("julia.cpu.")) {
+                        if (name.starts_with("julia.cpu.have_fma.")) {
                             // for some platforms we know they always do (or don't) support
                             // FMA. in those cases we don't need to clone the function.
                             // always_have_fma returns an optional<bool>
@@ -673,6 +678,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
     trampoline->addFnAttr("julia.mv.alias");
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
     alias->eraseFromParent();
 
     uint32_t id;

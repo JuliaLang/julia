@@ -250,7 +250,7 @@ end
             twopk = (k + UInt64(53)) << 52
             return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
-        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+        k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))

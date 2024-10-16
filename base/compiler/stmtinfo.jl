@@ -13,6 +13,12 @@ struct CallMeta
     exct::Any
     effects::Effects
     info::CallInfo
+    refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
+    function CallMeta(rt::Any, exct::Any, effects::Effects, info::CallInfo,
+                      refinements=nothing)
+        @nospecialize rt exct info
+        return new(rt, exct, effects, info, refinements)
+    end
 end
 
 struct NoCallInfo <: CallInfo end
@@ -27,10 +33,16 @@ not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
+    mt::MethodTable
+    fullmatch::Bool
 end
 nsplit_impl(info::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
 getresult_impl(::MethodMatchInfo, ::Int) = nothing
+function add_uncovered_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, @nospecialize(atype))
+    fully_covering(info) || push!(edges, info.mt, atype)
+    nothing
+end
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -42,20 +54,27 @@ each partition (`info.matches::Vector{MethodMatchInfo}`).
 This info is illegal on any statement that is not a call to a generic function.
 """
 struct UnionSplitInfo <: CallInfo
-    matches::Vector{MethodMatchInfo}
+    split::Vector{MethodMatchInfo}
 end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
     n = 0
-    for mminfo in info.matches
+    for mminfo in info.split
         n += nmatches(mminfo)
     end
     return n
 end
-nsplit_impl(info::UnionSplitInfo) = length(info.matches)
-getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit_impl(info.matches[idx], 1)
+nsplit_impl(info::UnionSplitInfo) = length(info.split)
+getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit(info.split[idx], 1)
 getresult_impl(::UnionSplitInfo, ::Int) = nothing
+function add_uncovered_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, @nospecialize(atype))
+    all(fully_covering, info.split) && return nothing
+    # add mt backedges with removing duplications
+    for mt in uncovered_method_tables(info)
+        push!(edges, mt, atype)
+    end
+end
 
 abstract type ConstResult end
 
@@ -75,6 +94,7 @@ struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
     effects::Effects
+    spec_info::SpecInfo
 end
 
 # XXX Technically this does not represent a result of constant inference, but rather that of
@@ -99,6 +119,7 @@ end
 nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
 getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
 getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
+add_uncovered_edges_impl(edges::Vector{Any}, info::ConstCallInfo, @nospecialize(atype)) = add_uncovered_edges!(edges, info.call, atype)
 
 """
     info::MethodResultPure <: CallInfo

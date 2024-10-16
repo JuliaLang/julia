@@ -17,6 +17,7 @@ extern "C" {
 typedef struct {
     jl_code_info_t *src; // contains the names and number of slots
     jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
+    jl_code_instance_t *ci; // CodeInstance we're executing (for generated functions)
     jl_module_t *module; // context for globals
     jl_value_t **locals; // slots for holding local slots and ssavalues
     jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
@@ -93,9 +94,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
             jl_error("method: invalid declaration");
         }
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        _Atomic(jl_value_t*) *bp = &b->value;
-        jl_value_t *gf = jl_generic_function_def(fname, modu, bp, b);
-        return gf;
+        return jl_declare_const_gf(b, modu, fname);
     }
 
     jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
@@ -135,10 +134,10 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i] = eval_value(args[i], s);
+        argv[i-1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
+    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
     JL_GC_POP();
     return result;
 }
@@ -231,6 +230,11 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
+        int allow_import = 1;
+        if (nargs == 2) {
+            assert(jl_is_bool(args[1]) && "malformed IR");
+            allow_import = args[1] == jl_true;
+        }
         if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
@@ -238,10 +242,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             defined = s->locals[n - 1] != NULL;
         }
         else if (jl_is_globalref(sym)) {
-            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym));
+            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym), allow_import);
         }
         else if (jl_is_symbol(sym)) {
-            defined = jl_boundp(s->module, (jl_sym_t*)sym);
+            defined = jl_boundp(s->module, (jl_sym_t*)sym, allow_import);
         }
         else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == jl_static_parameter_sym) {
             ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
@@ -297,7 +301,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4, 1);
+            argv[4], argv+5, nargs-5, 1);
         JL_GC_POP();
         return ret;
     }
@@ -528,6 +532,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 ct->scope = new_scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -536,6 +541,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else {
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -568,9 +574,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else {
                     jl_module_t *modu;
                     jl_sym_t *sym;
+                    // Plain assignment is allowed to create bindings at
+                    // toplevel and only for the current module
+                    int alloc = toplevel;
                     if (jl_is_globalref(lhs)) {
                         modu = jl_globalref_mod(lhs);
                         sym = jl_globalref_name(lhs);
+                        alloc &= modu == s->module;
                     }
                     else {
                         assert(jl_is_symbol(lhs));
@@ -578,7 +588,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym, alloc);
                     jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
                 }
@@ -620,6 +630,18 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                }
+                else if (head == jl_globaldecl_sym) {
+                    jl_value_t *val = eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_const_sym) {
+                    jl_value_t *val = jl_expr_nargs(stmt) == 1 ? NULL : eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
@@ -683,31 +705,55 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
+jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world)
 {
-    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
+    jl_value_t *ret = NULL;
+    jl_code_info_t *src = NULL;
     if (jl_is_method(mi->def.value)) {
-        if (!src || (jl_value_t*)src == jl_nothing) {
-            if (mi->def.method->source) {
-                src = (jl_code_info_t*)mi->def.method->source;
+        if (mi->def.method->source) {
+            jl_method_t *m = mi->def.method;
+            src = (jl_code_info_t*)m->source;
+            if (!jl_is_code_info(src)) {
+                src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+                // Replace the method source by the uncompressed version,
+                // under the assumption that the interpreter may need to
+                // access it frequently. TODO: Have some sort of usage-based
+                // cache here.
+                m->source = (jl_value_t*)src;
+                jl_gc_wb(m, src);
             }
-            else {
-                assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi, world);
-            }
+            ret = (jl_value_t*)src;
         }
-        if (src && (jl_value_t*)src != jl_nothing) {
-            JL_GC_PUSH1(&src);
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
-            jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
-            jl_gc_wb(mi, src);
-            JL_GC_POP();
+        else {
+            jl_code_instance_t *cache = jl_atomic_load_relaxed(&mi->cache);
+            jl_code_instance_t *uninferred = jl_cached_uninferred(cache, world);
+            if (!uninferred) {
+                assert(mi->def.method->generator);
+                src = jl_code_for_staged(mi, world, &uninferred);
+            }
+            ret = (jl_value_t*)uninferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
+        }
+    }
+    else {
+        jl_code_instance_t *uninferred = jl_cached_uninferred(jl_atomic_load_relaxed(&mi->cache), world);
+        ret = (jl_value_t*)uninferred;
+        if (ret) {
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
         }
     }
     if (!src || !jl_is_code_info(src)) {
         jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
     }
-    return src;
+    return ret;
+}
+
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
+{
+    jl_value_t *code_or_ci = jl_code_or_ci_for_interpreter(mi, world);
+    if (jl_is_code_instance(code_or_ci))
+        return (jl_code_info_t*)jl_atomic_load_relaxed(&((jl_code_instance_t*)code_or_ci)->inferred);
+    return (jl_code_info_t*)code_or_ci;
 }
 
 // interpreter entry points
@@ -718,7 +764,15 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_method_instance_t *mi = codeinst->def;
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
-    jl_code_info_t *src = jl_code_for_interpreter(mi, world);
+    jl_code_info_t *src = NULL;
+    jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
+    jl_code_instance_t *ci = NULL;
+    if (jl_is_code_instance(code)) {
+        ci = (jl_code_instance_t*)code;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
+    } else {
+        src = (jl_code_info_t*)code;
+    }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
@@ -733,8 +787,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     else {
         s->module = mi->def.method->module;
-        size_t defargs = mi->def.method->nargs;
-        int isva = mi->def.method->isva ? 1 : 0;
+        size_t defargs = src->nargs;
+        int isva = src->isva;
         size_t i;
         s->locals[0] = f;
         assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -749,6 +803,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = mi;
+    s->ci = ci;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -771,7 +826,13 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         assert(jl_is_method_instance(specializations));
         jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
         jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
-        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+        jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+        if (!src) {
+            // This can happen if somebody did :new_opaque_closure with broken IR. This is definitely bad
+            // and UB, but let's try to be slightly nicer than segfaulting here for people debugging.
+            jl_error("Internal Error: Opaque closure with no source at all");
+        }
+        code = jl_uncompress_ir(source, ci, src);
     }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
@@ -792,6 +853,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     size_t defargs = source->nargs;
     int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -823,6 +885,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -847,6 +910,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
@@ -866,7 +930,8 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
     uintptr_t entry_tags = jl_bt_entry_descriptor(njlvalues, 0, JL_BT_INTERP_FRAME_TAG, s->ip);
     bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
     bt_entry[1].uintptr = entry_tags;
-    bt_entry[2].jlvalue = s->mi  ? (jl_value_t*)s->mi  :
+    bt_entry[2].jlvalue = s->ci  ? (jl_value_t*)s->ci  :
+                          s->mi  ? (jl_value_t*)s->mi  :
                           s->src ? (jl_value_t*)s->src : (jl_value_t*)jl_nothing;
     if (need_module) {
         // If we only have a CodeInfo (s->src), we are in a top level thunk and

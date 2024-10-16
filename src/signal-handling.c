@@ -155,7 +155,7 @@ static void jl_shuffle_int_array_inplace(int *carray, int size, uint64_t *seed)
     // The "modern Fisher–Yates shuffle" - O(n) algorithm
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
     for (int i = size; i-- > 1; ) {
-        size_t j = cong(i, seed);
+        size_t j = cong(i + 1, seed); // cong is an open interval so we add 1
         uint64_t tmp = carray[j];
         carray[j] = carray[i];
         carray[i] = tmp;
@@ -256,7 +256,8 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
-    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_RISCV64_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -309,6 +310,11 @@ static void jl_check_profile_autostop(void)
     }
 }
 
+static void stack_overflow_warning(void)
+{
+    jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -335,8 +341,12 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((CONTEXT*)_ctx)->Rip;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     return ((ucontext_t*)_ctx)->uc_mcontext.pc;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.mc_gpregs.gp_elr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     return ((ucontext_t*)_ctx)->uc_mcontext.arm_pc;
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.__gregs[REG_PC];
 #else
     // TODO for PPC
     return 0;
@@ -414,11 +424,27 @@ void jl_show_sigill(void *_ctx)
             jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
     }
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+    uint32_t inst = 0;
+    size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
+    if (len < 2)
+        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+    if (inst == 0x00100073 || // ebreak
+        inst == 0xc0001073 || // unimp (pseudo-instruction for illegal `csrrw x0, cycle, x0`)
+        (inst & ((1 << 16) - 1)) == 0x0000) { // c.unimp (compressed form)
+        // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
+        jl_safe_printf("Unreachable reached at %p\n", pc);
+    }
+    else {
+        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
+    }
 #else
     // TODO for PPC
     (void)_ctx;
 #endif
 }
+
+void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // make it invalid for a task to return from this point to its stack
 // this is generally quite an foolish operation, but does free you up to do
@@ -432,15 +458,17 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->eh = NULL;
         ct->world_age = 1;
         // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
-        small_arraylist_t *locks = &ct->ptls->locks;
+        jl_ptls_t ptls = ct->ptls;
+        small_arraylist_t *locks = &ptls->locks;
         for (size_t i = locks->len; i > 0; i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = 0;
-        ct->ptls->in_pure_callback = 0;
-        ct->ptls->in_finalizer = 0;
-        ct->ptls->defer_signal = 0;
+        ptls->in_pure_callback = 0;
+        ptls->in_finalizer = 0;
+        ptls->defer_signal = 0;
         // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
-        jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_UNSAFE);
+        jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_UNSAFE);
+        surprise_wakeup(ptls);
         // allow continuing to use a Task that should have already died--unsafe necromancy!
         jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     }
@@ -454,6 +482,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
+        // and also resets the state of ct and ptls so that some code can run on this task again
         jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
         sigset_t sset;

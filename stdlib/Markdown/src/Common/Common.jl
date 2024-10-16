@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+abstract type MarkdownElement end
+
 include("block.jl")
 include("inline.jl")
 

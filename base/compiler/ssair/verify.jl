@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main)
+    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
+    else
+        Core.show(ir)
     end
 end
 
@@ -25,6 +27,7 @@ is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || he
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
+        op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
@@ -325,9 +328,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
-            @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
-            error("")
+        elseif isterminator(stmt)
+            if idx != last(ir.cfg.blocks[bb].stmts)
+                @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
+                error("")
+            end
+            if !isa(stmt, ReturnNode) && ir[SSAValue(idx)][:type] !== Any
+                @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
+                error("")
+            end
         else
             isforeigncall = false
             if isa(stmt, Expr)
@@ -338,6 +347,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[2] isa GlobalRef
                         # undefined GlobalRef as assignment RHS is OK
+                        continue
+                    end
+                elseif stmt.head === :isdefined
+                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                        @verify_error "malformed isdefined"
+                        error("")
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in isdefined
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end

@@ -1,68 +1,82 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Wrapping
+const AnnotIO = Union{AnnotatedIOBuffer, IOContext{AnnotatedIOBuffer}}
 
-function ansi_length(s)
-    replace(s, r"\e\[[0-9]+m" => "") |> textwidth
+function annotprint(f::Function, args...)
+    buf = AnnotatedIOBuffer()
+    f(buf, args...)
+    read(seekstart(buf), AnnotatedString)
 end
 
-words(s) = split(s, " ")
-lines(s) = split(s, "\n")
+"""
+    with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, <:Any}...)
 
-function wrapped_line(io::IO, s::AbstractString, width, i)
-    ws = words(s)
-    lines = String[]
-    for word in ws
-        word_length = ansi_length(word)
-        word_length == 0 && continue
-        if isempty(lines) || i + word_length + 1 > width
-            i = word_length
-            if length(lines) > 0
-                last_line = lines[end]
-                maybe_underline = findlast(Base.text_colors[:underline], last_line)
-                if !isnothing(maybe_underline)
-                    # disable underline style at end of line if not already disabled.
-                    maybe_disable_underline = max(
-                        last(something(findlast(Base.disable_text_style[:underline], last_line), -1)),
-                        last(something(findlast(Base.text_colors[:normal], last_line), -1)),
-                    )
+Call `f(io)`, and apply `annots` to the output created by doing so.
+"""
+function with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, <:Any}...)
+    @nospecialize annots
+    aio = if io isa AnnotatedIOBuffer io else io.io end
+    start = position(aio) + 1
+    f(io)
+    stop = position(aio)
+    sortedindex = searchsortedlast(aio.annotations, (region=start:stop,), by=a -> a.region)
+    for (i, annot) in enumerate(annots)
+        insert!(aio.annotations, sortedindex + i, (start:stop, annot...))
+    end
+end
 
-                    if maybe_disable_underline < 0 || maybe_disable_underline < last(maybe_underline)
+"""
+    wraplines(content::AnnotatedString, width::Integer = 80, column::Integer = 0)
 
-                        lines[end] = last_line * Base.disable_text_style[:underline]
-                        word = Base.text_colors[:underline] * word
-                    end
+Wrap `content` into a vector of lines of at most `width` (according to
+`textwidth`), with the first line starting at `column`.
+"""
+function wraplines(content::Union{Annot, SubString{<:Annot}}, width::Integer = 80, column::Integer = 0) where { Annot <: AnnotatedString}
+    s, lines = String(content), SubString{Annot}[]
+    i, lastwrap, slen = firstindex(s), 0, ncodeunits(s)
+    most_recent_break_opportunity = 1
+    while i < slen
+        if isspace(s[i]) && s[i] != '\n'
+            most_recent_break_opportunity = i
+        elseif s[i] == '\n'
+            push!(lines, content[nextind(s, lastwrap):prevind(s, i)])
+            lastwrap = i
+            column = 0
+        elseif column >= width && most_recent_break_opportunity > 1
+            if lastwrap == most_recent_break_opportunity
+                nextbreak = findfirst(isspace, @view s[nextind(s, lastwrap):end])
+                if isnothing(nextbreak)
+                    break
+                else
+                    most_recent_break_opportunity = lastwrap + nextbreak
                 end
+                i = most_recent_break_opportunity
+            else
+                i = nextind(s, most_recent_break_opportunity)
             end
-            push!(lines, word)
-        else
-            i += word_length + 1
-            lines[end] *= " " * word   # this could be more efficient
+            push!(lines, content[nextind(s, lastwrap):prevind(s, most_recent_break_opportunity)])
+            lastwrap = most_recent_break_opportunity
+            column = 0
         end
+        column += textwidth(s[i])
+        i = nextind(s, i)
     end
-    return i, lines
+    if lastwrap < slen
+        push!(lines, content[nextind(s, lastwrap):end])
+    end
+    lines
 end
 
-function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    ls = String[]
-    for ss in lines(s)
-        i, line = wrapped_line(io, ss, width, i)
-        append!(ls, line)
+# Print horizontal lines between each docstring if there are multiple docs
+function insert_hlines(docs)
+    if !isa(docs, MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
+        return docs
     end
-    return ls
-end
-
-wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
-    wrapped_lines(io, sprint(f, args...; context=io), width = width, i = 0)
-
-function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
-    lines = wrapped_lines(io, s..., width = width, i = i)
-    isempty(lines) && return 0, 0
-    print(io, lines[1])
-    for line in lines[2:end]
-        print(io, '\n', pre, line)
+    docs = docs::MD
+    v = Any[]
+    for (n, doc) in enumerate(docs.content)
+        push!(v, doc)
+        n == length(docs.content) || push!(v, HorizontalRule())
     end
-    length(lines), length(pre) + ansi_length(lines[end])
+    return MD(v)
 end
-
-print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args...; kws...)

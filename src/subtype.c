@@ -39,20 +39,24 @@ extern "C" {
 // Union type decision points are discovered while the algorithm works.
 // If a new Union decision is encountered, the `more` flag is set to tell
 // the forall/exists loop to grow the stack.
-// TODO: the stack probably needs to be artificially large because of some
-// deeper problem (see #21191) and could be shrunk once that is fixed
+
+typedef struct jl_bits_stack_t {
+    uint32_t data[16];
+    struct jl_bits_stack_t *next;
+} jl_bits_stack_t;
+
 typedef struct {
     int16_t depth;
     int16_t more;
     int16_t used;
-    uint32_t stack[100];  // stack of bits represented as a bit vector
+    jl_bits_stack_t stack;
 } jl_unionstate_t;
 
 typedef struct {
     int16_t depth;
     int16_t more;
     int16_t used;
-    void *stack;
+    uint8_t *stack;
 } jl_saved_unionstate_t;
 
 // Linked list storing the type variable environment. A new jl_varbinding_t
@@ -65,7 +69,6 @@ typedef struct jl_varbinding_t {
     jl_value_t *lb;
     jl_value_t *ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
-    int8_t occurs;      // occurs in any position
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
@@ -132,37 +135,111 @@ static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v) JL_GLOBALLY_ROOTED J
 }
 #endif
 
+// union-stack tools
+
 static int statestack_get(jl_unionstate_t *st, int i) JL_NOTSAFEPOINT
 {
-    assert(i >= 0 && i < sizeof(st->stack) * 8);
+    assert(i >= 0 && i <= 32767); // limited by the depth bit.
     // get the `i`th bit in an array of 32-bit words
-    return (st->stack[i>>5] & (1u<<(i&31))) != 0;
+    jl_bits_stack_t *stack = &st->stack;
+    while (i >= sizeof(stack->data) * 8) {
+        // We should have set this bit.
+        assert(stack->next);
+        stack = stack->next;
+        i -= sizeof(stack->data) * 8;
+    }
+    return (stack->data[i>>5] & (1u<<(i&31))) != 0;
 }
 
 static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 {
-    assert(i >= 0 && i < sizeof(st->stack) * 8);
+    assert(i >= 0 && i <= 32767); // limited by the depth bit.
+    jl_bits_stack_t *stack = &st->stack;
+    while (i >= sizeof(stack->data) * 8) {
+        if (__unlikely(stack->next == NULL)) {
+            stack->next = (jl_bits_stack_t *)malloc(sizeof(jl_bits_stack_t));
+            stack->next->next = NULL;
+        }
+        stack = stack->next;
+        i -= sizeof(stack->data) * 8;
+    }
     if (val)
-        st->stack[i>>5] |= (1u<<(i&31));
+        stack->data[i>>5] |= (1u<<(i&31));
     else
-        st->stack[i>>5] &= ~(1u<<(i&31));
+        stack->data[i>>5] &= ~(1u<<(i&31));
 }
 
-#define push_unionstate(saved, src)                                     \
-    do {                                                                \
-        (saved)->depth = (src)->depth;                                  \
-        (saved)->more = (src)->more;                                    \
-        (saved)->used = (src)->used;                                    \
-        (saved)->stack = alloca(((src)->used+7)/8);                     \
-        memcpy((saved)->stack, &(src)->stack, ((src)->used+7)/8);       \
+#define has_next_union_state(e, R) ((((R) ? &(e)->Runions : &(e)->Lunions)->more) != 0)
+
+static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
+{
+    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
+    if (state->more == 0)
+        return 0;
+    // reset `used` and let `pick_union_decision` clean the stack.
+    state->used = state->more;
+    statestack_set(state, state->used - 1, 1);
+    return 1;
+}
+
+static int pick_union_decision(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
+{
+    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
+    if (state->depth >= state->used) {
+        statestack_set(state, state->used, 0);
+        state->used++;
+    }
+    int ui = statestack_get(state, state->depth);
+    state->depth++;
+    if (ui == 0)
+        state->more = state->depth; // memorize that this was the deepest available choice
+    return ui;
+}
+
+static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
+{
+    do {
+        if (pick_union_decision(e, R))
+            u = ((jl_uniontype_t*)u)->b;
+        else
+            u = ((jl_uniontype_t*)u)->a;
+    } while (jl_is_uniontype(u));
+    return u;
+}
+
+#define push_unionstate(saved, src)                                  \
+    do {                                                             \
+        (saved)->depth = (src)->depth;                               \
+        (saved)->more = (src)->more;                                 \
+        (saved)->used = (src)->used;                                 \
+        jl_bits_stack_t *srcstack = &(src)->stack;                   \
+        int pushbits = ((saved)->used+7)/8;                          \
+        (saved)->stack = (uint8_t *)alloca(pushbits);                \
+        for (int n = 0; n < pushbits; n += sizeof(srcstack->data)) { \
+            assert(srcstack != NULL);                                \
+            int rest = pushbits - n;                                 \
+            if (rest > sizeof(srcstack->data))                       \
+                rest = sizeof(srcstack->data);                       \
+            memcpy(&(saved)->stack[n], &srcstack->data, rest);       \
+            srcstack = srcstack->next;                               \
+        }                                                            \
     } while (0);
 
-#define pop_unionstate(dst, saved)                                      \
-    do {                                                                \
-        (dst)->depth = (saved)->depth;                                  \
-        (dst)->more = (saved)->more;                                    \
-        (dst)->used = (saved)->used;                                    \
-        memcpy(&(dst)->stack, (saved)->stack, ((saved)->used+7)/8);     \
+#define pop_unionstate(dst, saved)                                  \
+    do {                                                            \
+        (dst)->depth = (saved)->depth;                              \
+        (dst)->more = (saved)->more;                                \
+        (dst)->used = (saved)->used;                                \
+        jl_bits_stack_t *dststack = &(dst)->stack;                  \
+        int popbits = ((saved)->used+7)/8;                          \
+        for (int n = 0; n < popbits; n += sizeof(dststack->data)) { \
+            assert(dststack != NULL);                               \
+            int rest = popbits - n;                                 \
+            if (rest > sizeof(dststack->data))                      \
+                rest = sizeof(dststack->data);                      \
+            memcpy(&dststack->data, &(saved)->stack[n], rest);      \
+            dststack = dststack->next;                              \
+        }                                                           \
     } while (0);
 
 static int current_env_length(jl_stenv_t *e)
@@ -179,7 +256,7 @@ static int current_env_length(jl_stenv_t *e)
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[32]; // == 8 * 4
+    int8_t _space[24]; // == 8 * 3
     jl_gcframe_t gcframe;
     jl_value_t *roots[24]; // == 8 * 3
 } jl_savedenv_t;
@@ -208,7 +285,6 @@ static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
             roots[i++] = v->ub;
             roots[i++] = (jl_value_t*)v->innervars;
         }
-        se->buf[j++] = v->occurs;
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
         se->buf[j++] = v->max_offset;
@@ -243,7 +319,7 @@ static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
             ct->gcstack = &se->gcframe;
         }
     }
-    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 4) : se->_space);
+    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 3) : se->_space);
 #ifdef __clang_gcanalyzer__
     memset(se->buf, 0, len * 3);
 #endif
@@ -264,6 +340,18 @@ static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
     if (se->buf != se->_space)
         free(se->buf);
     se->buf = NULL;
+}
+
+static void free_stenv(jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    for (int R = 0; R < 2; R++) {
+        jl_bits_stack_t *temp = R ? e->Runions.stack.next : e->Lunions.stack.next;
+        while (temp != NULL) {
+            jl_bits_stack_t *next = temp->next;
+            free(temp);
+            temp = next;
+        }
+    }
 }
 
 static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPOINT
@@ -290,7 +378,6 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
             v->ub = roots[i++];
             v->innervars = (jl_array_t*)roots[i++];
         }
-        v->occurs = se->buf[j++];
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
         v->max_offset = se->buf[j++];
@@ -300,15 +387,6 @@ static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPO
     e->Runions.depth = se->rdepth;
     if (e->envout && e->envidx < e->envsz)
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
-}
-
-static void clean_occurs(jl_stenv_t *e)
-{
-    jl_varbinding_t *v = e->vars;
-    while (v) {
-        v->occurs = 0;
-        v = v->prev;
-    }
 }
 
 #define flip_offset(e) ((e)->Loffset *= -1)
@@ -599,42 +677,6 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
-static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
-{
-    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->more == 0)
-        return 0;
-    // reset `used` and let `pick_union_decision` clean the stack.
-    state->used = state->more;
-    statestack_set(state, state->used - 1, 1);
-    return 1;
-}
-
-static int pick_union_decision(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
-{
-    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->depth >= state->used) {
-        statestack_set(state, state->used, 0);
-        state->used++;
-    }
-    int ui = statestack_get(state, state->depth);
-    state->depth++;
-    if (ui == 0)
-        state->more = state->depth; // memorize that this was the deepest available choice
-    return ui;
-}
-
-static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
-{
-    do {
-        if (pick_union_decision(e, R))
-            u = ((jl_uniontype_t*)u)->b;
-        else
-            u = ((jl_uniontype_t*)u)->a;
-    } while (jl_is_uniontype(u));
-    return u;
-}
-
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
@@ -679,8 +721,6 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int par
 // of determining whether the variable is concrete.
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param) JL_NOTSAFEPOINT
 {
-    if (vb != NULL)
-        vb->occurs = 1;
     if (vb != NULL && param) {
         // saturate counters at 2; we don't need values bigger than that
         if (param == 2 && e->invdepth > vb->depth0) {
@@ -915,7 +955,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -980,7 +1020,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0); // special token result that represents N::Int in the envout
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
             val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
@@ -1315,6 +1355,9 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return ans;
 }
 
+static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT;
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -1322,7 +1365,31 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (jl_is_uniontype(x)) {
-        if (x == y) return 1;
+        if (obviously_egal(x, y))
+            return 1;
+        if (e->Runions.depth == 0 && jl_is_typevar(y) && !jl_has_free_typevars(x)) {
+            // Similar to fast path for repeated elements: if there have been no outer
+            // unions on the right, and the right side is a typevar, then we can handle the
+            // typevar first before picking a union element, under the theory that it may
+            // be easy to match or reject this whole union in comparing and setting the lb
+            // and ub of the variable binding, without needing to examine each element.
+            // However, if x contains any free typevars, then each element with a free
+            // typevar must be handled separately from the union of all elements without
+            // free typevars, since the typevars presence might lead to those elements
+            // getting eliminated (omit_bad_union) or degenerate (Union{Ptr{T}, Ptr}) or
+            // combined (Union{T, S} where {T, S <: T}).
+            jl_tvar_t *yvar = (jl_tvar_t *)y;
+            jl_varbinding_t *yb = lookup(e, yvar);
+            while (e->intersection && yb != NULL && yb->lb == yb->ub && jl_is_typevar(yb->lb)) {
+                yvar = (jl_tvar_t *)yb->lb;
+                yb = lookup(e, yvar);
+            }
+            // Note: `x <: ∃y` performs a local ∀-∃ check between `x` and `yb->ub`.
+            // We need to ensure that there's no ∃ typevar as otherwise that check
+            // might cause false alarm due to the accumulated env change.
+            if (yb == NULL || yb->right == 0 || !has_exists_typevar(yb->ub, e))
+                return subtype_var(yvar, x, e, 1, param);
+        }
         x = pick_union_element(x, e, 0);
     }
     if (jl_is_uniontype(y)) {
@@ -1365,7 +1432,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 if (yy) record_var_occurrence(yy, e, param);
                 if (yr) {
                     record_var_occurrence(xx, e, param);
-                    return subtype(xx->lb, yy->ub, e, 0);
+                    int trysub = e->intersection ? try_subtype_by_bounds(xx->lb, yy->ub, e) : 0;
+                    return trysub || subtype(xx->lb, yy->ub, e, 0);
                 }
                 return var_lt((jl_tvar_t*)x, y, e, param);
             }
@@ -1497,37 +1565,12 @@ static int is_definite_length_tuple_type(jl_value_t *x)
     return k == JL_VARARG_NONE || k == JL_VARARG_INT;
 }
 
-static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int *count, int *noRmore);
-
-static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t *log) JL_NOTSAFEPOINT
+static int is_exists_typevar(jl_value_t *x, jl_stenv_t *e)
 {
-    if (x == NULL || x == (jl_value_t*)jl_any_type || x == jl_bottom_type)
-        return 0;
-    if (jl_is_unionall(x))
-        return may_contain_union_decision(((jl_unionall_t *)x)->body, e, log);
-    if (jl_is_datatype(x)) {
-        jl_datatype_t *xd = (jl_datatype_t *)x;
-        for (int i = 0; i < jl_nparams(xd); i++) {
-            jl_value_t *param = jl_tparam(xd, i);
-            if (jl_is_vararg(param))
-                param = jl_unwrap_vararg(param);
-            if (may_contain_union_decision(param, e, log))
-                return 1;
-        }
-        return 0;
-    }
     if (!jl_is_typevar(x))
-        return jl_is_type(x);
-    jl_typeenv_t *t = log;
-    while (t != NULL) {
-        if (x == (jl_value_t *)t->var)
-            return 1;
-        t = t->prev;
-    }
-    jl_typeenv_t newlog = { (jl_tvar_t*)x, NULL, log };
-    jl_varbinding_t *xb = lookup(e, (jl_tvar_t *)x);
-    return may_contain_union_decision(xb ? xb->lb : ((jl_tvar_t *)x)->lb, e, &newlog) ||
-           may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
+        return 0;
+    jl_varbinding_t *vb = lookup(e, (jl_tvar_t *)x);
+    return vb && vb->right;
 }
 
 static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
@@ -1558,31 +1601,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
         return jl_subtype(x, y);
-    if (may_contain_union_decision(y, e, NULL) && pick_union_decision(e, 1) == 0) {
-        jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
-        e->Lunions.used = e->Runions.used = 0;
-        e->Lunions.depth = e->Runions.depth = 0;
-        e->Lunions.more = e->Runions.more = 0;
-        int count = 0, noRmore = 0;
-        sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
-        pop_unionstate(&e->Runions, &oldRunions);
-        // We could skip the slow path safely if
-        // 1) `_∀_∃_subtype` has tested all cases
-        // 2) `_∀_∃_subtype` returns 1 &&  `x` and `y` contain no ∃ typevar
-        // Once `limit_slow == 1`, also skip it if
-        // 1) `_∀_∃_subtype` returns 0
-        // 2) the left `Union` looks big
-        // TODO: `limit_slow` ignores complexity from inner `local_∀_exists_subtype`.
-        if (limit_slow == -1)
-            limit_slow = kindx || kindy;
-        int skip = noRmore || (limit_slow && (count > 3 || !sub)) ||
-                   (sub && (kindx || !has_exists_typevar(x, e)) &&
-                           (kindy || !has_exists_typevar(y, e)));
-        if (skip)
-            e->Runions.more = oldRmore;
-    }
-    else {
-        // slow path
+    int has_exists = (!kindx && has_exists_typevar(x, e)) ||
+                     (!kindy && has_exists_typevar(y, e));
+    if (has_exists && (is_exists_typevar(x, e) != is_exists_typevar(y, e))) {
         e->Lunions.used = 0;
         while (1) {
             e->Lunions.more = 0;
@@ -1591,7 +1612,51 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
             if (!sub || !next_union_state(e, 0))
                 break;
         }
+        return sub;
     }
+    if (limit_slow == -1)
+        limit_slow = kindx || kindy;
+    jl_savedenv_t se;
+    save_env(e, &se, has_exists);
+    int count, limited = 0, ini_count = 0;
+    jl_saved_unionstate_t latestLunions = {0, 0, 0, NULL};
+    while (1) {
+        count = ini_count;
+        if (ini_count == 0)
+            e->Lunions.used = 0;
+        else
+            pop_unionstate(&e->Lunions, &latestLunions);
+        while (1) {
+            e->Lunions.more = 0;
+            e->Lunions.depth = 0;
+            if (count < 4) count++;
+            sub = subtype(x, y, e, param);
+            if (limit_slow && count == 4)
+                limited = 1;
+            if (!sub || !next_union_state(e, 0))
+                break;
+            if (limited || !has_exists || e->Runions.more == oldRmore) {
+                // re-save env and freeze the ∃decision for previous ∀Union
+                // Note: We could ignore the rest `∃Union` decisions if `x` and `y`
+                // contain no ∃ typevar, as they have no effect on env.
+                ini_count = count;
+                push_unionstate(&latestLunions, &e->Lunions);
+                re_save_env(e, &se, has_exists);
+                e->Runions.more = oldRmore;
+            }
+        }
+        if (sub || e->Runions.more == oldRmore)
+            break;
+        assert(e->Runions.more > oldRmore);
+        next_union_state(e, 1);
+        restore_env(e, &se, has_exists); // also restore Rdepth here
+        e->Runions.more = oldRmore;
+    }
+    if (!sub)
+        assert(e->Runions.more == oldRmore);
+    else if (limited || !has_exists)
+        e->Runions.more = oldRmore;
+    free_env(&se);
     return sub;
 }
 
@@ -1661,7 +1726,7 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savede
     }
 }
 
-static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int *count, int *noRmore)
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     // The depth recursion has the following shape, after simplification:
     // ∀₁
@@ -1673,12 +1738,8 @@ static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, i
 
     e->Lunions.used = 0;
     int sub;
-    if (count) *count = 0;
-    if (noRmore) *noRmore = 1;
     while (1) {
         sub = exists_subtype(x, y, e, &se, param);
-        if (count) *count = (*count < 4) ? *count + 1 : 4;
-        if (noRmore) *noRmore = *noRmore && e->Runions.more == 0;
         if (!sub || !next_union_state(e, 0))
             break;
         re_save_env(e, &se, 1);
@@ -1686,11 +1747,6 @@ static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, i
 
     free_env(&se);
     return sub;
-}
-
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
-{
-    return _forall_exists_subtype(x, y, e, param, NULL, NULL);
 }
 
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
@@ -1712,6 +1768,8 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
     e->Lunions.used = 0;       e->Runions.used = 0;
+    e->Lunions.stack.next = NULL;
+    e->Runions.stack.next = NULL;
 }
 
 // subtyping entry points
@@ -2141,6 +2199,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     }
     init_stenv(&e, env, envsz);
     int subtype = forall_exists_subtype(x, y, &e, 0);
+    free_stenv(&e);
     assert(obvious_subtype == 3 || obvious_subtype == subtype || jl_has_free_typevars(x) || jl_has_free_typevars(y));
 #ifndef NDEBUG
     if (obvious_subtype == 0 || (obvious_subtype == 1 && envsz == 0))
@@ -2233,6 +2292,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     {
         init_stenv(&e, NULL, 0);
         int subtype = forall_exists_subtype(a, b, &e, 0);
+        free_stenv(&e);
         assert(subtype_ab == 3 || subtype_ab == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
         if (subtype_ab != 0 && subtype_ab != 1) // ensures that running in a debugger doesn't change the result
@@ -2249,6 +2309,7 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
     {
         init_stenv(&e, NULL, 0);
         int subtype = forall_exists_subtype(b, a, &e, 0);
+        free_stenv(&e);
         assert(subtype_ba == 3 || subtype_ba == subtype || jl_has_free_typevars(a) || jl_has_free_typevars(b));
 #ifndef NDEBUG
         if (subtype_ba != 0 && subtype_ba != 1) // ensures that running in a debugger doesn't change the result
@@ -2407,24 +2468,47 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     if (obviously_egal(x, y))
         return x;
 
+    jl_varbinding_t *vars = NULL;
+    jl_varbinding_t *bbprev = NULL;
+    jl_varbinding_t *xb = jl_is_typevar(x) ? lookup(e, (jl_tvar_t *)x) : NULL;
+    jl_varbinding_t *yb = jl_is_typevar(y) ? lookup(e, (jl_tvar_t *)y) : NULL;
+    int simple_x = !jl_has_free_typevars(!jl_is_typevar(x) ? x : xb ? xb->ub : ((jl_tvar_t *)x)->ub);
+    int simple_y = !jl_has_free_typevars(!jl_is_typevar(y) ? y : yb ? yb->ub : ((jl_tvar_t *)y)->ub);
+    if (simple_x && simple_y && !(xb && yb)) {
+        vars = e->vars;
+        e->vars = xb ? xb : yb;
+        if (e->vars != NULL) {
+            bbprev = e->vars->prev;
+            e->vars->prev = NULL;
+        }
+    }
     jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
     int savedepth = e->invdepth;
     e->invdepth = depth;
     jl_value_t *res = intersect_all(x, y, e);
     e->invdepth = savedepth;
     pop_unionstate(&e->Runions, &oldRunions);
+    if (bbprev) e->vars->prev = bbprev;
+    if (vars) e->vars = vars;
     return res;
 }
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    if (param == 2 || (!jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u))) {
+    int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
+    if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;
         JL_GC_PUSH2(&a, &b);
+        jl_varbinding_t *vars = NULL;
+        if (no_free) {
+            vars = e->vars;
+            e->vars = NULL;
+        }
         jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
         a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
         b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
         pop_unionstate(&e->Runions, &oldRunions);
+        if (vars) e->vars = vars;
         jl_value_t *i = simple_join(a,b);
         JL_GC_POP();
         return i;
@@ -2497,7 +2581,7 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
 
 static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
-// similar to `subtype_by_bounds`, used to avoid stack-overflow caused by circulation constraints.
+// similar to `subtype_by_bounds`, used to avoid stack-overflow caused by circular constraints.
 static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
     if (jl_is_uniontype(a))
@@ -2506,22 +2590,21 @@ static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     else if (jl_is_uniontype(b))
         return try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->a, e) ||
                try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->b, e);
-    else if (jl_egal(a, b))
+    else if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || obviously_egal(a, b))
         return 1;
     else if (!jl_is_typevar(b))
         return 0;
-    jl_varbinding_t *vb = e->vars;
-    while (vb != NULL) {
-        if (subtype_by_bounds(b, (jl_value_t *)vb->var, e) && obviously_in_union(a, vb->ub))
-            return 1;
-        vb = vb->prev;
-    }
-    return 0;
+    else if (jl_is_typevar(a) && subtype_by_bounds(a, b, e))
+        return 1;
+    // check if `Union{a, ...} <: b`.
+    jl_varbinding_t *vb = lookup(e, (jl_tvar_t *)b);
+    jl_value_t *blb = vb ? vb->lb : ((jl_tvar_t *)b)->lb;
+    return obviously_in_union(a, blb);
 }
 
 static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
-    if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || try_subtype_by_bounds(a, b, e))
+    if (try_subtype_by_bounds(a, b, e))
         return 1;
     jl_savedenv_t se;
     save_env(e, &se, 1);
@@ -2782,12 +2865,9 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                 res = jl_bottom_type;
             }
             else if (obviously_egal(var->lb, ub)) {
-                JL_TRY {
-                    res = jl_substitute_var(body, var, ub);
-                }
-                JL_CATCH {
+                res = jl_substitute_var_nothrow(body, var, ub, 2);
+                if (res == NULL)
                     res = jl_bottom_type;
-                }
             }
             else {
                 if (ub != var->ub) {
@@ -2813,6 +2893,50 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
     }
     assert(res != NULL);
     return res;
+}
+
+// TODO: fuse with reachable_var?
+static int has_typevar_via_flatten_env(jl_value_t *x, jl_tvar_t *t, jl_ivarbinding_t *allvars, int8_t *checked) {
+    if (jl_is_unionall(x)) {
+        jl_tvar_t *var = ((jl_unionall_t *)x)->var;
+        if (has_typevar_via_flatten_env(var->lb, t, allvars, checked) ||
+            has_typevar_via_flatten_env(var->ub, t, allvars, checked))
+            return 1;
+        return has_typevar_via_flatten_env(((jl_unionall_t *)x)->body, t, allvars, checked);
+    }
+    else if (jl_is_uniontype(x)) {
+        return has_typevar_via_flatten_env(((jl_uniontype_t *)x)->a, t, allvars, checked) ||
+            has_typevar_via_flatten_env(((jl_uniontype_t *)x)->b, t, allvars, checked);
+    }
+    else if (jl_is_vararg(x)) {
+        jl_vararg_t *v = (jl_vararg_t *)x;
+        return (v->T && has_typevar_via_flatten_env(v->T, t, allvars, checked)) ||
+            (v->N && has_typevar_via_flatten_env(v->N, t, allvars, checked));
+    }
+    else if (jl_is_datatype(x)) {
+        for (size_t i = 0; i < jl_nparams(x); i++) {
+            if (has_typevar_via_flatten_env(jl_tparam(x, i), t, allvars, checked))
+                return 1;
+        }
+        return 0;
+    }
+    else if (jl_is_typevar(x)) {
+        if (t == (jl_tvar_t *)x)
+            return 1;
+        size_t ind = 0;
+        jl_ivarbinding_t *itemp = allvars;
+        while (itemp && *itemp->var != (jl_tvar_t *)x)
+        {
+            ind++;
+            itemp = itemp->next;
+        }
+        if (itemp == NULL || checked[ind])
+            return 0;
+        checked[ind] = 1;
+        return has_typevar_via_flatten_env(*itemp->lb, t, allvars, checked) ||
+            has_typevar_via_flatten_env(*itemp->ub, t, allvars, checked);
+    }
+    return 0;
 }
 
 // Caller might not have rooted `res`
@@ -2853,7 +2977,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
-    // flatten all innervar into a (revered) list
+    // flatten all innervar into a (reversed) list
     size_t icount = 0;
     if (vb->innervars)
         icount += jl_array_nrows(vb->innervars);
@@ -2912,8 +3036,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // remove/replace/rewrap free occurrences of this var in the environment
     int wrapped = 0;
     jl_ivarbinding_t *pwrap = NULL;
+    int vcount = icount + current_env_length(e);
+    int8_t *checked = (int8_t *)alloca(vcount);
     for (jl_ivarbinding_t *btemp = allvars, *pbtemp = NULL; btemp != NULL; btemp = btemp->next) {
         int bdepth0 = btemp->root->depth0;
+        int innerflag = 0;
         ivar = *btemp->var;
         ilb = *btemp->lb;
         iub = *btemp->ub;
@@ -2935,18 +3062,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             else if (ilb == (jl_value_t*)vb->var) {
                 *btemp->lb = vb->lb;
             }
-            else if (bdepth0 == vb->depth0 && !jl_has_typevar(vb->lb, ivar) && !jl_has_typevar(vb->ub, ivar)) {
-                // if our variable is T, and some outer variable has constraint S = Ref{T},
-                // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                if (newvar != vb->var)
-                    *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
-                if (!wrapped) pwrap = pbtemp;
-                wrapped = 1;
-            }
             else {
-                *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                innerflag |= 1;
             }
-            assert((jl_value_t*)ivar != *btemp->lb);
         }
         if (jl_has_typevar(iub, vb->var)) {
             assert(btemp->root->var == ivar || bdepth0 == vb->depth0);
@@ -2959,12 +3077,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 }
             }
             if (varval) {
-                JL_TRY {
-                    *btemp->ub = jl_substitute_var(iub, vb->var, varval);
-                }
-                JL_CATCH {
+                iub = jl_substitute_var_nothrow(iub, vb->var, varval, 2);
+                if (iub == NULL)
                     res = jl_bottom_type;
-                }
+                else
+                    *btemp->ub = iub;
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
@@ -2973,14 +3090,35 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
                 *btemp->ub = vb->ub;
             }
-            else if (bdepth0 == vb->depth0 && !jl_has_typevar(vb->lb, ivar) && !jl_has_typevar(vb->ub, ivar)) {
-                if (newvar != vb->var)
-                    *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
-                if (!wrapped) pwrap = pbtemp;
-                wrapped = 1;
+            else {
+                innerflag |= 2;
             }
-            else
-                *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+            if (innerflag) {
+                memset(checked, 0, vcount);
+                if (bdepth0 != vb->depth0 ||
+                    has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
+                    has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
+                    if (innerflag & 1)
+                        *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                    if (innerflag & 2)
+                        *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                }
+                else {
+                    assert(btemp->root != vb);
+                    // if our variable is T, and some outer variable has constraint S = Ref{T},
+                    // move the `where T` outside `where S` instead of putting it here. issue #21243.
+                    if (newvar != vb->var) {
+                        if (innerflag & 1)
+                            *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
+                        if (innerflag & 2)
+                            *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
+                    }
+                    if (!wrapped)
+                        pwrap = pbtemp;
+                    wrapped = 1;
+                }
+            }
+            assert((jl_value_t*)ivar != *btemp->lb);
             assert((jl_value_t*)ivar != *btemp->ub);
         }
         pbtemp = btemp;
@@ -2999,6 +3137,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             pwrap->next = inew;
         else
             allvars = inew;
+        vcount++;
     }
 
     // Re-sort the innervar inside the (reversed) var list.
@@ -3006,17 +3145,23 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // If this is slow, we could possibly switch to a simpler graph sort, such as Tarjan's SCC.
     if (icount > 0) {
         jl_ivarbinding_t *pib1 = NULL;
+#ifndef NDEBUG
+        size_t sort_count = 0;
+#endif
         while (1) {
             jl_ivarbinding_t *ib1 = pib1 == NULL ? allvars : pib1->next;
             if (ib1 == NULL) break;
-            if (jl_has_free_typevars(*ib1->lb) || jl_has_free_typevars(*ib1->ub)) {
+            assert((++sort_count) <= (vcount * (vcount + 1)) >> 1);
+            int lbfree = jl_has_free_typevars(*ib1->lb);
+            int ubfree = jl_has_free_typevars(*ib1->ub);
+            if (lbfree || ubfree) {
                 int changed = 0;
                 jl_ivarbinding_t *pib2 = ib1, *ib2 = ib1->next;
                 while (ib2 != NULL) {
                     int isinnervar = ib2->root->var != *ib2->var;
                     if (isinnervar && ib1->root->depth0 == ib2->root->depth0 &&
-                        (jl_has_typevar(*ib1->lb, *ib2->var) ||
-                        jl_has_typevar(*ib1->ub, *ib2->var))) {
+                        ((lbfree && jl_has_typevar(*ib1->lb, *ib2->var)) ||
+                         (ubfree && jl_has_typevar(*ib1->ub, *ib2->var)))) {
                         pib2->next = ib2->next;
                         ib2->next = ib1;
                         ib2->root = ib1->root;
@@ -3054,6 +3199,13 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (jl_has_typevar(iub, ivar))
                     *btemp2->ub = jl_substitute_var(iub, ivar, nivar);
             }
+            if (!wrapped && !varval) {
+                // newvar also needs bounds substitution.
+                if (jl_has_typevar(vb->lb, ivar))
+                    vb->lb = jl_substitute_var(vb->lb, ivar, nivar);
+                if (jl_has_typevar(vb->ub, ivar))
+                    vb->ub = jl_substitute_var(vb->ub, ivar, nivar);
+            }
             *btemp1->var = (jl_tvar_t *)nivar;
         }
     }
@@ -3069,11 +3221,13 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
         if (root != vb) icount--;
         if (root->innervars != NULL) {
-            size_t len = jl_array_nrows(root->innervars);
+            jl_array_t *rinnervars = root->innervars;
+            JL_GC_PROMISE_ROOTED(rinnervars);
+            size_t len = jl_array_nrows(rinnervars);
             if (icount > len)
-                jl_array_grow_end(root->innervars, icount - len);
+                jl_array_grow_end(rinnervars, icount - len);
             if (icount < len)
-                jl_array_del_end(root->innervars, len - icount);
+                jl_array_del_end(rinnervars, len - icount);
         }
         else if (icount > 0) {
             root->innervars = jl_alloc_array_1d(jl_array_any_type, icount);
@@ -3093,20 +3247,22 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
-            JL_TRY {
-                // you can construct `T{x} where x` even if T's parameter is actually
-                // limited. in that case we might get an invalid instantiation here.
-                res = jl_substitute_var(res, vb->var, varval);
-                // simplify chains of UnionAlls where bounds become equal
-                while (jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
-                                                             ((jl_unionall_t*)res)->var->ub))
-                    res = jl_instantiate_unionall((jl_unionall_t*)res, ((jl_unionall_t*)res)->var->lb);
+            // you can construct `T{x} where x` even if T's parameter is actually
+            // limited. in that case we might get an invalid instantiation here.
+            res = jl_substitute_var_nothrow(res, vb->var, varval, 2);
+            // simplify chains of UnionAlls where bounds become equal
+            while (res != NULL && jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
+                                                         ((jl_unionall_t*)res)->var->ub)) {
+                jl_unionall_t * ures = (jl_unionall_t *)res;
+                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb, 2);
             }
-            JL_CATCH {
+            if (res == NULL)
                 res = jl_bottom_type;
-            }
         }
         else {
+            // re-fresh newvar if bounds changed.
+            if (vb->lb != newvar->lb || vb->ub != newvar->ub)
+                newvar = jl_new_typevar(newvar->name, vb->lb, vb->ub);
             if (newvar != vb->var)
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
@@ -3237,7 +3393,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
@@ -3266,7 +3422,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                 vb.ub = vb.var->ub;
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
-            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -3313,7 +3469,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
             ii = (jl_value_t*)vmy;
         else {
             JL_GC_PUSH1(&ii);
-            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1, 0);
             JL_GC_POP();
         }
         return ii;
@@ -3369,7 +3525,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
         else if (yp2 && obviously_egal(yp1, ii) && obviously_egal(yp2, i2))
             ii = (jl_value_t*)vmy;
         else
-            ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1, 0);
     }
     JL_GC_POP();
     return ii;
@@ -3967,79 +4123,12 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
-static int merge_env(jl_stenv_t *e, jl_savedenv_t *se, int count)
+static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int count)
 {
-    if (count == 0)
-        alloc_env(e, se, 1);
-    jl_value_t **roots = NULL;
-    int nroots = 0;
-    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
-        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
-        assert(jl_is_svec(sv));
-        roots = jl_svec_data(sv);
-        nroots = jl_svec_len(sv);
+    if (count == 0) {
+        save_env(e, me, 1);
+        return 1;
     }
-    else {
-        roots = se->roots;
-        nroots = se->gcframe.nroots >> 2;
-    }
-    int m = 0, n = 0;
-    jl_varbinding_t *v = e->vars;
-    while (v != NULL) {
-        if (count == 0) {
-            // need to initialize this
-            se->buf[m] = 0;
-            se->buf[m+1] = 0;
-            se->buf[m+2] = 0;
-            se->buf[m+3] = v->max_offset;
-        }
-        jl_value_t *b1, *b2;
-        if (v->occurs) {
-            // only merge lb/ub if this var occurs.
-            b1 = roots[n];
-            JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
-            b2 = v->lb;
-            JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-            roots[n] = b1 ? simple_meet(b1, b2, 0) : b2;
-            b1 = roots[n+1];
-            JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
-            b2 = v->ub;
-            JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-            roots[n+1] = b1 ? simple_join(b1, b2) : b2;
-            // record the meeted vars.
-            se->buf[m] = 1;
-        }
-        // `innervars` might be re-sorted inside `finish_unionall`.
-        // We'd better always merge it.
-        b1 = roots[n+2];
-        JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
-        b2 = (jl_value_t*)v->innervars;
-        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
-        if (b2 && b1 != b2) {
-            if (b1)
-                jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
-            else
-                roots[n+2] = b2;
-        }
-        // always merge occurs_inv/cov by max (never decrease)
-        if (v->occurs_inv > se->buf[m+1])
-            se->buf[m+1] = v->occurs_inv;
-        if (v->occurs_cov > se->buf[m+2])
-            se->buf[m+2] = v->occurs_cov;
-        // always merge max_offset by min
-        if (!v->intersected && v->max_offset < se->buf[m+3])
-            se->buf[m+3] = v->max_offset;
-        m = m + 4;
-        n = n + 3;
-        v = v->prev;
-    }
-    assert(n == nroots); (void)nroots;
-    return count + 1;
-}
-
-// merge untouched vars' info.
-static void final_merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se)
-{
     jl_value_t **merged = NULL;
     jl_value_t **saved = NULL;
     int nroots = 0;
@@ -4061,47 +4150,49 @@ static void final_merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se)
     }
     assert(nroots == current_env_length(e) * 3);
     assert(nroots % 3 == 0);
-    for (int n = 0, m = 0; n < nroots; n += 3, m += 4) {
-        if (merged[n] == NULL)
-            merged[n] = saved[n];
-        if (merged[n+1] == NULL)
-            merged[n+1] = saved[n+1];
-        jl_value_t *b1, *b2;
+    int m = 0, n = 0;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        jl_value_t *b0, *b1, *b2;
+        // merge `lb`
+        b0 = saved[n];
+        b1 = merged[n];
+        JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
+        b2 = v->lb;
+        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
+        merged[n] = (b1 == b0 || b2 == b0) ? b0 : simple_meet(b1, b2, 0);
+        // merge `ub`
+        b0 = saved[n+1];
+        b1 = merged[n+1];
+        JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
+        b2 = v->ub;
+        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
+        merged[n+1] = (b1 == b0 || b2 == b0) ? b0 : simple_join(b1, b2);
+        // merge `innervars`
         b1 = merged[n+2];
         JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
-        b2 = saved[n+2];
-        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know this came from our GC frame
+        b2 = (jl_value_t*)v->innervars;
+        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
         if (b2 && b1 != b2) {
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
             else
                 merged[n+2] = b2;
         }
-        me->buf[m] |= se->buf[m];
-    }
-}
-
-static void expand_local_env(jl_stenv_t *e, jl_value_t *res)
-{
-    jl_varbinding_t *v = e->vars;
-    // Here we pull in some typevar missed in fastpath.
-    while (v != NULL) {
-        v->occurs = v->occurs || jl_has_typevar(res, v->var);
-        assert(v->occurs == 0 || v->occurs == 1);
+        // merge occurs_inv/cov by max (never decrease)
+        if (v->occurs_inv > me->buf[m])
+            me->buf[m] = v->occurs_inv;
+        if (v->occurs_cov > me->buf[m+1])
+            me->buf[m+1] = v->occurs_cov;
+        // merge max_offset by min
+        if (!v->intersected && v->max_offset < me->buf[m+2])
+            me->buf[m+2] = v->max_offset;
+        m = m + 3;
+        n = n + 3;
         v = v->prev;
     }
-    v = e->vars;
-    while (v != NULL) {
-        if (v->occurs == 1) {
-            jl_varbinding_t *v2 = e->vars;
-            while (v2 != NULL) {
-                if (v2 != v && v2->occurs == 0)
-                    v2->occurs = -(jl_has_typevar(v->lb, v2->var) || jl_has_typevar(v->ub, v2->var));
-                v2 = v2->prev;
-            }
-        }
-        v = v->prev;
-    }
+    assert(n == nroots); (void)nroots;
+    return count + 1;
 }
 
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -4114,26 +4205,31 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_savedenv_t se, me;
     save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
-    clean_occurs(e);
     is[0] = intersect(x, y, e, 0); // root
-    if (is[0] != jl_bottom_type) {
-        expand_local_env(e, is[0]);
-        niter = merge_env(e, &me, niter);
+    if (is[0] == jl_bottom_type) {
+        restore_env(e, &se, 1);
     }
-    restore_env(e, &se, 1);
+    else if (!e->emptiness_only && has_next_union_state(e, 1)) {
+        niter = merge_env(e, &me, &se, niter);
+        restore_env(e, &se, 1);
+    }
     while (next_union_state(e, 1)) {
         if (e->emptiness_only && is[0] != jl_bottom_type)
             break;
         e->Runions.depth = 0;
         e->Runions.more = 0;
 
-        clean_occurs(e);
         is[1] = intersect(x, y, e, 0);
-        if (is[1] != jl_bottom_type) {
-            expand_local_env(e, is[1]);
-            niter = merge_env(e, &me, niter);
+        if (is[1] == jl_bottom_type) {
+            restore_env(e, &se, 1);
         }
-        restore_env(e, &se, 1);
+        else if (niter > 0 || (!e->emptiness_only && has_next_union_state(e, 1))) {
+            niter = merge_env(e, &me, &se, niter);
+            restore_env(e, &se, 1);
+        }
+        else {
+            assert(is[0] == jl_bottom_type);
+        }
         if (is[0] == jl_bottom_type)
             is[0] = is[1];
         else if (is[1] != jl_bottom_type) {
@@ -4141,13 +4237,18 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             is[0] = jl_type_union(is, 2);
         }
         total_iter++;
-        if (niter > 4 || total_iter > 400000) {
+        if (has_next_union_state(e, 1) && (niter > 4 || total_iter > 400000)) {
             is[0] = y;
+            // we give up precise intersection here, just restore the saved env
+            restore_env(e, &se, 1);
+            if (niter > 0) {
+                free_env(&me);
+                niter = 0;
+            }
             break;
         }
     }
     if (niter) {
-        final_merge_env(e, &me, &se);
         restore_env(e, &me, 1);
         free_env(&me);
     }
@@ -4174,7 +4275,9 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     init_stenv(&e, NULL, 0);
     e.intersection = e.ignore_free = 1;
     e.emptiness_only = emptiness_only;
-    return intersect_all(x, y, &e);
+    jl_value_t *ans = intersect_all(x, y, &e);
+    free_stenv(&e);
+    return ans;
 }
 
 JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
@@ -4351,6 +4454,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             memset(env, 0, szb*sizeof(void*));
         e.envsz = szb;
         *ans = intersect_all(a, b, &e);
+        free_stenv(&e);
         if (*ans == jl_bottom_type) goto bot;
         // TODO: code dealing with method signatures is not able to handle unions, so if
         // `a` and `b` are both tuples, we need to be careful and may not return a union,
@@ -4595,7 +4699,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH2(&newt, &n);
         newt = insert_nondiagonal(t, troot, widen2ub);
         if (t != newt)
-            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0);
+            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0, 0);
         JL_GC_POP();
     }
     else if (jl_is_datatype(type)) {
@@ -4632,7 +4736,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
@@ -4655,6 +4759,56 @@ JL_DLLEXPORT jl_value_t *jl_widen_diagonal(jl_value_t *t, jl_unionall_t *ua)
 }
 
 // specificity comparison
+static int count_missing_wrap(jl_value_t *x, jl_typeenv_t *env)
+{
+    if (!jl_has_free_typevars(x))
+        return 0;
+    jl_typeenv_t *wrapped = NULL;
+    int count = 0;
+    for (jl_typeenv_t *env2 = env; env2 != NULL; env2 = env2->prev) {
+        int need_wrap = 0;
+        for (jl_typeenv_t *env3 = wrapped; env3 != NULL && need_wrap == 0; env3 = env3->prev) {
+            if (env3->var == env2->var)
+                need_wrap = -1;
+            else if (jl_has_typevar(env3->var->lb, env2->var) || jl_has_typevar(env3->var->ub, env2->var))
+                need_wrap = 1;
+        }
+        need_wrap = need_wrap == 0 ? jl_has_typevar(x, env2->var) :
+                    need_wrap == -1 ? 0 : 1;
+        if (need_wrap) {
+            count++;
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = env2->var;
+            newenv->val = NULL;
+            newenv->prev = wrapped;
+            wrapped = newenv;
+        }
+    }
+    return count;
+}
+
+static int obvious_subtype_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype, int wrapx, int wrapy)
+{
+    if (wrapx != 0 || wrapy != 0) {
+        int wrap_count = wrapx - wrapy;
+        while (wrap_count > 0 && jl_is_unionall(y))
+        {
+            y = ((jl_unionall_t*)y)->body;
+            wrap_count--;
+        }
+        while (wrap_count < 0 && jl_is_unionall(x))
+        {
+            x = ((jl_unionall_t*)x)->body;
+            wrap_count++;
+        }
+        if (wrap_count > 0) {
+            if (obvious_subtype(jl_unwrap_unionall(x), y, y0, subtype) && !*subtype)
+                return 1;
+            return 0;
+        }
+    }
+    return obvious_subtype(x, y, y0, subtype);
+}
 
 static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_typeenv_t *env)
 {
@@ -4677,12 +4831,14 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
         a = b;
         b = temp;
     }
+    int wrapa = count_missing_wrap(a, env);
+    int wrapb = count_missing_wrap(b, env);
     // first check if a <: b has an obvious answer
     int subtype_ab = 2;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type) {
         subtype_ab = 1;
     }
-    else if (obvious_subtype(a, b, b0, &subtype_ab)) {
+    else if (obvious_subtype_msp(a, b, b0, &subtype_ab, wrapa, wrapb)) {
 #ifdef NDEBUG
         if (subtype_ab == 0)
             return 0;
@@ -4696,7 +4852,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type) {
         subtype_ba = 1;
     }
-    else if (obvious_subtype(b, a, a0, &subtype_ba)) {
+    else if (obvious_subtype_msp(b, a, a0, &subtype_ba, wrapb, wrapa)) {
 #ifdef NDEBUG
         if (subtype_ba == 0)
             return 0;
@@ -4761,7 +4917,9 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
         return 1;
     }
     int obvious_sub = 2;
-    if (obvious_subtype(x, y, y0, &obvious_sub)) {
+    int wrapx = count_missing_wrap(x, env);
+    int wrapy = count_missing_wrap(y, env);
+    if (obvious_subtype_msp(x, y, y0, &obvious_sub, wrapx, wrapy)) {
 #ifdef NDEBUG
         return obvious_sub;
 #endif

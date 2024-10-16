@@ -477,3 +477,26 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m2, fshadow_m1)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
+
+# Generated functions without edges must have min_world = 1.
+# N.B.: If changing this, move this test to precompile and make sure
+# that the specialization survives revalidation.
+function generated_no_edges_gen(world, args...)
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
+    src.code = Any[Core.ReturnNode(nothing)]
+    src.slotnames = Symbol[:self]
+    src.slotflags = UInt8[0x00]
+    src.ssaflags = UInt32[0x00]
+    src.ssavaluetypes = 1
+    src.nargs = 1
+    src.min_world = first(Base._methods(generated_no_edges, Tuple{}, -1, world)).method.primary_world
+
+    return src
+end
+
+@eval function generated_no_edges()
+    $(Expr(:meta, :generated, generated_no_edges_gen))
+    $(Expr(:meta, :generated_only))
+end
+
+@test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()

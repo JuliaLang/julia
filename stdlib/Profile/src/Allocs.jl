@@ -54,18 +54,17 @@ julia> last(sort(results.allocs, by=x->x.size))
 Profile.Allocs.Alloc(Vector{Any}, Base.StackTraces.StackFrame[_new_array_ at array.c:127, ...], 5576)
 ```
 
-The best way to visualize these is currently with the
-[PProf.jl](https://github.com/JuliaPerf/PProf.jl) package,
-by invoking `PProf.Allocs.pprof`.
+See the profiling tutorial in the Julia documentation for more information.
 
-!!! note
-    The current implementation of the Allocations Profiler does not
-    capture types for all allocations. Allocations for which the profiler
-    could not capture the type are represented as having type
-    `Profile.Allocs.UnknownType`.
+!!! compat "Julia 1.11"
 
-    You can read more about the missing types and the plan to improve this, here:
-    <https://github.com/JuliaLang/julia/issues/43688>.
+    Older versions of Julia could not capture types in all cases. In older versions of
+    Julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
+    the profiler doesn't know what type of object was allocated. This mainly happened when
+    the allocation was coming from generated code produced by the compiler. See
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688) for more info.
+
+    Since Julia 1.11, all allocations should have a type reported.
 
 !!! compat "Julia 1.8"
     The allocation profiler was added in Julia 1.8.
@@ -322,7 +321,7 @@ end
 function flat(io::IO, data::Vector{Alloc}, cols::Int, fmt::ProfileFormat)
     fmt.combine || error(ArgumentError("combine=false"))
     lilist, n, m, totalbytes = parse_flat(fmt.combine ? StackFrame : UInt64, data, fmt.C)
-    filenamemap = Dict{Symbol,String}()
+    filenamemap = Profile.FileNameMap()
     if isempty(lilist)
         warning_empty()
         return true

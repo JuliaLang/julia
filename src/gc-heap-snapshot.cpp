@@ -2,9 +2,9 @@
 
 #include "gc-heap-snapshot.h"
 
+#include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
-#include "gc.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -182,8 +182,10 @@ struct HeapSnapshot {
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
+int gc_heap_snapshot_redact_data = 0;
 HeapSnapshot *g_snapshot = nullptr;
-extern jl_mutex_t heapsnapshot_lock;
+// mutex for gc-heap-snapshot.
+jl_mutex_t heapsnapshot_lock;
 
 void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one);
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
@@ -194,7 +196,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one)
+    ios_t *strings, ios_t *json, char all_one, char redact_data)
 {
     HeapSnapshot snapshot;
     snapshot.nodes = nodes;
@@ -206,6 +208,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Enable snapshotting
     g_snapshot = &snapshot;
+    gc_heap_snapshot_redact_data = redact_data;
     gc_heap_snapshot_enabled = true;
 
     _add_synthetic_root_entries(&snapshot);
@@ -215,6 +218,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = false;
+    gc_heap_snapshot_redact_data = 0;
     g_snapshot = nullptr;
 
     jl_mutex_unlock(&heapsnapshot_lock);
@@ -327,7 +331,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     if (jl_is_string(a)) {
         node_type = "String";
-        name = jl_string_data(a);
+        name = gc_heap_snapshot_redact_data ? "<redacted>" : jl_string_data(a);
         self_size = jl_string_len(a);
     }
     else if (jl_is_symbol(a)) {
@@ -557,6 +561,13 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<internal>"));
 }
 
+void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
+{
+    _record_gc_edge("binding", from, to,
+                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<binding>"));
+}
+
+
 void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     // valid alloc_type values are 0, 1, 2
@@ -606,21 +617,33 @@ void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx,
 void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one)
 {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
-    ios_printf(json, "{\"snapshot\":{");
-    ios_printf(json, "\"meta\":{");
-    ios_printf(json, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
-    ios_printf(json, "\"node_types\":[");
+    // also https://github.com/microsoft/vscode-v8-heap-tools/blob/c5b34396392397925ecbb4ecb904a27a2754f2c1/v8-heap-parser/src/decoder.rs#L43-L51
+    ios_printf(json, "{\"snapshot\":{\n");
+
+    ios_printf(json, "  \"meta\":{\n");
+    ios_printf(json, "    \"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],\n");
+    ios_printf(json, "    \"node_types\":[");
     snapshot.node_types.print_json_array(json, false);
     ios_printf(json, ",");
-    ios_printf(json, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],");
-    ios_printf(json, "\"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],");
-    ios_printf(json, "\"edge_types\":[");
+    ios_printf(json, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],\n");
+    ios_printf(json, "    \"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],\n");
+    ios_printf(json, "    \"edge_types\":[");
     snapshot.edge_types.print_json_array(json, false);
     ios_printf(json, ",");
-    ios_printf(json, "\"string_or_number\",\"from_node\"]");
-    ios_printf(json, "},\n"); // end "meta"
-    ios_printf(json, "\"node_count\":%zu,", snapshot.num_nodes);
-    ios_printf(json, "\"edge_count\":%zu", snapshot.num_edges);
+    ios_printf(json, "\"string_or_number\",\"from_node\"],\n");
+    // not used. Required by microsoft/vscode-v8-heap-tools
+    ios_printf(json, "    \"trace_function_info_fields\":[\"function_id\",\"name\",\"script_name\",\"script_id\",\"line\",\"column\"],\n");
+    ios_printf(json, "    \"trace_node_fields\":[\"id\",\"function_info_index\",\"count\",\"size\",\"children\"],\n");
+    ios_printf(json, "    \"sample_fields\":[\"timestamp_us\",\"last_assigned_id\"],\n");
+    ios_printf(json, "    \"location_fields\":[\"object_index\",\"script_id\",\"line\",\"column\"]\n");
+    // end not used
+    ios_printf(json, "  },\n"); // end "meta"
+
+    ios_printf(json, "  \"node_count\":%zu,\n", snapshot.num_nodes);
+    ios_printf(json, "  \"edge_count\":%zu,\n", snapshot.num_edges);
+    ios_printf(json, "  \"trace_function_count\":0\n"); // not used. Required by microsoft/vscode-v8-heap-tools
     ios_printf(json, "}\n"); // end "snapshot"
+
+    // this } is removed by the julia reassembler in Profile
     ios_printf(json, "}");
 }
