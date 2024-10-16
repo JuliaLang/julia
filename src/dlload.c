@@ -188,7 +188,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
         dlopen = (dlopen_prototype*)dlsym(RTLD_NEXT, "dlopen");
         if (!dlopen)
             return NULL;
-        void *libdl_handle = dlopen("libdl.so", RTLD_NOW | RTLD_NOLOAD);
+        void *libdl_handle = dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
         assert(libdl_handle);
         dlopen = (dlopen_prototype*)dlsym(libdl_handle, "dlopen");
         dlclose(libdl_handle);
