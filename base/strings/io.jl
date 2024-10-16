@@ -370,7 +370,7 @@ function _join_preserve_annotations(iterator, args...)
         # a plain `String` from `io`.
         if isconcretetype(et) || !isempty(io.annotations)
             seekstart(io)
-            read(io, AnnotatedString{String})
+            Core.compilerbarrier(:type, read(io, AnnotatedString{String}))::AbstractString
         else
             String(take!(io.io))
         end
