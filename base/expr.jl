@@ -1560,3 +1560,17 @@ function make_atomiconce(success_order, fail_order, ex)
     end
     error("@atomiconce expression missing field access or indexing")
 end
+
+# Meta expression head, these generally can't be deleted even when they are
+# in a dead branch but can be ignored when analyzing uses/liveness.
+is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
+
+function is_self_quoting(@nospecialize(x))
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
+        isa(x,Char) || x === nothing || isa(x,Function)
+end
+
+function quoted(@nospecialize(x))
+    return is_self_quoting(x) ? x : QuoteNode(x)
+end
