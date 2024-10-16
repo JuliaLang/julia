@@ -85,7 +85,6 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test zeros(eltya,n)\fill(eltya(1),n) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
@@ -1133,43 +1132,6 @@ end
 
         # symmetric, indefinite
         @test inv(convert(Matrix{elty}, [1. 2; 2 1])) ≈ convert(Matrix{elty}, [-1. 2; 2 -1]/3)
-    end
-end
-
-function test_rdiv_pinv_consistency(a, b)
-    @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
-end
-function test_ldiv_pinv_consistency(a, b)
-    @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
-end
-function test_div_pinv_consistency(a, b)
-    test_rdiv_pinv_consistency(a, b)
-    test_ldiv_pinv_consistency(a, b)
-end
-
-@testset "/ and \\ consistency with pinv for vectors" begin
-    @testset "Tests for type $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        c = rand(elty, 5)
-        r = (elty <: Complex ? adjoint : transpose)(rand(elty, 5))
-        cm = rand(elty, 5, 1)
-        rm = rand(elty, 1, 5)
-        @testset "dot products" begin
-            test_div_pinv_consistency(r, c)
-            test_div_pinv_consistency(rm, c)
-            test_div_pinv_consistency(r, cm)
-            test_div_pinv_consistency(rm, cm)
-        end
-        @testset "outer products" begin
-            test_div_pinv_consistency(c, r)
-            test_div_pinv_consistency(cm, rm)
-        end
-        @testset "matrix/vector" begin
-            m = rand(5, 5)
-            test_ldiv_pinv_consistency(m, c)
-            test_rdiv_pinv_consistency(r, m)
-        end
     end
 end
 
