@@ -643,47 +643,51 @@ end
 GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
 function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
     codeinst = get(code_cache, mi, nothing)
-    codeinst isa CodeInstance || return false
-    argescapes = traverse_analysis_results(codeinst) do @nospecialize result
+    codeinst isa CodeInstance || return nothing
+    return traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
     end
-    if argescapes !== nothing
-        return argescapes
-    end
-    effects = decode_effects(codeinst.ipo_purity_bits)
-    if is_effect_free(effects) && is_inaccessiblememonly(effects)
-        # We might not have run EA on simple frames without any escapes (e.g. when optimization
-        # is skipped when result is constant-folded by abstract interpretation). If those
-        # frames aren't inlined, the accuracy of EA for caller context takes a big hit.
-        # This is a HACK to avoid that, but obviously, a more comprehensive fix would be ideal.
-        return true
-    end
-    return false
+end
+
+analyze_and_cache_escapes!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState) =
+    analyze_and_cache_escapes!(interp, opt, sv.ir, sv.result)
+
+function analyze_and_cache_escapes!(interp::AbstractInterpreter, opt::OptimizationState,
+                                    ir::IRCode, result::InferenceResult)
+    nargs = Int(opt.src.nargs)
+    estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), get_escape_cache(interp))
+    argescapes = EscapeAnalysis.ArgEscapeCache(estate)
+    stack_analysis_result!(result, argescapes)
+    return estate
 end
 
 function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState)
+    EA_cached = false
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
-        ir = sv.ir
-        nargs = Int(opt.src.nargs)
-        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), get_escape_cache(interp))
-        argescapes = EscapeAnalysis.ArgEscapeCache(estate)
-        stack_analysis_result!(sv.result, argescapes)
+        estate = analyze_and_cache_escapes!(interp, opt, sv)
         validate_mutable_arg_escapes!(estate, sv)
+        EA_cached = true
     end
 
-    any_refinable(sv) || return false
     effects = sv.result.ipo_effects
-    sv.result.ipo_effects = Effects(effects;
+    any_refinable(sv) || @goto run_EA_on_simple_frame
+    effects = sv.result.ipo_effects = Effects(effects;
         consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
         effect_free = sv.all_effect_free ? ALWAYS_TRUE :
-                      sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
+                    sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
         nothrow = sv.all_nothrow ? true : effects.nothrow,
         noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub,
         nortcall = sv.nortcall ? true : effects.nortcall)
-    return true
+
+    @label run_EA_on_simple_frame
+    if !EA_cached && is_effect_free(effects) && is_inaccessiblememonly(effects)
+        analyze_and_cache_escapes!(interp, opt, sv)
+    end
+
+    nothing
 end
 
-function is_ipo_dataflow_analysis_profitable(effects::Effects)
+function is_ipo_effects_refinable(effects::Effects)
     return !(is_consistent(effects) && is_effect_free(effects) &&
              is_nothrow(effects) && is_noub(effects))
 end
@@ -958,8 +962,9 @@ end
 
 function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
                                 ir::IRCode, result::InferenceResult)
-    if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
-        return false
+    if !is_ipo_effects_refinable(result.ipo_effects)
+        analyze_and_cache_escapes!(interp, opt, ir, result)
+        return nothing
     end
 
     @assert isempty(ir.new_nodes) "IRCode should be compacted before post-opt analysis"
@@ -985,7 +990,8 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationSt
         end
     end
 
-    return refine_effects!(interp, opt, sv)
+    refine_effects!(interp, opt, sv)
+    nothing
 end
 
 # run the optimization work

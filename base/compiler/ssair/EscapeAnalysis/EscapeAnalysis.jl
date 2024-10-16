@@ -1069,24 +1069,8 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     add_liveness_changes!(astate, pc, args, first_idx, last_idx)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
+    cache isa ArgEscapeCache || return add_conservative_changes!(astate, pc, args, 2)
     ret = SSAValue(pc)
-    if cache isa Bool
-        if cache
-            # This method call is very simple and has good effects, so there's no need to
-            # escape its arguments. However, since the arguments might be returned, we need
-            # to consider the possibility of aliasing between them and the return value.
-            for argidx = first_idx:last_idx
-                arg = args[argidx]
-                if !is_mutation_free_argtype(argextype(arg, astate.ir))
-                    add_alias_change!(astate, ret, arg)
-                end
-            end
-            return nothing
-        else
-            return add_conservative_changes!(astate, pc, args, 2)
-        end
-    end
-    cache = cache::ArgEscapeCache
     retinfo = astate.estate[ret] # escape information imposed on the call statement
     method = mi.def::Method
     nargs = Int(method.nargs)
