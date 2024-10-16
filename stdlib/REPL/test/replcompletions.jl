@@ -1497,15 +1497,6 @@ test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
 test_dict_completion("test_repl_comp_customdict")
 
-struct NoLengthDict{K,V} <: AbstractDict{K,V}
-    dict::Dict{K,V}
-    NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
-end
-Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
-Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
-Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
-Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
-
 @testset "dict_identifier_key" begin
     # Issue #23004: this should not throw:
     @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
