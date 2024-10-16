@@ -504,7 +504,9 @@ end
 
 function Base.write(io::LimitIO, v::UInt8)
     io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
-    io.n += write(io.io, v)
+    n_bytes = write(io.io, v)
+    io.n += n_bytes
+    return n_bytes
 end
 
 # Semantically, we only need to override `Base.write`, but we also
