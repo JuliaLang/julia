@@ -349,7 +349,8 @@ bool Optimizer::isSafepoint(Instruction *inst)
         // Known functions emitted in codegen that are not safepoints
         if (callee == pass.pointer_from_objref_func
             || callee == pass.gc_loaded_func
-            || callee->getName() == "memcmp") {
+            || callee->getName() == "memcmp"
+	    || callee->getName().starts_with("julia.gc_loaded")) {
             return false;
         }
     }

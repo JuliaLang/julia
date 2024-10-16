@@ -44,6 +44,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 
 // support
 #include <llvm/ADT/SmallBitVector.h>
@@ -568,6 +569,7 @@ public:
     llvm::StringRef name;
     TypeFn_t _type;
     llvm::AttributeList (*_attrs)(llvm::LLVMContext &C);
+    llvm::SmallVector<JuliaFunction*,4> variants;
 
     JuliaFunction(const JuliaFunction&) = delete;
     JuliaFunction(const JuliaFunction&&) = delete;
@@ -579,6 +581,11 @@ public:
                          name, m);
         if (_attrs)
             F->setAttributes(_attrs(m->getContext()));
+        for (auto *other : variants) {
+            auto *otherF = other->realize(m);
+            // add the freshly created function llvm.compiler.used
+            appendToCompilerUsed(*m, {otherF});
+        }
         return F;
     }
 };
@@ -1498,6 +1505,58 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             {}); },
 };
+
+FunctionType *gc_loaded_vN_ft(LLVMContext &C, int N) {
+    return FunctionType::get(
+        FixedVectorType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded), N),
+        {
+            FixedVectorType::get(JuliaType::get_prjlvalue_ty(C), N),
+            FixedVectorType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), 0), N)
+        }, false);
+}
+
+// nonnull / nocapture / readnone don't apply to vectors of pointers
+static const auto gc_loaded_v2_func = new JuliaFunction<>{
+    "julia.gc_loaded.v2",
+    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 2); },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::none());
+#else
+        FnAttrs.addAttribute(Attribute::ReadNone);
+#endif
+        AttrBuilder RetAttrs(C);
+        RetAttrs.addAttribute(Attribute::NoUndef);
+        return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
+                { Attributes(C, {Attribute::NoUndef}),
+                  Attributes(C, {Attribute::NoUndef}) });
+                  },
+};
+
+static const auto gc_loaded_v4_func = new JuliaFunction<>{
+    "julia.gc_loaded.v4",
+    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 2); },
+    gc_loaded_v2_func->_attrs,
+};
+
+static const auto gc_loaded_v8_func = new JuliaFunction<>{
+    "julia.gc_loaded.v8",
+    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 8); },
+    gc_loaded_v2_func->_attrs,
+};
+
+static const auto gc_loaded_v16_func = new JuliaFunction<>{
+    "julia.gc_loaded.v16",
+    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 16); },
+    gc_loaded_v2_func->_attrs,
+};
+
 static const auto gc_loaded_func = new JuliaFunction<>{
     "julia.gc_loaded",
     // # memory(none) nosync nounwind speculatable willreturn norecurse
@@ -1515,6 +1574,10 @@ static const auto gc_loaded_func = new JuliaFunction<>{
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoRecurse);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
+        // XXX: According to langref we should be able to specify:
+        // _ZGV_LLVM_Nxvv for vector length agnostic and even
+        // _ZGV_LLVM_Nxvv_julia.gc_loaded(_LLVM_Scalarize_julia.gc_loaded) but that seems to not have been implemented
+	    FnAttrs.addAttribute("vector-function-abi-variant", "_ZGV_LLVM_N2vv_julia.gc_loaded(julia.gc_loaded.v2),_ZGV_LLVM_N4vv_julia.gc_loaded(julia.gc_loaded.v4),_ZGV_LLVM_N8vv_julia.gc_loaded(julia.gc_loaded.v8),_ZGV_LLVM_N16vv_julia.gc_loaded(julia.gc_loaded.v16)");
         AttrBuilder RetAttrs(C);
         RetAttrs.addAttribute(Attribute::NonNull);
         RetAttrs.addAttribute(Attribute::NoUndef);
@@ -1522,6 +1585,7 @@ static const auto gc_loaded_func = new JuliaFunction<>{
                 { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}, {NoCaptureAttr(C)}),
                   Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
                   },
+    {gc_loaded_v2_func,gc_loaded_v4_func,gc_loaded_v8_func,gc_loaded_v16_func},
 };
 
 // julia.call represents a call with julia calling convention, it is used as
