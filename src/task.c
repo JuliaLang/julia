@@ -312,7 +312,8 @@ static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
     JL_PROBE_RT_FINISH_TASK(ct);
-    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_ns;
+    ct->completed_at = jl_hrtime();
+    ct->cpu_time_ns += ct->completed_at - ct->last_scheduled_at;
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
@@ -701,7 +702,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_error("cannot switch to task running on another thread");
 
     JL_PROBE_RT_PAUSE_TASK(ct);
-    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_ns;
+    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_at;
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
@@ -737,7 +738,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
-    ct->last_scheduled_ns = jl_hrtime();
+    ct->last_scheduled_at = jl_hrtime();
 
     jl_gc_unsafe_leave(ptls, gc_state);
 }
@@ -1150,8 +1151,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
-    t->last_scheduled_ns = 0;
+    t->last_scheduled_at = 0;
     t->cpu_time_ns = 0;
+    t->completed_at = 0;
+    t->created_at = jl_hrtime();
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1252,7 +1255,7 @@ CFI_NORETURN
 
     ct->ctx.started = 1;
     JL_PROBE_RT_START_TASK(ct);
-    ct->last_scheduled_ns = jl_hrtime();
+    ct->last_scheduled_at = jl_hrtime();
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
@@ -1603,8 +1606,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
-    ct->last_scheduled_ns = 0;
+    ct->last_scheduled_at = 0;
     ct->cpu_time_ns = 0;
+    ct->completed_at = 0;
+    ct->created_at = jl_hrtime();
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

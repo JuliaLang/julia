@@ -87,6 +87,35 @@ end
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 """
+    task_cpu_time_ns(t::Task) -> UInt64
+
+Return the total nanoseconds that the task `t` has spent running.
+This metric is only updated when the task yields or completes.
+See also [`task_wall_time_ns`](@ref).
+
+!!! note "This metric is from the Julia scheduler"
+    A task may be running on an OS thread that is descheduled by the OS
+    scheduler, this time still counts towards the metric.
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+task_cpu_time_ns(t::Task) = t.cpu_time_ns
+
+"""
+    task_wall_time_ns(t::Task) -> UInt64
+
+Return the total nanoseconds that the task `t` was runnable.
+This is the time since the task was created until the time at which it was done or failed,
+or until the current time if the task has not yet completed.
+See also [`task_cpu_time_ns`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+task_wall_time_ns(t::Task) = iszero(t.completed_at) ? time_ns() : t.completed_at - t.created_at
+
+"""
     Base.gc_live_bytes()
 
 Return the total size (in bytes) of objects currently in memory.
