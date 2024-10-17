@@ -908,7 +908,7 @@ end
 # linear indexing
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck Core.Intrinsics.ult_int(i, A.length) || throw_boundserror(A, (i,))
+    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, A.length)) || throw_boundserror(A, (i,))
     memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
 end
 
