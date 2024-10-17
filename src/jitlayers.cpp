@@ -2125,27 +2125,26 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                         SG.eraseFromParent();
                         continue;
                     }
-                    //// If we start using llvm.used, we need to enable and test this
-                    //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && SG.hasAppendingLinkage()) {
-                    //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
-                    //    auto *sCA = cast<ConstantArray>(SG.getInitializer());
-                    //    SmallVector<Constant *, 16> Init;
-                    //    for (auto &Op : dCA->operands())
-                    //        Init.push_back(cast_or_null<Constant>(Op));
-                    //    for (auto &Op : sCA->operands())
-                    //        Init.push_back(cast_or_null<Constant>(Op));
-                    //    ArrayType *ATy = ArrayType::get(PointerType::get(dest.getContext()), Init.size());
-                    //    GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
-                    //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
-                    //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
-                    //    GV->copyAttributesFrom(dG);
-                    //    SG.replaceAllUsesWith(GV);
-                    //    dG->replaceAllUsesWith(GV);
-                    //    GV->takeName(SG);
-                    //    SG.eraseFromParent();
-                    //    dG->eraseFromParent();
-                    //    continue;
-                    //}
+                    else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && SG.hasAppendingLinkage()) {
+                        auto *dCA = cast<ConstantArray>(dG->getInitializer());
+                        auto *sCA = cast<ConstantArray>(SG.getInitializer());
+                        SmallVector<Constant *, 16> Init;
+                        for (auto &Op : dCA->operands())
+                            Init.push_back(cast_or_null<Constant>(Op));
+                        for (auto &Op : sCA->operands())
+                            Init.push_back(cast_or_null<Constant>(Op));
+                        ArrayType *ATy = ArrayType::get(PointerType::getUnqual(dest.getContext()), Init.size());
+                        GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
+                                GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "");
+                        GV->copyAttributesFrom(dG);
+                        GV->setSection(dG->getSection());
+                        SG.replaceAllUsesWith(GV);
+                        dG->replaceAllUsesWith(GV);
+                        GV->takeName(&SG);
+                        SG.eraseFromParent();
+                        dG->eraseFromParent();
+                        continue;
+                    }
                     else {
                         assert(dG->isDeclaration() || dG->getInitializer() == SG.getInitializer());
                         dG->replaceAllUsesWith(&SG);
