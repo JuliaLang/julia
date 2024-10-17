@@ -495,6 +495,7 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
+static htable_t bits_replace;
 static htable_t relocatable_ext_cis;
 
 // array of definitions for the predefined function pointers
@@ -1666,7 +1667,23 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 write_padding(f, offset - tot);
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
-                if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                jl_value_t *replace = (jl_value_t*)ptrhash_get(&bits_replace, (void*)slot);
+                if (replace != HT_NOTFOUND) {
+                    assert(t->name->mutabl && !jl_field_isptr(t, i));
+                    jl_value_t *rty = jl_typeof(replace);
+                    size_t sz = jl_datatype_size(rty);
+                    ios_write(f, (const char*)replace, sz);
+                    jl_value_t *ft = jl_field_type_concrete(t, i);
+                    int isunion = jl_is_uniontype(ft);
+                    unsigned nth = 0;
+                    if (!jl_find_union_component(ft, rty, &nth))
+                        assert(0 && "invalid field assignment to isbits union");
+                    assert(sz <= fsz - isunion);
+                    write_padding(f, fsz - sz - isunion);
+                    if (isunion)
+                        write_uint8(f, nth);
+                }
+                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
                     // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
@@ -2660,6 +2677,65 @@ jl_mutex_t global_roots_lock;
 extern jl_mutex_t world_counter_lock;
 extern size_t jl_require_world;
 
+jl_mutex_t precompile_field_replace_lock;
+jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
+
+static inline jl_value_t *get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
+{
+    if (mutabl) {
+        if (st == jl_module_type)
+            jl_error("cannot assign variables in other modules");
+        if (!st->name->mutabl)
+            jl_errorf("%s: immutable struct of type %s cannot be changed", name, jl_symbol_name(st->name->name));
+    }
+    size_t idx;
+    if (jl_is_long(arg)) {
+        idx = jl_unbox_long(arg) - 1;
+        if (idx >= jl_datatype_nfields(st))
+            jl_bounds_error(v, arg);
+    }
+    else if (jl_is_symbol(arg)) {
+        idx = jl_field_index(st, (jl_sym_t*)arg, 1);
+        arg = jl_box_long(idx);
+    }
+    else {
+        jl_value_t *ts[2] = {(jl_value_t*)jl_long_type, (jl_value_t*)jl_symbol_type};
+        jl_value_t *t = jl_type_union(ts, 2);
+        jl_type_error(name, t, arg);
+    }
+    if (mutabl && jl_field_isconst(st, idx)) {
+        jl_errorf("%s: const field .%s of type %s cannot be changed", name,
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+    }
+    return arg;
+}
+
+JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *field, jl_value_t *newval)
+{
+    if (!jl_generating_output())
+        return;
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(val);
+    jl_value_t *idx = get_checked_fieldindex("setfield!", st, val, field, 1);
+    JL_GC_PUSH1(&idx);
+    size_t idxval = jl_unbox_long(idx);
+    jl_value_t *ft = jl_field_type_concrete(st, idxval);
+    if (!jl_isa(newval, ft))
+        jl_type_error("setfield!", ft, newval);
+    JL_LOCK(&precompile_field_replace_lock);
+    if (precompile_field_replace == NULL) {
+        precompile_field_replace = jl_alloc_svec(3);
+        jl_svecset(precompile_field_replace, 0, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace, 1, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace, 2, jl_alloc_vec_any(0));
+    }
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 0), val);
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 1), idx);
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 2), newval);
+    JL_GC_POP();
+    JL_UNLOCK(&precompile_field_replace_lock);
+}
+
+
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(val)) {
@@ -2779,6 +2855,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
 {
     htable_new(&field_replace, 0);
+    htable_new(&bits_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
@@ -2790,6 +2867,37 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&gvars, 0);
     arraylist_t external_fns;
     arraylist_new(&external_fns, 0);
+    // prepare hash table with any fields the user wanted us to rewrite during serialization
+    if (precompile_field_replace) {
+        jl_array_t *vals = (jl_array_t*)jl_svecref(precompile_field_replace, 0);
+        jl_array_t *fields = (jl_array_t*)jl_svecref(precompile_field_replace, 1);
+        jl_array_t *newvals = (jl_array_t*)jl_svecref(precompile_field_replace, 2);
+        size_t i, l = jl_array_nrows(vals);
+        assert(jl_array_nrows(fields) == l && jl_array_nrows(newvals) == l);
+        for (i = 0; i < l; i++) {
+            jl_value_t *val = jl_array_ptr_ref(vals, i);
+            size_t field = jl_unbox_long(jl_array_ptr_ref(fields, i));
+            jl_value_t *newval = jl_array_ptr_ref(newvals, i);
+            jl_datatype_t *st = (jl_datatype_t*)jl_typeof(val);
+            size_t offs = jl_field_offset(st, field);
+            char *fldaddr = (char*)val + offs;
+            if (jl_field_isptr(st, field)) {
+                record_field_change((jl_value_t**)fldaddr, newval);
+            }
+            else {
+                // replace the bits
+                ptrhash_put(&bits_replace, (void*)fldaddr, newval);
+                // and any pointers inside
+                jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(newval);
+                const jl_datatype_layout_t *layout = rty->layout;
+                size_t j, np = layout->npointers;
+                for (j = 0; j < np; j++) {
+                    uint32_t ptr = jl_ptr_offset(rty, j);
+                    record_field_change((jl_value_t**)fldaddr + ptr, *(((jl_value_t**)newval) + ptr));
+                }
+            }
+        }
+    }
 
     int en = jl_gc_enable(0);
     if (native_functions) {
@@ -3130,6 +3238,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&field_replace);
+    htable_free(&bits_replace);
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
