@@ -211,11 +211,11 @@
           (block
            ,@loc
            (call (core eval) ,name ,x)))
-       (= (call include (:: ,x (top AbstractString)))
+       (= (call include ,x)
           (block
            ,@loc
            (call (core _call_latest) (top include) ,name ,x)))
-       (= (call include (:: ,mex (top Function)) (:: ,x (top AbstractString)))
+       (= (call include (:: ,mex (top Function)) ,x)
           (block
            ,@loc
            (call (core _call_latest) (top include) ,mex ,name ,x)))))
