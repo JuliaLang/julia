@@ -215,6 +215,7 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 @test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
 
 macro except_str(expr, err_type)
+    source_info = __source__
     return quote
         let err = nothing
             try
@@ -223,7 +224,7 @@ macro except_str(expr, err_type)
             end
             err === nothing && error("expected failure, but no exception thrown")
             @testset let expr=$(repr(expr))
-                @test typeof(err) === $(esc(err_type))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
             end
             buf = IOBuffer()
             showerror(buf, err)
@@ -233,6 +234,7 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    source_info = __source__
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
@@ -242,7 +244,7 @@ macro except_strbt(expr, err_type)
             end
             err === nothing && error($errmsg)
             @testset let expr=$(repr(expr))
-                @test typeof(err) === $(esc(err_type))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
             end
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
@@ -252,6 +254,7 @@ macro except_strbt(expr, err_type)
 end
 
 macro except_stackframe(expr, err_type)
+    source_info = __source__
     return quote
        let err = nothing
            local st
@@ -262,7 +265,7 @@ macro except_stackframe(expr, err_type)
            end
            err === nothing && error("expected failure, but no exception thrown")
            @testset let expr=$(repr(expr))
-               @test typeof(err) === $(esc(err_type))
+               $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
            end
            sprint(show, st[1])
        end
