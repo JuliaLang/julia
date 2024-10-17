@@ -2030,13 +2030,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
 
 JL_DLLEXPORT void jl_method_table_set_frozen(jl_methtable_t *mt, int val)
 {
-    JL_LOCK(&world_counter_lock);
-    JL_LOCK(&mt->writelock);
-    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
     mt->frozen = val;
-    jl_atomic_store_release(&jl_world_counter, world + 1);
-    JL_UNLOCK(&mt->writelock);
-    JL_UNLOCK(&world_counter_lock);
 }
 
 static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect JL_REQUIRE_ROOTED_SLOT, jl_value_t **isect2 JL_REQUIRE_ROOTED_SLOT)
