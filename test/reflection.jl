@@ -1299,14 +1299,14 @@ end
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
 
-# sealing
-f_sealed(x::Int64) = x+1
-Base.freeze!(Base.methods(f_sealed).mt)
+# freezing Core.MethodTable
+f_frozen(x::Int) = x+1
+Base.freeze!(Base.methods(f_frozen).mt)
 @test_throws(
     ErrorException("cannot add methods to or modify methods of a frozen function"),
-    @eval f_sealed(x::Float64) = x+2
+    @eval f_frozen(x::Float64) = x+2
 )
-Base.unfreeze!(Base.methods(f_sealed).mt)
-f_sealed(x::Float64) = x + 2
-@test f_sealed(1) == 2
-@test f_sealed(1.0) == 2.0
+Base.unfreeze!(Base.methods(f_frozen).mt)
+f_frozen(x::Float64) = x+2
+@test f_frozen(1) == 2
+@test f_frozen(1.0) == 3.0

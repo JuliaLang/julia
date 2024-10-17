@@ -2650,7 +2650,7 @@ for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typ
     @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
 end
 for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
-    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+    @test_throws ErrorException("cannot add methods to or modify methods of a frozen function") @eval $f() = 1
 end
 
 # issue #33370
