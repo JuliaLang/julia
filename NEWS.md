@@ -167,6 +167,8 @@ Standard library changes
 - the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
   and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
   in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 
