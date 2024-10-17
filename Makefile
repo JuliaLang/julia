@@ -385,6 +385,7 @@ endif
 
 	# Set .jl sources as read-only to match package directories
 	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;
+	find $(DESTDIR)$(datarootdir)/julia/stdlib -type f -name \*.jl -exec chmod 0444 '{}' \;
 	find $(DESTDIR)$(datarootdir)/julia/test -type f -name \*.jl -exec chmod 0444 '{}' \;
 
 	# Copy documentation
