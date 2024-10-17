@@ -10,6 +10,7 @@ Base.Threads.nthreads
 Base.Threads.threadpool
 Base.Threads.nthreadpools
 Base.Threads.threadpoolsize
+Base.Threads.threadpooltids
 Base.Threads.ngcthreads
 ```
 
