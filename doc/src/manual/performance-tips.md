@@ -1486,11 +1486,11 @@ from the manifest, then revert the change with `pkg> undo`.
 
 If loading time is dominated by slow `__init__()` methods having compilation, one verbose way to identify what is being
 compiled is to use the julia args `--trace-compile=stderr --trace-compile-timing` which will report a [`precompile`](@ref)
-statement each time a method is compiled, along with how long compilation took. For instance, the full setup would be:
+statement each time a method is compiled, along with how long compilation took. The InteractiveUtils macro
+[`@trace_compile`](@ref) provides a way to enable those args for a specific call. So a call for a complete report report would look like:
 
 ```
-$ julia --startup-file=no --trace-compile=stderr --trace-compile-timing
-julia> @time @time_imports using CustomPackage
+julia> @time @time_imports @trace_compile using CustomPackage
 ...
 ```
 

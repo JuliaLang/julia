@@ -109,8 +109,8 @@ Random.seed!(1)
     end
 
     @testset "diag" begin
-        @test_throws ArgumentError diag(D,  n+1)
-        @test_throws ArgumentError diag(D, -n-1)
+        @test isempty(@inferred diag(D,  n+1))
+        @test isempty(@inferred diag(D, -n-1))
         @test (@inferred diag(D))::typeof(dd) == dd
         @test (@inferred diag(D, 0))::typeof(dd) == dd
         @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
@@ -815,6 +815,13 @@ end
     D = Diagonal(fill(S,3))
     @test D * fill(S,2,3)' == fill(S * S', 3, 2)
     @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
+
+    @testset "indexing with non-standard-axes" begin
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        D = Diagonal(fill(s,3))
+        @test @inferred(D[1,2]) isa typeof(s)
+        @test all(iszero, D[1,2])
+    end
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin
@@ -1420,6 +1427,16 @@ end
 @testset "bounds-check with CartesianIndex ranges" begin
     D = Diagonal(1:typemax(Int))
     @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
+end
+
+@testset "zeros in kron with block matrices" begin
+    D = Diagonal(1:2)
+    B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
+    @test kron(D, B) == kron(Array(D), B)
+    @test kron(B, D) == kron(B, Array(D))
+    D2 = Diagonal([ones(2,2), ones(3,3)])
+    @test kron(D, D2) == kron(D, Array{eltype(D2)}(D2))
+    @test kron(D2, D) == kron(Array{eltype(D2)}(D2), D)
 end
 
 end # module TestDiagonal

@@ -5368,7 +5368,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     }
     CallInst *call = ctx.builder.CreateCall(cft, TheCallee, argvals);
     call->setAttributes(returninfo.attrs);
-    if (gcstack_arg)
+    if (gcstack_arg && ctx.emission_context.use_swiftcc)
         call->setCallingConv(CallingConv::Swift);
 
     jl_cgval_t retval;
@@ -8186,7 +8186,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
 
     if (gcstack_arg){
         AttrBuilder param(ctx.builder.getContext());
-        param.addAttribute(Attribute::SwiftSelf);
+        if (ctx.emission_context.use_swiftcc)
+            param.addAttribute(Attribute::SwiftSelf);
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(PointerType::get(JuliaType::get_ppjlvalue_ty(ctx.builder.getContext()), 0));
@@ -8278,7 +8279,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             fval = emit_inttoptr(ctx, fval, ftype->getPointerTo());
     }
     if (auto F = dyn_cast<Function>(fval)) {
-        if (gcstack_arg)
+        if (gcstack_arg && ctx.emission_context.use_swiftcc)
             F->setCallingConv(CallingConv::Swift);
         assert(F->arg_size() >= argnames.size());
         for (size_t i = 0; i < argnames.size(); i++) {
@@ -10371,6 +10372,7 @@ static void init_jit_functions(void)
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
+    add_named_global("__julia_personality", &__julia_personality);
 #if defined(_COMPILER_GCC_)
     add_named_global("___chkstk_ms", &___chkstk_ms);
 #else
@@ -10396,7 +10398,7 @@ static void init_jit_functions(void)
 }
 
 #ifdef JL_USE_INTEL_JITEVENTS
-char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifier
+char jl_using_intel_jitevents = 0; // Non-zero if running under Intel VTune Amplifier
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
@@ -10510,9 +10512,6 @@ extern "C" void jl_init_llvm(void)
 #if defined(JL_USE_INTEL_JITEVENTS) || \
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
-#ifdef JL_USE_JITLINK
-#pragma message("JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink")
-#else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
 #if defined(JL_USE_INTEL_JITEVENTS)
@@ -10529,24 +10528,23 @@ extern "C" void jl_init_llvm(void)
 
 #if defined(JL_USE_PERF_JITEVENTS)
     if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_perf_jitevents= 1;
+        jl_using_perf_jitevents = 1;
     }
 #endif
 
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
+        jl_ExecutionEngine->enableIntelJITEventListener();
 #endif
 
 #ifdef JL_USE_OPROFILE_JITEVENTS
     if (jl_using_oprofile_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createOProfileJITEventListener());
+        jl_ExecutionEngine->enableOProfileJITEventListener();
 #endif
 
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
-#endif
+        jl_ExecutionEngine->enablePerfJITEventListener();
 #endif
 #endif
 

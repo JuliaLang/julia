@@ -224,8 +224,11 @@ void Optimizer::optimizeAll()
         checkInst(orig);
         if (use_info.escaped) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+                    << "GC allocation escaped " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -233,8 +236,11 @@ void Optimizer::optimizeAll()
         }
         if (use_info.haserror || use_info.returned) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -243,8 +249,11 @@ void Optimizer::optimizeAll()
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
-                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+                    << "GC allocation removed " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
@@ -270,8 +279,11 @@ void Optimizer::optimizeAll()
         }
         if (has_refaggr) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -279,8 +291,11 @@ void Optimizer::optimizeAll()
         }
         if (!use_info.hasunknownmem && !use_info.addrescaped) {
             REMARK([&](){
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
-                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
@@ -292,16 +307,22 @@ void Optimizer::optimizeAll()
         // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
         if (has_unboxed && has_ref) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         REMARK([&](){
+            std::string str;
+            llvm::raw_string_ostream rso(str);
+            orig->print(rso);
             return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
-                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", StringRef(str));
         });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref, use_info.allockind);
@@ -380,7 +401,10 @@ void Optimizer::checkInst(CallInst *I)
         std::string suse_info;
         llvm::raw_string_ostream osuse_info(suse_info);
         use_info.dump(osuse_info);
-        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+        std::string str;
+        llvm::raw_string_ostream rso(str);
+        I->print(rso);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", StringRef(str)) << "\n" << ore::NV("UseInfo", osuse_info.str());
     });
 }
 
@@ -905,8 +929,11 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 REMARK([&](){
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    orig_inst->print(rso);
                     return OptimizationRemark(DEBUG_TYPE, "typeof", call)
-                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", StringRef(str));
                 });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to

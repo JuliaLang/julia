@@ -91,12 +91,16 @@ extern jl_mutex_t world_counter_lock;
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
+    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array(_newly_inferred));
+    if (_newly_inferred == jl_nothing)
+        _newly_inferred = NULL;
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
+    if (!newly_inferred)
+        return;
     JL_LOCK(&newly_inferred_mutex);
     size_t end = jl_array_nrows(newly_inferred);
     jl_array_grow_end(newly_inferred, 1);

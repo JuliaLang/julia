@@ -283,14 +283,14 @@ julia> module B
 B
 ```
 
-The statement `using .A, .B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get an error with a hint
 
 ```jldoctest module_manual
 julia> using .A, .B
 
 julia> f
-WARNING: both B and A export "f"; uses of it in module Main must be qualified
 ERROR: UndefVarError: `f` not defined in `Main`
+Hint: It looks like two or more modules export different bindings with this name, resulting in ambiguity. Try explicitly importing it from a particular module, or qualifying the name with the module it should come from.
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:

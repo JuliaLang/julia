@@ -59,6 +59,15 @@ It may take optional keyword arguments:
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
+!!! warning "Passing `data` as scratch space to `IOBuffer` with `write=true` may give unexpected behavior"
+    Once `write` is called on an `IOBuffer`, it is best to consider any
+    previous references to `data` invalidated; in effect `IOBuffer` "owns"
+    this data until a call to `take!`. Any indirect mutations to `data`
+    could lead to undefined behavior by breaking the abstractions expected
+    by `IOBuffer`. If `write=true` the IOBuffer may store data at any
+    offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
+    the IOBuffer might re-allocate the data entirely, which
+    may or may not be visible in any outstanding bindings to `array`.
 # Examples
 ```jldoctest
 julia> io = IOBuffer();

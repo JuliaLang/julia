@@ -597,7 +597,7 @@ const arch_mapping = Dict(
     "armv7l" => "arm(v7l)?", # if we just see `arm-linux-gnueabihf`, we assume it's `armv7l`
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
-    "riscv64" => "riscv64",
+    "riscv64" => "(rv64|riscv64)",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
 # These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
@@ -630,6 +630,9 @@ const arch_march_isa_mapping = let
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
             "a64fx" => get_set("aarch64", "a64fx"),
             "apple_m1" => get_set("aarch64", "apple_m1"),
+        ],
+        "riscv64" => [
+            "riscv64" => get_set("riscv64", "riscv64")
         ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
