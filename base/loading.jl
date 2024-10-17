@@ -1683,6 +1683,8 @@ function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
         opt_level === nothing ? cf.opt_level : opt_level
     )
 end
+# reflecting jloptions.c defaults
+const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2)
 
 function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     f = UInt8(0)
@@ -1694,12 +1696,29 @@ function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     return f
 end
 
+function translate_cache_flags(cacheflags::CacheFlags, defaultflags::CacheFlags)
+    opts = String[]
+    cacheflags.use_pkgimages    != defaultflags.use_pkgimages   && push!(opts, cacheflags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no")
+    cacheflags.debug_level      != defaultflags.debug_level     && push!(opts, "-g$(cacheflags.debug_level)")
+    cacheflags.check_bounds     != defaultflags.check_bounds    && push!(opts, ("--check-bounds=auto", "--check-bounds=yes", "--check-bounds=no")[cacheflags.check_bounds + 1])
+    cacheflags.inline           != defaultflags.inline          && push!(opts, cacheflags.inline ? "--inline=yes" : "--inline=no")
+    cacheflags.opt_level        != defaultflags.opt_level       && push!(opts, "-O$(cacheflags.opt_level)")
+    return opts
+end
+
 function show(io::IO, cf::CacheFlags)
-    print(io, "use_pkgimages = ", cf.use_pkgimages)
-    print(io, ", debug_level = ", cf.debug_level)
-    print(io, ", check_bounds = ", cf.check_bounds)
-    print(io, ", inline = ", cf.inline)
-    print(io, ", opt_level = ", cf.opt_level)
+    print(io, "CacheFlags(")
+    print(io, "; use_pkgimages=")
+    print(io, cf.use_pkgimages)
+    print(io, ", debug_level=")
+    print(io, cf.debug_level)
+    print(io, ", check_bounds=")
+    print(io, cf.check_bounds)
+    print(io, ", inline=")
+    print(io, cf.inline)
+    print(io, ", opt_level=")
+    print(io, cf.opt_level)
+    print(io, ")")
 end
 
 struct ImageTarget
@@ -2953,7 +2972,8 @@ end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout, isext::Bool=false)
+                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, isext::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2996,24 +3016,29 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     precomp_stack = "Base.PkgId[$(join(map(pkg_str, vcat(Base.precompilation_stack, pkg)), ", "))]"
 
+    if output_o === nothing
+        # remove options that make no difference given the other cache options
+        cacheflags = CacheFlags(cacheflags, opt_level=0)
+    end
+    opts = translate_cache_flags(cacheflags, CacheFlags()) # julia_cmd is generated for the running system, and must be fixed if running for precompile instead
     if output_o !== nothing
         @debug "Generating object cache file for $(repr("text/plain", pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
-        opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+        push!(opts, "--output-o", output_o)
     else
         @debug "Generating cache file for $(repr("text/plain", pkg))"
         cpu_target = nothing
-        opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
+    push!(opts, "--output-ji", output)
+    isassigned(PRECOMPILE_TRACE_COMPILE) && push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
 
-    trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[]) --trace-compile-timing` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
-                             $(flags)
-                             $(opts)
-                              --startup-file=no --history-file=no --warn-overwrite=yes
-                              --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                              $trace
-                              -`,
+                               $(flags)
+                               $(opts)
+                               --output-incremental=yes
+                               --startup-file=no --history-file=no --warn-overwrite=yes
+                               $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
+                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
@@ -3131,7 +3156,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, internal_stderr, internal_stdout, isext)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, isext)
 
         if success(p)
             if cache_objects
@@ -4136,5 +4161,5 @@ end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing)) || @assert false
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
-precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false
-precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false

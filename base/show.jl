@@ -324,8 +324,11 @@ end
 
 convert(::Type{IOContext}, io::IOContext) = io
 convert(::Type{IOContext}, io::IO) = IOContext(io, ioproperties(io))::IOContext
+convert(::Type{IOContext{IO_t}}, io::IOContext{IO_t}) where {IO_t} = io
+convert(::Type{IOContext{IO_t}}, io::IO) where {IO_t} = IOContext{IO_t}(io, ioproperties(io))::IOContext{IO_t}
 
 IOContext(io::IO) = convert(IOContext, io)
+IOContext{IO_t}(io::IO) where {IO_t} = convert(IOContext{IO_t}, io)
 
 function IOContext(io::IO, KV::Pair)
     d = ioproperties(io)
@@ -427,7 +430,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : Base.displaysize_(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))

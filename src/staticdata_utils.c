@@ -605,15 +605,15 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
-// OPT_LEVEL should always be the upper bits
 #define OPT_LEVEL 6
+#define DEBUG_LEVEL 1
 
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
     // OOICCDDP
     uint8_t flags = 0;
     flags |= (jl_options.use_pkgimages & 1); // 0-bit
-    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
+    flags |= (jl_options.debug_level & 3) << DEBUG_LEVEL; // 1-2 bit
     flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
     flags |= (jl_options.can_inline & 1) << 5; // 5-bit
     flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
@@ -636,14 +636,13 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actua
         actual_flags &= ~1;
     }
 
-    // 2. Check all flags, except opt level must be exact
-    uint8_t mask = (1 << OPT_LEVEL)-1;
+    // 2. Check all flags, except opt level and debug level must be exact
+    uint8_t mask = (~(3u << OPT_LEVEL) & ~(3u << DEBUG_LEVEL)) & 0x7f;
     if ((actual_flags & mask) != (requested_flags & mask))
         return 0;
-    // 3. allow for higher optimization flags in cache
-    actual_flags >>= OPT_LEVEL;
-    requested_flags >>= OPT_LEVEL;
-    return actual_flags >= requested_flags;
+    // 3. allow for higher optimization and debug level flags in cache to minimize required compile option combinations
+    return ((actual_flags >> OPT_LEVEL) & 3) >= ((requested_flags >> OPT_LEVEL) & 3) &&
+           ((actual_flags >> DEBUG_LEVEL) & 3) >= ((requested_flags >> DEBUG_LEVEL) & 3);
 }
 
 JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
