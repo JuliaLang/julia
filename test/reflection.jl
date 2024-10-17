@@ -1301,7 +1301,12 @@ end
 
 # disallow adding new methods
 f_sealed(x::Int) = x+1
-Base.morespecific!(which(f_frozen, (Int,)))
+f_sealed(x::Integer) = x+2
+@test_throws(
+    ErrorException("unsupported Method to disable"),
+    Base.morespecific!(which(f_sealed, (Int,)))
+)
+Base.morespecific!(which(f_sealed, (Integer,)))
 @test_throws(
     ErrorException("cannot add methods to or modify methods of a frozen function"),
     @eval f_sealed(x::Float64) = x+2
