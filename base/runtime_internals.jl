@@ -1192,12 +1192,12 @@ function delete_method(m::Method)
 end
 
 """
-    seal_methodtable(m::Core.MethodTable)
+    freeze!(mt::Core.MethodTable)
 
 Disallow adding or modifying methods of `mt`.
 """
-function seal_methodtable(m::Core.MethodTable)
-    ccall(:jl_method_table_seal, Cvoid, (Any,), m)
+function freeze!(mt::Core.MethodTable)
+    ccall(:jl_method_table_seal, Cvoid, (Any,), mt)
 end
 
 function get_methodtable(m::Method)
