@@ -11,7 +11,6 @@ MODULE_PASS("LowerPTLSPass", LowerPTLSPass, LowerPTLSPass())
 //Function passes
 #ifdef FUNCTION_PASS
 FUNCTION_PASS("DemoteFloat16", DemoteFloat16Pass, DemoteFloat16Pass())
-FUNCTION_PASS("CombineMulAdd", CombineMulAddPass, CombineMulAddPass())
 FUNCTION_PASS("LateLowerGCFrame", LateLowerGCPass, LateLowerGCPass())
 FUNCTION_PASS("AllocOpt", AllocOptPass, AllocOptPass())
 FUNCTION_PASS("PropagateJuliaAddrspaces", PropagateJuliaAddrspacesPass, PropagateJuliaAddrspacesPass())

@@ -825,7 +825,7 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, alpha::Number, beta::Number) =
+Base.@constprop :aggressive generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, alpha::Number, beta::Number) =
     @stable_muladdmul generic_matvecmul!(C, tA, A, B, MulAddMul(alpha, beta))
 @inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                                     _add::MulAddMul = MulAddMul())
@@ -957,7 +957,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
         ta = t(_add.alpha)
         for i in AxM
             mul!(tmp, pB, view(pA, :, i))
-            C[ci,:] .+= t.(ta .* tmp)
+            @views C[ci,:] .+= t.(ta .* tmp)
             ci += 1
         end
     else

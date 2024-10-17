@@ -56,7 +56,7 @@ typedef struct {
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
-     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
 #define JL_HAVE_ASM
 #endif
 #if 0
