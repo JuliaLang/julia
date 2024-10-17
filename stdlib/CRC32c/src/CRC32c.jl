@@ -7,7 +7,6 @@ See [`CRC32c.crc32c`](@ref) for more information.
 """
 module CRC32c
 
-import Base.FastContiguousSubArray
 import Base: DenseBytes
 
 export crc32c
@@ -16,9 +15,9 @@ export crc32c
     crc32c(data, crc::UInt32=0x00000000)
 
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
-can be used to compute a checksum on data divided into chunks: performing
+an `Array{UInt8}`, a contiguous subarray thereof, an `AbstractVector{UInt8}`, or a `String`.
+Optionally, you can pass a starting `crc` integer to be mixed in with the checksum.
+The `crc` parameter can be used to compute a checksum on data divided into chunks: performing
 `crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
 
@@ -30,11 +29,26 @@ calling [`take!`](@ref).
 
 For a `String`, note that the result is specific to the UTF-8 encoding
 (a different checksum would be obtained from a different Unicode encoding).
-To checksum an `a::Array` of some other bitstype, you can do `crc32c(reinterpret(UInt8,a))`,
+To checksum an `a::AbstractArray` of some other bitstype without padding,
+you can do `crc32c(vec(reinterpret(UInt8,a)))`,
 but note that the result may be endian-dependent.
 """
 function crc32c end
 
+function crc32c(a::AbstractVector{UInt8}, crc::UInt32=0x00000000)
+    # use block size 24576=8192*3, since that is the threshold for
+    # 3-way parallel SIMD code in the underlying jl_crc32c C function.
+    last = lastindex(a)
+    nb = length(a)
+    buf = Memory{UInt8}(undef, Int(min(nb, 24576)))
+    while nb > 0
+        n = min(nb, 24576)
+        copyto!(buf, 1, a, last - nb + 1, n)
+        crc = Base.unsafe_crc32c(buf, n % Csize_t, crc)
+        nb -= n
+    end
+    return crc
+end
 
 function crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     Base._crc32c(a, crc)
@@ -51,6 +65,5 @@ mixed with a starting `crc` integer.  If `nb` is not supplied, then
 """
 crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000) = Base._crc32c(io, nb, crc)
 crc32c(io::IO, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
-crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 
 end
