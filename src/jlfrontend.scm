@@ -199,28 +199,6 @@
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
 
-;; construct default definitions of `eval` for non-bare modules
-;; called by jl_eval_module_expr
-(define (module-default-defs name file line)
-  (jl-expand-to-thunk
-   (let* ((loc  (if (and (eq? file 'none) (eq? line 0)) '() `((line ,line ,file))))
-          (x    (if (eq? name 'x) 'y 'x))
-          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
-     `(block
-       (= (call eval ,x)
-          (block
-           ,@loc
-           (call (core eval) ,name ,x)))
-       (= (call include (:: ,x (top AbstractString)))
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,name ,x)))
-       (= (call include (:: ,mex (top Function)) (:: ,x (top AbstractString)))
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,mex ,name ,x)))))
-   file line))
-
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
   (expand-toplevel-expr (julia-parse str) 'none 0))

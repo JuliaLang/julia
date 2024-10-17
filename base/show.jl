@@ -3338,3 +3338,22 @@ end
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
     show(io, oc)
 end
+
+# Special pretty printing for EvalInto/IncludeInto
+function show(io::IO, ii::IncludeInto)
+    if getglobal(ii.m, :include) === ii
+        print(io, ii.m)
+        print(io, ".include")
+    else
+        show_default(io, ii)
+    end
+end
+
+function show(io::IO, ei::Core.EvalInto)
+    if getglobal(ei.m, :eval) === ei
+        print(io, ei.m)
+        print(io, ".eval")
+    else
+        show_default(io, ei)
+    end
+end
