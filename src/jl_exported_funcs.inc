@@ -305,7 +305,7 @@
     XX(jl_method_instance_add_backedge) \
     XX(jl_method_table_add_backedge) \
     XX(jl_method_table_disable) \
-    XX(jl_method_table_seal) \
+    XX(jl_method_table_set_frozen) \
     XX(jl_method_table_for) \
     XX(jl_method_table_insert) \
     XX(jl_methtable_lookup) \

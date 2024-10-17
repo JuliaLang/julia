@@ -2028,12 +2028,12 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&world_counter_lock);
 }
 
-JL_DLLEXPORT void jl_method_table_seal(jl_methtable_t *mt)
+JL_DLLEXPORT void jl_method_table_set_frozen(jl_methtable_t *mt, int val)
 {
     JL_LOCK(&world_counter_lock);
     JL_LOCK(&mt->writelock);
     size_t world = jl_atomic_load_relaxed(&jl_world_counter);
-    mt->frozen = 1;
+    mt->frozen = val;
     jl_atomic_store_release(&jl_world_counter, world + 1);
     JL_UNLOCK(&mt->writelock);
     JL_UNLOCK(&world_counter_lock);
