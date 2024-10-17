@@ -1194,7 +1194,7 @@ end
 """
     seal_methodtable(m::Core.MethodTable)
 
-Disallow adding or modifyng methods of `mt`.
+Disallow adding or modifying methods of `mt`.
 """
 function seal_methodtable(m::Core.MethodTable)
     ccall(:jl_method_table_seal, Cvoid, (Any,), m)
