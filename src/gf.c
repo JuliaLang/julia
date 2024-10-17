@@ -772,7 +772,7 @@ static int reset_mt_caches(jl_methtable_t *mt, void *env)
 {
     // removes all method caches
     // this might not be entirely safe (GC or MT), thus we only do it very early in bootstrapping
-    if (!mt->frozen) { // make sure not to reset builtin functions
+    if (!mt->frozen) { // make sure not to reset frozen functions
         jl_atomic_store_release(&mt->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
         jl_atomic_store_release(&mt->cache, jl_nothing);
     }
@@ -2023,6 +2023,17 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     jl_atomic_store_relaxed(&method->deleted_world, world);
     jl_atomic_store_relaxed(&methodentry->max_world, world);
     jl_method_table_invalidate(mt, method, world);
+    jl_atomic_store_release(&jl_world_counter, world + 1);
+    JL_UNLOCK(&mt->writelock);
+    JL_UNLOCK(&world_counter_lock);
+}
+
+JL_DLLEXPORT void jl_method_table_seal(jl_methtable_t *mt)
+{
+    JL_LOCK(&world_counter_lock);
+    JL_LOCK(&mt->writelock);
+    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+    mt->frozen = 1;
     jl_atomic_store_release(&jl_world_counter, world + 1);
     JL_UNLOCK(&mt->writelock);
     JL_UNLOCK(&world_counter_lock);

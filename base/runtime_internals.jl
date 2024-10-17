@@ -1182,6 +1182,25 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end
 
+"""
+    delete_method(m::Method)
+
+Make method `m` uncallable and force recompilation of any methods that use(d) it.
+"""
+function delete_method(m::Method)
+    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+end
+
+"""
+    seal_methodtable(m::Core.MethodTable)
+
+Disallow adding or modifyng methods of `mt`.
+"""
+function seal_methodtable(m::Core.MethodTable)
+    ccall(:jl_method_table_seal, Cvoid, (Any,), m)
+end
+seal_methodtable(m::Nothing) = nothing
+
 function get_methodtable(m::Method)
     mt = ccall(:jl_method_get_table, Any, (Any,), m)
     if mt === nothing
