@@ -850,3 +850,5 @@ end
         end
     end
 end
+
+@test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
