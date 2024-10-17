@@ -152,7 +152,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
-    isempty(t) && return show(io, t)
+    (isempty(t) || !haslength(t)) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit = get(io, :limit, false)::Bool
