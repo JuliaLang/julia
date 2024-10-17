@@ -1315,11 +1315,15 @@ end
 end
 
 @testset "CPU time counter" begin
+    start_time = time_ns()
     t = Threads.@spawn begin
         peakflops()
     end
     wait(t)
+    end_time = time_ns()
+    wall_time_delta = end_time - start_time
     @test t.cpu_time_ns > 0
+    @test t.cpu_time_ns < wall_time_delta
 end
 
 @testset "CPU time counter: lots of spawns" begin
