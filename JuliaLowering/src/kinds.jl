@@ -53,6 +53,7 @@ function _register_kinds()
             "local_def" # TODO: Replace with K"local" plus BindingFlags attribute?
             "_while"
             "_do_while"
+            "_typevars" # used for supplying already-allocated `TypeVar`s to `where`
             "with_static_parameters"
             "top"
             "core"

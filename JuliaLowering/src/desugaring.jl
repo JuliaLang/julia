@@ -1253,13 +1253,18 @@ end
 
 function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
     if kind(ex) == K"where" && numchildren(ex) == 2
-        params = kind(ex[2]) == K"braces" ? ex[2][1:end] : ex[2:2]
-        for param in params
-            bounds = analyze_typevar(ctx, param)
-            n = bounds[1]
-            push!(typevar_names, n)
-            push!(typevar_stmts, @ast ctx param [K"local" n])
-            push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
+        vars_kind = kind(ex[2])
+        if vars_kind == K"_typevars"
+            append!(typevar_names, children(ex[2]))
+        else
+            params = vars_kind == K"braces" ? ex[2][1:end] : ex[2:2]
+            for param in params
+                bounds = analyze_typevar(ctx, param)
+                n = bounds[1]
+                push!(typevar_names, n)
+                push!(typevar_stmts, @ast ctx param [K"local" n])
+                push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
+            end
         end
         _split_wheres!(ctx, typevar_names, typevar_stmts, ex[1])
     else
@@ -1374,7 +1379,6 @@ function expand_function_def(ctx, ex, docs)
         end
 
         method_table = nothing_(ctx, name) # TODO: method overlays
-
         @ast ctx ex [K"scope_block"(scope_type=:hard)
             [K"block"
                 [K"=" func_self func_self_val]
@@ -1508,48 +1512,53 @@ function bounds_to_TypeVar(ctx, srcref, bounds)
     ]
 end
 
-# Analyze type signatures such as `A <: B where C`
+# Analyze type signatures such as `A{C} <: B where C`
 #
 # Return (name, typevar_names, typevar_stmts, supertype) where
 # - `name` is the name of the type
-# - `typevar_names` are the names of the types's type parameters
-# - `typevar_stmts` are a list of statements to define a `TypeVar` for each
-#   name in `typevar_names`, to be emitted prior to uses of `typevar_names`
 # - `supertype` is the super type of the type
 function analyze_type_sig(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
         name = ex
-        params = ()
+        type_params = ()
         supertype = @ast ctx ex "Any"::K"core"
     elseif k == K"curly" && numchildren(ex) >= 1 && kind(ex[1]) == K"Identifier"
-        # name{params}
+        # name{type_params}
         name = ex[1]
-        params = ex[2:end]
+        type_params = ex[2:end]
         supertype = @ast ctx ex "Any"::K"core"
     elseif k == K"<:" && numchildren(ex) == 2
         if kind(ex[1]) == K"Identifier"
             name = ex[1]
-            params = ()
+            type_params = ()
             supertype = ex[2]
         elseif kind(ex[1]) == K"curly" && numchildren(ex[1]) >= 1 && kind(ex[1][1]) == K"Identifier"
             name = ex[1][1]
-            params = ex[1][2:end]
+            type_params = ex[1][2:end]
             supertype = ex[2]
         end
     end
     @isdefined(name) || throw(LoweringError(ex, "invalid type signature"))
 
+    return (name, type_params, supertype)
+end
+
+# Expand type_params into (typevar_names, typevar_stmts) where
+# - `typevar_names` are the names of the types's type parameters
+# - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
+#   name in `typevar_names`, to be emitted prior to uses of `typevar_names`
+function expand_typevars(ctx, type_params)
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
-    for param in params
+    for param in type_params
         bounds = analyze_typevar(ctx, param)
         n = bounds[1]
         push!(typevar_names, n)
         push!(typevar_stmts, @ast ctx param [K"local" n])
         push!(typevar_stmts, @ast ctx param [K"=" n bounds_to_TypeVar(ctx, param, bounds)])
     end
-    return (name, typevar_names, typevar_stmts, supertype)
+    return (typevar_names, typevar_stmts)
 end
 
 function expand_abstract_or_primitive_type(ctx, ex)
@@ -1561,7 +1570,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
         @chk numchildren(ex) == 2
         nbits = ex[2]
     end
-    name, typevar_names, typevar_stmts, supertype = analyze_type_sig(ctx, ex[1])
+    name, type_params, supertype = analyze_type_sig(ctx, ex[1])
+    typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
     @ast ctx ex [K"block"
         [K"scope_block"(scope_type=:hard)
@@ -1629,11 +1639,11 @@ function _match_struct_field(x0)
     end
 end
 
-function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, defs, exs)
+function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, constructors, exs)
     for e in exs
         if kind(e) == K"block"
             _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
-                                   defs, children(e))
+                                   constructors, children(e))
         elseif kind(e) == K"="
             throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
         else
@@ -1657,7 +1667,7 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
                 end
             else
                 # Inner constructors
-                push!(defs, e)
+                push!(constructors, e)
             end
         end
     end
@@ -1712,18 +1722,16 @@ function default_inner_constructors(ctx, srcref, outer_struct_var,
                      if isempty(typevar_names)
                          [K"curly" "Type"::K"core" outer_struct_var]
                      else
-                         # `Type{S{X,Y}} where {X, Y}` but with X and Y already allocated `TypeVar`s
-                         body = [K"curly"
-                             "Type"::K"core"
+                         [K"where"
                              [K"curly"
-                                 outer_struct_var 
-                                 typevar_names...
+                                 "Type"::K"core"
+                                 [K"curly"
+                                     outer_struct_var 
+                                     typevar_names...
+                                 ]
                              ]
+                             [K"_typevars" typevar_names...]
                          ]
-                         for v in reverse(typevar_names)
-                             body = [K"call" "UnionAll"::K"core" v body]
-                         end
-                         body
                      end
                 ]
                 field_names...
@@ -1758,6 +1766,36 @@ function default_inner_constructors(ctx, srcref, outer_struct_var,
     end
 end
 
+# Generate outer constructor for structs with type parameters. Eg, for
+#     struct X{U,V}
+#         x::U
+#         y::V
+#     end
+#
+# We basically generate
+#     function (::Type{X})(x::U, y::V) where {U,V}
+#         new(X{U,V}, x, y)
+#     end
+#
+function default_outer_constructor(ctx, srcref, outer_struct_var,
+                                   typevar_names, field_names, field_types)
+    @ast ctx srcref [K"function"
+        [K"where"
+            [K"call" 
+                # We use `::Type{$outer_struct_var}` here rather than just
+                # `struct_name` because outer_struct_var is a binding to a
+                # type - we know we're not creating a new `Function` and
+                # there's no reason to emit the 1-arg `Expr(:method, name)` in
+                # the next phase of expansion.
+                [K"::" [K"curly" "Type"::K"core" outer_struct_var]]
+                [[K"::" n t] for (n,t) in zip(field_names, field_types)]...
+            ]
+            [K"_typevars" typevar_names...]
+        ]
+        [K"new" [K"curly" outer_struct_var typevar_names...] field_names...]
+    ]
+end
+
 function _new_call(ctx, ex, typevar_names, field_names, field_types)
     if has_keywords(ex)
         throw(LoweringError(""))
@@ -1789,16 +1827,17 @@ function expand_struct_def(ctx, ex, docs)
     if kind(type_body) != K"block"
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
-    struct_name, typevar_names, typevar_stmts, supertype = analyze_type_sig(ctx, type_sig)
+    struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
+    typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     field_names = SyntaxList(ctx)
     field_types = SyntaxList(ctx)
     field_attrs = SyntaxList(ctx)
     field_docs = SyntaxList(ctx)
-    defs = SyntaxList(ctx)
+    constructors = SyntaxList(ctx)
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
-                           defs, children(type_body))
+                           constructors, children(type_body))
     is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
-    min_initialized = min(_constructor_min_initalized(defs), length(field_names))
+    min_initialized = min(_constructor_min_initalized(constructors), length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")
     outer_struct_var = alias_binding(ctx, struct_name)
     if !isempty(typevar_names)
@@ -1809,11 +1848,52 @@ function expand_struct_def(ctx, ex, docs)
         end
         prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
     end
-    if isempty(defs)
+
+    field_names_2 = similar_identifiers(ctx, field_names)
+
+    need_outer_constructor = false
+    if isempty(constructors) && !isempty(typevar_names)
+        # To generate an outer constructor each struct type parameter must be
+        # able to be inferred from the list of fields passed as constuctor
+        # arguments.
+        #
+        # More precisely, it must occur in a field type, or in the bounds of a
+        # subsequent type parameter. For example the following won't work
+        #     struct X{T}
+        #         a::Int
+        #     end
+        #     X(a::Int) where T = #... construct X{T} ??
+        #
+        # But the following does
+        #     struct X{T}
+        #         a::T
+        #     end
+        #     X(a::T) where {T} = # construct X{typeof(a)}(a)
+        need_outer_constructor = true
+        for i in 1:length(typevar_names)
+            typevar_name = typevar_names[i]
+            typevar_in_fields = any(contains_identifier(ft, typevar_name) for ft in field_types)
+            if !typevar_in_fields
+                typevar_in_bounds = any(type_params[i+1:end]) do param
+                    # Check the bounds of subsequent type params
+                    (_,lb,ub) = analyze_typevar(ctx, param)
+                    # TODO: flisp lowering tests `lb` here so we also do. But
+                    # in practice this doesn't seem to constrain `typevar_name`
+                    # and the generated constructor doesn't work?
+                    (!isnothing(ub) && contains_identifier(ub, typevar_name)) ||
+                    (!isnothing(lb) && contains_identifier(lb, typevar_name))
+                end
+                if !typevar_in_bounds
+                    need_outer_constructor = false
+                    break
+                end
+            end
+        end
     end
 
-    default_constructor_args = similar_identifiers(ctx, field_names)
-
+    # The following lowering covers several subtle issues in the ordering of
+    # typevars when "redefining" structs.
+    # See https://github.com/JuliaLang/julia/pull/36121
     @ast ctx ex [K"block"
         [K"global" struct_name]
         [K"const" struct_name]
@@ -1868,8 +1948,16 @@ function expand_struct_def(ctx, ex, docs)
                     [K"call" "svec"::K"core" field_types...]
                 ]
                 # Inner constructors
-                default_inner_constructors(ctx, ex, outer_struct_var,
-                                           typevar_names, field_names, field_types)
+                if isempty(constructors)
+                    default_inner_constructors(ctx, ex, outer_struct_var,
+                                               typevar_names, field_names_2, field_types)
+                else
+                    TODO(ex, "Convert new-calls to new-expressions in user-defined constructors")
+                end
+                if need_outer_constructor
+                    default_outer_constructor(ctx, ex, outer_struct_var,
+                                              typevar_names, field_names_2, field_types)
+                end
             ]
         ]
         
@@ -1902,10 +1990,18 @@ function expand_wheres(ctx, ex)
     body = ex[1]
     rhs = ex[2]
     if kind(rhs) == K"braces"
+        # S{X,Y} where {X,Y}
         for r in reverse(children(rhs))
             body = expand_where(ctx, ex, body, r)
         end
+    elseif kind(rhs) == K"_typevars"
+        # Eg, `S{X,Y} where {X, Y}` but with X and Y
+        # already allocated `TypeVar`s
+        for r in reverse(children(rhs))
+            body = @ast ctx ex [K"call" "UnionAll"::K"core" r body]
+        end
     else
+        # S{X} where X
         body = expand_where(ctx, ex, body, rhs)
     end
     body

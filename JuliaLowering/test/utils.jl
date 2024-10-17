@@ -98,12 +98,20 @@ function desugar(mod::Module, src::String)
     JuliaLowering.expand_forms_2(ctx, ex)
 end
 
+function uncomment_description(desc)
+    replace(desc, r"^# ?"m=>"")
+end
+
+function comment_description(desc)
+    replace(desc, r"^"m=>"# ")
+end
+
 function match_ir_test_case(case_str)
-    m = match(r"# *([^\n]*)\n((?:.|\n)*)"m, strip(case_str))
+    m = match(r"(^#(?:.|\n)*?)^([^#](?:.|\n)*)"m, strip(case_str))
     if isnothing(m)
         error("Malformatted IR test case:\n$(repr(case_str))")
     end
-    description = strip(m[1])
+    description = uncomment_description(m[1])
     inout = split(m[2], r"#----*")
     input, output = length(inout) == 2 ? inout          :
                     length(inout) == 1 ? (inout[1], "") :
@@ -153,7 +161,7 @@ function test_ir_cases(filename::AbstractString)
         output = format_ir_for_test(test_mod, input, expect_error)
         @testset "$description" begin
             if output != ref
-                # Do our own error dumping, as @test will 
+                # Do additional error dumping, as @test will not format errors in a nice way
                 @error "Test \"$description\" failed" output=Text(output) ref=Text(ref)
             end
             @test output == ref
@@ -163,8 +171,11 @@ end
 
 """
 Update all IR test cases in `filename` when the IR format has changed.
+
+When `pattern` is supplied, update only those tests where
+`occursin(pattern, description)` is true.
 """
-function refresh_ir_test_cases(filename)
+function refresh_ir_test_cases(filename, pattern=nothing)
     preamble, cases = read_ir_test_cases(filename)
     test_mod = Module(:TestMod)
     Base.include_string(test_mod, preamble)
@@ -173,15 +184,19 @@ function refresh_ir_test_cases(filename)
         println(io, preamble, "\n")
         println(io, "#*******************************************************************************")
     end
-    for (expect_error, description,input,ref) in cases
-        ir = format_ir_for_test(test_mod, input, expect_error)
-        if ir != ref
-            @info "Refreshing test case $(repr(description)) in $filename"
+    for (expect_error, description, input, ref) in cases
+        if isnothing(pattern) || occursin(pattern, description)
+            ir = format_ir_for_test(test_mod, input, expect_error)
+            if ir != ref
+                @info "Refreshing test case $(repr(description)) in $filename"
+            end
+        else
+            ir = ref
         end
         println(io,
             """
             ########################################
-            # $description
+            $(comment_description(description))
             $(strip(input))
             #---------------------
             $ir

@@ -566,6 +566,176 @@ end
 39  (return core.nothing)
 
 ########################################
+# Struct with outer constructor
+struct X{U}
+    x::U
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (= slot₁/U (call core.TypeVar :U))
+4   slot₁/U
+5   (call core.svec %₄)
+6   (call core.svec :x)
+7   (call core.svec)
+8   (call core._structtype TestMod :X %₅ %₆ %₇ false 1)
+9   (= slot₂/X %₈)
+10  (call core._setsuper! %₈ core.Any)
+11  (isdefined TestMod.X)
+12  (gotoifnot %₁₁ label₂₇)
+13  TestMod.X
+14  (call core._equiv_typedef %₁₃ %₈)
+15  (gotoifnot %₁₄ label₂₄)
+16  TestMod.X
+17  (= slot₂/X %₁₆)
+18  TestMod.X
+19  (call top.getproperty %₁₈ :body)
+20  (call top.getproperty %₁₉ :parameters)
+21  (call top.indexed_iterate %₂₀ 1)
+22  (= slot₁/U (call core.getfield %₂₁ 1))
+23  (goto label₂₆)
+24  slot₂/X
+25  (= TestMod.X %₂₄)
+26  (goto label₂₉)
+27  slot₂/X
+28  (= TestMod.X %₂₇)
+29  slot₂/X
+30  slot₁/U
+31  (call core.svec %₃₀)
+32  (call core._typebody! %₂₉ %₃₁)
+33  slot₁/U
+34  TestMod.X
+35  slot₁/U
+36  (call core.apply_type %₃₄ %₃₅)
+37  (call core.apply_type core.Type %₃₆)
+38  (call core.UnionAll %₃₃ %₃₇)
+39  (call core.svec %₃₈ core.Any)
+40  (call core.svec)
+41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
+42  --- method core.nothing %₄₁
+    1   (call core.fieldtype slot₁/#ctor-self# 1)
+    2   slot₂/x
+    3   (= slot₃/tmp %₂)
+    4   slot₃/tmp
+    5   (call core.isa %₄ %₁)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₀)
+    8   slot₃/tmp
+    9   (= slot₃/tmp (call top.convert %₁ %₈))
+    10  slot₃/tmp
+    11  (new slot₁/#ctor-self# %₁₀)
+    12  (return %₁₁)
+43  TestMod.X
+44  (call core.apply_type core.Type %₄₃)
+45  slot₁/U
+46  (call core.svec %₄₄ %₄₅)
+47  slot₁/U
+48  (call core.svec %₄₇)
+49  (call core.svec %₄₆ %₄₈ :($(QuoteNode(:(#= line 1 =#)))))
+50  --- method core.nothing %₄₉
+    1   TestMod.X
+    2   static_parameter₁
+    3   (call core.apply_type %₁ %₂)
+    4   (new %₃ slot₂/x)
+    5   (return %₄)
+51  (return core.nothing)
+
+########################################
+# Struct with outer constructor where one typevar is constrained by the other
+# See https://github.com/JuliaLang/julia/issues/27269)
+struct X{T, S <: Vector{T}}
+    v::Vector{S}
+end
+#---------------------
+1   (global TestMod.X)
+2   (const TestMod.X)
+3   (= slot₃/T (call core.TypeVar :T))
+4   TestMod.Vector
+5   slot₃/T
+6   (call core.apply_type %₄ %₅)
+7   (= slot₂/S (call core.TypeVar :S %₆))
+8   slot₃/T
+9   slot₂/S
+10  (call core.svec %₈ %₉)
+11  (call core.svec :v)
+12  (call core.svec)
+13  (call core._structtype TestMod :X %₁₀ %₁₁ %₁₂ false 1)
+14  (= slot₄/X %₁₃)
+15  (call core._setsuper! %₁₃ core.Any)
+16  (isdefined TestMod.X)
+17  (gotoifnot %₁₆ label₃₇)
+18  TestMod.X
+19  (call core._equiv_typedef %₁₈ %₁₃)
+20  (gotoifnot %₁₉ label₃₄)
+21  TestMod.X
+22  (= slot₄/X %₂₁)
+23  TestMod.X
+24  (call top.getproperty %₂₃ :body)
+25  (call top.getproperty %₂₄ :body)
+26  (call top.getproperty %₂₅ :parameters)
+27  (call top.indexed_iterate %₂₆ 1)
+28  (= slot₃/T (call core.getfield %₂₇ 1))
+29  (= slot₁/iterstate (call core.getfield %₂₇ 2))
+30  slot₁/iterstate
+31  (call top.indexed_iterate %₂₆ 2 %₃₀)
+32  (= slot₂/S (call core.getfield %₃₁ 1))
+33  (goto label₃₆)
+34  slot₄/X
+35  (= TestMod.X %₃₄)
+36  (goto label₃₉)
+37  slot₄/X
+38  (= TestMod.X %₃₇)
+39  slot₄/X
+40  TestMod.Vector
+41  slot₂/S
+42  (call core.apply_type %₄₀ %₄₁)
+43  (call core.svec %₄₂)
+44  (call core._typebody! %₃₉ %₄₃)
+45  slot₃/T
+46  slot₂/S
+47  TestMod.X
+48  slot₃/T
+49  slot₂/S
+50  (call core.apply_type %₄₇ %₄₈ %₄₉)
+51  (call core.apply_type core.Type %₅₀)
+52  (call core.UnionAll %₄₆ %₅₁)
+53  (call core.UnionAll %₄₅ %₅₂)
+54  (call core.svec %₅₃ core.Any)
+55  (call core.svec)
+56  (call core.svec %₅₄ %₅₅ :($(QuoteNode(:(#= line 1 =#)))))
+57  --- method core.nothing %₅₆
+    1   (call core.fieldtype slot₁/#ctor-self# 1)
+    2   slot₂/v
+    3   (= slot₃/tmp %₂)
+    4   slot₃/tmp
+    5   (call core.isa %₄ %₁)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₀)
+    8   slot₃/tmp
+    9   (= slot₃/tmp (call top.convert %₁ %₈))
+    10  slot₃/tmp
+    11  (new slot₁/#ctor-self# %₁₀)
+    12  (return %₁₁)
+58  TestMod.X
+59  (call core.apply_type core.Type %₅₈)
+60  TestMod.Vector
+61  slot₂/S
+62  (call core.apply_type %₆₀ %₆₁)
+63  (call core.svec %₅₉ %₆₂)
+64  slot₃/T
+65  slot₂/S
+66  (call core.svec %₆₄ %₆₅)
+67  (call core.svec %₆₃ %₆₆ :($(QuoteNode(:(#= line 1 =#)))))
+68  --- method core.nothing %₆₇
+    1   TestMod.X
+    2   static_parameter₁
+    3   static_parameter₂
+    4   (call core.apply_type %₁ %₂ %₃)
+    5   (new %₄ slot₂/v)
+    6   (return %₅)
+69  (return core.nothing)
+
+########################################
 # Error: Struct not at top level
 function f()
     struct X
