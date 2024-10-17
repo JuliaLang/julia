@@ -1306,7 +1306,3 @@ Base.freeze!(Base.methods(f_frozen).mt)
     ErrorException("cannot add methods to or modify methods of a frozen function"),
     @eval f_frozen(x::Float64) = x+2
 )
-Base.unfreeze!(Base.methods(f_frozen).mt)
-f_frozen(x::Float64) = x+2
-@test f_frozen(1) == 2
-@test f_frozen(1.0) == 3.0

@@ -1183,15 +1183,6 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
 end
 
 """
-    delete_method(m::Method)
-
-Make method `m` uncallable and force recompilation of any methods that use(d) it.
-"""
-function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
-end
-
-"""
     freeze!(mt::Core.MethodTable)
 
 Disallow adding or modifying methods of `mt`.
@@ -1200,17 +1191,6 @@ See also [`unfreeze!(mt)`](@ref unfreeze!).
 """
 function freeze!(mt::Core.MethodTable)
     ccall(:jl_method_table_set_frozen, Cvoid, (Any, Cint), mt, 1)
-end
-
-"""
-    unfreeze!(mt::Core.MethodTable)
-
-Allow adding or modifying methods of `mt`.
-
-See also [`freeze!(mt)`](@ref freeze!).
-"""
-function unfreeze!(mt::Core.MethodTable)
-    ccall(:jl_method_table_set_frozen, Cvoid, (Any, Cint), mt, 0)
 end
 
 function get_methodtable(m::Method)
