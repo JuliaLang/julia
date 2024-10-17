@@ -115,6 +115,12 @@ Base.checkindex
 Base.elsize
 ```
 
+The following functions can be used to handle arrays with custom indices:
+```@docs
+Base.require_one_based_indexing
+Base.has_offset_axes
+```
+
 ## Views (SubArrays and other view types)
 
 A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually
