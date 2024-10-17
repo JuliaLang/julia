@@ -154,20 +154,22 @@ Notes for various architectures:
 
 Building Julia requires that the following software be installed:
 
-- **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 7.1) or **[Clang][clang]** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
-- **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
-- **[python]** (>=2.7)          — needed to build LLVM.
-- **[gfortran]**                — compiling and linking Fortran libraries.
-- **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
-- **[m4]**                      — needed to build GMP.
-- **[awk]**                     — helper tool for Makefiles.
-- **[patch]**                   — for modifying source code.
-- **[cmake]** (>= 3.4.3)        — needed to build `libgit2`.
-- **[pkg-config]**              — needed to build `libgit2` correctly, especially for proxy support.
-- **[powershell]** (>= 3.0)     — necessary only on Windows.
-- **[which]**                   — needed for checking build dependencies.
+- GNU [make](https://www.gnu.org/software/make) — building dependencies
+- [GCC](https://gcc.gnu.org) (>= 7.1) — GNU Compiler Collection
+  - or [Clang](https://clang.llvm.org) (>= 5.0, >= 9.3 for Apple Clang)
+- [libatomic](https://gcc.gnu.org) — library for atomic operations
+- [python](https://www.python.org/) (>=2.7) — needed to build LLVM
+- [gfortran](https://gcc.gnu.org/fortran/) — compiling and linking Fortran libraries
+- [perl](https://www.perl.org) — preprocessing of header files of libraries
+- [wget](https://www.gnu.org/software/wget) — to automatically download external libraries
+  - or [curl](https://curl.haxx.se), or [fetch](https://www.freebsd.org/cgi/man.cgi?fetch(1)) (FreeBSD)
+- [m4](https://www.gnu.org/software/m4) — needed to build GMP
+- [awk](https://www.gnu.org/software/gawk) — helper tool for Makefiles
+- [patch](https://savannah.gnu.org/projects/patch/) — for modifying source code
+- [cmake](https://www.cmake.org) (>= 3.4.3) — needed to build `libgit2`
+- [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) — needed to build `libgit2` correctly, especially for proxy support
+- [powershell](https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview) (>= 3.0) — necessary only on Windows
+- [which](https://savannah.gnu.org/projects/which)  — needed for checking build dependencies
 
 On Debian-based distributions (e.g. Ubuntu), you can easily install them with `apt-get`:
 ```
@@ -180,61 +182,26 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (15.0 + [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)) — compiler infrastructure (see [note below](#llvm)).
-- **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
-- **[OpenLibm]**             — portable libm library containing elementary math functions.
-- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)]
-- **[LAPACK]**               — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[SuiteSparse]**          — library of linear algebra routines for sparse matrices.
-- **[PCRE]**                 — Perl-compatible regular expressions library.
-- **[GMP]**                  — GNU multiple precision arithmetic library, needed for `BigInt` support.
-- **[MPFR]**                 — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]**              — Git linkable library, used by Julia's package manager.
-- **[curl]**                 — libcurl provides download and proxy support.
-- **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
-- **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
-- **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
-- **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
-
-[GNU make]:     https://www.gnu.org/software/make
-[patch]:        https://www.gnu.org/software/patch
-[wget]:         https://www.gnu.org/software/wget
-[m4]:           https://www.gnu.org/software/m4
-[awk]:          https://www.gnu.org/software/gawk
-[gcc]:          https://gcc.gnu.org
-[clang]:        https://clang.llvm.org
-[python]:       https://www.python.org/
-[gfortran]:     https://gcc.gnu.org/fortran/
-[curl]:         https://curl.haxx.se
-[fetch]:        https://www.freebsd.org/cgi/man.cgi?fetch(1)
-[perl]:         https://www.perl.org
-[cmake]:        https://www.cmake.org
-[OpenLibm]:     https://github.com/JuliaLang/openlibm
-[DSFMT]:        https://github.com/MersenneTwister-Lab/dSFMT
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       https://www.netlib.org/lapack
-[MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  https://people.engr.tamu.edu/davis/suitesparse.html
-[PCRE]:         https://www.pcre.org
-[LLVM]:         https://www.llvm.org
-[LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
-[FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          https://gmplib.org
-[MPFR]:         https://www.mpfr.org
-[libuv]:        https://github.com/JuliaLang/libuv
-[libgit2]:      https://libgit2.org/
-[utf8proc]:     https://julialang.org/utf8proc/
-[libunwind]:    https://www.nongnu.org/libunwind
-[libssh2]:      https://www.libssh2.org
-[mbedtls]:      https://tls.mbed.org/
-[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
-[powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
-[which]:        https://carlowood.github.io/which/
-[ITTAPI]:       https://github.com/intel/ittapi
+- [LLVM](https://www.llvm.org) (15.0) — compiler infrastructure (see [note below](#llvm))
+  - [patches](https://github.com/JuliaLang/llvm-project/tree/julia-release/15.x)
+- [FemtoLisp](https://github.com/JeffBezanson/femtolisp) — packaged with Julia source, and used to implement the compiler front-end
+- [libuv](https://github.com/JuliaLang/libuv) (custom fork) — cross-platform asynchronous I/O
+- [OpenLibm](https://github.com/JuliaMath/openlibm) — portable, open source libm implementation
+- [DSFMT](https://github.com/MersenneTwister-Lab/dSFMT) — fast Mersenne Twister pseudorandom number generator library
+- [OpenBLAS](https://github.com/OpenMathLib/OpenBLAS) — optimized Basic Linear Algebra Subprograms (BLAS) library
+- [LAPACK](https://www.netlib.org/lapack) — library of Fortran subroutines [Linear Algebra Package (LAPACK)]
+- [MKL](https://software.intel.com/en-us/articles/intel-mkl) (optional) — OpenBLAS and LAPACK may be replaced by Intel's MKL library
+- [SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) — suite of sparse matrix algorithms
+- [PCRE2](https://www.pcre.org) — Perl-compatible regular expressions library
+- [GMP](https://gmplib.org) — library for arbitrary precision arithmetic, needed for `BigInt` support
+- [MPFR](https://www.mpfr.org) — library for multiple-precision floating-point computations, needed for `BigFloat` support
+- [libgit2](https://libgit2.org/) — re-entrant linkable library, used by Julia's package manager
+- [curl](https://curl.haxx.se) — libcurl provides download and proxy support
+- [libssh2](https://libssh2.org/) — client-side library implementing the SSH2 protocol, used for packages with SSH remotes
+- [mbedtls](https://github.com/Mbed-TLS/mbedtls) — readable and flexible TLS library, used by libssh2
+- [utf8proc](https://github.com/JuliaStrings/utf8proc) — small library for processing UTF-8 Unicode data
+- LLVM [libunwind](https://github.com/llvm/llvm-project/tree/main/libunwind) — fork of [libunwind](https://www.nongnu.org/libunwind)
+- [ITTAPI](https://github.com/intel/ittapi) — Intel's Instrumentation and Tracing Technology (ITT) and Just-In-Time (JIT) API
 
 ## Build dependencies
 
