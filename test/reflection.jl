@@ -1303,6 +1303,6 @@ end
 f_sealed(x::Int64) = x+1
 Base.seal_methodtable(Base.methods(f_sealed).mt)
 @test_throws(
-    ErrorException("cannot add methods to or modify methods of a sealed function"),
+    ErrorException("cannot add methods to or modify methods of a frozen function"),
     @eval f_sealed(x::Float64) = x+2
 )

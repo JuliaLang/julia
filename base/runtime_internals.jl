@@ -1199,7 +1199,7 @@ Disallow adding or modifying methods of `mt`.
 See also [`unfreeze!(mt)`](@ref unfreeze!).
 """
 function freeze!(mt::Core.MethodTable)
-    ccall(:jl_method_table_set_frozen, Cvoid, (Any,Cint), mt, 1)
+    ccall(:jl_method_table_set_frozen, Cvoid, (Any, Cint), mt, 1)
 end
 
 """
@@ -1210,7 +1210,7 @@ Allow adding or modifying methods of `mt`.
 See also [`freeze!(mt)`](@ref freeze!).
 """
 function unfreeze!(mt::Core.MethodTable)
-    ccall(:jl_method_table_set_frozen, Cvoid, (Any,Cint), mt, 0)
+    ccall(:jl_method_table_set_frozen, Cvoid, (Any, Cint), mt, 0)
 end
 
 function get_methodtable(m::Method)
