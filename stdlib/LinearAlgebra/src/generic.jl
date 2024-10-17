@@ -33,18 +33,22 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
-@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
+function MulAddMul{ais1,bis0}(alpha::TA, beta::TB) where {ais1,bis0,TA,TB}
+    MulAddMul{ais1,bis0,TA,TB}(alpha,beta)
+end
+
+@inline function MulAddMul(alpha, beta)
     if isone(alpha)
         if iszero(beta)
-            return MulAddMul{true,true,TA,TB}(alpha, beta)
+            return MulAddMul{true,true}(alpha, beta)
         else
-            return MulAddMul{true,false,TA,TB}(alpha, beta)
+            return MulAddMul{true,false}(alpha, beta)
         end
     else
         if iszero(beta)
-            return MulAddMul{false,true,TA,TB}(alpha, beta)
+            return MulAddMul{false,true}(alpha, beta)
         else
-            return MulAddMul{false,false,TA,TB}(alpha, beta)
+            return MulAddMul{false,false}(alpha, beta)
         end
     end
 end
@@ -83,16 +87,16 @@ macro stable_muladdmul(expr)
             local bsym = e.args[3]
 
             local e_sub11 = copy(expr)
-            e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub11.args[i] = :(MulAddMul{true, true}($asym, $bsym))
 
             local e_sub10 = copy(expr)
-            e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub10.args[i] = :(MulAddMul{true, false}($asym, $bsym))
 
             local e_sub01 = copy(expr)
-            e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub01.args[i] = :(MulAddMul{false, true}($asym, $bsym))
 
             local e_sub00 = copy(expr)
-            e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+            e_sub00.args[i] = :(MulAddMul{false, false}($asym, $bsym))
 
             local e_out = quote
                 if isone($asym)
@@ -115,7 +119,7 @@ macro stable_muladdmul(expr)
     throw(ArgumentError("No valid MulAddMul expression found."))
 end
 
-MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
+MulAddMul() = MulAddMul{true,true}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
 @inline (p::MulAddMul{false})(x) = x * p.alpha
