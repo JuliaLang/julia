@@ -256,7 +256,7 @@ typedef struct _jl_debuginfo_t {
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
+// the following mirrors `struct EffectsOverride` in `base/expr.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint16_t ipo_consistent          : 1;
