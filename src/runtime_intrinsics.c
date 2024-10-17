@@ -1271,54 +1271,73 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
 
 // floating point
 
-#define bi_fintrinsic(OP, name) \
-    bi_intrinsic_bfloat(OP, name) \
-    bi_intrinsic_half(OP, name) \
-    bi_intrinsic_ctype(OP, name, 32, float) \
-    bi_intrinsic_ctype(OP, name, 64, double) \
-JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+#define bi_fintrinsic(OP, op_name) \
+    bi_intrinsic_bfloat(OP, op_name) \
+    bi_intrinsic_half(OP, op_name) \
+    bi_intrinsic_ctype(OP, op_name, 32, float) \
+    bi_intrinsic_ctype(OP, op_name, 64, double) \
+JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
+    jl_value_t *et = ty; \
+    int np=1; \
     if (jl_typeof(b) != ty) \
-        jl_error(#name ": types of a and b must match"); \
-    if (!jl_is_primitivetype(ty)) \
-        jl_error(#name ": values are not primitive types"); \
-    int sz = jl_datatype_size(ty); \
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
+        jl_error(#op_name ": types of a and b must match"); \
+    if (jl_is_primitivetype(ty)){}\
+    else if (is_ntuple_type(ty) && jl_nparams(ty) > 0) \
+    { \
+        et = jl_tparam0(ty); \
+        np = jl_nparams(ty); \
+        if (((jl_datatype_t*)et)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(et, 0))){} \
+        else \
+            jl_error(#op_name ": eltype is not a VecElement of a primitive type"); \
+    }\
+    else \
+        jl_error(#op_name ": values are not primitive types"); \
+    int sz = jl_datatype_size(et); \
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, sz*np, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
     switch (sz) { \
     /* choose the right size c-type operation */ \
     case 2: \
         if ((jl_datatype_t*)ty == jl_float16_type) \
-            jl_##name##16(16, pa, pb, pr); \
+            jl_##op_name##16(16*np, pa, pb, pr); \
         else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
-            jl_##name##bf16(16, pa, pb, pr); \
+            jl_##op_name##bf16(16*np, pa, pb, pr); \
         break; \
     case 4: \
-        jl_##name##32(32, pa, pb, pr); \
+        jl_##op_name##32(32*np, pa, pb, pr); \
         break; \
     case 8: \
-        jl_##name##64(64, pa, pb, pr); \
+        jl_##op_name##64(64*np, pa, pb, pr); \
         break; \
     default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
+        jl_error(#op_name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
     } \
     return newv; \
 }
 
-#define bool_fintrinsic(OP, name) \
-    bool_intrinsic_bfloat(OP, name) \
-    bool_intrinsic_half(OP, name) \
-    bool_intrinsic_ctype(OP, name, 32, float) \
-    bool_intrinsic_ctype(OP, name, 64, double) \
-JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
+#define bool_fintrinsic(OP, op_name) \
+    bool_intrinsic_bfloat(OP, op_name) \
+    bool_intrinsic_half(OP, op_name) \
+    bool_intrinsic_ctype(OP, op_name, 32, float) \
+    bool_intrinsic_ctype(OP, op_name, 64, double) \
+JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty) \
-        jl_error(#name ": types of a and b must match"); \
-    if (!jl_is_primitivetype(ty)) \
-        jl_error(#name ": values are not primitive types"); \
+        jl_error(#op_name ": types of a and b must match"); \
+    if (jl_is_primitivetype(ty)) {}\
+    else if (is_ntuple_type(ty) && jl_nparams(ty) > 0) \
+    { \
+        jl_value_t *et = jl_tparam(ty, 0); \
+        if (((jl_datatype_t*)et)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(et, 0))){} \
+        else \
+            jl_error(#op_name ": eltype is not a VecElement of a primitive type"); \
+    }\
+    else \
+        jl_error(#op_name ": values are not primitive types"); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b); \
     int sz = jl_datatype_size(ty); \
     int cmp; \
@@ -1326,35 +1345,43 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     /* choose the right size c-type operation */ \
     case 2: \
         if ((jl_datatype_t*)ty == jl_float16_type) \
-            cmp = jl_##name##16(16, pa, pb); \
+            cmp = jl_##op_name##16(16, pa, pb); \
         else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
-            cmp = jl_##name##bf16(16, pa, pb); \
+            cmp = jl_##op_name##bf16(16, pa, pb); \
         break; \
     case 4: \
-        cmp = jl_##name##32(32, pa, pb); \
+        cmp = jl_##op_name##32(32, pa, pb); \
         break; \
     case 8: \
-        cmp = jl_##name##64(64, pa, pb); \
+        cmp = jl_##op_name##64(64, pa, pb); \
         break; \
     default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64"); \
+        jl_error(#op_name ": runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64"); \
     } \
     return cmp ? jl_true : jl_false; \
 }
 
-#define ter_fintrinsic(OP, name) \
-    ter_intrinsic_bfloat(OP, name) \
-    ter_intrinsic_half(OP, name) \
-    ter_intrinsic_ctype(OP, name, 32, float) \
-    ter_intrinsic_ctype(OP, name, 64, double) \
-JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
+#define ter_fintrinsic(OP, op_name) \
+    ter_intrinsic_bfloat(OP, op_name) \
+    ter_intrinsic_half(OP, op_name) \
+    ter_intrinsic_ctype(OP, op_name, 32, float) \
+    ter_intrinsic_ctype(OP, op_name, 64, double) \
+JL_DLLEXPORT jl_value_t *jl_##op_name(jl_value_t *a, jl_value_t *b, jl_value_t *c) \
 { \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
-        jl_error(#name ": types of a, b, and c must match"); \
-    if (!jl_is_primitivetype(ty)) \
-        jl_error(#name ": values are not primitive types"); \
+        jl_error(#op_name ": types of a, b, and c must match"); \
+    if (jl_is_primitivetype(ty)) {}\
+    else if (is_ntuple_type(ty) && jl_nparams(ty) > 0) \
+    { \
+        jl_value_t *et = jl_tparam(ty, 0); \
+        if (((jl_datatype_t*)et)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(et, 0))){} \
+        else \
+            jl_error(#op_name ": eltype is not a VecElement of a primitive type"); \
+    }\
+    else \
+        jl_error(#op_name ": values are not primitive types"); \
     int sz = jl_datatype_size(ty); \
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
@@ -1362,18 +1389,18 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
     /* choose the right size c-type operation */ \
     case 2: \
         if ((jl_datatype_t*)ty == jl_float16_type) \
-            jl_##name##16(16, pa, pb, pc, pr); \
+            jl_##op_name##16(16, pa, pb, pc, pr); \
         else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
-            jl_##name##bf16(16, pa, pb, pc, pr); \
+            jl_##op_name##bf16(16, pa, pb, pc, pr); \
         break; \
     case 4: \
-        jl_##name##32(32, pa, pb, pc, pr); \
+        jl_##op_name##32(32, pa, pb, pc, pr); \
         break; \
     case 8: \
-        jl_##name##64(64, pa, pb, pc, pr); \
+        jl_##op_name##64(64, pa, pb, pc, pr); \
         break; \
     default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
+        jl_error(#op_name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
     } \
     return newv; \
 }
