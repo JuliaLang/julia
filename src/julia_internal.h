@@ -372,6 +372,8 @@ extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
@@ -517,30 +519,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
-
-
-// Size does NOT include the type tag!!
-STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
-{
-    jl_value_t *v;
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    if (sz <= GC_MAX_SZCLASS) {
-        int pool_id = jl_gc_szclass(allocsz);
-        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
-        int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_small_alloc_noinline` instead of `jl_gc_small_alloc` to avoid double-counting in
-        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
-    }
-    else {
-        if (allocsz < sz) // overflow in adding offs, size was "negative"
-            jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc_noinline(ptls, allocsz);
-    }
-    jl_set_typeof(v, ty);
-    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
-    return v;
-}
 
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
