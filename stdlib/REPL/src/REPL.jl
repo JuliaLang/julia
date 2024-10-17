@@ -525,7 +525,7 @@ function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
     end
 
     # We won't hit the limit so we'll write the full `nb` bytes
-    bytes_written = Base.unsafe_write(limiter.io, p, nb)
+    bytes_written = Base.unsafe_write(limiter.io, p, nb)::Union{Int,UInt}
     limiter.n += bytes_written
     return bytes_written
 end
