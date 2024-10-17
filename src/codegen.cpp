@@ -1541,7 +1541,7 @@ static const auto gc_loaded_v2_func = new JuliaFunction<>{
 
 static const auto gc_loaded_v4_func = new JuliaFunction<>{
     "julia.gc_loaded.v4",
-    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 2); },
+    [](LLVMContext &C) { return gc_loaded_vN_ft(C, 4); },
     gc_loaded_v2_func->_attrs,
 };
 
