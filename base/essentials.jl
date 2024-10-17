@@ -384,11 +384,9 @@ default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-function getindex(A::GenericMemory, i::Int)
-    @_noub_if_noinbounds_meta
-    @boundscheck Core.Intrinsics.ult_int(i, A.length)
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
-end
+# bootstrap version for Memory{Any}
+getindex(A::Memory{Any}, i::Int) = (@_noub_if_noinbounds_meta;
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -908,6 +906,12 @@ macro goto(name::Symbol)
 end
 
 # linear indexing
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    @boundscheck Core.Intrinsics.ult_int(i, A.length) || throw_boundserror(A, (i,))
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
+
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
     @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
