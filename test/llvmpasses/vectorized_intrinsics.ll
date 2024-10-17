@@ -5,8 +5,6 @@
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='loop-vectorize' -force-vector-width=8 -S %s | FileCheck %s --check-prefixes=CHECKV8
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='loop-vectorize' -force-vector-width=16 -S %s | FileCheck %s --check-prefixes=CHECKV16
 
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='loop-vectorize' -scalable-vectorization=on -force-target-supports-scalable-vectors=true -force-vector-width=2 -S %s | FileCheck %s --check-prefixes=CHECKSCAL
-
 source_filename = "vectorized_intrinsics.ll"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128-ni:10:11:12:13"
 target triple = "x86_64-unknown-linux-gnu"
@@ -33,10 +31,10 @@ L30:                                              ; preds = %L30, %L13.preheader
   %memoryref_data = load ptr, ptr addrspace(11) %memory_data_ptr, align 8, !tbaa !15, !invariant.load !17, !alias.scope !18, !noalias !19, !nonnull !17
   %memoryref_offset = shl i64 %value_phi3, 3
   %3 = call ptr addrspace(13) @julia.gc_loaded(ptr addrspace(10) %memoryref_mem, ptr %memoryref_data)
-  ; CHECKV2: call <2 x ptr addrspace(13)> @julia.gc_loaded.v2
-  ; CHECKV4: call <4 x ptr addrspace(13)> @julia.gc_loaded.v4
-  ; CHECKV8: call <8 x ptr addrspace(13)> @julia.gc_loaded.v8
-  ; CHECKV16: call <16 x ptr addrspace(13)> @julia.gc_loaded.v16
+  ; CHECKV2: call <2 x ptr addrspace(13)> @julia.gc_loaded.v2(ptr addrspace(10) %memoryref_mem, <2 x ptr>
+  ; CHECKV4: call <4 x ptr addrspace(13)> @julia.gc_loaded.v4(ptr addrspace(10) %memoryref_mem, <4 x ptr>
+  ; CHECKV8: call <8 x ptr addrspace(13)> @julia.gc_loaded.v8(ptr addrspace(10) %memoryref_mem, <8 x ptr>
+  ; CHECKV16: call <16 x ptr addrspace(13)> @julia.gc_loaded.v16(ptr addrspace(10) %memoryref_mem, <16 x ptr>
   %4 = getelementptr i8, ptr addrspace(13) %3, i64 %memoryref_offset
   %memoryref_data6 = getelementptr i8, ptr addrspace(13) %4, i64 -8
   store i64 4607182418800017408, ptr addrspace(13) %memoryref_data6, align 8, !tbaa !20, !alias.scope !22, !noalias !23
@@ -57,19 +55,19 @@ declare ptr @julia.get_pgcstack()
 declare noundef nonnull ptr addrspace(13) @julia.gc_loaded(ptr addrspace(10) nocapture noundef nonnull readnone, ptr noundef nonnull readnone) #1
 
 ; Function Attrs: norecurse nosync nounwind speculatable willreturn memory(none)
-declare noundef <2 x ptr addrspace(13)> @julia.gc_loaded.v2(<2 x ptr addrspace(10)> noundef, <2 x ptr> noundef) #2
+declare noundef <2 x ptr addrspace(13)> @julia.gc_loaded.v2(ptr addrspace(10) nocapture noundef nonnull readnone, <2 x ptr> noundef) #2
 
 ; Function Attrs: norecurse nosync nounwind speculatable willreturn memory(none)
-declare noundef <4 x ptr addrspace(13)> @julia.gc_loaded.v4(<4 x ptr addrspace(10)> noundef, <4 x ptr> noundef) #2
+declare noundef <4 x ptr addrspace(13)> @julia.gc_loaded.v4(ptr addrspace(10) nocapture noundef nonnull readnone, <4 x ptr> noundef) #2
 
 ; Function Attrs: norecurse nosync nounwind speculatable willreturn memory(none)
-declare noundef <8 x ptr addrspace(13)> @julia.gc_loaded.v8(<8 x ptr addrspace(10)> noundef, <8 x ptr> noundef) #2
+declare noundef <8 x ptr addrspace(13)> @julia.gc_loaded.v8(ptr addrspace(10) nocapture noundef nonnull readnone, <8 x ptr> noundef) #2
 
 ; Function Attrs: norecurse nosync nounwind speculatable willreturn memory(none)
-declare noundef <16 x ptr addrspace(13)> @julia.gc_loaded.v16(<16 x ptr addrspace(10)> noundef, <16 x ptr> noundef) #2
+declare noundef <16 x ptr addrspace(13)> @julia.gc_loaded.v16(ptr addrspace(10) nocapture noundef nonnull readnone, <16 x ptr> noundef) #2
 
 attributes #0 = { "frame-pointer"="all" "julia.fsig"="var\22#5\22(FixedSizeArrays.FixedSizeArray{Float64, 1, Memory{Float64}})" "probe-stack"="inline-asm" }
-attributes #1 = { norecurse nosync nounwind speculatable willreturn memory(none) "vector-function-abi-variant"="_ZGV_LLVM_N2vv_julia.gc_loaded(julia.gc_loaded.v2),_ZGV_LLVM_N4vv_julia.gc_loaded(julia.gc_loaded.v4),_ZGV_LLVM_N8vv_julia.gc_loaded(julia.gc_loaded.v8),_ZGV_LLVM_N16vv_julia.gc_loaded(julia.gc_loaded.v16)" }
+attributes #1 = { norecurse nosync nounwind speculatable willreturn memory(none) "vector-function-abi-variant"="_ZGV_LLVM_N2uv_julia.gc_loaded(julia.gc_loaded.v2),_ZGV_LLVM_N4uv_julia.gc_loaded(julia.gc_loaded.v4),_ZGV_LLVM_N8uv_julia.gc_loaded(julia.gc_loaded.v8),_ZGV_LLVM_N16uv_julia.gc_loaded(julia.gc_loaded.v16)" }
 attributes #2 = { norecurse nosync nounwind speculatable willreturn memory(none) }
 
 !llvm.module.flags = !{!0, !1, !2}
