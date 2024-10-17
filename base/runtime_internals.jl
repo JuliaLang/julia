@@ -967,6 +967,19 @@ morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type
 morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
+    morespecific!(m::Method)
+
+Disallow adding methods more specific than `m`.
+"""
+function morespecific!(m::Method)
+    mt = get_methodtable(m)
+    # check that all Methods in this table are morespecific than m
+    # so we might avoid disabling a table that might get used for more than just subsets of m
+    all(m2 -> m === m2 || morespecific(m2, m), MethodList(mt)) || error("unsupported Method to disable")
+    setfield!(mt, nfields(mt), 0x1)
+end
+
+"""
     fieldoffset(type, i)
 
 The byte offset of field `i` of a type relative to the data start. For example, we could
@@ -1180,21 +1193,6 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
     ft = Core.Typeof(f)
     u = unwrap_unionall(argtypes)::DataType
     return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
-end
-
-"""
-    freeze!(mt::Core.MethodTable)
-
-Disallow adding or modifying methods of `mt`.
-
-See also [`unfreeze!(mt)`](@ref unfreeze!).
-"""
-function morespecific!(m::Method)
-    mt = get_methodtable(m)
-    # check that all Methods in this table are morespecific than m
-    # so we might avoid disabling a table that might get used for more than just subsets of m
-    all(m2 -> m === m2 || morespecific(m2, m), MethodList(mt)) || error("unsupported Method to disable")
-    setfield!(mt, nfields(mt), 0x1)
 end
 
 function get_methodtable(m::Method)
