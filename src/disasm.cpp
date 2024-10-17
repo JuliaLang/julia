@@ -1058,6 +1058,8 @@ static void jl_dump_asm_internal(
                 if (insSize == 0) // skip illegible bytes
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
+#elif defined(_CPU_RISCV64_)
+                    insSize = 2; // instructions can be 2 bytes when compressed
 #else
                     insSize = 1; // attempt to slide 1 byte forward
 #endif

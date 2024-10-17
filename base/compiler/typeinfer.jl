@@ -1,9 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Tracking of newly-inferred CodeInstances during precompilation
-const track_newly_inferred = RefValue{Bool}(false)
-const newly_inferred = CodeInstance[]
-
 """
 The module `Core.Compiler.Timings` provides a simple implementation of nested timers that
 can be used to measure the exclusive time spent inferring each method instance that is
@@ -264,12 +260,6 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     if cache_results
         code_cache(interp)[mi] = result.ci
-        if track_newly_inferred[]
-            m = mi.def
-            if isa(m, Method) && m.module != Core
-                ccall(:jl_push_newly_inferred, Cvoid, (Any,), result.ci)
-            end
-        end
     end
     return cache_results
 end

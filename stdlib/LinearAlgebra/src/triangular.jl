@@ -208,45 +208,33 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
-Base.isassigned(A::UnitLowerTriangular, i::Int, j::Int) =
-    i > j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
-    i < j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? isassigned(A.data, i, j) : true
+_shouldforwardindex(U::UpperTriangular, row::Integer, col::Integer) = row <= col
+_shouldforwardindex(U::LowerTriangular, row::Integer, col::Integer) = row >= col
+_shouldforwardindex(U::UnitUpperTriangular, row::Integer, col::Integer) = row < col
+_shouldforwardindex(U::UnitLowerTriangular, row::Integer, col::Integer) = row > col
 
-Base.isstored(A::UnitLowerTriangular, i::Int, j::Int) =
-    i > j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
-    i < j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? Base.isstored(A.data, i, j) : false
+Base.isassigned(A::UpperOrLowerTriangular, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? isassigned(A.data, i, j) : true
 
-@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Int, j::Int) where {T} =
-    i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? A.data[i,j] : _zero(A.data,j,i)
-@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Int, j::Int) where {T} =
-    i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? A.data[i,j] : _zero(A.data,j,i)
+Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? Base.isstored(A.data, i, j) : false
+
+@propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
+@propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+
+_shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
+_shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
+_shouldforwardindex(U::UnitUpperTriangular, b::BandIndex) = b.band > 0
+_shouldforwardindex(U::UnitLowerTriangular, b::BandIndex) = b.band < 0
 
 # these specialized getindex methods enable constant-propagation of the band
-Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitLowerTriangular{T}, b::BandIndex) where {T}
-    b.band < 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, b::BandIndex) where {T}
+    _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
-Base.@constprop :aggressive @propagate_inbounds function getindex(A::LowerTriangular, b::BandIndex)
-    b.band <= 0 ? A.data[b] : _zero(A.data, b)
-end
-Base.@constprop :aggressive @propagate_inbounds function getindex(A::UnitUpperTriangular{T}, b::BandIndex) where {T}
-    b.band > 0 ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
-end
-Base.@constprop :aggressive @propagate_inbounds function getindex(A::UpperTriangular, b::BandIndex)
-    b.band >= 0 ? A.data[b] : _zero(A.data, b)
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
+    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
@@ -523,10 +511,8 @@ for TM in (:LowerTriangular, :UpperTriangular)
     @eval -(A::$TM{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast(-, A)
 end
 
-tr(A::LowerTriangular) = tr(A.data)
-tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
-tr(A::UpperTriangular) = tr(A.data)
-tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperOrLowerTriangular) = tr(A.data)
+tr(A::Union{UnitLowerTriangular, UnitUpperTriangular}) = size(A, 1) * oneunit(eltype(A))
 
 for T in (:UpperOrUnitUpperTriangular, :LowerOrUnitLowerTriangular)
     @eval @propagate_inbounds function copyto!(dest::$T, U::$T)

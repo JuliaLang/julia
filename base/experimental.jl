@@ -420,7 +420,7 @@ macro consistent_overlay(mt, def)
     inner = Base.unwrap_macrocalls(def)
     is_function_def(inner) || error("@consistent_overlay requires a function definition")
     overlay_def!(mt, inner)
-    override = Core.Compiler.EffectsOverride(; consistent_overlay=true)
+    override = Base.EffectsOverride(; consistent_overlay=true)
     Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
     return esc(def)
 end

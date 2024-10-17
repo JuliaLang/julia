@@ -202,12 +202,15 @@ if Artifacts !== nothing
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     artifact_hash("HelloWorldC", artifacts_toml)
-    oldpwd = pwd(); cd(dirname(artifacts_toml))
-    macroexpand(Main, :(@artifact_str("HelloWorldC")))
-    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    if best_platform !== nothing
+      # @artifact errors for unsupported platforms
+      oldpwd = pwd(); cd(dirname(artifacts_toml))
+      macroexpand(Main, :(@artifact_str("HelloWorldC")))
+      cd(oldpwd)
+    end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
