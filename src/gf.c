@@ -2028,11 +2028,6 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_UNLOCK(&world_counter_lock);
 }
 
-JL_DLLEXPORT void jl_method_table_set_frozen(jl_methtable_t *mt, int val)
-{
-    mt->frozen = val;
-}
-
 static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect JL_REQUIRE_ROOTED_SLOT, jl_value_t **isect2 JL_REQUIRE_ROOTED_SLOT)
 {
     *isect2 = NULL;
