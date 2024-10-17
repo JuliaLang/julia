@@ -1189,7 +1189,11 @@ Disallow adding or modifying methods of `mt`.
 
 See also [`unfreeze!(mt)`](@ref unfreeze!).
 """
-function freeze!(mt::Core.MethodTable)
+function morespecific!(m::Method)
+    mt = get_methodtable(m)
+    # check that all Methods in this table are morespecific than m
+    # so we might avoid disabling a table that might get used for more than just subsets of m
+    all(m2 -> m === m2 || morespecific(m2, m), MethodList(mt)) || error("unsupported Method to disable")
     setfield!(mt, nfields(mt), 0x1)
 end
 
