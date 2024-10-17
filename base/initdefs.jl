@@ -112,20 +112,23 @@ function init_depot_path()
 
         # otherwise, populate the depot path with the entries in JULIA_DEPOT_PATH,
         # expanding empty strings to the bundled depot
-        populated = false
-        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
+        pushfirst_default = true
+        for (i, path) in enumerate(eachsplit(str, Sys.iswindows() ? ';' : ':'))
             if isempty(path)
                 append_bundled_depot_path!(DEPOT_PATH)
             else
                 path = expanduser(path)
                 path in DEPOT_PATH || push!(DEPOT_PATH, path)
-                populated = true
+                if i == 1
+                    # if a first entry is given, don't add the default depot at the start
+                    pushfirst_default = false
+                end
             end
         end
 
         # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
         # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
-        if !populated
+        if pushfirst_default
             pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
         end
     else
