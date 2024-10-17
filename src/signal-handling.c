@@ -18,46 +18,47 @@ extern "C" {
 #include <threading.h>
 
 // Profiler control variables
-// Note: these "static" variables are also used in "signals-*.c"
-static volatile jl_bt_element_t *bt_data_prof = NULL;
-static volatile size_t bt_size_max = 0;
-static volatile size_t bt_size_cur = 0;
+uv_mutex_t profile_lock;
+volatile jl_bt_element_t *profile_bt_data_prof = NULL;
+volatile size_t profile_bt_size_max = 0;
+volatile size_t profile_bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
-static volatile int running = 0;
-static const    uint64_t GIGA = 1000000000ULL;
+volatile int profile_running = 0;
+volatile int profile_all_tasks = 0;
+static const uint64_t GIGA = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(void);
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t);
 
 ///////////////////////
 // Utility functions //
 ///////////////////////
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
-    bt_size_max = maxsize;
+    profile_bt_size_max = maxsize;
     nsecprof = delay_nsec;
-    if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (bt_data_prof == NULL && maxsize > 0)
+    if (profile_bt_data_prof != NULL)
+        free((void*)profile_bt_data_prof);
+    profile_bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
+    if (profile_bt_data_prof == NULL && maxsize > 0)
         return -1;
-    bt_size_cur = 0;
+    profile_bt_size_cur = 0;
     return 0;
 }
 
 JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
 {
-    return (uint8_t*) bt_data_prof;
+    return (uint8_t*) profile_bt_data_prof;
 }
 
 JL_DLLEXPORT size_t jl_profile_len_data(void)
 {
-    return bt_size_cur;
+    return profile_bt_size_cur;
 }
 
 JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
-    return bt_size_max;
+    return profile_bt_size_max;
 }
 
 JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
@@ -67,12 +68,12 @@ JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
 
 JL_DLLEXPORT void jl_profile_clear_data(void)
 {
-    bt_size_cur = 0;
+    profile_bt_size_cur = 0;
 }
 
 JL_DLLEXPORT int jl_profile_is_running(void)
 {
-    return running;
+    return profile_running;
 }
 
 // Any function that acquires this lock must be either a unmanaged thread
@@ -184,7 +185,93 @@ JL_DLLEXPORT int jl_profile_is_buffer_full(void)
     // Declare buffer full if there isn't enough room to sample even just the
     // thread metadata and one max-sized frame. The `+ 6` is for the two block
     // terminator `0`'s plus the 4 metadata entries.
-    return bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > bt_size_max;
+    return profile_bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > profile_bt_size_max;
+}
+
+void jl_profile_task(void)
+{
+    if (jl_profile_is_buffer_full()) {
+        // Buffer full: Delete the timer
+        jl_profile_stop_timer();
+        return;
+    }
+
+    arraylist_t *tasks = jl_get_all_tasks_arraylist();
+    jl_task_t *t = NULL;
+    uint64_t seed = jl_rand();
+
+    const int n_max_random_attempts = (1 << 16);
+    // randomly select a task that is not done
+    for (int i = 0; i < n_max_random_attempts; i++) {
+        t = (jl_task_t*)tasks->items[cong(tasks->len, &seed)];
+        assert(t == NULL || jl_is_task(t));
+        if (t == NULL) {
+            continue;
+        }
+        int t_state = jl_atomic_load_relaxed(&t->_state);
+        if (t_state == JL_TASK_STATE_DONE) {
+            continue;
+        }
+        break;
+    }
+    // sequentially select a task that is not done
+    for (int i = 0; i < tasks->len; i++) {
+        t = (jl_task_t*)tasks->items[i];
+        assert(t == NULL || jl_is_task(t));
+        if (t == NULL) {
+            continue;
+        }
+        int t_state = jl_atomic_load_relaxed(&t->_state);
+        if (t_state == JL_TASK_STATE_DONE) {
+            continue;
+        }
+        break;
+    }
+    assert(t != NULL);
+
+    arraylist_free(tasks);
+    free(tasks);
+
+    jl_bt_element_t *bt_data_prof = (jl_bt_element_t*)(profile_bt_data_prof + profile_bt_size_cur);
+    size_t bt_size_max = profile_bt_size_max - profile_bt_size_cur - 1;
+
+    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data_prof, bt_size_max, 1);
+
+    int tid = r.tid;
+    // we failed to get a backtrace
+    if (r.bt_size == 0) {
+        return;
+    }
+
+    uv_mutex_lock(&profile_lock);
+
+    if (profile_running == 0) {
+        uv_mutex_unlock(&profile_lock);
+        return;
+    }
+
+    // update the profile buffer size
+    profile_bt_size_cur += r.bt_size;
+
+    // store threadid but add 1 as 0 is preserved to indicate end of block
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = tid + 1;
+
+    // store task id (never null)
+    profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)t;
+
+    // store cpu cycle clock
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
+
+    // the thread profiler uses this block to record whether the thread is not sleeping (1) or sleeping (2)
+    // let's use a dummy value which is not 1 or 2 to
+    // indicate that we are profiling a task, and therefore, this block is not about the thread state
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = 3;
+
+    // Mark the end of this block with two 0's
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+    profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+
+    uv_mutex_unlock(&profile_lock);
 }
 
 static uint64_t jl_last_sigint_trigger = 0;
