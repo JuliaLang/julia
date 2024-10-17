@@ -1314,7 +1314,7 @@ end
     end
 end
 
-@testset "CPU time counter" begin
+@testset "task time counters" begin
     start_time = time_ns()
     t = Threads.@spawn begin
         peakflops()
@@ -1322,30 +1322,51 @@ end
     wait(t)
     end_time = time_ns()
     wall_time_delta = end_time - start_time
-    @test t.cpu_time_ns > 0
-    @test t.cpu_time_ns < wall_time_delta
+    @test Base.task_cpu_time_ns(t) > 0
+    @test Base.task_wall_time_ns(t) > 0
+    @test Base.task_wall_time_ns(t) > Base.task_cpu_time_ns(t)
+    @test wall_time_delta > Base.task_wall_time_ns(t)
 end
 
-@testset "CPU time counter: lots of spawns" begin
-    using Base.Threads, Dates
-    # create more tasks than we have cores
+@testset "task time counters: lots of spawns" begin
+    using Dates
+    # create more tasks than we have threads
     # the CPU time each task gets should be less
     # than the wall time
+    n_tasks = 2 * Threads.nthreads()
+    cpu_times = Vector{UInt64}(undef, n_tasks)
+    wall_times = Vector{UInt64}(undef, n_tasks)
+    start_time_0 = time_ns()
     @sync begin
-        for i in 1:100
-            start_time = now()
-            task = @spawn begin
+        for i in 1:n_tasks
+            start_time_i = time_ns()
+            task_i = Threads.@spawn begin
                 peakflops()
             end
-            @spawn begin
-                wait(task)
-                end_time = now()
-                wall_time_delta = end_time - start_time
-                cpu_time = Nanosecond(task.cpu_time_ns)
-                @test cpu_time < wall_time_delta
+            Threads.@spawn begin
+                wait(task_i)
+                end_time_i = time_ns()
+                wall_time_delta_i = end_time_i - start_time_i
+                cpu_times[$i] = cpu_time_i = Base.task_cpu_time_ns(task_i)
+                wall_times[$i] = wall_time_i = Base.task_wall_time_ns(task_i)
+                @test cpu_time_i > 0
+                @test wall_time_i > 0
+                @test Nanosecond(wall_time_i) > Nanosecond(cpu_time_i)
+                @test Nanosecond(wall_time_delta_i) > Nanosecond(wall_time_i)
             end
         end
     end
+    end_time_0 = time_ns()
+    wall_time_delta_0 = end_time_0 - start_time_0
+    summed_cpu_times = sum(cpu_times)
+    summed_wall_times = sum(wall_times)
+    # Convert to Nanosecond so test failures easier to read,
+    # but make sure we're not overflowing the type
+    @assert summed_cpu_times < typemax(Int64)
+    @assert summed_wall_times < typemax(Int64)
+    @test Nanosecond(wall_time_delta_0) < Nanosecond(summed_wall_times)
+    @test Nanosecond(wall_time_delta_0) < Nanosecond(summed_cpu_times)
+    @test Nanosecond(summed_cpu_times) < Nanosecond(summed_wall_times)
 end
 
 end # main testset
