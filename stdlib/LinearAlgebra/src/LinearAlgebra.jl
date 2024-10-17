@@ -87,6 +87,7 @@ export
     diag,
     diagind,
     diagm,
+    diagview,
     dot,
     eigen!,
     eigen,

@@ -140,6 +140,7 @@ Standard library changes
   using total number of logical threads available on the system ([#55574]).
 * A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
   Custom array types may specialize this function to return an appropriate result. ([#55252])
+* A new function `diagview` is added that returns a view into a specific band of an `AbstractMatrix`.
 
 #### Logging
 
