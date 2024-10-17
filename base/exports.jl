@@ -475,6 +475,8 @@ export
     findmin,
     findmin!,
     findmax!,
+    findextrema,
+    findextrema!,
     findnext,
     findprev,
     match,
