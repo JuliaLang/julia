@@ -975,7 +975,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
             else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                if (tn->mt != NULL && !tn->mt->frozen) {
+                if (tn->mt != NULL && !jl_atomic_load_relaxed(&tn->mt->frozen)) {
                     jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
                     if (new_methtable != HT_NOTFOUND)
                         record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);

@@ -1226,8 +1226,8 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         mt = jl_method_table_for(argtype);
     if ((jl_value_t*)mt == jl_nothing)
         jl_error("Method dispatch is unimplemented currently for this method signature");
-    if (mt->frozen)
-        jl_error("cannot add methods to a builtin function");
+    if (jl_atomic_load_relaxed(&mt->frozen))
+        jl_error("cannot add methods to or modify methods of a frozen function");
 
     assert(jl_is_linenode(functionloc));
     jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
