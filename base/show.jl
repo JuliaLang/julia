@@ -218,6 +218,80 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     end
 end
 
+
+function show(io::IO, ::MIME"text/plain", nt::NamedTuple)
+    isempty(nt) && return show(io, nt)
+    # show more descriptively, with one line per key/value pair
+    recur_io = IOContext(io, :SHOWN_SET => nt)
+    limit = get(io, :limit, false)::Bool
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, :compact => true)
+    end
+    recur_io_k = IOContext(recur_io, :typeinfo=>keytype(nt))
+    recur_io_v = IOContext(recur_io, :typeinfo=>valtype(nt))
+
+    print(io, "$(length(nt))-element NamedTuple")
+    isempty(nt) && return
+    print(io, ":")
+    show_circular(io, nt) && return
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 1 # Subtract the summary
+
+        # determine max key width to align the output, caching the strings
+        hascolor = get(recur_io, :color, false)
+        ks = Vector{String}(undef, min(rows, length(nt)))
+        vs = Vector{String}(undef, min(rows, length(nt)))
+        keywidth = 0
+        valwidth = 0
+        for (i, (k, v)) in enumerate(zip(keys(nt), nt))
+            i > rows && break
+            ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
+            vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
+            keywidth = clamp(hascolor ? textwidth(ANSIIterator(ks[i])) : textwidth(ks[i]), keywidth, cols)
+            valwidth = clamp(hascolor ? textwidth(ANSIIterator(vs[i])) : textwidth(vs[i]), valwidth, cols)
+        end
+        if keywidth > max(div(cols, 2), cols - valwidth)
+            keywidth = max(cld(cols, 3), cols - valwidth)
+        end
+    else
+        rows = cols = typemax(Int)
+    end
+
+    for (i, (k, v)) in enumerate(zip(keys(nt), nt))
+        if i ==  1
+            print(io, "\n (")
+        else
+            print(io, "\n  ")
+        end
+
+        if i == rows < length(nt)
+            print(io, rpad("⋮", keywidth), "= ⋮ ")
+            break
+        end
+
+        if limit
+            key = _truncate_at_width_or_chars(hascolor, ks[i], keywidth, true)
+        else
+            key = sprint(show, k, context=recur_io_k, sizehint=0)
+        end
+        print(recur_io, chop(string(key), head=1, tail=0))
+        print(io, " = ")
+
+        if limit
+            val = _truncate_at_width_or_chars(hascolor, vs[i], cols - keywidth)
+            print(io, val)
+        else
+            show(recur_io_v, v)
+        end
+    end
+    print(io, ")")
+end
+
 function summary(io::IO, t::AbstractSet)
     n = length(t)
     showarg(io, t, true)
