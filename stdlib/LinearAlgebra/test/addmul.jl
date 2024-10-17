@@ -138,8 +138,8 @@ function compare_matmul(C, A, B, α, β,
     Ccopy = copy(C)
     returned_mat = mul!(Ccopy, A, B, α, β)
     @test returned_mat === Ccopy
-    atol = max(mapreduce(eps∘float∘eltype, max, (C,A,B)),
-                mapreduce(eps∘float∘typeof, max, (α,β)))
+    atol = max(maximum(eps∘float∘eltype, (C,A,B)),
+                maximum(eps∘float∘typeof, (α,β)))
     exp_val = Ac * Bc * strongzero(α) + Cc * strongzero(β)
     @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
     rtol_match = isapprox(collect(returned_mat), exp_val, rtol=rtol)
