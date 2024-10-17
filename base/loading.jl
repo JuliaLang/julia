@@ -2093,6 +2093,7 @@ debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but mor
 function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # handle recursive and concurrent calls to require
     assert_havelock(require_lock)
+    require_lock.reentrancy_cnt == 1 || throw(ConcurrencyViolationError("recursive call to start_loading"))
     while true
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
