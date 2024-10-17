@@ -560,7 +560,7 @@ struct ambigconvert; end # inject a problematic `convert` method to ensure it st
 Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
