@@ -489,17 +489,44 @@ function copy_ast(ctx, ex)
     return ex2
 end
 
+#-------------------------------------------------------------------------------
+function set_scope_layer(ctx, ex, layer_id, force)
+    k = kind(ex)
+    scope_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
+    if k == K"module" || k == K"toplevel" || k == K"inert"
+        makenode(ctx, ex, ex, children(ex);
+                 scope_layer=scope_layer)
+    elseif k == K"."
+        makenode(ctx, ex, ex, set_scope_layer(ctx, ex[1], layer_id, force), ex[2],
+                 scope_layer=scope_layer)
+    elseif !is_leaf(ex)
+        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex;
+                    scope_layer=scope_layer)
+    else
+        makeleaf(ctx, ex, ex;
+                 scope_layer=scope_layer)
+    end
+end
+
 """
     adopt_scope(ex, ref)
 
 Copy `ex`, adopting the scope layer of `ref`.
 """
-function adopt_scope(ex, scope_layer::LayerId)
+function adopt_scope(ex::SyntaxTree, scope_layer::LayerId)
     set_scope_layer(ex, ex, scope_layer, true)
 end
 
-function adopt_scope(ex, ref::SyntaxTree)
+function adopt_scope(ex::SyntaxTree, ref::SyntaxTree)
     adopt_scope(ex, ref.scope_layer)
+end
+
+function adopt_scope(exs::SyntaxList, ref)
+    out = SyntaxList(syntax_graph(exs))
+    for e in exs
+        push!(out, adopt_scope(e, ref))
+    end
+    return out
 end
 
 #-------------------------------------------------------------------------------
@@ -586,22 +613,13 @@ function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
 end
 
-function new_scope_layer(ctx)
+function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
     new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end
 
-# Create new local variable names with the same names as `names`, but with a
-# new scope_layer so that they become independent variables during scope
-# resolution.
-function similar_identifiers(ctx, names)
-    scope_layer = new_scope_layer(ctx)
-    new_names = SyntaxList(ctx)
-    for name in names
-        @assert kind(name) == K"Identifier"
-        push!(new_names, makeleaf(ctx, name, name, kind=K"Identifier", scope_layer=scope_layer))
-    end
-    new_names
+function new_scope_layer(ctx, mod_ref::SyntaxTree)
+    @assert kind(mod_ref) == K"Identifier"
+    new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
 end
-

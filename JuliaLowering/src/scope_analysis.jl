@@ -349,6 +349,8 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         end
     end
 
+    # TODO: Remove alias bindings? Dynamically generated scope layers are
+    # simpler and probably sufficient?
     for (varkey, id) in alias_bindings
         @assert !haskey(ctx.alias_map, id)
         ctx.alias_map[id] = get(var_ids, varkey) do

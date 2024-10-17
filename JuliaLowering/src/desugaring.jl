@@ -1690,7 +1690,7 @@ function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, v
     ]
 end
 
-function default_inner_constructors(ctx, srcref, outer_struct_var,
+function default_inner_constructors(ctx, srcref, global_struct_name,
                                     typevar_names, field_names, field_types)
     # TODO: Consider using srcref = @HERE ?
     exact_ctor = if isempty(typevar_names)
@@ -1698,11 +1698,11 @@ function default_inner_constructors(ctx, srcref, outer_struct_var,
         field_decls = SyntaxList(ctx)
         @ast ctx srcref [K"function"
             [K"call"
-                [K"::" [K"curly" "Type"::K"core" outer_struct_var]]
+                [K"::" [K"curly" "Type"::K"core" global_struct_name]]
                 [[K"::" n t] for (n,t) in zip(field_names, field_types)]...
             ]
             [K"new"
-                outer_struct_var
+                global_struct_name
                 field_names...
             ]
         ]
@@ -1720,13 +1720,13 @@ function default_inner_constructors(ctx, srcref, outer_struct_var,
                  [K"::"
                      ctor_self
                      if isempty(typevar_names)
-                         [K"curly" "Type"::K"core" outer_struct_var]
+                         [K"curly" "Type"::K"core" global_struct_name]
                      else
                          [K"where"
                              [K"curly"
                                  "Type"::K"core"
                                  [K"curly"
-                                     outer_struct_var 
+                                     global_struct_name 
                                      typevar_names...
                                  ]
                              ]
@@ -1777,22 +1777,22 @@ end
 #         new(X{U,V}, x, y)
 #     end
 #
-function default_outer_constructor(ctx, srcref, outer_struct_var,
+function default_outer_constructor(ctx, srcref, global_struct_name,
                                    typevar_names, field_names, field_types)
     @ast ctx srcref [K"function"
         [K"where"
             [K"call" 
-                # We use `::Type{$outer_struct_var}` here rather than just
-                # `struct_name` because outer_struct_var is a binding to a
+                # We use `::Type{$global_struct_name}` here rather than just
+                # `struct_name` because global_struct_name is a binding to a
                 # type - we know we're not creating a new `Function` and
                 # there's no reason to emit the 1-arg `Expr(:method, name)` in
                 # the next phase of expansion.
-                [K"::" [K"curly" "Type"::K"core" outer_struct_var]]
+                [K"::" [K"curly" "Type"::K"core" global_struct_name]]
                 [[K"::" n t] for (n,t) in zip(field_names, field_types)]...
             ]
             [K"_typevars" typevar_names...]
         ]
-        [K"new" [K"curly" outer_struct_var typevar_names...] field_names...]
+        [K"new" [K"curly" global_struct_name typevar_names...] field_names...]
     ]
 end
 
@@ -1839,17 +1839,22 @@ function expand_struct_def(ctx, ex, docs)
     is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
     min_initialized = min(_constructor_min_initalized(constructors), length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")
-    outer_struct_var = alias_binding(ctx, struct_name)
+    layer = new_scope_layer(ctx, struct_name)
+    global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
-        prev_typevars = outer_struct_var
+        prev_typevars = global_struct_name
         for _ in 1:length(typevar_names)
             prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
         end
         prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
     end
 
-    field_names_2 = similar_identifiers(ctx, field_names)
+    # New local variable names for constructor args to avoid clashing with any
+    # type names
+    if isempty(constructors)
+        field_names_2 = adopt_scope(field_names, layer)
+    end
 
     need_outer_constructor = false
     if isempty(constructors) && !isempty(typevar_names)
@@ -1895,12 +1900,11 @@ function expand_struct_def(ctx, ex, docs)
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
     @ast ctx ex [K"block"
-        [K"global" struct_name]
-        [K"const" struct_name]
-        [K"alias_binding" outer_struct_var struct_name]
         [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
         [K"scope_block"(scope_type=:hard)
             [K"block"
+                [K"global" global_struct_name]
+                [K"const" global_struct_name]
                 [K"local_def" struct_name]
                 typevar_stmts...
                 [K"="
@@ -1919,14 +1923,14 @@ function expand_struct_def(ctx, ex, docs)
                 [K"=" struct_name newtype_var]
                 [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype]
                 [K"if"
-                    [K"isdefined" outer_struct_var]
+                    [K"isdefined" global_struct_name]
                     [K"if"
-                        [K"call" "_equiv_typedef"::K"core" outer_struct_var newtype_var]
+                        [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
                         [K"block"
                             # If this is compatible with an old definition, use
                             # the existing type object and throw away
                             # NB away the new type
-                            [K"=" struct_name outer_struct_var]
+                            [K"=" struct_name global_struct_name]
                             if !isempty(typevar_names)
                                 # And resassign the typevar_names - these may be
                                 # referenced in the definition of the field
@@ -1938,29 +1942,30 @@ function expand_struct_def(ctx, ex, docs)
                             end
                         ]
                         # Otherwise do an assignment to trigger an error
-                        [K"=" outer_struct_var struct_name]
+                        [K"=" global_struct_name struct_name]
                     ]
-                    [K"=" outer_struct_var struct_name]
+                    [K"=" global_struct_name struct_name]
                 ]
                 [K"call"(type_body)
                     "_typebody!"::K"core"
                     struct_name
                     [K"call" "svec"::K"core" field_types...]
                 ]
-                # Inner constructors
+                # Default constructors
                 if isempty(constructors)
-                    default_inner_constructors(ctx, ex, outer_struct_var,
+                    default_inner_constructors(ctx, ex, global_struct_name,
                                                typevar_names, field_names_2, field_types)
                 else
                     TODO(ex, "Convert new-calls to new-expressions in user-defined constructors")
                 end
                 if need_outer_constructor
-                    default_outer_constructor(ctx, ex, outer_struct_var,
+                    default_outer_constructor(ctx, ex, global_struct_name,
                                               typevar_names, field_names_2, field_types)
                 end
             ]
         ]
-        
+
+        # Documentation
         if !isnothing(docs) || !isempty(field_docs)
             [K"call"(isnothing(docs) ? ex : docs)
                 bind_docs!::K"Value"

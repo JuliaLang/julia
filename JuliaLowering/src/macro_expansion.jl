@@ -113,24 +113,6 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     highlight(io, src.file, byterange, note=exc.msg)
 end
 
-function set_scope_layer(ctx, ex, layer_id, force)
-    k = kind(ex)
-    scope_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
-    if k == K"module" || k == K"toplevel" || k == K"inert"
-        makenode(ctx, ex, ex, children(ex);
-                 scope_layer=scope_layer)
-    elseif k == K"."
-        makenode(ctx, ex, ex, set_scope_layer(ctx, ex[1], layer_id, force), ex[2],
-                 scope_layer=scope_layer)
-    elseif !is_leaf(ex)
-        mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex;
-                    scope_layer=scope_layer)
-    else
-        makeleaf(ctx, ex, ex;
-                 scope_layer=scope_layer)
-    end
-end
-
 function eval_macro_name(ctx, ex)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
