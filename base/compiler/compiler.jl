@@ -84,7 +84,7 @@ const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
-include("reflection.jl")
+include("runtime_internals.jl")
 include("options.jl")
 
 ntuple(f, ::Val{0}) = ()
