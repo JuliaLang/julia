@@ -81,6 +81,9 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
+#include "llvm-dialects/Dialect/Builder.h"
+#include "JuliaDialect.h"
+
 using namespace llvm;
 
 static bool jl_fpo_disabled(const Triple &TT) {
@@ -777,19 +780,6 @@ static const auto jlboxed_uint8_cache = new JuliaVariable{
     true,
     [](Type *T_size) -> Type * { return ArrayType::get(get_pjlvalue(T_size->getContext()), 256); },
 };
-
-static const auto jlpgcstack_func = new JuliaFunction<>{
-    "julia.get_pgcstack",
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_ppjlvalue_ty(C), 0), false); },
-    nullptr,
-};
-
-static const auto jladoptthread_func = new JuliaFunction<>{
-    "julia.get_pgcstack_or_new",
-    jlpgcstack_func->_type,
-    jlpgcstack_func->_attrs,
-};
-
 
 // important functions
 // Symbols are not gc-tracked, but we'll treat them as callee rooted anyway,
@@ -1522,35 +1512,6 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto gc_loaded_func = new JuliaFunction<>{
-    "julia.gc_loaded",
-    // # memory(none) nosync nounwind speculatable willreturn norecurse
-    // declare nonnull noundef ptr(Loaded) @"julia.gc_loaded"(ptr(Tracked) nocapture nonnull noundef readnone, ptr nonnull noundef readnone)
-    //  top:
-    //   %metadata GC base pointer is ptr(Tracked)
-    //   ret addrspacecast ptr to ptr(Loaded)
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
-    [](LLVMContext &C) {
-        AttrBuilder FnAttrs(C);
-        FnAttrs.addAttribute(Attribute::NoSync);
-        FnAttrs.addAttribute(Attribute::NoUnwind);
-        FnAttrs.addAttribute(Attribute::Speculatable);
-        FnAttrs.addAttribute(Attribute::WillReturn);
-        FnAttrs.addAttribute(Attribute::NoRecurse);
-#if JL_LLVM_VERSION >= 160000
-        FnAttrs.addMemoryAttr(MemoryEffects::none());
-#else
-        FnAttrs.addAttribute(Attribute::ReadNone);
-#endif
-        AttrBuilder RetAttrs(C);
-        RetAttrs.addAttribute(Attribute::NonNull);
-        RetAttrs.addAttribute(Attribute::NoUndef);
-        return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
-                { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
-                  Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
-                  },
-};
 
 // julia.call represents a call with julia calling convention, it is used as
 //
@@ -1955,7 +1916,7 @@ struct jl_varinfo_t {
 // function and module, and visible local variables and labels.
 class jl_codectx_t {
 public:
-    IRBuilder<> builder;
+    llvm_dialects::Builder builder;
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     Function *f = NULL;
@@ -7144,7 +7105,11 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
 {
     // allocate a placeholder gc instruction
     // this will require the runtime, but it gets deleted later if unused
-    ctx.topalloca = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
+    if (or_new)
+        ctx.topalloca = ctx.builder.create<julia::GetPGCStackOrNew>();
+    else
+        ctx.topalloca = ctx.builder.create<julia::GetPGCStack>();
+
     ctx.pgcstack = ctx.topalloca;
     ctx.pgcstack->setName("pgcstack");
 }
@@ -10304,7 +10269,6 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, size2pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
-    add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
     add_named_global(jlatomicerror_func, &jl_atomic_error);
     add_named_global(jlthrow_func, &jl_throw);

@@ -3032,10 +3032,10 @@ static bool isLoadFromConstGV(Value *v)
         if (callee && callee->getName() == "julia.typeof") {
             return true;
         }
-        if (callee && callee->getName() == "julia.get_pgcstack") {
+        if (isa<julia::GetPGCStack>(callee)) {
             return true;
         }
-        if (callee && callee->getName() == "julia.gc_loaded") {
+        if (isa<julia::GCLoaded>(callee)) {
             return isLoadFromConstGV(call->getArgOperand(0)) &&
                    isLoadFromConstGV(call->getArgOperand(1));
         }
@@ -3375,7 +3375,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     Value *ptr = LI;
     if (AS) {
         assert(AS == AddressSpace::Loaded);
-        ptr = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, ptr });
+        ptr = ctx.builder.create<julia::GCLoaded>(mem, ptr);
     }
     setName(ctx.emission_context, ptr, "memory_data");
     return ptr;
@@ -4713,7 +4713,7 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         GEPlist.push_back(GEP);
         data = GEP->getPointerOperand()->stripPointerCastsSameRepresentation();
     }
-    data = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, data });
+    data = ctx.builder.create<julia::GCLoaded>(mem, data);
     if (!GEPlist.empty()) {
         for (auto &GEP : make_range(GEPlist.rbegin(), GEPlist.rend())) {
             GetElementPtrInst *GEP2 = cast<GetElementPtrInst>(GEP->clone());
