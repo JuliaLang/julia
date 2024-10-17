@@ -1758,8 +1758,9 @@ julia> unique(A, dims=3)
 ```
 """
 unique(A::AbstractArray; dims::Union{Colon,Integer} = :) = _unique_dims(A, dims)
+unique(A::AbstractVector; dims::Union{Colon,Integer} = 1) = _unique_dims(A, dims)
 
-_unique_dims(A::AbstractArray, dims::Colon) = invoke(unique, Tuple{Any}, A)
+_unique_dims(A::AbstractArray, dims::Colon) = _unique_dims(vec(A), 1)
 
 @generated function _unique_dims(A::AbstractArray{T,N}, dim::Integer) where {T,N}
     quote
