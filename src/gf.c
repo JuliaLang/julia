@@ -331,7 +331,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
             (jl_value_t*)mi, 1, ~(size_t)0);
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, newentry, 0);
 
-    mt->frozen = 1;
+    jl_atomic_store_relaxed(&mt->frozen, 1);
     JL_GC_POP();
     return dt;
 }
@@ -772,7 +772,7 @@ static int reset_mt_caches(jl_methtable_t *mt, void *env)
 {
     // removes all method caches
     // this might not be entirely safe (GC or MT), thus we only do it very early in bootstrapping
-    if (!mt->frozen) { // make sure not to reset frozen functions
+    if (!jl_atomic_load_relaxed(&mt->frozen)) { // make sure not to reset frozen functions
         jl_atomic_store_release(&mt->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
         jl_atomic_store_release(&mt->cache, jl_nothing);
     }

@@ -976,7 +976,7 @@ function morespecific!(m::Method)
     # check that all Methods in this table are morespecific than m
     # so we might avoid disabling a table that might get used for more than just subsets of m
     all(m2 -> m === m2 || morespecific(m2, m), MethodList(mt)) || error("unsupported Method to disable")
-    setfield!(mt, nfields(mt), 0x1)
+    setfield!(mt, :frozen, 0x1, :monotonic)
 end
 
 """

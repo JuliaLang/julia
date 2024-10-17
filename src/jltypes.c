@@ -3038,9 +3038,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->name->names = jl_perm_symsvec(11, "name", "defs",
                                                      "leafcache", "cache", "max_args",
                                                      "module", "backedges",
-                                                     "", "", "offs", "");
+                                                     "", "", "offs", "frozen");
     const static uint32_t methtable_constfields[1] = { 0x00000020 }; // (1<<5);
-    const static uint32_t methtable_atomicfields[1] = { 0x0000001e }; // (1<<1)|(1<<2)|(1<<3)|(1<<4);
+    const static uint32_t methtable_atomicfields[1] = { 0x00000041e }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<10);
     jl_methtable_type->name->constfields = methtable_constfields;
     jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
