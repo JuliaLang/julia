@@ -80,14 +80,16 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         if (!jl_subtype(rt_lb, selected_rt)) {
             // TODO: It would be better to try to get a specialization with the
             // correct rt check here (or we could codegen a wrapper).
-            specptr = NULL; invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+            specptr = NULL; // this will force codegen of the unspecialized version
+            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
             jl_value_t *ts[2] = {rt_lb, (jl_value_t*)ci->rettype};
             selected_rt = jl_type_union(ts, 2);
         }
         if (!jl_subtype(ci->rettype, rt_ub)) {
             // TODO: It would be better to try to get a specialization with the
             // correct rt check here (or we could codegen a wrapper).
-            specptr = NULL; invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+            specptr = NULL; // this will force codegen of the unspecialized version
+            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
             selected_rt = jl_type_intersection(rt_ub, selected_rt);
         }
 
@@ -108,8 +110,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     jl_value_t *oc_type JL_ALWAYS_LEAFTYPE = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, selected_rt);
     JL_GC_PROMISE_ROOTED(oc_type);
 
-    if (!specptr) {
-        sigtype = jl_argtype_with_function_type((jl_value_t*)oc_type, (jl_value_t*)argt);
+    if (specptr == NULL) {
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent
@@ -197,7 +198,7 @@ int jl_tupletype_length_compat(jl_value_t *v, size_t nargs)
 
 JL_CALLABLE(jl_f_opaque_closure_call)
 {
-    jl_opaque_closure_t* oc = (jl_opaque_closure_t*)F;
+    jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;
     jl_value_t *argt = jl_tparam0(jl_typeof(oc));
     if (!jl_tupletype_length_compat(argt, nargs))
         jl_method_error(F, args, nargs + 1, oc->world);

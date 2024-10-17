@@ -45,8 +45,8 @@ template<> struct llvm::DenseMapInfo<InferKey> {
   }
 };
 
-static std::mutex engine_lock;
-static std::condition_variable engine_wait;
+static std::mutex engine_lock; // n.b. this lock is only ever held briefly
+static std::condition_variable engine_wait; // but it may be waiting a while in this state
 // map from MethodInstance to threadid that owns it currently for inference
 static DenseMap<InferKey, ReservationInfo> Reservations;
 // vector of which threads are blocked and which lease they need
@@ -63,55 +63,51 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
     ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
     jl_code_instance_t *ci = jl_new_codeinst_uninit(m, owner); // allocate a placeholder
     JL_GC_PUSH1(&ci);
-    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
-    InferKey key = {m, owner};
-    std::unique_lock<std::mutex> lock(engine_lock);
     auto tid = jl_atomic_load_relaxed(&ct->tid);
-    if ((signed)Awaiting.size() < tid + 1)
-        Awaiting.resize(tid + 1);
-    while (1) {
-        auto record = Reservations.find(key);
-        if (record == Reservations.end()) {
-            Reservations[key] = ReservationInfo{tid, ci};
-            lock.unlock();
-            jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint
-            JL_GC_POP();
-            return ci;
-        }
-        // before waiting, need to run deadlock/cycle detection
-        // there is a cycle if the thread holding our lease is blocked
-        // and waiting for (transitively) any lease that is held by this thread
-        auto wait_tid = record->second.tid;
-        while (1) {
-            if (wait_tid == tid) {
-                lock.unlock();
-                jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint
-                JL_GC_POP();
-                ct->ptls->engine_nqueued--;
-                return ci; // break the cycle
+    if (([tid, m, owner, ci] () -> bool { // necessary scope block / lambda for unique_lock
+            jl_unique_gcsafe_lock lock(engine_lock);
+            InferKey key{m, owner};
+            if ((signed)Awaiting.size() < tid + 1)
+                Awaiting.resize(tid + 1);
+            while (1) {
+                auto record = Reservations.find(key);
+                if (record == Reservations.end()) {
+                    Reservations[key] = ReservationInfo{tid, ci};
+                    return false;
+                }
+                // before waiting, need to run deadlock/cycle detection
+                // there is a cycle if the thread holding our lease is blocked
+                // and waiting for (transitively) any lease that is held by this thread
+                auto wait_tid = record->second.tid;
+                while (1) {
+                    if (wait_tid == tid)
+                        return true;
+                    if ((signed)Awaiting.size() <= wait_tid)
+                        break; // no cycle, since it is running (and this should be unreachable)
+                    auto key2 = Awaiting[wait_tid];
+                    if (key2.mi == nullptr)
+                        break; // no cycle, since it is running
+                    auto record2 = Reservations.find(key2);
+                    if (record2 == Reservations.end())
+                        break; // no cycle, since it is about to resume
+                    assert(wait_tid != record2->second.tid);
+                    wait_tid = record2->second.tid;
+                }
+                Awaiting[tid] = key;
+                lock.wait(engine_wait);
+                Awaiting[tid] = InferKey{};
             }
-            if ((signed)Awaiting.size() <= wait_tid)
-                break; // no cycle, since it is running (and this should be unreachable)
-            auto key2 = Awaiting[wait_tid];
-            if (key2.mi == nullptr)
-                break; // no cycle, since it is running
-            auto record2 = Reservations.find(key2);
-            if (record2 == Reservations.end())
-                break; // no cycle, since it is about to resume
-            assert(wait_tid != record2->second.tid);
-            wait_tid = record2->second.tid;
-        }
-        Awaiting[tid] = key;
-        engine_wait.wait(lock);
-        Awaiting[tid] = InferKey{};
-    }
+        })())
+        ct->ptls->engine_nqueued--;
+    JL_GC_POP();
+    return ci;
 }
 
 int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner)
 {
     jl_task_t *ct = jl_current_task;
     InferKey key = {m, owner};
-    std::unique_lock<std::mutex> lock(engine_lock);
+    std::unique_lock lock(engine_lock);
     auto record = Reservations.find(key);
     return record != Reservations.end() && record->second.tid == jl_atomic_load_relaxed(&ct->tid);
 }
@@ -123,7 +119,7 @@ STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
 
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states)
 {
-    std::unique_lock<std::mutex> lock(engine_lock);
+    std::unique_lock lock(engine_lock);
     bool any = false;
     for (auto I = Reservations.begin(); I != Reservations.end(); ++I) {
         jl_code_instance_t *ci = I->second.ci;
@@ -142,7 +138,7 @@ void jl_engine_sweep(jl_ptls_t *gc_all_tls_states)
 void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
 {
     jl_task_t *ct = jl_current_task;
-    std::unique_lock<std::mutex> lock(engine_lock);
+    std::unique_lock lock(engine_lock);
     auto record = Reservations.find(InferKey{ci->def, ci->owner});
     if (record == Reservations.end() || record->second.ci != ci)
         return;
@@ -151,7 +147,6 @@ void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
     Reservations.erase(record);
     engine_wait.notify_all();
 }
-
 
 #ifdef __cplusplus
 }

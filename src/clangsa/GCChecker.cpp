@@ -31,7 +31,7 @@ namespace {
 using namespace clang;
 using namespace ento;
 
-#define PDP std::shared_ptr<PathDiagnosticPiece>
+typedef std::shared_ptr<PathDiagnosticPiece> PDP;
 #define MakePDP make_unique<PathDiagnosticEventPiece>
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
@@ -394,13 +394,18 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        if (Pos.isValid())
+          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
-      return MakePDP(Pos, "Safepoints re-enabled here");
+      if (Pos.isValid())
+        return MakePDP(Pos, "Safepoints re-enabled here");
+      //N->getLocation().dump();
     }
+    // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
   }
   return nullptr;
 }
