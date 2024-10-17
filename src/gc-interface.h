@@ -44,8 +44,10 @@ typedef struct {
     uint64_t total_time_to_safepoint;
     uint64_t sweep_time;
     uint64_t mark_time;
+    uint64_t stack_pool_sweep_time;
     uint64_t total_sweep_time;
     uint64_t total_mark_time;
+    uint64_t total_stack_pool_sweep_time;
     uint64_t last_full_sweep;
     uint64_t last_incremental_sweep;
 } jl_gc_num_t;

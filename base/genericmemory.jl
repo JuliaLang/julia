@@ -9,8 +9,7 @@ Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 `kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
 
-`addrspace` can currently only be set to Core.CPU. It is designed to  to permit extension by other systems
-such as GPUs, which might define values such as:
+`addrspace` can currently only be set to `Core.CPU`. It is designed to permit extension by other systems such as GPUs, which might define values such as:
 ```
 module CUDA
 const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
