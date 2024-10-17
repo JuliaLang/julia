@@ -135,19 +135,21 @@ function compare_matmul(C, A, B, α, β,
         rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...,
                    rtoldefault.(real.(typeof.((α, β))))...);
         Ac = collect(A), Bc = collect(B), Cc = collect(C))
-    Ccopy = copy(C)
-    returned_mat = mul!(Ccopy, A, B, α, β)
-    @test returned_mat === Ccopy
-    atol = max(maximum(eps∘float∘eltype, (C,A,B)),
-                maximum(eps∘float∘typeof, (α,β)))
-    exp_val = Ac * Bc * strongzero(α) + Cc * strongzero(β)
-    @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
-    rtol_match = isapprox(collect(returned_mat), exp_val, rtol=rtol)
-    if !(rtol_match || β isa Bool || isapprox(β, 0, atol=eps(typeof(β))))
-        negβ = -β
-        returned_mat = mul!(copy(C), A, B, α, negβ)
-        exp_val = Ac * Bc * strongzero(α) + Cc * negβ
+    @testset let A=A, B=B, C=C, α=α, β=β
+        Ccopy = copy(C)
+        returned_mat = mul!(Ccopy, A, B, α, β)
+        @test returned_mat === Ccopy
+        atol = max(maximum(eps∘real∘float∘eltype, (C,A,B)),
+                    maximum(eps∘real∘float∘typeof, (α,β)))
+        exp_val = Ac * Bc * strongzero(α) + Cc * strongzero(β)
         @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
+        rtol_match = isapprox(collect(returned_mat), exp_val, rtol=rtol)
+        if !(rtol_match || β isa Bool || isapprox(β, 0, atol=eps(typeof(β))))
+            negβ = -β
+            returned_mat = mul!(copy(C), A, B, α, negβ)
+            exp_val = Ac * Bc * strongzero(α) + Cc * negβ
+            @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
+        end
     end
 end
 
@@ -218,7 +220,7 @@ end
             @testset "α = 0 ignores A .= NaN" begin
                 Acopy = copy(A)
                 parent(Acopy) .= NaN
-                compare_matmul(C, Acopy, B, α, zero(eltype(C)), rtol; Ac, Bc, Cc)
+                compare_matmul(C, Acopy, B, zero(eltype(A)), β, rtol; Ac, Bc, Cc)
             end
         end
     end
