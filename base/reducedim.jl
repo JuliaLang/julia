@@ -66,10 +66,17 @@ _realtype(T::Type) = T
 _realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
 _realtype(::Any, T) = T
 
-function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
+"""
+    reducedim_init(f, op, A, region)
+
+Internal function to create the correctly-sized array holding the initial
+values (possibly the return values, or possibly erroring) for a reduction
+over the region (dims) when no initial value was explicitly passed.
+"""
+function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArrayOrBroadcasted, region)
     _reducedim_init(f, op, zero, sum, A, region)
 end
-function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
+function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArrayOrBroadcasted, region)
     _reducedim_init(f, op, one, prod, A, region)
 end
 function _reducedim_init(f, op, fv, fop, A, region)
@@ -87,7 +94,7 @@ end
 
 # initialization when computing minima and maxima requires a little care
 for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
-    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
+    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArrayOrBroadcasted, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
         ri = reduced_indices(A, region)
@@ -129,7 +136,7 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
     end
 end
 
-function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray, region)
+function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArrayOrBroadcasted, region)
     # First compute the reduce indices. This will throw an ArgumentError
     # if any region is invalid
     ri = reduced_indices(A, region)
@@ -325,8 +332,18 @@ julia> mapreduce(isodd, |, a, dims=1)
 """
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A, B...); kw...)
+function mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kwargs...)
+    Adims = ndims(A)
+    if any(b->Adims != ndims(b), B)
+        # The map documentation explicitly allows arrays of different shapes when ndims don't match.
+        # We fall back to `map` in these cases — which will allocate — but perhaps this allocation will
+        # help someone identify their bug: if you hit this, the dimensionalities of your args don't match!
+        return reduce(op, map(f, A, B...); kwargs...)
+    end
+    Aax = axes(A)
+    all(b->Aax==axes(b), B) || throw(ArgumentError("all arguments must have the same axes"))
+    mapreduce(splat(f), op, Broadcast.instantiate(broadcasted(tuple, A, B...)); kwargs...)
+end
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
