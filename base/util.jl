@@ -383,11 +383,33 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="", timeout=nothing) -> Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
-then the user can enter just a newline character to select the `default`.
+then the user can enter just a newline character to select the `default`. A `timeout` in seconds
+greater than 0 can be provided, after which the default will be returned.
+
+For instance, the user enters a value and hits `return`:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5 seconds: y
+"y"
+```
+
+The user hits `return` alone to select the default:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5 seconds:
+"n"
+```
+
+The user doesn't input and hit `return` before the timeout, so default returns:
+```julia
+julia> Base.prompt("Proceed? y/n"; default="n", timeout=5)
+Proceed? y/n [n] timeout 5 seconds: timed out
+"n"
+```
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
@@ -409,10 +431,40 @@ function prompt(input::IO, output::IO, message::AbstractString; default::Abstrac
     uinput = chomp(uinput)
     isempty(uinput) ? default : uinput
 end
+function prompt(input::LibuvStream, output::IO, message::AbstractString; default::AbstractString="", timeout::Union{Nothing, Real} = nothing)
+    in_stat_before = input.status
+    timeout_timer = if !isnothing(timeout) && timeout > 0
+        plural = timeout == 1 ? "" : "s"
+        msg = !isempty(default) ? "$message [$default] timeout $timeout second$(plural): " : "$message: "
+        Timer(timeout) do t
+            lock(input.cond)
+            input.status = StatusEOF
+            notify(input.cond)
+            unlock(input.cond)
+        end
+    else
+        msg = !isempty(default) ? "$message [$default]: " : "$message: "
+        nothing
+    end
+    print(output, msg)
+    uinput = readline(input, keep=true)
+    if !isnothing(timeout_timer)
+        if isopen(timeout_timer)
+            close(timeout_timer)
+        else
+            println(output, "timed out")
+            input.status = in_stat_before
+            return default
+        end
+    end
+    isempty(uinput) && return nothing  # Encountered an EOF
+    uinput = chomp(uinput)
+    isempty(uinput) ? default : uinput
+end
 
 # allow new prompt methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-prompt(message::AbstractString; default::AbstractString="") = prompt(stdin, stdout, message, default=default)
+prompt(message::AbstractString; kwargs...) = prompt(stdin, stdout, message; kwargs...)
 
 # Windows authentication prompt
 if Sys.iswindows()
