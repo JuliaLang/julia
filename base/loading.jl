@@ -3540,7 +3540,7 @@ function resolve_depot(inc::AbstractString)
 end
 
 """
-    RelocPath(path::AbstractString)
+    Base.RelocPath(path::AbstractString)
 
 A type to represent a relocatable path.
 
@@ -3554,7 +3554,7 @@ julia> path1 = joinpath(mktempdir(), "foo"); touch(path1); # set up a file calle
 
 julia> pushfirst!(DEPOT_PATH, dirname(path1));
 
-julia> relocpath = RelocPath(path1);
+julia> relocpath = Base.RelocPath(path1);
 
 julia> String(relocpath) == path1
 true
