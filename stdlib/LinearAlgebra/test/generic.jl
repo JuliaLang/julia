@@ -3,6 +3,7 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
+using LinearAlgebra: MulAddMul
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -19,6 +20,17 @@ isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "
 using .Main.FillArrays
 
 Random.seed!(123)
+
+@testset "MulAddMul" begin
+    @test_throws "alpha = 2.0 is inconsistent" MulAddMul{true,true}(2.0, 2.0)
+    @test_throws "alpha = 2.0 is inconsistent" MulAddMul{true,false}(2.0, 2.0)
+    @test_throws "alpha = true is inconsistent" MulAddMul{false,true}(true, 2.0)
+    @test_throws "alpha = true is inconsistent" MulAddMul{false,false}(true, 2.0)
+    @test_throws "beta = 2.0 is inconsistent" MulAddMul{true,true}(true, 2.0)
+    @test_throws "beta = 2.0 is inconsistent" MulAddMul{false,true}(2.0, 2.0)
+    @test_throws "beta = false is inconsistent" MulAddMul{true,false}(true, false)
+    @test_throws "beta = false is inconsistent" MulAddMul{false,false}(2.0, false)
+end
 
 n = 5 # should be odd
 

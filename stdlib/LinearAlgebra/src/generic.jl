@@ -33,22 +33,26 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
-function MulAddMul{ais1,bis0}(alpha::TA, beta::TB) where {ais1,bis0,TA,TB}
+@noinline throw_alpha(ais1, alpha) = throw(ArgumentError(lazy"alpha = $alpha is inconsistent with the type parameter ais1 = $ais1"))
+@noinline throw_beta(bis0, beta) = throw(ArgumentError(lazy"beta = $beta is inconsistent with the type parameter bis0 = $bis0"))
+@inline function MulAddMul{ais1,bis0}(alpha::TA, beta::TB) where {ais1,bis0,TA,TB}
+    xor(ais1, isone(alpha)) && throw_alpha(ais1, alpha)
+    xor(bis0, iszero(beta)) && throw_beta(bis0, beta)
     MulAddMul{ais1,bis0,TA,TB}(alpha,beta)
 end
 
-@inline function MulAddMul(alpha, beta)
+@inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
     if isone(alpha)
         if iszero(beta)
-            return MulAddMul{true,true}(alpha, beta)
+            return MulAddMul{true,true,TA,TB}(alpha, beta)
         else
-            return MulAddMul{true,false}(alpha, beta)
+            return MulAddMul{true,false,TA,TB}(alpha, beta)
         end
     else
         if iszero(beta)
-            return MulAddMul{false,true}(alpha, beta)
+            return MulAddMul{false,true,TA,TB}(alpha, beta)
         else
-            return MulAddMul{false,false}(alpha, beta)
+            return MulAddMul{false,false,TA,TB}(alpha, beta)
         end
     end
 end
@@ -87,16 +91,16 @@ macro stable_muladdmul(expr)
             local bsym = e.args[3]
 
             local e_sub11 = copy(expr)
-            e_sub11.args[i] = :(MulAddMul{true, true}($asym, $bsym))
+            e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
 
             local e_sub10 = copy(expr)
-            e_sub10.args[i] = :(MulAddMul{true, false}($asym, $bsym))
+            e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
 
             local e_sub01 = copy(expr)
-            e_sub01.args[i] = :(MulAddMul{false, true}($asym, $bsym))
+            e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
 
             local e_sub00 = copy(expr)
-            e_sub00.args[i] = :(MulAddMul{false, false}($asym, $bsym))
+            e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
 
             local e_out = quote
                 if isone($asym)
