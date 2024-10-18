@@ -1247,7 +1247,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         else
             io = open(path, "r")
             try
-                iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+                iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
                 _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
                 ignore_native = pkg_tracked(includes)
             finally
@@ -1868,7 +1868,7 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
@@ -1943,7 +1943,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     ignore_native = false
     try
-        iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+        iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
         _, (includes, _, _), depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
 
         ignore_native = pkg_tracked(includes)
@@ -3154,7 +3154,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if iszero(isvalid_cache_header(f))
-                    error("Invalid header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
+                    error("Incompatible header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
                 write(f, crc_so)
@@ -3478,7 +3478,7 @@ end
 function parse_cache_header(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
         return ret
     finally
@@ -3491,7 +3491,7 @@ function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
     try
         if iszero(isvalid_cache_header(io))
-            throw(ArgumentError("Invalid header in cache file $cachefile."))
+            throw(ArgumentError("Incompatible header in cache file $cachefile."))
         end
         return preferences_hash(io, cachefile)
     finally
@@ -3507,7 +3507,7 @@ end
 function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return cache_dependencies(io, cachefile)
     finally
         close(io)
@@ -3547,7 +3547,7 @@ end
 function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return read_dependency_src(io, cachefile, filename)
     finally
         close(io)
@@ -3831,9 +3831,9 @@ end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
-            @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
-            record_reason(reasons, "invalid header")
-            return true # invalid cache file
+            @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
+            record_reason(reasons, "incompatible header")
+            return true # incompatible cache file
         end
         modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, actual_flags = parse_cache_header(io, cachefile)
         if isempty(modules)
