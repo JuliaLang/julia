@@ -2053,16 +2053,18 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
-    size_t nusings = mb_parent->usings.len;
+    size_t nusings = module_usings_length(mb_parent);
     if (nusings > 0) {
         // this is only necessary because bindings for "using" modules
         // are added only when accessed. therefore if a module is replaced
         // after "using" it but before accessing it, this array might
         // contain the only reference.
         jl_value_t *obj_parent = (jl_value_t *)mb_parent;
-        jl_value_t **objary_begin = (jl_value_t **)mb_parent->usings.items;
-        jl_value_t **objary_end = objary_begin + nusings;
-        gc_mark_objarray(ptls, obj_parent, objary_begin, objary_end, 1, nptr);
+        struct _jl_module_using *objary_begin = (struct _jl_module_using *)mb_parent->usings.items;
+        struct _jl_module_using *objary_end = objary_begin + nusings;
+        static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void *), "Mismatch in _jl_module_using size");
+        static_assert(offsetof(struct _jl_module_using, mod) == 0, "Expected `mod` at the beginning of _jl_module_using");
+        gc_mark_objarray(ptls, obj_parent, (jl_value_t**)objary_begin, (jl_value_t**)objary_end, 3, nptr);
     }
     else {
         gc_mark_push_remset(ptls, (jl_value_t *)mb_parent, nptr);
@@ -2175,7 +2177,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 if (update_meta)
                     gc_setmark(ptls, o, bits, sizeof(jl_module_t));
                 jl_module_t *mb_parent = (jl_module_t *)new_obj;
-                uintptr_t nptr = ((mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
+                uintptr_t nptr = ((module_usings_length(mb_parent) + 1) << 2) | (bits & GC_OLD);
                 gc_mark_module_binding(ptls, mb_parent, nptr, bits);
             }
             else if (vtag == jl_task_tag << 4) {
@@ -2784,6 +2786,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_list, "global_roots_list");
     gc_try_claim_and_push(mq, jl_global_roots_keyset, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_keyset, "global_roots_keyset");
+    gc_try_claim_and_push(mq, precompile_field_replace, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)precompile_field_replace, "precompile_field_replace");
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".

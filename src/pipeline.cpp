@@ -19,6 +19,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 
@@ -332,6 +333,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ForceFunctionAttrsPass());
       invokePipelineStartCallbacks(MPM, PB, O);
       MPM.addPass(Annotation2MetadataPass());
+      MPM.addPass(InferFunctionAttrsPass());
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
