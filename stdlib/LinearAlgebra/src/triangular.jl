@@ -233,7 +233,7 @@ Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
     _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
-    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : diagzero(A,i,j)
 
 _shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
 _shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
@@ -245,7 +245,7 @@ Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitL
     _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
-    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
+    _shouldforwardindex(A, b) ? A.data[b] : diagzero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
