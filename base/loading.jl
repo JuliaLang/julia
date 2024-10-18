@@ -1518,7 +1518,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             push!(trigger_ids, trigger_id)
-            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -2392,9 +2392,8 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-    elseif !haskey(explicit_loaded_modules, uuidkey)
-        explicit_loaded_modules[uuidkey] = m
-        run_package_callbacks(uuidkey)
+    else
+        newm = root_module(uuidkey)
     end
     return m
 end
@@ -2407,7 +2406,6 @@ end
 PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
-const explicit_loaded_modules = Dict{PkgId,Module}() # Emptied on Julia start
 const loaded_modules = Dict{PkgId,Module}() # available to be explicitly loaded
 const loaded_precompiles = Dict{PkgId,Vector{Module}}() # extended (complete) list of modules, available to be loaded
 const loaded_modules_order = Vector{Module}()
@@ -2448,7 +2446,6 @@ end
     end
     maybe_loaded_precompile(key, module_build_id(m)) === nothing && push!(loaded_modules_order, m)
     loaded_modules[key] = m
-    explicit_loaded_modules[key] = m
     module_keys[m] = key
     end
     nothing
@@ -2480,9 +2477,6 @@ loaded_modules_array() = @lock require_lock copy(loaded_modules_order)
 # after unreference_module, a subsequent require call will try to load a new copy of it, if stale
 # reload(m) = (unreference_module(m); require(m))
 function unreference_module(key::PkgId)
-    if haskey(explicit_loaded_modules, key)
-        m = pop!(explicit_loaded_modules, key)
-    end
     if haskey(loaded_modules, key)
         m = pop!(loaded_modules, key)
         # need to ensure all modules are GC rooted; will still be referenced
@@ -3046,7 +3040,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # build up the list of modules that we want the precompile process to preserve
     if keep_loaded_modules
         concrete_deps = copy(_concrete_dependencies)
-        for (pkgreq, modreq) in loaded_modules # TODO: convert all relevant staleness heuristics to use explicit_loaded_modules instead
+        for (pkgreq, modreq) in loaded_modules
             if !(pkgreq === Main || pkgreq === Core || pkgreq === Base)
                 push!(concrete_deps, pkgreq => module_build_id(modreq))
             end
