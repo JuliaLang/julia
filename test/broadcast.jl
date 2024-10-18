@@ -1017,7 +1017,7 @@ p0 = copy(p)
 @test identity(.+) == Broadcast.BroadcastFunction(+)
 @test identity.(.*) == Broadcast.BroadcastFunction(*)
 @test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
-@test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
+@test repr(.!) == "Broadcast.BroadcastFunction(!)"
 @test eval(:(.+)) == Base.BroadcastFunction(+)
 
 @testset "Issue #5187: Broadcasting of short-circuiting ops" begin
