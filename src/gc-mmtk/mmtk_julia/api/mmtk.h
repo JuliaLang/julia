@@ -63,39 +63,9 @@ extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 extern uintptr_t JULIA_MALLOC_BYTES;
 
 /**
- * Julia-specific
- */
-
-// When we call upcalls from Rust, we assume:
-// * int is 4 bytes
-// * size_t is 8 bytes
-typedef struct {
-    void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessSlotFn process_slot);
-    void* (* get_stackbase) (int16_t tid);
-    void (* jl_throw_out_of_memory_error) (void);
-    void (* sweep_malloced_memory) (void);
-    void (* sweep_stack_pools) (void);
-    void (* wait_in_a_safepoint) (void);
-    void (* exit_from_safepoint) (int8_t old_state);
-    uint64_t (* jl_hrtime) (void);
-    void (* update_gc_stats) (uint64_t, size_t, bool);
-    uintptr_t (* get_abi_structs_checksum_c) (void);
-    void* (* get_thread_finalizer_list) (void* tls);
-    void* (* get_to_finalize_list)(void);
-    void* (* get_marked_finalizers_list)(void);
-    void (*arraylist_grow)(void* a, size_t n);
-    int* (*get_jl_gc_have_pending_finalizers)(void);
-    void (*scan_vm_specific_roots)(RootsWorkClosure* closure);
-    void (*update_inlined_array) (void* from, void* to);
-    void (*prepare_to_collect)(void);
-    void* (* get_owner_address)(void* m);
-    size_t (* mmtk_genericmemory_how)(void* m);
-} Julia_Upcalls;
-
-/**
  * Misc
  */
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, Julia_Upcalls *calls, uintptr_t header_size, uintptr_t tag);
+extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
 extern bool mmtk_will_never_move(void* object);
 extern bool mmtk_process(char* name, char* value);
 extern void mmtk_scan_region(void);
@@ -110,6 +80,11 @@ extern void mmtk_run_finalizers(bool at_exit);
 extern void mmtk_gc_poll(void *tls);
 extern void mmtk_julia_copy_stack_check(int copy_stack);
 extern void* mmtk_get_possibly_forwared(void* object);
+extern void mmtk_block_thread_for_gc(void);
+extern void* mmtk_new_mutator_iterator(void);
+extern void* mmtk_get_next_mutator_tls(void*);
+extern void* mmtk_close_mutator_iterator(void*);
+
 
 /**
  * VM Accounting

@@ -1,11 +1,8 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-
 use crate::JuliaVM;
-use crate::Julia_Upcalls;
 use crate::JULIA_HEADER_SIZE;
 use crate::SINGLETON;
-use crate::UPCALLS;
 use crate::{BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
 
 use libc::c_char;
@@ -26,21 +23,13 @@ pub extern "C" fn mmtk_gc_init(
     min_heap_size: usize,
     max_heap_size: usize,
     n_gcthreads: usize,
-    calls: *const Julia_Upcalls,
     header_size: usize,
     buffer_tag: usize,
 ) {
     unsafe {
-        UPCALLS = calls;
         crate::JULIA_HEADER_SIZE = header_size;
         crate::JULIA_BUFF_TAG = buffer_tag;
     };
-
-    // Assert to make sure our ABI is correct
-    assert_eq!(
-        unsafe { ((*UPCALLS).get_abi_structs_checksum_c)() },
-        crate::util::get_abi_structs_checksum_rust()
-    );
 
     {
         let mut builder = BUILDER.lock().unwrap();

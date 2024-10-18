@@ -1,5 +1,5 @@
 use crate::slots::JuliaVMSlot;
-use crate::{SINGLETON, UPCALLS};
+use crate::SINGLETON;
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
@@ -13,6 +13,9 @@ use mmtk::vm::VMBinding;
 use mmtk::Mutator;
 use mmtk::MMTK;
 
+use crate::jl_gc_mmtk_sweep_malloced_memory;
+use crate::jl_gc_mmtk_sweep_stack_pools;
+use crate::jl_gc_scan_vm_specific_roots;
 use crate::JuliaVM;
 
 pub struct VMScanning {}
@@ -36,8 +39,10 @@ impl Scanning<JuliaVM> for VMScanning {
                             self.buffer.push(object);
                         }
                     }
-                    JuliaVMSlot::Offset(_) => {
-                        unimplemented!() // transitively pinned roots in Julia only come from the stack
+                    JuliaVMSlot::Offset(oe) => {
+                        if let Some(object) = oe.load() {
+                            self.buffer.push(object);
+                        }
                     }
                 }
             }
@@ -47,12 +52,12 @@ impl Scanning<JuliaVM> for VMScanning {
         use crate::julia_types::*;
         use mmtk::util::Address;
 
-        let ptls: &mut mmtk__jl_tls_states_t = unsafe { std::mem::transmute(mutator.mutator_tls) };
+        let ptls: &mut _jl_tls_states_t = unsafe { std::mem::transmute(mutator.mutator_tls) };
         let mut slot_buffer = SlotBuffer { buffer: vec![] }; // need to be tpinned as they're all from the shadow stack
         let mut node_buffer = vec![];
 
         // Scan thread local from ptls: See gc_queue_thread_local in gc.c
-        let mut root_scan_task = |task: *const mmtk__jl_task_t, task_is_root: bool| {
+        let mut root_scan_task = |task: *const _jl_task_t, task_is_root: bool| {
             if !task.is_null() {
                 unsafe {
                     crate::julia_scanning::mmtk_scan_gcstack(task, &mut slot_buffer);
@@ -79,15 +84,15 @@ impl Scanning<JuliaVM> for VMScanning {
         // need to iterate over live tasks as well to process their shadow stacks
         // we should not set the task themselves as roots as we will know which ones are still alive after GC
         let mut i = 0;
-        while i < ptls.gc_tls.heap.live_tasks.len {
-            let mut task_address = Address::from_ptr(ptls.gc_tls.heap.live_tasks.items);
+        while i < ptls.gc_tls_common.heap.live_tasks.len {
+            let mut task_address = Address::from_ptr(ptls.gc_tls_common.heap.live_tasks.items);
             task_address = task_address.shift::<Address>(i as isize);
-            let task = unsafe { task_address.load::<*const mmtk_jl_task_t>() };
+            let task = unsafe { task_address.load::<*const jl_task_t>() };
             root_scan_task(task, false);
             i += 1;
         }
 
-        root_scan_task(ptls.current_task as *mut mmtk__jl_task_t, true);
+        root_scan_task(ptls.current_task as *mut _jl_task_t, true);
         root_scan_task(ptls.next_task, true);
         root_scan_task(ptls.previous_task, true);
         if !ptls.previous_exception.is_null() {
@@ -148,7 +153,7 @@ impl Scanning<JuliaVM> for VMScanning {
         use crate::slots::RootsWorkClosure;
         let mut roots_closure = RootsWorkClosure::from_roots_work_factory(&mut factory);
         unsafe {
-            ((*UPCALLS).scan_vm_specific_roots)(&mut roots_closure as _);
+            jl_gc_scan_vm_specific_roots(&mut roots_closure as _);
         }
     }
 
@@ -211,9 +216,9 @@ impl SweepVMSpecific {
 
 impl<VM: VMBinding> GCWork<VM> for SweepVMSpecific {
     fn do_work(&mut self, _worker: &mut GCWorker<VM>, _mmtk: &'static MMTK<VM>) {
-        // call sweep malloced arrays and sweep stack pools from UPCALLS
-        unsafe { ((*UPCALLS).mmtk_sweep_malloced_array)() }
-        unsafe { ((*UPCALLS).mmtk_sweep_stack_pools)() }
+        // call sweep malloced arrays and sweep stack pools
+        unsafe { jl_gc_mmtk_sweep_malloced_memory() }
+        unsafe { jl_gc_mmtk_sweep_stack_pools() }
         self.swept = true;
     }
 }

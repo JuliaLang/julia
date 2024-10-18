@@ -7,7 +7,7 @@ use mmtk::vm::Finalizable;
 use mmtk::vm::ReferenceGlue;
 
 extern "C" {
-    pub static jl_nothing: *mut mmtk_jl_value_t;
+    pub static jl_nothing: *mut jl_value_t;
 }
 
 #[derive(Copy, Clone, Eq, Hash, PartialOrd, PartialEq, Debug)]
@@ -36,13 +36,13 @@ impl Finalizable for JuliaFinalizableObject {
 pub struct VMReferenceGlue {}
 
 impl VMReferenceGlue {
-    fn load_referent_raw(reference: ObjectReference) -> *mut mmtk_jl_value_t {
-        let reff = reference.to_raw_address().to_ptr::<mmtk_jl_weakref_t>();
+    fn load_referent_raw(reference: ObjectReference) -> *mut jl_value_t {
+        let reff = reference.to_raw_address().to_ptr::<jl_weakref_t>();
         unsafe { (*reff).value }
     }
 
-    fn set_referent_raw(reference: ObjectReference, referent_raw: *mut mmtk_jl_value_t) {
-        let reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
+    fn set_referent_raw(reference: ObjectReference, referent_raw: *mut jl_value_t) {
+        let reff = reference.to_raw_address().to_mut_ptr::<jl_weakref_t>();
         unsafe {
             (*reff).value = referent_raw;
         }

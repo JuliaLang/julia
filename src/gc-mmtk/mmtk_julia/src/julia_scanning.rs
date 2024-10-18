@@ -3,7 +3,6 @@ use crate::julia_types::*;
 use crate::slots::JuliaVMSlot;
 use crate::slots::OffsetSlot;
 use crate::JULIA_BUFF_TAG;
-use crate::UPCALLS;
 use memoffset::offset_of;
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::slot::SimpleSlot;
@@ -11,29 +10,35 @@ use mmtk::vm::SlotVisitor;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use crate::jl_gc_genericmemory_how;
+use crate::jl_gc_get_owner_address_to_mmtk;
+use crate::jl_gc_get_stackbase;
+use crate::jl_gc_scan_julia_exc_obj;
+
 const JL_MAX_TAGS: usize = 64; // from vm/julia/src/jl_exports.h
 const OFFSET_OF_INLINED_SPACE_IN_MODULE: usize =
-    offset_of!(mmtk_jl_module_t, usings) + offset_of!(mmtk_arraylist_t, _space);
+    offset_of!(jl_module_t, usings) + offset_of!(arraylist_t, _space);
 
 #[allow(improper_ctypes)]
 extern "C" {
-    pub static jl_simplevector_type: *const mmtk_jl_datatype_t;
-    pub static jl_genericmemory_typename: *mut mmtk_jl_typename_t;
-    pub static jl_genericmemoryref_typename: *mut mmtk_jl_typename_t;
-    pub static jl_array_typename: *mut mmtk_jl_typename_t;
-    pub static jl_module_type: *const mmtk_jl_datatype_t;
-    pub static jl_task_type: *const mmtk_jl_datatype_t;
-    pub static jl_string_type: *const mmtk_jl_datatype_t;
-    pub static jl_weakref_type: *const mmtk_jl_datatype_t;
-    pub static jl_symbol_type: *const mmtk_jl_datatype_t;
-    pub static jl_method_type: *const mmtk_jl_datatype_t;
-    pub static mut ijl_small_typeof: [*mut mmtk_jl_datatype_t; 128usize];
+    pub static jl_simplevector_type: *const jl_datatype_t;
+    pub static jl_genericmemory_typename: *mut jl_typename_t;
+    pub static jl_genericmemoryref_typename: *mut jl_typename_t;
+    pub static jl_array_typename: *mut jl_typename_t;
+    pub static jl_module_type: *const jl_datatype_t;
+    pub static jl_task_type: *const jl_datatype_t;
+    pub static jl_string_type: *const jl_datatype_t;
+    pub static jl_weakref_type: *const jl_datatype_t;
+    pub static jl_symbol_type: *const jl_datatype_t;
+    pub static jl_method_type: *const jl_datatype_t;
+    pub static jl_binding_partition_type: *const jl_datatype_t;
+    pub static mut jl_small_typeof: [*mut jl_datatype_t; 128usize];
 }
 
 #[inline(always)]
 pub unsafe fn mmtk_jl_typetagof(addr: Address) -> Address {
     let as_tagged_value =
-        addr.as_usize() - std::mem::size_of::<crate::julia_scanning::mmtk_jl_taggedvalue_t>();
+        addr.as_usize() - std::mem::size_of::<crate::julia_scanning::jl_taggedvalue_t>();
     let t_header = Address::from_usize(as_tagged_value).load::<Address>();
     let t = t_header.as_usize() & !0xf;
 
@@ -41,18 +46,18 @@ pub unsafe fn mmtk_jl_typetagof(addr: Address) -> Address {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_typeof(addr: Address) -> *const mmtk_jl_datatype_t {
+pub unsafe fn mmtk_jl_typeof(addr: Address) -> *const jl_datatype_t {
     mmtk_jl_to_typeof(mmtk_jl_typetagof(addr))
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const mmtk_jl_datatype_t {
+pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const jl_datatype_t {
     let t_raw = t.as_usize();
     if t_raw < (JL_MAX_TAGS << 4) {
-        let ty = ijl_small_typeof[t_raw / std::mem::size_of::<Address>()];
+        let ty = jl_small_typeof[t_raw / std::mem::size_of::<Address>()];
         return ty;
     }
-    return t.to_ptr::<mmtk_jl_datatype_t>();
+    return t.to_ptr::<jl_datatype_t>();
 }
 
 const PRINT_OBJ_TYPE: bool = false;
@@ -75,23 +80,23 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
     // symbols are always marked
     // buffers are marked by their parent object
-    if vtag.to_ptr::<mmtk_jl_datatype_t>() == jl_symbol_type || vtag_usize == JULIA_BUFF_TAG {
+    if vtag.to_ptr::<jl_datatype_t>() == jl_symbol_type || vtag_usize == JULIA_BUFF_TAG {
         return;
     }
 
-    if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4)
-        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_unionall_tag as usize) << 4)
-        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_uniontype_tag as usize) << 4)
-        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_tvar_tag as usize) << 4)
-        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_vararg_tag as usize) << 4)
+    if vtag_usize == ((jl_small_typeof_tags_jl_datatype_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_unionall_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_uniontype_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_tvar_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_vararg_tag as usize) << 4)
     {
         // these objects have pointers in them, but no other special handling
         // so we want these to fall through to the end
-        vtag_usize = ijl_small_typeof[vtag.as_usize() / std::mem::size_of::<Address>()] as usize;
+        vtag_usize = jl_small_typeof[vtag.as_usize() / std::mem::size_of::<Address>()] as usize;
         vtag = Address::from_usize(vtag_usize);
-    } else if vtag_usize < ((mmtk_jl_small_typeof_tags_mmtk_jl_max_tags as usize) << 4) {
+    } else if vtag_usize < ((jl_small_typeof_tags_jl_max_tags as usize) << 4) {
         // these objects either have specialing handling
-        if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_simplevector_tag as usize) << 4) {
+        if vtag_usize == ((jl_small_typeof_tags_jl_simplevector_tag as usize) << 4) {
             if PRINT_OBJ_TYPE {
                 println!("scan_julia_obj {}: simple vector\n", obj);
             }
@@ -103,12 +108,12 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 process_slot(closure, objary_begin);
                 objary_begin = objary_begin.shift::<Address>(1);
             }
-        } else if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_module_tag as usize) << 4) {
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_module_tag as usize) << 4) {
             if PRINT_OBJ_TYPE {
                 println!("scan_julia_obj {}: module\n", obj);
             }
 
-            let m = obj.to_ptr::<mmtk_jl_module_t>();
+            let m = obj.to_ptr::<jl_module_t>();
             let bindings_slot = ::std::ptr::addr_of!((*m).bindings);
             if PRINT_OBJ_TYPE {
                 println!(" - scan bindings: {:?}\n", bindings_slot);
@@ -150,12 +155,12 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                     objary_begin = objary_begin.shift::<Address>(1);
                 }
             }
-        } else if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_task_tag as usize) << 4) {
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_task_tag as usize) << 4) {
             if PRINT_OBJ_TYPE {
                 println!("scan_julia_obj {}: task\n", obj);
             }
 
-            let ta = obj.to_ptr::<mmtk_jl_task_t>();
+            let ta = obj.to_ptr::<jl_task_t>();
 
             mmtk_scan_gcstack(ta, closure);
 
@@ -172,30 +177,30 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 process_slot(closure, slot);
                 obj8_begin = obj8_begin.shift::<u8>(1);
             }
-        } else if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_string_tag as usize) << 4) {
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4) {
             if PRINT_OBJ_TYPE {
                 println!("scan_julia_obj {}: string\n", obj);
             }
         }
         return;
     } else {
-        let vt = vtag.to_ptr::<mmtk_jl_datatype_t>();
+        let vt = vtag.to_ptr::<jl_datatype_t>();
         let type_tag = mmtk_jl_typetagof(vtag);
 
-        if type_tag.as_usize() != ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4)
+        if type_tag.as_usize() != ((jl_small_typeof_tags_jl_datatype_tag as usize) << 4)
             || (*vt).smalltag() != 0
         {
             panic!(
                 "GC error (probable corruption) - !jl_is_datatype(vt) = {}; vt->smalltag = {}, vt = {:?}",
-                vt as usize != ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4),
-                (*(vtag.to_ptr::<mmtk_jl_datatype_t>())).smalltag() != 0,
+                vt as usize != ((jl_small_typeof_tags_jl_datatype_tag as usize) << 4),
+                (*(vtag.to_ptr::<jl_datatype_t>())).smalltag() != 0,
                 vt
             );
         }
     }
-    let vt = vtag.to_ptr::<mmtk_jl_datatype_t>();
+    let vt = vtag.to_ptr::<jl_datatype_t>();
     if (*vt).name == jl_array_typename {
-        let a = obj.to_ptr::<mmtk_jl_array_t>();
+        let a = obj.to_ptr::<jl_array_t>();
         let memref = (*a).ref_;
 
         let ptr_or_offset = memref.ptr_or_offset;
@@ -218,8 +223,8 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
         if PRINT_OBJ_TYPE {
             println!("scan_julia_obj {}: genericmemory\n", obj);
         }
-        let m = obj.to_ptr::<mmtk_jl_genericmemory_t>();
-        let how = mmtk_jl_genericmemory_how(m);
+        let m = obj.to_ptr::<jl_genericmemory_t>();
+        let how = jl_gc_genericmemory_how(obj);
 
         if PRINT_OBJ_TYPE {
             println!("scan_julia_obj {}: genericmemory how = {}\n", obj, how);
@@ -308,6 +313,15 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     if npointers == 0 {
         return;
     } else {
+        if vt == jl_binding_partition_type {
+            let bpart_ptr = obj.to_mut_ptr::<jl_binding_partition_t>();
+            let restriction = (*bpart_ptr).restriction._M_i;
+            let offset = mmtk_decode_restriction_value(restriction);
+            let slot = Address::from_ptr(::std::ptr::addr_of!((*bpart_ptr).restriction));
+            if restriction - offset != 0 {
+                process_offset_slot(closure, slot, offset);
+            }
+        }
         debug_assert!(
             (*layout).nfields > 0 && (*layout).fielddesc_type_custom() != 3,
             "opaque types should have been handled specially"
@@ -349,23 +363,9 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     }
 }
 
-/*
-  how - allocation style
-  0 = data is inlined
-  1 = owns the gc-managed data, exclusively (will free it)
-  2 = malloc-allocated pointer (does not own it)
-  3 = has a pointer to the object that owns the data pointer
-*/
 #[inline(always)]
-pub unsafe fn mmtk_jl_genericmemory_how(m: *const mmtk_jl_genericmemory_t) -> usize {
-    return unsafe { ((*UPCALLS).mmtk_genericmemory_how)(Address::from_ptr(m)) };
-}
-
-#[inline(always)]
-unsafe fn mmtk_jl_genericmemory_data_owner_field_address(
-    m: *const mmtk_jl_genericmemory_t,
-) -> Address {
-    unsafe { ((*UPCALLS).get_owner_address)(Address::from_ptr(m)) }
+unsafe fn mmtk_jl_genericmemory_data_owner_field_address(m: *const jl_genericmemory_t) -> Address {
+    unsafe { jl_gc_get_owner_address_to_mmtk(Address::from_ptr(m)) }
 }
 
 // #[inline(always)]
@@ -376,15 +376,15 @@ unsafe fn mmtk_jl_genericmemory_data_owner_field_address(
 // }
 
 pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
-    ta: *const mmtk_jl_task_t,
+    ta: *const jl_task_t,
     closure: &mut EV,
 ) {
-    let stkbuf = (*ta).stkbuf;
-    let copy_stack = (*ta).copy_stack_custom();
+    let stkbuf = (*ta).ctx.stkbuf;
+    let copy_stack = (*ta).ctx.copy_stack_custom();
 
     #[cfg(feature = "julia_copy_stack")]
     if stkbuf != std::ptr::null_mut() && copy_stack != 0 {
-        let stkbuf_slot = Address::from_ptr(::std::ptr::addr_of!((*ta).stkbuf));
+        let stkbuf_slot = Address::from_ptr(::std::ptr::addr_of!((*ta).ctx.stkbuf));
         process_slot(closure, stkbuf_slot);
     }
 
@@ -393,19 +393,19 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
     #[cfg(feature = "julia_copy_stack")]
     if stkbuf != std::ptr::null_mut() && copy_stack != 0 && (*ta).ptls == std::ptr::null_mut() {
-        if ((*ta).tid as i16) < 0 {
+        if ((*ta).tid._M_i) < 0 {
             panic!("tid must be positive.")
         }
-        let stackbase = ((*UPCALLS).get_stackbase)((*ta).tid);
+        let stackbase = jl_gc_get_stackbase((*ta).tid._M_i);
         ub = stackbase as u64;
-        lb = ub - ((*ta).copy_stack() as u64);
-        offset = (*ta).stkbuf as isize - lb as isize;
+        lb = ub - ((*ta).ctx.copy_stack() as u64);
+        offset = (*ta).ctx.stkbuf as isize - lb as isize;
     }
 
     if s != std::ptr::null_mut() {
         let s_nroots_addr = ::std::ptr::addr_of!((*s).nroots);
         let mut nroots = read_stack(Address::from_ptr(s_nroots_addr), offset, lb, ub);
-        debug_assert!(nroots.as_usize() as u32 <= UINT32_MAX);
+        debug_assert!(nroots.as_usize() as u32 <= std::u32::MAX);
         let mut nr = nroots >> 2;
 
         loop {
@@ -448,7 +448,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
                 break;
             }
 
-            s = sprev.to_mut_ptr::<mmtk_jl_gcframe_t>();
+            s = sprev.to_mut_ptr::<jl_gcframe_t>();
             let s_nroots_addr = ::std::ptr::addr_of!((*s).nroots);
             let new_nroots = read_stack(Address::from_ptr(s_nroots_addr), offset, lb, ub);
             nroots = new_nroots;
@@ -459,7 +459,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
 
     // just call into C, since the code is cold
     if (*ta).excstack != std::ptr::null_mut() {
-        ((*UPCALLS).scan_julia_exc_obj)(
+        jl_gc_scan_julia_exc_obj(
             Address::from_ptr(ta),
             Address::from_mut_ptr(closure),
             process_slot::<EV> as _,
@@ -522,42 +522,26 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
     closure.visit_slot(JuliaVMSlot::Simple(simple_slot));
 }
 
-// #[inline(always)]
-// pub unsafe fn boot_image_object_has_been_scanned(obj: Address) -> u8 {
-//     let obj_type_addr = mmtk_jl_typeof(obj);
-//     let obj_type = obj_type_addr.to_ptr::<mmtk_jl_datatype_t>();
+// This is based on the function decode_restriction_value from julia_internal.h.
+// However, since MMTk uses the slot to load the object, we get the offset from pku using
+// that offset to pass to process_offset_edge and get the right address.
+#[inline(always)]
+pub fn mmtk_decode_restriction_value(pku: usize) -> usize {
+    #[cfg(target_pointer_width = "64")]
+    {
+        // need to apply (pku & ~0x7) to get the object to be traced
+        // so we use (pku & 0x7) to get the offset from the object
+        // and pass it to process_offset_slot
+        return pku & 0x7;
+    }
 
-//     if obj_type == jl_symbol_type {
-//         return 1;
-//     }
-
-//     if BI_METADATA_START_ALIGNED_DOWN == 0 {
-//         return 0;
-//     }
-
-//     if obj.as_usize() < BI_METADATA_START_ALIGNED_DOWN
-//         || obj.as_usize() >= BI_METADATA_END_ALIGNED_UP
-//     {
-//         return 0;
-//     }
-
-//     return check_metadata_scanned(obj);
-// }
-
-// #[inline(always)]
-// pub unsafe fn boot_image_mark_object_as_scanned(obj: Address) {
-//     if BI_METADATA_START_ALIGNED_DOWN == 0 {
-//         return;
-//     }
-
-//     if obj.as_usize() < BI_METADATA_START_ALIGNED_DOWN
-//         || obj.as_usize() >= BI_METADATA_END_ALIGNED_UP
-//     {
-//         return;
-//     }
-
-//     mark_metadata_scanned(obj);
-// }
+    #[cfg(not(target_pointer_width = "64"))]
+    {
+        // when not #ifdef _P64 we simply return pku.val
+        // i.e., the offset is 0, since val is the first field
+        return 0;
+    }
+}
 
 #[inline(always)]
 pub fn process_offset_slot<EV: SlotVisitor<JuliaVMSlot>>(
@@ -594,42 +578,42 @@ pub fn mmtk_jl_array_ndimwords(ndims: u32) -> usize {
 
 #[inline(always)]
 pub unsafe fn mmtk_jl_svec_len(obj: Address) -> usize {
-    (*obj.to_ptr::<mmtk_jl_svec_t>()).length
+    (*obj.to_ptr::<jl_svec_t>()).length
 }
 
 #[inline(always)]
 pub unsafe fn mmtk_jl_svec_data(obj: Address) -> Address {
-    obj + std::mem::size_of::<crate::julia_scanning::mmtk_jl_svec_t>()
+    obj + std::mem::size_of::<crate::julia_scanning::jl_svec_t>()
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_tparam0(vt: *const mmtk_jl_datatype_t) -> *const mmtk_jl_datatype_t {
+pub unsafe fn mmtk_jl_tparam0(vt: *const jl_datatype_t) -> *const jl_datatype_t {
     mmtk_jl_svecref((*vt).parameters, 0)
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_svecref(vt: *mut mmtk_jl_svec_t, i: usize) -> *const mmtk_jl_datatype_t {
+pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatype_t {
     debug_assert!(
         mmtk_jl_typetagof(Address::from_mut_ptr(vt)).as_usize()
-            == (mmtk_jl_small_typeof_tags_mmtk_jl_simplevector_tag << 4) as usize
+            == (jl_small_typeof_tags_jl_simplevector_tag << 4) as usize
     );
     debug_assert!(i < mmtk_jl_svec_len(Address::from_mut_ptr(vt)));
 
     let svec_data = mmtk_jl_svec_data(Address::from_mut_ptr(vt));
     let result_ptr = svec_data + i;
     let result = result_ptr.atomic_load::<AtomicUsize>(Ordering::Relaxed);
-    ::std::mem::transmute::<usize, *const mmtk_jl_datatype_t>(result)
+    ::std::mem::transmute::<usize, *const jl_datatype_t>(result)
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_dt_layout_ptrs(l: *const mmtk_jl_datatype_layout_t) -> Address {
+pub unsafe fn mmtk_jl_dt_layout_ptrs(l: *const jl_datatype_layout_t) -> Address {
     mmtk_jl_dt_layout_fields(l)
         + (mmtk_jl_fielddesc_size((*l).fielddesc_type_custom()) * (*l).nfields) as usize
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_dt_layout_fields(l: *const mmtk_jl_datatype_layout_t) -> Address {
-    Address::from_ptr(l) + std::mem::size_of::<mmtk_jl_datatype_layout_t>()
+pub unsafe fn mmtk_jl_dt_layout_fields(l: *const jl_datatype_layout_t) -> Address {
+    Address::from_ptr(l) + std::mem::size_of::<jl_datatype_layout_t>()
 }
 
 #[inline(always)]
@@ -640,12 +624,12 @@ pub unsafe fn mmtk_jl_fielddesc_size(fielddesc_type: u16) -> u32 {
 
 const JL_BT_NON_PTR_ENTRY: usize = usize::MAX;
 
-pub fn mmtk_jl_bt_is_native(bt_entry: *mut mmtk_jl_bt_element_t) -> bool {
+pub fn mmtk_jl_bt_is_native(bt_entry: *mut jl_bt_element_t) -> bool {
     let entry = unsafe { (*bt_entry).__bindgen_anon_1.uintptr };
     entry != JL_BT_NON_PTR_ENTRY
 }
 
-pub fn mmtk_jl_bt_entry_size(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+pub fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize {
     if mmtk_jl_bt_is_native(bt_entry) {
         1
     } else {
@@ -653,19 +637,19 @@ pub fn mmtk_jl_bt_entry_size(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
     }
 }
 
-pub fn mmtk_jl_bt_num_jlvals(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+pub fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     entry & 0x7
 }
 
-pub fn mmtk_jl_bt_num_uintvals(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
+pub fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     (entry >> 3) & 0x7
 }
 
-pub fn mmtk_jl_bt_entry_jlvalue(bt_entry: *mut mmtk_jl_bt_element_t, i: usize) -> ObjectReference {
+pub fn mmtk_jl_bt_entry_jlvalue(bt_entry: *mut jl_bt_element_t, i: usize) -> ObjectReference {
     let entry = unsafe { (*bt_entry.add(2 + i)).__bindgen_anon_1.jlvalue };
     debug_assert!(!entry.is_null());
     unsafe { ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(entry)) }

@@ -1,4 +1,3 @@
-use crate::UPCALLS;
 use mmtk::memory_manager;
 use mmtk::util::Address;
 use mmtk::util::ObjectReference;
@@ -8,13 +7,18 @@ use mmtk::Mutator;
 
 use crate::JuliaVM;
 
+use crate::arraylist_grow;
+use crate::jl_gc_get_have_pending_finalizers;
+use crate::jl_gc_get_marked_finalizers_list;
+use crate::jl_gc_get_thread_finalizer_list;
+use crate::jl_gc_get_to_finalize_list;
+
 /// This is a Rust implementation of finalizer scanning in _jl_gc_collect() in gc.c
 pub fn scan_finalizers_in_rust<T: ObjectTracer>(tracer: &mut T) {
     use crate::mmtk::vm::ActivePlan;
     let to_finalize = ArrayListT::to_finalize_list();
     let marked_finalizers_list = ArrayListT::marked_finalizers_list();
-    let jl_gc_have_pending_finalizers: *mut i32 =
-        unsafe { ((*UPCALLS).get_jl_gc_have_pending_finalizers)() };
+    let jl_gc_have_pending_finalizers: *mut i32 = unsafe { jl_gc_get_have_pending_finalizers() };
 
     // Current length of marked list: we only need to trace objects after this length if this is a nursery GC.
     let mut orig_marked_len = marked_finalizers_list.len;
@@ -72,17 +76,17 @@ impl ArrayListT {
 
     /// ptls->finalizers: new finalizers are registered into this thread local list
     fn thread_local_finalizer_list(mutator: &Mutator<JuliaVM>) -> &mut ArrayListT {
-        let list = unsafe { ((*UPCALLS).get_thread_finalizer_list)(mutator.mutator_tls.0 .0) };
+        let list = unsafe { jl_gc_get_thread_finalizer_list(mutator.mutator_tls.0 .0) };
         unsafe { &mut *list.to_mut_ptr() }
     }
     /// to_finalize: objects that are dead are in this list waiting for finalization
     fn to_finalize_list<'a>() -> &'a mut ArrayListT {
-        let list = unsafe { ((*UPCALLS).get_to_finalize_list)() };
+        let list = unsafe { jl_gc_get_to_finalize_list() };
         unsafe { &mut *list.to_mut_ptr() }
     }
     /// finalizer_list_marked: objects that are alive and traced, thus we do not need to scan them again in future nursery GCs.
     fn marked_finalizers_list<'a>() -> &'a mut ArrayListT {
-        let list = unsafe { ((*UPCALLS).get_marked_finalizers_list)() };
+        let list = unsafe { jl_gc_get_marked_finalizers_list() };
         unsafe { &mut *list.to_mut_ptr() }
     }
 
@@ -103,7 +107,7 @@ impl ArrayListT {
         if newlen > self.max {
             // Call into C to grow the list.
             unsafe {
-                ((*UPCALLS).arraylist_grow)(Address::from_mut_ptr(self as _), n);
+                arraylist_grow(Address::from_mut_ptr(self as _), n);
             }
         }
         self.len = newlen

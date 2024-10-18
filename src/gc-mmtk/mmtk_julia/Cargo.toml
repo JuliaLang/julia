@@ -1,7 +1,8 @@
 [package]
 name = "mmtk-julia"
 version = "0.1.0"
-authors = ["Eduardo Souza <ledusou@gmail.com>"]
+authors = ["Eduardo Souza <ledusou@gmail.com>", "Yi Lin <qinsoon@gmail.com>"]
+build = "build.rs"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +11,7 @@ edition = "2018"
 [package.metadata.julia]
 # Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
 julia_repo = "https://github.com/mmtk/julia.git"
-julia_version = "d98aa333178d372d96f3c99c712edf0018a50289"
+julia_version = "4bf8f4582a18867826f4c005e72fadb109e5164f"
 
 [lib]
 crate-type = ["cdylib"]
@@ -18,6 +19,7 @@ crate-type = ["cdylib"]
 [build-dependencies]
 cc = "*"
 built = "*"
+bindgen = "*"
 
 [profile.release]
 lto = true

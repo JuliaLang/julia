@@ -1,19 +1,19 @@
+use crate::SINGLETON;
+use crate::{
+    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter, jl_hrtime,
+    jl_throw_out_of_memory_error,
+};
 use crate::{JuliaVM, USER_TRIGGERED_GC};
-use crate::{SINGLETON, UPCALLS};
 use log::{info, trace};
 use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
 static GC_START: AtomicU64 = AtomicU64::new(0);
-
-extern "C" {
-    pub static jl_gc_disable_counter: AtomicU32;
-}
 
 pub struct VMCollection {}
 
@@ -40,18 +40,18 @@ impl Collection<JuliaVM> for VMCollection {
         }
 
         // Record the start time of the GC
-        let now = unsafe { ((*UPCALLS).jl_hrtime)() };
+        let now = unsafe { jl_hrtime() };
         trace!("gc_start = {}", now);
         GC_START.store(now, Ordering::Relaxed);
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
         // Get the end time of the GC
-        let end = unsafe { ((*UPCALLS).jl_hrtime)() };
+        let end = unsafe { jl_hrtime() };
         trace!("gc_end = {}", end);
         let gc_time = end - GC_START.load(Ordering::Relaxed);
         unsafe {
-            ((*UPCALLS).update_gc_stats)(
+            jl_gc_update_stats(
                 gc_time,
                 crate::api::mmtk_used_bytes(),
                 is_current_gc_nursery(),
@@ -76,7 +76,7 @@ impl Collection<JuliaVM> for VMCollection {
     fn block_for_gc(_tls: VMMutatorThread) {
         info!("Triggered GC!");
 
-        unsafe { ((*UPCALLS).prepare_to_collect)() };
+        unsafe { jl_gc_prepare_to_collect() };
 
         info!("Finished blocking mutator for GC!");
     }
@@ -101,7 +101,7 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn out_of_memory(_tls: VMThread, _err_kind: AllocationError) {
         println!("Out of Memory!");
-        unsafe { ((*UPCALLS).jl_throw_out_of_memory_error)() };
+        unsafe { jl_throw_out_of_memory_error() };
     }
 
     fn vm_live_bytes() -> usize {
@@ -109,7 +109,7 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn is_collection_enabled() -> bool {
-        unsafe { AtomicU32::load(&jl_gc_disable_counter, Ordering::SeqCst) <= 0 }
+        unsafe { jl_get_gc_disable_counter() <= 0 }
     }
 }
 

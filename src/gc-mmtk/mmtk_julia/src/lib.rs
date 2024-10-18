@@ -11,7 +11,6 @@ use mmtk::MMTKBuilder;
 use mmtk::MMTK;
 
 use std::collections::HashMap;
-use std::ptr::null_mut;
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -94,29 +93,25 @@ lazy_static! {
 
 type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
-#[repr(C)]
-pub struct Julia_Upcalls {
-    pub scan_julia_exc_obj:
-        extern "C" fn(obj: Address, closure: Address, process_slot: ProcessSlotFn),
-    pub get_stackbase: extern "C" fn(tid: u16) -> usize,
-    pub jl_throw_out_of_memory_error: extern "C" fn(),
-    pub mmtk_sweep_malloced_array: extern "C" fn(),
-    pub mmtk_sweep_stack_pools: extern "C" fn(),
-    pub wait_in_a_safepoint: extern "C" fn(),
-    pub exit_from_safepoint: extern "C" fn(old_state: i8),
-    pub jl_hrtime: extern "C" fn() -> u64,
-    pub update_gc_stats: extern "C" fn(u64, usize, bool),
-    pub get_abi_structs_checksum_c: extern "C" fn() -> usize,
-    pub get_thread_finalizer_list: extern "C" fn(tls: OpaquePointer) -> Address,
-    pub get_to_finalize_list: extern "C" fn() -> Address,
-    pub get_marked_finalizers_list: extern "C" fn() -> Address,
-    pub arraylist_grow: extern "C" fn(Address, usize),
-    pub get_jl_gc_have_pending_finalizers: extern "C" fn() -> *mut i32,
-    pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::slots::RootsWorkClosure),
-    pub update_inlined_array: extern "C" fn(to: Address, from: Address),
-    pub prepare_to_collect: extern "C" fn(),
-    pub get_owner_address: extern "C" fn(m: Address) -> Address,
-    pub mmtk_genericmemory_how: extern "C" fn(m: Address) -> usize,
+#[allow(improper_ctypes)]
+extern "C" {
+    pub fn jl_gc_scan_julia_exc_obj(obj: Address, closure: Address, process_slot: ProcessSlotFn);
+    pub fn jl_gc_get_stackbase(tid: i16) -> usize;
+    pub fn jl_throw_out_of_memory_error();
+    pub fn jl_get_gc_disable_counter() -> u32;
+    pub fn jl_gc_mmtk_sweep_malloced_memory();
+    pub fn jl_gc_mmtk_sweep_stack_pools();
+    pub fn jl_hrtime() -> u64;
+    pub fn jl_gc_update_stats(t: u64, mmtk_live_bytes: usize, is_nursery: bool);
+    pub fn jl_gc_get_abi_structs_checksum_c() -> usize;
+    pub fn jl_gc_get_thread_finalizer_list(tls: OpaquePointer) -> Address;
+    pub fn jl_gc_get_to_finalize_list() -> Address;
+    pub fn jl_gc_get_marked_finalizers_list() -> Address;
+    pub fn arraylist_grow(a: Address, n: usize);
+    pub fn jl_gc_get_have_pending_finalizers() -> *mut i32;
+    pub fn jl_gc_scan_vm_specific_roots(closure: *mut crate::slots::RootsWorkClosure);
+    pub fn jl_gc_update_inlined_array(to: Address, from: Address);
+    pub fn jl_gc_prepare_to_collect();
+    pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;
+    pub fn jl_gc_genericmemory_how(m: Address) -> usize;
 }
-
-pub static mut UPCALLS: *const Julia_Upcalls = null_mut();
