@@ -823,6 +823,8 @@ JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
 endif
 
+LLVMDIALECTS:=-lllvm_dialects
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler
@@ -1121,6 +1123,8 @@ else
 LLVM_CONFIG := $(build_depsbindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
+
+DIALECTS_TBLGEN := $(build_depsbindir)/llvm-dialects-tblgen$(EXE)
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 JCPPFLAGS+=-DSYSTEM_LLVM
@@ -1772,6 +1776,7 @@ PERLCOLOR:="\033[35m"
 FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
 DTRACECOLOR:="\033[32;1m"
+TBLGENCOLOR:="\033[32;1m"
 
 SRCCOLOR:="\033[33m"
 BINCOLOR:="\033[37;1m"
@@ -1786,6 +1791,7 @@ PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_TBLGEN = printf '    %b %b\n' $(TBLGENCOLOR)TBLGEN$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
 QUIET_MAKE =
@@ -1796,6 +1802,7 @@ PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_TBLGEN = echo '$(subst ','\'',$(1))'; $(1)
 
 endif
 

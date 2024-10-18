@@ -48,7 +48,6 @@ DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
 
 DLLEXPORT const char *MakeLoadGlobalFunction() {
     LLVMContext Ctx;
-
     auto M = new Module("shadow", Ctx);
     auto intType = Type::getInt32Ty(Ctx);
     auto G = new GlobalVariable(

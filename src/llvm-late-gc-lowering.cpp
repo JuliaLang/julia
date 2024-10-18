@@ -208,7 +208,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
             auto callee = CI->getCalledFunction();
-            if (callee && callee->getName() == "julia.gc_loaded") {
+            if (callee && isa<GCLoaded>(callee)) {
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
@@ -873,7 +873,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
             task_local = true;
             return true;
         }
-        if (callee && callee->getName() == "julia.gc_loaded") {
+        if (isa<GCLoaded>(callee)) {
             return isLoadFromConstGV(call->getArgOperand(0), task_local, seen) &&
                    isLoadFromConstGV(call->getArgOperand(1), task_local, seen);
         }
@@ -1155,7 +1155,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (callee && callee == typeof_func) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-2});
                 }
-                else if (callee && callee->getName() == "julia.gc_loaded") {
+                else if (callee && isa<GCLoaded>(callee)) {
                     continue;
                 }
                 else {
@@ -1248,7 +1248,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                        callee == write_barrier_func || isa<GCLoaded>(callee) || callee == pop_handler_noexcept_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
@@ -2045,7 +2045,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
+            } else if (isa<GCLoaded>(callee)) {
                 auto *obj = CI->getOperand(1);
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
                 ASCI->takeName(CI);
