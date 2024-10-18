@@ -28,6 +28,10 @@ public
     acquire,
     release,
 
+# arrays
+    has_offset_axes,
+    require_one_based_indexing,
+
 # collections
     IteratorEltype,
     IteratorSize,
