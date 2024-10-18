@@ -3270,8 +3270,8 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, mod_array);
 }
 
-JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
-                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
+JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist,
+                                         ios_t **s, jl_array_t **udeps, int64_t *srctextpos)
 {
     if (jl_options.strip_ir || jl_options.trim) {
         // make sure this is precompiled for jl_foreach_reachable_mtable
@@ -3281,25 +3281,13 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
-    // iff emit_split
-    // write header and src_text to one file f/s
-    // write systemimg to a second file ff/z
     jl_task_t *ct = jl_current_task;
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
 
-    ios_t *ff = NULL;
-    if (emit_split) {
-        ff = (ios_t*)malloc_s(sizeof(ios_t));
-        ios_mem(ff, 0);
-    } else {
-        ff = f;
-    }
-
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     int64_t checksumpos = 0;
-    int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
     JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
 
@@ -3316,14 +3304,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             new_ext_cis = NULL;
         }
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
-        if (emit_split) {
-            checksumpos_ff = write_header(ff, 1);
-            write_uint8(ff, jl_cache_flags());
-            write_mod_list(ff, mod_array);
-        }
-        else {
-            checksumpos_ff = checksumpos;
-        }
     }
     else if (_native_data != NULL) {
         precompilation_world = jl_atomic_load_acquire(&jl_world_counter);
@@ -3342,18 +3322,13 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         htable_new(&relocatable_ext_cis, 0);
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
                                       &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
-        if (!emit_split) {
-            write_int32(f, 0); // No clone_targets
-            write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
-        }
-        else {
-            write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
-        }
-        datastartpos = ios_pos(ff);
+        write_int32(f, 0); // No clone_targets
+        write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
+        datastartpos = ios_pos(f);
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(f, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
     if (_native_data != NULL)
         native_functions = NULL;
     if (worklist)
@@ -3366,28 +3341,17 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 
     if (worklist) {
         // Go back and update the checksum in the header
-        int64_t dataendpos = ios_pos(ff);
-        uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);
-        ios_seek(ff, checksumpos_ff);
-        write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
-        write_uint64(ff, datastartpos);
-        write_uint64(ff, dataendpos);
-        ios_seek(ff, dataendpos);
-
-        // Write the checksum to the split header if necessary
-        if (emit_split) {
-            int64_t cur = ios_pos(f);
-            ios_seek(f, checksumpos);
-            write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
-            ios_seek(f, cur);
-            // Next we will write the clone_targets and afterwards the srctext
-        }
+        int64_t dataendpos = ios_pos(f);
+        uint32_t checksum = jl_crc32c(0, &f->buf[datastartpos], dataendpos - datastartpos);
+        ios_seek(f, checksumpos);
+        write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
+        write_uint64(f, datastartpos);
+        write_uint64(f, dataendpos);
+        ios_seek(f, dataendpos);
     }
 
     JL_GC_POP();
     *s = f;
-    if (emit_split)
-        *z = ff;
     return;
 }
 
