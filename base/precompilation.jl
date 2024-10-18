@@ -800,8 +800,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             name *= color_string(" $(config_str)", :light_black)
                         end
                         lock(print_lock) do
-                            if !fancyprint && target === nothing && isempty(pkg_queue)
-                                printpkgstyle(io, :Precompiling, "packages...")
+                            if !fancyprint && isempty(pkg_queue)
+                                printpkgstyle(io, :Precompiling, something(target, "packages..."))
                             end
                         end
                         push!(pkg_queue, pkg_config)
