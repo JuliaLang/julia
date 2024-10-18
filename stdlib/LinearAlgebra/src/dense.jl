@@ -112,10 +112,7 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     haszero(T::Type)
 
 Return whether a type `T` has a unique zero element defined using `zero(T)`.
-If a type `M` specializes `zero(M)`, it may also choose to add the method
-```julia
-haszero(::Type{M}) where {M} = true
-```
+If a type `M` specializes `zero(M)`, it may also choose to set `haszero(M)` to `true`.
 By default, `haszero` is assumed to be `false`, in which case the zero elements
 are deduced from values rather than the type.
 
