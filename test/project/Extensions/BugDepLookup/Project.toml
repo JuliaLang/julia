@@ -1,0 +1,13 @@
+name = "BugDepLookup"
+uuid = "9b094d01-e697-4a76-8fe8-871656a862e0"
+authors = ["Cody Tapscott <topolarity@tapscott.me>"]
+version = "0.1.0"
+
+[deps]
+SomePackage = "678608ae-7bb3-42c7-98b1-82102067a3d8"
+
+[weakdeps]
+Baz = "5796e38b-8bd2-4f06-8c98-e0a8826bb787"
+
+[extensions]
+SomePackageExt = "SomePackage"

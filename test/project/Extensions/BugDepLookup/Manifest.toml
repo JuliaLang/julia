@@ -1,0 +1,22 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-DEV"
+manifest_format = "2.0"
+project_hash = "cebcff3d0ef322620470318a4693cc25dfa56077"
+
+[[deps.BugDepLookup]]
+deps = ["SomePackage"]
+path = "."
+uuid = "9b094d01-e697-4a76-8fe8-871656a862e0"
+version = "0.1.0"
+
+    [deps.BugDepLookup.extensions]
+    SomePackageExt = "SomePackage"
+
+    [deps.BugDepLookup.weakdeps]
+    Baz = "5796e38b-8bd2-4f06-8c98-e0a8826bb787"
+
+[[deps.SomePackage]]
+path = "../SomePackage"
+uuid = "678608ae-7bb3-42c7-98b1-82102067a3d8"
+version = "0.1.0"
