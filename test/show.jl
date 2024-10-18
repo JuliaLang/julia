@@ -928,19 +928,19 @@ end
 # string show with elision
 @testset "string show with elision" begin
     @testset "elision logic" begin
-        strs = ["A", "∀", "∀A", "A∀", "😃"]
+        strs = ["A", "∀", "∀A", "A∀", "😃", "x̂"]
         for limit = 0:100, len = 0:100, str in strs
             str = str^len
             str = str[1:nextind(str, 0, len)]
             out = sprint() do io
                 show(io, MIME"text/plain"(), str; limit)
             end
-            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
+            lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
+            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
-                @test limit-!isascii(str) <= length(out) <= limit
+                @test limit-2 <= textwidth(out) <= limit
                 re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
                 m = match(re, out)
                 head = eval(Meta.parse(m.captures[1]))
@@ -956,11 +956,11 @@ end
 
     @testset "default elision limit" begin
         r = replstr("x"^1000)
-        @test length(r) == 7*80
-        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        @test length(r) == 7*80-1
+        @test r == repr("x"^270) * " ⋯ 460 bytes ⋯ " * repr("x"^270)
         r = replstr(["x"^1000])
         @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+        @test r == "1-element Vector{String}:\n " * repr("x"^30) * " ⋯ 940 bytes ⋯ " * repr("x"^30)
     end
 end
 
