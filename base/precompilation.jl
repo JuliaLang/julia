@@ -47,7 +47,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
                 key == "weakdeps" ? project_weakdeps :
                 key == "extras" ? project_extras :
                 error()
-            uuid = UUID(_uuid)
+            uuid = UUID(_uuid::String)
             v[name] = uuid
             names[UUID(uuid)] = name
             project_uuid_to_name[name] = UUID(uuid)
@@ -61,9 +61,11 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
-    for (name, triggers::Union{String, Vector{String}}) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
+    for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
         if triggers isa String
             triggers = [triggers]
+        else
+            triggers = triggers::Vector{String}
         end
         uuids = UUID[]
         for trigger in triggers
@@ -106,8 +108,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
     sizehint!(lookup_strategy, length(manifest_d))
 
     for (name, pkg_infos) in get_deps(manifest_d)
-        pkg_infos = pkg_infos::Vector{Any}
-        for pkg_info in pkg_infos
+        for pkg_info in pkg_infos::Vector{Any}
+            pkg_info = pkg_info::Dict{String, Any}
             m_uuid = UUID(pkg_info["uuid"]::String)
 
             # If we have multiple packages with the same name we will overwrite things here
@@ -128,8 +130,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
                 # Expanded format:
                 else
                     uuids = UUID[]
-                    for (name_dep, _dep_uuid::String) in deps_pkg
-                        dep_uuid = UUID(_dep_uuid)
+                    for (name_dep, _dep_uuid) in deps_pkg
+                        dep_uuid = UUID(_dep_uuid::String)
                         push!(uuids, dep_uuid)
                         names[dep_uuid] = name_dep
                     end
@@ -140,9 +142,10 @@ function ExplicitEnv(envpath::String=Base.active_project())
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
             for (ext, triggers) in deps_pkg
-                triggers = triggers::Union{String, Vector{String}}
                 if triggers isa String
                     triggers = [triggers]
+                else
+                    triggers = triggers::Vector{String}
                 end
                 deps_pkg[ext] = triggers
             end
@@ -174,7 +177,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
     if proj_name !== nothing && proj_uuid !== nothing
         deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
         extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
         entry_point = path !== nothing ? path : dirname(envpath)
         lookup_strategy[proj_uuid] = entry_point
     end
@@ -655,7 +658,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             n_print_rows = 0
             while !printloop_should_exit
                 lock(print_lock) do
-                    term_size = Base.displaysize(io)::Tuple{Int,Int}
+                    term_size = Base.displaysize_(io)
                     num_deps_show = term_size[1] - 3
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -670,7 +673,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         bar.max = n_total - n_already_precomp
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
+                        termwidth = Base.displaysize_(io)[2] - 4
                         if !final_loop
                             str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
