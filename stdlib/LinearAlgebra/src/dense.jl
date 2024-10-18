@@ -108,6 +108,21 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 # Conservative assessment of types that have zero(T) defined for themselves
+"""
+    haszero(T::Type)
+
+Return whether a type `T` has a unique zero element defined using `zero(T)`.
+If a type `M` specializes `zero(M)`, it may also choose to add the method
+```julia
+haszero(::Type{M}) where {M} = true
+```
+By default, `haszero` is assumed to be `false`, in which case the zero elements
+are deduced from values rather than the type.
+
+!!! note
+    `haszero` is a conservative check that is used to dispatch to
+    optimized paths. Extending it is optional, but encouraged.
+"""
 haszero(::Type) = false
 haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
 haszero(::Type{Union{Missing,T}}) where {T<:Number} = haszero(T)
