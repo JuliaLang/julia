@@ -908,7 +908,7 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
 +(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(A)), B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
 function -(A::UpperTriangular, B::UpperTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
