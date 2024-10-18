@@ -683,10 +683,8 @@ and the complexity of the operation.
 
 ### Level 1 BLAS functions
 
-The level 1 BLAS functions were first proposed in [(Lawson, 1979)][Lawson-1979] and
+The level 1 BLAS functions were first proposed in ([Lawson, 1979](https://dl.acm.org/doi/10.1145/355841.355847)) and
 define operations between scalars and vectors.
-
-[Lawson-1979]: https://dl.acm.org/doi/10.1145/355841.355847
 
 ```@docs
 # xROTG
@@ -710,10 +708,8 @@ LinearAlgebra.BLAS.iamax
 
 ### Level 2 BLAS functions
 
-The level 2 BLAS functions were published in [(Dongarra, 1988)][Dongarra-1988],
+The level 2 BLAS functions were published in ([Dongarra, 1988](https://dl.acm.org/doi/10.1145/42288.42291))
 and define matrix-vector operations.
-
-[Dongarra-1988]: https://dl.acm.org/doi/10.1145/42288.42291
 
 **return a vector**
 
@@ -763,10 +759,8 @@ LinearAlgebra.BLAS.spr!
 
 ### Level 3 BLAS functions
 
-The level 3 BLAS functions were published in [(Dongarra, 1990)][Dongarra-1990],
+The level 3 BLAS functions were published in ([Dongarra, 1990](https://dl.acm.org/doi/10.1145/77626.79170))
 and define matrix-matrix operations.
-
-[Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
 
 ```@docs
 LinearAlgebra.BLAS.gemmt!

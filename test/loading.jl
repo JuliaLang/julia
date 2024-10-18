@@ -731,7 +731,7 @@ end
         "" => [],
         "$s" => [default; bundled],
         "$tmp$s" => [tmp; bundled],
-        "$s$tmp" => [bundled; tmp],
+        "$s$tmp" => [default; bundled; tmp],
         )
     for (env, result) in pairs(cases)
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
@@ -1338,6 +1338,18 @@ end
         # and the file size changed).
         @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
         @test filesize(cache_path) != cache_size
+    end
+end
+
+@testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
+        # handled by falling back to the stdlib Project.toml for dependency truth.
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+        ))
     end
 end
 

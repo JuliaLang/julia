@@ -152,7 +152,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
-    isempty(t) && return show(io, t)
+    (isempty(t) || !haslength(t)) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit = get(io, :limit, false)::Bool
@@ -427,7 +427,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : Base.displaysize_(io.io)
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -2622,7 +2622,7 @@ end
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
+        sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
