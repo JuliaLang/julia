@@ -400,3 +400,28 @@ end
 catch
     current_exceptions()
 end) == 2
+
+# Trigger merging of branches in LLVM so we have a dynamic pop_handler
+a1234123::Int = 3
+function poll_fd2()
+    local timer
+    try
+        try
+            try
+                global a1234123 = 1
+            finally
+                global a1234123 = 2
+            end
+            return events
+        catch ex
+            return FDEvent()
+        end
+    finally
+        if @isdefined(timer)
+            global a1234123 = 2
+        else
+            global a1234123 = 4
+        end
+    end
+end
+@test_throws UndefVarError poll_fd2() #shouldn't crash
