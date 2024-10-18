@@ -144,6 +144,13 @@ static Type *FLOATT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
+    if (auto *tv = dyn_cast<VectorType>(t))
+    {
+        Type *st = FLOATT(tv->getElementType());
+        if (!st)
+            return NULL;
+        return VectorType::get(st, tv->getElementCount());
+    }
     unsigned nb = (t->isPointerTy() ? sizeof(void*) * 8 : t->getPrimitiveSizeInBits());
     auto &ctxt = t->getContext();
     if (nb == 64)
@@ -165,6 +172,13 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return t;
     if (t->isPointerTy())
         return DL.getIntPtrType(t);
+    if (auto *tv = dyn_cast<VectorType>(t))
+    {
+        Type *st = INTT(tv->getElementType(), DL);
+        if (!st)
+            return NULL;
+        return VectorType::get(st, tv->getElementCount());
+    }
     if (t == getDoubleTy(ctxt))
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
@@ -1287,7 +1301,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return emit_llvmcall(ctx, args, nargs);
     if (f == cglobal_auto || f == cglobal)
         return emit_cglobal(ctx, args, nargs);
-
     SmallVector<jl_cgval_t, 0> argv(nargs);
     for (size_t i = 0; i < nargs; ++i) {
         jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
@@ -1409,17 +1422,26 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     default: {
         assert(nargs >= 1 && "invalid nargs for intrinsic call");
         const jl_cgval_t &xinfo = argv[0];
-
         // verify argument types
-        if (!jl_is_primitivetype(xinfo.typ))
+        if (jl_is_primitivetype(xinfo.typ)){}
+        else if (is_ntuple_type(xinfo.typ) && jl_nparams(xinfo.typ) > 0)
+        {
+            jl_value_t *et = jl_tparam0(xinfo.typ);
+            if (((jl_datatype_t*)et)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(et, 0)))
+                et = jl_tparam0(et);
+            else
+                return emit_runtime_call(ctx, f, argv, nargs);
+        }
+        else
             return emit_runtime_call(ctx, f, argv, nargs);
-        Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
+        bool isboxed=true;
+        Type *xtyp = julia_type_to_llvm(ctx, xinfo.typ, &(isboxed));
         if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
             xtyp = INTT(xtyp, DL);
         if (!xtyp)
-            return emit_runtime_call(ctx, f, argv, nargs);
+             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
         ////so while they are represented as i8,
         ////the operations need to be done in mod 1
