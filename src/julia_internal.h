@@ -1715,13 +1715,14 @@ JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTS
 
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);
+JL_DLLEXPORT jl_value_t *jl_argtype_without_function(jl_value_t *ftypes);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
-void register_eh_frames(uint8_t *Addr, size_t Size);
-void deregister_eh_frames(uint8_t *Addr, size_t Size);
+void register_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
+void deregister_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 
-STATIC_INLINE void *jl_get_frame_addr(void)
+STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
 {
 #ifdef __GNUC__
     return __builtin_frame_address(0);
