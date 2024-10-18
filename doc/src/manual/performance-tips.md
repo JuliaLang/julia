@@ -250,9 +250,16 @@ better than `IdDict{Type, Vector}`
 
 See also the discussion under [Parametric Types](@ref).
 
+## Type annotations
+
+In many languages with optional type annotations, adding such annotations is the principal way to
+make code run faster. This is *not* the case in Julia. In Julia, the compiler generally knows
+the types of all function arguments, local variables, and expressions. However, there are a few
+specific instances where annotations are helpful.
+
 ### Avoid fields with abstract type
 
-Types can be declared without specifying the types of their fields:
+Types can be annotated without specifying the types of their fields:
 
 ```jldoctest myambig
 julia> struct MyAmbiguousType
