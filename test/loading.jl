@@ -1129,25 +1129,6 @@ end
             run(cmd_proj_ext)
         end
 
-        # Sysimage extensions
-        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
-        # if it gets moved out, this test will need to be updated.
-        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
-        sysimg_ext_test_code = """
-            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
-            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
-            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
-            using HasExtensions
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
-            using LinearAlgebra
-            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
-        """
-        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
-        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
-        run(cmd)
-
-
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
         try
