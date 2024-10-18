@@ -552,7 +552,7 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-isascii(s::String) = isascii(codeunits(s))
+isascii(s::String) = @inline isascii(codeunits(s))
 
 # don't assume effects for general integers since we cannot know their implementation
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
