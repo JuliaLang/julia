@@ -2076,7 +2076,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(aty)
                 return Conditional(a, thentype, elsetype)
             end
-        elseif f === Core.Compiler.not_int
+        elseif f === Core.Intrinsics.not_int
             aty = argtypes[2]
             if isa(aty, Conditional)
                 thentype = rt === Const(false) ? Bottom : aty.elsetype

@@ -557,7 +557,7 @@ function _start()
     try
         repl_was_requested = exec_options(JLOptions())
         if should_use_main_entrypoint() && !is_interactive
-            if Core.Compiler.generating_output()
+            if Base.generating_output()
                 precompile(Main.main, (typeof(ARGS),))
             else
                 ret = invokelatest(Main.main, ARGS)
