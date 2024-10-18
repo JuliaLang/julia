@@ -1284,6 +1284,14 @@ end
             @test istril(U, k) == istril(A, k)
         end
     end
+
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,2,2)
+        U = triu(M)
+        @test iszero(U[2,1])
+        U = tril(M)
+        @test iszero(U[1,2])
+    end
 end
 
 @testset "indexing with a BandIndex" begin
