@@ -1212,10 +1212,7 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-
-    io = PipeBuffer()
-    show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1403,13 +1400,16 @@ end
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEBUG" => "loading")
 
-            out = Pipe()
-            proc = run(pipeline(cmd, stdout=out, stderr=out))
-            close(out.in)
-
-            log = @async String(read(out))
-            @test success(proc)
-            fetch(log)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
         end
 
         log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
