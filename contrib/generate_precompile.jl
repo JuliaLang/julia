@@ -184,10 +184,9 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     write(IOBuffer(), "")
 
     # Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
-    # Do not call `rand` which can cause bad caching on some platforms: #56177.
-    f55729() = ones(2, 2) * ones(2, 2)
-    @time f55729()
-    @time f55729()
+    f55729() = Base.Experimental.@force_compile
+    @time @eval f55729()
+    @time @eval f55729()
 
     break   # only actually need to do this once
 end
