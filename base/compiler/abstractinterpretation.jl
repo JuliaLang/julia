@@ -57,7 +57,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     gfresult = Future{CallMeta}()
     # intermediate work for computing gfresult
     rettype = exctype = Bottom
-    edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seenall = true
     const_results = nothing # or const_results::Vector{Union{Nothing,ConstResult}} if any const results are available
@@ -95,7 +94,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, edge, effects, volatile_inf_result) = mresult[]
+                local (; rt, exct, effects, volatile_inf_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
@@ -119,9 +118,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         # e.g. in cases when there are cycles but cached result is still accurate
                         this_conditional = this_const_conditional
                         this_rt = this_const_rt
-                        (; effects, const_result, edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     elseif is_better_effects(const_call_result.effects, effects)
-                        (; effects, const_result, edge) = const_call_result
+                        (; effects, const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
@@ -129,7 +128,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     # because consistent-cy does not apply to exceptions.
                     if const_call_result.exct ⋤ this_exct
                         this_exct = const_call_result.exct
-                        (; const_result, edge) = const_call_result
+                        (; const_result) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
@@ -142,7 +141,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     end
                     const_results[i] = const_result
                 end
-                edge === nothing || push!(edges, edge)
                 @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
                 if can_propagate_conditional(this_conditional, argtypes)
                     # The only case where we need to keep this in rt is where
@@ -230,8 +228,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # and avoid keeping track of a more complex result type.
             rettype = Any
         end
-        any_slot_refined = slotrefinements !== nothing
-        add_call_backedges!(interp, rettype, all_effects, any_slot_refined, edges, matches, atype.contents, sv)
         if isa(sv, InferenceState)
             # TODO (#48913) implement a proper recursion handling for irinterp:
             # This works just because currently the `:terminate` condition guarantees that
@@ -267,12 +263,6 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::MethodMatchInfo, @nospecialize(atype))
-    fully_covering(info) || add_mt_backedge!(sv, info.mt, atype)
-    nothing
-end
-add_uncovered_edges!(sv::AbsIntState, matches::MethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
 
 struct UnionSplitMethodMatches
     applicable::Vector{Any}
@@ -284,23 +274,14 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::UnionSplitInfo, @nospecialize(atype))
-    all(fully_covering, info.split) && return nothing
-    # add mt backedges with removing duplications
-    for mt in uncovered_method_tables(info)
-        add_mt_backedge!(sv, mt, atype)
-    end
-end
-add_uncovered_edges!(sv::AbsIntState, matches::UnionSplitMethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
-function uncovered_method_tables(info::UnionSplitInfo)
-    mts = MethodTable[]
+
+nmatches(info::MethodMatchInfo) = length(info.results)
+function nmatches(info::UnionSplitInfo)
+    n = 0
     for mminfo in info.split
-        fully_covering(mminfo) && continue
-        any(mt′::MethodTable->mt′===mminfo.mt, mts) && continue
-        push!(mts, mminfo.mt)
+        n += nmatches(mminfo)
     end
-    return mts
+    return n
 end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
@@ -339,7 +320,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
-        thisinfo = MethodMatchInfo(thismatches, mt, thisfullmatch)
+        thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
     end
     info = UnionSplitInfo(infos)
@@ -360,7 +341,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    info = MethodMatchInfo(matches, mt, fullmatch)
+    info = MethodMatchInfo(matches, mt, atype, fullmatch)
     return MethodMatches(matches.matches, info, matches.valid_worlds)
 end
 
@@ -559,31 +540,6 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{A
         end
     end
     return slotrefinements
-end
-
-function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype),
-    all_effects::Effects, any_slot_refined::Bool, edges::Vector{MethodInstance},
-    matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
-    sv::AbsIntState)
-    # don't bother to add backedges when both type and effects information are already
-    # maximized to the top since a new method couldn't refine or widen them anyway
-    if rettype === Any
-        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
-        # since it will never be tainted anyway
-        if !isoverlayed(method_table(interp))
-            all_effects = Effects(all_effects; nonoverlayed=ALWAYS_FALSE)
-        end
-        if all_effects === Effects() && !any_slot_refined
-            return nothing
-        end
-    end
-    for edge in edges
-        add_backedge!(sv, edge)
-    end
-    # also need an edge to the method table in case something gets
-    # added that did not intersect with any existing method
-    add_uncovered_edges!(sv, matches, atype)
-    return nothing
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
@@ -858,13 +814,11 @@ struct ConstCallResults
     exct::Any
     const_result::ConstResult
     effects::Effects
-    edge::MethodInstance
     function ConstCallResults(
         @nospecialize(rt), @nospecialize(exct),
         const_result::ConstResult,
-        effects::Effects,
-        edge::MethodInstance)
-        return new(rt, exct, const_result, effects, edge)
+        effects::Effects)
+        return new(rt, exct, const_result, effects)
     end
 end
 
@@ -1016,9 +970,9 @@ function concrete_eval_call(interp::AbstractInterpreter,
     catch e
         # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime.
         # Howevever, at present, :consistency does not mandate the type of the exception
-        return ConstCallResults(Bottom, Any, ConcreteResult(edge, result.effects), result.effects, edge)
+        return ConstCallResults(Bottom, Any, ConcreteResult(edge, result.effects), result.effects)
     end
-    return ConstCallResults(Const(value), Union{}, ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
+    return ConstCallResults(Const(value), Union{}, ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
 end
 
 # check if there is a cycle and duplicated inference of `mi`
@@ -1262,9 +1216,9 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
     world = frame_world(sv)
     mi_cache = WorldView(code_cache(interp), world)
-    code = get(mi_cache, mi, nothing)
-    if code !== nothing
-        irsv = IRInterpretationState(interp, code, mi, arginfo.argtypes, world)
+    codeinst = get(mi_cache, mi, nothing)
+    if codeinst !== nothing
+        irsv = IRInterpretationState(interp, codeinst, mi, arginfo.argtypes, world)
         if irsv !== nothing
             assign_parentchild!(irsv, sv)
             rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
@@ -1283,7 +1237,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                     effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
                 exct = refine_exception_type(result.exct, effects)
-                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects, spec_info(irsv)), effects, mi)
+                return ConstCallResults(rt, exct, SemiConcreteResult(codeinst, ir, effects, spec_info(irsv)), effects)
             end
         end
     end
@@ -1292,7 +1246,7 @@ end
 
 const_prop_result(inf_result::InferenceResult) =
     ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
-                     inf_result.ipo_effects, inf_result.linfo)
+                     inf_result.ipo_effects)
 
 # return cached result of constant analysis
 return_localcache_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
@@ -2230,7 +2184,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, edge, effects, volatile_inf_result) = result
+        (; rt, exct, effects, volatile_inf_result) = result
         res = nothing
         sig = match.spec_types
         argtypes′ = invoke_rewrite(argtypes)
@@ -2251,15 +2205,14 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         const_result = volatile_inf_result
         if const_call_result !== nothing
             if const_call_result.rt ⊑ rt
-                (; rt, effects, const_result, edge) = const_call_result
+                (; rt, effects, const_result) = const_call_result
             end
             if const_call_result.exct ⋤ exct
-                (; exct, const_result, edge) = const_call_result
+                (; exct, const_result) = const_call_result
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-        info = InvokeCallInfo(match, const_result)
-        edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
+        info = InvokeCallInfo(match, const_result, lookupsig)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -2455,19 +2408,19 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, edge, effects, volatile_inf_result, edgecycle) = result
+        (; rt, exct, effects, volatile_inf_result, edgecycle) = result
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         const_result = volatile_inf_result
         if !edgecycle
             const_call_result = abstract_call_method_with_const_args(interp, result,
-                nothing, arginfo, si, match, sv)
+                #=f=#nothing, arginfo, si, match, sv)
             if const_call_result !== nothing
                 if const_call_result.rt ⊑ rt
-                    (; rt, effects, const_result, edge) = const_call_result
+                    (; rt, effects, const_result) = const_call_result
                 end
                 if const_call_result.exct ⋤ exct
-                    (; exct, const_result, edge) = const_call_result
+                    (; exct, const_result) = const_call_result
                 end
             end
         end
@@ -2482,7 +2435,6 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
         info = OpaqueClosureCallInfo(match, const_result)
-        edge !== nothing && add_backedge!(sv, edge)
         return CallMeta(rt, exct, effects, info)
     end
 end
@@ -3432,7 +3384,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         while currpc < bbend
             currpc += 1
             frame.currpc = currpc
-            empty_backedges!(frame, currpc)
             stmt = frame.src.code[currpc]
             # If we're at the end of the basic block ...
             if currpc == bbend

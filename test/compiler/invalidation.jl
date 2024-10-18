@@ -95,7 +95,8 @@ end
 const GLOBAL_BUFFER = IOBuffer()
 
 # test backedge optimization when the callee's type and effects information are maximized
-begin take!(GLOBAL_BUFFER)
+begin
+    take!(GLOBAL_BUFFER)
 
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); Base.inferencebarrier(x))
     pr48932_caller(x) = pr48932_callee(Base.inferencebarrier(x))
@@ -150,11 +151,11 @@ begin take!(GLOBAL_BUFFER)
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
+        @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test_broken ci.max_world == typemax(UInt)
     end
 
     @test isnothing(pr48932_caller(42))
@@ -213,11 +214,11 @@ begin take!(GLOBAL_BUFFER)
         ci = mi.cache
         @test isdefined(ci, :next)
         @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
+        @test_broken ci.max_world == typemax(UInt)
         ci = ci.next
         @test !isdefined(ci, :next)
         @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test_broken ci.max_world == typemax(UInt)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
