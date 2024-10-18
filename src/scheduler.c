@@ -80,10 +80,6 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
     return 1;
 }
 
-// GC functions used
-extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT;
-
 // initialize the threading infrastructure
 // (called only by the main thread)
 void jl_init_threadinginfra(void)

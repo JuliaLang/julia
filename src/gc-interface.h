@@ -96,6 +96,8 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 // should run a collection cycle again (e.g. a full mark right after a full sweep to ensure
 // we do a full heap traversal).
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
+// Returns whether the thread with `tid` is a collector thread
+JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics
@@ -130,6 +132,13 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // Allocation
 // ========================================================================= //
 
+// On GCC, this function is inlined when sz is constant (see julia_internal.h)
+// In general, this function should implement allocation and should use the specific GC's logic
+// to decide whether to allocate a small or a large object. Finally, note that this function
+// **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
+// an allocation of that type in the allocation profiler.
+struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
+
 // Allocates small objects and increments Julia allocation counterst. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -157,26 +166,6 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz);
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz);
 // Wrapper around Libc realloc that updates Julia allocation counters.
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz);
-// Wrapper around Libc malloc that allocates a memory region with a few additional machine
-// words before the actual payload that are used to record the size of the requested
-// allocation. Also updates Julia allocation counters. The function returns a pointer to the
-// payload as a result of the allocation.
-JL_DLLEXPORT void *jl_malloc(size_t sz);
-// Wrapper around Libc calloc that allocates a memory region with a few additional machine
-// words before the actual payload that are used to record the size of the requested
-// allocation. Also updates Julia allocation counters. The function returns a pointer to the
-// payload as a result of the allocation.
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz);
-// Wrapper around Libc free that takes a pointer to the payload of a memory region allocated
-// with jl_malloc or jl_calloc, and uses the size information stored in the first machine
-// words of the memory buffer update Julia allocation counters, and then frees the
-// corresponding memory buffer.
-JL_DLLEXPORT void jl_free(void *p);
-// Wrapper around Libc realloc that takes a memory region allocated with jl_malloc or
-// jl_calloc, and uses the size information stored in the first machine words of the memory
-// buffer to update Julia allocation counters, reallocating the corresponding memory buffer
-// in the end.
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz);
 // Wrapper around Libc malloc that's used to dynamically allocate memory for Arrays and
 // Strings. It increments Julia allocation counters and should check whether we're close to
 // the Julia heap target, and therefore, whether we should run a collection. Note that this
@@ -190,14 +179,6 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 // thread-local allocator of the thread referenced by the first jl_ptls_t argument.
 JL_DLLEXPORT struct _jl_weakref_t *jl_gc_new_weakref_th(struct _jl_tls_states_t *ptls,
                                                         struct _jl_value_t *value);
-// Allocates a new weak-reference, assigns its value and increments Julia allocation
-// counters. If thread-local allocators are used, then this function should allocate in the
-// thread-local allocator of the current thread.
-JL_DLLEXPORT struct _jl_weakref_t *jl_gc_new_weakref(struct _jl_value_t *value);
-// Allocates an object whose size is specified by the function argument and increments Julia
-// allocation counters. If thread-local allocators are used, then this function should
-// allocate in the thread-local allocator of the current thread.
-JL_DLLEXPORT struct _jl_value_t *jl_gc_allocobj(size_t sz);
 // Permanently allocates a memory slot of the size specified by the first parameter. This
 // block of memory is allocated in an immortal region that is never swept. The second
 // parameter specifies whether the memory should be filled with zeros. The third and fourth
