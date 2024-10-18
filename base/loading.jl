@@ -308,6 +308,21 @@ function find_package(arg) # ::Union{Nothing,String}
     return locate_package(pkg, env)
 end
 
+# is there a better/faster ground truth?
+function is_stdlib(pkgid::PkgId)
+    pkgid.name in readdir(Sys.STDLIB) || return false
+    stdlib_root = joinpath(Sys.STDLIB, pkgid.name)
+    project_file = locate_project_file(stdlib_root)
+    if project_file isa String
+        d = parsed_toml(project_file)
+        uuid = get(d, "uuid", nothing)
+        if uuid !== nothing
+            return UUID(uuid) == pkgid.uuid
+        end
+    end
+    return false
+end
+
 """
     Base.identify_package_env(name::String)::Union{Tuple{PkgId, String}, Nothing}
     Base.identify_package_env(where::Union{Module,PkgId}, name::String)::Union{Tuple{PkgId, Union{String, Nothing}}, Nothing}
@@ -336,6 +351,12 @@ function identify_package_env(where::PkgId, name::String)
             end
             break # found in implicit environment--return "not found"
         end
+        if pkg_env === nothing && is_stdlib(where)
+            # if not found it could be that manifests are from a different julia version/commit
+            # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
+            # as a fallback
+            pkg_env = identify_stdlib_project_dep(where, name)
+        end
     end
     if cache !== nothing
         cache.identified_where[(where, name)] = pkg_env
@@ -360,6 +381,22 @@ function identify_package_env(name::String)
         cache.identified[name] = pkg_env
     end
     return pkg_env
+end
+
+function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
+    @debug """
+    Stdlib $(repr("text/plain", stdlib)) is trying to load `$depname`
+    which is not listed as a dep in the load path manifests, so resorting to search
+    in the stdlib Project.tomls for true deps"""
+    stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
+    stdlib_projfile === nothing && return nothing
+    found = explicit_project_deps_get(stdlib_projfile, depname)
+    if found !== nothing
+        @debug "$(repr("text/plain", stdlib)) indeed depends on $depname in project $stdlib_projfile"
+        pkgid = PkgId(found, depname)
+        return pkgid, stdlib_projfile
+    end
+    return nothing
 end
 
 _nothing_or_first(x) = x === nothing ? nothing : first(x)
@@ -2056,6 +2093,7 @@ debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but mor
 function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # handle recursive and concurrent calls to require
     assert_havelock(require_lock)
+    require_lock.reentrancy_cnt == 1 || throw(ConcurrencyViolationError("recursive call to start_loading"))
     while true
         loaded = stalecheck ? maybe_root_module(modkey) : nothing
         loaded isa Module && return loaded
@@ -2863,6 +2901,9 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
+# Const global for GC root
+const newly_inferred = CodeInstance[]
+
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
@@ -2882,8 +2923,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
-    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
-    Core.Compiler.track_newly_inferred.x = true
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -2891,10 +2931,15 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
-        Core.Compiler.track_newly_inferred.x = false
+        ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     Base.check_package_module_loaded(pkg)
+
+    # Re-populate the runtime's newly-inferred array, which will be included
+    # in the output. We removed it above to avoid including any code we may
+    # have compiled for error handling and validation.
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
 end
 
 function check_package_module_loaded(pkg::PkgId)

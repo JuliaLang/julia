@@ -999,6 +999,16 @@ namespace {
         options.EmulatedTLS = true;
         options.ExplicitEmulatedTLS = true;
 #endif
+#if defined(_CPU_RISCV64_)
+        // we set these manually to avoid LLVM defaulting to soft-float
+#if defined(__riscv_float_abi_double)
+        options.MCOptions.ABIName = "lp64d";
+#elif defined(__riscv_float_abi_single)
+        options.MCOptions.ABIName = "lp64f";
+#else
+        options.MCOptions.ABIName = "lp64";
+#endif
+#endif
         uint32_t target_flags = 0;
         auto target = jl_get_llvm_target(imaging_default(), target_flags);
         auto &TheCPU = target.first;
@@ -1042,11 +1052,23 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
+        else if (TheTriple.isRISCV()) {
+            // RISC-V will support large code model in LLVM 21
+            // https://github.com/llvm/llvm-project/pull/70308
+            codemodel = CodeModel::Medium;
+        }
+        // Generate simpler code for JIT
+        Reloc::Model relocmodel = Reloc::Static;
+        if (TheTriple.isRISCV()) {
+            // until large code model is supported, use PIC for RISC-V
+            // https://github.com/llvm/llvm-project/issues/106203
+            relocmodel = Reloc::PIC_;
+        }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
                 TheTriple.getTriple(), TheCPU, FeaturesStr,
                 options,
-                Reloc::Static, // Generate simpler code for JIT
+                relocmodel,
                 codemodel,
                 optlevel,
                 true // JIT
@@ -1067,7 +1089,7 @@ namespace {
             .setCPU(TM.getTargetCPU().str())
             .setFeatures(TM.getTargetFeatureString())
             .setOptions(TM.Options)
-            .setRelocationModel(Reloc::Static)
+            .setRelocationModel(TM.getRelocationModel())
             .setCodeModel(TM.getCodeModel())
             .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
     }

@@ -102,6 +102,7 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
 
 # filesystem operations
     rename,

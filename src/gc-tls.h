@@ -82,6 +82,7 @@ typedef struct {
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     _Atomic(size_t) gc_sweeps_requested;
+    _Atomic(size_t) gc_stack_sweep_requested;
     arraylist_t sweep_objs;
 } jl_gc_tls_states_t;
 

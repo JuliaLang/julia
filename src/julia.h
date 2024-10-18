@@ -20,6 +20,7 @@
 #include "libsupport.h"
 #include <stdint.h>
 #include <string.h>
+#include <fenv.h>
 
 #include "htable.h"
 #include "arraylist.h"
@@ -255,7 +256,7 @@ typedef struct _jl_debuginfo_t {
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
+// the following mirrors `struct EffectsOverride` in `base/expr.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint16_t ipo_consistent          : 1;
@@ -713,7 +714,7 @@ typedef struct _jl_module_t {
     jl_sym_t *file;
     int32_t line;
     // hidden fields:
-    arraylist_t usings;  // modules with all bindings potentially imported
+    arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
@@ -726,6 +727,12 @@ typedef struct _jl_module_t {
     jl_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
+
+struct _jl_module_using {
+    jl_module_t *mod;
+    size_t min_world;
+    size_t max_world;
+};
 
 struct _jl_globalref_t {
     JL_DATA_TYPE
@@ -2282,6 +2289,9 @@ typedef struct _jl_task_t {
     uint16_t priority;
 
 // hidden state:
+    // cached floating point environment
+    // only updated at task switch
+    fenv_t fenv;
 
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;

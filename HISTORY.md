@@ -119,6 +119,11 @@ New library features
 Standard library changes
 ------------------------
 
+* It's not possible to define `length` for stateful iterators in a generally consistent manner. The
+  potential for silently incorrect results for `Stateful` iterators is addressed by deleting the
+  `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
+  PR: ([#51747]).
+
 #### StyledStrings
 
 * A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
@@ -225,6 +230,7 @@ Tooling Improvements
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
 [#47354]: https://github.com/JuliaLang/julia/issues/47354
 [#47679]: https://github.com/JuliaLang/julia/issues/47679
+[#47790]: https://github.com/JuliaLang/julia/issues/47790
 [#48273]: https://github.com/JuliaLang/julia/issues/48273
 [#48625]: https://github.com/JuliaLang/julia/issues/48625
 [#49546]: https://github.com/JuliaLang/julia/issues/49546
@@ -250,6 +256,7 @@ Tooling Improvements
 [#51616]: https://github.com/JuliaLang/julia/issues/51616
 [#51647]: https://github.com/JuliaLang/julia/issues/51647
 [#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51747]: https://github.com/JuliaLang/julia/issues/51747
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929

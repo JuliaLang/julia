@@ -105,8 +105,8 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
-    // int128 is 16 bytes aligned on aarch64 and on x86 with LLVM >= 18
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
+    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -259,6 +259,11 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
+#elif defined(_CPU_RISCV64_)
+    // taken from https://github.com/google/benchmark/blob/3b3de69400164013199ea448f051d94d7fc7d81f/src/cycleclock.h#L190
+    uint64_t ret;
+    __asm__ volatile("rdcycle %0" : "=r"(ret));
+    return ret;
 #elif defined(_CPU_PPC64_)
     // This returns a time-base, which is not always precisely a cycle-count.
     // https://reviews.llvm.org/D78084
@@ -814,6 +819,28 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+
+#ifndef __clang_gcanalyzer__
+// The analyzer doesn't like looking through the arraylist, so just model the
+// access for it using this function
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return (struct _jl_module_using *)&(m->usings.items[3*i]);
+}
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return module_usings_getidx(m, i)->mod;
+}
+#endif
+
+STATIC_INLINE size_t module_usings_length(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.len/3;
+}
+
+STATIC_INLINE size_t module_usings_max(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.max/3;
+}
+
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
@@ -858,6 +885,8 @@ extern jl_genericmemory_t *jl_global_roots_keyset JL_GLOBALLY_ROOTED;
 extern arraylist_t *jl_entrypoint_mis;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBALLY_ROOTED;
+extern jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *field, jl_value_t *newval) JL_GLOBALLY_ROOTED;
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv, int do_compile);

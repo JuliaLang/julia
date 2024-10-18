@@ -173,6 +173,7 @@ include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
+include("runtime_internals.jl")
 include("reflection.jl")
 include("options.jl")
 
