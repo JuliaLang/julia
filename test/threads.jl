@@ -360,6 +360,52 @@ end
     end
 end
 
+@testset "io_thread" begin
+    function io_thread_test()
+        # This test creates a thread that does IO and then blocks the main julia thread
+        # This test hangs if you don't spawn an IO thread.
+        # It hanging or not is technically a race but I haven't seen julia win that race yet.
+        cmd = """
+        Base.Experimental.make_io_thread()
+        function callback()::Cvoid
+            println("Running a command")
+            run(`echo 42`)
+            return
+        end
+        function call_on_thread(callback::Ptr{Nothing})
+            tid = UInt[0]
+            threadwork = @cfunction function(arg::Ptr{Cvoid})
+                current_task().donenotify = Base.ThreadSynchronizer()
+                Base.errormonitor(current_task())
+                println("Calling Julia from thread")
+                ccall(arg, Cvoid, ())
+                nothing
+            end Cvoid (Ptr{Cvoid},)
+            err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, callback::Ptr{Cvoid})::Cint
+            err == 0 || Base.uv_error("uv_thread_create", err)
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            err == 0 || Base.uv_error("uv_thread_join", err)
+            return
+        end
+        function main()
+            callback_ptr = @cfunction(callback, Cvoid, ())
+            call_on_thread(callback_ptr)
+            println("Done")
+        end
+        main()
+
+        """
+        proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`), wait=false)
+        t = Timer(60) do t; kill(proc); end;
+        @test success(proc)
+        close(t)
+        return true
+    end
+    @test io_thread_test()
+end
+
 # Make sure default number of BLAS threads respects CPU affinity: issue #55572.
 @testset "LinearAlgebra number of default threads" begin
     if AFFINITY_SUPPORTED
