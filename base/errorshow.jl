@@ -850,7 +850,10 @@ function _simplify_include_frames(trace)
     for i in length(trace):-1:1
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
-        if first_ignored === nothing
+        if mod === Base && frame.func === :IncludeInto ||
+           mod === Core && frame.func === :EvalInto
+            kept_frames[i] = false
+        elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
                 # Hide include() machinery by default
                 first_ignored = i

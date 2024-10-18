@@ -32,11 +32,7 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
+const include = Base.IncludeInto(Main)
 
 """
     eval(expr)
@@ -45,7 +41,7 @@ Evaluate an expression in the global scope of the containing module.
 Every `Module` (except those defined with `baremodule`) has its own 1-argument
 definition of `eval`, which evaluates expressions in that module.
 """
-eval(x) = Core.eval(Main, x)
+const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
