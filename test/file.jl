@@ -459,6 +459,11 @@ end
     end
 end
 
+# Issue #51710 and PR #54855
+@test_throws MethodError stat(7)
+@test_throws MethodError ispath(false)
+@test_throws MethodError ispath(1)
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
