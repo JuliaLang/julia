@@ -3786,6 +3786,9 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t task_atomicfields[1] = {0x00001000}; // Set fields 13 as atomic
     jl_task_type->name->atomicfields = task_atomicfields;
 
+    const static uint32_t task_constfields[1] = {0x00000040}; // Set fields 7 as constant
+    jl_task_type->name->constfields = task_constfields;
+
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
         // N.B.: OpaqueClosure call code relies on specptr being field 5.
