@@ -8,6 +8,7 @@ trim = nothing
 outname = nothing
 file = nothing
 add_ccallables = false
+verbose = false
 
 help = findfirst(x->x == "--help", ARGS)
 if help !== nothing
@@ -39,6 +40,8 @@ let i = 1
             end
         elseif arg == "--compile-ccallable"
             global add_ccallables = true
+        elseif arg == "--verbose"
+            global verbose = true
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -77,9 +80,8 @@ open(initsrc_path, "w") do io
 end
 
 static_call_graph_arg() = isnothing(trim) ?  `` : `--trim=$(trim)`
-is_verbose() = verbose ? `--verbose-compilation=yes` : ``
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
-
+verbose && println("Running: $cmd")
 if !success(pipeline(cmd; stdout, stderr))
     println(stderr, "\nFailed to compile $file")
     exit(1)

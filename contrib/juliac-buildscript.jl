@@ -27,6 +27,7 @@ end
 (f::Base.RedirectStdStream)(io::Core.CoreSTDOUT) = Base._redirect_io_global(io, f.unix_fd)
 
 @eval Base begin
+    depwarn(msg, funcsym; force::Bool=false) = nothing
     _assert_tostring(msg) = ""
     reinit_stdio() = nothing
     JuliaSyntax.enable_in_core!() = nothing
@@ -229,20 +230,15 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
         using Artifacts
         @eval Artifacts begin
             function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, _::Val{lazyartifacts}) where lazyartifacts
-                moduleroot = Base.moduleroot(__module__)
-                if haskey(Base.module_keys, moduleroot)
-                    # Process overrides for this UUID, if we know what it is
-                    process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
-                end
-
                 # If the artifact exists, we're in the happy path and we can immediately
                 # return the path to the artifact:
-                dirs = artifact_paths(hash; honor_overrides=true)
+                dirs = artifacts_dirs(bytes2hex(hash.bytes))
                 for dir in dirs
                     if isdir(dir)
                         return jointail(dir, path_tail)
                     end
                 end
+                error("Artifact not found")
             end
         end
     end
@@ -255,6 +251,18 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
     if :StyledStrings in loaded
         using StyledStrings
         @eval StyledStrings begin
+            __init__() = rand()
+        end
+    end
+    if :Markdown in loaded
+        using Markdown
+        @eval Markdown begin
+            __init__() = rand()
+        end
+    end
+    if :JuliaSyntaxHighlighting in loaded
+        using JuliaSyntaxHighlighting
+        @eval JuliaSyntaxHighlighting begin
             __init__() = rand()
         end
     end
