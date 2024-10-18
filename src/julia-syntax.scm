@@ -1823,7 +1823,9 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-(define (expand-for lhss itrs body)
+(define (expand-for lhss itrs body . else-body)
+  (if (and (length> lhss 1) (not (null? else-body)))
+      (error "multi-dimensional for-loops are not allowed to have else-blocks"))
   (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
   (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
          ;; TODO: maybe filter these to remove vars not assigned in the loop
@@ -1867,7 +1869,8 @@
                            (_do_while
                             (block ,body
                                    (= ,next (call (top iterate) ,coll ,state)))
-                            (call (top not_int) (call (core ===) ,next (null))))))))))))
+                            (call (top not_int) (call (core ===) ,next (null))))
+                           ,@else-body))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
 (define (func-for-generator-ranges expr range-exprs flat outervars)
@@ -2134,10 +2137,17 @@
   (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
 
 (define (expand-while e)
-  `(break-block loop-exit
-                (_while ,(expand-condition (cadr e))
-                        (break-block loop-cont
-                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
+  (if (length= e 3)
+      `(break-block loop-exit
+                    (_while ,(expand-condition (cadr e))
+                            (break-block loop-cont
+                                         (scope-block ,(blockify (expand-forms (caddr e)))))))
+      `(break-block loop-exit
+                    (if ,(expand-condition (cadr e))
+                        (_do_while (break-block loop-cont
+                                                (scope-block ,(blockify (expand-forms (caddr e)))))
+                                   ,(expand-condition (cadr e)))
+                        (scope-block ,(blockify (expand-forms (cadddr e))))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
@@ -2798,7 +2808,7 @@
      (let ((ranges (if (eq? (car (cadr e)) 'block)
                        (cdr (cadr e))
                        (list (cadr e)))))
-       (expand-forms (expand-for (map cadr ranges) (map caddr ranges) (caddr e)))))
+       (expand-forms (apply expand-for (map cadr ranges) (map caddr ranges) (cddr e)))))
 
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
