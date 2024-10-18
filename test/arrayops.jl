@@ -3286,3 +3286,18 @@ end
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
 end
+
+@testset "Parent" begin
+    x = ["abc", "def", "ghi"]
+    mem = parent(x)
+    @test mem isa Memory{String}
+    start_index = 0
+    for i in eachindex(mem)
+        if isassigned(mem, i)
+            start_index = i
+            break
+        end
+    end
+    @test !iszero(start_index)
+    @test parentindices(x) == (start_index:start_index+2,)
+end

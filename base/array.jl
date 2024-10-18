@@ -165,6 +165,13 @@ function vect(X::T...) where T
     return vec
 end
 
+parent(A::Array) = A.ref.mem
+
+function parentindices(A::Array)
+    offset = div(A.ref.ptr_or_offset - A.ref.mem.ptr, elsize(A))
+    (offset + 1:offset + length(A),)
+end
+
 """
     vect(X...)
 
