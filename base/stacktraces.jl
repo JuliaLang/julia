@@ -198,15 +198,26 @@ Base.@constprop :none function stacktrace(c_funcs::Bool=false)
 end
 
 """
-    remove_frames!(stack::StackTrace, name::Symbol)
+    remove_frames!(stack::StackTrace, name::Symbol; reverse::Bool=false)
 
 Takes a `StackTrace` (a vector of `StackFrames`) and a function name (a `Symbol`) and
 removes the `StackFrame` specified by the function name from the `StackTrace` (also removing
 all frames above the specified function). Primarily used to remove `StackTraces` functions
-from the `StackTrace` prior to returning it.
+from the `StackTrace` prior to returning it (or after if `reverse` is `true`).
 """
-function remove_frames!(stack::StackTrace, name::Symbol)
-    deleteat!(stack, 1:something(findlast(frame -> frame.func == name, stack), 0))
+function remove_frames!(stack::StackTrace, name::Symbol; reverse::Bool=false, n::Int=0)
+    if reverse
+        f = findfirst(frame -> frame.func == name, stack)
+        if f !== nothing
+            stack_length = length(stack)
+            deleteat!(stack, (f - n):stack_length)
+        end
+    else
+        f = findlast(frame -> frame.func == name, stack)
+        if f !== nothing
+            deleteat!(stack, 1:(f + n))
+        end
+    end
     return stack
 end
 

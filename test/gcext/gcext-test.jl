@@ -55,7 +55,7 @@ end
         Base.compilecache(Base.identify_package("DependsOnForeign"))
 
         push!(LOAD_PATH, joinpath(@__DIR__, "ForeignObjSerialization"))
-        @test_throws ErrorException  Base.compilecache(Base.identify_package("ForeignObjSerialization"), Base.DevNull())
+        @test_throws Base.PackagePrecompileError Base.compilecache(Base.identify_package("ForeignObjSerialization"), Base.DevNull())
         pop!(LOAD_PATH)
 
         (@eval (using Foreign))
