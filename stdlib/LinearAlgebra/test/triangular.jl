@@ -1354,11 +1354,8 @@ end
                 B[1,1] = B[2,2] = 3
             end
             M = Matrix(B)
-            # These are broken, as triu/tril don't work with
-            # unfilled adjoint matrices
-            # See https://github.com/JuliaLang/julia/pull/55312
-            @test_broken B - B' == M - M'
-            @test_broken B + B' == M + M'
+            @test B - B' == M - M'
+            @test B + B' == M + M'
             @test B - copy(B') == M - M'
             @test B + copy(B') == M + M'
             C = MyTriangular(B)
