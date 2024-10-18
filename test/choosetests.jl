@@ -29,7 +29,7 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues", "compileall"
+        "scopedvalues", "compileall", "rebinding"
 ]
 
 const INTERNET_REQUIRED_LIST = [

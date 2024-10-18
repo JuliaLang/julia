@@ -3883,9 +3883,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 if ((jl_value_t*)b == jl_nothing)
                     continue;
                 jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                jl_atomic_store_relaxed(&bpart->restriction,
-                    encode_restriction((jl_value_t*)jl_atomic_load_relaxed(&bpart->restriction), bpart->reserved));
-                bpart->reserved = 0;
+                while (bpart) {
+                    jl_atomic_store_relaxed(&bpart->restriction,
+                        encode_restriction((jl_value_t*)jl_atomic_load_relaxed(&bpart->restriction), bpart->reserved));
+                    bpart->reserved = 0;
+                    bpart = jl_atomic_load_relaxed(&bpart->next);
+                }
             }
 #endif
         }
