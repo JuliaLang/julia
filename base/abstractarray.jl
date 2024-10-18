@@ -1197,6 +1197,7 @@ function copymutable(a::AbstractArray)
     copyto!(similar(a), a)
 end
 copymutable(itr) = collect(itr)
+copymutable(a::Array) = copy(a)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
 zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
