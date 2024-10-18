@@ -15,7 +15,7 @@ using .Base:
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
 using Core: @doc
 
 if Base !== Core.Compiler
@@ -1048,7 +1048,7 @@ _prod_size(t::Tuple) = (_prod_size1(t[1], IteratorSize(t[1]))..., _prod_size(tai
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute size for object of type ", typeof(a))))
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
@@ -1056,7 +1056,7 @@ _prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indic
 _prod_axes1(a, ::HasShape)  = axes(a)
 _prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_axes1(a, A) =
-    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute indices for object of type ", typeof(a))))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)

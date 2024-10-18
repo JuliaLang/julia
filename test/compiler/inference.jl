@@ -5161,3 +5161,6 @@ let x = 1, _Any = Any
     foo27031() = bar27031((x, 1.0), Val{_Any})
     @test foo27031() == "OK"
 end
+
+issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
+@test only(Base.return_types(issue55882_nfields)) <: Int
