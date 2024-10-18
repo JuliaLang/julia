@@ -820,6 +820,12 @@ static const auto jlerror_func = new JuliaFunction<>{
             {getPointerTy(C)}, false); },
     get_attrs_noreturn,
 };
+static const auto jlargumenterror_func = new JuliaFunction<>{
+    XSTR(jl_argument_error),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {getPointerTy(C)}, false); },
+    get_attrs_noreturn,
+};
 static const auto jlatomicerror_func = new JuliaFunction<>{
     XSTR(jl_atomic_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -1174,6 +1180,34 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
             None);
     },
 };
+static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_alloc_genericmemory_unchecked),
+    [](LLVMContext &C, Type *T_size) {
+        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
+        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        return FunctionType::get(T_prjlvalue,
+                {T_pjlvalue, T_size, T_pjlvalue}, false);
+    },
+    [](LLVMContext &C) {
+        auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        auto RetAttrs = AttrBuilder(C);
+        RetAttrs.addAttribute(Attribute::NoAlias);
+        RetAttrs.addAttribute(Attribute::NonNull);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet::get(C, RetAttrs),
+            None);
+    },
+};
+
 static const auto jl_newbits_func = new JuliaFunction<>{
     XSTR(jl_new_bits),
     [](LLVMContext &C) {
@@ -1511,12 +1545,16 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived)}, false); },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
 #if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::none());
 #else
         FnAttrs.addAttribute(Attribute::ReadNone);
 #endif
-        FnAttrs.addAttribute(Attribute::NoUnwind);
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
@@ -1634,6 +1672,7 @@ static const auto &builtin_func_map() {
           { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
           { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
+          { jl_f_memorynew_addr,             new JuliaFunction<>{XSTR(jl_f_memorynew), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefoffset_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefoffset), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefset_addr,       new JuliaFunction<>{XSTR(jl_f_memoryrefset), get_func_sig, get_func_attrs} },
@@ -4473,6 +4512,28 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         Value *arg1 = boxed(ctx, argv[1]);
         raise_exception(ctx, arg1);
         *ret = jl_cgval_t();
+        return true;
+    }
+
+    else if (f == jl_builtin_memorynew && (nargs == 2)) {
+        const jl_cgval_t &memty = argv[1];
+        if (!memty.constant)
+            return false;
+        jl_datatype_t *typ = (jl_datatype_t*) memty.constant;
+        if (!jl_is_concrete_type((jl_value_t*)typ) || !jl_is_genericmemory_type(typ))
+            return false;
+        jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
+        if (inst == NULL)
+            return false;
+        if(argv[2].constant) {
+            if (argv[2].typ != (jl_value_t*)jl_long_type)
+                return false;
+            size_t nel = jl_unbox_long(argv[2].constant);
+            if (nel < 0)
+                return false;
+            *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
+        } else
+            *ret = emit_memorynew(ctx, typ, argv[2], inst);
         return true;
     }
 
@@ -10306,6 +10367,7 @@ static void init_jit_functions(void)
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
+    add_named_global(jlargumenterror_func, &jl_argument_error);
     add_named_global(jlatomicerror_func, &jl_atomic_error);
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
@@ -10346,6 +10408,7 @@ static void init_jit_functions(void)
     add_named_global(jltypeassert_func, &jl_typeassert);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
     add_named_global(jl_object_id__func, &jl_object_id_);
+    add_named_global(jl_alloc_genericmemory_unchecked_func, &jl_alloc_genericmemory_unchecked);
     add_named_global(jl_alloc_obj_func, (void*)NULL);
     add_named_global(jl_newbits_func, (void*)jl_new_bits);
     add_named_global(jl_typeof_func, (void*)NULL);
