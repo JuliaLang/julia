@@ -53,6 +53,12 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 // malloc wrappers, aligned allocation
 // =========================================================================== //
 
+// data structure for tracking malloc'd genericmemory.
+typedef struct _mallocmemory_t {
+    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
+    struct _mallocmemory_t *next;
+} mallocmemory_t;
+
 #if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
@@ -172,5 +178,11 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
 
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
+
+// =========================================================================== //
+// Logging
+// =========================================================================== //
+
+extern int gc_logging_enabled;
 
 #endif // JL_GC_COMMON_H
