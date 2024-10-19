@@ -1710,3 +1710,20 @@ end
         @test occursin(expected, result)
     end
 end
+
+# Issue #54082
+module M54082 end
+@testset "@test_throws UndefVarError(:var)" begin
+    # Single-arg `UndefVarError` should match all `UndefVarError` for the
+    # same variable name, regardless of scope, to keep pre-v1.11 behaviour.
+    f54082() = var
+    @test_throws UndefVarError(:var) f54082()
+    # But if scope is set, then it has to match.
+    @test_throws UndefVarError(:var, M54082) M54082.var
+    let result = @testset NoThrowTestSet begin
+            # Wrong module scope
+            @test_throws UndefVarError(:var, Main) M54082.var
+        end
+        @test only(result) isa Test.Fail
+    end
+end
