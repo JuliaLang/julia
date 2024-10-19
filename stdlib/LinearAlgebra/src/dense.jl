@@ -1047,17 +1047,24 @@ function cos(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(cos(Symmetric(A))), 'U')
     end
-    T = complex(float(eltype(A)))
-    return real(exp!(T.(im .* A)))
+    M = im .* float.(A)
+    return real(exp_maybe_inplace(M))
 end
+_broadcast!!(::Val{true}, f, dest, args...) = broadcast!(f, dest, args...)
+_broadcast!!(::Val{false}, f, dest, args...) = broadcast(f, args...)
 function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return copytri!(parent(cos(Hermitian(A))), 'U', true)
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    @. X = (X + $exp!(T(-im*A))) / 2
-    return X
+    M = im .* float.(A)
+    N = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(N)
+    # Compute (X + Y)/2 and return the result.
+    # Compute the result in-place if X is strided
+    half = eltype(X)(0.5)
+    isstrided = X isa StridedMatrix
+    _broadcast!!(Val(isstrided), (x,y) -> half * (x + y),  X, X, Y)
 end
 
 """
@@ -1080,21 +1087,22 @@ function sin(A::AbstractMatrix{<:Real})
     if issymmetric(A)
         return copytri!(parent(sin(Symmetric(A))), 'U')
     end
-    T = complex(float(eltype(A)))
-    return imag(exp!(T.(im .* A)))
+    M = im .* float.(A)
+    return imag(exp_maybe_inplace(M))
 end
 function sin(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return copytri!(parent(sin(Hermitian(A))), 'U', true)
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X, Y)
-        x, y = X[i]/2, Y[i]/2
-        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
-    end
-    return X
+    M = im .* float.(A)
+    Mneg = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(Mneg)
+    # Compute (X - Y)/2im and return the result.
+    # Compute the result in-place if X is strided
+    halfim = eltype(X)(0.5)*im
+    isstrided = X isa StridedMatrix
+    _broadcast!!(Val(isstrided), (x,y) -> halfim * (y - x),  X, X, Y)
 end
 
 """
@@ -1124,8 +1132,8 @@ function sincos(A::AbstractMatrix{<:Real})
         cosA = copytri!(parent(symcosA), 'U')
         return sinA, cosA
     end
-    T = complex(float(eltype(A)))
-    c, s = reim(exp!(T.(im .* A)))
+    M =  im .* float.(A)
+    c, s = reim(exp_maybe_inplace(M))
     return s, c
 end
 function sincos(A::AbstractMatrix{<:Complex})
@@ -1135,15 +1143,25 @@ function sincos(A::AbstractMatrix{<:Complex})
         cosA = copytri!(parent(hermcosA), 'U', true)
         return sinA, cosA
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X, Y)
+    M = im .* float.(A)
+    Mneg = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(Mneg)
+    _sincos(X, Y)
+end
+function _sincos(X::StridedMatrix, Y::StridedMatrix)
+    @inbounds for i in eachindex(X)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
         Y[i] = x+y
     end
     return X, Y
+end
+function _sincos(X, Y)
+    T = eltype(X)
+    X′ = T(0.5)*im .* (Y .- X)
+    Y′ = T(0.5) .* (X .+ Y)
+    X′, Y′
 end
 
 """
@@ -1181,8 +1199,11 @@ function cosh(A::AbstractMatrix)
         return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    @. X = (X + $exp!(float(-A))) / 2
-    return X
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    half = eltype(X)(0.5)
+    isstrided = X isa StridedMatrix
+    _broadcast!!(Val(isstrided), (x,y) -> half * (x + y), X, X, Y)
 end
 
 """
@@ -1195,8 +1216,11 @@ function sinh(A::AbstractMatrix)
         return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    @. X = (X - $exp!(float(-A))) / 2
-    return X
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    half = eltype(X)(0.5)
+    isstrided = X isa StridedMatrix
+    _broadcast!!(Val(isstrided), (x,y) -> half * (x - y), X, X, Y)
 end
 
 """
@@ -1209,15 +1233,20 @@ function tanh(A::AbstractMatrix)
         return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    Y = exp!(float.(.-A))
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    X′, Y′ = _subadd!!(X, Y)
+    return X′ / Y′
+end
+function _subadd!!(X::StridedMatrix, Y::StridedMatrix)
     @inbounds for i in eachindex(X, Y)
         x, y = X[i], Y[i]
         X[i] = x - y
         Y[i] = x + y
     end
-    X /= Y
-    return X
+    return X, Y
 end
+_subadd!!(X, Y) = X - Y, X + Y
 
 """
     acos(A::AbstractMatrix)
