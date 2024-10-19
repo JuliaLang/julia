@@ -165,16 +165,23 @@ end
 
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
-    gcdx(a, b)
+    gcdx(a, b...)
 
 Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+
+For more arguments than two, i.e., `gcdx(a, b, c, ...)` the Bézout coefficients are computed
+recursively, returning a solution `(d, u, v, w, ...)` to
+``u*a + v*b + w*c + ... = d = gcd(a, b, c, ...)``.
 
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
+
+!!! compat "Julia 1.12"
+    More or fewer arguments than two require Julia 1.12 or later.
 
 # Examples
 ```jldoctest
@@ -183,6 +190,9 @@ julia> gcdx(12, 42)
 
 julia> gcdx(240, 46)
 (2, -9, 47)
+
+julia> gcdx(15, 12, 20)
+(1, 7, -7, -1)
 ```
 
 !!! note
@@ -215,6 +225,18 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
+gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
+function gcdx(a::Real, b::Real, cs::Real...)
+    # a solution to the 3-arg `gcdx(a,b,c)` problem, `u*a + v*b + w*c = gcd(a,b,c)`, can be
+    # obtained from the 2-arg problem in three steps:
+    #   1. `gcdx(a,b)`: solve `i*a + j*b = d′ = gcd(a,b)` for `(i,j)`
+    #   2. `gcdx(d′,c)`: solve `x*gcd(a,b) + yc = gcd(gcd(a,b),c) = gcd(a,b,c)` for `(x,y)`
+    #   3. return `d = gcd(a,b,c)`, `u = i*x`, `v = j*x`, and `w = y`
+    # the N-arg solution proceeds similarly by recursion
+    d, i, j = gcdx(a, b)
+    d′, x, ys... = gcdx(d, cs...)
+    return d′, i*x, j*x, ys...
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -298,7 +320,11 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -362,7 +388,7 @@ end
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
-const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float16,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # Inline x^2 and x^3 for Val

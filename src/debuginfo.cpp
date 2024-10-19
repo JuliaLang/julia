@@ -58,7 +58,7 @@ extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
 extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
 
 template <typename callback>
-static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
+static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f) JL_NOTSAFEPOINT
 {
     const char *P = EHFrameAddr;
     const char *End = P + EHFrameSize;
@@ -164,6 +164,12 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 // --- storing and accessing source location metadata ---
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
+    // Non-opaque-closure MethodInstances are considered globally rooted
+    // through their methods, but for OC, we need to create a global root
+    // here.
+    jl_method_instance_t *mi = codeinst->def;
+    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+        jl_as_global_root((jl_value_t*)mi, 1);
     getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
 }
 
@@ -223,10 +229,20 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
 #endif
 
 void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
-                        std::function<uint64_t(const StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress)
+                        std::function<uint64_t(const StringRef &)> getLoadAddress)
 {
     object::section_iterator EndSection = Object.section_end();
+
+    bool anyfunctions = false;
+    for (const object::SymbolRef &sym_iter : Object.symbols()) {
+        object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
+        if (SymbolType != object::SymbolRef::ST_Function)
+            continue;
+        anyfunctions = true;
+        break;
+    }
+    if (!anyfunctions)
+        return;
 
 #ifdef _CPU_ARM_
     // ARM does not have/use .eh_frame
@@ -281,14 +297,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #if defined(_OS_WINDOWS_)
     uint64_t SectionAddrCheck = 0;
     uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
-    uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
     uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
     uint8_t *catchjmp = NULL;
     for (const object::SymbolRef &sym_iter : Object.symbols()) {
         StringRef sName = cantFail(sym_iter.getName());
-        if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
-            uint64_t Addr = cantFail(sym_iter.getAddress());
+        if (sName == "__UnwindData" || sName == "__catchjmp") {
+            uint64_t Addr = cantFail(sym_iter.getAddress()); // offset into object (including section offset)
             auto Section = cantFail(sym_iter.getSection());
             assert(Section != EndSection && Section->isText());
             uint64_t SectionAddr = Section->getAddress();
@@ -300,39 +315,18 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                         SectionLoadCheck == SectionLoadAddr);
             SectionAddrCheck = SectionAddr;
             SectionLoadCheck = SectionLoadAddr;
-            SectionWriteCheck = SectionLoadAddr;
-            if (lookupWriteAddress)
-                SectionWriteCheck = (uintptr_t)lookupWriteAddress((void*)SectionLoadAddr);
-            Addr += SectionWriteCheck - SectionLoadCheck;
-            if (sName.equals("__UnwindData")) {
+            Addr += SectionLoadAddr - SectionAddr;
+            if (sName == "__UnwindData") {
                 UnwindData = (uint8_t*)Addr;
             }
-            else if (sName.equals("__catchjmp")) {
+            else if (sName == "__catchjmp") {
                 catchjmp = (uint8_t*)Addr;
             }
         }
     }
     assert(catchjmp);
     assert(UnwindData);
-    assert(SectionAddrCheck);
     assert(SectionLoadCheck);
-    assert(!memcmp(catchjmp, "\0\0\0\0\0\0\0\0\0\0\0\0", 12) &&
-            !memcmp(UnwindData, "\0\0\0\0\0\0\0\0\0\0\0\0", 12));
-    catchjmp[0] = 0x48;
-    catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
-    *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
-    catchjmp[10] = 0xff;
-    catchjmp[11] = 0xe0; // jmp RAX
-    UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-    UnwindData[1] = 4;    // size of prolog (bytes)
-    UnwindData[2] = 2;    // count of unwind codes (slots)
-    UnwindData[3] = 0x05; // frame register (rbp) = rsp
-    UnwindData[4] = 4;    // second instruction
-    UnwindData[5] = 0x03; // mov RBP, RSP
-    UnwindData[6] = 1;    // first instruction
-    UnwindData[7] = 0x50; // push RBP
-    *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
-    UnwindData -= SectionWriteCheck - SectionLoadCheck;
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
@@ -353,7 +347,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         uint64_t SectionAddr = Section->getAddress();
         StringRef secName = cantFail(Section->getName());
         uint64_t SectionLoadAddr = getLoadAddress(secName);
-        Addr -= SectionAddr - SectionLoadAddr;
+        Addr += SectionLoadAddr - SectionAddr;
         StringRef sName = cantFail(sym_iter.getName());
         uint64_t SectionSize = Section->getSize();
         size_t Size = sym_size.second;
@@ -381,11 +375,6 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         if (codeinst) {
             JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
-            // Non-opaque-closure MethodInstances are considered globally rooted
-            // through their methods, but for OC, we need to create a global root
-            // here.
-            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
@@ -404,10 +393,9 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress)
+                            std::function<uint64_t(const StringRef &)> getLoadAddress)
 {
-    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
+    getJITDebugRegistry().registerJITObject(Object, getLoadAddress);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -1294,14 +1282,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 {
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
-  processFDEs((char*)Addr, Size, [](const char *Entry) {
+  processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
     });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
-   processFDEs((char*)Addr, Size, [](const char *Entry) {
+   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_deregister_frame(Entry);
     });
 }
@@ -1313,7 +1301,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 // Skip over an arbitrary long LEB128 encoding.
 // Return the pointer to the first unprocessed byte.
-static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End)
+static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOINT
 {
     const uint8_t *P = Addr;
     while ((*P >> 7) != 0 && P < End)
@@ -1325,7 +1313,7 @@ static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End)
 // bytes than what there are more bytes than what the type can store.
 // Adjust the pointer to the first unprocessed byte.
 template<typename T> static T parse_leb128(const uint8_t *&Addr,
-                                           const uint8_t *End)
+                                           const uint8_t *End) JL_NOTSAFEPOINT
 {
     typedef typename std::make_unsigned<T>::type uT;
     uT v = 0;
@@ -1348,7 +1336,7 @@ template<typename T> static T parse_leb128(const uint8_t *&Addr,
 }
 
 template <typename U, typename T>
-static U safe_trunc(T t)
+static U safe_trunc(T t) JL_NOTSAFEPOINT
 {
     assert((t >= static_cast<T>(std::numeric_limits<U>::min()))
            && (t <= static_cast<T>(std::numeric_limits<U>::max())));
@@ -1388,7 +1376,7 @@ enum DW_EH_PE : uint8_t {
 };
 
 // Parse the CIE and return the type of encoding used by FDE
-static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
+static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOINT
 {
     // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
@@ -1494,7 +1482,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 
     // Now first count the number of FDEs
     size_t nentries = 0;
-    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
+    processFDEs((char*)Addr, Size, [&](const char*) JL_NOTSAFEPOINT { nentries++; });
     if (nentries == 0)
         return;
 
@@ -1523,7 +1511,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // CIE's (may not happen) without parsing it every time.
     const uint8_t *cur_cie = nullptr;
     DW_EH_PE encoding = DW_EH_PE_omit;
-    processFDEs((char*)Addr, Size, [&](const char *Entry) {
+    processFDEs((char*)Addr, Size, [&](const char *Entry) JL_NOTSAFEPOINT {
             // Skip Length (4bytes) and CIE offset (4bytes)
             uint32_t fde_size = *(const uint32_t*)Entry;
             uint32_t cie_id = ((const uint32_t*)Entry)[1];
@@ -1644,7 +1632,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 #endif
 
 extern "C" JL_DLLEXPORT_CODEGEN
-uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
+uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     // Might be called from unmanaged thread
     jl_lock_profile();

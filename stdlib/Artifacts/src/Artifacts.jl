@@ -443,7 +443,7 @@ function artifact_hash(name::String, artifacts_toml::String;
         return nothing
     end
 
-    return SHA1(meta["git-tree-sha1"])
+    return SHA1(meta["git-tree-sha1"]::String)
 end
 
 function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
@@ -642,10 +642,9 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
     if meta === nothing
         error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
-    hash = SHA1(meta["git-tree-sha1"])
+    hash = SHA1(meta["git-tree-sha1"]::String)
     return artifact_name, artifact_path_tail, hash
 end
-
 """
     macro artifact_str(name)
 
@@ -707,17 +706,16 @@ macro artifact_str(name, platform=nothing)
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && platform === nothing
-        # To support slash-indexing, we need to split the artifact name from the path tail:
+    if platform === nothing
         platform = HostPlatform()
+    end
+    if isa(name, AbstractString) && isa(platform, AbstractPlatform)
+        # To support slash-indexing, we need to split the artifact name from the path tail:
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
             Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), Val($(LazyArtifacts)))::String
         end
     else
-        if platform === nothing
-            platform = :($(HostPlatform)())
-        end
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)

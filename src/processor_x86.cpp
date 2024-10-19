@@ -144,8 +144,6 @@ static constexpr FeatureDep deps[] = {
     {avx512f, avx2},
     {avx512dq, avx512f},
     {avx512ifma, avx512f},
-    {avx512pf, avx512f},
-    {avx512er, avx512f},
     {avx512cd, avx512f},
     {avx512bw, avx512f},
     {avx512bf16, avx512bw},
@@ -183,7 +181,7 @@ constexpr auto tremont = goldmont_plus | get_feature_masks(clwb, gfni);
 constexpr auto knl = get_feature_masks(sse3, ssse3, sse41, sse42, cx16, sahf, popcnt,
                                        aes, pclmul, avx, xsave, xsaveopt, rdrnd, f16c, fsgsbase,
                                        avx2, bmi, bmi2, fma, lzcnt, movbe, adx, rdseed, prfchw,
-                                       avx512f, avx512er, avx512cd, avx512pf, prefetchwt1);
+                                       avx512f, avx512cd);
 constexpr auto knm = knl | get_feature_masks(avx512vpopcntdq);
 constexpr auto yonah = get_feature_masks(sse3);
 constexpr auto prescott = yonah;
@@ -584,7 +582,7 @@ template<typename T>
 static inline void features_disable_avx512(T &features)
 {
     using namespace Feature;
-    unset_bits(features, avx512f, avx512dq, avx512ifma, avx512pf, avx512er, avx512cd,
+    unset_bits(features, avx512f, avx512dq, avx512ifma, avx512cd,
                avx512bw, avx512vl, avx512vbmi, avx512vpopcntdq, avx512vbmi2, avx512vnni,
                avx512bitalg, avx512vp2intersect, avx512bf16);
 }
@@ -948,7 +946,6 @@ static void ensure_jit_target(bool imaging)
                                                   Feature::vaes, Feature::vpclmulqdq,
                                                   Feature::sse4a, Feature::avx512f,
                                                   Feature::avx512dq, Feature::avx512ifma,
-                                                  Feature::avx512pf, Feature::avx512er,
                                                   Feature::avx512cd, Feature::avx512bw,
                                                   Feature::avx512vl, Feature::avx512vbmi,
                                                   Feature::avx512vpopcntdq, Feature::avxvnni,
@@ -1142,7 +1139,6 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
                                                   Feature::vaes, Feature::vpclmulqdq,
                                                   Feature::sse4a, Feature::avx512f,
                                                   Feature::avx512dq, Feature::avx512ifma,
-                                                  Feature::avx512pf, Feature::avx512er,
                                                   Feature::avx512cd, Feature::avx512bw,
                                                   Feature::avx512vl, Feature::avx512vbmi,
                                                   Feature::avx512vpopcntdq, Feature::avxvnni,

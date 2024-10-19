@@ -547,6 +547,7 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{A
             sigt = Bottom
             for j = 1:length(applicable)
                 match = applicable[j]::MethodMatch
+                valid_as_lattice(match.spec_types, true) || continue
                 sigt = sigt ⊔ fieldtype(match.spec_types, i)
             end
             if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
@@ -1282,7 +1283,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                     effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
                 exct = refine_exception_type(result.exct, effects)
-                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects), effects, mi)
+                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects, spec_info(irsv)), effects, mi)
             end
         end
     end
@@ -2680,7 +2681,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::Infere
     end
     si = StmtInfo(!unused)
     call = abstract_call(interp, arginfo, si, sv)::Future
-    Future{Nothing}(call, interp, sv) do call, interp, sv
+    Future{Any}(call, interp, sv) do call, interp, sv
         # this only is needed for the side-effect, sequenced before any task tries to consume the return value,
         # which this will do even without returning this Future
         sv.stmt_info[sv.currpc] = call.info
@@ -2832,7 +2833,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                 pushfirst!(argtypes, rt.env)
                 callinfo = abstract_call_opaque_closure(interp, rt,
                     ArgInfo(nothing, argtypes), StmtInfo(true), sv, #=check=#false)::Future
-                Future{Nothing}(callinfo, interp, sv) do callinfo, interp, sv
+                Future{Any}(callinfo, interp, sv) do callinfo, interp, sv
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                     nothing
                 end
@@ -3113,6 +3114,7 @@ end
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
 
 function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
+    (1 ≤ s.id ≤ length(ssavaluetypes)) || throw(InvalidIRError())
     typ = ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom
@@ -3773,6 +3775,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     takeprev = 0
     while takenext >= frame.frameid
         callee = takenext == 0 ? frame : callstack[takenext]::InferenceState
+        interp = callee.interp
         if !isempty(callstack)
             if length(callstack) - frame.frameid >= minwarn
                 topmethod = callstack[1].linfo
