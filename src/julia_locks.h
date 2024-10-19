@@ -103,6 +103,33 @@ JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }
+
+#include <mutex>
+#include <condition_variable>
+// simple C++ shim around a std::unique_lock + gc-safe + disabled finalizers region
+// since we nearly always want that combination together
+class jl_unique_gcsafe_lock {
+public:
+    int8_t gc_state;
+    std::unique_lock<std::mutex> native;
+    explicit jl_unique_gcsafe_lock(std::mutex &native) JL_NOTSAFEPOINT_ENTER
+    {
+        jl_task_t *ct = jl_current_task;
+        gc_state = jl_gc_safe_enter(ct->ptls);
+        this->native = std::unique_lock(native);
+        ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
+    }
+    jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &&native) = delete;
+    jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &native) = delete;
+    ~jl_unique_gcsafe_lock() JL_NOTSAFEPOINT_LEAVE {
+        jl_task_t *ct = jl_current_task;
+        jl_gc_safe_leave(ct->ptls, gc_state);
+        ct->ptls->engine_nqueued--; // enable finalizers (but don't run them until the next gc)
+    }
+    void wait(std::condition_variable& cond) JL_NOTSAFEPOINT {
+        cond.wait(native);
+    }
+};
 #endif
 
 #endif

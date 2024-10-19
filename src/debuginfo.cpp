@@ -58,7 +58,7 @@ extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
 extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
 
 template <typename callback>
-static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
+static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f) JL_NOTSAFEPOINT
 {
     const char *P = EHFrameAddr;
     const char *End = P + EHFrameSize;
@@ -164,6 +164,12 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 // --- storing and accessing source location metadata ---
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
+    // Non-opaque-closure MethodInstances are considered globally rooted
+    // through their methods, but for OC, we need to create a global root
+    // here.
+    jl_method_instance_t *mi = codeinst->def;
+    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+        jl_as_global_root((jl_value_t*)mi, 1);
     getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
 }
 
@@ -369,11 +375,6 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         if (codeinst) {
             JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
-            // Non-opaque-closure MethodInstances are considered globally rooted
-            // through their methods, but for OC, we need to create a global root
-            // here.
-            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
@@ -1281,14 +1282,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 {
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
-  processFDEs((char*)Addr, Size, [](const char *Entry) {
+  processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
     });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
-   processFDEs((char*)Addr, Size, [](const char *Entry) {
+   processFDEs((char*)Addr, Size, [](const char *Entry) JL_NOTSAFEPOINT {
       getJITDebugRegistry().libc_frames.libc_deregister_frame(Entry);
     });
 }
@@ -1300,7 +1301,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 
 // Skip over an arbitrary long LEB128 encoding.
 // Return the pointer to the first unprocessed byte.
-static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End)
+static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOINT
 {
     const uint8_t *P = Addr;
     while ((*P >> 7) != 0 && P < End)
@@ -1312,7 +1313,7 @@ static const uint8_t *consume_leb128(const uint8_t *Addr, const uint8_t *End)
 // bytes than what there are more bytes than what the type can store.
 // Adjust the pointer to the first unprocessed byte.
 template<typename T> static T parse_leb128(const uint8_t *&Addr,
-                                           const uint8_t *End)
+                                           const uint8_t *End) JL_NOTSAFEPOINT
 {
     typedef typename std::make_unsigned<T>::type uT;
     uT v = 0;
@@ -1335,7 +1336,7 @@ template<typename T> static T parse_leb128(const uint8_t *&Addr,
 }
 
 template <typename U, typename T>
-static U safe_trunc(T t)
+static U safe_trunc(T t) JL_NOTSAFEPOINT
 {
     assert((t >= static_cast<T>(std::numeric_limits<U>::min()))
            && (t <= static_cast<T>(std::numeric_limits<U>::max())));
@@ -1375,7 +1376,7 @@ enum DW_EH_PE : uint8_t {
 };
 
 // Parse the CIE and return the type of encoding used by FDE
-static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
+static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOINT
 {
     // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
@@ -1481,7 +1482,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 
     // Now first count the number of FDEs
     size_t nentries = 0;
-    processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
+    processFDEs((char*)Addr, Size, [&](const char*) JL_NOTSAFEPOINT { nentries++; });
     if (nentries == 0)
         return;
 
@@ -1510,7 +1511,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // CIE's (may not happen) without parsing it every time.
     const uint8_t *cur_cie = nullptr;
     DW_EH_PE encoding = DW_EH_PE_omit;
-    processFDEs((char*)Addr, Size, [&](const char *Entry) {
+    processFDEs((char*)Addr, Size, [&](const char *Entry) JL_NOTSAFEPOINT {
             // Skip Length (4bytes) and CIE offset (4bytes)
             uint32_t fde_size = *(const uint32_t*)Entry;
             uint32_t cie_id = ((const uint32_t*)Entry)[1];
@@ -1631,7 +1632,7 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
 #endif
 
 extern "C" JL_DLLEXPORT_CODEGEN
-uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
+uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr) JL_NOTSAFEPOINT
 {
     // Might be called from unmanaged thread
     jl_lock_profile();

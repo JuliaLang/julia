@@ -980,3 +980,9 @@ extern "C" JL_DLLEXPORT_CODEGEN
 ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }
+
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
+}
