@@ -245,14 +245,15 @@ function to_lowered_expr(mod, ex)
         # primitive_type global const new splatnew isdefined
         # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
         # foreigncall new_opaque_closure lambda
-        head = k == K"call"   ? :call   :
-               k == K"new"    ? :new    :
-               k == K"="      ? :(=)    :
-               k == K"global" ? :global :
-               k == K"const"  ? :const  :
-               k == K"leave"  ? :leave  :
-               k == K"pop_exception"  ? :pop_exception  :
-               k == K"isdefined"  ? :isdefined  :
+        head = k == K"call"      ? :call       :
+               k == K"new"       ? :new        :
+               k == K"splatnew"  ? :splatnew   :
+               k == K"="         ? :(=)        :
+               k == K"global"    ? :global     :
+               k == K"const"     ? :const      :
+               k == K"leave"     ? :leave      :
+               k == K"isdefined" ? :isdefined  :
+               k == K"pop_exception" ? :pop_exception  :
                nothing
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")

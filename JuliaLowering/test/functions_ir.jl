@@ -102,11 +102,11 @@ function f(::T, ::U, ::V) where T where {U,V}
     (T,U,V)
 end
 #---------------------
-1   (method :f)
-2   (= slot₂/U (call core.TypeVar :U))
-3   (= slot₃/V (call core.TypeVar :V))
-4   (= slot₁/T (call core.TypeVar :T))
-5   (call core.Typeof %₁)
+1   (= slot₂/U (call core.TypeVar :U))
+2   (= slot₃/V (call core.TypeVar :V))
+3   (= slot₁/T (call core.TypeVar :T))
+4   (method :f)
+5   (call core.Typeof %₄)
 6   slot₁/T
 7   slot₂/U
 8   slot₃/V
@@ -122,7 +122,7 @@ end
     3   static_parameter₂
     4   (call core.tuple %₁ %₂ %₃)
     5   (return %₄)
-16  (return %₁)
+16  (return %₄)
 
 ########################################
 # Static parameter with bounds and used with apply_type in argument
@@ -130,11 +130,11 @@ function f(::S{T}) where X <: T <: Y
     T
 end
 #---------------------
-1   (method :f)
-2   TestMod.X
-3   TestMod.Y
-4   (= slot₁/T (call core.TypeVar :T %₂ %₃))
-5   (call core.Typeof %₁)
+1   TestMod.X
+2   TestMod.Y
+3   (= slot₁/T (call core.TypeVar :T %₁ %₂))
+4   (method :f)
+5   (call core.Typeof %₄)
 6   TestMod.S
 7   slot₁/T
 8   (call core.apply_type %₆ %₇)
@@ -145,7 +145,7 @@ end
 13  --- method core.nothing %₁₂
     1   static_parameter₁
     2   (return %₁)
-14  (return %₁)
+14  (return %₄)
 
 ########################################
 # Error: Duplicate function argument names

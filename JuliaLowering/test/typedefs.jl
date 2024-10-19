@@ -123,6 +123,112 @@ let s = test_mod.S5{Any}(42.0, "hi")
     @test s.y == "hi"
 end
 
+# User defined inner constructors and helper functions for structs without type params
+@test JuliaLowering.include_string(test_mod, """
+struct S6
+    x
+    S6_f() = new(42)
+
+    "some docs"
+    S6() = S6_f()
+    S6(x) = new(x)
+end
+""") === nothing
+let s = test_mod.S6()
+    @test s isa test_mod.S6
+    @test s.x === 42
+end
+let s = test_mod.S6(2)
+    @test s isa test_mod.S6
+    @test s.x === 2
+end
+@test docstrings_equal(@doc(test_mod.S6), Markdown.doc"some docs")
+
+# User defined inner constructors and helper functions for structs with type params
+@test JuliaLowering.include_string(test_mod, """
+struct S7{S,T}
+    x::S
+    y
+
+    # Cases where full struct type may be deduced and used in body
+    S7{Int,String}() = new(10.0, "y1")
+    S7{S,T}() where {S,T} = new(10.0, "y2")
+    S7{Int,T}() where {T} = new(10.0, "y3")
+    (::Type{S7{Int,UInt8}})() = new{Int,UInt8}(10.0, "y4")
+
+    # Cases where new{...} is called
+    S7() = new{Int,Int}(10.0, "y5")
+    S7{UInt8}() = S7_f()
+    S7_f() = new{UInt8,UInt8}(10.0, "y6")
+end
+""") === nothing
+let s = test_mod.S7{Int,String}()
+    @test s isa test_mod.S7{Int,String}
+    @test s.x === 10
+    @test s.y === "y1"
+end
+let s = test_mod.S7{UInt16,UInt16}()
+    @test s isa test_mod.S7{UInt16,UInt16}
+    @test s.x === UInt16(10)
+    @test s.y === "y2"
+end
+let s = test_mod.S7{Int,UInt16}()
+    @test s isa test_mod.S7{Int,UInt16}
+    @test s.x === 10
+    @test s.y === "y3"
+end
+let s = test_mod.S7{Int,UInt8}()
+    @test s isa test_mod.S7{Int,UInt8}
+    @test s.x === 10
+    @test s.y === "y4"
+end
+let s = test_mod.S7()
+    @test s isa test_mod.S7{Int,Int}
+    @test s.x === 10
+    @test s.y === "y5"
+end
+let s = test_mod.S7{UInt8}()
+    @test s isa test_mod.S7{UInt8,UInt8}
+    @test s.x === UInt8(10)
+    @test s.y === "y6"
+end
+
+# new() with splats and typed fields
+@test JuliaLowering.include_string(test_mod, """
+struct S8
+    x::Int
+    y::Float64
+
+    S8(xs, ys) = new(xs..., ys...)
+end
+""") === nothing
+let s = test_mod.S8((10.0,), (20,))
+    @test s isa test_mod.S8
+    @test s.x === 10
+    @test s.y === 20.0
+end
+# Wrong number of args checked by lowering
+@test_throws ArgumentError test_mod.S8((1,), ())
+@test_throws ArgumentError test_mod.S8((1,2,3), ())
+
+# new() with splats and untyped fields
+@test JuliaLowering.include_string(test_mod, """
+struct S9
+    x
+    y
+
+    S9(xs) = new(xs...)
+end
+""") === nothing
+let s = test_mod.S9((10.0,20))
+    @test s isa test_mod.S9
+    @test s.x === 10.0
+    @test s.y === 20
+end
+# Wrong number of args checked by the runtime
+@test_throws ArgumentError test_mod.S9((1,))
+@test_throws ArgumentError test_mod.S9((1,2,3))
+
 # Test cases from
 # https://github.com/JuliaLang/julia/issues/36104
 # https://github.com/JuliaLang/julia/pull/36121

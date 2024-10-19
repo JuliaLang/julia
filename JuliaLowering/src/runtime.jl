@@ -165,7 +165,7 @@ Base.@assume_effects :removable :nothrow function current_exception()
     @ccall jl_current_exception(current_task()::Any)::Any
 end
 
-function bind_docs!(f::Function, docstr, method_metadata)
+function _bind_func_docs!(f, docstr, method_metadata::Core.SimpleVector)
     mod = parentmodule(f)
     bind = Base.Docs.Binding(mod, nameof(f))
     full_sig = method_metadata[1]
@@ -181,7 +181,20 @@ function bind_docs!(f::Function, docstr, method_metadata)
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), arg_sig)
 end
 
-function bind_docs!(type::Type, docstr, lineno; field_docs=Core.svec())
+function bind_docs!(f::Function, docstr, method_metadata::Core.SimpleVector)
+    _bind_func_docs!(f, docstr, method_metadata)
+end
+
+# Document constructors
+function bind_docs!(::Type{Type{T}}, docstr, method_metadata::Core.SimpleVector) where T
+    _bind_func_docs!(T, docstr, method_metadata)
+end
+
+function bind_docs!(type::Type, docstr, method_metadata::Core.SimpleVector)
+    _bind_func_docs!(type, docstr, method_metadata)
+end
+
+function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.svec())
     mod = parentmodule(type)
     bind = Base.Docs.Binding(mod, nameof(type))
     metadata = Dict{Symbol, Any}(

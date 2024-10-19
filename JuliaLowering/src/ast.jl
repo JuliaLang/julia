@@ -147,10 +147,11 @@ end
 
 #-------------------------------------------------------------------------------
 # AST creation utilities
-_node_id(ex::NodeId) = ex
-_node_id(ex::SyntaxTree) = ex._id
-
 _node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
+function _node_id(graph::SyntaxGraph, ex)
+    # Fallback to give a comprehensible error message for use with the @ast macro
+    error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
+end
 
 _node_ids(graph::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)

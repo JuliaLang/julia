@@ -4,6 +4,12 @@ using JuliaLowering
 using JuliaSyntax
 import FileWatching
 
+# The following are for docstrings testing. We need to load the REPL module
+# here for `Base.@doc` lookup to work at all. Yes this does seem really,
+# really, REALLY messed up.
+using Markdown
+import REPL
+
 using JuliaSyntax: sourcetext
 
 using JuliaLowering:
@@ -227,3 +233,22 @@ function watch_ir_tests(dir, delay=0.5)
         end
     end
 end
+
+# See Julia Base tests in "test/docs.jl"
+function docstrings_equal(d1, d2; debug=true)
+    io1 = IOBuffer()
+    io2 = IOBuffer()
+    show(io1, MIME"text/markdown"(), d1)
+    show(io2, MIME"text/markdown"(), d2)
+    s1 = String(take!(io1))
+    s2 = String(take!(io2))
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
+    return s1 == s2
+end
+docstrings_equal(d1::Docs.DocStr, d2) = docstrings_equal(Docs.parsedoc(d1), d2)
+

@@ -11,7 +11,9 @@ julia = "1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 FileWatching = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
 [targets]
-test = ["Test", "FileWatching"]
+test = ["Test", "FileWatching", "Markdown", "REPL"]

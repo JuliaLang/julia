@@ -29,8 +29,9 @@ function _register_kinds()
             "symbolic_label"
             # Goto named label
             "symbolic_goto"
-            # Internal initializer for structures, called from inner constructor
+            # Internal initializer for struct types, for inner constructors/functions
             "new"
+            "splatnew"
             # Catch-all for additional syntax extensions without the need to
             # extend `Kind`. Known extensions include:
             #   locals, islocal

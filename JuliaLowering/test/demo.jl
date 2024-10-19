@@ -561,7 +561,12 @@ end
 """
 
 src = """
-struct X
+struct S9{T}
+    x
+    y
+
+    "Docs for S9"
+    S9{Int}(xs) = new(xs...)
 end
 """
 

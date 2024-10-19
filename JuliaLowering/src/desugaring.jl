@@ -1272,7 +1272,7 @@ function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
     end
 end
 
-function expand_function_def(ctx, ex, docs)
+function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity)
     @chk numchildren(ex) in (1,2)
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
@@ -1302,10 +1302,9 @@ function expand_function_def(ctx, ex, docs)
         return_type = name[2]
         name = name[1]
     end
-    
+
     if kind(name) == K"call"
-        callex = name
-        body = ex[2]
+        callex = rewrite_call(name)
         # TODO
         # nospecialize
         # argument destructuring
@@ -1367,6 +1366,7 @@ function expand_function_def(ctx, ex, docs)
         pushfirst!(arg_names, farg_name)
         pushfirst!(arg_types, farg_type)
 
+        body = rewrite_body(ex[2])
         if !isnothing(return_type)
             ret_var = ssavar(ctx, return_type, "return_type")
             body = @ast ctx body [
@@ -1381,8 +1381,8 @@ function expand_function_def(ctx, ex, docs)
         method_table = nothing_(ctx, name) # TODO: method overlays
         @ast ctx ex [K"scope_block"(scope_type=:hard)
             [K"block"
-                [K"=" func_self func_self_val]
                 typevar_stmts...
+                [K"=" func_self func_self_val]
                 # metadata contains svec(types, sparms, location)
                 method_metadata := [K"call"(callex)
                     "svec"              ::K"core"
@@ -1639,11 +1639,11 @@ function _match_struct_field(x0)
     end
 end
 
-function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, constructors, exs)
+function _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs, inner_defs, exs)
     for e in exs
         if kind(e) == K"block"
             _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
-                                   constructors, children(e))
+                                   inner_defs, children(e))
         elseif kind(e) == K"="
             throw(LoweringError(e, "assignment syntax in structure fields is reserved"))
         else
@@ -1666,8 +1666,9 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
                     push!(field_docs, @ast ctx e m.docs)
                 end
             else
-                # Inner constructors
-                push!(constructors, e)
+                # Inner constructors and inner functions
+                # TODO: Disallow arbitrary expressions inside `struct`?
+                push!(inner_defs, e)
             end
         end
     end
@@ -1802,22 +1803,232 @@ function _new_call(ctx, ex, typevar_names, field_names, field_types)
     end
 end
 
-function _rewrite_constructor_new_calls(ctx, ex, typevar_names, field_names, field_types)
+function _is_new_call(ex)
+    kind(ex) == K"call" &&
+        ((kind(ex[1]) == K"Identifier" && ex[1].name_val == "new") ||
+         (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && ex[1][1].name_val == "new"))
 end
 
-function _constructor_min_initalized(ex::SyntaxTree)
-    if kind(ex) == K"call" && ((kind(ex[1]) == K"Identifier" && ex[1].name_val == "new") ||
-           (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && ex[1][1].name_val == "new"))
-        numchildren(ex) - 1
-    elseif !is_leaf(ex)
-        _constructor_min_initalized(children(ex))
+# Rewrite inner constructor signatures for struct `X` from `X(...)`
+# to `(ctor_self::Type{X})(...)`
+function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_typevars, ctor_self)
+    @assert kind(callex) == K"call"
+    name = callex[1]
+    if is_same_identifier_like(struct_name, name)
+        # X(x,y)  ==>  (#ctor-self#::Type{X})(x,y)
+        ctor_self[] = new_mutable_var(ctx, callex, "#ctor-self#"; kind=:argument)
+        @ast ctx callex [K"call"
+            [K"::"
+                ctor_self[]
+                [K"curly" "Type"::K"core" global_struct_name]
+            ]
+            callex[2:end]...
+        ]
+    elseif kind(name) == K"curly" && is_same_identifier_like(struct_name, name[1])
+        # X{T}(x,y)  ==>  (#ctor-self#::Type{X{T}})(x,y)
+        self = new_mutable_var(ctx, callex, "#ctor-self#"; kind=:argument)
+        if numchildren(name) - 1 == length(struct_typevars)
+            # Self fully parameterized - can be used as the full type to
+            # rewrite new() calls in constructor body.
+            ctor_self[] = self
+        end
+        @ast ctx callex [K"call"
+            [K"::"
+                self
+                [K"curly"
+                    "Type"::K"core"
+                    [K"curly"
+                        global_struct_name
+                        name[2:end]...
+                    ]
+                ]
+            ]
+            callex[2:end]...
+        ]
     else
-        typemax(Int)
+        callex
     end
 end
 
-function _constructor_min_initalized(exs::AbstractVector)
-    minimum((_constructor_min_initalized(e) for e in exs), init=typemax(Int))
+# Rewrite calls to `new` in bodies of inner constructors and inner functions
+# into `new` or `splatnew` expressions.  For example:
+#
+#     struct X{T,S}
+#         X() = new()
+#         X() = new{A,B}()
+#         X{T,S}() where {T,S} = new()
+#         X{A,B}() = new()
+#         X{A}() = new()
+#         (t::Type{X})() = new{A,B}()
+#         f() = new()
+#         f() = new{A,B}()
+#         f() = new{Ts...}()
+#     end
+#
+# Map to the following
+#
+#     X() = ERROR
+#     (#ctor-self#::Type{X})() = (new X{A,B})
+#     (Type{X{T,S}}() where {T,S} = (new #ctor-self#)
+#     X{A,B}() = (new #ctor-self#)
+#     X{A}() = ERROR
+#     (t::Type{X})() = (new X{A,B})
+#     f() = ERROR
+#     f() = (new X{A,B})
+#     f() = (new X{Ts...})
+#
+# TODO: Arguably the following "could also work", but any symbolic match of
+# this case would be heuristic and rely on assuming Type == Core.Type. So
+# runtime checks would really be required and flisp lowering doesn't catch
+# this case either.
+#
+#     (t::Type{X{A,B}})() = new()
+function _rewrite_ctor_new_calls(ctx, ex, struct_name, global_struct_name, ctor_self,
+                                 struct_typevars, field_types)
+    if is_leaf(ex)
+        return ex
+    elseif !_is_new_call(ex)
+        return mapchildren(
+            e->_rewrite_ctor_new_calls(ctx, e, struct_name, global_struct_name,
+                                       ctor_self, struct_typevars, field_types),
+            ctx, ex
+        )
+    end
+    # Rewrite a call to new()
+    kw_arg_i = findfirst(e->(k = kind(e); k == K"=" || k == K"parameters"), children(ex))
+    if !isnothing(kw_arg_i)
+        throw(LoweringError(ex[kw_arg_i], "`new` does not accept keyword arguments"))
+    end
+    full_struct_type = if kind(ex[1]) == K"curly"
+        # new{A,B}(...)
+        new_type_params = ex[1][2:end]
+        n_type_splat = sum(kind(t) == K"..." for t in new_type_params)
+        n_type_nonsplat = length(new_type_params) - n_type_splat
+        if n_type_splat == 0 && n_type_nonsplat < length(struct_typevars)
+            throw(LoweringError(ex[1], "too few type parameters specified in `new{...}`"))
+        elseif n_type_nonsplat > length(struct_typevars)
+            throw(LoweringError(ex[1], "too many type parameters specified in `new{...}`"))
+        end
+        @ast ctx ex[1] [K"curly" global_struct_name new_type_params...]
+    elseif !isnothing(ctor_self)
+        # new(...) in constructors
+        ctor_self
+    else
+        # new(...) inside non-constructor inner functions
+        if isempty(struct_typevars)
+            global_struct_name
+        else
+            throw(LoweringError(ex[1], "too few type parameters specified in `new`"))
+        end
+    end
+    new_args = ex[2:end]
+    n_splat = sum(kind(t) == K"..." for t in new_args)
+    n_nonsplat = length(new_args) - n_splat
+    n_fields = length(field_types)
+    function throw_n_fields_error(desc)
+        @ast ctx ex [K"call"
+            "throw"::K"core"
+            [K"call"
+                "ArgumentError"::K"top"
+                "too $desc arguments in `new` (expected $n_fields)"::K"String"
+            ]
+        ]
+    end
+    if n_nonsplat > n_fields
+        return throw_n_fields_error("many")
+    else
+        # "Too few" args are allowed in partially initialized structs
+    end
+    if n_splat == 0
+        @ast ctx ex [K"block"
+            struct_type := full_struct_type
+            [K"new"
+                struct_type
+                [_new_call_convert_arg(ctx, struct_type, type, i, name)
+                 for (i, (name,type)) in enumerate(zip(ex[2:end], field_types))]...
+            ]
+        ]
+    else
+        fields_all_Any = all(kind(ft) == K"core" && ft.name_val == "Any" for ft in field_types)
+        if fields_all_Any
+            @ast ctx ex [K"block"
+                struct_type := full_struct_type
+                [K"splatnew"
+                    struct_type
+                    # Note: `jl_new_structt` ensures length of this tuple is
+                    # exactly the number of fields.
+                    [K"call" "tuple"::K"core" ex[2:end]...]
+                ]
+            ]
+        else
+            # `new` with splatted args which are symbolically not `Core.Any`
+            # (might be `Any` at runtime but we can't know that here.)
+            @ast ctx ex [K"block"
+                args := [K"call" "tuple"::K"core" ex[2:end]...]
+                n_args := [K"call" "nfields"::K"core" args]
+                [K"if"
+                    [K"call" "ult_int"::K"top" n_args n_fields::K"Integer"]
+                    throw_n_fields_error("few")
+                ]
+                [K"if"
+                    [K"call" "ult_int"::K"top" n_fields::K"Integer" n_args]
+                    throw_n_fields_error("many")
+                ]
+                struct_type := full_struct_type
+                [K"new"
+                    struct_type
+                    [_new_call_convert_arg(ctx, struct_type, type, i,
+                         [K"call" "getfield"::K"core" args i::K"Integer"])
+                     for (i, type) in enumerate(field_types)]...
+                ]
+            ]
+        end
+    end
+end
+
+# Rewrite calls to `new( ... )` to `new` expressions on the appropriate
+# type, determined by the containing type and constructor definitions.
+#
+# This is mainly for constructors, but also needs to work for inner functions
+# which may call new() but are not constructors.
+function rewrite_new_calls(ctx, ex, struct_name, global_struct_name,
+                           typevar_names, field_names, field_types)
+    if kind(ex) == K"doc"
+        docs = ex[1]
+        ex = ex[2]
+    else
+        docs = nothing
+    end
+    if kind(ex) != K"function"
+        return ex
+    end
+    if !(numchildren(ex) == 2 && is_eventually_call(ex[1]))
+        throw(LoweringError(ex, "Expected constructor or named inner function"))
+    end
+
+    ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
+    expand_function_def(ctx, ex, docs,
+        callex->_rewrite_ctor_sig(ctx, callex, struct_name,
+                                  global_struct_name, typevar_names, ctor_self),
+        body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
+                                      ctor_self[], typevar_names, field_types)
+    )
+end
+
+function _constructor_min_initalized(ex::SyntaxTree)
+    if _is_new_call(ex)
+        if any(kind(e) == K"..." for e in ex[2:end])
+            # Lowering ensures new with splats always inits all fields
+            # or in the case of splatnew this is enforced by the runtime.
+            typemax(Int)
+        else
+            numchildren(ex) - 1
+        end
+    elseif !is_leaf(ex)
+        minimum((_constructor_min_initalized(e) for e in children(ex)), init=typemax(Int))
+    else
+        typemax(Int)
+    end
 end
 
 function expand_struct_def(ctx, ex, docs)
@@ -1833,11 +2044,12 @@ function expand_struct_def(ctx, ex, docs)
     field_types = SyntaxList(ctx)
     field_attrs = SyntaxList(ctx)
     field_docs = SyntaxList(ctx)
-    constructors = SyntaxList(ctx)
+    inner_defs = SyntaxList(ctx)
     _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
-                           constructors, children(type_body))
+                           inner_defs, children(type_body))
     is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
-    min_initialized = min(_constructor_min_initalized(constructors), length(field_names))
+    min_initialized = minimum((_constructor_min_initalized(e) for e in inner_defs),
+                              init=length(field_names))
     newtype_var = ssavar(ctx, ex, "struct_type")
     layer = new_scope_layer(ctx, struct_name)
     global_struct_name = adopt_scope(struct_name, layer)
@@ -1852,12 +2064,12 @@ function expand_struct_def(ctx, ex, docs)
 
     # New local variable names for constructor args to avoid clashing with any
     # type names
-    if isempty(constructors)
+    if isempty(inner_defs)
         field_names_2 = adopt_scope(field_names, layer)
     end
 
     need_outer_constructor = false
-    if isempty(constructors) && !isempty(typevar_names)
+    if isempty(inner_defs) && !isempty(typevar_names)
         # To generate an outer constructor each struct type parameter must be
         # able to be inferred from the list of fields passed as constuctor
         # arguments.
@@ -1928,8 +2140,8 @@ function expand_struct_def(ctx, ex, docs)
                         [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
                         [K"block"
                             # If this is compatible with an old definition, use
-                            # the existing type object and throw away
-                            # NB away the new type
+                            # the existing type object and throw away the new
+                            # type
                             [K"=" struct_name global_struct_name]
                             if !isempty(typevar_names)
                                 # And resassign the typevar_names - these may be
@@ -1952,11 +2164,15 @@ function expand_struct_def(ctx, ex, docs)
                     [K"call" "svec"::K"core" field_types...]
                 ]
                 # Default constructors
-                if isempty(constructors)
+                if isempty(inner_defs)
                     default_inner_constructors(ctx, ex, global_struct_name,
                                                typevar_names, field_names_2, field_types)
                 else
-                    TODO(ex, "Convert new-calls to new-expressions in user-defined constructors")
+                    map!(inner_defs, inner_defs) do def
+                        rewrite_new_calls(ctx, def, struct_name, global_struct_name,
+                                          typevar_names, field_names, field_types)
+                    end
+                    [K"block" inner_defs...]
                 end
                 if need_outer_constructor
                     default_outer_constructor(ctx, ex, global_struct_name,

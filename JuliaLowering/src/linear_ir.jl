@@ -584,8 +584,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         end
-    elseif k == K"call" || k == K"new"
-        # TODO k ∈ splatnew foreigncall cfunction new_opaque_closure cglobal
+    elseif k == K"call" || k == K"new" || k == K"splatnew"
+        # TODO k ∈ foreigncall cfunction new_opaque_closure cglobal
         args = compile_args(ctx, children(ex))
         callex = makenode(ctx, ex, k, args)
         if in_tail_pos

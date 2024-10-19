@@ -100,6 +100,20 @@ begin
 end
 """) === ("fallback", (Number, Float64), (Int, Int), "fallback")
 
+Base.eval(test_mod,
+:(struct X1{T} end)
+)
+
+# `where` params used in function obj type
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function (x::X1{T})() where T
+        T
+    end
+    X1{Int}()()
+end
+""") === Int
+
 Base.include_string(test_mod,
 """
     struct X end
