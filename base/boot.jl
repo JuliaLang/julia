@@ -310,8 +310,8 @@ macro _boundscheck() Expr(:boundscheck) end
 
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
-TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
-TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
+TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub::Type)
+TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb::Type, ub::Type)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}

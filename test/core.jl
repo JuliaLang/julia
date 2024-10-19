@@ -8332,3 +8332,18 @@ let s = mktemp() do path, io
     end
     @test strip(s) == "xxx = 42"
 end
+
+function issue_56248_ub_1()
+    TypeVar(:x, 3)
+end
+function issue_56248_ub_2()
+    TypeVar(:x, Union{}, 3)
+end
+function issue_56248_lb()
+    TypeVar(:x, 3, Any)
+end
+@testset "issue #56248 (mustn't crash julia)" begin
+    @test_throws TypeError issue_56248_ub_1()
+    @test_throws TypeError issue_56248_ub_2()
+    @test_throws TypeError issue_56248_lb()
+end
