@@ -1596,7 +1596,7 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     if n != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    @inbounds for i = eachindex(x)
+    @inbounds for i = eachindex(x,y)
         xi, yi = x[i], y[i]
         x[i] =       c *xi + s*yi
         y[i] = -conj(s)*xi + c*yi
@@ -1992,12 +1992,12 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     A = Base.unalias(B, A)
     if uplo == 'U'
         LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
-        for j in axes(A,2), i in 1:min(j,m)
+        for j in axes(A,2), i in axes(A,1)[begin : min(j,end)]
             @inbounds B[i,j] = A[i,j]
         end
     else # uplo == 'L'
         LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
-        for j in axes(A,2), i in j:m
+        for j in axes(A,2), i in axes(A,1)[j:end]
             @inbounds B[i,j] = A[i,j]
         end
     end
