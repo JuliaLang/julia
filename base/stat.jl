@@ -201,9 +201,11 @@ end
 
 """
     stat(file)
-    stat(joinpath...)
+    stat(path_elements...)
 
-Return a structure whose fields contain information about the file.
+Return a structure whose fields contain information about the file. 
+If multiple arguments are given, they are joined by `joinpath`.
+
 The fields of the structure are:
 
 | Name    | Type                            | Description                                                        |
@@ -308,9 +310,11 @@ function filemode_string(mode)
 end
 
 """
-    filesize(path...)
+    filesize(file)
+    filesize(path_elements...)
 
 Equivalent to `stat(file).size`.
+If multiple arguments are given, they are joined by `joinpath`.
 """
 filesize(st::StatStruct) = st.size
 
