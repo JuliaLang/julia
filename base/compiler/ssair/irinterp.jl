@@ -52,7 +52,7 @@ end
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
     call = abstract_call(interp, arginfo, si, irsv)::Future
-    Future{Nothing}(call, interp, irsv) do call, interp, irsv
+    Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
         nothing
     end

@@ -938,8 +938,12 @@ endif
 
 #If nothing is set default to native unless we are cross-compiling
 ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
-ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+ifeq ($(ARCH),aarch64)
+# ARM recommends only setting MCPU for AArch64
 MCPU=native
+else ifneq (,$(findstring riscv64,$(ARCH)))
+# RISC-V doesn't have a native option
+$(error Building for RISC-V requires a specific MARCH to be set))
 else
 MARCH=native
 MTUNE=native
@@ -995,6 +999,9 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 DIST_ARCH:=arm
 endif
+ifneq (,$(findstring riscv64,$(ARCH)))
+DIST_ARCH:=riscv64
+endif
 
 JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
 endif
@@ -1002,16 +1009,14 @@ endif
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
-USE_BLAS64:=0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
+BINARY:=32
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
 ifneq (,$(findstring aarch64,$(ARCH)))
-OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
-USE_BLAS64:=1
 BINARY:=64
 endif
 
@@ -1020,7 +1025,11 @@ ifneq ($(MARCH),)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
+# On RISC-V, don't forward the MARCH ISA string to JULIA_CPU_TARGET,
+# as it's always incompatible with LLVM's CPU target name parser.
+ifeq (,$(findstring riscv64,$(ARCH)))
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
 endif
 
 # Set MCPU-specific flags
