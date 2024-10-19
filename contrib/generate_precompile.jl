@@ -183,10 +183,10 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     # interactive startup uses this
     write(IOBuffer(), "")
 
-    # not critical, but helps hide unrelated compilation from @time when using --trace-compile
-    foo() = rand(2,2) * rand(2,2)
-    @time foo()
-    @time foo()
+    # Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
+    f55729() = Base.Experimental.@force_compile
+    @time @eval f55729()
+    @time @eval f55729()
 
     break   # only actually need to do this once
 end
@@ -202,12 +202,15 @@ if Artifacts !== nothing
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     artifact_hash("HelloWorldC", artifacts_toml)
-    oldpwd = pwd(); cd(dirname(artifacts_toml))
-    macroexpand(Main, :(@artifact_str("HelloWorldC")))
-    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    if best_platform !== nothing
+      # @artifact errors for unsupported platforms
+      oldpwd = pwd(); cd(dirname(artifacts_toml))
+      macroexpand(Main, :(@artifact_str("HelloWorldC")))
+      cd(oldpwd)
+    end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
@@ -347,8 +350,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "F$n_step1")
         return :ok
     end
-    Base.errormonitor(step1)
-    !PARALLEL_PRECOMPILATION && wait(step1)
+    PARALLEL_PRECOMPILATION ? bind(statements_step1, step1) : wait(step1)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -362,7 +364,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     # Make statements unique
     statements = Set{String}()
     # Execute the precompile statements
-    for sts in [statements_step1,], statement in sts
+    for statement in statements_step1
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
@@ -398,6 +400,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     println()
     # Seems like a reasonable number right now, adjust as needed
     # comment out if debugging script
+    have_repl = false
     n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
@@ -408,7 +411,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
 finally
     fancyprint && print(ansi_enablecursor)
     GC.gc(true); GC.gc(false); # reduce memory footprint
-    return
 end
 
 generate_precompile_statements()

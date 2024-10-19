@@ -171,6 +171,11 @@ end
     @test D isa Eigen{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
     @test D.values ≈ D32.values
     @test D.vectors ≈ D32.vectors
+
+    # ensure that different algorithms dispatch correctly
+    λ, V = eigen(C, LinearAlgebra.QRIteration())
+    @test λ isa Vector{Float16}
+    @test C * V ≈ V * Diagonal(λ)
 end
 
 @testset "complex Symmetric" begin

@@ -51,6 +51,8 @@ function print(io::IO, xs...)
     return nothing
 end
 
+setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
+
 """
     println([io::IO], xs...)
 
@@ -74,6 +76,7 @@ julia> String(take!(io))
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
 
+setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -149,6 +152,7 @@ function print_to_string(xs...)
     end
     String(_unsafe_take!(s))
 end
+setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -812,12 +816,12 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    annots = RegionAnnotation[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
             for annot in c.annotations
-                push!(annots, (point:point, annot))
+                push!(annots, (point:point, annot...))
             end
         end
         point += ncodeunits(c)

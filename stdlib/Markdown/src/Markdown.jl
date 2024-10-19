@@ -56,7 +56,8 @@ const MARKDOWN_FACES = [
 
 __init__() = foreach(addface!, MARKDOWN_FACES)
 
-parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+parse(markdown::AbstractString; flavor = julia) = parse(String(markdown), flavor = flavor)
 parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)

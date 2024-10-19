@@ -3617,7 +3617,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "backedges",
                             "cache",
                             "cache_with_orig",
-                            "precompiled"),
+                            "flags"),
                         jl_svec(7,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,

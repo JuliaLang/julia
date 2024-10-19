@@ -505,12 +505,29 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+// Must be kept in sync with `base/timing.jl`
+#define FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL (0)
+#define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
+#define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
+#define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
+#define FULL_SWEEP_NUM_REASONS (4)
+
+extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
+STATIC_INLINE void gc_count_full_sweep_reason(int reason) JL_NOTSAFEPOINT
+{
+    assert(reason >= 0 && reason < FULL_SWEEP_NUM_REASONS);
+    jl_full_sweep_reasons[reason]++;
+}
+
 extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
-extern _Atomic(int) gc_n_threads_sweeping;
+extern _Atomic(int) gc_n_threads_sweeping_pools;
+extern _Atomic(int) gc_n_threads_sweeping_stacks;
+extern _Atomic(int) gc_ptls_sweep_idx;
+extern _Atomic(int) gc_stack_free_idx;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -521,7 +538,7 @@ void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
-void sweep_stack_pools(void) JL_NOTSAFEPOINT;
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages

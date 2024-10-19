@@ -45,7 +45,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         copy(A::$t) = $t(copy(A.data))
         Base.unaliascopy(A::$t) = $t(Base.unaliascopy(A.data))
 
-        real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
         real(A::$t{<:Complex, <:StridedMaybeAdjOrTransMat}) = $t(real.(A))
     end
@@ -143,6 +142,7 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -182,6 +182,16 @@ copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(si
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
+function full(A::Union{UpperTriangular,LowerTriangular})
+    return _triangularize(A)(parent(A))
+end
+function full(A::UnitUpperOrUnitLowerTriangular)
+    isupper = A isa UnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
+    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    return Ap
+end
+
 function full!(A::LowerTriangular)
     B = A.data
     tril!(B)
@@ -209,32 +219,34 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
-Base.isassigned(A::UnitLowerTriangular, i::Int, j::Int) =
-    i > j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
-    i < j ? isassigned(A.data, i, j) : true
-Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? isassigned(A.data, i, j) : true
+_shouldforwardindex(U::UpperTriangular, row::Integer, col::Integer) = row <= col
+_shouldforwardindex(U::LowerTriangular, row::Integer, col::Integer) = row >= col
+_shouldforwardindex(U::UnitUpperTriangular, row::Integer, col::Integer) = row < col
+_shouldforwardindex(U::UnitLowerTriangular, row::Integer, col::Integer) = row > col
 
-Base.isstored(A::UnitLowerTriangular, i::Int, j::Int) =
-    i > j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
-    i < j ? Base.isstored(A.data, i, j) : false
-Base.isstored(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? Base.isstored(A.data, i, j) : false
+Base.isassigned(A::UpperOrLowerTriangular, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? isassigned(A.data, i, j) : true
 
-@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Int, j::Int) where {T} =
-    i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::LowerTriangular, i::Int, j::Int) =
-    i >= j ? A.data[i,j] : _zero(A.data,j,i)
-@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Int, j::Int) where {T} =
-    i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
-    i <= j ? A.data[i,j] : _zero(A.data,j,i)
+Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? Base.isstored(A.data, i, j) : false
+
+@propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
+@propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+
+_shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
+_shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
+_shouldforwardindex(U::UnitUpperTriangular, b::BandIndex) = b.band > 0
+_shouldforwardindex(U::UnitLowerTriangular, b::BandIndex) = b.band < 0
+
+# these specialized getindex methods enable constant-propagation of the band
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, b::BandIndex) where {T}
+    _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
+end
+Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
+    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
+end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
 _zero_triangular_half_str(::Type{<:LowerOrUnitLowerTriangular}) = "upper"
@@ -480,10 +492,8 @@ adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , tr
 adjoint!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true, true))
 adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true, false))
 
-diag(A::LowerTriangular) = diag(A.data)
-diag(A::UnitLowerTriangular) = fill(oneunit(eltype(A)), size(A,1))
-diag(A::UpperTriangular) = diag(A.data)
-diag(A::UnitUpperTriangular) = fill(oneunit(eltype(A)), size(A,1))
+diag(A::UpperOrLowerTriangular) = diag(A.data)
+diag(A::Union{UnitLowerTriangular, UnitUpperTriangular}) = fill(oneunit(eltype(A)), size(A,1))
 
 # Unary operations
 -(A::LowerTriangular) = LowerTriangular(-A.data)
@@ -512,10 +522,8 @@ for TM in (:LowerTriangular, :UpperTriangular)
     @eval -(A::$TM{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast(-, A)
 end
 
-tr(A::LowerTriangular) = tr(A.data)
-tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
-tr(A::UpperTriangular) = tr(A.data)
-tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperOrLowerTriangular) = tr(A.data)
+tr(A::Union{UnitLowerTriangular, UnitUpperTriangular}) = size(A, 1) * oneunit(eltype(A))
 
 for T in (:UpperOrUnitUpperTriangular, :LowerOrUnitLowerTriangular)
     @eval @propagate_inbounds function copyto!(dest::$T, U::$T)
@@ -574,6 +582,8 @@ end
     return A
 end
 
+_triangularize(::UpperOrUnitUpperTriangular) = triu
+_triangularize(::LowerOrUnitLowerTriangular) = tril
 _triangularize!(::UpperOrUnitUpperTriangular) = triu!
 _triangularize!(::LowerOrUnitLowerTriangular) = tril!
 
@@ -850,51 +860,92 @@ fillstored!(A::UpperTriangular, x)     = (fillband!(A.data, x, 0, size(A,2)-1); 
 fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); A)
 
 # Binary operations
-+(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data + B.data)
-+(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data + B.data)
-+(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data + triu(B.data, 1) + I)
-+(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data + tril(B.data, -1) + I)
-+(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) + B.data + I)
-+(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) + B.data + I)
-+(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
-+(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
-
--(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data - B.data)
--(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data - B.data)
--(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(A.data - triu(B.data, 1) - I)
--(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(A.data - tril(B.data, -1) - I)
--(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(triu(A.data, 1) - B.data + I)
--(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) - B.data + I)
--(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
--(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
-
 # use broadcasting if the parents are strided, where we loop only over the triangular part
-for op in (:+, :-)
-    for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
-    for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
-    end
+function +(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + B.data)
 end
+function +(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + B.data)
+end
+function +(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(A.data + triu(B.data, 1) + I)
+end
+function +(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(A.data + tril(B.data, -1) + I)
+end
+function +(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + B.data + I)
+end
+function +(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + B.data + I)
+end
+function +(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
+end
+function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
+    LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
+end
++(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
-function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function -(A::UpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - B.data)
+end
+function -(A::LowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - B.data)
+end
+function -(A::UpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(A.data - triu(B.data, 1) - I)
+end
+function -(A::LowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(A.data - tril(B.data, -1) - I)
+end
+function -(A::UnitUpperTriangular, B::UpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - B.data + I)
+end
+function -(A::UnitLowerTriangular, B::LowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - B.data + I)
+end
+function -(A::UnitUpperTriangular, B::UnitUpperTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
+end
+function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
+    (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
+    LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
+end
+-(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) - copyto!(similar(parent(B), size(B)), B)
+
+function kron(A::UpperTriangular{T,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
-function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
-    C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+function kron(A::LowerTriangular{T,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C
@@ -913,7 +964,7 @@ function _triukron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = 1:(l-1)
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
@@ -945,7 +996,7 @@ function _trilkron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = (l+1):n_B
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end

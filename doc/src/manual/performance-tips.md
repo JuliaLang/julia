@@ -1394,6 +1394,125 @@ Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl
 These are external packages, so we will not discuss them in detail here.
 Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS with respect to multithreading).
 
+## Execution latency, package loading and package precompiling time
+
+### Reducing time to first plot etc.
+
+The first time a julia method is called it (and any methods it calls, or ones that can be statically determined) will be
+compiled. The [`@time`](@ref) macro family illustrates this.
+
+```
+julia> foo() = rand(2,2) * rand(2,2)
+foo (generic function with 1 method)
+
+julia> @time @eval foo();
+  0.252395 seconds (1.12 M allocations: 56.178 MiB, 2.93% gc time, 98.12% compilation time)
+
+julia> @time @eval foo();
+  0.000156 seconds (63 allocations: 2.453 KiB)
+```
+
+Note that `@time @eval` is better for measuring compilation time because without [`@eval`](@ref), some compilation may
+already be done before timing starts.
+
+When developing a package, you may be able to improve the experience of your users with *precompilation*
+so that when they use the package, the code they use is already compiled. To precompile package code effectively, it's
+recommended to use [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) to run a
+"precompile workload" during precompilation time that is representative of typical package usage, which will cache the
+native compiled code into the package `pkgimage` cache, greatly reducing "time to first execution" (often referred to as
+TTFX) for such usage.
+
+Note that [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) workloads can be
+disabled and sometimes configured via Preferences if you do not want to spend the extra time precompiling, which
+may be the case during development of a package.
+
+### Reducing package loading time
+
+Keeping the time taken to load the package down is usually helpful.
+General good practice for package developers includes:
+
+1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref) to support interoperability with other packages without bloating your essential dependencies.
+3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
+   of compilation, or just take a long time to execute.
+4. Where possible, fix [invalidations](https://julialang.org/blog/2020/08/invalidations/) among your dependencies and from your package code.
+
+The tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
+
+```julia-repl
+julia> @time @time_imports using Plots
+      0.5 ms  Printf
+     16.4 ms  Dates
+      0.7 ms  Statistics
+               ┌ 23.8 ms SuiteSparse_jll.__init__() 86.11% compilation time (100% recompilation)
+     90.1 ms  SuiteSparse_jll 91.57% compilation time (82% recompilation)
+      0.9 ms  Serialization
+               ┌ 39.8 ms SparseArrays.CHOLMOD.__init__() 99.47% compilation time (100% recompilation)
+    166.9 ms  SparseArrays 23.74% compilation time (100% recompilation)
+      0.4 ms  Statistics → SparseArraysExt
+      0.5 ms  TOML
+      8.0 ms  Preferences
+      0.3 ms  PrecompileTools
+      0.2 ms  Reexport
+... many deps omitted for example ...
+      1.4 ms  Tar
+               ┌ 73.8 ms p7zip_jll.__init__() 99.93% compilation time (100% recompilation)
+     79.4 ms  p7zip_jll 92.91% compilation time (100% recompilation)
+               ┌ 27.7 ms GR.GRPreferences.__init__() 99.77% compilation time (100% recompilation)
+     43.0 ms  GR 64.26% compilation time (100% recompilation)
+               ┌ 2.1 ms Plots.__init__() 91.80% compilation time (100% recompilation)
+    300.9 ms  Plots 0.65% compilation time (100% recompilation)
+  1.795602 seconds (3.33 M allocations: 190.153 MiB, 7.91% gc time, 39.45% compilation time: 97% of which was recompilation)
+
+```
+
+Notice that in this example there are multiple packages loaded, some with `__init__()` functions, some of which cause
+compilation of which some is recompilation. Recompilation is caused by earlier packages invalidating methods, then in
+these cases when the following packages run their `__init__()` function some hit recompilation before the code can be run.
+
+Further, note the `Statistics` extension `SparseArraysExt` has been activated because `SparseArrays` is in the dependency
+tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
+
+This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
+Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
+
+```
+(CustomPackage) pkg> why FFMPEG_jll
+  Plots → FFMPEG → FFMPEG_jll
+  Plots → GR → GR_jll → FFMPEG_jll
+```
+
+or to see the indirect dependencies that a package brings in, you can `pkg> rm` the package, see the deps that are removed
+from the manifest, then revert the change with `pkg> undo`.
+
+If loading time is dominated by slow `__init__()` methods having compilation, one verbose way to identify what is being
+compiled is to use the julia args `--trace-compile=stderr --trace-compile-timing` which will report a [`precompile`](@ref)
+statement each time a method is compiled, along with how long compilation took. The InteractiveUtils macro
+[`@trace_compile`](@ref) provides a way to enable those args for a specific call. So a call for a complete report report would look like:
+
+```
+julia> @time @time_imports @trace_compile using CustomPackage
+...
+```
+
+Note the `--startup-file=no` which helps isolate the test from packages you may have in your `startup.jl`.
+
+More analysis of the reasons for recompilation can be achieved with the
+[`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.
+
+### Reducing precompilation time
+
+If package precompilation is taking a long time, one option is to set the following internal and then precompile.
+```
+julia> Base.PRECOMPILE_TRACE_COMPILE[] = "stderr"
+
+pkg> precompile
+```
+
+This has the effect of setting `--trace-compile=stderr --trace-compile-timing` in the precompilation processes themselves,
+so will show which methods are precompiled and how long they took to precompile.
+
+There are also profiling options such as [using the external profiler Tracy to profile the precompilation process](@ref Profiling-package-precompilation-with-Tracy).
+
 
 ## Miscellaneous
 
@@ -1418,7 +1537,7 @@ be modified as suggested by the warnings.
 Sometimes you can enable better optimization by promising certain program properties.
 
   * Use [`@inbounds`](@ref) to eliminate array bounds checking within expressions. Be certain before doing
-    this. If the subscripts are ever out of bounds, you may suffer crashes or silent corruption.
+    this. If the indices are ever out of bounds, you may suffer crashes or silent corruption.
   * Use [`@fastmath`](@ref) to allow floating point optimizations that are correct for real numbers, but lead
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.

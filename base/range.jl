@@ -1485,7 +1485,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).

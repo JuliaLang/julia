@@ -995,7 +995,7 @@ function dict_identifier_key(str::String, tag::Symbol, context_module::Module=Ma
     isa(objt, Core.Const) || return (nothing, nothing, nothing)
     obj = objt.val
     isa(obj, AbstractDict) || return (nothing, nothing, nothing)
-    length(obj)::Int < 1_000_000 || return (nothing, nothing, nothing)
+    (Base.haslength(obj) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
     return (obj, str[begin_of_key:end], begin_of_key)
