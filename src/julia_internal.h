@@ -105,8 +105,8 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
-    // int128 is 16 bytes aligned on aarch64 and on x86 with LLVM >= 18
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
+    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -259,6 +259,11 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
+#elif defined(_CPU_RISCV64_)
+    // taken from https://github.com/google/benchmark/blob/3b3de69400164013199ea448f051d94d7fc7d81f/src/cycleclock.h#L190
+    uint64_t ret;
+    __asm__ volatile("rdcycle %0" : "=r"(ret));
+    return ret;
 #elif defined(_CPU_PPC64_)
     // This returns a time-base, which is not always precisely a cycle-count.
     // https://reviews.llvm.org/D78084
@@ -366,6 +371,8 @@ extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
+
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
@@ -512,30 +519,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
-
-
-// Size does NOT include the type tag!!
-STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
-{
-    jl_value_t *v;
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    if (sz <= GC_MAX_SZCLASS) {
-        int pool_id = jl_gc_szclass(allocsz);
-        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
-        int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_small_alloc_noinline` instead of `jl_gc_small_alloc` to avoid double-counting in
-        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
-    }
-    else {
-        if (allocsz < sz) // overflow in adding offs, size was "negative"
-            jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc_noinline(ptls, allocsz);
-    }
-    jl_set_typeof(v, ty);
-    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
-    return v;
-}
 
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
@@ -814,6 +797,28 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+
+#ifndef __clang_gcanalyzer__
+// The analyzer doesn't like looking through the arraylist, so just model the
+// access for it using this function
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return (struct _jl_module_using *)&(m->usings.items[3*i]);
+}
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return module_usings_getidx(m, i)->mod;
+}
+#endif
+
+STATIC_INLINE size_t module_usings_length(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.len/3;
+}
+
+STATIC_INLINE size_t module_usings_max(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.max/3;
+}
+
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
@@ -858,6 +863,8 @@ extern jl_genericmemory_t *jl_global_roots_keyset JL_GLOBALLY_ROOTED;
 extern arraylist_t *jl_entrypoint_mis;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBALLY_ROOTED;
+extern jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *field, jl_value_t *newval) JL_GLOBALLY_ROOTED;
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv, int do_compile);
@@ -1170,6 +1177,12 @@ JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codein
 JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src);
 JL_DLLEXPORT extern jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT void jl_force_trace_compile_timing_enable(void);
+JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void);
+
+JL_DLLEXPORT void jl_force_trace_dispatch_enable(void);
+JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
 
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
@@ -1680,13 +1693,14 @@ JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTS
 
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);
+JL_DLLEXPORT jl_value_t *jl_argtype_without_function(jl_value_t *ftypes);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
-void register_eh_frames(uint8_t *Addr, size_t Size);
-void deregister_eh_frames(uint8_t *Addr, size_t Size);
+void register_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
+void deregister_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 
-STATIC_INLINE void *jl_get_frame_addr(void)
+STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
 {
 #ifdef __GNUC__
     return __builtin_frame_address(0);

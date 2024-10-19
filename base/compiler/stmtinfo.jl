@@ -94,6 +94,7 @@ struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
     effects::Effects
+    spec_info::SpecInfo
 end
 
 # XXX Technically this does not represent a result of constant inference, but rather that of

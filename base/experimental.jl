@@ -319,9 +319,9 @@ function show_error_hints(io, ex, args...)
     for handler in hinters
         try
             @invokelatest handler(io, ex, args...)
-        catch err
+        catch
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
         end
     end
 end
@@ -420,7 +420,7 @@ macro consistent_overlay(mt, def)
     inner = Base.unwrap_macrocalls(def)
     is_function_def(inner) || error("@consistent_overlay requires a function definition")
     overlay_def!(mt, inner)
-    override = Core.Compiler.EffectsOverride(; consistent_overlay=true)
+    override = Base.EffectsOverride(; consistent_overlay=true)
     Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
     return esc(def)
 end
