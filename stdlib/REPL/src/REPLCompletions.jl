@@ -147,7 +147,7 @@ function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Complet
         filter!(macros) do m
             s = String(m)
             if endswith(s, "_str") || endswith(s, "_cmd")
-                occursin(name, s[1:end-4])
+                occursin(name, first(s, length(s)-4))
             else
                 true
             end
