@@ -1728,6 +1728,13 @@ cd(dirwalk) do
         @test dirs == []
         @test files == ["foo"]
     end
+
+    # pwd() as default directory
+    for ((r1, d1, f1), (r2, d2, f2)) in zip(walkdir(), walkdir(pwd()))
+        @test r1 == r2
+        @test d1 == d2
+        @test f1 == f2
+    end
 end
 rm(dirwalk, recursive=true)
 
