@@ -1200,7 +1200,9 @@ function complete_identifiers!(suggestions::Vector{Completion},
             if !isinfix
                 # Handle infix call argument completion of the form bar + foo(qux).
                 frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
-                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                if !isempty(frange) # if find_start_brace fails to find the brace just continue
+                    isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                end
             end
             if isinfix
                 prefix = prefix.args[end]
