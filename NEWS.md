@@ -68,6 +68,12 @@ variables. ([#53742]).
 Multi-threading changes
 -----------------------
 
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
+
 Build system changes
 --------------------
 
@@ -139,7 +145,9 @@ Standard library changes
 * The number of default BLAS threads now respects process affinity, instead of
   using total number of logical threads available on the system ([#55574]).
 * A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
-  Custom array types may specialize this function to return an appropriate result. ([#55252])
+  Custom array types may specialize this function to return an appropriate result ([#55252]).
+* The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
+  This function is now public ([#55537]).
 
 #### Logging
 
@@ -165,6 +173,8 @@ Standard library changes
 - the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
   and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
   in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 

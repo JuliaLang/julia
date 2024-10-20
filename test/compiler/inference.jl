@@ -2647,7 +2647,7 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+let ct = code_typed(f26826, (Float64,))[1]
     typed_code, retty = ct.first, ct.second
     found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)

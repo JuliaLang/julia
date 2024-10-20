@@ -1236,7 +1236,7 @@ end
     end
     @test_throws ArgumentError Symbol("a\0a")
 
-    @test Base._string_n_override == Core.Compiler.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+    @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin

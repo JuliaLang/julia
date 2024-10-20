@@ -45,7 +45,16 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
-promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
+
+function promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number}
+    U = promote_type(S, real(T))
+    if S <: U
+        # prevent infinite recursion
+        promote_type(Float64, T)
+    else
+        promote_type(U, T)
+    end
+end
 
 AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
 Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)

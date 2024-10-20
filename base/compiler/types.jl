@@ -457,6 +457,8 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
+get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
+
 abstract type CallInfo end
 
 @nospecialize

@@ -76,7 +76,7 @@ L3:                                               ; preds = %L2, %L1, %0
 ; CHECK-LABEL: @legal_int_types
 ; CHECK: alloca [12 x i8]
 ; CHECK-NOT: alloca i96
-; CHECK: store [12 x i8] zeroinitializer,
+; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %var1,
 ; CHECK: ret void
 define void @legal_int_types() {
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -140,7 +140,7 @@ L2:                                               ; preds = %0
 ; CHECK: alloca
 ; CHECK-NOT: call token(...) @llvm.julia.gc_preserve_begin
 ; CHECK: call void @llvm.lifetime.start
-; CHECK: store [8 x i8] zeroinitializer,
+; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %v,
 ; CHECK-NOT: call void @llvm.lifetime.end
 define void @lifetime_no_preserve_end(ptr noalias nocapture noundef nonnull sret({}) %0) {
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -164,11 +164,8 @@ define void @lifetime_no_preserve_end(ptr noalias nocapture noundef nonnull sret
 ; CHECK: alloca [1 x i8]
 ; CHECK-DAG: alloca [2 x i8]
 ; CHECK-DAG: alloca [3 x i8]
-; CHECK-DAG: freeze [1 x i8] undef
-; CHECK-DAG: store [1 x i8] %
-; CHECK-DAG: store [3 x i8] zeroinitializer,
-; CHECK-NOT: store
-; CHECK-NOT: zeroinitializer
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 1 %var1,
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 4 %var7,
 ; CHECK: ret void
 define void @initializers() {
   %pgcstack = call ptr @julia.get_pgcstack()

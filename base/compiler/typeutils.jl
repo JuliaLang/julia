@@ -202,8 +202,6 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     return a # TODO: improve this bound?
 end
 
-hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
-
 _typename(@nospecialize a) = Union{}
 _typename(a::TypeVar) = Core.TypeName
 function _typename(a::Union)

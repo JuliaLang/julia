@@ -545,6 +545,12 @@ typeinfo_eltype(typeinfo::Type{<:AbstractArray{T}}) where {T} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractDict{K,V}}) where {K,V} = eltype(typeinfo)
 typeinfo_eltype(typeinfo::Type{<:AbstractSet{T}}) where {T} = eltype(typeinfo)
 
+# This is a fancy way to make de-specialize a call to `typeinfo_implicit(T)`
+# which is unfortunately invalidated by Dates
+#  (https://github.com/JuliaLang/julia/issues/56080)
+#
+# This makes the call less efficient, but avoids being invalidated by Dates.
+_typeinfo_implicit(@nospecialize(T)) = Base.invoke_in_world(Base.tls_world_age(), typeinfo_implicit, T)::Bool
 
 # types that can be parsed back accurately from their un-decorated representations
 function typeinfo_implicit(@nospecialize(T))
@@ -553,9 +559,9 @@ function typeinfo_implicit(@nospecialize(T))
         return true
     end
     return isconcretetype(T) &&
-        ((T <: Array && typeinfo_implicit(eltype(T))) ||
-         ((T <: Tuple || T <: NamedTuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
-         (T <: AbstractDict && typeinfo_implicit(keytype(T)) && typeinfo_implicit(valtype(T))))
+        ((T <: Array && _typeinfo_implicit(eltype(T))) ||
+         ((T <: Tuple || T <: NamedTuple || T <: Pair) && all(_typeinfo_implicit, fieldtypes(T))) ||
+         (T <: AbstractDict && _typeinfo_implicit(keytype(T)) && _typeinfo_implicit(valtype(T))))
 end
 
 # X not constrained, can be any iterable (cf. show_vector)
@@ -573,7 +579,7 @@ function typeinfo_prefix(io::IO, X)
     if X isa AbstractDict
         if eltype_X == eltype_ctx
             sprint(show_type_name, typeof(X).name; context=io), false
-        elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
+        elseif !isempty(X) && _typeinfo_implicit(keytype(X)) && _typeinfo_implicit(valtype(X))
             sprint(show_type_name, typeof(X).name; context=io), true
         else
             sprint(print, typeof(X); context=io), false
@@ -582,7 +588,7 @@ function typeinfo_prefix(io::IO, X)
         # Types hard-coded here are those which are created by default for a given syntax
         if eltype_X == eltype_ctx
             "", false
-        elseif !isempty(X) && typeinfo_implicit(eltype_X)
+        elseif !isempty(X) && _typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
             sprint(show_type_name, unwrap_unionall(eltype_X).name; context=io), false # Print "Array" rather than "Array{T,N}"

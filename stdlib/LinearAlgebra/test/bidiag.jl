@@ -398,8 +398,8 @@ Random.seed!(1)
             @test (@inferred diag(T))::typeof(dv) == dv
             @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T, -n - 1)
-            @test_throws ArgumentError diag(T,  n + 1)
+            @test isempty(@inferred diag(T, -n - 1))
+            @test isempty(@inferred diag(T,  n + 1))
             # test diag with another wrapped vector type
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)

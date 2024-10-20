@@ -644,6 +644,7 @@ end
     @test !allunique((NaN, NaN))
     # Known length 1, need not evaluate:
     @test allunique(error(x) for x in [1])
+    # @test_opt allunique(Int[])
 end
 
 @testset "allunique(f, xs)" begin

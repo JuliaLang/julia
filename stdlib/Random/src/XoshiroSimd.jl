@@ -3,7 +3,7 @@
 module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
 import ..Random: rand!
-using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!
+using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!, _uint2float
 using Base: BitInteger_types
 using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
@@ -30,7 +30,12 @@ simdThreshold(::Type{Bool}) = 640
     Tuple{UInt64, Int64},
     x, y)
 
-@inline _bits2float(x::UInt64, ::Type{Float64}) = reinterpret(UInt64, Float64(x >>> 11) * 0x1.0p-53)
+# `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
+# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32, etc...), it
+# truncates each part to the unsigned type of the same size as `T`, scales all of these
+# numbers to a value of type `T` in the range [0,1) with `_uint2float`, and then
+# recomposes another `UInt64` using all these parts.
+@inline _bits2float(x::UInt64, ::Type{Float64}) = reinterpret(UInt64,  _uint2float(x, Float64))
 @inline function _bits2float(x::UInt64, ::Type{Float32})
     #=
     # this implementation uses more high bits, but is harder to vectorize
@@ -40,8 +45,8 @@ simdThreshold(::Type{Bool}) = 640
     =#
     ui = (x>>>32) % UInt32
     li = x % UInt32
-    u = Float32(ui >>> 8) * Float32(0x1.0p-24)
-    l = Float32(li >>> 8) * Float32(0x1.0p-24)
+    u = _uint2float(ui, Float32)
+    l = _uint2float(ui, Float32)
     (UInt64(reinterpret(UInt32, u)) << 32) | UInt64(reinterpret(UInt32, l))
 end
 @inline function _bits2float(x::UInt64, ::Type{Float16})
@@ -49,10 +54,10 @@ end
     i2 = (x>>>32) % UInt16
     i3 = (x>>>16) % UInt16
     i4 = x % UInt16
-    f1 = Float16(i1 >>> 5) * Float16(0x1.0p-11)
-    f2 = Float16(i2 >>> 5) * Float16(0x1.0p-11)
-    f3 = Float16(i3 >>> 5) * Float16(0x1.0p-11)
-    f4 = Float16(i4 >>> 5) * Float16(0x1.0p-11)
+    f1 = _uint2float(i1, Float16)
+    f2 = _uint2float(i2, Float16)
+    f3 = _uint2float(i3, Float16)
+    f4 = _uint2float(i4, Float16)
     return (UInt64(reinterpret(UInt16, f1)) << 48) | (UInt64(reinterpret(UInt16, f2)) << 32) | (UInt64(reinterpret(UInt16, f3)) << 16) | UInt64(reinterpret(UInt16, f4))
 end
 

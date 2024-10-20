@@ -148,6 +148,7 @@ Notes for various operating systems:
 Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
+* [RISC-V](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/riscv.md)
 
 ## Required Build Tools and External Libraries
 

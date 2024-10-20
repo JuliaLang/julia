@@ -17,7 +17,6 @@ task.rngState3 = 0x3a77f7189200c20b
 task.rngState4 = 0x5502376d099035ae
 uuid_tuple = (UInt64(0), UInt64(0))
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
-ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
 
 # Patch methods in Core and Base
 

@@ -22,8 +22,10 @@ struct GC_Num
     total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
+    stack_pool_sweep_time ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
 end

@@ -38,53 +38,12 @@ convert(::Type{T}, x::T) where {T} = x
 # Note that `@assume_effects` is available only after loading namedtuple.jl.
 abstract type MethodTableView end
 abstract type AbstractInterpreter end
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates_globally::Bool
-    terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-    noub::Bool
-    noub_if_noinbounds::Bool
-    consistent_overlay::Bool
-    nortcall::Bool
-end
-function EffectsOverride(
-    override::EffectsOverride =
-        EffectsOverride(false, false, false, false, false, false, false, false, false, false, false);
-    consistent::Bool = override.consistent,
-    effect_free::Bool = override.effect_free,
-    nothrow::Bool = override.nothrow,
-    terminates_globally::Bool = override.terminates_globally,
-    terminates_locally::Bool = override.terminates_locally,
-    notaskstate::Bool = override.notaskstate,
-    inaccessiblememonly::Bool = override.inaccessiblememonly,
-    noub::Bool = override.noub,
-    noub_if_noinbounds::Bool = override.noub_if_noinbounds,
-    consistent_overlay::Bool = override.consistent_overlay,
-    nortcall::Bool = override.nortcall)
-    return EffectsOverride(
-        consistent,
-        effect_free,
-        nothrow,
-        terminates_globally,
-        terminates_locally,
-        notaskstate,
-        inaccessiblememonly,
-        noub,
-        noub_if_noinbounds,
-        consistent_overlay,
-        nortcall)
-end
-const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
-include("reflection.jl")
+include("runtime_internals.jl")
 include("options.jl")
 
 ntuple(f, ::Val{0}) = ()

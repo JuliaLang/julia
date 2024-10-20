@@ -48,24 +48,6 @@ anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-#######
-# AST #
-#######
-
-# Meta expression head, these generally can't be deleted even when they are
-# in a dead branch but can be ignored when analyzing uses/liveness.
-is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
-is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
-
-function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
-        isa(x,Char) || x === nothing || isa(x,Function)
-end
-
-function quoted(@nospecialize(x))
-    return is_self_quoting(x) ? x : QuoteNode(x)
-end
-
 ############
 # inlining #
 ############
@@ -115,10 +97,6 @@ end
 function is_inlineable_constant(@nospecialize(x))
     return count_const_size(x) <= MAX_INLINE_CONST_SIZE
 end
-
-is_nospecialized(method::Method) = method.nospecialize ≠ 0
-
-is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospecialized(method)
 
 ###########################
 # MethodInstance/CodeInfo #
@@ -192,73 +170,11 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method, #=int return_if_compileable=#1)
 end
 
-function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
-    isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return method.sig
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#0)
-end
 
 isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
-# eliminate UnionAll vars that might be degenerate due to having identical bounds,
-# or a concrete upper bound and appearing covariantly.
-function subst_trivial_bounds(@nospecialize(atype))
-    if !isa(atype, UnionAll)
-        return atype
-    end
-    v = atype.var
-    if isconcretetype(v.ub) || v.lb === v.ub
-        subst = try
-            atype{v.ub}
-        catch
-            # Note in rare cases a var bound might not be valid to substitute.
-            nothing
-        end
-        if subst !== nothing
-            return subst_trivial_bounds(subst)
-        end
-    end
-    return UnionAll(v, subst_trivial_bounds(atype.body))
-end
-
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
-
-# If removing trivial vars from atype results in an equivalent type, use that
-# instead. Otherwise we can get a case like issue #38888, where a signature like
-#   f(x::S) where S<:Int
-# gets cached and matches a concrete dispatch case.
-function normalize_typevars(method::Method, @nospecialize(atype), sparams::SimpleVector)
-    at2 = subst_trivial_bounds(atype)
-    if at2 !== atype && at2 == atype
-        atype = at2
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
-    end
-    return Pair{Any,SimpleVector}(atype, sparams)
-end
-
-# get a handle to the unique specialization object representing a particular instantiation of a call
-@inline function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
-    if isa(atype, UnionAll)
-        atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if is_nospecializeinfer(method)
-        atype = get_nospecializeinfer_sig(method, atype, sparams)
-    end
-    if preexisting
-        # check cached specializations
-        # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atype)::Union{Nothing,MethodInstance}
-    end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atype, sparams)
-end
-
-function specialize_method(match::MethodMatch; kwargs...)
-    return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
-end
 
 """
     is_declared_inline(method::Method) -> Bool

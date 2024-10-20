@@ -153,6 +153,8 @@ runtime initialization functions of external C libraries and initializing global
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
 
+See also: [`OncePerProcess`](@ref).
+
 # Examples
 ```julia
 const foo_data_ptr = Ref{Ptr{Cvoid}}(0)

@@ -373,16 +373,6 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     return b;
 }
 
-static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
-
-#ifndef __clang_gcanalyzer__
-// The analyzer doesn't like looking through the arraylist, so just model the
-// access for it using this function
-static inline jl_module_t *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
-    return (jl_module_t*)m->usings.items[i];
-}
-#endif
-
 static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_t world)
 {
     jl_ptr_kind_union_t owner_pku = jl_atomic_load_relaxed(&owner->restriction);
@@ -407,11 +397,11 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
     jl_binding_partition_t *bpart = NULL;
     jl_module_t *owner = NULL;
     JL_LOCK(&m->lock);
-    int i = (int)m->usings.len - 1;
+    int i = (int)module_usings_length(m) - 1;
     JL_UNLOCK(&m->lock);
     for (; i >= 0; --i) {
         JL_LOCK(&m->lock);
-        jl_module_t *imp = module_usings_getidx(m, i);
+        jl_module_t *imp = module_usings_getmod(m, i);
         JL_UNLOCK(&m->lock);
         jl_binding_t *tempb = jl_get_module_binding(imp, var, 0);
         if (tempb != NULL && tempb->exportp) {
@@ -746,19 +736,24 @@ JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t 
     module_import_(to, from, asname, s, 0);
 }
 
-
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
     JL_LOCK(&to->lock);
-    for (size_t i = 0; i < to->usings.len; i++) {
-        if (from == to->usings.items[i]) {
+    for (size_t i = 0; i < module_usings_length(to); i++) {
+        if (from == module_usings_getmod(to, i)) {
             JL_UNLOCK(&to->lock);
             return;
         }
     }
-    arraylist_push(&to->usings, from);
+    struct _jl_module_using new_item = {
+        .mod = from,
+        .min_world = 0,
+        .max_world = (size_t)-1
+    };
+    arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
+    memcpy(&to->usings.items[to->usings.len-3], &new_item, sizeof(struct _jl_module_using));
     jl_gc_wb(to, from);
     JL_UNLOCK(&to->lock);
 
@@ -1096,12 +1091,12 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
     JL_LOCK(&m->lock);
-    int j = m->usings.len;
+    int j = module_usings_length(m);
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, j);
     JL_GC_PUSH1(&a);
     for (int i = 0; j > 0; i++) {
         j--;
-        jl_module_t *imp = (jl_module_t*)m->usings.items[i];
+        jl_module_t *imp = module_usings_getmod(m, i);
         jl_array_ptr_set(a, j, (jl_value_t*)imp);
     }
     JL_UNLOCK(&m->lock); // may gc
@@ -1156,10 +1151,8 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, 
     if (usings) {
         // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
         // the names exported by those modules into the list.
-        for(int i=(int)m->usings.len-1; i >= 0; --i) {
-            jl_module_t *usinged = module_usings_getidx(m, i);
-            append_exported_names(a, usinged, all);
-        }
+        for (int i = module_usings_length(m)-1; i >= 0; i--)
+            append_exported_names(a, module_usings_getmod(m, i), all);
     }
     JL_GC_POP();
     return (jl_value_t*)a;

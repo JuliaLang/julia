@@ -2681,7 +2681,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::Infere
     end
     si = StmtInfo(!unused)
     call = abstract_call(interp, arginfo, si, sv)::Future
-    Future{Nothing}(call, interp, sv) do call, interp, sv
+    Future{Any}(call, interp, sv) do call, interp, sv
         # this only is needed for the side-effect, sequenced before any task tries to consume the return value,
         # which this will do even without returning this Future
         sv.stmt_info[sv.currpc] = call.info
@@ -2833,7 +2833,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                 pushfirst!(argtypes, rt.env)
                 callinfo = abstract_call_opaque_closure(interp, rt,
                     ArgInfo(nothing, argtypes), StmtInfo(true), sv, #=check=#false)::Future
-                Future{Nothing}(callinfo, interp, sv) do callinfo, interp, sv
+                Future{Any}(callinfo, interp, sv) do callinfo, interp, sv
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                     nothing
                 end
@@ -3775,6 +3775,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     takeprev = 0
     while takenext >= frame.frameid
         callee = takenext == 0 ? frame : callstack[takenext]::InferenceState
+        interp = callee.interp
         if !isempty(callstack)
             if length(callstack) - frame.frameid >= minwarn
                 topmethod = callstack[1].linfo

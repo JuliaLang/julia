@@ -484,8 +484,68 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
+SHOW_MAXIMUM_BYTES::Int = 20480
+
+# Limit printing during REPL display
+mutable struct LimitIO{IO_t <: IO} <: IO
+    io::IO_t
+    maxbytes::Int
+    n::Int # max bytes to write
+end
+LimitIO(io::IO, maxbytes) = LimitIO(io, maxbytes, 0)
+
+struct LimitIOException <: Exception
+    maxbytes::Int
+end
+
+function Base.showerror(io::IO, e::LimitIOException)
+    print(io, "$LimitIOException: aborted printing after attempting to print more than $(Base.format_bytes(e.maxbytes)) within a `LimitIO`.")
+end
+
+function Base.write(io::LimitIO, v::UInt8)
+    io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
+    n_bytes = write(io.io, v)
+    io.n += n_bytes
+    return n_bytes
+end
+
+# Semantically, we only need to override `Base.write`, but we also
+# override `unsafe_write` for performance.
+function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
+    # already exceeded? throw
+    limiter.n > limiter.maxbytes && throw(LimitIOException(limiter.maxbytes))
+    remaining = limiter.maxbytes - limiter.n # >= 0
+
+    # Not enough bytes left; we will print up to the limit, then throw
+    if remaining < nb
+        if remaining > 0
+            Base.unsafe_write(limiter.io, p, remaining)
+        end
+        throw(LimitIOException(limiter.maxbytes))
+    end
+
+    # We won't hit the limit so we'll write the full `nb` bytes
+    bytes_written = Base.unsafe_write(limiter.io, p, nb)::Union{Int,UInt}
+    limiter.n += bytes_written
+    return bytes_written
+end
+
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
+end
+
+function show_limited(io::IO, mime::MIME, x)
+    try
+        # We wrap in a LimitIO to limit the amount of printing.
+        # We unpack `IOContext`s, since we will pass the properties on the outside.
+        inner = io isa IOContext ? io.io : io
+        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), io)
+        # `show_repl` to allow the hook with special syntax highlighting
+        show_repl(wrapped_limiter, mime, x)
+    catch e
+        e isa LimitIOException || rethrow()
+        printstyled(io, """…[printing stopped after displaying $(Base.format_bytes(e.maxbytes)); call `show(stdout, MIME"text/plain"(), ans)` to print without truncation]"""; color=:light_yellow, bold=true)
+    end
 end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
@@ -504,7 +564,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show_repl(io, mime, x[])
+        show_limited(io, mime, x[])
         println(io)
     end
     return nothing

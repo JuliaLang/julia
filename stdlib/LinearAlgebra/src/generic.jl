@@ -389,55 +389,7 @@ function cross(a::AbstractVector, b::AbstractVector)
 end
 
 """
-    triu(M)
-
-Upper triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> triu(a)
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 0.0  1.0  1.0  1.0
- 0.0  0.0  1.0  1.0
- 0.0  0.0  0.0  1.0
-```
-"""
-triu(M::AbstractMatrix) = triu!(copymutable(M))
-
-"""
-    tril(M)
-
-Lower triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> tril(a)
-4×4 Matrix{Float64}:
- 1.0  0.0  0.0  0.0
- 1.0  1.0  0.0  0.0
- 1.0  1.0  1.0  0.0
- 1.0  1.0  1.0  1.0
-```
-"""
-tril(M::AbstractMatrix) = tril!(copymutable(M))
-
-"""
-    triu(M, k::Integer)
+    triu(M, k::Integer = 0)
 
 Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
@@ -465,10 +417,22 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copymutable(M),k)
+function triu(M::AbstractMatrix, k::Integer = 0)
+    d = similar(M)
+    A = triu!(d,k)
+    if iszero(k)
+        copytrito!(A, M, 'U')
+    else
+        for col in axes(A,2)
+            rows = firstindex(A,1):min(col-k, lastindex(A,1))
+            A[rows, col] = @view M[rows, col]
+        end
+    end
+    return A
+end
 
 """
-    tril(M, k::Integer)
+    tril(M, k::Integer = 0)
 
 Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
@@ -496,7 +460,19 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copymutable(M),k)
+function tril(M::AbstractMatrix,k::Integer=0)
+    d = similar(M)
+    A = tril!(d,k)
+    if iszero(k)
+        copytrito!(A, M, 'L')
+    else
+        for col in axes(A,2)
+            rows = max(firstindex(A,1),col-k):lastindex(A,1)
+            A[rows, col] = @view M[rows, col]
+        end
+    end
+    return A
+end
 
 """
     triu!(M)

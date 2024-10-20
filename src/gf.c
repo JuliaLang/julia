@@ -3222,6 +3222,23 @@ jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_v
     return tt;
 }
 
+// undo jl_argtype_with_function transform
+jl_value_t *jl_argtype_without_function(jl_value_t *ftypes)
+{
+    jl_value_t *types = jl_unwrap_unionall(ftypes);
+    size_t l = jl_nparams(types);
+    if (l == 1 && jl_is_vararg(jl_tparam0(types)))
+        return ftypes;
+    jl_value_t *tt = (jl_value_t*)jl_alloc_svec(l - 1);
+    JL_GC_PUSH1(&tt);
+    for (size_t i = 1; i < l; i++)
+        jl_svecset(tt, i - 1, jl_tparam(types, i));
+    tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt, 0);
+    tt = jl_rewrap_unionall_(tt, types);
+    JL_GC_POP();
+    return tt;
+}
+
 #ifdef JL_TRACE
 static int trace_en = 0;
 static int error_en = 1;

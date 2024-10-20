@@ -287,13 +287,8 @@ end
             @test (@inferred diag(A, 1))::typeof(d) == (mat_type == Tridiagonal ? du : dl)
             @test (@inferred diag(A, -1))::typeof(d) == dl
             @test (@inferred diag(A, n-1))::typeof(d) == zeros(elty, 1)
-            if A isa SymTridiagonal
-                @test isempty(@inferred diag(A, -n - 1))
-                @test isempty(@inferred diag(A, n + 1))
-            else
-                @test_throws ArgumentError diag(A, -n - 1)
-                @test_throws ArgumentError diag(A, n + 1)
-            end
+            @test isempty(@inferred diag(A, -n - 1))
+            @test isempty(@inferred diag(A, n + 1))
             GA = mat_type == Tridiagonal ? mat_type(GenericArray.((dl, d, du))...) : mat_type(GenericArray.((d, dl))...)
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
@@ -527,8 +522,8 @@ end
     @test @inferred diag(A, -1) == fill(M, n-1)
     @test_broken diag(A, -2) == fill(M, n-2)
     @test_broken diag(A, 2) == fill(M, n-2)
-    @test_throws ArgumentError diag(A, n+1)
-    @test_throws ArgumentError diag(A, -n-1)
+    @test isempty(@inferred diag(A, n+1))
+    @test isempty(@inferred diag(A, -n-1))
 
     for n in 0:2
         dv, ev = fill(M, n), fill(M, max(n-1,0))
