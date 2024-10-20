@@ -460,7 +460,7 @@ end
     end
 end
 
-@inline function getindex(A::SymTridiagonal{T}, i::Int, j::Int) where T
+@inline function getindex(A::SymTridiagonal, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     if i == j
         return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
@@ -469,7 +469,7 @@ end
     elseif i + 1 == j
         return @inbounds A.ev[i]
     else
-        return zero(T)
+        return diagzero(A, i, j)
     end
 end
 
@@ -703,7 +703,7 @@ end
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, i::Int, j::Int) where T
+@inline function getindex(A::Tridiagonal, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.d[i]
@@ -712,11 +712,11 @@ end
     elseif i + 1 == j
         return @inbounds A.du[i]
     else
-        return zero(T)
+        return diagzero(A, i, j)
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, b::BandIndex) where T
+@inline function getindex(A::Tridiagonal, b::BandIndex)
     @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.d[b.index]
@@ -725,7 +725,7 @@ end
     elseif b.band == 1
         return @inbounds A.du[b.index]
     else
-        return zero(T)
+        return diagzero(A, b)
     end
 end
 

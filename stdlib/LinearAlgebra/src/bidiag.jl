@@ -118,17 +118,6 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
-    Tel = eltype(A)
-    if i < j && A.uplo == 'U' #= top right zeros =#
-        return zeroslike(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
-    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return zeroslike(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
-    else
-        return zeroslike(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
-    end
-end
-
 _offdiagind(uplo) = uplo == 'U' ? 1 : -1
 
 @inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
@@ -153,7 +142,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, i::Int, j::Int) where T
+@inline function getindex(A::Bidiagonal, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
@@ -164,7 +153,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
+@inline function getindex(A::Bidiagonal, b::BandIndex)
     @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.dv[b.index]
@@ -172,7 +161,7 @@ end
         # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
-        return diagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, b)
     end
 end
 
