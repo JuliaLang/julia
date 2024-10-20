@@ -480,6 +480,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     i = firstindex(r)
     braces = in_comment = 0
     in_single_quotes = in_double_quotes = in_back_ticks = false
+    num_single_quotes_in_string = count('\'', s)
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -502,7 +503,9 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 braces += 1
             elseif c == c_end
                 braces -= 1
-            elseif c == '\''
+            elseif c == '\'' && num_single_quotes_in_string % 2 == 0
+                # ' can be a transpose too, so check if there are even number of 's in the string
+                # TODO: This probably needs to be more robust
                 in_single_quotes = true
             elseif c == '"'
                 in_double_quotes = true
