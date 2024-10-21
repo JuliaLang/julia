@@ -4,6 +4,10 @@
 
 import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
 
+# defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
+# via. `Base.@time_imports`
+import Base: @time_imports
+
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
@@ -242,17 +246,6 @@ macro code_lowered(ex0...)
     quote
         local results = $thecall
         length(results) == 1 ? results[1] : results
-    end
-end
-
-macro time_imports(ex)
-    quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
     end
 end
 
