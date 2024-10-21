@@ -2243,7 +2243,10 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
             break;
         }
         if (caller) {
+
             // assert(ctx.emission_context.enqueuers.count(caller) == 1);
+            // Each enqueuer should only be enqueued at least once and only once. Check why this assert is triggering
+            // This isn't a fatal error, just means that we may get a wrong backtrace
             if (jl_is_method_instance(caller)) {
                 //TODO: Use a subrange when C++20 is a thing
                 for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
