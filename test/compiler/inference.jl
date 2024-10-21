@@ -5685,3 +5685,11 @@ t255751 = Array{Float32, 3}
 
 issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
 @test Base.infer_return_type(issue55882_nfields) <: Int
+
+# JuliaLang/julia#56248
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, 1)
+end === Union{}
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, Any, 1)
+end === Union{}
