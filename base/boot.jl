@@ -454,9 +454,13 @@ Nothing() = nothing
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
-include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
+include(m::Module, fname::String) = (@noinline; ccall(:jl_load_, Any, (Any, Any), m, fname))
+eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e))
 
-eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+struct EvalInto <: Function
+    m::Module
+end
+(this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
 mutable struct Box
     contents::Any

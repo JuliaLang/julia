@@ -25,6 +25,11 @@ function include(mod::Module, path::String)
 end
 include(path::String) = include(Base, path)
 
+struct IncludeInto <: Function
+    m::Module
+end
+(this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
+
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
@@ -572,6 +577,9 @@ include("precompilation.jl")
 for m in methods(include)
     delete_method(m)
 end
+for m in methods(IncludeInto(Base))
+    delete_method(m)
+end
 
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
@@ -579,8 +587,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
