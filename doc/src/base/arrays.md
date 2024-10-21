@@ -115,7 +115,7 @@ Base.checkindex
 Base.elsize
 ```
 
-The following functions can be used to handle arrays with custom indices:
+While most code can be written in an index-agnostic manner (see, e.g., [`eachindex`](@ref)), it can sometimes be useful to explicitly check for offset axes:
 ```@docs
 Base.require_one_based_indexing
 Base.has_offset_axes
