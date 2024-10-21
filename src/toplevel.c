@@ -318,6 +318,7 @@ void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_va
                     jl_symbol_name(mod->name), jl_symbol_name(sym));
         }
         jl_value_t *old_ty = decode_restriction_value(pku);
+        JL_GC_PROMISE_ROOTED(old_ty);
         if (!jl_types_equal(ty, old_ty)) {
             jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                     jl_symbol_name(mod->name), jl_symbol_name(sym));
@@ -738,6 +739,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
             if (!val)
                 return bpart;
             jl_value_t *old = decode_restriction_value(pku);
+            JL_GC_PROMISE_ROOTED(old);
             if (jl_egal(val, old))
                 break;
             if (!did_warn) {

@@ -824,6 +824,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_tupletype_t") ||
                    Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
                    Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_binding_partition_t") ||
                    Name.ends_with_insensitive("jl_ordereddict_t") ||
                    Name.ends_with_insensitive("jl_tvar_t") ||
                    Name.ends_with_insensitive("jl_typemap_t") ||
@@ -847,6 +848,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_stenv_t") ||
                    Name.ends_with_insensitive("jl_varbinding_t") ||
                    Name.ends_with_insensitive("set_world") ||
+                   Name.ends_with_insensitive("jl_ptr_kind_union_t") ||
                    Name.ends_with_insensitive("jl_codectx_t")) {
                  return true;
                }
