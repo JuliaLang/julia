@@ -698,11 +698,14 @@ While this works for declared types, it fails for types without
 supertypes:
 
 ```julia-repl
-julia> eltype_wrong(Union{AbstractArray{Int}, AbstractArray{Float64}})
-ERROR: MethodError: no method matching supertype(::Type{Union{AbstractArray{Float64,N} where N, AbstractArray{Int64,N} where N}})
+julia> eltype_wrong(Union{Vector{Int}, Matrix{Int}})
+ERROR: MethodError: no method matching supertype(::Type{VecOrMat{Int64}})
+
 Closest candidates are:
-  supertype(::DataType) at operators.jl:43
-  supertype(::UnionAll) at operators.jl:48
+  supertype(::UnionAll)
+   @ Base operators.jl:44
+  supertype(::DataType)
+   @ Base operators.jl:43
 ```
 
 ### Building a similar type with a different type parameter
