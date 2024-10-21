@@ -249,7 +249,8 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 required.use_info.addrescaped = true;
                 return true;
             }
-            if (required.pass.gc_loaded_func == callee) {
+            if (required.pass.gc_loaded_func == callee
+	        || callee->getName().starts_with("julia.gc_loaded")) {
                 required.use_info.haspreserve = true;
                 required.use_info.hasload = true;
                 return true;
