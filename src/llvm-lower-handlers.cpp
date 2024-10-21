@@ -150,7 +150,16 @@ static bool lowerExcHandlers(Function &F) {
                 EnterDepth[CI] = Depth++;
             else if (Callee == leave_func || Callee == leave_noexcept_func) {
                 LeaveDepth[CI] = Depth;
-                Depth -= cast<ConstantInt>(CI->getArgOperand(1))->getLimitedValue();
+                if (auto change = dyn_cast<ConstantInt>(CI->getArgOperand(1)))
+                    Depth -= change->getLimitedValue();
+                else if (auto Phi = dyn_cast<PHINode>(CI->getArgOperand(1))) {
+                    //This should really do a dataflow analysis but assuming worst case means that we will always have enough space
+                    uint64_t MinPhiDepth = std::numeric_limits<uint64_t>::max();
+                    for (Value *Incoming : Phi->incoming_values()) {
+                        MinPhiDepth = std::min(MinPhiDepth, cast<ConstantInt>(Incoming)->getLimitedValue());
+                    }
+                    Depth -= MinPhiDepth;
+                }
             }
             assert(Depth >= 0);
             if (Depth > MaxDepth)
@@ -175,7 +184,7 @@ static bool lowerExcHandlers(Function &F) {
     unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     for (int i = 0; i < MaxDepth; ++i) {
         auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
-                handler_sz, Align(16), "", firstInst);
+                handler_sz, Align(16), "depth" + std::to_string(i), firstInst);
         if (allocaAddressSpace) {
             AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, PointerType::get(F.getContext(), AddressSpace::Generic));
             buff_casted->insertAfter(buff);
@@ -232,7 +241,18 @@ static bool lowerExcHandlers(Function &F) {
     // Insert lifetime end intrinsics after every leave.
     for (auto it : LeaveDepth) {
         int StartDepth = it.second - 1;
-        int npops = cast<ConstantInt>(it.first->getArgOperand(1))->getLimitedValue();
+        uint64_t minPops = std::numeric_limits<uint64_t>::max();
+        if (auto change = dyn_cast<ConstantInt>(it.first->getArgOperand(1)))
+            minPops = change->getLimitedValue();
+        else if (auto Phi = dyn_cast<PHINode>(it.first->getArgOperand(1))) {
+            //This should really do a dataflow analysis but assuming worst case means that we will always have enough space
+            uint64_t MinPhiDepth = std::numeric_limits<uint64_t>::max();
+            for (Value *Incoming : Phi->incoming_values()) {
+                MinPhiDepth = std::min(MinPhiDepth, cast<ConstantInt>(Incoming)->getLimitedValue());
+            }
+            minPops = MinPhiDepth;
+        }
+        int npops = minPops;
         for (int i = 0; i < npops; ++i) {
             assert(StartDepth-i >= 0);
             Value *lifetime_args[] = {
