@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-import Base64:
+using Base64:
+    Base64,
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
@@ -141,4 +142,8 @@ end
     for _ in 1:1000
         @test String(base64decode(splace(longEncodedText))) == longDecodedText
     end
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Base64))
 end

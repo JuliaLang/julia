@@ -33,7 +33,7 @@ aimg  = randn(n,n)/2
         @test sort(imag(f.values)) ≈ sort(imag(d))
         @test istriu(f.Schur) || eltype(a)<:Real
         @test convert(Array, f) ≈ a
-        @test_throws ErrorException f.A
+        @test_throws FieldError f.A
 
         sch, vecs, vals = schur(UpperTriangular(triu(a)))
         @test vecs*sch*vecs' ≈ triu(a)
@@ -68,7 +68,7 @@ aimg  = randn(n,n)/2
             O = ordschur(S, select)
             sum(select) != 0 && @test S.values[findall(select)] ≈ O.values[1:sum(select)]
             @test O.vectors*O.Schur*O.vectors' ≈ ordschura
-            @test_throws ErrorException f.A
+            @test_throws FieldError f.A
             Snew = LinearAlgebra.Schur(S.T, S.Z, S.values)
             SchurNew = ordschur!(copy(Snew), select)
             @test O.vectors ≈ SchurNew.vectors
@@ -88,7 +88,7 @@ aimg  = randn(n,n)/2
             @test f.Q*f.T*f.Z' ≈ a2_sf
             @test istriu(f.S) || eltype(a)<:Real
             @test istriu(f.T) || eltype(a)<:Real
-            @test_throws ErrorException f.A
+            @test_throws FieldError f.A
 
             sstring = sprint((t, s) -> show(t, "text/plain", s), f.S)
             tstring = sprint((t, s) -> show(t, "text/plain", s), f.T)

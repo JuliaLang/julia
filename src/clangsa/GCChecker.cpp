@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "clang/AST/Type.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -14,6 +15,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 
+#include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
 
@@ -29,7 +31,7 @@ namespace {
 using namespace clang;
 using namespace ento;
 
-#define PDP std::shared_ptr<PathDiagnosticPiece>
+typedef std::shared_ptr<PathDiagnosticPiece> PDP;
 #define MakePDP make_unique<PathDiagnosticEventPiece>
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
@@ -392,13 +394,18 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        if (Pos.isValid())
+          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
       PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
           N->getLocationContext(), BRC.getSourceManager());
-      return MakePDP(Pos, "Safepoints re-enabled here");
+      if (Pos.isValid())
+        return MakePDP(Pos, "Safepoints re-enabled here");
+      //N->getLocation().dump();
     }
+    // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
   }
   return nullptr;
 }
@@ -765,7 +772,7 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const S
   SourceLocation Loc = FD->getLocation();
   StringRef Name = SM.getFilename(Loc);
   Name = llvm::sys::path::filename(Name);
-  if (Name.startswith("llvm-"))
+  if (Name.starts_with("llvm-"))
       return true;
   return false;
 }
@@ -793,56 +800,54 @@ static bool isMutexUnlock(StringRef name) {
            false;
 }
 
-#if LLVM_VERSION_MAJOR >= 13
-#define endswith_lower endswith_insensitive
-#endif
 
 bool GCChecker::isGCTrackedType(QualType QT) {
   return isJuliaType(
              [](StringRef Name) {
-               if (Name.endswith_lower("jl_value_t") ||
-                   Name.endswith_lower("jl_svec_t") ||
-                   Name.endswith_lower("jl_sym_t") ||
-                   Name.endswith_lower("jl_expr_t") ||
-                   Name.endswith_lower("jl_code_info_t") ||
-                   Name.endswith_lower("jl_array_t") ||
-                   Name.endswith_lower("jl_genericmemory_t") ||
-                   //Name.endswith_lower("jl_genericmemoryref_t") ||
-                   Name.endswith_lower("jl_method_t") ||
-                   Name.endswith_lower("jl_method_instance_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_datatype_t") ||
-                   Name.endswith_lower("jl_typemap_entry_t") ||
-                   Name.endswith_lower("jl_typemap_level_t") ||
-                   Name.endswith_lower("jl_typename_t") ||
-                   Name.endswith_lower("jl_module_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-                   Name.endswith_lower("jl_binding_t") ||
-                   Name.endswith_lower("jl_ordereddict_t") ||
-                   Name.endswith_lower("jl_tvar_t") ||
-                   Name.endswith_lower("jl_typemap_t") ||
-                   Name.endswith_lower("jl_unionall_t") ||
-                   Name.endswith_lower("jl_methtable_t") ||
-                   Name.endswith_lower("jl_cgval_t") ||
-                   Name.endswith_lower("jl_codectx_t") ||
-                   Name.endswith_lower("jl_ast_context_t") ||
-                   Name.endswith_lower("jl_code_instance_t") ||
-                   Name.endswith_lower("jl_excstack_t") ||
-                   Name.endswith_lower("jl_task_t") ||
-                   Name.endswith_lower("jl_uniontype_t") ||
-                   Name.endswith_lower("jl_method_match_t") ||
-                   Name.endswith_lower("jl_vararg_t") ||
-                   Name.endswith_lower("jl_opaque_closure_t") ||
-                   Name.endswith_lower("jl_globalref_t") ||
+               if (Name.ends_with_insensitive("jl_value_t") ||
+                   Name.ends_with_insensitive("jl_svec_t") ||
+                   Name.ends_with_insensitive("jl_sym_t") ||
+                   Name.ends_with_insensitive("jl_expr_t") ||
+                   Name.ends_with_insensitive("jl_code_info_t") ||
+                   Name.ends_with_insensitive("jl_array_t") ||
+                   Name.ends_with_insensitive("jl_genericmemory_t") ||
+                   //Name.ends_with_insensitive("jl_genericmemoryref_t") ||
+                   Name.ends_with_insensitive("jl_method_t") ||
+                   Name.ends_with_insensitive("jl_method_instance_t") ||
+                   Name.ends_with_insensitive("jl_debuginfo_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_datatype_t") ||
+                   Name.ends_with_insensitive("jl_typemap_entry_t") ||
+                   Name.ends_with_insensitive("jl_typemap_level_t") ||
+                   Name.ends_with_insensitive("jl_typename_t") ||
+                   Name.ends_with_insensitive("jl_module_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
+                   Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_ordereddict_t") ||
+                   Name.ends_with_insensitive("jl_tvar_t") ||
+                   Name.ends_with_insensitive("jl_typemap_t") ||
+                   Name.ends_with_insensitive("jl_unionall_t") ||
+                   Name.ends_with_insensitive("jl_methtable_t") ||
+                   Name.ends_with_insensitive("jl_cgval_t") ||
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_ast_context_t") ||
+                   Name.ends_with_insensitive("jl_code_instance_t") ||
+                   Name.ends_with_insensitive("jl_excstack_t") ||
+                   Name.ends_with_insensitive("jl_task_t") ||
+                   Name.ends_with_insensitive("jl_uniontype_t") ||
+                   Name.ends_with_insensitive("jl_method_match_t") ||
+                   Name.ends_with_insensitive("jl_vararg_t") ||
+                   Name.ends_with_insensitive("jl_opaque_closure_t") ||
+                   Name.ends_with_insensitive("jl_globalref_t") ||
                    // Probably not technically true for these, but let's allow it
-                   Name.endswith_lower("typemap_intersection_env") ||
-                   Name.endswith_lower("interpreter_state") ||
-                   Name.endswith_lower("jl_typeenv_t") ||
-                   Name.endswith_lower("jl_stenv_t") ||
-                   Name.endswith_lower("jl_varbinding_t") ||
-                   Name.endswith_lower("set_world") ||
-                   Name.endswith_lower("jl_codectx_t")) {
+                   Name.ends_with_insensitive("typemap_intersection_env") ||
+                   Name.ends_with_insensitive("interpreter_state") ||
+                   Name.ends_with_insensitive("jl_typeenv_t") ||
+                   Name.ends_with_insensitive("jl_stenv_t") ||
+                   Name.ends_with_insensitive("jl_varbinding_t") ||
+                   Name.ends_with_insensitive("set_world") ||
+                   Name.ends_with_insensitive("jl_codectx_t")) {
                  return true;
                }
                return false;
@@ -865,7 +870,7 @@ bool GCChecker::isGCTracked(const Expr *E) {
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
   return isJuliaType(
-      [](StringRef Name) { return Name.endswith("jl_sym_t"); }, QT);
+      [](StringRef Name) { return Name.ends_with("jl_sym_t"); }, QT);
 }
 
 bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
@@ -894,9 +899,11 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     if (!Decl || !FD) {
       if (Callee == nullptr) {
         isCalleeSafepoint = true;
-      } else if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
-        isCalleeSafepoint =
-            !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
+        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
+          isCalleeSafepoint =
+              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+        }
       } else if (const CXXPseudoDestructorExpr *PDE =
                      dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
         // A pseudo-destructor is an expression that looks like a member
@@ -909,9 +916,9 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
       else if (FD->getDeclName().isIdentifier() &&
-               (FD->getName().startswith("uv_") ||
-                FD->getName().startswith("unw_") ||
-                FD->getName().startswith("_U")) &&
+               (FD->getName().starts_with("uv_") ||
+                FD->getName().starts_with("unw_") ||
+                FD->getName().starts_with("_U")) &&
                FD->getName() != "uv_run")
         isCalleeSafepoint = false;
       else
@@ -941,7 +948,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
             isGCTrackedType(ParmType->getPointeeType())) {
           // This is probably an out parameter. Find the value it refers to now.
           SVal Loaded =
-              State->getSVal(Call.getArgSVal(i).getAs<Loc>().getValue());
+              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
           SpeciallyRootedSymbol = Loaded.getAsSymbol();
           continue;
         }
@@ -1048,13 +1055,13 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         // global roots.
         StringRef FDName =
             FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        if (FDName.startswith("jl_box_") || FDName.startswith("ijl_box_")) {
+        if (FDName.starts_with("jl_box_") || FDName.starts_with("ijl_box_")) {
           SVal Arg = Call.getArgSVal(0);
           if (auto CI = Arg.getAs<nonloc::ConcreteInt>()) {
             const llvm::APSInt &Value = CI->getValue();
             bool GloballyRooted = false;
             const int64_t NBOX_C = 1024;
-            if (FDName.startswith("jl_box_u") || FDName.startswith("ijl_box_u")) {
+            if (FDName.starts_with("jl_box_u") || FDName.starts_with("ijl_box_u")) {
               if (Value < NBOX_C) {
                 GloballyRooted = true;
               }
@@ -1164,10 +1171,10 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     // TODO: We may want to refine this. This is to track pointers through the
     // array list in jl_module_t.
     bool ParentIsModule = isJuliaType(
-        [](StringRef Name) { return Name.endswith("jl_module_t"); },
+        [](StringRef Name) { return Name.ends_with("jl_module_t"); },
         Parent->getType());
     bool ResultIsArrayList = isJuliaType(
-        [](StringRef Name) { return Name.endswith("arraylist_t"); },
+        [](StringRef Name) { return Name.ends_with("arraylist_t"); },
         Result->getType());
     if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
       ResultTracked = false;
@@ -1440,7 +1447,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8" ||
+             name == "JL_GC_PUSH9") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1520,7 +1528,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = State->getLValue(FD, ArrayList).getAs<Loc>().getValue();
+      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1688,7 +1696,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
   // better than this.
   if (IsLoad && (RS = State->get<GCRootMap>(SLoc.getAsRegion()))) {
     SymbolRef LoadedSym =
-        State->getSVal(SLoc.getAs<Loc>().getValue()).getAsSymbol();
+        State->getSVal(*SLoc.getAs<Loc>()).getAsSymbol();
     if (LoadedSym) {
       const ValueState *ValS = State->get<GCValueMap>(LoadedSym);
       if (!ValS || !ValS->isRooted() || ValS->RootDepth > RS->RootedAtDepth) {

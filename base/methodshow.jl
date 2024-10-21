@@ -286,6 +286,29 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     !iszero(n) && print(io, ":")
 end
 
+# Determine the `modulecolor` value to pass to `show_method`
+function _modulecolor(method::Method)
+    mmt = get_methodtable(method)
+    if mmt === nothing || mmt.module === parentmodule(method)
+        return nothing
+    end
+    # `mmt` is only particularly relevant for external method tables. Since the primary
+    # method table is shared, we now need to distinguish "primary" methods by trying to
+    # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
+    # would derive this same information (for the name).
+    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
+    # `ft` should be the type associated with the first argument in the method signature.
+    # If it's `Type`, try to unwrap it again.
+    if isType(ft)
+        ft = argument_datatype(ft.parameters[1])
+    end
+    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
+        return nothing
+    end
+    m = parentmodule_before_main(method)
+    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+end
+
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
     name = mt.name
@@ -300,12 +323,6 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
-    modul = if mt === _TYPE_NAME.mt && length(ms) > 0 # type constructor
-            which(ms.ms[1].module, ms.ms[1].name)
-        else
-            mt.module
-        end
-
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms
@@ -315,13 +332,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
             print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            modulecolor = if parentmodule(meth) == modul
-                nothing
-            else
-                m = parentmodule_before_main(meth)
-                get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-            end
-            show_method(io, meth; modulecolor)
+            show_method(io, meth; modulecolor=_modulecolor(meth))
 
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing

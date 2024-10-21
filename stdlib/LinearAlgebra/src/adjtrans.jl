@@ -281,6 +281,11 @@ adjoint(A::Adjoint) = A.parent
 transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
+adjoint(A::Transpose{<:Any,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Any,<:Transpose}) = adjoint(A.parent.parent)
+# disambiguation
+adjoint(A::Transpose{<:Real,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Real,<:Transpose}) = A.parent
 
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
@@ -296,6 +301,16 @@ function Base.showarg(io::IO, v::Transpose, toplevel)
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
+end
+function Base.show(io::IO, v::Adjoint{<:Real, <:AbstractVector})
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+end
+function Base.show(io::IO, v::Transpose{<:Number, <:AbstractVector})
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
 end
 
 # some aliases for internal convenience use
@@ -319,10 +334,9 @@ axes(A::AdjOrTrans) = reverse(axes(A.parent))
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
 size(A::AdjOrTransAbsMat) = reverse(size(A.parent))
-axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
+axes(v::AdjOrTransAbsVec) = (axes(v.parent,2), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
-IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 @propagate_inbounds Base.isassigned(v::AdjOrTransAbsVec, i::Int) = isassigned(v.parent, i-1+first(axes(v.parent)[1]))
 @propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
@@ -391,15 +405,26 @@ hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 #
 # note that the caller's operation f operates in the domain of the wrapped vectors' entries.
 # hence the adjoint->f->adjoint shenanigans applied to the parent vectors' entries.
-map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(avs)...))
-map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
+function map(f, av::AdjointAbsVec, avs::AdjointAbsVec...)
+    s = (av, avs...)
+    adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(s)...))
+end
+function map(f, tv::TransposeAbsVec, tvs::TransposeAbsVec...)
+    s = (tv, tvs...)
+    transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(s)...))
+end
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
+quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below
 broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Transpose{<:Any,<:AdjointAbsVec}}...) =
+    transpose(adjoint(broadcast((xs...) -> adjoint(transpose(f(conj.(xs)...))), quasiparentc.(tvs)...)))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Adjoint{<:Any,<:TransposeAbsVec}}...) =
+    adjoint(transpose(broadcast((xs...) -> transpose(adjoint(f(conj.(xs)...))), quasiparentc.(tvs)...)))
 # TODO unify and allow mixed combinations with a broadcast style
 
 
@@ -449,7 +474,7 @@ tr(A::Transpose) = transpose(tr(parent(A)))
 function _dot_nonrecursive(u, v)
     lu = length(u)
     if lu != length(v)
-        throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
+        throw(DimensionMismatch(lazy"first array has length $(lu) which does not match the length of the second, $(length(v))."))
     end
     if lu == 0
         zero(eltype(u)) * zero(eltype(v))
@@ -466,10 +491,6 @@ end
 
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
-# Adjoint/Transpose-vector * Adjoint/Transpose-vector
-# (necessary for disambiguation with fallback methods in linalg/matmul)
-*(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
-*(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities

@@ -112,24 +112,24 @@ Core.NamedTuple
 
 if nameof(@__MODULE__) === :Base
 
-@eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
+@eval function (NT::Type{NamedTuple{names,T}})(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names::Tuple)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
     # Note T(args) might not return something of type T; e.g.
     # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
-    $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
+    $(Expr(:splatnew, :NT, :(T(args))))
 end
 
-function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
+function (NT::Type{NamedTuple{names, T}})(nt::NamedTuple) where {names, T <: Tuple}
     if @generated
-        Expr(:new, :(NamedTuple{names, T}),
-             Any[ :(let Tn = fieldtype(T, $n),
+        Expr(:new, :NT,
+             Any[ :(let Tn = fieldtype(NT, $n),
                       ntn = getfield(nt, $(QuoteNode(names[n])))
                       ntn isa Tn ? ntn : convert(Tn, ntn)
                   end) for n in 1:length(names) ]...)
     else
-        NamedTuple{names, T}(map(Fix1(getfield, nt), names))
+        NT(map(Fix1(getfield, nt), names))
     end
 end
 
@@ -145,13 +145,10 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
     end
 end
 
-NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
-NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
+(NT::Type{NamedTuple{names, T}})(itr) where {names, T <: Tuple} = NT(T(itr))
+(NT::Type{NamedTuple{names}})(itr) where {names} = NT(Tuple(itr))
 
 NamedTuple(itr) = (; itr...)
-
-# avoids invalidating Union{}(...)
-NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
 
 end # if Base
 
@@ -182,9 +179,11 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
+convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = (@inline NT(t))::NT
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+    NT = NamedTuple{names,T}
+    (@inline NT(nt))::NT
 end
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
@@ -196,9 +195,8 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
 end
 
 if nameof(@__MODULE__) === :Base
-    Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
-end
+Tuple(nt::NamedTuple) = (nt...,)
+(::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
 function show(io::IO, t::NamedTuple)
     n = nfields(t)
@@ -231,6 +229,7 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
+end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
@@ -268,8 +267,11 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
+
+function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[an...]
     for n in bn
         if !sym_in(n, an)
@@ -279,15 +281,17 @@ end
     (names...,)
 end
 
-@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
-    @nospecialize names a b
+function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+    @nospecialize
+    @_total_meta
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(a::NamedTuple, b::NamedTuple,
-                                                  an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+function merge_fallback(a::NamedTuple, b::NamedTuple,
+                        an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize
+    @_foldable_meta
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
@@ -388,8 +392,9 @@ tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
 reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
-@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[]
     for n in an
         if !sym_in(n, bn)
@@ -399,11 +404,15 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
-@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+function diff_types(a::NamedTuple, names::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = diff_names(an, bn)
     isempty(names) && return (;)
     types = diff_types(a, names)
@@ -414,6 +423,24 @@ end
         A[i] = getfield(a, n)
     end
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
+end
+
+"""
+    delete(a::NamedTuple, field::Symbol)
+
+Construct a new named tuple from `a` by removing the named field.
+
+```jldoctest
+julia> Base.delete((a=1, b=2, c=3), :a)
+(b = 2, c = 3)
+
+julia> Base.delete((a=1, b=2, c=3), :b)
+(a = 1, c = 3)
+```
+"""
+@constprop :aggressive function delete(a::NamedTuple{an}, field::Symbol) where {an}
+    names = diff_names(an, (field,))
+    NamedTuple{names}(a)
 end
 
 """
@@ -516,6 +543,7 @@ Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
 
 julia> sum("julia"; init=1)
 ERROR: MethodError: no method matching +(::Char, ::Char)
+The function `+` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   +(::Any, ::Any, ::Any, ::Any...)

@@ -41,6 +41,7 @@ STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction
 STATISTIC(MaxChainLength, "Max length of reduction chain");
 STATISTIC(AddChains, "Addition reduction chains");
 STATISTIC(MulChains, "Multiply reduction chains");
+STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
 
 #ifndef __clang_gcanalyzer__
 #define REMARK(remark) ORE.emit(remark)
@@ -48,6 +49,49 @@ STATISTIC(MulChains, "Multiply reduction chains");
 #define REMARK(remark) (void) 0;
 #endif
 namespace {
+
+/**
+ * Combine
+ * ```
+ * %v0 = fmul ... %a, %b
+ * %v = fadd contract ... %v0, %c
+ * ```
+ * to
+ * %v0 = fmul contract ... %a, %b
+ * %v = fadd contract ... %v0, %c
+ * when `%v0` has no other use
+ */
+
+static bool checkCombine(Value *maybeMul, Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
+{
+    auto mulOp = dyn_cast<Instruction>(maybeMul);
+    if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
+        return false;
+    if (!L.contains(mulOp))
+        return false;
+    if (!mulOp->hasOneUse()) {
+        LLVM_DEBUG(dbgs() << "mulOp has multiple uses: " << *maybeMul << "\n");
+        REMARK([&](){
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Multiuse FMul", mulOp)
+                << "fmul had multiple uses " << ore::NV("fmul", mulOp);
+        });
+        return false;
+    }
+    // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
+    auto fmf = mulOp->getFastMathFlags();
+    if (!fmf.allowContract()) {
+        LLVM_DEBUG(dbgs() << "Marking mulOp for FMA: " << *maybeMul << "\n");
+        REMARK([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Marked for FMA", mulOp)
+                << "marked for fma " << ore::NV("fmul", mulOp);
+        });
+        ++TotalContracted;
+        fmf.setAllowContract(true);
+        mulOp->copyFastMathFlags(fmf);
+        return true;
+    }
+    return false;
+}
 
 static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
 {
@@ -150,6 +194,28 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRe
         });
         (*K)->setHasAllowReassoc(true);
         (*K)->setHasAllowContract(true);
+        switch ((*K)->getOpcode()) {
+            case Instruction::FAdd: {
+                if (!(*K)->hasAllowContract())
+                    continue;
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
+                break;
+            }
+            case Instruction::FSub: {
+                if (!(*K)->hasAllowContract())
+                    continue;
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
+                break;
+            }
+            default:
+                break;
+            }
         if (SE)
             SE->forgetValue(*K);
         ++length;
@@ -177,10 +243,10 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         const MDString *S = dyn_cast<MDString>(Op);
         if (S) {
             LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
-            if (S->getString().startswith("julia")) {
-                if (S->getString().equals("julia.simdloop"))
+            if (S->getString().starts_with("julia")) {
+                if (S->getString() == "julia.simdloop")
                     simd = true;
-                if (S->getString().equals("julia.ivdep"))
+                if (S->getString() == "julia.ivdep")
                     ivdep = true;
                 continue;
             }

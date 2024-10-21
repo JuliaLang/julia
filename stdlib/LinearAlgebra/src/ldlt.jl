@@ -175,7 +175,7 @@ function ldiv!(S::LDLt{<:Any,<:SymTridiagonal}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
-        throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
+        throw(DimensionMismatch(lazy"Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
     end
     d = S.data.dv
     l = S.data.ev

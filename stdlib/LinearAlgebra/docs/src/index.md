@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/LinearAlgebra/docs/src/index.md"
+```
+
 # [Linear Algebra](@id man-linalg)
 
 ```@meta
@@ -157,7 +161,7 @@ sorts of systems of linear equations.
 
 ## Special matrices
 
-[Matrices with special symmetries and structures](http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274)
+[Matrices with special symmetries and structures](https://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274)
 arise often in linear algebra and are frequently associated with various matrix factorizations.
 Julia features a rich collection of special matrix types, which allow for fast computation with
 specialized routines that are specially developed for particular matrix types.
@@ -184,8 +188,8 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Matrix type                   | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
 |:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
-| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
+| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
 | [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
@@ -300,7 +304,7 @@ of the Linear Algebra documentation.
 | `QRCompactWY`      | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`        | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
 | `LQ`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition) of `transpose(A)`                           |
-| `Hessenberg`       | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
+| `Hessenberg`       | [Hessenberg decomposition](https://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
 | `Eigen`            | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)                         |
 | `GeneralizedEigen` | [Generalized spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix#Generalized_eigenvalue_problem)                            |
 | `SVD`              | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
@@ -400,19 +404,51 @@ generally broadcasting over elements in the matrix representation fail because t
 be highly inefficient. For such use cases, consider computing the matrix representation
 up front and cache it for future reuse.
 
+## [Pivoting Strategies](@id man-linalg-pivoting-strategies)
+
+Several of Julia's [matrix factorizations](@ref man-linalg-factorizations) support
+[pivoting](https://en.wikipedia.org/wiki/Pivot_element), which can be used to improve their
+numerical stability. In fact, some matrix factorizations, such as the LU
+factorization, may fail without pivoting.
+
+In pivoting, first, a [pivot element](https://en.wikipedia.org/wiki/Pivot_element)
+with good numerical properties is chosen based on a pivoting strategy. Next, the rows and
+columns of the original matrix are permuted to bring the chosen element in place for
+subsequent computation. Furthermore, the process is repeated for each stage of the factorization.
+
+Consequently, besides the conventional matrix factors, the outputs of
+pivoted factorization schemes also include permutation matrices.
+
+In the following, the pivoting strategies implemented in Julia are briefly described. Note
+that not all matrix factorizations may support them. Consult the documentation of the
+respective [matrix factorization](@ref man-linalg-factorizations) for details on the
+supported pivoting strategies.
+
+See also [`LinearAlgebra.ZeroPivotException`](@ref).
+
+```@docs
+LinearAlgebra.NoPivot
+LinearAlgebra.RowNonZero
+LinearAlgebra.RowMaximum
+LinearAlgebra.ColumnNorm
+```
+
 ## Standard functions
 
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](https://www.netlib.org/lapack/).
 Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com).
 Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
+Base.:*(::AbstractMatrix, ::AbstractMatrix, ::AbstractVector)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
+LinearAlgebra.RankDeficientException
+LinearAlgebra.LAPACKException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
@@ -516,6 +552,7 @@ Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix)
+LinearAlgebra.cbrt(::AbstractMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})
@@ -565,12 +602,14 @@ LinearAlgebra.checksquare
 LinearAlgebra.peakflops
 LinearAlgebra.hermitianpart
 LinearAlgebra.hermitianpart!
+LinearAlgebra.copy_adjoint!
+LinearAlgebra.copy_transpose!
 ```
 
 ## Low-level matrix operations
 
 In many cases there are in-place versions of matrix operations that allow you to supply
-a pre-allocated output vector or matrix.  This is useful when optimizing critical code in order
+a pre-allocated output vector or matrix. This is useful when optimizing critical code in order
 to avoid the overhead of repeated allocations. These in-place operations are suffixed with `!`
 below (e.g. `mul!`) according to the usual Julia convention.
 
@@ -585,13 +624,13 @@ LinearAlgebra.rdiv!
 ## BLAS functions
 
 In Julia (as in much of scientific computation), dense linear-algebra operations are based on
-the [LAPACK library](http://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
-building-blocks known as the [BLAS](http://www.netlib.org/blas/). There are highly optimized
+the [LAPACK library](https://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
+building-blocks known as the [BLAS](https://www.netlib.org/blas/). There are highly optimized
 implementations of BLAS available for every computer architecture, and sometimes in high-performance
 linear algebra routines it is useful to call the BLAS functions directly.
 
 `LinearAlgebra.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
-that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
+that overwrite one of the input arrays have names ending in `'!'`. Usually, a BLAS function has
 four methods defined, for [`Float32`](@ref), [`Float64`](@ref), [`ComplexF32`](@ref Complex),
 and [`ComplexF64`](@ref Complex) arrays.
 
@@ -644,10 +683,8 @@ and the complexity of the operation.
 
 ### Level 1 BLAS functions
 
-The level 1 BLAS functions were first proposed in [(Lawson, 1979)][Lawson-1979] and
+The level 1 BLAS functions were first proposed in ([Lawson, 1979](https://dl.acm.org/doi/10.1145/355841.355847)) and
 define operations between scalars and vectors.
-
-[Lawson-1979]: https://dl.acm.org/doi/10.1145/355841.355847
 
 ```@docs
 # xROTG
@@ -671,10 +708,8 @@ LinearAlgebra.BLAS.iamax
 
 ### Level 2 BLAS functions
 
-The level 2 BLAS functions were published in [(Dongarra, 1988)][Dongarra-1988],
+The level 2 BLAS functions were published in ([Dongarra, 1988](https://dl.acm.org/doi/10.1145/42288.42291))
 and define matrix-vector operations.
-
-[Dongarra-1988]: https://dl.acm.org/doi/10.1145/42288.42291
 
 **return a vector**
 
@@ -724,10 +759,8 @@ LinearAlgebra.BLAS.spr!
 
 ### Level 3 BLAS functions
 
-The level 3 BLAS functions were published in [(Dongarra, 1990)][Dongarra-1990],
+The level 3 BLAS functions were published in ([Dongarra, 1990](https://dl.acm.org/doi/10.1145/77626.79170))
 and define matrix-matrix operations.
-
-[Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
 
 ```@docs
 LinearAlgebra.BLAS.gemmt!
@@ -756,7 +789,7 @@ LinearAlgebra.BLAS.trsm!
 LinearAlgebra.BLAS.trsm
 ```
 
-## LAPACK functions
+## [LAPACK functions](@id man-linalg-lapack-functions)
 
 `LinearAlgebra.LAPACK` provides wrappers for some of the LAPACK functions for linear algebra.
  Those functions that overwrite one of the input arrays have names ending in `'!'`.

@@ -15,31 +15,83 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
-const IR_FLAG_NULL        = UInt32(0)
+const IR_FLAG_NULL        = zero(UInt32)
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = UInt32(1) << 0
+const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE      = UInt32(1) << 1
+const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = UInt32(1) << 2
-const IR_FLAG_THROW_BLOCK = UInt32(1) << 3
-# This statement may be removed if its result is unused. In particular,
-# it must be both :effect_free and :nothrow.
-# TODO: Separate these out.
-const IR_FLAG_EFFECT_FREE = UInt32(1) << 4
-# This statement was proven not to throw
-const IR_FLAG_NOTHROW     = UInt32(1) << 5
-# This is :consistent
-const IR_FLAG_CONSISTENT  = UInt32(1) << 6
+const IR_FLAG_NOINLINE    = one(UInt32) << 2
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = UInt32(1) << 7
-# This is :noub == ALWAYS_TRUE
-const IR_FLAG_NOUB        = UInt32(1) << 8
+const IR_FLAG_REFINED     = one(UInt32) << 3
+# This statement is proven :consistent
+const IR_FLAG_CONSISTENT  = one(UInt32) << 4
+# This statement is proven :effect_free
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 5
+# This statement is proven :nothrow
+const IR_FLAG_NOTHROW     = one(UInt32) << 6
+# This statement is proven :terminates
+const IR_FLAG_TERMINATES  = one(UInt32) << 7
+# This statement is proven :noub
+const IR_FLAG_NOUB        = one(UInt32) << 8
+# TODO: Both of these should eventually go away once
+# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_EFIIMO      = one(UInt32) << 9
+# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 10
+# This statement is :nortcall
+const IR_FLAG_NORTCALL    = one(UInt32) << 11
+# This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
+const IR_FLAG_UNUSED      = one(UInt32) << 12
 
-const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+const NUM_IR_FLAGS = 13 # sync with julia.h
+
+const IR_FLAGS_EFFECTS =
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
+    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL
+
+const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
+
+const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
+
+has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
+
+function iscallstmt(@nospecialize stmt)
+    stmt isa Expr || return false
+    head = stmt.head
+    return head === :call || head === :invoke || head === :foreigncall
+end
+
+function flags_for_effects(effects::Effects)
+    flags = zero(UInt32)
+    if is_consistent(effects)
+        flags |= IR_FLAG_CONSISTENT
+    end
+    if is_effect_free(effects)
+        flags |= IR_FLAG_EFFECT_FREE
+    elseif is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_EFIIMO
+    end
+    if is_nothrow(effects)
+        flags |= IR_FLAG_NOTHROW
+    end
+    if is_terminates(effects)
+        flags |= IR_FLAG_TERMINATES
+    end
+    if is_inaccessiblemem_or_argmemonly(effects)
+        flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
+    end
+    if is_noub(effects)
+        flags |= IR_FLAG_NOUB
+    end
+    if is_nortcall(effects)
+        flags |= IR_FLAG_NORTCALL
+    end
+    return flags
+end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -70,42 +122,17 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-is_source_inferred(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-
-function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+# return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+function src_inlining_policy(interp::AbstractInterpreter,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
-        is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
+        return src_inlineable
     elseif isa(src, IRCode)
-        return src
-    elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
-        return src
+        return true
     end
-    return nothing
+    @assert !isa(src, CodeInstance) # handled by caller
+    return false
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
@@ -114,11 +141,11 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]::Vector{Any}
+    edges = sv.stmt_edges[1]
     return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
-    return InliningState(Any[], get_world_counter(interp), interp)
+    return InliningState(Any[], get_inference_world(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -144,7 +171,7 @@ function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
                              sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
-function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -152,7 +179,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
-    sptypes = sptypes_from_meth_instance(linfo)
+    sptypes = sptypes_from_meth_instance(mi)
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
@@ -160,7 +187,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     end
     stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
     # cache some useful state computations
-    def = linfo.def
+    def = mi.def
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
@@ -174,13 +201,13 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
             for slot = 1:nslots
         ])
     end
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
-function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
-    world = get_world_counter(interp)
-    src = retrieve_code_info(linfo, world)
+function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
+    world = get_inference_world(interp)
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, interp)
+    return OptimizationState(mi, src, interp)
 end
 
 function argextype end # imported by EscapeAnalysis
@@ -199,14 +226,13 @@ function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
-    validate_code_in_debug_mode(linfo, src, "optimized")
+    maybe_validate_code(linfo, src, "optimized")
     return src
 end
 
 function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
     replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
-    src.inferred = true
     return src
 end
 
@@ -224,8 +250,6 @@ function widen_all_consts!(src::CodeInfo)
         end
     end
 
-    src.rettype = widenconst(src.rettype)
-
     return src
 end
 
@@ -235,9 +259,8 @@ end
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-is_stmt_inline(stmt_flag::UInt32)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
-is_stmt_noinline(stmt_flag::UInt32)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
-is_stmt_throw_block(stmt_flag::UInt32) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
+is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
@@ -274,22 +297,17 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     return (false, true, true)
 end
 
-"""
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
-        (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
-
-Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
-"""
+# Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
+    isa(stmt, EnterNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = isdefined(stmt.mod, stmt.name)
-        consistent = nothrow && isconst(stmt.mod, stmt.name)
+        nothrow = consistent = isdefinedconst_globalref(stmt)
         return (consistent, nothrow, nothrow)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
@@ -303,12 +321,6 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === UnionAll
-                # TODO: This is a weird special case - should be determined in inference
-                argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
-                return (true, nothrow, nothrow)
-            end
             if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
@@ -316,12 +328,14 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
-            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            return (consistent, effect_free & nothrow, nothrow)
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
+            return (consistent, removable, nothrow)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
@@ -331,7 +345,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            return (consistent, effect_free & nothrow, nothrow)
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
+            return (consistent, removable, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -340,7 +356,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            source = argextype(args[4], src)
+            source = argextype(args[5], src)
             if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
                 return (false, false, false)
             end
@@ -358,6 +374,29 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     return (true, true, true)
 end
 
+function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt),
+                                 src::Union{IRCode,IncrementalCompact})
+    flag = IR_FLAG_NULL
+    (consistent, removable, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, src)
+    if consistent
+        flag |= IR_FLAG_CONSISTENT
+    end
+    if removable
+        flag |= IR_FLAGS_REMOVABLE
+    elseif nothrow
+        flag |= IR_FLAG_NOTHROW
+    end
+    if !iscallstmt(stmt)
+        # There is a bit of a subtle point here, which is that some non-call
+        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # illegal to introduce such statements that actually cause UB (for any
+        # input). Ideally that'd be handled at insertion time (TODO), but for
+        # the time being just do that here.
+        flag |= IR_FLAG_NOUB
+    end
+    return flag
+end
+
 """
     argextype(x, src::Union{IRCode,IncrementalCompact}) -> t
     argextype(x, src::CodeInfo, sptypes::Vector{VarState}) -> t
@@ -372,32 +411,41 @@ function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vecto
     isa(x, AnySSAValue) && return types(compact)[x]
     return argextype(x, compact, sptypes, compact.ir.argtypes)
 end
-argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
+function argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState})
+    return argextype(x, src, sptypes, src.slottypes::Union{Vector{Any},Nothing})
+end
 function argextype(
     @nospecialize(x), src::Union{IRCode,IncrementalCompact,CodeInfo},
-    sptypes::Vector{VarState}, slottypes::Vector{Any})
+    sptypes::Vector{VarState}, slottypes::Union{Vector{Any},Nothing})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int].typ
+            idx = x.args[1]::Int
+            (1 ≤ idx ≤ length(sptypes)) || throw(InvalidIRError())
+            return sptypes[idx].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
+            length(x.args) == 0 && throw(InvalidIRError())
             return argextype(x.args[1], src, sptypes, slottypes)
         end
         Core.println("argextype called on Expr with head ", x.head,
                      " which is not valid for IR in argument-position.")
         @assert false
     elseif isa(x, SlotNumber)
+        slottypes === nothing && return Any
+        (1 ≤ x.id ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.id]
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x, src)
     elseif isa(x, Argument)
+        slottypes === nothing && return Any
+        (1 ≤ x.n ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.n]
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref(x)
-    elseif isa(x, PhiNode)
+        return abstract_eval_globalref_type(x)
+    elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
         return x.typ
@@ -405,7 +453,15 @@ function argextype(
         return Const(x)
     end
 end
-abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
+function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
+    ssavaluetypes = src.ssavaluetypes
+    if ssavaluetypes isa Int
+        (1 ≤ s.id ≤ ssavaluetypes) || throw(InvalidIRError())
+        return Any
+    else
+        return abstract_eval_ssavalue(s, ssavaluetypes::Vector{Any})
+    end
+end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
@@ -484,25 +540,32 @@ function visit_bb_phis!(callback, ir::IRCode, bb::Int)
 end
 
 function any_stmt_may_throw(ir::IRCode, bb::Int)
-    for stmt in ir.cfg.blocks[bb].stmts
-        if (ir[SSAValue(stmt)][:flag] & IR_FLAG_NOTHROW) != 0
+    for idx in ir.cfg.blocks[bb].stmts
+        if !has_flag(ir[SSAValue(idx)], IR_FLAG_NOTHROW)
             return true
         end
     end
     return false
 end
 
-function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
+visit_conditional_successors(callback, ir::IRCode, bb::Int) = # used for test
+    visit_conditional_successors(callback, LazyPostDomtree(ir), ir, bb)
+function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
     while !isempty(worklist)
-        thisbb = pop!(worklist)
+        thisbb = popfirst!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
-            any_stmt_may_throw(ir, succ) && return true
-            push!(worklist, succ)
+            if postdominates(get!(lazypostdomtree), succ, bb)
+                # this successor is not conditional, so no need to visit it further
+                continue
+            elseif callback(succ)
+                return true
+            else
+                push!(worklist, succ)
+            end
         end
     end
     return false
@@ -531,11 +594,10 @@ function get!(lazyagdomtree::LazyAugmentedDomtree)
             cfg_insert_edge!(cfg, bb, length(cfg.blocks))
         end
     end
-    domtree = construct_domtree(cfg.blocks)
+    domtree = construct_domtree(cfg)
     return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
 end
 
-# TODO refine `:effect_free` using EscapeAnalysis
 mutable struct PostOptAnalysisState
     const result::InferenceResult
     const ir::IRCode
@@ -543,39 +605,81 @@ mutable struct PostOptAnalysisState
     const tpdum::TwoPhaseDefUseMap
     const lazypostdomtree::LazyPostDomtree
     const lazyagdomtree::LazyAugmentedDomtree
+    const ea_analysis_pending::Vector{Int}
     all_retpaths_consistent::Bool
     all_effect_free::Bool
+    effect_free_if_argmem_only::Union{Nothing,Bool}
     all_nothrow::Bool
     all_noub::Bool
     any_conditional_ub::Bool
+    nortcall::Bool
     function PostOptAnalysisState(result::InferenceResult, ir::IRCode)
         inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         lazypostdomtree = LazyPostDomtree(ir)
         lazyagdomtree = LazyAugmentedDomtree(ir)
-        return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, true, true, true, true, false)
+        return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, Int[],
+                   true, true, nothing, true, true, false, true)
     end
 end
 
 give_up_refinements!(sv::PostOptAnalysisState) =
-    sv.all_retpaths_consistent = sv.all_effect_free = sv.all_nothrow = sv.all_noub = false
+    sv.all_retpaths_consistent = sv.all_effect_free = sv.effect_free_if_argmem_only =
+    sv.all_nothrow = sv.all_noub = sv.nortcall = false
 
 function any_refinable(sv::PostOptAnalysisState)
     effects = sv.result.ipo_effects
     return ((!is_consistent(effects) & sv.all_retpaths_consistent) |
             (!is_effect_free(effects) & sv.all_effect_free) |
             (!is_nothrow(effects) & sv.all_nothrow) |
-            (!is_noub(effects) & sv.all_noub))
+            (!is_noub(effects) & sv.all_noub) |
+            (!is_nortcall(effects) & sv.nortcall))
 end
 
-function refine_effects!(sv::PostOptAnalysisState)
+struct GetNativeEscapeCache{CodeCache}
+    code_cache::CodeCache
+    GetNativeEscapeCache(code_cache::CodeCache) where CodeCache = new{CodeCache}(code_cache)
+end
+GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
+function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
+    codeinst = get(code_cache, mi, nothing)
+    codeinst isa CodeInstance || return false
+    argescapes = traverse_analysis_results(codeinst) do @nospecialize result
+        return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
+    end
+    if argescapes !== nothing
+        return argescapes
+    end
+    effects = decode_effects(codeinst.ipo_purity_bits)
+    if is_effect_free(effects) && is_inaccessiblememonly(effects)
+        # We might not have run EA on simple frames without any escapes (e.g. when optimization
+        # is skipped when result is constant-folded by abstract interpretation). If those
+        # frames aren't inlined, the accuracy of EA for caller context takes a big hit.
+        # This is a HACK to avoid that, but obviously, a more comprehensive fix would be ideal.
+        return true
+    end
+    return false
+end
+
+function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState)
+    if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
+        ir = sv.ir
+        nargs = Int(opt.src.nargs)
+        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), get_escape_cache(interp))
+        argescapes = EscapeAnalysis.ArgEscapeCache(estate)
+        stack_analysis_result!(sv.result, argescapes)
+        validate_mutable_arg_escapes!(estate, sv)
+    end
+
     any_refinable(sv) || return false
     effects = sv.result.ipo_effects
     sv.result.ipo_effects = Effects(effects;
         consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
-        effect_free = sv.all_effect_free ? ALWAYS_TRUE : effects.effect_free,
+        effect_free = sv.all_effect_free ? ALWAYS_TRUE :
+                      sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
         nothrow = sv.all_nothrow ? true : effects.nothrow,
-        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub,
+        nortcall = sv.nortcall ? true : effects.nortcall)
     return true
 end
 
@@ -584,52 +688,140 @@ function is_ipo_dataflow_analysis_profitable(effects::Effects)
              is_nothrow(effects) && is_noub(effects))
 end
 
-function is_getfield_with_boundscheck_arg(@nospecialize(stmt), sv::PostOptAnalysisState)
-    is_known_call(stmt, getfield, sv.ir) || return false
-    length(stmt.args) < 4 && return false
+function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
+    isexpr(stmt, :call) || return false
+    ft = argextype(stmt.args[1], sv.ir)
+    f = singleton_type(ft)
+    f === nothing && return false
+    if f === getfield
+        nargs = 4
+    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+        nargs = 4
+    elseif f === memoryrefset!
+        nargs = 5
+    else
+        return false
+    end
+    length(stmt.args) < nargs && return false
     boundscheck = stmt.args[end]
     argextype(boundscheck, sv.ir) === Bool || return false
     isa(boundscheck, SSAValue) || return false
     return true
 end
 
+function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospecialize(stmt),
+                                  estate::EscapeAnalysis.EscapeState)
+    stmt isa Expr || return false
+    if isexpr(stmt, :invoke)
+        startidx = 2
+    elseif isexpr(stmt, :new)
+        startidx = 1
+    else
+        return false
+    end
+    has_no_escape(x::EscapeAnalysis.EscapeInfo) =
+        EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_argescape(x))
+    for i = startidx:length(stmt.args)
+        arg = stmt.args[i]
+        argt = argextype(arg, ir)
+        if is_mutation_free_argtype(argt)
+            continue
+        end
+        # See if we can find the allocation
+        if isa(arg, Argument)
+            if has_no_escape(estate[arg])
+                # Even if we prove everything else effect_free, the best we can
+                # say is :effect_free_if_argmem_only
+                if sv.effect_free_if_argmem_only === nothing
+                    sv.effect_free_if_argmem_only = true
+                end
+            else
+                sv.effect_free_if_argmem_only = false
+            end
+            return false
+        elseif isa(arg, SSAValue)
+            has_no_escape(estate[arg]) || return false
+            check_all_args_noescape!(sv, ir, ir[arg][:stmt], estate) || return false
+        else
+            return false
+        end
+    end
+    return true
+end
+
+function validate_mutable_arg_escapes!(estate::EscapeAnalysis.EscapeState, sv::PostOptAnalysisState)
+    ir = sv.ir
+    for idx in sv.ea_analysis_pending
+        # See if any mutable memory was allocated in this function and determined
+        # not to escape.
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        if !check_all_args_noescape!(sv, ir, stmt, estate)
+            return sv.all_effect_free = false
+        end
+    end
+    return true
+end
+
 function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
-    # Special case: `:boundscheck` into `getfield`
     stmt = inst[:stmt]
-    is_getfield_with_boundscheck_arg(stmt, sv) || return false
-    barg = stmt.args[end]
+    iscall_with_boundscheck(stmt, sv) || return false
+    barg = stmt.args[end]::SSAValue
     bstmt = sv.ir[barg][:stmt]
     isexpr(bstmt, :boundscheck) || return false
     # If IR_FLAG_INBOUNDS is already set, no more conditional ub
     (!isempty(bstmt.args) && bstmt.args[1] === false) && return false
-    sv.any_conditional_ub = true
     return true
 end
 
 function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
+    # If we can prove that the argmem does not escape the current function, we can
+    # refine this to :effect_free.
+    needs_ea_validation = has_flag(flag, IR_FLAGS_NEEDS_EA)
     stmt = inst[:stmt]
-    if !isterminator(stmt) && stmt !== nothing
-        # ignore control flow node – they are not removable on their own and thus not
-        # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
-        # the whole method invocation
-        sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+    if !needs_ea_validation
+        if !isterminator(stmt) && stmt !== nothing
+            # ignore control flow node – they are not removable on their own and thus not
+            # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
+            # the whole method invocation
+            sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
+        end
+    elseif sv.all_effect_free
+        if (isexpr(stmt, :invoke) || isexpr(stmt, :new) ||
+            # HACK for performance: limit the scope of EA to code with object field access only,
+            # since its abilities to reason about e.g. arrays are currently very limited anyways.
+            is_known_call(stmt, setfield!, sv.ir))
+            push!(sv.ea_analysis_pending, inst.idx)
+        else
+            sv.all_effect_free = false
+        end
     end
-    sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
-    if iszero(flag & IR_FLAG_NOUB)
-        if !is_conditional_noub(inst, sv)
+    sv.all_nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+    if !has_flag(flag, IR_FLAG_NOUB)
+        # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
+        if is_conditional_noub(inst, sv)
+            sv.any_conditional_ub = true
+        else
             sv.all_noub = false
+        end
+    end
+    if !has_flag(flag, IR_FLAG_NORTCALL)
+        # if a function call that might invoke `Core.Compiler.return_type` has been deleted,
+        # there's no need to taint with `:nortcall`, allowing concrete evaluation
+        if iscallstmt(stmt)
+            sv.nortcall = false
         end
     end
 end
 
-function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisState)
+function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
-    stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
+    stmt_inconsistent = !has_flag(flag, IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
-    # Special case: For getfield, we allow inconsistency of the :boundscheck argument
+    # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
-    if is_getfield_with_boundscheck_arg(stmt, sv)
+    if iscall_with_boundscheck(stmt, sv)
         for i = 1:(length(stmt.args)-1)
             val = stmt.args[i]
             if isa(val, SSAValue)
@@ -646,7 +838,7 @@ function scan_inconsistency!(inst::Instruction, idx::Int, sv::PostOptAnalysisSta
             end
         end
     end
-    stmt_inconsistent && push!(inconsistent, idx)
+    stmt_inconsistent && push!(inconsistent, inst.idx)
     return stmt_inconsistent
 end
 
@@ -654,10 +846,10 @@ struct ScanStmt
     sv::PostOptAnalysisState
 end
 
-function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
+function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
 
-    if isexpr(stmt, :enter)
+    if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
         return nothing
@@ -665,31 +857,40 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 
     scan_non_dataflow_flags!(inst, sv)
 
-    stmt_inconsistent = scan_inconsistency!(inst, idx, sv)
+    stmt_inconsistent = scan_inconsistency!(inst, sv)
 
-    if stmt_inconsistent && idx == lstmt
-        if isa(stmt, ReturnNode) && isdefined(stmt, :val)
+    if stmt_inconsistent
+        if !has_flag(inst[:flag], IR_FLAG_NOTHROW)
+            # Taint :consistent if this statement may raise since :consistent requires
+            # consistent termination. TODO: Separate :consistent_return and :consistent_termination from :consistent.
             sv.all_retpaths_consistent = false
-        elseif isa(stmt, GotoIfNot)
-            # Conditional Branch with inconsistent condition.
-            # If we do not know this function terminates, taint consistency, now,
-            # :consistent requires consistent termination. TODO: Just look at the
-            # inconsistent region.
-            if !sv.result.ipo_effects.terminates
+        end
+        if inst.idx == lstmt
+            if isa(stmt, ReturnNode) && isdefined(stmt, :val)
                 sv.all_retpaths_consistent = false
-            elseif conditional_successors_may_throw(sv.lazypostdomtree, sv.ir, bb)
-                # Check if there are potential throws that require
-                sv.all_retpaths_consistent = false
-            else
-                (; cfg, domtree) = get!(sv.lazyagdomtree)
-                for succ in iterated_dominance_frontier(cfg, BlockLiveness(sv.ir.cfg.blocks[bb].succs, nothing), domtree)
-                    if succ == length(cfg.blocks)
-                        # Phi node in the virtual exit -> We have a conditional
-                        # return. TODO: Check if all the retvals are egal.
-                        sv.all_retpaths_consistent = false
-                    else
-                        visit_bb_phis!(sv.ir, succ) do phiidx::Int
-                            push!(sv.inconsistent, phiidx)
+            elseif isa(stmt, GotoIfNot)
+                # Conditional Branch with inconsistent condition.
+                # If we do not know this function terminates, taint consistency, now,
+                # :consistent requires consistent termination. TODO: Just look at the
+                # inconsistent region.
+                if !sv.result.ipo_effects.terminates
+                    sv.all_retpaths_consistent = false
+                elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
+                        return any_stmt_may_throw(sv.ir, succ)
+                    end
+                    # check if this `GotoIfNot` leads to conditional throws, which taints consistency
+                    sv.all_retpaths_consistent = false
+                else
+                    (; cfg, domtree) = get!(sv.lazyagdomtree)
+                    for succ in iterated_dominance_frontier(cfg, BlockLiveness(sv.ir.cfg.blocks[bb].succs, nothing), domtree)
+                        if succ == length(cfg.blocks)
+                            # Phi node in the virtual exit -> We have a conditional
+                            # return. TODO: Check if all the retvals are egal.
+                            sv.all_retpaths_consistent = false
+                        else
+                            visit_bb_phis!(sv.ir, succ) do phiidx::Int
+                                push!(sv.inconsistent, phiidx)
+                            end
                         end
                     end
                 end
@@ -706,13 +907,14 @@ function ((; sv)::ScanStmt)(inst::Instruction, idx::Int, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, false)
-    complete!(sv.tpdum); push!(scanner.bb_ip, 1)
-    populate_def_use_map!(sv.tpdum, scanner)
-
     (; ir, inconsistent, tpdum) = sv
+
+    scan!(ScanStmt(sv), scanner, false)
+    complete!(tpdum); push!(scanner.bb_ip, 1)
+    populate_def_use_map!(tpdum, scanner)
+
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-    for def in sv.inconsistent
+    for def in inconsistent
         for use in tpdum[def]
             if !(use in inconsistent)
                 push!(inconsistent, use)
@@ -720,11 +922,12 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             end
         end
     end
+    lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if is_getfield_with_boundscheck_arg(stmt, sv)
+        if iscall_with_boundscheck(stmt, sv)
             any_non_boundscheck_inconsistent = false
             for i = 1:(length(stmt.args)-1)
                 val = stmt.args[i]
@@ -736,12 +939,11 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
-        else isa(stmt, GotoIfNot)
+        elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
-            domtree = construct_domtree(cfg.blocks)
-            for succ in iterated_dominance_frontier(cfg, blockliveness, domtree)
+            for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
                     push!(inconsistent, phiidx)
                     push!(stmt_ip, phiidx)
@@ -754,8 +956,13 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
     end
 end
 
-function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result::InferenceResult)
-    is_ipo_dataflow_analysis_profitable(result.ipo_effects) || return false
+function ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                ir::IRCode, result::InferenceResult)
+    if !is_ipo_dataflow_analysis_profitable(result.ipo_effects)
+        return false
+    end
+
+    @assert isempty(ir.new_nodes) "IRCode should be compacted before post-opt analysis"
 
     sv = PostOptAnalysisState(result, ir)
     scanner = BBScanner(ir)
@@ -767,7 +974,7 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
             check_inconsistentcy!(sv, scanner)
         else
             # No longer any dataflow concerns, just scan the flags
-            scan!(scanner, false) do inst::Instruction, idx::Int, lstmt::Int, bb::Int
+            scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
                 scan_non_dataflow_flags!(inst, sv)
                 # bail out early if there are no possibilities to refine the effects
                 if !any_refinable(sv)
@@ -778,13 +985,13 @@ function ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, result:
         end
     end
 
-    return refine_effects!(sv)
+    return refine_effects!(interp, opt, sv)
 end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt, caller)
-    ipo_dataflow_analysis!(interp, ir, caller)
+    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -806,7 +1013,6 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass
@@ -819,24 +1025,88 @@ function run_passes_ipo_safe(
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "compact 3" ir = compact!(ir, true)
-    if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
+    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    if made_changes
+        @pass "compact 3" ir = compact!(ir, true)
+    end
+    if is_asserts()
+        @timeit "verify 3" begin
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_linetable(ir.debuginfo, length(ir.stmts))
+        end
     end
     @label __done__  # used by @pass
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
-    linetable = ci.linetable
-    if !isa(linetable, Vector{LineInfoNode})
-        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
+function strip_trailing_junk!(code::Vector{Any}, ssavaluetypes::Vector{Any}, ssaflags::Vector, debuginfo::DebugInfoStream, cfg::CFG, info::Vector{CallInfo})
+    # Remove `nothing`s at the end, we don't handle them well
+    # (we expect the last instruction to be a terminator)
+    codelocs = debuginfo.codelocs
+    for i = length(code):-1:1
+        if code[i] !== nothing
+            resize!(code, i)
+            resize!(ssavaluetypes, i)
+            resize!(codelocs, 3i)
+            resize!(info, i)
+            resize!(ssaflags, i)
+            break
+        end
     end
+    # If the last instruction is not a terminator, add one. This can
+    # happen for implicit return on dead branches.
+    term = code[end]
+    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
+        push!(code, ReturnNode())
+        push!(ssavaluetypes, Union{})
+        push!(codelocs, 0, 0, 0)
+        push!(info, NoCallInfo())
+        push!(ssaflags, IR_FLAG_NOTHROW)
 
+        # Update CFG to include appended terminator
+        old_range = cfg.blocks[end].stmts
+        new_range = StmtRange(first(old_range), last(old_range) + 1)
+        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
+        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
+    end
+    nothing
+end
+
+function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
+    while true
+        next = getdebugidx(di, codeloc)
+        line = next[1]
+        line < 0 && return false # invalid info
+        line == 0 && next[2] == 0 && return false # no new info
+        prevloc <= 0 && return true # no old info
+        prev = getdebugidx(di, prevloc)
+        next === prev && return false # exactly identical
+        prevline = prev[1]
+        prevline < 0 && return true # previous invalid info, now valid
+        edge = next[2]
+        edge === prev[2] || return true # change to this edge
+        linetable = di.linetable
+        # check for change to line number here
+        if linetable === nothing || line == 0
+            line == prevline || return true
+        else
+            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
+        end
+        # check for change to edge here
+        edge == 0 && return false # no edge here
+        di = di.edges[Int(edge)]::DebugInfo
+        codeloc = Int(next[3])
+        prevloc = Int(prev[3])
+    end
+end
+
+function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    code = copy_exprargs(ci.code)
+    ci.code = code = copy_exprargs(ci.code)
+    di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
+    codelocs = di.codelocs
+    ssaflags = ci.ssaflags
     for i = 1:length(code)
         expr = code[i]
         if !(i in sv.unreachable)
@@ -852,21 +1122,44 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
                     expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                 elseif i + 1 in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block + 1)
                     expr = GotoNode(expr.dest)
                 elseif expr.dest in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
                     expr = nothing
                 end
                 code[i] = expr
-            elseif isexpr(expr, :enter)
-                catchdest = expr.args[1]::Int
+            elseif isa(expr, EnterNode)
+                catchdest = expr.catch_dest
                 if catchdest in sv.unreachable
                     cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
-                    code[i] = nothing
+                    if isdefined(expr, :scope)
+                        # We've proven that nothing inside the enter region throws,
+                        # but we don't yet know whether something might read the scope,
+                        # so we need to retain this enter for the time being. However,
+                        # we use the special marker `0` to indicate that setting up
+                        # the try/catch frame is not required.
+                        code[i] = EnterNode(expr, 0)
+                    else
+                        code[i] = nothing
+                    end
                 end
+            elseif isa(expr, PhiNode)
+                new_edges = Int32[]
+                new_vals = Any[]
+                for j = 1:length(expr.edges)
+                    edge = expr.edges[j]
+                    (edge in sv.unreachable || (ssavaluetypes[edge] === Union{} && !isa(code[edge], PhiNode))) && continue
+                    push!(new_edges, edge)
+                    if isassigned(expr.values, j)
+                        push!(new_vals, expr.values[j])
+                    else
+                        resize!(new_vals, length(new_edges))
+                    end
+                end
+                code[i] = PhiNode(new_edges, new_vals)
             end
         end
     end
@@ -874,20 +1167,17 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     stmtinfo = sv.stmt_info
-    codelocs = ci.codelocs
-    ssaflags = ci.ssaflags
     meta = Expr[]
     idx = 1
     oldidx = 1
     nstmts = length(code)
     ssachangemap = labelchangemap = blockchangemap = nothing
-    prevloc = zero(eltype(ci.codelocs))
+    prevloc = 0
     while idx <= length(code)
-        codeloc = codelocs[idx]
-        if sv.insert_coverage && codeloc != prevloc && codeloc != 0
+        if sv.insert_coverage && changed_lineinfo(ci.debuginfo, oldidx, prevloc)
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
-            insert!(codelocs, idx, codeloc)
+            splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, NoCallInfo())
             insert!(ssaflags, idx, IR_FLAG_NULL)
@@ -906,9 +1196,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             end
             blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
             idx += 1
-            prevloc = codeloc
+            prevloc = oldidx
         end
-        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable)
+        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable) && !isa(code[idx], PhiNode)
             # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
             @assert !isterminator(code[idx])
 
@@ -926,24 +1216,23 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 # Any statements from here to the end of the block have been wrapped in Core.Const(...)
                 # by type inference (effectively deleting them). Only task left is to replace the block
                 # terminator with an explicit `unreachable` marker.
-                if block_end > idx
-                    code[block_end] = ReturnNode()
-                    codelocs[block_end] = codelocs[idx]
-                    ssavaluetypes[block_end] = Union{}
-                    stmtinfo[block_end] = NoCallInfo()
-                    ssaflags[block_end] = IR_FLAG_NOTHROW
 
-                    # Verify that type-inference did its job
-                    if JLOptions().debug_level == 2
+                if block_end > idx
+                    if is_asserts()
+                        # Verify that type-inference did its job
                         for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
                             @assert i in sv.unreachable
                         end
                     end
-
+                    code[block_end] = ReturnNode()
+                    codelocs[3block_end-2], codelocs[3block_end-1], codelocs[3block_end-0] = (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0])
+                    ssavaluetypes[block_end] = Union{}
+                    stmtinfo[block_end] = NoCallInfo()
+                    ssaflags[block_end] = IR_FLAG_NOTHROW
                     idx += block_end - idx
                 else
                     insert!(code, idx + 1, ReturnNode())
-                    insert!(codelocs, idx + 1, codelocs[idx])
+                    splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
                     insert!(ssavaluetypes, idx + 1, Union{})
                     insert!(stmtinfo, idx + 1, NoCallInfo())
                     insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
@@ -969,6 +1258,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         idx += 1
         oldidx += 1
     end
+    empty!(sv.unreachable)
 
     if ssachangemap !== nothing && labelchangemap !== nothing
         renumber_ir_elements!(code, ssachangemap, labelchangemap)
@@ -980,14 +1270,14 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
     end
-    strip_trailing_junk!(ci, sv.cfg, code, stmtinfo)
+    strip_trailing_junk!(code, ssavaluetypes, ssaflags, di, sv.cfg, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, linetable, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -1001,14 +1291,13 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
+    @timeit "domtree 1" domtree = construct_domtree(ir)
+    defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
-    resize!(ir.argtypes, nargs)
+    resize!(ir.argtypes, ci.nargs)
     return ir
 end
 
@@ -1021,7 +1310,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                        params::OptimizationParams, error_path::Bool = false)
+                        params::OptimizationParams)
     #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
@@ -1082,10 +1371,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return 0
             elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 1 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 5 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
@@ -1101,7 +1390,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         if extyp === Union{}
             return 0
         end
-        return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+        return params.inline_nonleaf_penalty
     elseif head === :foreigncall
         foreigncall = ex.args[1]
         if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
@@ -1124,17 +1413,11 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params))
         end
         return cost
     elseif head === :copyast
         return 100
-    elseif head === :enter
-        # try/catch is a couple function calls,
-        # but don't inline functions with try/catch
-        # since these aren't usually performance-sensitive functions,
-        # and llvm is more likely to miscompile them when these functions get large
-        return typemax(Int)
     end
     return 0
 end
@@ -1144,8 +1427,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, params,
-                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
+        thiscost = statement_cost(stmt, line, src, sptypes, params)::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
@@ -1153,6 +1435,12 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         thiscost = dst(stmt.label) < line ? 40 : 0
     elseif stmt isa GotoIfNot
         thiscost = dst(stmt.dest) < line ? 40 : 0
+    elseif stmt isa EnterNode
+        # try/catch is a couple function calls,
+        # but don't inline functions with try/catch
+        # since these aren't usually performance-sensitive functions,
+        # and llvm is more likely to miscompile them when these functions get large
+        thiscost = typemax(Int)
     end
     return thiscost
 end
@@ -1249,19 +1537,26 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     i += 1
                 end
             end
+        elseif isa(el, EnterNode)
+            tgt = el.catch_dest
+            if tgt != 0
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    @assert !isdefined(el, :scope)
+                    body[i] = nothing
+                else
+                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
+                    else
+                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                    end
+                end
+            end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr
                 el = el.args[2]::Expr
             end
-            if el.head === :enter
-                tgt = el.args[1]::Int
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    body[i] = nothing
-                else
-                    el.args[1] = tgt + labelchangemap[tgt]
-                end
-            elseif !is_meta_expr_head(el.head)
+            if !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

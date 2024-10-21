@@ -14,6 +14,7 @@ const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
+const _DOCS_ALIASING_WARNING = ""
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -28,10 +29,13 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
-# mostly used by compiler/methodtable.jl, but also by reflection.jl
+# These types are used by reflection.jl and expr.jl too, so declare them here.
+# Note that `@assume_effects` is available only after loading namedtuple.jl.
 abstract type MethodTableView end
 abstract type AbstractInterpreter end
 
@@ -39,7 +43,7 @@ abstract type AbstractInterpreter end
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
-include("reflection.jl")
+include("runtime_internals.jl")
 include("options.jl")
 
 ntuple(f, ::Val{0}) = ()
@@ -138,6 +142,17 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
+baremodule BuildSettings
+using Core: ARGS, include
+using Core.Compiler: >, getindex, length
+
+global MAX_METHODS::Int = 3
+
+if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
+    include(BuildSettings, ARGS[3])
+end
+end
+
 if false
     import Base: Base, @show
 else
@@ -162,8 +177,10 @@ include("compiler/validation.jl")
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+include("compiler/ssair/tarjan.jl")
 
 include("compiler/abstractlattice.jl")
+include("compiler/stmtinfo.jl")
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 
@@ -171,7 +188,6 @@ include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
-include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")

@@ -3,10 +3,13 @@
 using Test
 using REPL
 using Random
+using Logging
 import REPL.LineEdit
 using Markdown
 
-@test isassigned(Base.REPL_MODULE_REF)
+empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
+
+@test Base.REPL_MODULE_REF[] === REPL
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
@@ -112,7 +115,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-# These are integration tests. If you want to unit test test e.g. completion, or
+# These are integration tests. If you want to unit test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
@@ -241,8 +244,9 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] ")
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
+            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
         write(stdin_write, "\b")
         wait(t)
     end
@@ -498,8 +502,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1212,9 +1217,9 @@ global some_undef_global
 @test occursin("does not exist", sprint(show, help_result("..")))
 # test that helpmode is sensitive to contextual module
 @test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Base.Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Fix2", Base)))
 
 
@@ -1397,6 +1402,126 @@ end
     Base.wait(backend.backend_task)
 end
 
+# Mimic of JSON.jl's structure
+module JSON54872
+
+module Parser
+export parse
+function parse end
+end # Parser
+
+using .Parser: parse
+end # JSON54872
+
+# Test the public mechanism
+module JSON54872_public
+public tryparse
+end # JSON54872_public
+
+@testset "warn_on_non_owning_accesses AST transform" begin
+    @test REPL.has_ancestor(JSON54872.Parser, JSON54872)
+    @test !REPL.has_ancestor(JSON54872, JSON54872.Parser)
+
+    # JSON54872.Parser owns `parse`
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.Parser.parse
+    end)
+    @test isempty(warnings)
+
+    # A submodule of `JSON54872` owns `parse`
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.parse
+    end)
+    @test isempty(warnings)
+
+    # `JSON54872` does not own `tryparse` (nor is it public)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.tryparse
+    end)
+    @test length(warnings) == 1
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
+
+    # Same for nested access
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.Parser.tryparse
+    end)
+    @test length(warnings) == 1
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
+
+    test_logger = TestLogger()
+    with_logger(test_logger) do
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+    end
+    # only 1 logging statement emitted thanks to `maxlog` mechanism
+    @test length(test_logger.logs) == 1
+    record = only(test_logger.logs)
+    @test record.level == Warn
+    @test record.message == "tryparse is defined in Base and is not public in $JSON54872"
+
+    # However JSON54872_public has `tryparse` declared public
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872_public.tryparse
+    end)
+    @test isempty(warnings)
+
+    # Now let us test some tricky cases
+    # No warning since `JSON54872` is local (LHS of `=`)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = (; tryparse=1)
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning for nested local access either
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = (; Parser = (; tryparse=1))
+            JSON54872.Parser.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (long-form function arg)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        function f(JSON54872=(; tryparse))
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (short-form function arg)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        f(JSON54872=(; tryparse)) = JSON54872.tryparse
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (long-form anonymous function)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        function (JSON54872=(; tryparse))
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (short-form anonymous function)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        (JSON54872 = (; tryparse)) -> begin
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # false-negative: missing warning
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = JSON54872
+            JSON54872.tryparse
+        end
+    end)
+    @test_broken !isempty(warnings)
+end
 
 backend = REPL.REPLBackend()
 frontend_task = @async begin
@@ -1475,8 +1600,42 @@ end
         @test isempty(mods)
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
         @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        @test isempty(mods)
     end
 end
+
+# Test that the REPL can find `using` statements inside macro expansions
+global packages_requested = Any[]
+old_hooks = copy(REPL.install_packages_hooks)
+empty!(REPL.install_packages_hooks)
+push!(REPL.install_packages_hooks, function(pkgs)
+    append!(packages_requested, pkgs)
+end)
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    # Just consume all the output - we only test that the callback ran
+    read_resp_task = @async while !eof(stdout_read)
+        readavailable(stdout_read)
+    end
+
+    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "@usingfoo\n")
+    write(stdin_write, "\x4")
+    Base.wait(repltask)
+    close(stdin_write)
+    close(stdout_read)
+    Base.wait(read_resp_task)
+end
+@test packages_requested == Any[:FooNotFound]
+empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
 
 # err should reprint error if deeper than top-level
 fake_repl() do stdin_write, stdout_read, repl
@@ -1491,13 +1650,13 @@ fake_repl() do stdin_write, stdout_read, repl
     # generate top-level error
     write(stdin_write, "foobar\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
-    @test readline(stdout_read) == ""
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
+    @test readline(stdout_read) == "" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0m"
+    @test readline(stdout_read) == "\e[0m" skip = Sys.iswindows() && Sys.WORD_SIZE == 32
     readuntil(stdout_read, "julia> ", keep=true)
     # generate deeper error
     write(stdin_write, "foo() = foobar\n")
@@ -1506,13 +1665,13 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo()\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
     readuntil(stdout_read, "julia> ", keep=true)
     # check that deeper error did set `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
-    @test readline(stdout_read) == "UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "UndefVarError: `foobar` not defined in `Main`"
     @test readline(stdout_read) == "Stacktrace:"
     readuntil(stdout_read, "\n\n", keep=true)
     readuntil(stdout_read, "julia> ", keep=true)
@@ -1557,8 +1716,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1673,6 +1833,56 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
+try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    # check the requirement to trigger the hint via `UndefVarError_hint`
+    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
+
+    fake_repl() do stdin_write, stdout_read, repl
+        backend = REPL.REPLBackend()
+        repltask = @async REPL.run_repl(repl; backend)
+        write(stdin_write,
+              "remove_linenums!\n\"ZZZZZ\"\n")
+        txt = readuntil(stdout_read, "ZZZZZ")
+        write(stdin_write, '\x04')
+        wait(repltask)
+        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+    end
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
+try # test the functionality of `UndefVarError_hint` against import clashes
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    @eval module X
+
+    module A
+    export x
+    x = 1
+    end # A
+
+    module B
+    export x
+    x = 2
+    end # B
+
+    using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1709,6 +1919,17 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     @test LineEdit.state(repl.mistate).hint === nothing
 
+    # issue #52376
+    write(stdin_write, "\x15")
+    write(stdin_write, "\\_ailuj")
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+    s5 = readuntil(stdout_read, "\\_ailuj")
+    write(stdin_write, "\t")
+    s6 = readuntil(stdout_read, "ₐᵢₗᵤⱼ")
+
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
@@ -1735,4 +1956,81 @@ let io = IOBuffer()
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(REPL)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
+end
+
+struct A40735
+    str::String
+end
+
+# https://github.com/JuliaLang/julia/issues/40735
+@testset "Long printing" begin
+    previous = REPL.SHOW_MAXIMUM_BYTES
+    try
+        REPL.SHOW_MAXIMUM_BYTES = 1000
+        str = string(('a':'z')...)^50
+        @test length(str) > 1100
+        # For a raw string, we correctly get the standard abbreviated output
+        output = sprint(REPL.show_limited, MIME"text/plain"(), str; context=:limit => true)
+        hint = """call `show(stdout, MIME"text/plain"(), ans)` to print without truncation"""
+        suffix = "[printing stopped after displaying 1000 bytes; $hint]"
+        @test !endswith(output, suffix)
+        @test contains(output, "bytes ⋯")
+        # For a struct without a custom `show` method, we don't hit the abbreviated
+        # 3-arg show on the inner string, so here we check that the REPL print-limiting
+        # feature is correctly kicking in.
+        a = A40735(str)
+        output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
+        @test endswith(output, suffix)
+        @test length(output) <= 1200
+        # We also check some extreme cases
+        REPL.SHOW_MAXIMUM_BYTES = 1
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "1"
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 12)
+        @test output == "1…[printing stopped after displaying 1 byte; $hint]"
+        REPL.SHOW_MAXIMUM_BYTES = 0
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "…[printing stopped after displaying 0 bytes; $hint]"
+        @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
+        @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+    finally
+        REPL.SHOW_MAXIMUM_BYTES = previous
+    end
+end
+
+@testset "Dummy Pkg prompt" begin
+    # do this in an empty depot to test default for new users
+    withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
+        @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    # Issue 55850
+    tmp_55850 = mktempdir()
+    tmp_sym_link = joinpath(tmp_55850, "sym")
+    symlink(tmp_55850, tmp_sym_link; dir_target=true)
+    withenv("JULIA_DEPOT_PATH" => tmp_sym_link * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.projname(REPL.find_project_file()))"`)
+        @test prompt == "@v$(VERSION.major).$(VERSION.minor)"
+    end
+
+    get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
+
+    @test get_prompt("--project=$(pkgdir(REPL))") == "(REPL) pkg> "
+
+    tdir = mkpath(joinpath(mktempdir(), "foo"))
+    @test get_prompt("--project=$tdir") == "(foo) pkg> "
+
+    proj_file = joinpath(tdir, "Project.toml")
+    touch(proj_file) # make a bad Project.toml
+    @test get_prompt("--project=$proj_file") == "(foo) pkg> "
+
+    write(proj_file, "name = \"Bar\"\n")
+    @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
 end
