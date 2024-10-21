@@ -1283,9 +1283,12 @@ julia> fold
 """
 macro world(sym, world)
     if isa(sym, Symbol)
-        return :($(_resolve_in_world)($world, $(QuoteNode(GlobalRef(__module__, sym)))))
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
     elseif isa(sym, GlobalRef)
-        return :($(_resolve_in_world)($world, $(QuoteNode(sym))))
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    elseif isa(sym, Expr) && sym.head === :(.) &&
+            length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
     else
         error("`@world` requires a symbol or GlobalRef")
     end
