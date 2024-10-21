@@ -1035,6 +1035,21 @@ function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     return false
 end
 
+function check_world_bounded(tn::Core.TypeName)
+    bnd = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), tn.module, tn.name, true)
+    isdefined(bnd, :partitions) || return nothing
+    partition = @atomic bnd.partitions
+    while true
+        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
+            max_world = @atomic partition.max_world
+            max_world == typemax(UInt) && return nothing
+            return Int(partition.min_world):Int(max_world)
+        end
+        isdefined(partition, :next) || return nothing
+        partition = @atomic partition.next
+    end
+end
+
 function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
@@ -1063,7 +1078,10 @@ function show_type_name(io::IO, tn::Core.TypeName)
             end
         end
     end
+    world = check_world_bounded(tn)
+    world !== nothing && print(io, "@world(")
     show_sym(io, sym)
+    world !== nothing && print(io, ", ", world, ")")
     quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing
