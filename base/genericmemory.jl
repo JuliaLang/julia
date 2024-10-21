@@ -9,8 +9,7 @@ Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 `kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
 
-`addrspace` can currently only be set to Core.CPU. It is designed to  to permit extension by other systems
-such as GPUs, which might define values such as:
+`addrspace` can currently only be set to `Core.CPU`. It is designed to permit extension by other systems such as GPUs, which might define values such as:
 ```
 module CUDA
 const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
@@ -119,7 +118,17 @@ function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
     n == 0 && return dest
     @boundscheck memoryref(dest, n), memoryref(src, n)
-    ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    if isbitstype(T)
+        tdest = @_gc_preserve_begin dest
+        tsrc = @_gc_preserve_begin src
+        pdest = unsafe_convert(Ptr{Cvoid}, dest)
+        psrc = unsafe_convert(Ptr{Cvoid}, src)
+        memmove(pdest, psrc, aligned_sizeof(T) * n)
+        @_gc_preserve_end tdest
+        @_gc_preserve_end tsrc
+    else
+        ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    end
     return dest
 end
 
@@ -235,11 +244,16 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-function setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
+function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
     ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
+    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
     return A
+end
+
+function setindex!(A::Memory{T}, x, i1::Int) where {T}
+    @_propagate_inbounds_meta
+    val = x isa T ? x : convert(T,x)::T
+    return _setindex!(A, val, i1)
 end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}

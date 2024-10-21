@@ -173,6 +173,7 @@ include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
+include("runtime_internals.jl")
 include("reflection.jl")
 include("options.jl")
 
@@ -532,6 +533,7 @@ include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+include("util.jl")
 
 include("initdefs.jl")
 Filesystem.__postinit__()
@@ -548,7 +550,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
 

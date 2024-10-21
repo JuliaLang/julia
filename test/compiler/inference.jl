@@ -2647,7 +2647,7 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+let ct = code_typed(f26826, (Float64,))[1]
     typed_code, retty = ct.first, ct.second
     found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
@@ -6048,3 +6048,10 @@ t255751 = Array{Float32, 3}
 
 issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
 @test Base.infer_return_type(issue55882_nfields) <: Int
+
+# issue #55916
+f55916(x) = 1
+f55916(::Vararg{T,T}) where {T} = "2"
+g55916(x) = f55916(x)
+# this shouldn't error
+@test only(code_typed(g55916, (Any,); optimize=false))[2] == Int

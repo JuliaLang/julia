@@ -94,6 +94,17 @@ precompile_test_harness(false) do dir
               end
               abstract type AbstractAlgebraMap{A} end
               struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
+
+              global process_state_calls::Int = 0
+              const process_state = Base.OncePerProcess{typeof(getpid())}() do
+                  @assert (global process_state_calls += 1) == 1
+                  return getpid()
+              end
+              const mypid = process_state()
+              @assert process_state_calls === 1
+              process_state_calls = 0
+              @assert process_state() === process_state()
+              @assert process_state_calls === 0
           end
           """)
     write(Foo2_file,
@@ -272,6 +283,9 @@ precompile_test_harness(false) do dir
 
               oid_vec_int = objectid(a_vec_int)
               oid_mat_int = objectid(a_mat_int)
+
+              using $FooBase_module: process_state, mypid as FooBase_pid, process_state_calls
+              const mypid = process_state()
           end
           """)
     # Issue #52063
@@ -333,6 +347,13 @@ precompile_test_harness(false) do dir
         @test isready(Foo.ch2)
         @test take!(Foo.ch2) === 2
         @test !isready(Foo.ch2)
+
+        @test Foo.process_state_calls === 0
+        @test Foo.process_state() === getpid()
+        @test Foo.mypid !== getpid()
+        @test Foo.FooBase_pid !== getpid()
+        @test Foo.mypid !== Foo.FooBase_pid
+        @test Foo.process_state_calls === 1
     end
 
     let

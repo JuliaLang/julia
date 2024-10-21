@@ -404,20 +404,17 @@ end
 function diag(M::Bidiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
+        copyto!(v, M.dv)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
-        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+        copyto!(v, M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        v = similar(M.dv, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
+    return v
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)

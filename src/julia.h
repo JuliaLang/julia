@@ -20,6 +20,7 @@
 #include "libsupport.h"
 #include <stdint.h>
 #include <string.h>
+#include <fenv.h>
 
 #include "htable.h"
 #include "arraylist.h"
@@ -255,7 +256,7 @@ typedef struct _jl_debuginfo_t {
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
+// the following mirrors `struct EffectsOverride` in `base/expr.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint16_t ipo_consistent          : 1;
@@ -425,8 +426,8 @@ typedef struct _jl_opaque_closure_t {
     jl_value_t *captures;
     size_t world;
     jl_method_t *source;
-    jl_fptr_args_t invoke;
-    void *specptr;
+    jl_fptr_args_t invoke; // n.b. despite the similar name, this is not an invoke ABI (jl_call_t / julia.call2), but rather the fptr1 (jl_fptr_args_t / julia.call) ABI
+    void *specptr; // n.b. despite the similarity in field name, this is not arbitrary private data for jlcall, but rather the codegen ABI for specsig, and is mandatory if specsig is valid
 } jl_opaque_closure_t;
 
 // This type represents an executable operation
@@ -474,7 +475,7 @@ typedef struct _jl_code_instance_t {
                                    // & 0b100 == From image
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
-    _Atomic(jl_callptr_t) invoke; // jlcall entry point
+    _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
         _Atomic(jl_fptr_args_t) fptr1;
@@ -713,7 +714,7 @@ typedef struct _jl_module_t {
     jl_sym_t *file;
     int32_t line;
     // hidden fields:
-    arraylist_t usings;  // modules with all bindings potentially imported
+    arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
@@ -726,6 +727,12 @@ typedef struct _jl_module_t {
     jl_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
+
+struct _jl_module_using {
+    jl_module_t *mod;
+    size_t min_world;
+    size_t max_world;
+};
 
 struct _jl_globalref_t {
     JL_DATA_TYPE
@@ -2282,6 +2289,9 @@ typedef struct _jl_task_t {
     uint16_t priority;
 
 // hidden state:
+    // cached floating point environment
+    // only updated at task switch
+    fenv_t fenv;
 
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
@@ -2329,7 +2339,13 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
 
+#ifdef __cplusplus
+}
+#endif
 #include "julia_locks.h"   // requires jl_task_t definition
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Return the exception currently being handled, or `jl_nothing`.
 //

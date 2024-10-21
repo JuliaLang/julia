@@ -19,7 +19,7 @@ all: checksum pack-checksum
 # Get this list via:
 #    using BinaryBuilder
 #    print("TRIPLETS=\"$(join(sort(triplet.(BinaryBuilder.supported_platforms(;experimental=true))), " "))\"")
-TRIPLETS=aarch64-apple-darwin aarch64-linux-gnu aarch64-linux-musl armv6l-linux-gnueabihf armv6l-linux-musleabihf armv7l-linux-gnueabihf armv7l-linux-musleabihf i686-linux-gnu i686-linux-musl i686-w64-mingw32 powerpc64le-linux-gnu x86_64-apple-darwin x86_64-linux-gnu x86_64-linux-musl x86_64-unknown-freebsd x86_64-w64-mingw32
+TRIPLETS=aarch64-apple-darwin aarch64-linux-gnu aarch64-linux-musl aarch64-unknown-freebsd armv6l-linux-gnueabihf armv6l-linux-musleabihf armv7l-linux-gnueabihf armv7l-linux-musleabihf i686-linux-gnu i686-linux-musl i686-w64-mingw32 powerpc64le-linux-gnu x86_64-apple-darwin x86_64-linux-gnu x86_64-linux-musl x86_64-unknown-freebsd x86_64-w64-mingw32
 CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
