@@ -1672,7 +1672,7 @@ const _xs_with_finalizers_ = Any[]
     if _gc_or_register[]
         # this would hit the slow path
         empty!(_xs_with_finalizers_)
-        GC.gc()
+        GC.gc(); GC.gc();
     else
         # still hits the fast path
         push!(_xs_with_finalizers_, finalizer(Ref(y)) do x
