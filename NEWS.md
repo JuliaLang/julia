@@ -110,6 +110,7 @@ New library features
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 * `Lockable` is now exported ([#54595])
+* `Base.require_one_based_indexing` and `Base.has_offset_axes` are now public ([#56196])
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 
 Standard library changes
