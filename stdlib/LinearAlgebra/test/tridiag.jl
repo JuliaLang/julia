@@ -1065,4 +1065,14 @@ end
     end
 end
 
+@testset "diagview" begin
+    A = Tridiagonal(rand(3), rand(4), rand(3))
+    for k in -5:5
+        @test diagview(A,k) == diag(A,k)
+    end
+    v = diagview(A,1)
+    v .= 0
+    @test all(iszero, diag(A,1))
+end
+
 end # module TestTridiagonal
