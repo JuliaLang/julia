@@ -1594,11 +1594,11 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         inlining::InliningState, lazydomtree::LazyDomtree,
         lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
     # For now, require that:
-    # 1. The allocation dominates the finalizer registration
+    # 1. The allocation dominates the finalizer registration.
     # 2. The insertion block for the finalizer is the post-dominator of all
     #    uses (including the finalizer registration).
     # 3. The path from the finalizer registration to the finalizer inlining
-    #    location is nothrow
+    #    location is nothrow, otherwise we need to insert `Core._cancel_finalizer` too.
     #
     # TODO: We could relax the check 2, by inlining the finalizer multiple times.
 
@@ -1677,8 +1677,8 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     attach_after = insert_idx !== nothing
     flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     alloc_obj = finalizer_stmt.args[3]
-    cancel_registration = current_task_ssa !== nothing
-    if cancel_registration
+    cancellation_required = current_task_ssa !== nothing
+    if cancellation_required
         lookup_idx_ssa = SSAValue(finalizer_idx)
         finalize_call = Expr(:call, GlobalRef(Core, :_cancel_finalizer), alloc_obj, current_task_ssa, lookup_idx_ssa)
         newinst = add_flag(NewInstruction(finalize_call, Nothing), flag)
@@ -1702,7 +1702,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
         insert_node!(ir, loc, newinst, attach_after)
     end
-    if !cancel_registration
+    if !cancellation_required
         # Erase the call to `finalizer`
         ir[SSAValue(finalizer_idx)][:stmt] = nothing
     end
@@ -1721,10 +1721,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 finalizer_useidx = useidx
             end
         end
-        if finalizer_useidx === nothing || inlining === nothing
-            return true
-        end
-        return finalizer_useidx
+        return something(finalizer_useidx, true)
     end
     for (defidx, (intermediaries, defuse)) in defuses
         # Find the type for this allocation
@@ -1749,11 +1746,11 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         all_eliminated = all_forwarded = true
         if nleaves ≠ nuses_total
             finalizer_useidx = find_finalizer_useidx(defuse)
-            if finalizer_useidx isa Int
+            if finalizer_useidx isa Int && inlining !== nothing
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
                 estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
                 einfo = estate[SSAValue(defidx)]
-                if EscapeAnalysis.has_no_escape(einfo)
+                if EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_thrownescapes(einfo))
                     already = BitSet(use.idx for use in defuse.uses)
                     for idx = einfo.Liveness
                         if idx ∉ already
@@ -1761,16 +1758,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                         end
                     end
                     finalizer_idx = defuse.uses[finalizer_useidx].idx
-                    try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining::InliningState,
+                    try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining,
                         lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
                 end
             end
             continue
         else
             finalizer_useidx = find_finalizer_useidx(defuse)
-            if finalizer_useidx isa Int
+            if finalizer_useidx isa Int && inlining !== nothing
                 finalizer_idx = defuse.uses[finalizer_useidx].idx
-                try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining::InliningState,
+                try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining,
                     lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
                 deleteat!(defuse.uses, finalizer_useidx)
                 all_eliminated = all_forwarded = false # can't eliminate `setfield!` calls safely
