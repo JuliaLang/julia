@@ -206,8 +206,10 @@ function getproperty(F::SVD, d::Symbol)
     end
 end
 
-Base.propertynames(F::SVD, private::Bool=false) =
-    private ? (:V, fieldnames(typeof(F))...) : (:U, :S, :V, :Vt)
+Base.propertynames(F::SVD, private::Bool=false) = begin
+    fldnames = fieldnames(typeof(F))
+    private ? (:V, fldnames...) : fldnames
+end
 
 """
     svdvals!(A)
