@@ -11,7 +11,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
-             ispositive, isnegative, clamp, @deprecate
+             ispositive, isnegative, clamp
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
