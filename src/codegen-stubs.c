@@ -110,22 +110,6 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
 
 JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraMPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define CGSCC_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraCGPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraFPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraLPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-
-#include "llvm-julia-passes.inc"
-
-#undef MODULE_PASS
-#undef CGSCC_PASS
-#undef FUNCTION_PASS
-#undef LOOP_PASS
-
 //LLVM C api to the julia JIT
 JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE
 

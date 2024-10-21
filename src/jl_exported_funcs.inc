@@ -547,21 +547,6 @@
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraMPMAddCPUFeaturesPass) \
-    YY(LLVMExtraMPMAddRemoveNIPass) \
-    YY(LLVMExtraMPMAddMultiVersioningPass) \
-    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
-    YY(LLVMExtraMPMAddLowerPTLSPass) \
-    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
-    YY(LLVMExtraFPMAddLateLowerGCPass) \
-    YY(LLVMExtraFPMAddAllocOptPass) \
-    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
-    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
-    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
-    YY(LLVMExtraFPMAddFinalLowerGCPass) \
-    YY(LLVMExtraLPMAddJuliaLICMPass) \
-    YY(LLVMExtraLPMAddLowerSIMDLoopPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \
