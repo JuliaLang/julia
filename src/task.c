@@ -428,7 +428,7 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
 NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
 {
     // storing bt_size in ptls ensures roots in bt_data will be found
-    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1);
+    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1, 0);
 }
 
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT
@@ -1166,6 +1166,42 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     return pgcstack == NULL ? NULL : container_of(pgcstack, jl_task_t, gcstack);
+}
+
+extern int gc_first_tid;
+// Builds a list of the live tasks. Racy: `live_tasks` can expand at any time.
+arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT
+{
+    uv_mutex_lock(&live_tasks_lock);
+    arraylist_t *tasks = (arraylist_t*)malloc_s(sizeof(arraylist_t));
+    arraylist_new(tasks, 0);
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads...
+        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_task_t *t = ptls2->root_task;
+        if (t->ctx.stkbuf != NULL) {
+            arraylist_push(tasks, t);
+        }
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        for (size_t i = 0; i < n; i++) {
+            jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
+            assert(t != NULL);
+            if (t->ctx.stkbuf != NULL) {
+                arraylist_push(tasks, t);
+            }
+        }
+    }
+    uv_mutex_unlock(&live_tasks_lock);
+    return tasks;
 }
 
 // Do one-time initializations for task system

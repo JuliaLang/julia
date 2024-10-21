@@ -60,7 +60,7 @@ jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
         ptls->profiling_bt_buffer = shared_bt_data_buffer;
     }
 
-    size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2);
+    size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2, 0);
 
     // Then we copy only the needed bytes out of the buffer into our profile.
     size_t bt_bytes = bt_size * sizeof(jl_bt_element_t);

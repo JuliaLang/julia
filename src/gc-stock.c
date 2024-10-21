@@ -1035,9 +1035,11 @@ void sweep_stack_pools(jl_ptls_t ptls) JL_NOTSAFEPOINT
     else
         jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
     jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
+    uv_mutex_lock(&live_tasks_lock);
     gc_sweep_wake_all_stacks(ptls);
     sweep_stack_pool_loop();
     gc_sweep_wait_for_all_stacks();
+    uv_mutex_unlock(&live_tasks_lock);
 }
 
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
@@ -3584,6 +3586,7 @@ void jl_gc_init(void)
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
     uv_mutex_init(&gc_queue_observer_lock);
+    uv_mutex_init(&live_tasks_lock);
     void *_addr = (void*)calloc_s(1); // dummy allocation to get the sentinel tag
     uintptr_t addr = (uintptr_t)_addr;
     gc_bigval_sentinel_tag = addr;

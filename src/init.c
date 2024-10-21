@@ -744,6 +744,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     // initialize symbol-table lock
     uv_mutex_init(&symtab_lock);
+    // initialize profiler lock
+    uv_mutex_init(&bt_data_prof_lock);
 
     // initialize backtraces
     jl_init_profile_lock();
@@ -758,7 +760,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // nongnu libunwind initialization is only threadsafe on architecture where the
     // author could access TSAN, per https://github.com/libunwind/libunwind/pull/109
     // so we need to do this once early (before threads)
-    rec_backtrace(NULL, 0, 0);
+    rec_backtrace(NULL, 0, 0, 0);
 #endif
 
     libsupport_init();
