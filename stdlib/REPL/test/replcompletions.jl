@@ -1357,6 +1357,27 @@ let (c, r, res) = test_complete("\"~/julia")
     c, r, res = test_complete("\"foo~bar")
     @test !res
 end
+if !Sys.iswindows()
+    # create a dir and file temporarily in the home directory
+    path = mkpath(joinpath(homedir(), "Zx6Wa0GkCO"))
+    touch(joinpath(path, "my_file"))
+    try
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC")
+            @test res && c == String["\"~/Zx6Wa0GkC0/"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0")
+            @test res && c == String[homedir() * "/Zx6Wa0GkCO"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_")
+            @test res && c == String["\"~/Zx6Wa0GkC0/my_file"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_file")
+            @test res && c == String[homedir() * "/Zx6Wa0GkC0/my_file"]
+        end
+    finally
+        rm(path, recursive=true)
+    end
+end
 
 # Test the completion returns nothing when the folder do not exist
 let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
