@@ -1229,8 +1229,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # ?(x, y)TAB lists methods you can call with these objects
         # ?(x, y TAB lists methods that take these objects as the first two arguments
         # MyModule.?(x, y)TAB restricts the search to names in MyModule
-        # but ignore ?( inside strings
-        rexm = match(r"^(?!\")(?:\w+\.|)\?\((.*)$", partial)
+        rexm = match(r"(\w+\.|)\?\((.*)$", partial)
         if rexm !== nothing
             # Get the module scope
             if isempty(rexm.captures[1])
