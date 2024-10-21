@@ -768,6 +768,14 @@ end
 # https://github.com/JuliaLang/julia/issues/52551
 @test !isempty(test_complete("?("))
 
+# issue #56272: Ignore ?( in strings
+@test isempty(test_complete("\"?(\""))
+@test isempty(test_complete("\"foo?(\""))
+@test isempty(test_complete("\"?(foo\""))
+@test isempty(test_complete("\"\"\"?(\"\"\""))
+@test isempty(test_complete("\"\"\"foo?(\"\"\""))
+@test isempty(test_complete("\"\"\"?(foo\"\"\""))
+
 #################################################################
 
 # Test method completion with varargs
