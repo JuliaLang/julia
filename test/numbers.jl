@@ -841,10 +841,10 @@ end
         @testset "$T" begin
             for value in values
                 @eval begin
-                    @test ispositive($value) === $value > 0
-                    @test ispositive(-$value) === -$value > 0
-                    @test isnegative($value) === $value < 0
-                    @test isnegative(-$value) === -$value < 0
+                    @test ispositive($value) === ($value > 0)
+                    @test ispositive(-$value) === (-$value > 0)
+                    @test isnegative($value) === ($value < 0)
+                    @test isnegative(-$value) === (-$value < 0)
                 end
             end
         end
