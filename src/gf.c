@@ -2560,8 +2560,15 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
     if (!jl_has_free_typevars(mi->specTypes)) {
         if (is_recompile && s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF)
             jl_printf(s_precompile, "\e[33m");
-        if (force_trace_compile || jl_options.trace_compile_timing)
-            jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
+        if (force_trace_compile || jl_options.trace_compile_timing) {
+            jl_printf(s_precompile, "#= %6.1f ms", compilation_time / 1e6);
+            if (is_recompile) {
+                jl_printf(s_precompile, "*=# ");
+            }
+            else {
+                jl_printf(s_precompile, " =# ");
+            }
+        }
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
         jl_printf(s_precompile, ")");
