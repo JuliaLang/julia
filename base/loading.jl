@@ -878,14 +878,14 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
+            # deps is either a list of names (deps = ["DepA", "DepB"]) or
+            # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
+            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
             if UUID(uuid) === where.uuid
                 found_where = true
-                # deps is either a list of names (deps = ["DepA", "DepB"]) or
-                # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-                deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                 if deps isa Vector{String}
                     found_name = name in deps
-                    break
+                    found_name && @goto done
                 elseif deps isa Dict{String, Any}
                     deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
@@ -904,23 +904,25 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             return PkgId(UUID(uuid), name)
                         end
                         exts = extensions[where.name]::Union{String, Vector{String}}
+                        weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                         if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
-                            weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                            if weakdeps !== nothing
-                                if weakdeps isa Vector{String}
-                                    found_name = name in weakdeps
-                                    break
-                                elseif weakdeps isa Dict{String, Any}
-                                    weakdeps = weakdeps::Dict{String, Any}
-                                    for (dep, uuid) in weakdeps
-                                        uuid::String
-                                        if dep === name
-                                            return PkgId(UUID(uuid), name)
+                            for deps′ in [weakdeps, deps]
+                                    if deps′ !== nothing
+                                        if deps′ isa Vector{String}
+                                            found_name = name in deps′
+                                            found_name && @goto done
+                                        elseif deps′ isa Dict{String, Any}
+                                            deps′ = deps′::Dict{String, Any}
+                                            for (dep, uuid) in deps′
+                                                uuid::String
+                                                if dep === name
+                                                    return PkgId(UUID(uuid), name)
+                                                end
+                                            end
                                         end
                                     end
                                 end
                             end
-                        end
                         # `name` is not an ext, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
@@ -928,6 +930,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             end
         end
     end
+    @label done
     found_where || return nothing
     found_name || return PkgId(name)
     # Only reach here if deps was not a dict which mean we have a unique name for the dep
