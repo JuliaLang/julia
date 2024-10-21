@@ -2565,14 +2565,8 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
         jl_printf(s_precompile, ")");
-        if (is_recompile) {
-            if (s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF) {
-                jl_printf(s_precompile, "\e[0m");
-            }
-            else {
-                jl_printf(s_precompile, " # recompile");
-            }
-        }
+        if (is_recompile)
+            jl_printf(s_precompile, " # recompile\e[0m");
         jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
