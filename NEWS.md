@@ -88,6 +88,7 @@ New library functions
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
+* `ispositive(::Real)`, `isnegative(::Real)`, `isnonpositive(::Real)` and `isnonnegative(::Real)` are provided for performance and convenience ([#53677]).
 
 New library features
 --------------------
