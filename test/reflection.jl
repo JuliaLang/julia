@@ -1298,3 +1298,16 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# disallow adding new methods
+f_sealed(x::Int) = x+1
+f_sealed(x::Integer) = x+2
+@test_throws(
+    ErrorException("unsupported Method to disable"),
+    Base.morespecific!(which(f_sealed, (Int,)))
+)
+Base.morespecific!(which(f_sealed, (Integer,)))
+@test_throws(
+    ErrorException("cannot add methods to or modify methods of a frozen function"),
+    @eval f_sealed(x::Float64) = x+2
+)
