@@ -1322,51 +1322,57 @@ end
     wait(t)
     end_time = time_ns()
     wall_time_delta = end_time - start_time
+    @show (Base.task_cpu_time_ns(t)/Base.task_wall_time_ns(t))
     @test Base.task_cpu_time_ns(t) > 0
     @test Base.task_wall_time_ns(t) > 0
-    @test Base.task_wall_time_ns(t) > Base.task_cpu_time_ns(t)
+    @test Base.task_wall_time_ns(t) >= Base.task_cpu_time_ns(t)
     @test wall_time_delta > Base.task_wall_time_ns(t)
 end
 
 @testset "task time counters: lots of spawns" begin
     using Dates
-    # create more tasks than we have threads
-    # the CPU time each task gets should be less
-    # than the wall time
-    n_tasks = 2 * Threads.nthreads()
+    # create more tasks than we have threads.
+    # - all tasks must have: cpu time <= wall time
+    # - some tasks must have: cpu time < wall time
+    # - summing across all tasks we must have: actual cpu time <= available cpu time
+    n_tasks = 2 * Threads.nthreads(:default)
     cpu_times = Vector{UInt64}(undef, n_tasks)
     wall_times = Vector{UInt64}(undef, n_tasks)
-    start_time_0 = time_ns()
+    start_time = time_ns()
     @sync begin
         for i in 1:n_tasks
             start_time_i = time_ns()
-            task_i = Threads.@spawn begin
-                peakflops()
+            task_i = Threads.@spawn :default begin
+                rand() < 0.5 ? sleep(0.001) : peakflops()
+                return nothing
             end
-            Threads.@spawn begin
+            Threads.@spawn :default begin
                 wait(task_i)
                 end_time_i = time_ns()
                 wall_time_delta_i = end_time_i - start_time_i
                 cpu_times[$i] = cpu_time_i = Base.task_cpu_time_ns(task_i)
                 wall_times[$i] = wall_time_i = Base.task_wall_time_ns(task_i)
+                # tasks should have recorded some wall-time and some cpu-time
                 @test cpu_time_i > 0
                 @test wall_time_i > 0
-                @test Nanosecond(wall_time_i) > Nanosecond(cpu_time_i)
-                @test Nanosecond(wall_time_delta_i) > Nanosecond(wall_time_i)
+                # task cpu-time cannot be greater than the task's wall-time
+                @test wall_time_i >= cpu_time_i
+                # task wall-time cannot be greater than our manually measured wall-time
+                # between calling `@spawn` and returning from `wait`.
+                @test wall_time_delta_i > wall_time_i
             end
         end
     end
-    end_time_0 = time_ns()
-    wall_time_delta_0 = end_time_0 - start_time_0
-    summed_cpu_times = sum(cpu_times)
+    end_time = time_ns()
+    wall_time_delta = (end_time - start_time)
+    @show cpu_time_available = wall_time_delta * Threads.nthreads(:default)
+    @show summed_cpu_times = sum(cpu_times)
+    # CPU time from all tasks can't exceed what was actually available.
+    @test cpu_time_available > summed_cpu_times
+    # some tasks must have cpu-time less than their wall-time, because we had more tasks
+    # than threads.
     summed_wall_times = sum(wall_times)
-    # Convert to Nanosecond so test failures easier to read,
-    # but make sure we're not overflowing the type
-    @assert summed_cpu_times < typemax(Int64)
-    @assert summed_wall_times < typemax(Int64)
-    @test Nanosecond(wall_time_delta_0) < Nanosecond(summed_wall_times)
-    @test Nanosecond(wall_time_delta_0) < Nanosecond(summed_cpu_times)
-    @test Nanosecond(summed_cpu_times) < Nanosecond(summed_wall_times)
+    @test summed_wall_times > summed_cpu_times
 end
 
 end # main testset

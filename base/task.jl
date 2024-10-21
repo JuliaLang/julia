@@ -810,6 +810,12 @@ end
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
+    # @assert t.first_scheduled_at != 0
+    # @assert t.last_scheduled_at != 0
+    # user -task-finished-> scheduler
+    now = time_ns()
+    t.wall_time_ns = t.first_scheduled_at == 0 ? 0 : now - t.first_scheduled_at
+    t.cpu_time_ns += t.last_scheduled_at == 0 ? 0 : now - t.last_scheduled_at
     err = istaskfailed(t)
     result = task_result(t)
     handled = false
@@ -937,6 +943,11 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
+    # user -task-created-> scheduled
+    # user -task-paused-> scheduler
+    if t.last_scheduled_at != 0
+        t.cpu_time_ns += time_ns() - t.last_scheduled_at
+    end
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -1102,6 +1113,13 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
+    # scheduler -task-started-> user
+    # scheduler -task-resumed-> user
+    scheduled_at = time_ns()
+    if ct.first_scheduled_at == 0
+        ct.first_scheduled_at = scheduled_at
+    end
+    ct.last_scheduled_at = scheduled_at
     if ct._isexception
         exc = ct.result
         ct.result = nothing

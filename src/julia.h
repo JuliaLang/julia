@@ -2280,17 +2280,19 @@ typedef struct _jl_task_t {
     // uint8_t padding1;
     // multiqueue priority
     uint16_t priority;
-    // TODO: int32 of ms instead?
-    uint64_t cpu_time_ns;  // time this task has spent running; updated when it yields
-    uint64_t created_at;   // timestamp this task was created
-    uint64_t completed_at; // timestamp this task was completed (DONE or FAILED)
+    // timestamp this task became runnable (TODO: int32 of ms instead?)
+    uint64_t first_scheduled_at;
+    // timestamp this task was last scheduled
+    uint64_t last_scheduled_at;
+    // time this task has spent running; updated when it yields
+    uint64_t cpu_time_ns;
+    // time since this task was runnable
+    uint64_t wall_time_ns;
 
 // hidden state:
     // cached floating point environment
     // only updated at task switch
     fenv_t fenv;
-    // timestamp this task was last scheduled (TODO: int32 of ms instead?)
-    uint64_t last_scheduled_at;
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id

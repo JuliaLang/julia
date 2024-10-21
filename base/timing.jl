@@ -100,20 +100,25 @@ See also [`task_wall_time_ns`](@ref).
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
-task_cpu_time_ns(t::Task) = t.cpu_time_ns
+function task_cpu_time_ns(t::Task)
+    return t.cpu_time_ns
+end
 
 """
     task_wall_time_ns(t::Task) -> UInt64
 
 Return the total nanoseconds that the task `t` was runnable.
-This is the time since the task was created until the time at which it was done or failed,
+This is the time since the task entered the run queue until the time at which it completed,
 or until the current time if the task has not yet completed.
 See also [`task_cpu_time_ns`](@ref).
 
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
-task_wall_time_ns(t::Task) = iszero(t.completed_at) ? time_ns() : t.completed_at - t.created_at
+function task_wall_time_ns(t::Task)
+    return t.wall_time_ns
+    # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_scheduled_at
+end
 
 """
     Base.gc_live_bytes()
