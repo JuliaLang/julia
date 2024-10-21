@@ -343,7 +343,10 @@ function front(t::Tuple)
     _front(t...)
 end
 _front() = throw(ArgumentError("Cannot call front on an empty tuple."))
-_front(v) = ()
+function _front(@nospecialize v)
+    @_nospecializeinfer_meta
+    ()
+end
 function _front(v, t...)
     @inline
     (v, _front(t...)...)
