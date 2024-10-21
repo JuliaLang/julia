@@ -5774,7 +5774,8 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
     int failed_dispatch = !argv[0].constant;
     if (ctx.params->trim != JL_TRIM_NO) {
-        abort(); // this code path is unsound, unsafe, and probably bad
+        // TODO: Implement the last-minute call resolution that used to be here
+        //       in inference instead.
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {
