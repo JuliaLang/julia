@@ -357,7 +357,7 @@ let retval_tests = @testset NoThrowTestSet begin
 end
 
 @testset "printing of a TestSetException" begin
-    tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
+    tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}(),nothing))
     @test occursin("1 passed", tse_str)
     @test occursin("2 failed", tse_str)
     @test occursin("3 errored", tse_str)
@@ -832,14 +832,14 @@ end
 end
 
 let io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}(),nothing)
     Base.showerror(io, exc, backtrace())
     @test !occursin("backtrace()", String(take!(io)))
 end
 
 @testset "#19750" begin
     io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}(),nothing)
     Base.showerror(io, exc, backtrace())
     @test !occursin("backtrace()", String(take!(io)))
 

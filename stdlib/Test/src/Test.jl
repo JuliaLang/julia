@@ -982,6 +982,7 @@ struct TestSetException <: Exception
     error::Int
     broken::Int
     errors_and_fails::Vector{Union{Fail, Error}}
+    seed::Union{Nothing,AbstractRNG}
 end
 
 function Base.show(io::IO, ex::TestSetException)
@@ -990,6 +991,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.fail,  " failed, ")
     print(io, ex.error, " errored, ")
     print(io, ex.broken, " broken.")
+    if !isnothing(ex.seed)
+        println(io)
+        print(io, "Random seed for this testset: ", ex.seed)
+    end
 end
 
 function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
@@ -1071,8 +1076,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_end::Union{Float64,Nothing}
     failfast::Bool
     file::Union{String,Nothing}
+    seed::Union{Nothing,AbstractRNG}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, seed = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1082,7 +1088,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source))
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), seed)
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1251,7 +1257,7 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
         efs = filter_errors(ts)
-        throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs))
+        throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs, ts.seed))
     end
 
     # return the testset so it is returned from the @testset macro
@@ -1289,6 +1295,22 @@ function filter_errors(ts::DefaultTestSet)
     end
     efs
 end
+
+"""
+    Test.get_seed(ts::AbstractTestSet) -> Union{Nothing,AbstractRNG}
+
+Return the RNG seed associated to the input testset `ts`.  If no seed is associated to it, return `nothing`.
+"""
+get_seed(::AbstractTestSet) = nothing
+get_seed(ts::DefaultTestSet) = ts.seed
+"""
+    Test.set_seed!(ts::AbstractTestSet, seed::AbstractRNG) -> AbstractRNG
+
+Set the RNG seed associated to the input testset `ts` to `seed`.  If no seed is associated to it, do nothing.
+In any case, always return the input `seed`.
+"""
+set_seed!(::AbstractTestSet, seed::AbstractRNG) = seed
+set_seed!(ts::DefaultTestSet, seed::AbstractRNG) = ts.seed = seed
 
 """
     TestCounts
@@ -1717,9 +1739,11 @@ function testset_beginend_call(args, tests, source)
         # by wrapping the body in a function
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
+        local tls_seed = isnothing(get_seed(ts)) ? set_seed!(ts, tls_seed_orig) : get_seed(ts)
         try
             # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
-            copy!(Random.default_rng(), tls_seed_orig)
+            copy!(Random.default_rng(), tls_seed)
+            copy!(Random.get_tls_seed(), Random.default_rng())
             let
                 $(esc(tests))
             end
@@ -1800,10 +1824,10 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-            copy!(default_rng(), tls_seed_orig)
+            copy!(default_rng(), tls_seed)
         end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
-            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options..., seed=tls_seed)
         else
             $(testsettype)($desc; $options...)
         end
@@ -1825,10 +1849,12 @@ function testset_forloop(args, testloop, source)
         local arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local seed_option = get($(options), :seed, nothing)
         local finish_errored = false
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
-        copy!(Random.default_rng(), tls_seed_orig)
+        local tls_seed = isnothing(seed_option) ? copy(Random.get_tls_seed()) : seed_option
+        copy!(Random.default_rng(), tls_seed)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
