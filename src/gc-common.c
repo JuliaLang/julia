@@ -487,11 +487,8 @@ int erase_finalizer_at(arraylist_t *list, jl_value_t *o, size_t idx)
     void **items = list->items;
     void *v = items[idx];
     if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
-        for (size_t j = idx + 2; j < list->len; j += 2) {
-            items[j-2] = items[j];
-            items[j-1] = items[j+1];
-        }
-        list->len = list->len - 2;
+        items[idx] = NULL;
+        items[idx+1] = NULL;
         return 1;
     }
     return 0;
@@ -499,10 +496,9 @@ int erase_finalizer_at(arraylist_t *list, jl_value_t *o, size_t idx)
 
 int erase_finalizer(arraylist_t *list, jl_value_t *o)
 {
-    for (size_t i = 0; i < list->len; i += 2) {
+    for (size_t i = 0; i < list->len; i += 2)
         if (erase_finalizer_at(list, o, i))
             return 1;
-    }
     return 0;
 }
 
