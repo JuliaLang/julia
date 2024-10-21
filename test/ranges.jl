@@ -1574,7 +1574,7 @@ end
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
     end
     let r = Base.OneTo(Int8(4))
-        @test first(r,4) === r 
+        @test first(r,4) === r
     end
     @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
     @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)
