@@ -735,8 +735,6 @@ isone(x::BigInt) = x == Culong(1)
 <(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
 isnegative(x::BigInt) = x.size < 0
 ispositive(x::BigInt) = x.size > 0
-@deprecate isneg(x) isnegative(x)
-@deprecate ispos(x) ispositive(x)
 
 signbit(x::BigInt) = isnegative(x)
 flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
