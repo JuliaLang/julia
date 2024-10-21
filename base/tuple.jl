@@ -664,7 +664,9 @@ all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
 all(x::Tuple{Bool, Bool}) = x[1]&x[2]
 all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
+all(x::Tuple{Any}) = x[1] || return false
+all(f, x::Tuple{}) = true
+all(f, x::Tuple{Any}) = all((f(x[1]),))
 
 any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]

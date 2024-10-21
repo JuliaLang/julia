@@ -38,8 +38,8 @@ macro opaque(ty, ex)
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
-using Core.Compiler: IRCode, SSAValue
-using Core: CodeInfo
+using Core: CodeInfo, SSAValue
+using Base.Compiler: IRCode
 
 function compute_ir_rettype(ir::IRCode)
     rt = Union{}

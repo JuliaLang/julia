@@ -1,6 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be built either a monolith or with a minimal Base image that just has the
+# compiler.
+if isdefined(Main, :Base); else
+Core.eval(Main, :(baremodule Base; end))
+end
+
+Core.include(Base, "Base.jl")
 
 using .Base
 
