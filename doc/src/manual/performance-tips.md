@@ -1057,7 +1057,7 @@ Sometimes you can circumvent the need to allocate memory on each function call b
 the output. As a trivial example, compare
 
 ```jldoctest prealloc
-julia> function xinc(x)
+julia> @noinline function xinc(x)
            return [x, x+1, x+2]
        end;
 
