@@ -139,6 +139,17 @@ Standard library changes
   `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
   PR: ([#51747]).
 
+#### Package Manager
+
+* It is now possible to specify "sources" for packages in a `[sources]` section in Project.toml.
+  This can be used to add non-registered normal or test dependencies.
+* Pkg now obeys `[compat]` bounds for `julia` and raises an error if the version of the running Julia binary is incompatible with the bounds in `Project.toml`.
+  Pkg has always obeyed this compat when working with Registry packages. This change affects mostly local packages
+* `pkg> add` and `Pkg.add` will now add compat entries for new direct dependencies if the active environment is a
+  package (has a `name` and `uuid` entry).
+* Dependencies can now be directly added as weak deps or extras via the `pkg> add --weak/extra Foo` or
+  `Pkg.add("Foo", target=:weakdeps/:extras)` forms.
+
 #### StyledStrings
 
 * A new standard library for handling styling in a more comprehensive and structured way ([#49586]).

@@ -16,6 +16,26 @@ Base.@irrational γ        euler
 Base.@irrational φ        (1+sqrt(big(5)))/2
 Base.@irrational catalan  catalan
 
+const _KnownIrrational = Union{
+    typeof(π), typeof(ℯ), typeof(γ), typeof(φ), typeof(catalan)
+}
+
+function Rational{BigInt}(::_KnownIrrational)
+    Base._throw_argument_error_irrational_to_rational_bigint()
+end
+Base.@assume_effects :foldable function Rational{T}(x::_KnownIrrational) where {T<:Integer}
+    Base._irrational_to_rational(T, x)
+end
+Base.@assume_effects :foldable function (::Type{T})(x::_KnownIrrational, r::RoundingMode) where {T<:Union{Float32,Float64}}
+    Base._irrational_to_float(T, x, r)
+end
+Base.@assume_effects :foldable function rationalize(::Type{T}, x::_KnownIrrational; tol::Real=0) where {T<:Integer}
+    Base._rationalize_irrational(T, x, tol)
+end
+Base.@assume_effects :foldable function Base.lessrational(rx::Rational, x::_KnownIrrational)
+    Base._lessrational(rx, x)
+end
+
 # aliases
 """
     π
