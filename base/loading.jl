@@ -2477,9 +2477,6 @@ loaded_modules_array() = @lock require_lock copy(loaded_modules_order)
 # after unreference_module, a subsequent require call will try to load a new copy of it, if stale
 # reload(m) = (unreference_module(m); require(m))
 function unreference_module(key::PkgId)
-    if haskey(explicit_loaded_modules, key)
-        m = pop!(explicit_loaded_modules, key)
-    end
     if haskey(loaded_modules, key)
         m = pop!(loaded_modules, key)
         # need to ensure all modules are GC rooted; will still be referenced
@@ -3043,7 +3040,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # build up the list of modules that we want the precompile process to preserve
     if keep_loaded_modules
         concrete_deps = copy(_concrete_dependencies)
-        for (pkgreq, modreq) in loaded_modules # TODO: convert all relevant staleness heuristics to use explicit_loaded_modules instead
+        for (pkgreq, modreq) in loaded_modules
             if !(pkgreq === Main || pkgreq === Core || pkgreq === Base)
                 push!(concrete_deps, pkgreq => module_build_id(modreq))
             end
