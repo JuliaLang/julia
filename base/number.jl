@@ -156,7 +156,6 @@ julia> ispositive(0.0)
 false
 ```
 """
-ispositive(x) = x > zero(x) # generic fallback
 ispositive(x::Real) = x > 0
 
 """
@@ -179,7 +178,6 @@ julia> isnegative(-0.0)
 false
 ```
 """
-isnegative(x) = x < zero(x) # generic fallback
 isnegative(x::Real) = x < 0
 
 """
