@@ -1622,6 +1622,89 @@ let src = code_typed1((Int,)) do x
     @test count(iscall((src, setfield!)), src.code) == 1
 end
 
+# finalizer inlining with `Core._cancel_finalizer`
+let src = code_typed1((Int,)) do x
+        xs = finalizer(Ref(x)) do obj
+            Base.@assume_effects :nothrow :notaskstate
+            Core.println("finalizing: ", objectid(obj))
+        end
+        @show xs[]
+        return xs[]
+    end
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+    @test count(iscall((src, Core._cancel_finalizer)), src.code) == 1
+end
+
+mutable struct AtomicCounter
+    @atomic count::Int
+end
+const counter = AtomicCounter(0)
+
+# simple case that only hits the fast path: `with_finalizer_cancellation`
+const _throw_or_not = Ref(false)
+@noinline throw_or_noop() = _throw_or_not[] ? error("") : nothing
+function with_finalizer_cancellation(x)
+    xs = finalizer(Ref(x)) do obj
+        Base.@assume_effects :nothrow :notaskstate
+        @atomic counter.count += obj[]
+    end
+    throw_or_noop()
+    return xs[] += 1
+end
+# check IR
+let src = code_typed1(with_finalizer_cancellation, (Int,))
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+    @test count(iscall((src, Core._cancel_finalizer)), src.code) == 1
+end
+# successful case
+with_finalizer_cancellation(0)
+@test counter.count == 1
+# error case: check if the finalizer is still registered
+_throw_or_not[] = true
+try with_finalizer_cancellation(1) catch end
+GC.gc(); GC.gc()
+@test counter.count == 2
+
+# a complex case that may hit the slow path: `with_finalizer_cancellation_slow_path`
+const _gc_or_register = Ref(false)
+const _xs_with_finalizers_ = Any[]
+@noinline function gc_or_register(y)
+    if _gc_or_register[]
+        # this would hit the slow path
+        empty!(_xs_with_finalizers_)
+        GC.gc(); GC.gc();
+    else
+        # still hits the fast path
+        push!(_xs_with_finalizers_, finalizer(Ref(y)) do x
+            @atomic counter.count += x[]
+        end)
+    end
+end
+function with_finalizer_cancellation_slow_path(x, y)
+    xs = finalizer(Ref(x)) do obj
+        Base.@assume_effects :nothrow :notaskstate
+        @atomic counter.count += obj[]
+    end
+    gc_or_register(y)
+    return xs[]+=1
+end
+# check IR
+let src = code_typed1(with_finalizer_cancellation_slow_path, (Int,Int,))
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+    @test count(iscall((src, Core._cancel_finalizer)), src.code) == 1
+end
+# make sure the finalizer has been erased
+@atomic counter.count = 0
+with_finalizer_cancellation_slow_path(0, 1)
+@test counter.count == 1
+_gc_or_register[] = true
+with_finalizer_cancellation_slow_path(0, 1)
+with_finalizer_cancellation_slow_path(0, 1)
+GC.gc(); GC.gc();
+@test counter.count == 4
+GC.gc(); GC.gc();
+@test counter.count == 4
+
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
