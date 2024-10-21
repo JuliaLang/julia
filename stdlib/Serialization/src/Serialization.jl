@@ -1564,9 +1564,9 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Task})
-    t = Task(()->nothing)
+    code = deserialize(s)
+    t = Task(code)
     deserialize_cycle(s, t)
-    t.code = deserialize(s)
     t.storage = deserialize(s)
     state = deserialize(s)
     if state === :runnable
