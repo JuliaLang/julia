@@ -340,6 +340,12 @@ end
 # inexistent completion inside a cmd
 @test_nocompletion("run(`lol")
 
+# issue 55856: copy(A').<TAB> errors in the REPL
+let
+    c, r = test_complete("copy(A').")
+    @test isempty(c)
+end
+
 # test latex symbol completions
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
