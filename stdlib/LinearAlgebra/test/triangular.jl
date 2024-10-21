@@ -25,6 +25,12 @@ debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
@@ -1074,6 +1080,52 @@ end
                 @test V isa TD{Float64, Matrix{Float64}}
                 @test all(isnan, diag(V))
             end
+        end
+    end
+end
+
+@testset "addition/subtraction of mixed triangular" begin
+    for A in (Hermitian(rand(4, 4)), Diagonal(rand(5)))
+        for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            B = T(A)
+            M = Matrix(B)
+            R = B - B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M - M'
+            R = B + B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
+    end
+    @testset "unfilled parent" begin
+        @testset for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            F = Matrix{BigFloat}(undef, 2, 2)
+            B = T(F)
+            isupper = B isa Union{UpperTriangular, UnitUpperTriangular}
+            B[1+!isupper, 1+isupper] = 2
+            if !(B isa Union{UnitUpperTriangular, UnitLowerTriangular})
+                B[1,1] = B[2,2] = 3
+            end
+            M = Matrix(B)
+            # These are broken, as triu/tril don't work with
+            # unfilled adjoint matrices
+            # See https://github.com/JuliaLang/julia/pull/55312
+            @test_broken B - B' == M - M'
+            @test_broken B + B' == M + M'
+            @test B - copy(B') == M - M'
+            @test B + copy(B') == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
         end
     end
 end

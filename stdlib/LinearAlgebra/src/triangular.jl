@@ -152,6 +152,7 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -219,6 +220,16 @@ function Matrix{T}(A::UnitUpperTriangular) where T
         B[i,i] = oneunit(T)
     end
     B
+end
+
+function full(A::Union{UpperTriangular,LowerTriangular})
+    return _triangularize(A)(parent(A))
+end
+function full(A::UnitUpperOrUnitLowerTriangular)
+    isupper = A isa UnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
+    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    return Ap
 end
 
 function full!(A::LowerTriangular)
@@ -553,6 +564,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     return A
 end
 
+_triangularize(::UpperOrUnitUpperTriangular) = triu
+_triangularize(::LowerOrUnitLowerTriangular) = tril
+
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 @inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
@@ -812,7 +826,8 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
++(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
 function -(A::UpperTriangular, B::UpperTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
@@ -846,7 +861,8 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
     LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 end
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
+-(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) - copyto!(similar(parent(B), size(B)), B)
 
 # use broadcasting if the parents are strided, where we loop only over the triangular part
 for op in (:+, :-)
