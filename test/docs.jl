@@ -2,6 +2,10 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+# check that @doc can work before REPL is loaded
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc @time'`, String), "nothing")
+
 using Markdown
 using REPL
 
@@ -120,7 +124,7 @@ module NoDocStrings end
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
-"DocsTest"
+"DocsTest, evaluating $(K)"     # test that module docstring is evaluated within module
 module DocsTest
 
 using Markdown
@@ -265,7 +269,7 @@ fnospecialize(@nospecialize(x::AbstractArray)) = 2
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
-    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest, evaluating K")
     # Check that plain docstrings store a module reference.
     # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
     @test md.docs[Union{}].data[:module] == DocsTest
@@ -571,8 +575,8 @@ end
 
 let T = meta(DocVars)[@var(DocVars.T)],
     S = meta(DocVars)[@var(DocVars.S)],
-    Tname = Markdown.parse("```\n$(curmod_prefix)DocVars.T\n```"),
-    Sname = Markdown.parse("```\n$(curmod_prefix)DocVars.S\n```")
+    Tname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.T\n```"),
+    Sname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.S\n```")
     # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""
@@ -1562,3 +1566,15 @@ Base.@ccallable c51586_long()::Int = 3
     @test_broken isempty(undoc)
     @test undoc == [Symbol("@var")]
 end
+
+# Docing the macroception macro
+macro docmacroception()
+    Expr(:toplevel, macroexpand(__module__, :(@Base.__doc__ macro docmacrofoo() 1 end); recursive=false), :(@docmacrofoo))
+end
+
+"""
+This docmacroception has a docstring
+"""
+@docmacroception()
+
+@test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")

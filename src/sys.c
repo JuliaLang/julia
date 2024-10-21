@@ -102,7 +102,6 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 
 // --- dir/file stuff ---
 
-JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
 JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
@@ -478,25 +477,10 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
-    int cpu = jl_cpu_threads();
-    int masksize = uv_cpumask_size();
-    if (masksize < 0 || jl_running_under_rr(0))
-        return cpu;
-    uv_thread_t tid = uv_thread_self();
-    char *cpumask = (char *)calloc(masksize, sizeof(char));
-    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
-    if (err) {
-        free(cpumask);
-        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
-                       err);
-        return cpu;
-    }
-    int n = 0;
-    for (size_t i = 0; i < masksize; i++) {
-        n += cpumask[i];
-    }
-    free(cpumask);
-    return n < cpu ? n : cpu;
+    // We want the more conservative estimate of the two.
+    int cpu_threads = jl_cpu_threads();
+    int available_parallelism = uv_available_parallelism();
+    return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
 }
 
 
@@ -635,6 +619,38 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
+#ifdef _OS_OPENBSD_
+// Helper for jl_pathname_for_handle()
+struct dlinfo_data {
+    void       *searched;
+    const char *result;
+};
+
+static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
+{
+    struct dlinfo_data *data = (struct dlinfo_data *)vdata;
+    void *handle;
+
+    /* ensure dl_phdr_info at compile-time to be compatible with the one at runtime */
+    if (sizeof(*info) < size)
+        return -1;
+
+    /* dlopen the name */
+    handle = dlopen(info->dlpi_name, RTLD_LAZY | RTLD_NOLOAD);
+    if (handle == NULL)
+        return 0;
+
+    /* check if the opened library is the same as the searched handle */
+    if (data->searched == handle)
+        data->result = info->dlpi_name;
+
+    dlclose(handle);
+
+    /* continue if still not found */
+    return (data->result != NULL);
+}
+#endif
+
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
@@ -676,6 +692,14 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     }
     free(pth16);
     return filepath;
+
+#elif defined(_OS_OPENBSD_)
+    struct dlinfo_data data = {
+        .searched = handle,
+        .result = NULL,
+    };
+    dl_iterate_phdr(&dlinfo_helper, &data);
+    return data.result;
 
 #else // Linux, FreeBSD, ...
 
@@ -747,26 +771,11 @@ JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT size_t jl_maxrss(void)
 {
-#if defined(_OS_WINDOWS_)
-    PROCESS_MEMORY_COUNTERS counter;
-    GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
-    return (size_t)counter.PeakWorkingSetSize;
-
-// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
-//        All of them return `ru_maxrss` in kilobytes.
-#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
-    struct rusage rusage;
-    getrusage( RUSAGE_SELF, &rusage );
-
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-    return (size_t)(rusage.ru_maxrss * 1024);
-#else
-    return (size_t)rusage.ru_maxrss;
-#endif
-
-#else
-    return (size_t)0;
-#endif
+    uv_rusage_t rusage;
+    if (uv_getrusage(&rusage) == 0) {
+        return rusage.ru_maxrss * 1024;
+    }
+    return 0;
 }
 
 // Simple `rand()` like function, with global seed and added thread-safety

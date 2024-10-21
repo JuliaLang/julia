@@ -27,6 +27,15 @@ throw
 
 ## native julia error handling ##
 
+# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
+# for `error(::Any)` to fail (JuliaLang/julia#54029).
+# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
+# on package side, guaranteeing that return type inference on `error` is successful always.
+function error end
+typeof(error).name.max_methods = UInt8(2)
+
 """
     error(message::AbstractString)
 
@@ -62,7 +71,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
 end
@@ -87,7 +96,7 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
             mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else
@@ -223,19 +232,21 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
+        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
+        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = quote
-            msg = $(Expr(:quote,msg))
-            isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
-        end
+        msg = :(Main.Base.inferencebarrier(_assert_tostring)($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
+
+# this may be overridden in contexts where `string(::Expr)` doesn't work
+_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+    (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff
     n::Int

@@ -10,10 +10,10 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-`print` falls back to calling `show`, so most types should just define
-`show`. Define `print` if your type has a separate "plain" representation.
-For example, `show` displays strings with quotes, and `print` displays strings
-without quotes.
+`print` falls back to calling the 2-argument `show(io, x)` for each argument `x` in `xs`,
+so most types should just define `show`. Define `print` if your type has a separate
+"plain" representation.  For example, `show` displays strings with quotes, and `print`
+displays strings without quotes.
 
 See also [`println`](@ref), [`string`](@ref), [`printstyled`](@ref).
 
@@ -51,6 +51,8 @@ function print(io::IO, xs...)
     return nothing
 end
 
+setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
+
 """
     println([io::IO], xs...)
 
@@ -74,6 +76,7 @@ julia> String(take!(io))
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
 
+setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -149,6 +152,7 @@ function print_to_string(xs...)
     end
     String(_unsafe_take!(s))
 end
+setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -246,14 +250,14 @@ end
 
 # optimized methods to avoid iterating over chars
 write(io::IO, s::Union{String,SubString{String}}) =
-    GC.@preserve s Int(unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))))::Int
+    GC.@preserve s (unsafe_write(io, pointer(s), reinterpret(UInt, sizeof(s))) % Int)::Int
 print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 
 """
     repr(x; context=nothing)
 
-Create a string from any value using the [`show`](@ref) function.
-You should not add methods to `repr`; define a `show` method instead.
+Create a string from any value using the 2-argument `show(io, x)` function.
+You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -262,7 +266,7 @@ attributes are used for the I/O stream passed to `show`.
 Note that `repr(x)` is usually similar to how the value of `x` would
 be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
-equivalent to the REPL display of `x`.
+equivalent to the REPL display of `x`, using the 3-argument `show(io, mime, x)`.
 
 !!! compat "Julia 1.7"
     Passing a tuple to keyword `context` requires Julia 1.7 or later.
@@ -354,12 +358,22 @@ function join(io::IO, iterator, delim="")
 end
 
 function _join_preserve_annotations(iterator, args...)
-    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+    et = @default_eltype(iterator)
+    if isconcretetype(et) && !_isannotated(et) && !any(_isannotated, args)
+        sprint(join, iterator, args...)
+    else
         io = AnnotatedIOBuffer()
         join(io, iterator, args...)
-        read(seekstart(io), AnnotatedString{String})
-    else
-        sprint(join, iterator, args...)
+        # If we know (from compile time information, or dynamically in the case
+        # of iterators with a non-concrete eltype), that the result is annotated
+        # in nature, we extract an `AnnotatedString`, otherwise we just extract
+        # a plain `String` from `io`.
+        if isconcretetype(et) || !isempty(io.annotations)
+            seekstart(io)
+            read(io, AnnotatedString{String})
+        else
+            String(take!(io.io))
+        end
     end
 end
 
@@ -374,8 +388,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc]; keep = ())::AbstractString
-    escape_string(io, str::AbstractString[, esc]; keep = ())::Nothing
+    escape_string(str::AbstractString[, esc]; keep=(), ascii=false, fullhex=false)::AbstractString
+    escape_string(io, str::AbstractString[, esc]; keep=())::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -390,10 +404,22 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 The argument `keep` specifies a collection of characters which are to be kept as
 they are. Notice that `esc` has precedence here.
 
+The argument `ascii` can be set to `true` to escape all non-ASCII characters,
+whereas the default `ascii=false` outputs printable Unicode characters as-is.
+(`keep` takes precedence over `ascii`.)
+
+The argument `fullhex` can be set to `true` to require all `\\u` escapes to be
+printed with 4 hex digits, and `\\U` escapes to be printed with 8 hex digits,
+whereas by default (`fullhex=false`) they are printed with fewer digits if
+possible (omitting leading zeros).
+
 See also [`unescape_string`](@ref) for the reverse operation.
 
 !!! compat "Julia 1.7"
     The `keep` argument is available as of Julia 1.7.
+
+!!! compat "Julia 1.12"
+    The `ascii` and `fullhex` arguments require Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -413,7 +439,7 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 "ℵ\\\\x000"
 ```
 """
-function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
+function escape_string(io::IO, s::AbstractString, esc=""; keep = (), ascii::Bool=false, fullhex::Bool=false)
     a = Iterators.Stateful(s)
     for c::AbstractChar in a
         if c in esc
@@ -428,10 +454,10 @@ function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
             isprint(c)         ? print(io, c) :
                                  print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
-            isprint(c)         ? print(io, c) :
-            c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
+            !ascii && isprint(c) ? print(io, c) :
+            c <= '\x7f'          ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
+            c <= '\uffff'        ? print(io, "\\u", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                   print(io, "\\U", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
@@ -442,8 +468,8 @@ function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',); keep = ()) =
-    sprint((io)->escape_string(io, s, esc; keep = keep), sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',); keep = (), ascii::Bool=false, fullhex::Bool=false) =
+    sprint((io)->escape_string(io, s, esc; keep, ascii, fullhex), sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')
@@ -615,7 +641,7 @@ string literals. (It also happens to be the escaping convention
 expected by the Microsoft C/C++ compiler runtime when it parses a
 command-line string into the argv[] array.)
 
-See also [`escape_string`](@ref).
+See also [`Base.escape_string()`](@ref).
 """
 function escape_raw_string(io::IO, str::AbstractString, delim::Char='"')
     total = 0
@@ -790,12 +816,12 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    annots = RegionAnnotation[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
             for annot in c.annotations
-                push!(annots, (point:point, annot))
+                push!(annots, (point:point, annot...))
             end
         end
         point += ncodeunits(c)

@@ -1,4 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
+
+const WorkThunk = Any
+# #@eval struct WorkThunk
+#    thunk::Core.OpaqueClosure{Tuple{Vector{Tasks}}, Bool}
+#    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
+# end
+# (p::WorkThunk)() = p.thunk()
 
 """
     AbstractInterpreter
@@ -20,6 +28,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 
 abstract type AbstractLattice end
 
+struct InvalidIRError <: Exception end
+
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
     argtypes::Vector{Any}
@@ -33,11 +43,14 @@ struct StmtInfo
     used::Bool
 end
 
-struct MethodInfo
+struct SpecInfo
+    nargs::Int
+    isva::Bool
     propagate_inbounds::Bool
     method_for_inference_limit_heuristics::Union{Nothing,Method}
 end
-MethodInfo(src::CodeInfo) = MethodInfo(
+SpecInfo(src::CodeInfo) = SpecInfo(
+    Int(src.nargs), src.isva,
     src.propagate_inbounds,
     src.method_for_inference_limit_heuristics::Union{Nothing,Method})
 
@@ -57,8 +70,6 @@ struct VarState
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
 end
 
-abstract type ForwardableArgtypes end
-
 struct AnalysisResults
     result
     next::AnalysisResults
@@ -70,16 +81,19 @@ end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
 """
-    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
+    result::InferenceResult
 
 A type that represents the result of running type inference on a chunk of code.
-
-See also [`matching_cache_argtypes`](@ref).
+There are two constructor available:
+- `InferenceResult(mi::MethodInstance, [𝕃::AbstractLattice])` for regular inference,
+  without extended lattice information included in `result.argtypes`.
+- `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::BitVector)`
+  for constant inference, with extended lattice information included in `result.argtypes`.
 """
 mutable struct InferenceResult
     const linfo::MethodInstance
     const argtypes::Vector{Any}
-    const overridden_by_const::BitVector
+    const overridden_by_const::Union{Nothing,BitVector}
     result                   # extended lattice element if inferred, nothing otherwise
     exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
@@ -88,19 +102,16 @@ mutable struct InferenceResult
     effects::Effects         # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
-    ci::CodeInstance         # CodeInstance if this result has been added to the cache
-    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        # def = linfo.def
-        # nargs = def isa Method ? Int(def.nargs) : 0
-        # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
+    ci::CodeInstance         # CodeInstance if this result may be added to the cache
+    function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
+        return new(mi, argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
-InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
-InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
+    argtypes = matching_cache_argtypes(𝕃, mi)
+    return InferenceResult(mi, argtypes, #=overridden_by_const=#nothing)
+end
 
 function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
     return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)
@@ -158,11 +169,6 @@ Parameters that control abstract interpretation-based type inference operation.
   information available. [`Base.@constprop :aggressive`](@ref Base.@constprop) can have a
   more fine-grained control on this configuration with per-method annotation basis.
 ---
-- `inf_params.unoptimize_throw_blocks::Bool = true`\\
-  If `true`, skips inferring calls that are in a block that is known to `throw`.
-  It may improve the compiler latency without sacrificing the runtime performance
-  in common situations.
----
 - `inf_params.assume_bindings_static::Bool = false`\\
   If `true`, assumes that no new bindings will be added, i.e. a non-existing binding at
   inference time can be assumed to always not exist at runtime (and thus e.g. any access to
@@ -178,7 +184,6 @@ struct InferenceParams
     tuple_complexity_limit_depth::Int
     ipo_constant_propagation::Bool
     aggressive_constant_propagation::Bool
-    unoptimize_throw_blocks::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
 
@@ -190,7 +195,6 @@ struct InferenceParams
         tuple_complexity_limit_depth::Int,
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
-        unoptimize_throw_blocks::Bool,
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool)
         return new(
@@ -201,21 +205,19 @@ struct InferenceParams
             tuple_complexity_limit_depth,
             ipo_constant_propagation,
             aggressive_constant_propagation,
-            unoptimize_throw_blocks,
             assume_bindings_static,
             ignore_recursion_hardlimit)
     end
 end
 function InferenceParams(
     params::InferenceParams = InferenceParams( # default constructor
-        #=max_methods::Int=# 3,
+        #=max_methods::Int=# BuildSettings.MAX_METHODS,
         #=max_union_splitting::Int=# 4,
         #=max_apply_union_enum::Int=# 8,
         #=max_tuple_splat::Int=# 32,
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
@@ -225,7 +227,6 @@ function InferenceParams(
     tuple_complexity_limit_depth::Int = params.tuple_complexity_limit_depth,
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
-    unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
     return InferenceParams(
@@ -236,7 +237,6 @@ function InferenceParams(
         tuple_complexity_limit_depth,
         ipo_constant_propagation,
         aggressive_constant_propagation,
-        unoptimize_throw_blocks,
         assume_bindings_static,
         ignore_recursion_hardlimit)
 end
@@ -260,10 +260,6 @@ Parameters that control optimizer operation.
   Specifies the extra inlining willingness for a method specialization with non-concrete
   tuple return types (in hopes of splitting it up). `opt_params.inline_tupleret_bonus` will
   be added to `opt_params.inline_cost_threshold` when making inlining decision.
----
-- `opt_params.inline_error_path_cost::Int = 20`\\
-  Specifies the penalty cost for an un-optimized dynamic call in a block that is known to
-  `throw`. See also [`(inf_params::InferenceParams).unoptimize_throw_blocks`](@ref InferenceParams).
 ---
 - `opt_params.max_tuple_splat::Int = 32`\\
   When attempting to inline `Core._apply_iterate`, abort the optimization if the tuple
@@ -291,7 +287,6 @@ struct OptimizationParams
     inline_cost_threshold::Int
     inline_nonleaf_penalty::Int
     inline_tupleret_bonus::Int
-    inline_error_path_cost::Int
     max_tuple_splat::Int
     compilesig_invokes::Bool
     assume_fatal_throw::Bool
@@ -302,7 +297,6 @@ struct OptimizationParams
         inline_cost_threshold::Int,
         inline_nonleaf_penalty::Int,
         inline_tupleret_bonus::Int,
-        inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
         assume_fatal_throw::Bool,
@@ -312,7 +306,6 @@ struct OptimizationParams
             inline_cost_threshold,
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
-            inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
             assume_fatal_throw,
@@ -325,7 +318,6 @@ function OptimizationParams(
         #=inline_cost_threshold::Int=# 100,
         #=inline_nonleaf_penalty::Int=# 1000,
         #=inline_tupleret_bonus::Int=# 250,
-        #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
         #=assume_fatal_throw::Bool=# false,
@@ -334,7 +326,6 @@ function OptimizationParams(
     inline_cost_threshold::Int = params.inline_cost_threshold,
     inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
     inline_tupleret_bonus::Int = params.inline_tupleret_bonus,
-    inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
     assume_fatal_throw::Bool = params.assume_fatal_throw,
@@ -344,7 +335,6 @@ function OptimizationParams(
         inline_cost_threshold,
         inline_nonleaf_penalty,
         inline_tupleret_bonus,
-        inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
         assume_fatal_throw,
@@ -404,36 +394,15 @@ get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
 cache_owner(interp::NativeInterpreter) = nothing
 
-"""
-    already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
+engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
+engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
+# engine_fulfill(::AbstractInterpreter, ci::CodeInstance, src::CodeInfo) = ccall(:jl_engine_fulfill, Cvoid, (Any, Any), ci, src) # currently the same as engine_reject, so just use that one
+engine_reject(::AbstractInterpreter, ci::CodeInstance) = ccall(:jl_engine_fulfill, Cvoid, (Any, Ptr{Cvoid}), ci, C_NULL)
 
-For the `NativeInterpreter`, we don't need to do an actual cache query to know if something
-was already inferred. If we reach this point, but the inference flag has been turned off,
-then it's in the cache. This is purely for a performance optimization.
-"""
-already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) = !mi.inInference
-already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) = false
 
-"""
-    lock_mi_inference(::AbstractInterpreter, mi::MethodInstance)
-
-Hint that `mi` is in inference to help accelerate bootstrapping.
-This is particularly used by `NativeInterpreter` and helps us limit the amount of wasted
-work we might do when inference is working on initially inferring itself by letting us
-detect when inference is already in progress and not running a second copy on it.
-This creates a data-race, but the entry point into this code from C (`jl_type_infer`)
-already includes detection and restriction on recursion, so it is hopefully mostly a
-benign problem, since it should really only happen during the first phase of bootstrapping
-that we encounter this flag.
-"""
-lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
-lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
-
-"""
-See `lock_mi_inference`.
-"""
-unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
-unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
+function already_inferred_quick_test end
+function lock_mi_inference end
+function unlock_mi_inference end
 
 """
     add_remark!(::AbstractInterpreter, sv::InferenceState, remark)
@@ -488,16 +457,24 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
+get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
+
 abstract type CallInfo end
 
 @nospecialize
 
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+add_uncovered_edges!(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = add_uncovered_edges_impl(edges, info, atype)
+
 getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
 
+# must implement `nsplit`, `getsplit`, and `add_uncovered_edges!` to opt in to inlining
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("unexpected call into `add_uncovered_edges!`")
+
+# must implement `getresult` to opt in to extended lattice return information
 getresult_impl(::CallInfo, ::Int) = nothing
 
 @specialize

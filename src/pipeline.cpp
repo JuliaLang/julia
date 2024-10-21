@@ -19,18 +19,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Transforms/IPO.h>
-#include <llvm/Transforms/Scalar.h>
-#include <llvm/Transforms/Vectorize.h>
-#include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
-#include <llvm/Transforms/Scalar/GVN.h>
-#include <llvm/Transforms/IPO/AlwaysInliner.h>
-#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
-#include <llvm/Transforms/InstCombine/InstCombine.h>
-#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
-#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 
@@ -40,6 +29,7 @@
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
 #include <llvm/Transforms/IPO/GlobalDCE.h>
+#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
@@ -76,6 +66,8 @@
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
 #include <llvm/Transforms/Utils/InjectTLIMappings.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
@@ -189,10 +181,11 @@ namespace {
         // }
     }
 
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
-        if (!llvm_only)
-            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
+        if (!llvm_only){
+            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
+        }
         MPM.addPass(VerifierPass());
     }
 #endif
@@ -332,7 +325,7 @@ namespace {
 
 static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlySimplificationMarkerPass());
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
@@ -340,6 +333,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ForceFunctionAttrsPass());
       invokePipelineStartCallbacks(MPM, PB, O);
       MPM.addPass(Annotation2MetadataPass());
+      MPM.addPass(InferFunctionAttrsPass());
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
@@ -576,7 +570,6 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
     if (options.cleanup) {
         if (O.getSpeedupLevel() >= 2) {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(CombineMulAddPass()));
             FPM.addPass(DivRemPairsPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
@@ -608,7 +601,8 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         if (O.getSpeedupLevel() >= 2) {
             buildVectorPipeline(FPM, PB, O, options);
         }
-        FPM.addPass(WarnMissedTransformationsPass());
+        if (options.warn_missed_transformations)
+            FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
@@ -616,63 +610,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
-struct PipelineConfig {
-    int Speedup;
-    int Size;
-    int lower_intrinsics;
-    int dump_native;
-    int external_use;
-    int llvm_only;
-    int always_inline;
-    int enable_early_simplifications;
-    int enable_early_optimizations;
-    int enable_scalar_optimizations;
-    int enable_loop_optimizations;
-    int enable_vector_pipeline;
-    int remove_ni;
-    int cleanup;
-};
-
-extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, PipelineConfig* config) JL_NOTSAFEPOINT
-{
-    OptimizationLevel O;
-    switch (config->Size) {
-        case 1:
-            O = OptimizationLevel::Os;
-            break;
-        default:
-            O = OptimizationLevel::Oz;
-            break;
-        case 0:
-            switch (config->Speedup) {
-                case 0:
-                    O = OptimizationLevel::O0;
-                    break;
-                case 1:
-                    O = OptimizationLevel::O1;
-                    break;
-                case 2:
-                    O = OptimizationLevel::O2;
-                    break;
-                default:
-                    O = OptimizationLevel::O3;
-                    break;
-            }
-    }
-    buildPipeline(*reinterpret_cast<ModulePassManager*>(MPM), reinterpret_cast<PassBuilder*>(PB), O,
-                    OptimizationOptions{!!config->lower_intrinsics,
-                                        !!config->dump_native,
-                                        !!config->external_use,
-                                        !!config->llvm_only,
-                                        !!config->always_inline,
-                                        !!config->enable_early_simplifications,
-                                        !!config->enable_early_optimizations,
-                                        !!config->enable_scalar_optimizations,
-                                        !!config->enable_loop_optimizations,
-                                        !!config->enable_vector_pipeline,
-                                        !!config->remove_ni,
-                                        !!config->cleanup});
-}
 
 #undef JULIA_PASS
 
@@ -805,6 +742,17 @@ void NewPM::run(Module &M) {
 #else
     StandardInstrumentations SI(false);
 #endif
+#if JL_LLVM_VERSION >= 170000
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    SI.registerCallbacks(PIC, &MAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+#else
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
@@ -814,6 +762,7 @@ void NewPM::run(Module &M) {
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
+#endif
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
@@ -857,7 +806,16 @@ static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPip
             OPTION(lower_intrinsics),
             OPTION(dump_native),
             OPTION(external_use),
-            OPTION(llvm_only)
+            OPTION(llvm_only),
+            OPTION(always_inline),
+            OPTION(enable_early_simplifications),
+            OPTION(enable_early_optimizations),
+            OPTION(enable_scalar_optimizations),
+            OPTION(enable_loop_optimizations),
+            OPTION(enable_vector_pipeline),
+            OPTION(remove_ni),
+            OPTION(cleanup),
+            OPTION(warn_missed_transformations)
 #undef OPTION
         };
         while (!name.empty()) {
@@ -1021,4 +979,10 @@ void jl_register_passbuilder_callbacks_impl(void *PB) JL_NOTSAFEPOINT {
 extern "C" JL_DLLEXPORT_CODEGEN
 ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
+}
+
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }

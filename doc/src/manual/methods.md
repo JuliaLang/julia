@@ -614,7 +614,7 @@ Start some other operations that use `f(x)`:
 julia> g(x) = f(x)
 g (generic function with 1 method)
 
-julia> t = @async f(wait()); yield();
+julia> t = Threads.@spawn f(wait()); yield();
 ```
 
 Now we add some new methods to `f(x)`:
@@ -639,7 +639,7 @@ julia> g(1)
 julia> fetch(schedule(t, 1))
 "original definition"
 
-julia> t = @async f(wait()); yield();
+julia> t = Threads.@spawn f(wait()); yield();
 
 julia> fetch(schedule(t, 1))
 "definition for Int"
@@ -664,7 +664,7 @@ abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 
-using so-called triangular dispatch.  Note that `UnionAll` types, for
+using so-called triangular dispatch. Note that `UnionAll` types, for
 example `eltype(AbstractArray{T} where T <: Integer)`, do not match the
 above method. The implementation of `eltype` in `Base` adds a fallback
 method to `Any` for such cases.
@@ -776,7 +776,7 @@ often referred to as a
 
 This pattern is implemented by defining a generic function which
 computes a different singleton value (or type) for each trait-set to which the
-function arguments may belong to.  If this function is pure there is
+function arguments may belong to. If this function is pure there is
 no impact on performance compared to normal dispatch.
 
 The example in the previous section glossed over the implementation details of
@@ -891,8 +891,8 @@ matmul(a, b) = matmul(promote(a, b)...)
 ## Parametrically-constrained Varargs methods
 
 Function parameters can also be used to constrain the number of arguments that may be supplied
-to a "varargs" function ([Varargs Functions](@ref)).  The notation `Vararg{T,N}` is used to indicate
-such a constraint.  For example:
+to a "varargs" function ([Varargs Functions](@ref)). The notation `Vararg{T,N}` is used to indicate
+such a constraint. For example:
 
 ```jldoctest
 julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
@@ -1025,7 +1025,7 @@ function emptyfunc end
 ## [Method design and the avoidance of ambiguities](@id man-method-design-ambiguities)
 
 Julia's method polymorphism is one of its most powerful features, yet
-exploiting this power can pose design challenges.  In particular, in
+exploiting this power can pose design challenges. In particular, in
 more complex method hierarchies it is not uncommon for
 [ambiguities](@ref man-ambiguities) to arise.
 
@@ -1168,7 +1168,7 @@ sure this method is implemented with generic calls (like `similar` and
 When this approach is not possible, it may be worth starting a
 discussion with other developers about resolving the ambiguity; just
 because one method was defined first does not necessarily mean that it
-can't be modified or eliminated.  As a last resort, one developer can
+can't be modified or eliminated. As a last resort, one developer can
 define the "band-aid" method
 
 ```julia

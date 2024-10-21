@@ -99,7 +99,7 @@ typedef intptr_t ssize_t;
 #define BYTE_ORDER     __BYTE_ORDER
 #endif
 
-#if defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 #include <machine/endian.h>
 #define __LITTLE_ENDIAN  LITTLE_ENDIAN
 #define __BIG_ENDIAN     BIG_ENDIAN
@@ -122,6 +122,13 @@ typedef intptr_t ssize_t;
 
 #define STATIC_INLINE static inline
 #define FORCE_INLINE static inline __attribute__((always_inline))
+
+#ifdef _OS_WINDOWS_
+#define EXTERN_INLINE_DECLARE inline
+#else
+#define EXTERN_INLINE_DECLARE inline __attribute__ ((visibility("default")))
+#endif
+#define EXTERN_INLINE_DEFINE extern inline JL_DLLEXPORT
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
 #  define NOINLINE __declspec(noinline)

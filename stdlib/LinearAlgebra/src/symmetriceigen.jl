@@ -1,16 +1,66 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # preserve HermOrSym wrapper
-eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.uplo))
-eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
+# Call `copytrito!` instead of `copy_similar` to only copy the matching triangular half
+eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric{<:Complex}, S) = copyto!(similar(parent(A), S), A)
+
+default_eigen_alg(A) = DivideAndConquer()
 
 # Eigensolvers for symmetric and Hermitian matrices
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
-    Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
+function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    if alg === DivideAndConquer()
+        Eigen(sorteig!(LAPACK.syevd!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === QRIteration()
+        Eigen(sorteig!(LAPACK.syev!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === RobustRepresentations()
+        Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
+    else
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
+    end
+end
 
-function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
+"""
+    eigen(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A)) -> Eigen
+
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
+
+See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
+a comparison of the accuracy and performance of different algorithms.
+
+The default `alg` used may change in the future.
+
+!!! compat "Julia 1.12"
+    The `alg` keyword argument requires Julia 1.12 or later.
+
+The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
+"""
+function eigen(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    _eigen(A, alg; sortby)
+end
+
+# we dispatch on the eltype in an internal method to avoid ambiguities
+function _eigen(A::RealHermSymComplexHerm, alg::Algorithm; sortby)
     S = eigtype(eltype(A))
-    eigen!(eigencopy_oftype(A, S), sortby=sortby)
+    eigen!(eigencopy_oftype(A, S), alg; sortby)
+end
+
+function _eigen(A::RealHermSymComplexHerm{Float16}, alg::Algorithm; sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), alg, sortby=sortby)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
@@ -63,16 +113,41 @@ function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigen!(eigencopy_oftype(A, S), vl, vh)
 end
 
-function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
-    vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    vals::Vector{real(eltype(A))} = if alg === DivideAndConquer()
+        LAPACK.syevd!('N', A.uplo, A.data)
+    elseif alg === QRIteration()
+        LAPACK.syev!('N', A.uplo, A.data)
+    elseif alg === RobustRepresentations()
+        LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+    else
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
+    end
     !isnothing(sortby) && sort!(vals, by=sortby)
     return vals
 end
 
-function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
+"""
+    eigvals(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A))) -> values
+
+Return the eigenvalues of `A`.
+
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
+
+See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
+a comparison of the accuracy and performance of different methods.
+
+The default `alg` used may change in the future.
+"""
+function eigvals(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
-    eigvals!(eigencopy_oftype(A, S), sortby=sortby)
+    eigvals!(eigencopy_oftype(A, S), alg; sortby)
 end
+
 
 """
     eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
@@ -295,8 +370,16 @@ function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{F
     return eigvals!(A; sortby)
 end
 
-
-function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+eigen(A::Hermitian{<:Complex, <:Tridiagonal}; kwargs...) =
+    _eigenhermtridiag(A; kwargs...)
+# disambiguation
+function eigen(A::Hermitian{Complex{Float16}, <:Tridiagonal}; kwargs...)
+    E = _eigenhermtridiag(A; kwargs...)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{ComplexF16}, E.vectors)
+    return Eigen(values, vectors)
+end
+function _eigenhermtridiag(A::Hermitian{<:Complex,<:Tridiagonal}; kwargs...)
     (; dl, d, du) = parent(A)
     N = length(d)
     if N <= 1

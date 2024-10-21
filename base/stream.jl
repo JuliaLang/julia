@@ -122,7 +122,7 @@ const DEFAULT_READ_BUFFER_SZ = 10485760 # 10 MB
 if Sys.iswindows()
     const MAX_OS_WRITE = UInt(0x1FF0_0000) # 511 MB (determined semi-empirically, limited to 31 MB on XP)
 else
-    const MAX_OS_WRITE = UInt(typemax(Csize_t))
+    const MAX_OS_WRITE = UInt(0x7FFF_0000) # almost 2 GB (both macOS and linux have this kernel restriction, although only macOS documents it)
 end
 
 
@@ -453,14 +453,16 @@ function closewrite(s::LibuvStream)
     sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -566,6 +568,13 @@ julia> displaysize(stdout)
 displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
+
+# This is a fancy way to make de-specialize a call to `displaysize(io::IO)`
+# which is unfortunately invalidated by REPL
+#  (https://github.com/JuliaLang/julia/issues/56080)
+#
+# This makes the call less efficient, but avoids being invalidated by REPL.
+displaysize_(io::IO) = Base.invoke_in_world(Base.tls_world_age(), displaysize, io)::Tuple{Int,Int}
 
 function displaysize(io::TTY)
     check_open(io)
@@ -932,6 +941,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
+        initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
         newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
@@ -942,7 +952,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -1062,17 +1073,19 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1601,7 +1614,7 @@ end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
 
-function reseteof(x::BufferStream)
+function reseteof(s::BufferStream)
     lock(s.cond) do
         s.status = StatusOpen
         nothing

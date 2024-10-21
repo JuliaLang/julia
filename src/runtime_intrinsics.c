@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 const unsigned int host_char_bit = 8;
 
@@ -255,7 +256,7 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 11) || \
      (defined(__clang__) && __clang_major__ > 14)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
-    !defined(_OS_WINDOWS_)
+    !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define FLOAT16_TYPE _Float16
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define FLOAT16_FROM_UINT16(x) (*(_Float16*)&(x))
@@ -354,7 +355,7 @@ float julia_bfloat_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
      (defined(__clang__) && __clang_major__ > 16)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
-    !defined(_OS_WINDOWS_)
+    !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define BFLOAT16_FROM_UINT16(x) (*(__bf16*)&(x))
@@ -673,8 +674,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     void *ptr;
     jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
-    jl_value_t *jv = jl_gc_alloc_1w();
-    jl_set_typeof(jv, rt);
+    jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
     JL_GC_POP();
     return jv;
@@ -1384,10 +1384,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
 #define add(a,b) a + b
 bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
-bi_iintrinsic_fast(LLVMAdd, add, add_ptr, u)
 #define sub(a,b) a - b
 bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
-bi_iintrinsic_fast(LLVMSub, sub, sub_ptr, u)
 #define mul(a,b) a * b
 bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
 #define div(a,b) a / b
@@ -1576,6 +1574,16 @@ bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
+#if JL_LLVM_VERSION >= 170000
+//uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
+uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
+//#define ctlz_op(a) __builtin_ctlz(a)
+//uu_iintrinsic_fast(LLVMCountl_zero, ctlz_op, ctlz_int, u)
+uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
+//#define cttz_op(a) __builtin_cttz(a)
+//uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
+uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
+#else
 //uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
@@ -1584,6 +1592,7 @@ uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
+#endif
 #define not_op(a) ~a
 un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 
@@ -1695,4 +1704,20 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(add_ptr, pointer, ptr);
+    JL_TYPECHK(add_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) + jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
+}
+
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(sub_ptr, pointer, ptr);
+    JL_TYPECHK(sub_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) - jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
 }

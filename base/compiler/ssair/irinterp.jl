@@ -5,37 +5,42 @@ function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
     return typ
 end
 
-function concrete_eval_invoke(interp::AbstractInterpreter,
-    inst::Expr, mi::MethodInstance, irsv::IRInterpretationState)
-    world = frame_world(irsv)
-    mi_cache = WorldView(code_cache(interp), world)
-    code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
-    argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv)
-    argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
-    effects = decode_effects(code.ipo_purity_bits)
+function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, argtypes::Vector{Any}, parent::IRInterpretationState)
+    world = frame_world(parent)
+    effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
-        value = let world = get_inference_world(interp)
-            try
-                Core._call_in_world_total(world, args...)
-            catch
-                return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects)))
-            end
+        value = try
+            Core._call_in_world_total(world, args...)
+        catch
+            return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects)))
         end
         return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
-        if is_constprop_edge_recursed(mi, irsv)
+        mi = ci.def
+        if is_constprop_edge_recursed(mi, parent)
             return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
         end
-        newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
+        newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
         if newirsv !== nothing
-            newirsv.parent = irsv
+            assign_parentchild!(newirsv, parent)
             return ir_abstract_constant_propagation(interp, newirsv)
         end
         return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
     end
+end
+
+function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instruction, irsv::IRInterpretationState)
+    stmt = inst[:stmt]
+    mi = stmt.args[1]::MethodInstance
+    world = frame_world(irsv)
+    mi_cache = WorldView(code_cache(interp), world)
+    code = get(mi_cache, mi, nothing)
+    code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
+    argtypes = collect_argtypes(interp, stmt.args[2:end], nothing, irsv)
+    argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
+    return concrete_eval_invoke(interp, code, argtypes, irsv)
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::IRInterpretationState) = abstract_eval_ssavalue(s, sv.ir)
@@ -46,9 +51,12 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    (; rt, exct, effects, info) = abstract_call(interp, arginfo, si, irsv)
-    irsv.ir.stmts[irsv.curridx][:info] = info
-    return RTEffects(rt, exct, effects)
+    call = abstract_call(interp, arginfo, si, irsv)::Future
+    Future{Any}(call, interp, irsv) do call, interp, irsv
+        irsv.ir.stmts[irsv.curridx][:info] = call.info
+        nothing
+    end
+    return call
 end
 
 function kill_block!(ir::IRCode, bb::Int)
@@ -124,7 +132,6 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             add_flag!(inst, IR_FLAG_NOTHROW)
             if condval
                 inst[:stmt] = nothing
-                inst[:type] = Any
                 kill_edge!(irsv, bb, stmt.dest)
             else
                 inst[:stmt] = GotoNode(stmt.dest)
@@ -137,11 +144,24 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
-            (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+            head === :static_parameter || head === :isdefined || head === :boundscheck)
+            @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
+            result = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+            reverse!(irsv.tasks)
+            while true
+                if length(irsv.callstack) > irsv.frameid
+                    typeinf(interp, irsv.callstack[irsv.frameid + 1])
+                elseif !doworkloop(interp, irsv)
+                    break
+                end
+            end
+            @assert length(irsv.callstack) == irsv.frameid && isempty(irsv.tasks)
+            result isa Future && (result = result[])
+            (; rt, effects) = result
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
-            rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
+            rt, (nothrow, noub) = abstract_eval_invoke_inst(interp, inst, irsv)
             if nothrow
                 add_flag!(inst, IR_FLAG_NOTHROW)
             end
@@ -163,6 +183,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :leave
             return false
         else
+            Core.println(stmt)
             error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(stmt, PhiNode)
@@ -171,6 +192,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         rt = argextype(stmt.val, irsv.ir)
     elseif isa(stmt, PhiCNode)
         # Currently not modeled
+        return false
+    elseif isa(stmt, EnterNode)
+        # TODO: Propagate scope type changes
         return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
@@ -185,6 +209,13 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         rt = argextype(stmt, irsv.ir)
     end
     if rt !== nothing
+        if has_flag(inst, IR_FLAG_UNUSED)
+            # Don't bother checking the type if we know it's unused
+            if has_flag(inst, IR_FLAGS_REMOVABLE)
+                inst[:stmt] = nothing
+            end
+            return false
+        end
         if isa(rt, Const)
             inst[:type] = rt
             if is_inlineable_constant(rt.val) && has_flag(inst, IR_FLAGS_REMOVABLE)
@@ -277,7 +308,7 @@ function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irs
     return true
 end
 
-function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
+function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
 
@@ -319,7 +350,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = (isa(stmt, PhiNode) || isterminator(stmt))
+        is_terminator_or_phi = (isa(stmt, PhiNode) || stmt === nothing || isterminator(stmt))
         if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end
@@ -425,20 +456,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         store_backedges(frame_instance(irsv), irsv.edges)
     end
 
+    if irsv.frameid != 0
+        callstack = irsv.callstack::Vector{AbsIntState}
+        @assert callstack[end] === irsv && length(callstack) == irsv.frameid
+        pop!(callstack)
+    end
+
     return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
 end
-
-function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
-    if __measure_typeinf__[]
-        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
-        Timings.enter_new_timer(inf_frame)
-        ret = _ir_abstract_constant_propagation(interp, irsv)
-        append!(inf_frame.slottypes, irsv.ir.argtypes)
-        Timings.exit_current_timer(inf_frame)
-        return ret
-    else
-        return _ir_abstract_constant_propagation(interp, irsv)
-    end
-end
-ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
-    _ir_abstract_constant_propagation(interp, irsv)

@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-global PROGRAM_FILE = ""
+global PROGRAM_FILE::String = ""
 
 """
     ARGS
@@ -75,11 +75,11 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 
 * `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
-* `config`: Contains julia-level configuration such as a `startup.jl`
+* `config`: Contains julia-level configuration such as a `startup.jl`.
 * `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
-* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and Julia.
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 * `scratchspaces`: Contains content that a package itself installs via the [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) package. `Pkg.gc()` will delete content that is known to be unused.
@@ -112,20 +112,23 @@ function init_depot_path()
 
         # otherwise, populate the depot path with the entries in JULIA_DEPOT_PATH,
         # expanding empty strings to the bundled depot
-        populated = false
-        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
+        pushfirst_default = true
+        for (i, path) in enumerate(eachsplit(str, Sys.iswindows() ? ';' : ':'))
             if isempty(path)
                 append_bundled_depot_path!(DEPOT_PATH)
             else
                 path = expanduser(path)
                 path in DEPOT_PATH || push!(DEPOT_PATH, path)
-                populated = true
+                if i == 1
+                    # if a first entry is given, don't add the default depot at the start
+                    pushfirst_default = false
+                end
             end
         end
 
         # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
         # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
-        if !populated
+        if pushfirst_default
             pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
         end
     else
@@ -245,8 +248,14 @@ function init_load_path()
     if haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        paths = filter!(env -> env !== nothing,
-            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+        paths = String[]
+        for env in DEFAULT_LOAD_PATH
+            if env == "@."
+                env = current_project()
+                env === nothing && continue
+            end
+            push!(paths, env)
+        end
     end
     append!(empty!(LOAD_PATH), paths)
 end
@@ -263,6 +272,7 @@ function init_active_project()
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
@@ -271,19 +281,25 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
+        env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@scriptdir")
+        if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)
                 dir = dirname(PROGRAM_FILE)
             else
-                cmds = unsafe_load_commands(opts.commands)
-                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                cmds = unsafe_load_commands(JLOptions().commands)
+                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
                     # Usage error. The user did not pass a script.
                     return nothing
                 end
                 dir = dirname(ARGS[1])
             end
-            return abspath(replace(env, "@scriptdir" => dir))
+            if env == "@script"  # complete match, not startswith, so search upwards
+                return current_project(dir)
+            else
+                # starts with, so assume relative path is after
+                return abspath(replace(env, "@script" => dir))
+            end
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
@@ -425,6 +441,11 @@ function atexit(f::Function)
 end
 
 function _atexit(exitcode::Cint)
+    # this current task shouldn't be scheduled anywhere, but if it was (because
+    # this exit came from a signal for example), then try to clear that state
+    # to minimize scheduler issues later
+    ct = current_task()
+    q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we
@@ -480,7 +501,7 @@ end
 
 ## hook for disabling threaded libraries ##
 
-library_threading_enabled = true
+library_threading_enabled::Bool = true
 const disable_library_threading_hooks = []
 
 function at_disable_library_threading(f)

@@ -655,7 +655,7 @@ end
         @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
         @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
         @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
-        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(1), T(0))
+        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(0), T(0))
 
         if T <: Signed
             @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
@@ -700,6 +700,22 @@ end
         @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
         @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
     end
+end
+
+@testset "gcdx for 1 and 3+ arguments" begin
+    # one-argument
+    @test gcdx(7) == (7, 1)
+    @test gcdx(-7) == (7, -1)
+    @test gcdx(1//4) == (1//4, 1)
+
+    # 3+ arguments
+    @test gcdx(2//3) == gcdx(2//3) == (2//3, 1)
+    @test gcdx(15, 12, 20) == (1, 7, -7, -1)
+    @test gcdx(60//4, 60//5, 60//3) == (1//1, 7, -7, -1)
+    abcd = (105, 1638, 2145, 3185)
+    d, uvwp... = gcdx(abcd...)
+    @test d == sum(abcd .* uvwp) # u*a + v*b + w*c + p*d == gcd(a, b, c, d)
+    @test (@inferred gcdx(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) isa NTuple{11, Int}
 end
 
 @testset "Binary operations with Integer" begin
@@ -800,4 +816,21 @@ end
     @assert Float64(precise_next) == nextfloat(0.1)
     @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
+end
+
+@testset "complex numerator, denominator" begin
+    z = complex(3*3, 2*3*5)
+    @test z === numerator(z) === numerator(z // 2) === numerator(z // 5)
+    @test complex(3, 2*5) === numerator(z // 3)
+    @test isone(denominator(z))
+    @test 2 === denominator(z // 2)
+    @test 1 === denominator(z // 3)
+    @test 5 === denominator(z // 5)
+    for den ∈ 1:10
+        q = z // den
+        @test q === (numerator(q)//denominator(q))
+    end
+    @testset "do not overflow silently" begin
+        @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
+    end
 end

@@ -58,7 +58,11 @@
 #include "llvm-version.h"
 
 // for outputting disassembly
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
 #include <llvm/AsmParser/Parser.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/BinaryFormat/COFF.h>
@@ -99,6 +103,7 @@
 // for outputting assembly
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/AsmPrinterHandler.h>
+#include <llvm/CodeGen/DebugHandlerBase.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/Passes.h>
 #include <llvm/CodeGen/TargetPassConfig.h>
@@ -495,7 +500,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
     std::string code;
     raw_string_ostream stream(code);
 
-    {
+    if (dump->F) {
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
@@ -916,11 +921,17 @@ static void jl_dump_asm_internal(
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     std::unique_ptr<MCStreamer> Streamer(
-            TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
-                                         /*useDwarfDirectory*/ true,
-                                         IP.release(),
-                                         std::move(CE), std::move(MAB),
-                                         /*ShowInst*/ false));
+#if JL_LLVM_VERSION >= 190000
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream),
+
+                                     IP.release(), std::move(CE), std::move(MAB))
+#else
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/ true,
+                                     /*useDwarfDirectory*/ true, IP.release(),
+                                     std::move(CE), std::move(MAB),
+                                     /*ShowInst*/ false)
+#endif
+    );
     Streamer->initSections(true, *STI);
 
     // Make the MemoryObject wrapper
@@ -1047,6 +1058,8 @@ static void jl_dump_asm_internal(
                 if (insSize == 0) // skip illegible bytes
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
+#elif defined(_CPU_RISCV64_)
+                    insSize = 2; // instructions can be 2 bytes when compressed
 #else
                     insSize = 1; // attempt to slide 1 byte forward
 #endif
@@ -1094,7 +1107,11 @@ static void jl_dump_asm_internal(
                             const MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
+                                #if JL_LLVM_VERSION >= 170000
+                                if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
+                                #else
                                 if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
+                                #endif
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
                                 if (name)
@@ -1140,7 +1157,11 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     return &MMIWP->getMMI().getContext();
 }
 
+#if JL_LLVM_VERSION >= 190000
+class LineNumberPrinterHandler : public DebugHandlerBase {
+#else
 class LineNumberPrinterHandler : public AsmPrinterHandler {
+#endif
     MCStreamer &S;
     LineNumberAnnotatedWriter LinePrinter;
     std::string Buffer;
@@ -1149,7 +1170,11 @@ class LineNumberPrinterHandler : public AsmPrinterHandler {
 
 public:
     LineNumberPrinterHandler(AsmPrinter &Printer, const char *debuginfo)
-        : S(*Printer.OutStreamer),
+        :
+#if JL_LLVM_VERSION >= 190000
+          DebugHandlerBase(&Printer),
+#endif
+          S(*Printer.OutStreamer),
           LinePrinter("; ", true, debuginfo),
           RawStream(Buffer),
           Stream(RawStream) {}
@@ -1168,12 +1193,20 @@ public:
     //virtual void beginModule(Module *M) override {}
     virtual void endModule() override {}
     /// note that some AsmPrinter implementations may not call beginFunction at all
+#if JL_LLVM_VERSION >= 190000
+    virtual void beginFunctionImpl(const MachineFunction *MF) override {
+#else
     virtual void beginFunction(const MachineFunction *MF) override {
+#endif
         LinePrinter.emitFunctionAnnot(&MF->getFunction(), Stream);
         emitAndReset();
     }
     //virtual void markFunctionEnd() override {}
+#if JL_LLVM_VERSION >= 190000
+    virtual void endFunctionImpl(const MachineFunction *MF) override {
+#else
     virtual void endFunction(const MachineFunction *MF) override {
+#endif
         LinePrinter.emitEnd(Stream);
         emitAndReset();
     }
@@ -1196,7 +1229,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
-    { // scope block
+    if (dump->F) { // scope block also
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         TSM->withModuleDo([&](Module &m) {
@@ -1216,7 +1249,11 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
         addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (emit_mc) {
             raw_svector_ostream obj_OS(ObjBufferSV);
+#if JL_LLVM_VERSION >= 180000
+            if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CodeGenFileType::ObjectFile, false, nullptr))
+#else
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
+#endif
                 return jl_an_empty_string;
             TSM->withModuleDo([&](Module &m) { PM.run(m); });
         }
@@ -1245,15 +1282,23 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-                *Context, std::move(FOut), true,
-                true, InstPrinter,
-                std::move(MCE), std::move(MAB),
-                false));
+#if JL_LLVM_VERSION >= 190000
+                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)
+#else
+                *Context, std::move(FOut), true, true, InstPrinter, std::move(MCE),
+                std::move(MAB), false
+#endif
+                    ));
             std::unique_ptr<AsmPrinter> Printer(
                 TM->getTarget().createAsmPrinter(*TM, std::move(S)));
+#if JL_LLVM_VERSION >= 190000
+            Printer->addDebugHandler(
+                        std::make_unique<LineNumberPrinterHandler>(*Printer, debuginfo));
+#else
             Printer->addAsmPrinterHandler(AsmPrinter::HandlerInfo(
                         std::unique_ptr<AsmPrinterHandler>(new LineNumberPrinterHandler(*Printer, debuginfo)),
                         "emit", "Debug Info Emission", "Julia", "Julia::LineNumberPrinterHandler Markup"));
+#endif
             if (!Printer)
                 return jl_an_empty_string;
             PM.add(Printer.release());

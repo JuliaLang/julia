@@ -17,18 +17,15 @@ concurrently.
     Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 
-In its simplest form you can create a [`Base.ScopedValue`](@ref) with a
-default value and then use [`Base.with`](@ref with) or [`Base.@with`](@ref) to
-enter a new dynamic scope.
+In its simplest form you can create a [`ScopedValue`](@ref Base.ScopedValues.ScopedValue)
+with a default value and then use [`with`](@ref Base.ScopedValues.with) or
+[`@with`](@ref Base.ScopedValues.@with) to enter a new dynamic scope. The new scope will
+inherit all values from the parent scope (and recursively from all outer scopes) with the
+provided scoped value taking priority over previous definitions.
 
-The new scope will inherit all values from the parent scope
-(and recursively from all outer scopes) with the provided scoped
-value taking priority over previous definitions.
-
-Let's first look at an example of **lexical** scope:
-
-A `let` statements begins a new lexical scope within which the outer definition
-of `x` is shadowed by it's inner definition.
+Let's first look at an example of **lexical** scope. A `let` statement begins
+a new lexical scope within which the outer definition of `x` is shadowed by
+it's inner definition.
 
 ```julia
 x = 1
@@ -38,9 +35,9 @@ end
 @show x # 1
 ```
 
-Since Julia uses lexical scope the variable `x` is bound within the function `f`
-to the global scope and entering a `let` scope does not change the value `f`
-observes.
+In the following example, since Julia uses lexical scope, the variable `x` in the body
+of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
+not change the value `f` observes.
 
 ```julia
 x = 1
@@ -64,7 +61,7 @@ end
 f() # 1
 ```
 
-Not that the observed value of the `ScopedValue` is dependent on the execution
+Note that the observed value of the `ScopedValue` is dependent on the execution
 path of the program.
 
 It often makes sense to use a `const` variable to point to a scoped value,
@@ -74,34 +71,54 @@ and you can set the value of multiple `ScopedValue`s with one call to `with`.
 ```julia
 using Base.ScopedValues
 
-const scoped_val = ScopedValue(1)
-const scoped_val2 = ScopedValue(0)
+f() = @show a[]
+g() = @show b[]
 
-# Enter a new dynamic scope and set value
-@show scoped_val[] # 1
-@show scoped_val2[] # 0
-with(scoped_val => 2) do
-    @show scoped_val[] # 2
-    @show scoped_val2[] # 0
-    with(scoped_val => 3, scoped_val2 => 5) do
-        @show scoped_val[] # 3
-        @show scoped_val2[] # 5
+const a = ScopedValue(1)
+const b = ScopedValue(2)
+
+f() # a[] = 1
+g() # b[] = 2
+
+# Enter a new dynamic scope and set value.
+with(a => 3) do
+    f() # a[] = 3
+    g() # b[] = 2
+    with(a => 4, b => 5) do
+        f() # a[] = 4
+        g() # b[] = 5
     end
-    @show scoped_val[] # 2
-    @show scoped_val2[] # 0
+    f() # a[] = 3
+    g() # b[] = 2
 end
-@show scoped_val[] # 1
-@show scoped_val2[] # 0
+
+f() # a[] = 1
+g() # b[] = 2
 ```
 
-Since `with` requires a closure or a function and creates another call-frame,
-it can sometimes be beneficial to use the macro form.
+`ScopedValues` provides a macro version of `with`. The expression `@with var=>val expr`
+evaluates `expr` in a new dynamic scope with `var` set to `val`. `@with var=>val expr`
+is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-argument
+closure or function, which results in an extra call-frame. As an example, consider the
+following function `f`:
 
 ```julia
 using Base.ScopedValues
+const a = ScopedValue(1)
+f(x) = a[] + x
+```
 
-const STATE = ScopedValue{State}()
-with_state(f, state::State) = @with(STATE => state, f())
+If you wish to run `f` in a dynamic scope with `a` set to `2`, then you can use `with`:
+
+```julia
+with(() -> f(10), a=>2)
+```
+
+However, this requires wrapping `f` in a zero-argument function. If you wish to avoid
+the extra call-frame, then you can use the `@with` macro:
+
+```julia
+@with a=>2 f(10)
 ```
 
 !!! note
@@ -265,11 +282,11 @@ Base.@kwdef struct Configuration
     verbose::Bool = false
 end
 
-const CONFIG = ScopedValue(Configuration())
+const CONFIG = ScopedValue(Configuration(color=true))
 
-@with CONFIG => Configuration(CONFIG[], color=true) begin
+@with CONFIG => Configuration(color=CONFIG[].color, verbose=true) begin
     @show CONFIG[].color # true
-    @show CONFIG[].verbose # false
+    @show CONFIG[].verbose # true
 end
 ```
 

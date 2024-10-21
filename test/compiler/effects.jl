@@ -89,13 +89,13 @@ Base.@assume_effects :terminates_globally function recur_termination1(x)
     0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination1, (Int,)))
 function recur_termination2()
     Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
-@test_broken fully_eliminated(recur_termination2)
+@test fully_eliminated(recur_termination2)
 @test fully_eliminated() do; recur_termination2(); end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
@@ -104,15 +104,15 @@ Base.@assume_effects :terminates_globally function recur_termination21(x)
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination21, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination22, (Int,)))
 function recur_termination2x()
     Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
-@test_broken fully_eliminated(recur_termination2x)
+@test fully_eliminated(recur_termination2x)
 @test fully_eliminated() do; recur_termination2x(); end
 
 # anonymous function support for `@assume_effects`
@@ -236,7 +236,7 @@ end
 # Effect modeling for Core.compilerbarrier
 @test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
 
-# allocation/access of uninitialized fields should taint the :consistent-cy
+# effects modeling for allocation/access of uninitialized fields
 struct Maybe{T}
     x::T
     Maybe{T}() where T = new{T}()
@@ -244,57 +244,9 @@ struct Maybe{T}
     Maybe(x::T) where T = new{T}(x)
 end
 Base.getindex(x::Maybe) = x.x
-
 struct SyntacticallyDefined{T}
     x::T
 end
-
-import Core.Compiler: Const, getfield_notundefined
-for T = (Base.RefValue, Maybe) # both mutable and immutable
-    for name = (Const(1), Const(:x))
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{Union{String,Integer}}, name)
-        @test getfield_notundefined(Union{T{String},T{Integer}}, name)
-        @test !getfield_notundefined(T{Int}, name)
-        @test !getfield_notundefined(T{<:Integer}, name)
-        @test !getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test !getfield_notundefined(T, name)
-    end
-    # throw doesn't account for undefined behavior
-    for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
-                Float64, String, Nothing)
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Int}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{<:Integer}, name)
-        @test getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test getfield_notundefined(T, name)
-    end
-    # should not be too conservative when field isn't known very well but object information is accurate
-    @test getfield_notundefined(T{String}, Int)
-    @test getfield_notundefined(T{String}, Symbol)
-    @test getfield_notundefined(T{Integer}, Int)
-    @test getfield_notundefined(T{Integer}, Symbol)
-    @test !getfield_notundefined(T{Int}, Int)
-    @test !getfield_notundefined(T{Int}, Symbol)
-    @test !getfield_notundefined(T{<:Integer}, Int)
-    @test !getfield_notundefined(T{<:Integer}, Symbol)
-end
-# should be conservative when object information isn't accurate
-@test !getfield_notundefined(Any, Const(1))
-@test !getfield_notundefined(Any, Const(:x))
-# tuples and namedtuples should be okay if not given accurate information
-for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
-                    NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
-    FieldType = Any[Int, Symbol, Any]
-    @test getfield_notundefined(TupleType, FieldType)
-end
-# skip analysis on fields that are known to be defined syntactically
-@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
-# high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -858,7 +810,12 @@ end
 #        @test !Core.Compiler.is_nothrow(effects)
 #    end
 #end
-#
+
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growbeg!, (Vector{Int}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growbeg!, (Vector{Any}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growend!, (Vector{Int}, Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(Base._growend!, (Vector{Any}, Int)))
+
 # tuple indexing
 # --------------
 
@@ -904,7 +861,6 @@ end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
-@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
 @test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -970,7 +926,7 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 abstractly_recursive1() = abstractly_recursive2()
 abstractly_recursive2() = (Core.Compiler._return_type(abstractly_recursive1, Tuple{}); 1)
 abstractly_recursive3() = abstractly_recursive2()
-@test Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
+@test_broken Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
 actually_recursive1(x) = actually_recursive2(x)
 actually_recursive2(x) = (x <= 0) ? 1 : actually_recursive1(x - 1)
 actually_recursive3(x) = actually_recursive2(x)
@@ -996,7 +952,7 @@ end
 let effects = Base.infer_effects() do
         isdefined(defined_ref, :x)
     end
-    @test Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_consistent(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
@@ -1096,13 +1052,15 @@ function f2_optrefine()
     end
     return true
 end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine; optimize=false))
 @test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
 
 function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
-@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+@test !Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine; optimize=false))
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
 
 # Check that :consistent is properly modeled for throwing statements
 const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
@@ -1188,6 +1146,14 @@ end
 @test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_2, (Vector{Int},)))
 @test_broken Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_arr!, (Vector{Int},)))
 
+# EA-based refinement of :effect_free
+function f_EA_refine(ax, b)
+    bx = Ref{Any}()
+    @noinline bx[] = b
+    return ax[] + b
+end
+@test Core.Compiler.is_effect_free(Base.infer_effects(f_EA_refine, (Base.RefValue{Int},Int)))
+
 function issue51837(; openquotechar::Char, newlinechar::Char)
     ncodeunits(openquotechar) == 1 || throw(ArgumentError("`openquotechar` must be a single-byte character"))
     if !isnothing(newlinechar)
@@ -1215,22 +1181,22 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
       Core.Compiler.ALWAYS_FALSE
 
 # noub modeling for memory ops
-let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
-        (Core.memoryref, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryrefnew, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
     function builtin_effects(@nospecialize xs...)
         interp = Core.Compiler.NativeInterpreter()
         𝕃 = Core.Compiler.typeinf_lattice(interp)
         rt = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
         return Core.Compiler.builtin_effects(𝕃, xs..., rt)
     end
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[Memory,]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(true)]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(false)]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Bool]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Int]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Vararg{Bool}]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[Memory,]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Vararg{Any}]))
     @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Bool]))
@@ -1251,7 +1217,7 @@ let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
     # `:boundscheck` taint should be refined by post-opt analysis
     @test Base.infer_effects() do xs::Vector{Any}, i::Int
-        memoryrefget(memoryref(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
+        memoryrefget(memoryrefnew(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
     end |> Core.Compiler.is_noub_if_noinbounds
 end
 
@@ -1259,7 +1225,7 @@ end
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Int},Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Any},Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Int},Int,Int)))
-@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Any},Any,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(Base._setindex!, (Vector{Any},Any,Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Int},Int)))
 @test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Any},Int)))
 @test Base.infer_effects((Vector{Int},Int)) do xs, i
@@ -1387,3 +1353,29 @@ let; Base.Experimental.@force_compile; func52843(); end
 # https://github.com/JuliaLang/julia/issues/53508
 @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (UnitRange{Int},Int)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Base.OneTo{Int},Int)))
+
+@noinline f53613() = @assert isdefined(@__MODULE__, :v53613)
+g53613() = f53613()
+h53613() = g53613()
+@test !Core.Compiler.is_consistent(Base.infer_effects(f53613))
+@test !Core.Compiler.is_consistent(Base.infer_effects(g53613))
+@test_throws AssertionError f53613()
+@test_throws AssertionError g53613()
+@test_throws AssertionError h53613()
+global v53613 = nothing
+@test f53613() === nothing
+@test g53613() === nothing
+@test h53613() === nothing
+
+# tuple/svec effects
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.tuple(xs...)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.svec(xs...)
+end |> Core.Compiler.is_nothrow
+
+# effects for unknown `:foreigncall`s
+@test Base.infer_effects() do
+    @ccall unsafecall()::Cvoid
+end == Core.Compiler.EFFECTS_UNKNOWN

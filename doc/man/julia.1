@@ -28,7 +28,7 @@
 julia - a high-level, high-performance dynamic programming language for technical computing
 
 .SH SYNOPSIS
-\fBjulia\fR [OPTIONS...] \fB--\fR [PROGRAMMFILE] [ARGS...]
+\fBjulia\fR [OPTIONS...] \fB--\fR [PROGRAMFILE] [ARGS...]
 
 If a Julia source file is given as a \fIPROGRAMFILE\fP (optionally followed by
 arguments in \fIARGS\fP) Julia will execute the program and exit.
@@ -59,7 +59,7 @@ Display version information
 
 .TP
 -h, --help
-Print help message
+Print command-line options (this message)
 
 .TP
 --help-hidden
@@ -77,7 +77,7 @@ Start up with the given system image file
 
 .TP
 -H, --home <dir>
-Set location of julia executable
+Set location of `julia` executable
 
 .TP
 --startup-file={yes*|no}
@@ -95,44 +95,47 @@ Use native code from system image if available
 .TP
 --compiled-modules={yes*|no|existing|strict}
 Enable or disable incremental precompilation of modules.
-The "existing" option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files.
-The "strict" option is similar, but will error if no precompile file is found.
+The `existing` option allows use of existing compiled modules that were
+previously precompiled, but disallows creation of new precompile files.
+The `strict` option is similar, but will error if no precompile file is found.
 
 .TP
 --pkgimages={yes*|no|existing}
 Enable or disable usage of native code caching in the form of pkgimages
+The `existing` option allows use of existing pkgimages but disallows creation of new ones
 
 .TP
 -e, --eval <expr>
 Evaluate <expr>
 
 .TP
--m, --module <Package> [args]
-Run entry point of `Package` (`@main` function) with `args'.
-
-
-.TP
 -E, --print <expr>
 Evaluate <expr> and display the result
+
+.TP
+-m, --module <Package> [args]
+Run entry point of `Package` (`@main` function) with `args'
 
 .TP
 -L, --load <file>
 Load <file> immediately on all processors
 
 .TP
--t, --threads <n>
-Enable n threads; "auto" tries to infer a useful default number
-of threads to use but the exact behavior might change in the future.
-Currently, "auto" uses the number of CPUs assigned to this julia
-process based on the OS-specific affinity assignment interface, if
-supported (Linux and Windows). If this is not supported (macOS) or
-process affinity is not configured, it uses the number of CPU
-threads.
+-t, --threads {auto|N[,auto|M]}
+Enable N[+M] threads; N threads are assigned to the `default`
+threadpool, and if M is specified, M threads are assigned to the
+`interactive` threadpool; `auto` tries to infer a useful
+default number of threads to use but the exact behavior might change
+in the future. Currently sets N to the number of CPUs assigned to
+this Julia process based on the OS-specific affinity assignment
+interface if supported (Linux and Windows) or to the number of CPU
+threads if not supported (MacOS) or if process affinity is not
+configured, and sets M to 1.
 
 .TP
 --gcthreads=N[,M]
 Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.
-N is set to half of the number of compute threads and M is set to 0 if unspecified.
+N is set to the number of compute threads and M is set to 0 if unspecified.
 
 .TP
 -p, --procs {N|auto}
@@ -144,7 +147,7 @@ as the number of local CPU threads (logical cores)
 Run processes on hosts listed in <file>
 
 .TP
--i
+-i, --interactive
 Interactive mode; REPL runs and `isinteractive()` is true
 
 .TP
@@ -152,7 +155,7 @@ Interactive mode; REPL runs and `isinteractive()` is true
 Quiet startup: no banner, suppress REPL warnings
 
 .TP
---banner={yes|no|auto*}
+--banner={yes|no|short|auto*}
 Enable or disable startup banner
 
 .TP
@@ -180,15 +183,15 @@ Enable or disable warning for ambiguous top-level scope
 Limit usage of CPU features up to <target>; set to `help` to see the available options
 
 .TP
--O, --optimize={0,1,2*,3}
+-O, --optimize={0|1|2*|3}
 Set the optimization level (level 3 if `-O` is used without a level)
 
 .TP
---min-optlevel={0*,1,2,3}
+--min-optlevel={0*|1|2|3}
 Set a lower bound on the optimization level
 
 .TP
--g {0,1*,2}
+-g, --debug-info={0|1*|2}
 Set the level of debug info generation (level 2 if `-g` is used without a level)
 
 .TP
@@ -200,8 +203,12 @@ Control whether inlining is permitted, including overriding @inline declarations
 Emit bounds checks always, never, or respect @inbounds declarations
 
 .TP
---math-mode={ieee|user}
-Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
+--math-mode={ieee|user*}
+Always follow `ieee` floating point semantics or respect `@fastmath` declarations
+
+.TP
+--polly={yes*|no}
+Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)
 
 .TP
 --code-coverage[={none*|user|all}]
@@ -213,8 +220,8 @@ Count executions of source lines in a file or files under a given directory. A `
 be placed before the path to indicate this option. A `@` with no path will track the current directory.
 
 .TP
- --code-coverage=tracefile.info
- Append coverage information to the LCOV tracefile (filename supports format tokens)
+--code-coverage=tracefile.info
+Append coverage information to the LCOV tracefile (filename supports format tokens)
 
 .TP
 --track-allocation[={none*|user|all}]
@@ -222,8 +229,8 @@ Count bytes allocated by each source line (omitting setting is equivalent to `us
 
 .TP
 --track-allocation=@<path>
-Count bytes allocated by each source line in a file or files under a given directory. A `@`
-must be placed before the path to indicate this option. A `@` with no path will track the current directory.
+Count bytes but only in files that fall under the given file path/directory.
+The `@` prefix is required to select this option. A `@` with no path will track the current directory.
 
 .TP
 --bug-report=KIND
@@ -233,7 +240,7 @@ fallbacks to the latest compatible BugReporting.jl if not. For more information,
 --bug-report=help.
 
 .TP
---heap-size-hint=<value>
+--heap-size-hint=<size>
 Forces garbage collection if memory usage is higher than the given value.
 The value may be specified as a number of bytes, optionally in units of
 KB, MB, GB, or TB, or as a percentage of physical memory with %.
@@ -275,12 +282,25 @@ Generate an assembly file (.s)
 Generate an incremental output file (rather than complete)
 
 .TP
---trace-compile={stderr,name}
-Print precompile statements for methods compiled during execution or save to a path
+--trace-compile={stderr|name}
+Print precompile statements for methods compiled during execution or save to stderr or a path.
+Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported
+
+.TP
+--trace-compile-timing=
+If --trace-compile is enabled show how long each took to compile in ms
+
+.TP
+--trace-dispatch={stderr|name}
+Print precompile statements for methods dispatched during execution or save to stderr or a path.
 
 .TP
 -image-codegen
 Force generate code in imaging mode
+
+.TP
+--permalloc-pkgimg={yes|no*}
+Copy the data section of package images into memory
 
 .SH FILES AND ENVIRONMENT
 See https://docs.julialang.org/en/v1/manual/environment-variables/

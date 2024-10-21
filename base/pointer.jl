@@ -118,7 +118,7 @@ end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, dims::Tuple{Int}; own::Bool = false) where {kind,T}
     ccall(:jl_ptr_to_genericmemory, Ref{GenericMemory{kind,T,Core.CPU}},
-          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dim[1], own)
+          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dims[1], own)
 end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, d::Integer; own::Bool = false) where {kind,T}
@@ -313,8 +313,8 @@ isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 <(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
 -(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))
++(x::Ptr, y::Integer) = add_ptr(x, (y % UInt) % UInt)
+-(x::Ptr, y::Integer) = sub_ptr(x, (y % UInt) % UInt)
 +(x::Integer, y::Ptr) = y + x
 
 unsigned(x::Ptr) = UInt(x)

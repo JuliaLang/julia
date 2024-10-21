@@ -162,7 +162,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
-        @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
+        @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -294,7 +294,7 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[26])
-        @test occursin("Expected: [\"BoundsError\", \"aquire\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
@@ -1534,6 +1534,22 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
 
+# Issue 54807
+struct FEexc
+    a::Nothing
+    b::Nothing
+end
+
+@testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
+    feexc = FEexc(nothing, nothing)
+    # This is redundant regular test for FieldError
+    @test_throws FieldError feexc.c
+    # This should raise ErrorException
+    @test_throws ErrorException feexc.a = 1
+    # This is test for FieldError shim and deprecation
+    @test_deprecated @test_throws ErrorException feexc.c
+end
+
 # Issue 25483
 mutable struct PassInformationTestSet <: Test.AbstractTestSet
     results::Vector
@@ -1708,5 +1724,32 @@ end
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
+    end
+
+end
+
+@testset "Deprecated multiple arguments" begin
+    msg1 = """Multiple descriptions provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg1 @macroexpand @testset "name1" "name2" begin end
+    msg2 = """Multiple testset types provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg2 @macroexpand @testset DefaultTestSet DefaultTestSet begin end
+end
+
+# Issue #54082
+module M54082 end
+@testset "@test_throws UndefVarError(:var)" begin
+    # Single-arg `UndefVarError` should match all `UndefVarError` for the
+    # same variable name, regardless of scope, to keep pre-v1.11 behaviour.
+    f54082() = var
+    @test_throws UndefVarError(:var) f54082()
+    # But if scope is set, then it has to match.
+    @test_throws UndefVarError(:var, M54082) M54082.var
+    let result = @testset NoThrowTestSet begin
+            # Wrong module scope
+            @test_throws UndefVarError(:var, Main) M54082.var
+        end
+        @test only(result) isa Test.Fail
     end
 end

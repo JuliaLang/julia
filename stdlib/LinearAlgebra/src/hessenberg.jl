@@ -66,12 +66,14 @@ similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.da
 AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H)
 AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
+Base.dataids(A::UpperHessenberg) = Base.dataids(parent(A))
+Base.unaliascopy(A::UpperHessenberg) = UpperHessenberg(Base.unaliascopy(parent(A)))
+
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
-real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
-function istriu(A::UpperHessenberg, k::Integer=0)
+Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
     return _istriu(A, k)
 end
@@ -84,13 +86,15 @@ end
 Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
     i <= j+1 ? isassigned(H.data, i, j) : true
 
-Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
+Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Int, j::Int) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
+
+Base._reverse(A::UpperHessenberg, dims) = reverse!(Matrix(A); dims)
 
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -180,7 +184,7 @@ end
 function ldiv!(F::UpperHessenberg, B::AbstractVecOrMat; shift::Number=false)
     checksquare(F)
     m = size(F,1)
-    m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side # rows != $m"))
+    m != size(B,1) && throw(DimensionMismatch(lazy"wrong right-hand-side # rows != $m"))
     require_one_based_indexing(B)
     n = size(B,2)
     H = F.data
@@ -230,7 +234,7 @@ end
 function rdiv!(B::AbstractMatrix, F::UpperHessenberg; shift::Number=false)
     checksquare(F)
     m = size(F,1)
-    m != size(B,2) && throw(DimensionMismatch("wrong right-hand-side # cols != $m"))
+    m != size(B,2) && throw(DimensionMismatch(lazy"wrong right-hand-side # cols != $m"))
     require_one_based_indexing(B)
     n = size(B,1)
     H = F.data
@@ -441,7 +445,7 @@ This is useful because multiple shifted solves `(F + μ*I) \\ b`
 Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 3×3 Matrix{Float64}:
  4.0  9.0  7.0

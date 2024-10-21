@@ -24,6 +24,7 @@ Random.seed!(1234543)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
     @test convert(UniformScaling{Float64}, 2I) === 2.0I
+    @test float(2I) === 2.0*I
 end
 
 @testset "getindex" begin
@@ -67,7 +68,7 @@ end
 
     # on complex plane
     J = UniformScaling(randn(ComplexF64))
-    for f in ( exp,   log,
+    for f in ( exp,   log, cis,
                sqrt,
                sin,   cos,   tan,
                asin,  acos,  atan,
@@ -78,6 +79,10 @@ end
                csch,  sech,  coth,
                acsch, asech, acoth )
         @test f(J) ≈ f(M(J))
+    end
+
+    for f in (sincos, sincosd)
+        @test all(splat(≈), zip(f(J), f(M(J))))
     end
 
     # on real axis
@@ -219,6 +224,13 @@ let
         @test copyto!(A, I) == one(A)
         B = Matrix{ComplexF64}(undef, (1,2))
         @test copyto!(B, J) == [λ zero(λ)]
+    end
+
+    @testset "copy!" begin
+        A = Matrix{Int}(undef, (3,3))
+        @test copy!(A, I) == one(A)
+        B = Matrix{ComplexF64}(undef, (1,2))
+        @test copy!(B, J) == [λ zero(λ)]
     end
 
     @testset "binary ops with vectors" begin

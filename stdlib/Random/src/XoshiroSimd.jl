@@ -3,7 +3,7 @@
 module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
 import ..Random: rand!
-using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!
+using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!, _uint2float
 using Base: BitInteger_types
 using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
@@ -30,7 +30,12 @@ simdThreshold(::Type{Bool}) = 640
     Tuple{UInt64, Int64},
     x, y)
 
-@inline _bits2float(x::UInt64, ::Type{Float64}) = reinterpret(UInt64, Float64(x >>> 11) * 0x1.0p-53)
+# `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
+# `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32, etc...), it
+# truncates each part to the unsigned type of the same size as `T`, scales all of these
+# numbers to a value of type `T` in the range [0,1) with `_uint2float`, and then
+# recomposes another `UInt64` using all these parts.
+@inline _bits2float(x::UInt64, ::Type{Float64}) = reinterpret(UInt64,  _uint2float(x, Float64))
 @inline function _bits2float(x::UInt64, ::Type{Float32})
     #=
     # this implementation uses more high bits, but is harder to vectorize
@@ -40,9 +45,20 @@ simdThreshold(::Type{Bool}) = 640
     =#
     ui = (x>>>32) % UInt32
     li = x % UInt32
-    u = Float32(ui >>> 8) * Float32(0x1.0p-24)
-    l = Float32(li >>> 8) * Float32(0x1.0p-24)
+    u = _uint2float(ui, Float32)
+    l = _uint2float(ui, Float32)
     (UInt64(reinterpret(UInt32, u)) << 32) | UInt64(reinterpret(UInt32, l))
+end
+@inline function _bits2float(x::UInt64, ::Type{Float16})
+    i1 = (x>>>48) % UInt16
+    i2 = (x>>>32) % UInt16
+    i3 = (x>>>16) % UInt16
+    i4 = x % UInt16
+    f1 = _uint2float(i1, Float16)
+    f2 = _uint2float(i2, Float16)
+    f3 = _uint2float(i3, Float16)
+    f4 = _uint2float(i4, Float16)
+    return (UInt64(reinterpret(UInt16, f1)) << 48) | (UInt64(reinterpret(UInt16, f2)) << 32) | (UInt64(reinterpret(UInt16, f3)) << 16) | UInt64(reinterpret(UInt16, f4))
 end
 
 # required operations. These could be written more concisely with `ntuple`, but the compiler
@@ -118,6 +134,18 @@ for N in [4,8,16]
         ret <$N x i64> %i
         """
         @eval @inline _bits2float(x::$VT, ::Type{Float32}) = llvmcall($code, $VT, Tuple{$VT}, x)
+
+        code = """
+        %as16 = bitcast <$N x i64> %0 to <$(4N) x i16>
+        %shiftamt = shufflevector <1 x i16> <i16 5>, <1 x i16> undef, <$(4N) x i32> zeroinitializer
+        %sh = lshr <$(4N) x i16> %as16, %shiftamt
+        %f = uitofp <$(4N) x i16> %sh to <$(4N) x half>
+        %scale = shufflevector <1 x half> <half 0x3f40000000000000>, <1 x half> undef, <$(4N) x i32> zeroinitializer
+        %m = fmul <$(4N) x half> %f, %scale
+        %i = bitcast <$(4N) x half> %m to <$N x i64>
+        ret <$N x i64> %i
+        """
+        @eval @inline _bits2float(x::$VT, ::Type{Float16}) = llvmcall($code, $VT, Tuple{$VT}, x)
     end
 end
 
@@ -137,7 +165,7 @@ end
 
 _id(x, T) = x
 
-@inline function xoshiro_bulk(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, T::Union{Type{UInt8}, Type{Bool}, Type{Float32}, Type{Float64}}, ::Val{N}, f::F = _id) where {N, F}
+@inline function xoshiro_bulk(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, T::Union{Type{UInt8}, Type{Bool}, Type{Float16}, Type{Float32}, Type{Float64}}, ::Val{N}, f::F = _id) where {N, F}
     if len >= simdThreshold(T)
         written = xoshiro_bulk_simd(rng, dst, len, T, Val(N), f)
         len -= written
@@ -265,13 +293,8 @@ end
 end
 
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Float32}, ::SamplerTrivial{CloseOpen01{Float32}})
-    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*4, Float32, xoshiroWidth(), _bits2float)
-    dst
-end
-
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{Float64}, ::SamplerTrivial{CloseOpen01{Float64}})
-    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*8, Float64, xoshiroWidth(), _bits2float)
+function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Array{T}, ::SamplerTrivial{CloseOpen01{T}}) where {T<:Union{Float16,Float32,Float64}}
+    GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), T, xoshiroWidth(), _bits2float)
     dst
 end
 

@@ -6,8 +6,8 @@ include $(JULIAHOME)/stdlib/stdlib.mk
 
 
 # set some influential environment variables
-export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
-export JULIA_LOAD_PATH := @stdlib:$(JULIAHOME)/stdlib
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_prefix)/share/julia))
+export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
@@ -25,8 +25,8 @@ print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
 $(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(JULIA_DEPOT_PATH)/compiled
-	export JULIA_CPU_TARGET="$(JULIA_CPU_TARGET)"
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.Precompilation.precompilepkgs(;configs=[``=>Base.CacheFlags(), `--check-bounds=yes`=>Base.CacheFlags(;check_bounds=1)])')
+	@$(call PRINT_JULIA, JULIA_CPU_TARGET="$(JULIA_CPU_TARGET)" $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e \
+		'Base.Precompilation.precompilepkgs(configs=[``=>Base.CacheFlags(debug_level=2, opt_level=3), ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3)])')
 	touch $@
 
 $(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT)

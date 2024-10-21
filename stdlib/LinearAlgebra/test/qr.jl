@@ -50,7 +50,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a)
                 q, r  = qra.Q, qra.R
-                @test_throws ErrorException qra.Z
+                @test_throws FieldError qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
                 @test q'*Matrix(1.0I, a_1, a_1)' ≈ squareQ(q)'
@@ -79,7 +79,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a[:, 1:n1], NoPivot())
                 q,r   = qra.Q, qra.R
-                @test_throws ErrorException qra.Z
+                @test_throws FieldError qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q'*rectangularQ(q) ≈ Matrix(I, a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
@@ -106,7 +106,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
-                @test_throws ErrorException qrpa.Z
+                @test_throws FieldError qrpa.Z
                 p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*squareQ(q)' ≈ Matrix(I, n1, n1)
@@ -134,7 +134,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
                 qrpa  = factorize(a[:,1:n1])
                 q,r = qrpa.Q, qrpa.R
-                @test_throws ErrorException qrpa.Z
+                @test_throws FieldError qrpa.Z
                 p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
@@ -502,6 +502,42 @@ end
     DF = Complex{Float64}[1+im 1-im; 0 0]
     xf = CF\DF
     @test x ≈ xf
+end
+
+@testset "issue #53451" begin
+    # in the issue it was noted that QR factorizations of zero-column matrices
+    # were possible, but zero row-matrices errored, because LAPACK does not
+    # accept these empty matrices. now, the `geqrt!` call should be forwarded only
+    # if both matrix dimensions are positive.
+
+    for dimA in (0, 1, 2, 4)
+        for F in (Float32, Float64, ComplexF32, ComplexF64, BigFloat)
+            # this should have worked before, Q is square, and R is 0 × 0:
+            A_zero_cols = rand(F, dimA, 0)
+            qr_zero_cols = qr(A_zero_cols)
+            @test size(qr_zero_cols.Q) == (dimA, dimA)
+            @test size(qr_zero_cols.R) == (0, 0)
+            @test qr_zero_cols.Q == LinearAlgebra.I(dimA)
+
+            # this should work now, Q is 0 × 0, and R has `dimA` columns:
+            A_zero_rows = rand(F, 0, dimA)
+            qr_zero_rows = qr(A_zero_rows)
+            @test size(qr_zero_rows.Q) == (0, 0)
+            @test size(qr_zero_rows.R) == (0, dimA)
+        end
+    end
+end
+
+@testset "issue #53214" begin
+    # Test that the rank of a QRPivoted matrix is computed correctly
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm())) == 2
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), rtol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), atol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), rtol=1.01) == 0
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), atol=1.01) == 0
+
+    @test rank(qr([1.0 2.0; 2.0 4.0], ColumnNorm())) == 1
+    @test rank(qr([1.0 2.0 3.0; 4.0 5.0 6.0 ; 7.0 8.0 9.0], ColumnNorm())) == 2
 end
 
 end # module TestQR

@@ -13,6 +13,19 @@ struct lbt_library_info_t
     f2c::Int32
     cblas::Int32
 end
+
+macro get_warn(map, key)
+    return quote
+        if !haskey($(esc(map)), $(esc(key)))
+            println(Core.stderr, string("Warning: [LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
+            # All the unknown values share a common value: `-1`
+            $(esc(map))[$(esc(LBT_INTERFACE_UNKNOWN))]
+        else
+            $(esc(map))[$(esc(key))]
+        end
+    end
+end
+
 const LBT_INTERFACE_LP64    = 32
 const LBT_INTERFACE_ILP64   = 64
 const LBT_INTERFACE_UNKNOWN = -1
@@ -35,10 +48,12 @@ const LBT_INV_F2C_MAP = Dict(v => k for (k, v) in LBT_F2C_MAP)
 
 const LBT_COMPLEX_RETSTYLE_NORMAL   =  0
 const LBT_COMPLEX_RETSTYLE_ARGUMENT =  1
+const LBT_COMPLEX_RETSTYLE_FNDA     =  2
 const LBT_COMPLEX_RETSTYLE_UNKNOWN  = -1
 const LBT_COMPLEX_RETSTYLE_MAP = Dict(
     LBT_COMPLEX_RETSTYLE_NORMAL   => :normal,
     LBT_COMPLEX_RETSTYLE_ARGUMENT => :argument,
+    LBT_COMPLEX_RETSTYLE_FNDA     => :float_normal_double_argument,
     LBT_COMPLEX_RETSTYLE_UNKNOWN  => :unknown,
 )
 const LBT_INV_COMPLEX_RETSTYLE_MAP = Dict(v => k for (k, v) in LBT_COMPLEX_RETSTYLE_MAP)
@@ -69,10 +84,10 @@ struct LBTLibraryInfo
             lib_info.handle,
             unsafe_string(lib_info.suffix),
             unsafe_wrap(Vector{UInt8}, lib_info.active_forwards, div(num_exported_symbols,8)+1),
-            LBT_INTERFACE_MAP[lib_info.interface],
-            LBT_COMPLEX_RETSTYLE_MAP[lib_info.complex_retstyle],
-            LBT_F2C_MAP[lib_info.f2c],
-            LBT_CBLAS_MAP[lib_info.cblas],
+            @get_warn(LBT_INTERFACE_MAP, lib_info.interface),
+            @get_warn(LBT_COMPLEX_RETSTYLE_MAP, lib_info.complex_retstyle),
+            @get_warn(LBT_F2C_MAP, lib_info.f2c),
+            @get_warn(LBT_CBLAS_MAP, lib_info.cblas),
         )
     end
 end
@@ -117,7 +132,7 @@ struct LBTConfig
             if str_ptr != C_NULL
                 push!(exported_symbols, unsafe_string(str_ptr))
             else
-                @error("NULL string in lbt_config.exported_symbols[$(sym_idx)]")
+                println(Core.stderr, "Error: NULL string in lbt_config.exported_symbols[$(sym_idx)]")
             end
         end
 
@@ -247,11 +262,11 @@ If the given `symbol_name` is not contained within the list of exported symbols,
 function lbt_find_backing_library(symbol_name, interface::Symbol;
                                   config::LBTConfig = lbt_get_config())
     if interface ∉ (:ilp64, :lp64)
-        throw(ArgumentError("Invalid interface specification: '$(interface)'"))
+        throw(ArgumentError(lazy"Invalid interface specification: '$(interface)'"))
     end
     symbol_idx = findfirst(s -> s == symbol_name, config.exported_symbols)
     if symbol_idx === nothing
-        throw(ArgumentError("Invalid exported symbol name '$(symbol_name)'"))
+        throw(ArgumentError(lazy"Invalid exported symbol name '$(symbol_name)'"))
     end
     # Convert to zero-indexed
     symbol_idx -= 1
@@ -266,6 +281,25 @@ function lbt_find_backing_library(symbol_name, interface::Symbol;
 
     # No backing library was found
     return nothing
+end
+
+
+"""
+    lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+
+Given a backing library `lib`, return the list of all functions that are
+forwarded to that library, as a vector of `String`s.
+"""
+function lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+    forwarded_funcs = String[]
+    for (symbol_idx, symbol) in enumerate(config.exported_symbols)
+        forward_byte_offset = div(symbol_idx - 1, 8)
+        forward_byte_mask = 1 << mod(symbol_idx - 1, 8)
+        if lib.active_forwards[forward_byte_offset+1] & forward_byte_mask != 0x00
+            push!(forwarded_funcs, symbol)
+        end
+    end
+    return forwarded_funcs
 end
 
 

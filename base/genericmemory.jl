@@ -3,9 +3,20 @@
 ## genericmemory.jl: Managed Memory
 
 """
-    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: AbstractVector{T}
+    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: DenseVector{T}
 
-One-dimensional dense array with elements of type `T`.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
+
+`kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
+
+`addrspace` can currently only be set to `Core.CPU`. It is designed to permit extension by other systems such as GPUs, which might define values such as:
+```
+module CUDA
+const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
+const Global = bitcast(Core.AddrSpace{CUDA}, 1)
+end
+```
+The exact semantics of these other addrspaces is defined by the specific backend, but will error if the user is attempting to access these on the CPU.
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -15,7 +26,7 @@ GenericMemory
 """
     Memory{T} == GenericMemory{:not_atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -25,11 +36,24 @@ Memory
 """
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`, where each element is
-independently atomic when accessed, and cannot be set non-atomically.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
+Fetching of any of its individual elements is performed atomically
+(with `:monotonic` ordering by default).
+
+!!! warning
+    The access to `AtomicMemory` must be done by either using the [`@atomic`](@ref)
+    macro or the lower level interface functions: `Base.getindex_atomic`,
+    `Base.setindex_atomic!`, `Base.setindexonce_atomic!`,
+    `Base.swapindex_atomic!`, `Base.modifyindex_atomic!`, and `Base.replaceindex_atomic!`.
+
+For details, see [Atomic Operations](@ref man-atomic-operations) as well as macros
+[`@atomic`](@ref), [`@atomiconce`](@ref), [`@atomicswap`](@ref), and [`@atomicreplace`](@ref).
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
+
+!!! compat "Julia 1.12"
+    Lower level interface functions or `@atomic` macro requires Julia 1.12 or later.
 """
 AtomicMemory
 
@@ -46,14 +70,16 @@ size(a::GenericMemory) = (length(a),)
 
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
+parent(ref::GenericMemoryRef) = ref.mem
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
-_unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(GenericMemoryRef(A, i)); A)
+_unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
 function _unsetindex!(A::MemoryRef{T}) where T
     @_terminates_locally_meta
     @_propagate_inbounds_meta
     @inline
-    @boundscheck GenericMemoryRef(A, 1)
+    @boundscheck memoryref(A, 1)
     mem = A.mem
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
@@ -82,7 +108,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 function isassigned(a::GenericMemory, i::Int)
     @inline
     @boundscheck (i - 1)%UInt < length(a)%UInt || return false
-    return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), default_access_order(a), false)
+    return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
 isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a), @_boundscheck)
@@ -91,21 +117,31 @@ isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
     n == 0 && return dest
-    @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
-    ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    @boundscheck memoryref(dest, n), memoryref(src, n)
+    if isbitstype(T)
+        tdest = @_gc_preserve_begin dest
+        tsrc = @_gc_preserve_begin src
+        pdest = unsafe_convert(Ptr{Cvoid}, dest)
+        psrc = unsafe_convert(Ptr{Cvoid}, src)
+        memmove(pdest, psrc, aligned_sizeof(T) * n)
+        @_gc_preserve_end tdest
+        @_gc_preserve_end tsrc
+    else
+        ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    end
     return dest
 end
 
 function unsafe_copyto!(dest::GenericMemoryRef, src::GenericMemoryRef, n)
     n == 0 && return dest
-    @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
+    @boundscheck memoryref(dest, n), memoryref(src, n)
     unsafe_copyto!(dest.mem, memoryrefoffset(dest), src.mem, memoryrefoffset(src), n)
     return dest
 end
 
 function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{T}
     n == 0 && return dest
-    unsafe_copyto!(GenericMemoryRef(dest, doffs), GenericMemoryRef(src, soffs), n)
+    unsafe_copyto!(memoryref(dest, doffs), memoryref(src, soffs), n)
     return dest
 end
 
@@ -138,6 +174,7 @@ end
 
 copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
 
+copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
     n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
     unsafe_copyto!(dest, doffs, src, soffs, n)
@@ -162,7 +199,7 @@ function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
     p = unsafe_convert(Ptr{Cvoid}, a)
     T = eltype(a)
-    memset(p, x isa T ? x : convert(T, x), length(a))
+    memset(p, x isa T ? x : convert(T, x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -207,12 +244,18 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-function setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
+function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
+    ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
+    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
     return A
 end
+
+function setindex!(A::Memory{T}, x, i1::Int) where {T}
+    @_propagate_inbounds_meta
+    val = x isa T ? x : convert(T,x)::T
+    return _setindex!(A, val, i1)
+end
+
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
@@ -287,4 +330,81 @@ function indcopy(sz::Dims, I::GenericMemory)
     dst = eltype(I)[_findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
     src = eltype(I)[I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
     dst, src
+end
+
+# get, set(once), modify, swap and replace at index, atomically
+function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
+    memref = memoryref(mem, i)
+    return memoryrefget(memref, order, @_boundscheck)
+end
+
+function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return memoryrefset!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        order,
+        @_boundscheck
+    )
+end
+
+function setindexonce_atomic!(
+    mem::GenericMemory,
+    success_order::Symbol,
+    fail_order::Symbol,
+    val,
+    i::Int,
+)
+    @_propagate_inbounds_meta
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefsetonce!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        success_order,
+        fail_order,
+        @_boundscheck
+    )
+end
+
+function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
+    @_propagate_inbounds_meta
+    memref = memoryref(mem, i)
+    return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
+end
+
+function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefswap!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        order,
+        @_boundscheck
+    )
+end
+
+function replaceindex_atomic!(
+    mem::GenericMemory,
+    success_order::Symbol,
+    fail_order::Symbol,
+    expected,
+    desired,
+    i::Int,
+)
+    @_propagate_inbounds_meta
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefreplace!(
+        memref,
+        expected,
+        desired isa T ? desired : convert(T, desired)::T,
+        success_order,
+        fail_order,
+        @_boundscheck,
+    )
 end

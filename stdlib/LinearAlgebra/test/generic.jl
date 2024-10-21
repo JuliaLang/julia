@@ -18,6 +18,9 @@ using .Main.DualNumbers
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 Random.seed!(123)
 
 n = 5 # should be odd
@@ -571,6 +574,13 @@ end
     @test_broken ismissing(norm(x, 0))
 end
 
+@testset "avoid stackoverflow of norm on AbstractChar" begin
+    @test_throws ArgumentError norm('a')
+    @test_throws ArgumentError norm(['a', 'b'])
+    @test_throws ArgumentError norm("s")
+    @test_throws ArgumentError norm(["s", "t"])
+end
+
 @testset "peakflops" begin
     @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
@@ -647,12 +657,64 @@ end
 
 @testset "copytrito!" begin
     n = 10
-    A = rand(n, n)
-    for uplo in ('L', 'U')
-        B = zeros(n, n)
-        copytrito!(B, A, uplo)
-        C = uplo == 'L' ? tril(A) : triu(A)
-        @test B ≈ C
+    @testset "square" begin
+        for A in (rand(n, n), rand(Int8, n, n)), uplo in ('L', 'U')
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = uplo == 'L' ? tril(AA) : triu(AA)
+                for B in (zeros(n, n), zeros(n+1, n+2))
+                    copytrito!(B, AA, uplo)
+                    @test view(B, 1:n, 1:n) == C
+                end
+            end
+        end
+    end
+    @testset "wide" begin
+        for A in (rand(n, 2n), rand(Int8, n, 2n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = tril(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, 2n), AA, 'L')
+                C = triu(AA)
+                for (M, N) in ((n, 2n), (n+1, 2n), (n, 2n+1), (n+1, 2n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:2n) == view(C, 1:n, 1:2n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n+1, 2n-1), AA, 'U')
+            end
+        end
+    end
+    @testset "tall" begin
+        for A in (rand(2n, n), rand(Int8, 2n, n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = triu(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'U')
+                C = tril(AA)
+                for (M, N) in ((2n, n), (2n, n+1), (2n+1, n), (2n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:2n, 1:n) == view(C, 1:2n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'L')
+            end
+        end
+    end
+    @testset "aliasing" begin
+        M = Matrix(reshape(1:36, 6, 6))
+        A = view(M, 1:5, 1:5)
+        A2 = Matrix(A)
+        B = view(M, 2:6, 2:6)
+        copytrito!(B, A, 'U')
+        @test UpperTriangular(B) == UpperTriangular(A2)
     end
 end
 
@@ -664,6 +726,58 @@ end
     @test tril(A) == tril(M)
     @test tril(A, 1) == tril(M, 1)
     @test det(A) == det(M)
+end
+
+@testset "tril/triu" begin
+    @testset "with partly initialized matrices" begin
+        function test_triu(M, k=nothing)
+            M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
+            if isnothing(k)
+                MU = triu(M)
+            else
+                MU = triu(M, k)
+            end
+            @test iszero(MU[2,1])
+            @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
+        end
+        test_triu(Matrix{BigInt}(undef, 2, 3))
+        test_triu(Matrix{BigInt}(undef, 2, 3), 0)
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+
+        function test_tril(M, k=nothing)
+            M[1,1] = M[2,2] = M[2,1] = 3
+            if isnothing(k)
+                ML = tril(M)
+            else
+                ML = tril(M, k)
+            end
+            @test ML[1,2] == ML[1,3] == ML[2,3] == 0
+            @test ML[1,1] == ML[2,2] == ML[2,1] == 3
+        end
+        test_tril(Matrix{BigInt}(undef, 2, 3))
+        test_tril(Matrix{BigInt}(undef, 2, 3), 0)
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+    end
+
+    @testset "block arrays" begin
+        for nrows in 0:3, ncols in 0:3
+            M = [randn(2,2) for _ in 1:nrows, _ in 1:ncols]
+            Mu = triu(M)
+            for col in axes(M,2)
+                rowcutoff = min(col, size(M,1))
+                @test @views Mu[1:rowcutoff, col] == M[1:rowcutoff, col]
+                @test @views Mu[rowcutoff+1:end, col] == zero.(M[rowcutoff+1:end, col])
+            end
+            Ml = tril(M)
+            for col in axes(M,2)
+                @test @views Ml[col:end, col] == M[col:end, col]
+                rowcutoff = min(col-1, size(M,1))
+                @test @views Ml[1:rowcutoff, col] == zero.(M[1:rowcutoff, col])
+            end
+        end
+    end
 end
 
 end # module TestGeneric
