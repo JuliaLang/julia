@@ -820,7 +820,7 @@ end
 
 generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
     generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
-@inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,  
+@inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                                     alpha::Number, beta::Number)
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     Anew, ta = tA_uc in ('S', 'H') ? (wrap(A, tA), oftype(tA, 'N')) : (A, tA)
