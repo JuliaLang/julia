@@ -102,6 +102,30 @@ n = 5
     @test Q ≈ Prect
     @test Q ≈ Psquare
     @test Q ≈ F.Q*I
+
+    @testset "similar" begin
+        QS = similar(Q)
+        @test QS isa Matrix{eltype(Q)}
+        @test size(QS) == size(Q)
+
+        QS = similar(Q, Int8)
+        @test QS isa Matrix{Int8}
+        @test size(QS) == size(Q)
+
+        QS = similar(Q, 1)
+        @test QS isa Vector{eltype(Q)}
+        @test size(QS) == (1,)
+
+        QS = similar(Q, Int8, 2)
+        @test QS isa Vector{Int8}
+        @test size(QS) == (2,)
+
+        QS = similar(Q, Int8, ())
+        @test QS isa Array{Int8,0}
+
+        QS = similar(Q, ())
+        @test QS isa Array{eltype(Q),0}
+    end
 end
 
 end # module

@@ -78,6 +78,14 @@ axes(Q::AbstractQ, d::Integer) = d in (1, 2) ? axes(Q)[d] : Base.OneTo(1)
 copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
 copy(Q::AbstractQ) = copymutable(Q)
 
+# legacy compatibility
+similar(Q::AbstractQ) = similar(Q, eltype(Q), size(Q))
+similar(Q::AbstractQ, ::Type{T}) where {T} = similar(Q, T, size(Q))
+similar(Q::AbstractQ, size::DimOrInd...) = similar(Q, eltype(Q), size...)
+similar(Q::AbstractQ, ::Type{T}, size::DimOrInd...) where {T} = similar(Q, T, Base.to_shape(size))
+similar(Q::AbstractQ, size::Tuple{Vararg{DimOrInd}}) = similar(Q, eltype(Q), Base.to_shape(size))
+similar(Q::AbstractQ, ::Type{T}, size::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, size)
+
 # getindex
 @inline function getindex(Q::AbstractQ, inds...)
     @boundscheck Base.checkbounds_indices(Bool, axes(Q), inds) || Base.throw_boundserror(Q, inds)
