@@ -339,43 +339,58 @@ RPO traversal and in particular, any use of an SSA value must come after
 (by linear order) its definition.
 """
 function domsort_ssa!(ir::IRCode, domtree::DomTree)
-    # First compute the new order of basic blocks
+    # Mapping from new → old BB index
+    # An "old" index of 0 means that this was a BB inserted as part of a fixup (see below)
     result_order = Int[]
-    stack = Int[]
+
+    # Mapping from old → new BB index
     bb_rename = fill(-1, length(ir.cfg.blocks))
-    node = 1
-    ncritbreaks = 0
-    nnewfallthroughs = 0
-    while node !== -1
-        push!(result_order, node)
-        bb_rename[node] = length(result_order)
-        cs = domtree.nodes[node].children
-        terminator = ir[SSAValue(last(ir.cfg.blocks[node].stmts))][:stmt]
-        next_node = node + 1
-        node = -1
+
+    # The number of GotoNodes we need to insert to preserve control-flow after sorting
+    nfixupstmts = 0
+
+    # node queued up for scheduling (-1 === nothing)
+    node_to_schedule = 1
+    worklist = Int[]
+    while node_to_schedule !== -1
+        # First assign a new BB index to `node_to_schedule`
+        push!(result_order, node_to_schedule)
+        bb_rename[node_to_schedule] = length(result_order)
+        cs = domtree.nodes[node_to_schedule].children
+        terminator = ir[SSAValue(last(ir.cfg.blocks[node_to_schedule].stmts))][:stmt]
+        fallthrough = node_to_schedule + 1
+        node_to_schedule = -1
+
         # Adding the nodes in reverse sorted order attempts to retain
         # the original source order of the nodes as much as possible.
         # This is not required for correctness, but is easier on the humans
-        for child in Iterators.Reverse(cs)
-            if child == next_node
+        for node in Iterators.Reverse(cs)
+            if node == fallthrough
                 # Schedule the fall through node first,
                 # so we can retain the fall through
-                node = next_node
+                node_to_schedule = node
             else
-                push!(stack, child)
+                push!(worklist, node)
             end
         end
-        if node == -1 && !isempty(stack)
-            node = pop!(stack)
+        if node_to_schedule == -1 && !isempty(worklist)
+            node_to_schedule = pop!(worklist)
         end
-        if node != next_node && !isa(terminator, Union{GotoNode, ReturnNode})
+        # If a fallthrough successor is no longer the fallthrough after sorting, we need to
+        # add a GotoNode (and either extend or split the basic block as necessary)
+        if node_to_schedule != fallthrough && !isa(terminator, Union{GotoNode, ReturnNode})
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
-                ncritbreaks += 1
+                push!(result_order, 0)
+            elseif isa(terminator, EnterNode) || isexpr(terminator, :leave)
+                # Cannot extend the BasicBlock with a goto, have to split it
                 push!(result_order, 0)
             else
-                nnewfallthroughs += 1
+                # No need for a new block, just extend
+                @assert !isterminator(terminator)
             end
+            # Reserve space for the fixup goto
+            nfixupstmts += 1
         end
     end
     new_bbs = Vector{BasicBlock}(undef, length(result_order))
@@ -385,7 +400,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             nstmts += length(ir.cfg.blocks[i].stmts)
         end
     end
-    result = InstructionStream(nstmts + ncritbreaks + nnewfallthroughs)
+    result = InstructionStream(nstmts + nfixupstmts)
     inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
     @inbounds for i = 1:length(ir.stmts)
         inst_rename[i] = SSAValue(-1)
@@ -394,7 +409,6 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         inst_rename[i + length(ir.stmts)] = SSAValue(i + length(result))
     end
     bb_start_off = 0
-    crit_edge_breaks_fixup = Tuple{Int, Int}[]
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
             nidx = bb_start_off + 1
@@ -426,8 +440,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             else
                 result[inst_range[end]][:stmt] = GotoNode(bb_rename[terminator.label])
             end
-        elseif isa(terminator, GotoIfNot)
-            # Check if we need to break the critical edge
+        elseif isa(terminator, GotoIfNot) || isa(terminator, EnterNode) || isexpr(terminator, :leave)
+            # Check if we need to break the critical edge or split the block
             if bb_rename[bb + 1] != new_bb + 1
                 @assert result_order[new_bb + 1] == 0
                 # Add an explicit goto node in the next basic block (we accounted for this above)
@@ -435,11 +449,14 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node = result[nidx]
                 node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
-            result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
-        elseif !isa(terminator, ReturnNode)
-            if isa(terminator, EnterNode)
+            if isa(terminator, GotoIfNot)
+                result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+            elseif isa(terminator, EnterNode)
                 result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
+            else
+                @assert isexpr(terminator, :leave)
             end
+        elseif !isa(terminator, ReturnNode)
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
@@ -452,7 +469,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
             new_preds = Int[bb for bb in (rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds) if bb != -1]
-            new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
+            new_succs = Int[              rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end

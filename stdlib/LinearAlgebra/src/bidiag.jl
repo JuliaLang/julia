@@ -118,17 +118,6 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
-    Tel = eltype(A)
-    if i < j && A.uplo == 'U' #= top right zeros =#
-        return zeroslike(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
-    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return zeroslike(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
-    else
-        return zeroslike(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
-    end
-end
-
 _offdiagind(uplo) = uplo == 'U' ? 1 : -1
 
 @inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
@@ -404,20 +393,17 @@ end
 function diag(M::Bidiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
+        copyto!(v, M.dv)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
-        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+        copyto!(v, M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        v = similar(M.dv, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
+    return v
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)

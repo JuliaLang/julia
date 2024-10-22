@@ -1099,6 +1099,12 @@ int jl_n_markthreads;
 int jl_n_sweepthreads;
 // `tid` of first GC thread
 int gc_first_tid;
+// Number of threads sweeping stacks
+_Atomic(int) gc_n_threads_sweeping_stacks;
+// counter for sharing work when sweeping stacks
+_Atomic(int) gc_ptls_sweep_idx;
+// counter for round robin of giving back stack pages to the OS
+_Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {

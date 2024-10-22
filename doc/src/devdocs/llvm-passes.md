@@ -114,18 +114,6 @@ This pass is used to verify Julia's invariants about LLVM IR. This includes thin
 
 These passes are used to perform transformations on LLVM IR that LLVM will not perform itself, e.g. fast math flag propagation, escape analysis, and optimizations on Julia-specific internal functions. They use knowledge about Julia's semantics to perform these optimizations.
 
-### CombineMulAdd
-
-* Filename: `llvm-muladd.cpp`
-* Class Name: `CombineMulAddPass`
-* Opt Name: `function(CombineMulAdd)`
-
-This pass serves to optimize the particular combination of a regular `fmul` with a fast `fadd` into a contract `fmul` with a fast `fadd`. This is later optimized by the backend to a [fused multiply-add](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation#Fused_multiply%E2%80%93add) instruction, which can provide significantly faster operations at the cost of more [unpredictable semantics](https://simonbyrne.github.io/notes/fastmath/).
-
-!!! note
-
-    This optimization only occurs when the `fmul` has a single use, which is the fast `fadd`.
-
 ### AllocOpt
 
 * Filename: `llvm-alloc-opt.cpp`

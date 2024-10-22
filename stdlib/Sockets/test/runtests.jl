@@ -605,6 +605,31 @@ end
     end
 end
 
+@testset "fd() methods" begin
+    function valid_fd(x)
+        if Sys.iswindows()
+            return x isa Base.OS_HANDLE
+        elseif !Sys.iswindows()
+            value = Base.cconvert(Cint, x)
+
+            # 2048 is a bit arbitrary, it depends on the process not having too many
+            # file descriptors open. But select() has a limit of 1024 and people
+            # don't seem to hit it too often so let's hope twice that is safe.
+            return value > 0 && value < 2048
+        end
+    end
+
+    sock = TCPSocket(; delay=false)
+    @test valid_fd(fd(sock))
+
+    sock = UDPSocket()
+    bind(sock, Sockets.localhost, 0)
+    @test valid_fd(fd(sock))
+
+    server = listen(Sockets.localhost, 0)
+    @test valid_fd(fd(server))
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1

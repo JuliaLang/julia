@@ -130,7 +130,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     if !(isopen(stream)::Bool)
         stream = stderr
     end
-    dsize = displaysize(stream)::Tuple{Int,Int}
+    dsize = Base.displaysize_(stream)::Tuple{Int,Int}
     nkwargs = length(kwargs)::Int
     if nkwargs > hasmaxlog
         valbuf = IOBuffer()

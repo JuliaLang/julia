@@ -142,7 +142,10 @@ struct BigFloat <: AbstractFloat
 
     # Not recommended for general use:
     # used internally by, e.g. deepcopy
-    global _BigFloat(d::Memory{Limb}) = new(d)
+    global function _BigFloat(d::Memory{Limb})
+        Base.unsafe_convert(Ref{BigFloat}, BigFloatData(d)) # force early initialization of pointer field of z.d
+        return new(d)
+    end
 
     function BigFloat(; precision::Integer=_precision_with_base_2(BigFloat))
         precision < 1 && throw(DomainError(precision, "`precision` cannot be less than 1."))
@@ -150,14 +153,17 @@ struct BigFloat <: AbstractFloat
         nl = (nb + offset_p + sizeof(Limb) - 1) ÷ Core.sizeof(Limb) # align to number of Limb allocations required for this
         d = Memory{Limb}(undef, nl % Int)
         # ccall-based version, inlined below
-        z = _BigFloat(d) # initialize to +NAN
         #ccall((:mpfr_custom_init,libmpfr), Cvoid, (Ptr{Limb}, Clong), BigFloatData(d), prec) # currently seems to be a no-op in mpfr
         #NAN_KIND = Cint(0)
         #ccall((:mpfr_custom_init_set,libmpfr), Cvoid, (Ref{BigFloat}, Cint, Clong, Ptr{Limb}), z, NAN_KIND, prec, BigFloatData(d))
-        z.prec = Clong(precision)
-        z.sign = one(Cint)
-        z.exp = mpfr_special_exponent_nan
-        return z
+        p = Base.unsafe_convert(Ptr{Limb}, d)
+        GC.@preserve d begin # initialize to +NAN
+            unsafe_store!(Ptr{Clong}(p) + offset_prec, Clong(precision))
+            unsafe_store!(Ptr{Cint}(p) + offset_sign, one(Cint))
+            unsafe_store!(Ptr{Clong}(p) + offset_exp, mpfr_special_exponent_nan)
+            unsafe_store!(Ptr{Ptr{Limb}}(p) + offset_d, p + offset_p)
+        end
+        return new(d)
     end
 end
 
@@ -186,16 +192,16 @@ end
     end
 end
 
+# While BigFloat (like all Numbers) is considered immutable, for practical reasons
+# of writing the algorithms on it we allow mutating sign, exp, and the contents of d
 @inline function Base.setproperty!(x::BigFloat, s::Symbol, v)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
-    if s === :prec
-        return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_prec, v)
-    elseif s === :sign
+    if s === :sign
         return GC.@preserve d unsafe_store!(Ptr{Cint}(p) + offset_sign, v)
     elseif s === :exp
         return GC.@preserve d unsafe_store!(Ptr{Clong}(p) + offset_exp, v)
-    #elseif s === :d # not mutable
+    #elseif s === :d || s === :prec # not mutable
     else
         return throw(FieldError(x, s))
     end
@@ -208,7 +214,11 @@ Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Re
 function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
-    GC.@preserve d unsafe_store!(Ptr{Ptr{Limb}}(p) + offset_d, p + offset_p, :monotonic) # :monotonic ensure that TSAN knows that this isn't a data race
+    dptrptr = Ptr{Ptr{Limb}}(p) + offset_d
+    dptr = p + offset_p
+    GC.@preserve d if unsafe_load(dptrptr, :monotonic) != dptr # make sure this pointer value was recomputed after any deserialization or copying
+        unsafe_store!(dptrptr, dptr, :monotonic) # :monotonic ensure that TSAN knows that this isn't a data race
+    end
     return Ptr{BigFloat}(p)
 end
 Base.unsafe_convert(::Type{Ptr{Limb}}, fd::BigFloatData) = Base.unsafe_convert(Ptr{Limb}, getfield(fd, :d)) + offset_p

@@ -480,6 +480,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     i = firstindex(r)
     braces = in_comment = 0
     in_single_quotes = in_double_quotes = in_back_ticks = false
+    num_single_quotes_in_string = count('\'', s)
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -502,7 +503,9 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 braces += 1
             elseif c == c_end
                 braces -= 1
-            elseif c == '\''
+            elseif c == '\'' && num_single_quotes_in_string % 2 == 0
+                # ' can be a transpose too, so check if there are even number of 's in the string
+                # TODO: This probably needs to be more robust
                 in_single_quotes = true
             elseif c == '"'
                 in_double_quotes = true
@@ -995,7 +998,7 @@ function dict_identifier_key(str::String, tag::Symbol, context_module::Module=Ma
     isa(objt, Core.Const) || return (nothing, nothing, nothing)
     obj = objt.val
     isa(obj, AbstractDict) || return (nothing, nothing, nothing)
-    length(obj)::Int < 1_000_000 || return (nothing, nothing, nothing)
+    (Base.haslength(obj) && length(obj)::Int < 1_000_000) || return (nothing, nothing, nothing)
     begin_of_key = something(findnext(!isspace, str, nextind(str, end_of_identifier) + 1), # +1 for [
                              lastindex(str)+1)
     return (obj, str[begin_of_key:end], begin_of_key)
@@ -1197,7 +1200,9 @@ function complete_identifiers!(suggestions::Vector{Completion},
             if !isinfix
                 # Handle infix call argument completion of the form bar + foo(qux).
                 frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
-                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                if !isempty(frange) # if find_start_brace fails to find the brace just continue
+                    isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                end
             end
             if isinfix
                 prefix = prefix.args[end]

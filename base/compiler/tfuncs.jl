@@ -601,8 +601,16 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
                 return TypeVar
             end
         end
-        tv = TypeVar(nval, lb, ub)
-        return PartialTypeVar(tv, lb_certain, ub_certain)
+        lb_valid = lb isa Type || lb isa TypeVar
+        ub_valid = ub isa Type || ub isa TypeVar
+        if lb_valid && ub_valid
+            tv = TypeVar(nval, lb, ub)
+            return PartialTypeVar(tv, lb_certain, ub_certain)
+        elseif !lb_valid && lb_certain
+            return Union{}
+        elseif !ub_valid && ub_certain
+            return Union{}
+        end
     end
     return TypeVar
 end

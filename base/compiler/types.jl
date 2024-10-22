@@ -28,6 +28,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 
 abstract type AbstractLattice end
 
+struct InvalidIRError <: Exception end
+
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
     argtypes::Vector{Any}
@@ -454,6 +456,8 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
+
+get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
 
 abstract type CallInfo end
 

@@ -1967,3 +1967,32 @@ let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), c
    ir = Core.Compiler.sroa_pass!(ir, inlining)
    Core.Compiler.verify_ir(ir)
 end
+
+let code = Any[
+        # block 1
+        GotoNode(4), # skip
+        # block 2
+        Expr(:leave, SSAValue(1)), # not domsorted - make sure we move it correctly
+        # block 3
+        ReturnNode(2),
+        # block 4
+        EnterNode(7),
+        # block 5
+        GotoIfNot(Argument(1), 2),
+        # block 6
+        Expr(:leave, SSAValue(1)),
+        # block 7
+        ReturnNode(1),
+        # block 8
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}])
+    @test length(ir.cfg.blocks) == 8
+    Core.Compiler.verify_ir(ir)
+
+    # The IR should remain valid after domsorting
+    # (esp. including the insertion of new BasicBlocks for any fix-ups)
+    domtree = Core.Compiler.construct_domtree(ir)
+    ir = Core.Compiler.domsort_ssa!(ir, domtree)
+    Core.Compiler.verify_ir(ir)
+end
