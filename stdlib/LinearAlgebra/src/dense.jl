@@ -110,6 +110,7 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
 # Conservative assessment of types that have zero(T) defined for themselves
 haszero(::Type) = false
 haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+haszero(::Type{Union{Missing,T}}) where {T<:Number} = haszero(T)
 @propagate_inbounds _zero(M::AbstractArray{T}, inds...) where {T} = haszero(T) ? zero(T) : zero(M[inds...])
 
 """

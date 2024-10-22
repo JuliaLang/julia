@@ -6055,3 +6055,11 @@ f55916(::Vararg{T,T}) where {T} = "2"
 g55916(x) = f55916(x)
 # this shouldn't error
 @test only(code_typed(g55916, (Any,); optimize=false))[2] == Int
+
+# JuliaLang/julia#56248
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, 1)
+end === Union{}
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, Any, 1)
+end === Union{}

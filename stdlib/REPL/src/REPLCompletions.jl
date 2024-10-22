@@ -493,6 +493,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     i = firstindex(r)
     braces = in_comment = 0
     in_single_quotes = in_double_quotes = in_back_ticks = false
+    num_single_quotes_in_string = count('\'', s)
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -515,7 +516,9 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 braces += 1
             elseif c == c_end
                 braces -= 1
-            elseif c == '\''
+            elseif c == '\'' && num_single_quotes_in_string % 2 == 0
+                # ' can be a transpose too, so check if there are even number of 's in the string
+                # TODO: This probably needs to be more robust
                 in_single_quotes = true
             elseif c == '"'
                 in_double_quotes = true
@@ -1210,7 +1213,9 @@ function complete_identifiers!(suggestions::Vector{Completion},
             if !isinfix
                 # Handle infix call argument completion of the form bar + foo(qux).
                 frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
-                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                if !isempty(frange) # if find_start_brace fails to find the brace just continue
+                    isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
+                end
             end
             if isinfix
                 prefix = prefix.args[end]
@@ -1233,33 +1238,35 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
-    # ?(x, y)TAB lists methods you can call with these objects
-    # ?(x, y TAB lists methods that take these objects as the first two arguments
-    # MyModule.?(x, y)TAB restricts the search to names in MyModule
-    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
-    if rexm !== nothing
-        # Get the module scope
-        if isempty(rexm.captures[1])
-            callee_module = context_module
-        else
-            modname = Symbol(rexm.captures[1][1:end-1])
-            if isdefined(context_module, modname)
-                callee_module = getfield(context_module, modname)
-                if !isa(callee_module, Module)
+    if !hint # require a tab press for completion of these
+        # ?(x, y)TAB lists methods you can call with these objects
+        # ?(x, y TAB lists methods that take these objects as the first two arguments
+        # MyModule.?(x, y)TAB restricts the search to names in MyModule
+        rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+        if rexm !== nothing
+            # Get the module scope
+            if isempty(rexm.captures[1])
+                callee_module = context_module
+            else
+                modname = Symbol(rexm.captures[1][1:end-1])
+                if isdefined(context_module, modname)
+                    callee_module = getfield(context_module, modname)
+                    if !isa(callee_module, Module)
+                        callee_module = context_module
+                    end
+                else
                     callee_module = context_module
                 end
-            else
-                callee_module = context_module
             end
-        end
-        moreargs = !endswith(rexm.captures[2], ')')
-        callstr = "_(" * rexm.captures[2]
-        if moreargs
-            callstr *= ')'
-        end
-        ex_org = Meta.parse(callstr, raise=false, depwarn=false)
-        if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            moreargs = !endswith(rexm.captures[2], ')')
+            callstr = "_(" * rexm.captures[2]
+            if moreargs
+                callstr *= ')'
+            end
+            ex_org = Meta.parse(callstr, raise=false, depwarn=false)
+            if isa(ex_org, Expr)
+                return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            end
         end
     end
 
