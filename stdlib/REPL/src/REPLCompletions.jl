@@ -1225,33 +1225,35 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
 
-    # ?(x, y)TAB lists methods you can call with these objects
-    # ?(x, y TAB lists methods that take these objects as the first two arguments
-    # MyModule.?(x, y)TAB restricts the search to names in MyModule
-    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
-    if rexm !== nothing
-        # Get the module scope
-        if isempty(rexm.captures[1])
-            callee_module = context_module
-        else
-            modname = Symbol(rexm.captures[1][1:end-1])
-            if isdefined(context_module, modname)
-                callee_module = getfield(context_module, modname)
-                if !isa(callee_module, Module)
+    if !hint # require a tab press for completion of these
+        # ?(x, y)TAB lists methods you can call with these objects
+        # ?(x, y TAB lists methods that take these objects as the first two arguments
+        # MyModule.?(x, y)TAB restricts the search to names in MyModule
+        rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+        if rexm !== nothing
+            # Get the module scope
+            if isempty(rexm.captures[1])
+                callee_module = context_module
+            else
+                modname = Symbol(rexm.captures[1][1:end-1])
+                if isdefined(context_module, modname)
+                    callee_module = getfield(context_module, modname)
+                    if !isa(callee_module, Module)
+                        callee_module = context_module
+                    end
+                else
                     callee_module = context_module
                 end
-            else
-                callee_module = context_module
             end
-        end
-        moreargs = !endswith(rexm.captures[2], ')')
-        callstr = "_(" * rexm.captures[2]
-        if moreargs
-            callstr *= ')'
-        end
-        ex_org = Meta.parse(callstr, raise=false, depwarn=false)
-        if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            moreargs = !endswith(rexm.captures[2], ')')
+            callstr = "_(" * rexm.captures[2]
+            if moreargs
+                callstr *= ')'
+            end
+            ex_org = Meta.parse(callstr, raise=false, depwarn=false)
+            if isa(ex_org, Expr)
+                return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            end
         end
     end
 
