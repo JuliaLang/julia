@@ -134,8 +134,8 @@ function instanceof_tfunc(@nospecialize(t), @nospecialize(troot) = t)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
-        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, troot)
-        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, troot)
+        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(unwraptv(t.a), troot)
+        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(unwraptv(t.b), troot)
         isconcrete = isconcrete_a && isconcrete_b
         istype = istype_a && istype_b
         # most users already handle the Union case, so here we assume that
@@ -536,9 +536,9 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
         end
     end
     if isa(x, Union)
-        na = nfields_tfunc(𝕃, x.a)
+        na = nfields_tfunc(𝕃, unwraptv(x.a))
         na === Int && return Int
-        return tmerge(na, nfields_tfunc(𝕃, x.b))
+        return tmerge(𝕃, na, nfields_tfunc(𝕃, unwraptv(x.b)))
     end
     return Int
 end

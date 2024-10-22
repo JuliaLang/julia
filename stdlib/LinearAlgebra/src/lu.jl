@@ -85,6 +85,11 @@ function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:Bl
 end
 function lu!(A::HermOrSym{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true) where {T}
     copytri!(A.data, A.uplo, isa(A, Hermitian))
+    @inbounds if isa(A, Hermitian) # realify diagonal
+        for i in axes(A, 1)
+            A.data[i,i] = A[i,i]
+        end
+    end
     lu!(A.data, pivot; check = check)
 end
 # for backward compatibility

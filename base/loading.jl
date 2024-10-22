@@ -3115,9 +3115,16 @@ end
 
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
-            if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
-                return true # cache file was compiled from a different path
+            if !samefile(includes[1].filename, modpath)
+                stdlib_path = fixup_stdlib_path(includes[1].filename)
+                # In certain cases the path rewritten by `fixup_stdlib_path` may
+                # point to an unreadable directory, make sure we can `stat` the
+                # file before comparing it with `modpath`.
+                isreadable = iszero(@ccall jl_fs_access(stdlib_path::Cstring, 0x04::Cint)::Cint)
+                if !(isreadable && samefile(stdlib_path, modpath))
+                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
+                    return true # cache file was compiled from a different path
+                end
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`

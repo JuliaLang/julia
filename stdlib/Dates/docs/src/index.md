@@ -688,9 +688,9 @@ value in the days field is uncertain.
 See the [API reference](@ref stdlib-dates-api) for additional information
 on methods exported from the `Dates` module.
 
-# [API reference](@id stdlib-dates-api)
+## [API reference](@id stdlib-dates-api)
 
-## Dates and Time Types
+### Dates and Time Types
 
 ```@docs
 Dates.Period
@@ -705,7 +705,7 @@ Dates.TimeZone
 Dates.UTC
 ```
 
-## Dates Functions
+### Dates Functions
 
 ```@docs
 Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
@@ -734,7 +734,7 @@ Dates.now(::Type{Dates.UTC})
 Base.eps(::Union{Type{DateTime}, Type{Date}, Type{Time}, TimeType})
 ```
 
-### Accessor Functions
+#### Accessor Functions
 
 ```@docs
 Dates.year
@@ -762,7 +762,7 @@ Dates.monthday
 Dates.yearmonthday
 ```
 
-### Query Functions
+#### Query Functions
 
 ```@docs
 Dates.dayname
@@ -781,7 +781,7 @@ Dates.quarterofyear
 Dates.dayofquarter
 ```
 
-### Adjuster Functions
+#### Adjuster Functions
 
 ```@docs
 Base.trunc(::Dates.TimeType, ::Type{Dates.Period})
@@ -801,7 +801,7 @@ Dates.tonext(::Function, ::Dates.TimeType)
 Dates.toprev(::Function, ::Dates.TimeType)
 ```
 
-### Periods
+#### Periods
 
 ```@docs
 Dates.Period(::Any)
@@ -812,7 +812,7 @@ Dates.default
 Dates.periods
 ```
 
-### Rounding Functions
+#### Rounding Functions
 
 `Date` and `DateTime` values can be rounded to a specified resolution (e.g., 1 month or 15 minutes)
 with `floor`, `ceil`, or `round`.
@@ -841,7 +841,7 @@ Dates.date2epochdays
 Dates.datetime2epochms
 ```
 
-### Conversion Functions
+#### Conversion Functions
 
 ```@docs
 Dates.today
