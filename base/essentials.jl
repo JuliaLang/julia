@@ -1258,8 +1258,8 @@ arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the ma
 will error unless the binding is valid and has the same value across the entire world
 range.
 
-The `@world` macro is primarily used in the priniting of bindings that are no longer available
-in the current world.
+The `@world` macro is primarily used in the printing of bindings that are no longer
+available in the current world.
 
 ## Example
 ```
