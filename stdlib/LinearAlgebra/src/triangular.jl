@@ -1066,7 +1066,7 @@ for TC in (:AbstractVector, :AbstractMatrix)
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return @stable_muladdmul generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
+            return _generic_matvecmul!(C, 'N', A, B, alpha, beta)
         end
     end
 end
