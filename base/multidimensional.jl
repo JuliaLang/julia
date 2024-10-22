@@ -616,7 +616,7 @@ module IteratorsMD
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
         CartesianIndices(intersect.(a.indices, b.indices))
     Base.issubset(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
-        all(map(issubset, a.indices, b.indices))
+        isempty(a) || all(map(issubset, a.indices, b.indices))
 
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,<:Tuple{AbstractUnitRange{Int}},false}
