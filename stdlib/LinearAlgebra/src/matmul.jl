@@ -818,6 +818,7 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
+# legacy method, retained for backward compatibility
 generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
     generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
 @inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
@@ -827,6 +828,9 @@ generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector
     return _generic_matvecmul!(C, ta, Anew, B, alpha, beta)
 end
 
+# legacy method, retained for backward compatibility
+_generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
+    _generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
 function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                             alpha::Number, beta::Number)
     require_one_based_indexing(C, A, B)
