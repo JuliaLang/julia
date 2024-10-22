@@ -812,7 +812,11 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
                 extype = extype.error # deprecated
             end
-            if isa(exc, typeof(extype))
+            # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
+            # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
+            if isa(extype, UndefVarError) && !isdefined(extype, :scope)
+                success = exc isa UndefVarError && exc.var == extype.var
+            else isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
                     if !isequal(getfield(extype, fld), getfield(exc, fld))

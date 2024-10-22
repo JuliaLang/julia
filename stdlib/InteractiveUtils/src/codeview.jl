@@ -54,7 +54,7 @@ function is_expected_union(u::Union)
     return true
 end
 
-function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter, label_dynamic_calls)
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
@@ -74,7 +74,7 @@ function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(retty
     print(io, "Body")
     warntype_type_printer(io; type=rettype, used=true)
     println(io)
-    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls)
     Base.IRShow.show_ir(io, src, irshow_config)
     println(io)
 end
@@ -154,7 +154,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
         isa(f.source, Method) && (nargs = f.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs;
+                                lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
     tt = Base.signature_type(f, tt)
@@ -167,7 +168,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
         mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
         if src isa Core.CodeInfo
-            print_warntype_codeinfo(io, src, src.rettype, nargs; lineprinter)
+            print_warntype_codeinfo(io, src, src.rettype, nargs;
+                                    lineprinter, label_dynamic_calls = optimize)
         else
             println(io, "  inference not successful")
         end

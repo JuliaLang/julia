@@ -1485,7 +1485,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).
@@ -1679,4 +1679,15 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bpart = lookup_binding_partition(first(worlds), gr)
+    if bpart.max_world < last(world)
+        error("Binding does not cover the full world range")
+    end
+    _resolve_in_world(last(world), gr)
 end

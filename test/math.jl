@@ -1498,6 +1498,28 @@ end
     n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
+
+    # #55633
+    struct Issue55633_1 <: Number end
+    struct Issue55633_3 <: Number end
+    struct Issue55633_9 <: Number end
+    Base.one(::Issue55633_3) = Issue55633_1()
+    Base.:(*)(::Issue55633_3, ::Issue55633_3) = Issue55633_9()
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Issue55633_3}) = Int
+    Base.promote_rule(::Type{Issue55633_3}, ::Type{Issue55633_9}) = Int
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Issue55633_9}) = Int
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Int}) = Int
+    Base.promote_rule(::Type{Issue55633_3}, ::Type{Int}) = Int
+    Base.promote_rule(::Type{Issue55633_9}, ::Type{Int}) = Int
+    Base.convert(::Type{Int}, ::Issue55633_1) = 1
+    Base.convert(::Type{Int}, ::Issue55633_3) = 3
+    Base.convert(::Type{Int}, ::Issue55633_9) = 9
+    for x ∈ (im, pi, Issue55633_3())
+        p = promote(one(x), x, x*x)
+        for y ∈ 0:2
+            @test all((t -> ===(t...)), zip(x^y, p[y + 1]))
+        end
+    end
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

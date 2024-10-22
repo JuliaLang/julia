@@ -398,8 +398,8 @@ Random.seed!(1)
             @test (@inferred diag(T))::typeof(dv) == dv
             @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T, -n - 1)
-            @test_throws ArgumentError diag(T,  n + 1)
+            @test isempty(@inferred diag(T, -n - 1))
+            @test isempty(@inferred diag(T,  n + 1))
             # test diag with another wrapped vector type
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)
@@ -838,6 +838,16 @@ end
         ev = fill(M, 0)
         B = Bidiagonal(dv, ev, :U)
         @test B == Matrix{eltype(B)}(B)
+    end
+
+    @testset "non-standard axes" begin
+        LinearAlgebra.diagzero(T::Type, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) =
+            zeros(T, ax)
+
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        B = Bidiagonal(fill(s,4), fill(s,3), :U)
+        @test @inferred(B[2,1]) isa typeof(s)
+        @test all(iszero, B[2,1])
     end
 end
 

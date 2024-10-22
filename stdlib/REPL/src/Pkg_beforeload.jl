@@ -1,17 +1,16 @@
 ## Pkg stuff needed before Pkg has loaded
 
 const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-const Pkg_REPLExt_pkgid = Base.PkgId(Base.UUID("ceef7b17-42e7-5b1c-81d4-4cc4a2494ccf"), "REPLExt")
 
 function load_pkg()
+    REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
     @lock Base.require_lock begin
-        REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
         # require_stdlib does not guarantee that the `__init__` of the package is done when loading is done async
         # but we need to wait for the repl mode to be set up
-        lock = get(Base.package_locks, Pkg_REPLExt_pkgid.uuid, nothing)
+        lock = get(Base.package_locks, Base.PkgId(REPLExt), nothing)
         lock !== nothing && wait(lock[2])
-        return REPLExt
     end
+    return REPLExt
 end
 
 ## Below here copied/tweaked from Pkg Types.jl so that the dummy Pkg prompt
@@ -88,7 +87,7 @@ function projname(project_file::String)
     end
     for depot in Base.DEPOT_PATH
         envdir = joinpath(depot, "environments")
-        if startswith(abspath(project_file), abspath(envdir))
+        if startswith(safe_realpath(project_file), safe_realpath(envdir))
             return "@" * name
         end
     end
