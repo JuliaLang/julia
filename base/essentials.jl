@@ -1258,8 +1258,8 @@ arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the ma
 will error unless the binding is valid and has the same value across the entire world
 range.
 
-The `@world` macro is primarily used in the priniting of bindings that are no longer available
-in the current world.
+The `@world` macro is primarily used in the printing of bindings that are no longer
+available in the current world.
 
 ## Example
 ```
@@ -1283,9 +1283,12 @@ julia> fold
 """
 macro world(sym, world)
     if isa(sym, Symbol)
-        return :($(_resolve_in_world)($world, $(QuoteNode(GlobalRef(__module__, sym)))))
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
     elseif isa(sym, GlobalRef)
-        return :($(_resolve_in_world)($world, $(QuoteNode(sym))))
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    elseif isa(sym, Expr) && sym.head === :(.) &&
+            length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
     else
         error("`@world` requires a symbol or GlobalRef")
     end
