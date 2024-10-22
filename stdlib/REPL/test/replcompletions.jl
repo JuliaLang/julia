@@ -2269,7 +2269,17 @@ let s = "@time using .Iss"
     @test res
     @test "Issue52922" in c
 end
+let s = "@time @time @time using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
 let s = " @time using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = " @time @time using .Iss"
     c, r, res = test_complete_context(s)
     @test res
     @test "Issue52922" in c
