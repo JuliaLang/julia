@@ -2281,9 +2281,9 @@ typedef struct _jl_task_t {
     // multiqueue priority
     uint16_t priority;
     // timestamp this task became runnable (TODO: int32 of ms instead?)
-    uint64_t first_scheduled_at;
+    uint64_t first_scheduled_at; // TODO: naming... first_enqueued_at?
     // timestamp this task was last scheduled
-    uint64_t last_scheduled_at;
+    uint64_t last_scheduled_at; // TODO: naming... last_dequeued_at?
     // time this task has spent running; updated when it yields
     uint64_t cpu_time_ns;
     // time since this task was runnable

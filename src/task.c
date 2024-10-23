@@ -15,6 +15,7 @@
 //#endif
 
 // this is needed for !COPY_STACKS to work on linux
+#include <stdint.h>
 #ifdef _FORTIFY_SOURCE
 // disable __longjmp_chk validation so that we can jump between stacks
 // (which would normally be invalid to do with setjmp / longjmp)
@@ -1251,9 +1252,10 @@ CFI_NORETURN
     fesetenv(&ct->fenv);
 
     ct->ctx.started = 1;
-    // scheduler -task-started-> user
-    ct->first_scheduled_at = jl_hrtime();
-    ct->last_scheduled_at = ct->first_scheduled_at;
+    /* // wait_time -task-started-> user_time */
+    assert(ct->first_scheduled_at != 0);
+    assert(ct->last_scheduled_at == 0);
+    ct->last_scheduled_at = jl_hrtime();
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1605,10 +1607,11 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
-    ct->first_scheduled_at = 0;
-    ct->last_scheduled_at = 0;
     ct->cpu_time_ns = 0;
     ct->wall_time_ns = 0;
+    uint64_t now = jl_hrtime();
+    ct->first_scheduled_at = now;
+    ct->last_scheduled_at = now;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

@@ -810,12 +810,10 @@ end
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
-    # @assert t.first_scheduled_at != 0
-    # @assert t.last_scheduled_at != 0
-    # user -task-finished-> scheduler
+    # user_time -task-finished-> wait_time
     now = time_ns()
-    t.wall_time_ns = t.first_scheduled_at == 0 ? 0 : now - t.first_scheduled_at
-    t.cpu_time_ns += t.last_scheduled_at == 0 ? 0 : now - t.last_scheduled_at
+    record_cpu_time!(t, now)
+    record_wall_time!(t, now)
     err = istaskfailed(t)
     result = task_result(t)
     handled = false
@@ -943,11 +941,6 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    # user -task-created-> scheduled
-    # user -task-paused-> scheduler
-    if t.last_scheduled_at != 0
-        t.cpu_time_ns += time_ns() - t.last_scheduled_at
-    end
 
     # Sticky tasks go into their thread's work queue.
     if t.sticky
@@ -988,7 +981,13 @@ function enq_work(t::Task)
     return t
 end
 
-schedule(t::Task) = enq_work(t)
+function schedule(t::Task)
+    # user_time -task-scheduled-> wait_time
+    if t.first_scheduled_at == 0
+        t.first_scheduled_at = time_ns()
+    end
+    enq_work(t)
+end
 
 """
     schedule(t::Task, [val]; error=false)
@@ -1034,6 +1033,10 @@ true
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
+    # user_time -task-scheduled-> wait_time
+    if t.first_scheduled_at == 0
+        t.first_scheduled_at = time_ns()
+    end
     if error
         q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
@@ -1055,6 +1058,7 @@ tasks.
 """
 function yield()
     ct = current_task()
+    record_cpu_time!(ct)
     enq_work(ct)
     try
         wait()
@@ -1076,6 +1080,7 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
     current = current_task()
+    record_cpu_time!(current)
     t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     t.result = x
@@ -1100,6 +1105,9 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
+    if t.first_scheduled_at == 0
+        t.first_scheduled_at = time_ns()
+    end
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -1115,11 +1123,8 @@ function try_yieldto(undo)
     ct = current_task()
     # scheduler -task-started-> user
     # scheduler -task-resumed-> user
-    scheduled_at = time_ns()
-    if ct.first_scheduled_at == 0
-        ct.first_scheduled_at = scheduled_at
-    end
-    ct.last_scheduled_at = scheduled_at
+    # @assert ct.last_scheduled_at == 0
+    ct.last_scheduled_at = time_ns()
     if ct._isexception
         exc = ct.result
         ct.result = nothing
@@ -1133,6 +1138,9 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
+    if t.first_scheduled_at == 0
+        t.first_scheduled_at = time_ns()
+    end
     t.result = exc
     t._isexception = true
     set_next_task(t)
@@ -1198,4 +1206,17 @@ if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
     pause() = ccall(:pause, Cvoid, ())
+end
+
+function record_cpu_time!(t::Task, done_at::UInt64=time_ns())
+    @assert t.last_scheduled_at != 0
+    t.cpu_time_ns += done_at - t.last_scheduled_at
+    t.last_scheduled_at = 0
+    return t
+end
+
+function record_wall_time!(t::Task, done_at::UInt64=time_ns())
+    @assert t.first_scheduled_at != 0
+    t.wall_time_ns = done_at - t.first_scheduled_at
+    return t
 end
