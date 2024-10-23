@@ -206,11 +206,17 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     if (std_imports) {
         if (jl_base_module != NULL) {
             jl_add_standard_imports(newm);
+            jl_datatype_t *include_into = (jl_datatype_t *)jl_get_global(jl_base_module, jl_symbol("IncludeInto"));
+            if (include_into) {
+                form = jl_new_struct(include_into, newm);
+                jl_set_const(newm, jl_symbol("include"), form);
+            }
         }
-        // add `eval` function
-        form = jl_call_scm_on_ast_and_loc("module-default-defs", (jl_value_t*)name, newm, filename, lineno);
-        jl_toplevel_eval_flex(newm, form, 0, 1, &filename, &lineno);
-        form = NULL;
+        jl_datatype_t *eval_into = (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
+        if (eval_into) {
+            form = jl_new_struct(eval_into, newm);
+            jl_set_const(newm, jl_symbol("eval"), form);
+        }
     }
 
     newm->file = jl_symbol(filename);
