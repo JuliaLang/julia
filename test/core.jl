@@ -35,7 +35,7 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
-        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args, :frozen]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache]),
