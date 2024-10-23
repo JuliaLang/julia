@@ -141,6 +141,19 @@ function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Complet
     ssyms = names(mod; all=true, imported, usings)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
+
+    # don't complete string and command macros when the input matches the internal name like `r_` to `r"`
+    if !startswith(name, "@")
+        filter!(macros) do m
+            s = String(m)
+            if endswith(s, "_str") || endswith(s, "_cmd")
+                occursin(name, first(s, length(s)-4))
+            else
+                true
+            end
+        end
+    end
+
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
