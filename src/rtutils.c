@@ -661,7 +661,7 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        jl_value_t *bv = jl_get_binding_value_if_const(b);
+        jl_value_t *bv = jl_get_binding_value_if_resolved_and_const(b);
         // The `||` makes this function work for both function instances and function types.
         if (bv && (bv == v || jl_typeof(bv) == v))
             return 1;

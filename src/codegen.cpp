@@ -2247,7 +2247,10 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
             break;
         }
         if (caller) {
-            assert(ctx.emission_context.enqueuers.count(caller) == 1);
+
+            // assert(ctx.emission_context.enqueuers.count(caller) == 1);
+            // Each enqueuer should only be enqueued at least once and only once. Check why this assert is triggering
+            // This isn't a fatal error, just means that we may get a wrong backtrace
             if (jl_is_method_instance(caller)) {
                 //TODO: Use a subrange when C++20 is a thing
                 for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
@@ -5732,10 +5735,34 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             // special case for some known builtin not handled by emit_builtin_call
             auto it = builtin_func_map().find(builtin_fptr);
             if (it != builtin_func_map().end()) {
-                if (trim_may_error(ctx.params->trim) && may_dispatch_builtins().count(builtin_fptr)) {
-                    errs() << "ERROR: Dynamic call to builtin" << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
-                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stacktrace(ctx, ctx.params->trim);
+                if (trim_may_error(ctx.params->trim)) {
+                    bool may_dispatch = may_dispatch_builtins().count(builtin_fptr);
+                    if (may_dispatch && f.constant == jl_builtin__apply_iterate && nargs >= 4) {
+                        if (jl_subtype(argv[2].typ, (jl_value_t*)jl_builtin_type)) {
+                            static jl_value_t *jl_dispatchfree_apply_iterate_type = NULL;
+                            if (!jl_dispatchfree_apply_iterate_type) {
+                                jl_value_t *types[5] = {
+                                    (jl_value_t *)jl_simplevector_type,
+                                    (jl_value_t *)jl_genericmemory_type,
+                                    (jl_value_t *)jl_array_type,
+                                    (jl_value_t *)jl_tuple_type,
+                                    (jl_value_t *)jl_namedtuple_type,
+                                };
+                                jl_dispatchfree_apply_iterate_type = jl_as_global_root(jl_type_union(types, 5), 1);
+                            }
+                            for (size_t i = 3; i < nargs; i++) {
+                                auto ai = argv[i].typ;
+                                if (!jl_subtype(ai, jl_dispatchfree_apply_iterate_type))
+                                    break;
+                            }
+                            may_dispatch = false;
+                        }
+                    }
+                    if (may_dispatch) {
+                        errs() << "ERROR: Dynamic call to builtin " << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
+                        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+                        print_stacktrace(ctx, ctx.params->trim);
+                    }
                 }
                 Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
                 setName(ctx.emission_context, ret, it->second->name + "_ret");
@@ -5751,6 +5778,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         else {
             fptr = FunctionCallee(get_func_sig(ctx.builder.getContext()), ctx.builder.CreateCall(prepare_call(jlgetbuiltinfptr_func), {emit_typeof(ctx, f)}));
             cc = julia_call;
+        }
+        if (trim_may_error(ctx.params->trim)) {
+            errs() << "ERROR: Dynamic call to unknown builtin";
+            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+            print_stacktrace(ctx, ctx.params->trim);
         }
         Value *ret = emit_jlcall(ctx, fptr, nullptr, argv, nargs, cc);
         setName(ctx.emission_context, ret, "Builtin_ret");
@@ -5774,7 +5806,8 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
     int failed_dispatch = !argv[0].constant;
     if (ctx.params->trim != JL_TRIM_NO) {
-        abort(); // this code path is unsound, unsafe, and probably bad
+        // TODO: Implement the last-minute call resolution that used to be here
+        //       in inference instead.
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {

@@ -1284,6 +1284,14 @@ end
             @test istril(U, k) == istril(A, k)
         end
     end
+
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,2,2)
+        U = triu(M)
+        @test iszero(U[2,1])
+        U = tril(M)
+        @test iszero(U[1,2])
+    end
 end
 
 @testset "indexing with a BandIndex" begin
@@ -1319,6 +1327,19 @@ end
     end
     for T in (LowerTriangular, UnitLowerTriangular)
         @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
+    end
+end
+
+@testset "indexing uses diagzero" begin
+    @testset "block matrix" begin
+        M = reshape([zeros(2,2), zeros(4,2), zeros(2,3), zeros(4,3)],2,2)
+        U = UpperTriangular(M)
+        @test [size(x) for x in U] == [size(x) for x in M]
+    end
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,4,4)
+        U = UpperTriangular(M)
+        @test iszero(U[3,1])
     end
 end
 

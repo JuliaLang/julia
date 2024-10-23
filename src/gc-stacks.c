@@ -47,7 +47,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
     VirtualFree(stkbuf, 0, MEM_RELEASE);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
@@ -82,7 +82,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
     return stk;
 }
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
     munmap(stkbuf, bufsz);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
@@ -132,7 +132,7 @@ void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
-            small_arraylist_push(&ptls->gc_tls.heap.free_stacks[pool_id], stkbuf);
+            small_arraylist_push(&ptls->gc_tls_common.heap.free_stacks[pool_id], stkbuf);
             return;
         }
     }
@@ -161,7 +161,7 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 #ifdef _COMPILER_ASAN_ENABLED_
             __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
 #endif
-            small_arraylist_push(&ptls->gc_tls.heap.free_stacks[pool_id], stkbuf);
+            small_arraylist_push(&ptls->gc_tls_common.heap.free_stacks[pool_id], stkbuf);
         }
     }
 }
@@ -176,7 +176,7 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     if (ssize <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(ssize);
         ssize = pool_sizes[pool_id];
-        small_arraylist_t *pool = &ptls->gc_tls.heap.free_stacks[pool_id];
+        small_arraylist_t *pool = &ptls->gc_tls_common.heap.free_stacks[pool_id];
         if (pool->len > 0) {
             stk = small_arraylist_pop(pool);
         }
@@ -197,7 +197,7 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     }
     *bufsz = ssize;
     if (owner) {
-        small_arraylist_t *live_tasks = &ptls->gc_tls.heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls->gc_tls_common.heap.live_tasks;
         mtarraylist_push(live_tasks, owner);
     }
     return stk;
@@ -228,7 +228,7 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         // free half of stacks that remain unused since last sweep
         if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
             for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-                small_arraylist_t *al = &ptls2->gc_tls.heap.free_stacks[p];
+                small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
                 size_t n_to_free;
                 if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
                     n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
@@ -251,10 +251,10 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
             }
         }
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            small_arraylist_free(ptls2->gc_tls.heap.free_stacks);
+            small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
 
-        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = 0;
         size_t ndel = 0;
         size_t l = live_tasks->len;
@@ -306,7 +306,7 @@ restart:
         jl_ptls_t ptls2 = allstates[i];
         if (ptls2 == NULL)
             continue;
-        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         l += n + (ptls2->root_task->ctx.stkbuf != NULL);
     }
@@ -325,7 +325,7 @@ restart:
                 goto restart;
             jl_array_data(a,void*)[j++] = t;
         }
-        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         for (size_t i = 0; i < n; i++) {
             jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
