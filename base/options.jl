@@ -58,6 +58,7 @@ struct JLOptions
     strip_ir::Int8
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
+    trace_compile_timing::Int8
     safe_crash_log_file::Ptr{UInt8}
 end
 

@@ -761,6 +761,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
     end
 
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
     # --trace-dispatch
     let
         io = IOBuffer()

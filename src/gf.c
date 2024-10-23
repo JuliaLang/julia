@@ -2333,7 +2333,7 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 
 jl_mutex_t precomp_statement_out_lock;
 
-static void record_precompile_statement(jl_method_instance_t *mi)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -2356,6 +2356,8 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         }
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
+        if (jl_options.trace_compile_timing)
+            jl_printf(s_precompile, "#= %6.1f =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
         jl_printf(s_precompile, ")\n");
@@ -2484,7 +2486,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     codeinst->rettype_const = unspec->rettype_const;
                     jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi);
+                    record_precompile_statement(mi, 0);
                     return codeinst;
                 }
             }
@@ -2501,7 +2503,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi);
+            record_precompile_statement(mi, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2511,8 +2513,11 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
     }
 
+    double compile_time = jl_hrtime();
     int did_compile = 0;
     codeinst = jl_generate_fptr(mi, world, &did_compile);
+    compile_time = jl_hrtime() - compile_time;
+
     if (!codeinst) {
         jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
@@ -2553,7 +2558,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_mi_cache_insert(mi, codeinst);
     }
     else if (did_compile) {
-        record_precompile_statement(mi);
+        record_precompile_statement(mi, compile_time);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
     return codeinst;
