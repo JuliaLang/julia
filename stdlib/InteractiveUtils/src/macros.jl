@@ -4,6 +4,10 @@
 
 import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
 
+# defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
+# via. `Base.@time_imports` etc.
+import Base: @time_imports, @trace_compile, @trace_dispatch
+
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
@@ -242,39 +246,6 @@ macro code_lowered(ex0...)
     quote
         local results = $thecall
         length(results) == 1 ? results[1] : results
-    end
-end
-
-macro time_imports(ex)
-    quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
-    end
-end
-
-macro trace_compile(ex)
-    quote
-        try
-            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
-            $(esc(ex))
-        finally
-            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
-        end
-    end
-end
-
-macro trace_dispatch(ex)
-    quote
-        try
-            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
-            $(esc(ex))
-        finally
-            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
-        end
     end
 end
 

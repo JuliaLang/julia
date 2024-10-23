@@ -68,6 +68,16 @@ let ex = quote
         Base.keys(d::CustomDict) = collect(keys(d.mydict))
         Base.length(d::CustomDict) = length(d.mydict)
 
+        # Support AbstractDict with unknown length, #55931
+        struct NoLengthDict{K,V} <: AbstractDict{K,V}
+            dict::Dict{K,V}
+            NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
+        end
+        Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
+        Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
+        Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
+        Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
+
         test(x::T, y::T) where {T<:Real} = pass
         test(x::Real, y::Real) = pass
         test(x::AbstractArray{T}, y) where {T<:Real} = pass
@@ -151,6 +161,7 @@ let ex = quote
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
         test_dict_ℂ = Dict(1=>2)
+        test_dict_no_length = CompletionFoo.NoLengthDict{Int,Int}()
     end
     ex.head = :toplevel
     Core.eval(Main, ex)
@@ -328,6 +339,12 @@ end
 
 # inexistent completion inside a cmd
 @test_nocompletion("run(`lol")
+
+# issue 55856: copy(A').<TAB> errors in the REPL
+let
+    c, r = test_complete("copy(A').")
+    @test isempty(c)
+end
 
 # test latex symbol completions
 let s = "\\alpha"
@@ -1219,7 +1236,7 @@ let current_dir, forbidden
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
-            @test c == ["selfsymlink"]
+            @test c == ["selfsymlink\""]
         end
     end
 
@@ -1339,6 +1356,31 @@ let (c, r, res) = test_complete("\"~/julia")
 
     c, r, res = test_complete("\"foo~bar")
     @test !res
+end
+if !Sys.iswindows()
+    # create a dir and file temporarily in the home directory
+    path = mkpath(joinpath(homedir(), "Zx6Wa0GkC0"))
+    touch(joinpath(path, "my_file"))
+    try
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC")
+            @test res
+            @test c == String["Zx6Wa0GkC0/"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0")
+            @test res
+            @test c == String[homedir() * "/Zx6Wa0GkC0"]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_")
+            @test res
+            @test c == String["my_file\""]
+        end
+        let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_file")
+            @test res
+            @test c == String[homedir() * "/Zx6Wa0GkC0/my_file"]
+        end
+    finally
+        rm(path, recursive=true)
+    end
 end
 
 # Test the completion returns nothing when the folder do not exist
@@ -1486,8 +1528,12 @@ test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
 test_dict_completion("test_repl_comp_customdict")
 
-# Issue #23004: this should not throw:
-@test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+@testset "dict_identifier_key" begin
+    # Issue #23004: this should not throw:
+    @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+    # Issue #55931: neither should this:
+    @test REPLCompletions.dict_identifier_key("test_dict_no_length[", :other) isa NTuple{3,Nothing}
+end
 
 @testset "completion of string/cmd macros (#22577)" begin
     c, r, res = test_complete("ra")

@@ -22,8 +22,10 @@ struct GC_Num
     total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
+    stack_pool_sweep_time ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
 end
@@ -624,5 +626,40 @@ macro timed(ex)
             compile_time=compile_elapsedtimes[1]/1e9,
             recompile_time=compile_elapsedtimes[2]/1e9
         )
+    end
+end
+
+# Exported, documented, and tested in InteractiveUtils
+# here so it's possible to time/trace all imports, including InteractiveUtils and its deps
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
+        end
     end
 end

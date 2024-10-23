@@ -1160,4 +1160,11 @@ end
     @test symT-s == Array(symT) - Array(s)
 end
 
+@testset "issue #56283" begin
+    a = 1.0
+    D = Diagonal(randn(10))
+    H = Hermitian(D*D')
+    @test a*H == H
+end
+
 end # module TestSymmetric

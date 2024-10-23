@@ -166,15 +166,17 @@ debug info, respectively, and so will make debugging more difficult.
   types are not known. All printing should use a specific IO object with a known type.
   The easiest substitution is to use `print(Core.stdout, x)` instead of `print(x)` or
   `print(stdout, x)`.
-- Use tools like `JET`, `Cthulhu`, and/or `SnoopCompile` to identify failures of type-inference, and
-  follow our [Performance Tips](@ref) to fix them.
+- Use tools like [JET.jl](https://github.com/aviatesk/JET.jl),
+  [Cthulhu.jl](https://github.com/JuliaDebug/Cthulhu.jl), and/or
+  [SnoopCompile](https://github.com/timholy/SnoopCompile.jl)
+  to identify failures of type-inference, and follow our [Performance Tips](@ref) to fix them.
 
 ### Compatibility concerns
 
 We have identified many small changes to Base that significantly increase the set of programs
 that can be reliably trimmed. Unfortunately some of those changes would be considered breaking,
 and so are only applied when trimming is requested (this is done by an external build script,
-currently maintained inside the test suite as `test/trimming/buildscript.jl`).
+currently maintained inside the test suite as `contrib/juliac-buildscript.jl`).
 Therefore in many cases trimming will require you to opt in to new variants of Base and some
 standard libraries.
 
@@ -187,7 +189,7 @@ with trimming as you develop it.
 Package authors may wish to test that their package is "trimming safe", however this is impossible
 in general. Trimming is only expected to work given concrete entry points such as `main()` and
 library entry points meant to be called from outside Julia. For generic packages, existing tests
-for type stability like `@inferred` and `JET` are about as close as you can get to checking
+for type stability like `@inferred` and `JET.@report_call` are about as close as you can get to checking
 trim compatibility.
 
 Trimming also introduces new compatibility issues between minor versions of Julia. At this time,

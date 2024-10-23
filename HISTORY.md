@@ -119,6 +119,11 @@ New library features
 Standard library changes
 ------------------------
 
+* It's not possible to define `length` for stateful iterators in a generally consistent manner. The
+  potential for silently incorrect results for `Stateful` iterators is addressed by deleting the
+  `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
+  PR: ([#51747]).
+
 #### StyledStrings
 
 * A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
@@ -131,6 +136,14 @@ Standard library changes
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
 
 #### Package Manager
+* It is now possible to specify "sources" for packages in a `[sources]` section in Project.toml.
+  This can be used to add non-registered normal or test dependencies.
+* Pkg now obeys `[compat]` bounds for `julia` and raises an error if the version of the running Julia binary is incompatible with the bounds in `Project.toml`.
+  Pkg has always obeyed this compat when working with Registry packages. This change affects mostly local packages
+* `pkg> add` and `Pkg.add` will now add compat entries for new direct dependencies if the active environment is a
+  package (has a `name` and `uuid` entry).
+* Dependencies can now be directly added as weak deps or extras via the `pkg> add --weak/extra Foo` or
+  `Pkg.add("Foo", target=:weakdeps/:extras)` forms.
 
 #### LinearAlgebra
 * `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
@@ -225,6 +238,7 @@ Tooling Improvements
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
 [#47354]: https://github.com/JuliaLang/julia/issues/47354
 [#47679]: https://github.com/JuliaLang/julia/issues/47679
+[#47790]: https://github.com/JuliaLang/julia/issues/47790
 [#48273]: https://github.com/JuliaLang/julia/issues/48273
 [#48625]: https://github.com/JuliaLang/julia/issues/48625
 [#49546]: https://github.com/JuliaLang/julia/issues/49546
@@ -250,6 +264,7 @@ Tooling Improvements
 [#51616]: https://github.com/JuliaLang/julia/issues/51616
 [#51647]: https://github.com/JuliaLang/julia/issues/51647
 [#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51747]: https://github.com/JuliaLang/julia/issues/51747
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929

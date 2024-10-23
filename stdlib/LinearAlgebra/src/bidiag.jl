@@ -118,17 +118,6 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
-    Tel = eltype(A)
-    if i < j && A.uplo == 'U' #= top right zeros =#
-        return zeroslike(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
-    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return zeroslike(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
-    else
-        return zeroslike(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
-    end
-end
-
 _offdiagind(uplo) = uplo == 'U' ? 1 : -1
 
 @inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
