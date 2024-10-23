@@ -831,6 +831,50 @@ end
 # legacy method, retained for backward compatibility
 _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
     _generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
+function __generic_matvecmul!(f::F, C::AbstractVector, A::AbstractVecOrMat, B::AbstractVector,
+                            alpha::Number, beta::Number) where {F}
+    Astride = size(A, 1)
+    @inbounds begin
+        if length(B) == 0
+            for k = eachindex(C)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), false, C, k)
+            end
+        else
+            for k = eachindex(C)
+                aoffs = (k-1)*Astride
+                firstterm = f(A[aoffs + 1]) * B[1]
+                s = zero(firstterm + firstterm)
+                for i = eachindex(B)
+                    s += f(A[aoffs+i]) * B[i]
+                end
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), s, C, k)
+            end
+        end
+    end
+end
+function __generic_matvecmul!(::typeof(identity), C::AbstractVector, A::AbstractVecOrMat, B::AbstractVector,
+                            alpha::Number, beta::Number)
+    Astride = size(A, 1)
+    @inbounds begin
+        for i = eachindex(C)
+            if !iszero(beta)
+                C[i] *= beta
+            elseif length(B) == 0
+                C[i] = false
+            else
+                C[i] = zero(A[i]*B[1] + A[i]*B[1])
+            end
+        end
+        for k = eachindex(B)
+            aoffs = (k-1)*Astride
+            b = @stable_muladdmul MulAddMul(alpha,beta)(B[k])
+            for i = eachindex(C)
+                C[i] += A[aoffs + i] * b
+            end
+        end
+    end
+    return C
+end
 function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                             alpha::Number, beta::Number)
     require_one_based_indexing(C, A, B)
@@ -844,60 +888,13 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
         throw(DimensionMismatch(lazy"result C has length $(length(C)), needs length $mA"))
     end
 
-    Astride = size(A, 1)
-
-    @inbounds begin
     if tA == 'T'  # fastest case
-        if nA == 0
-            for k = 1:mA
-                @stable_muladdmul _modify!(MulAddMul(alpha,beta), false, C, k)
-            end
-        else
-            for k = 1:mA
-                aoffs = (k-1)*Astride
-                firstterm = transpose(A[aoffs + 1])*B[1]
-                s = zero(firstterm + firstterm)
-                for i = 1:nA
-                    s += transpose(A[aoffs+i]) * B[i]
-                end
-                @stable_muladdmul _modify!(MulAddMul(alpha,beta), s, C, k)
-            end
-        end
+        __generic_matvecmul!(transpose, C, A, B, alpha, beta)
     elseif tA == 'C'
-        if nA == 0
-            for k = 1:mA
-                @stable_muladdmul _modify!(MulAddMul(alpha,beta), false, C, k)
-            end
-        else
-            for k = 1:mA
-                aoffs = (k-1)*Astride
-                firstterm = A[aoffs + 1]'B[1]
-                s = zero(firstterm + firstterm)
-                for i = 1:nA
-                    s += A[aoffs + i]'B[i]
-                end
-                @stable_muladdmul _modify!(MulAddMul(alpha,beta), s, C, k)
-            end
-        end
+        __generic_matvecmul!(adjoint, C, A, B, alpha, beta)
     else # tA == 'N'
-        for i = 1:mA
-            if !iszero(beta)
-                C[i] *= beta
-            elseif mB == 0
-                C[i] = false
-            else
-                C[i] = zero(A[i]*B[1] + A[i]*B[1])
-            end
-        end
-        for k = 1:mB
-            aoffs = (k-1)*Astride
-            b = @stable_muladdmul MulAddMul(alpha,beta)(B[k])
-            for i = 1:mA
-                C[i] += A[aoffs + i] * b
-            end
-        end
+        __generic_matvecmul!(identity, C, A, B, alpha, beta)
     end
-    end # @inbounds
     C
 end
 
