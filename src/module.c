@@ -48,6 +48,7 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
             return bpart;
         jl_binding_partition_t *new_bpart = new_binding_partition();
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
+        jl_gc_wb_fresh(new_bpart, bpart);
         if (bpart)
             new_bpart->min_world = jl_atomic_load_relaxed(&bpart->max_world) + 1;
         jl_atomic_store_relaxed(&new_bpart->max_world, max_world);
@@ -343,6 +344,26 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
+        return NULL;
+    if (!jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+        return NULL;
+    return decode_restriction_value(pku);
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b)
+{
+    // Unlike jl_get_binding_value_if_const this doesn't try to allocate new binding partitions if they
+    // don't already exist, making this JL_NOTSAFEPOINT.
+    if (!b)
+        return NULL;
+    jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
+    if (!bpart)
+        return NULL;
+    size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
+    if (bpart->min_world > jl_current_task->world_age || jl_current_task->world_age > max_world)
+        return NULL;
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
         return NULL;
     if (!jl_bkind_is_some_constant(decode_restriction_kind(pku)))
