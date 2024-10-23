@@ -78,17 +78,13 @@ _mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
 generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
                 alpha::Number, beta::Number) where {T<:BlasFloat} =
     gemv!(y, tA, A, x, alpha, beta)
-generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
-                _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
-    gemv!(y, tA, A, x, _add.alpha, _add.beta)
+
 # Real (possibly transposed) matrix times complex vector.
 # Multiply the matrix with the real and imaginary parts separately
 generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
                 alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, tA, A, x, alpha, beta)
-generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-                _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
-    gemv!(y, tA, A, x, _add.alpha, _add.beta)
+
 # Complex matrix times real vector.
 # Reinterpret the matrix as a real matrix and do real matvec computation.
 # works only in cooperation with BLAS when A is untransposed (tA == 'N')
@@ -96,9 +92,6 @@ generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::S
 generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
                 alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, tA, A, x, alpha, beta)
-generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
-                _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
-    gemv!(y, tA, A, x, _add.alpha, _add.beta)
 
 # Vector-Matrix multiplication
 (*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
@@ -539,9 +532,9 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     if tA_uc in ('S', 'H')
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
-        return @stable_muladdmul _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, α, β)
     else
-        return @stable_muladdmul _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, tA, A, x, α, β)
     end
 end
 
@@ -564,7 +557,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
         return y
     else
         Anew, ta = tA_uc in ('S', 'H') ? (wrap(A, tA), oftype(tA, 'N')) : (A, tA)
-        return @stable_muladdmul _generic_matvecmul!(y, ta, Anew, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, ta, Anew, x, α, β)
     end
 end
 
@@ -591,9 +584,9 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     elseif tA_uc in ('S', 'H')
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
-        return @stable_muladdmul _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, α, β)
     else
-        return @stable_muladdmul _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, tA, A, x, α, β)
     end
 end
 
@@ -825,17 +818,65 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-Base.@constprop :aggressive generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, alpha::Number, beta::Number) =
-    @stable_muladdmul generic_matvecmul!(C, tA, A, B, MulAddMul(alpha, beta))
+# legacy method, retained for backward compatibility
+generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
+    generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
 @inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
-                                    _add::MulAddMul = MulAddMul())
+                                    alpha::Number, beta::Number)
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     Anew, ta = tA_uc in ('S', 'H') ? (wrap(A, tA), oftype(tA, 'N')) : (A, tA)
-    return _generic_matvecmul!(C, ta, Anew, B, _add)
+    return _generic_matvecmul!(C, ta, Anew, B, alpha, beta)
 end
 
+# legacy method, retained for backward compatibility
+_generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector, _add::MulAddMul = MulAddMul()) =
+    _generic_matvecmul!(C, tA, A, B, _add.alpha, _add.beta)
+function __generic_matvecmul!(f::F, C::AbstractVector, A::AbstractVecOrMat, B::AbstractVector,
+                            alpha::Number, beta::Number) where {F}
+    Astride = size(A, 1)
+    @inbounds begin
+        if length(B) == 0
+            for k = eachindex(C)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), false, C, k)
+            end
+        else
+            for k = eachindex(C)
+                aoffs = (k-1)*Astride
+                firstterm = f(A[aoffs + 1]) * B[1]
+                s = zero(firstterm + firstterm)
+                for i = eachindex(B)
+                    s += f(A[aoffs+i]) * B[i]
+                end
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), s, C, k)
+            end
+        end
+    end
+end
+function __generic_matvecmul!(::typeof(identity), C::AbstractVector, A::AbstractVecOrMat, B::AbstractVector,
+                            alpha::Number, beta::Number)
+    Astride = size(A, 1)
+    @inbounds begin
+        for i = eachindex(C)
+            if !iszero(beta)
+                C[i] *= beta
+            elseif length(B) == 0
+                C[i] = false
+            else
+                C[i] = zero(A[i]*B[1] + A[i]*B[1])
+            end
+        end
+        for k = eachindex(B)
+            aoffs = (k-1)*Astride
+            b = @stable_muladdmul MulAddMul(alpha,beta)(B[k])
+            for i = eachindex(C)
+                C[i] += A[aoffs + i] * b
+            end
+        end
+    end
+    return C
+end
 function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
-                            _add::MulAddMul = MulAddMul())
+                            alpha::Number, beta::Number)
     require_one_based_indexing(C, A, B)
     @assert tA in ('N', 'T', 'C')
     mB = length(B)
@@ -847,60 +888,13 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
         throw(DimensionMismatch(lazy"result C has length $(length(C)), needs length $mA"))
     end
 
-    Astride = size(A, 1)
-
-    @inbounds begin
     if tA == 'T'  # fastest case
-        if nA == 0
-            for k = 1:mA
-                _modify!(_add, false, C, k)
-            end
-        else
-            for k = 1:mA
-                aoffs = (k-1)*Astride
-                firstterm = transpose(A[aoffs + 1])*B[1]
-                s = zero(firstterm + firstterm)
-                for i = 1:nA
-                    s += transpose(A[aoffs+i]) * B[i]
-                end
-                _modify!(_add, s, C, k)
-            end
-        end
+        __generic_matvecmul!(transpose, C, A, B, alpha, beta)
     elseif tA == 'C'
-        if nA == 0
-            for k = 1:mA
-                _modify!(_add, false, C, k)
-            end
-        else
-            for k = 1:mA
-                aoffs = (k-1)*Astride
-                firstterm = A[aoffs + 1]'B[1]
-                s = zero(firstterm + firstterm)
-                for i = 1:nA
-                    s += A[aoffs + i]'B[i]
-                end
-                _modify!(_add, s, C, k)
-            end
-        end
+        __generic_matvecmul!(adjoint, C, A, B, alpha, beta)
     else # tA == 'N'
-        for i = 1:mA
-            if !iszero(_add.beta)
-                C[i] *= _add.beta
-            elseif mB == 0
-                C[i] = false
-            else
-                C[i] = zero(A[i]*B[1] + A[i]*B[1])
-            end
-        end
-        for k = 1:mB
-            aoffs = (k-1)*Astride
-            b = _add(B[k])
-            for i = 1:mA
-                C[i] += A[aoffs + i] * b
-            end
-        end
+        __generic_matvecmul!(identity, C, A, B, alpha, beta)
     end
-    end # @inbounds
     C
 end
 
