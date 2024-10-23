@@ -1061,6 +1061,8 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
+    world = check_world_bounded(tn)
+    world !== nothing && print(io, "@world(")
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
         # IOContext If :module is not set, default to Main.
@@ -1078,8 +1080,6 @@ function show_type_name(io::IO, tn::Core.TypeName)
             end
         end
     end
-    world = check_world_bounded(tn)
-    world !== nothing && print(io, "@world(")
     show_sym(io, sym)
     world !== nothing && print(io, ", ", world, ")")
     quo      && print(io, ")")
@@ -3358,4 +3358,82 @@ end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
     show(io, oc)
+end
+
+# printing bindings and partitions
+function print_partition(io::IO, partition::Core.BindingPartition)
+    print(io, partition.min_world)
+    print(io, ":")
+    max_world = @atomic partition.max_world
+    if max_world == typemax(UInt)
+        print(io, '∞')
+    else
+        print(io, max_world)
+    end
+    print(io, " - ")
+    kind = binding_kind(partition)
+    if is_some_const_binding(kind)
+        print(io, "constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_GUARD
+        print(io, "undefined binding - guard entry")
+    elseif kind == BINDING_KIND_FAILED
+        print(io, "ambiguous binding - guard entry")
+    elseif kind == BINDING_KIND_DECLARED
+        print(io, "undefined, but declared using `global` - guard entry")
+    elseif kind == BINDING_KIND_IMPLICIT
+        print(io, "implicit `using` from ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_EXPLICIT
+        print(io, "explicit `using` from ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_IMPORTED
+        print(io, "explicit `import` from ")
+        print(io, partition_restriction(partition))
+    else
+        @assert kind == BINDING_KIND_GLOBAL
+        print(io, "global variable with type ")
+        print(io, partition_restriction(partition))
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
+    print(io, "BindingPartition ")
+    print_partition(io, partition)
+end
+
+function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
+    print(io, "Binding ")
+    print(io, bnd.globalref)
+    if !isdefined(bnd, :partitions)
+        print(io, "No partitions")
+    else
+        partition = @atomic bnd.partitions
+        while true
+            println(io)
+            print(io, "   ")
+            print_partition(io, partition)
+            isdefined(partition, :next) || break
+            partition = @atomic partition.next
+        end
+    end
+end
+
+# Special pretty printing for EvalInto/IncludeInto
+function show(io::IO, ii::IncludeInto)
+    if getglobal(ii.m, :include) === ii
+        print(io, ii.m)
+        print(io, ".include")
+    else
+        show_default(io, ii)
+    end
+end
+
+function show(io::IO, ei::Core.EvalInto)
+    if getglobal(ei.m, :eval) === ei
+        print(io, ei.m)
+        print(io, ".eval")
+    else
+        show_default(io, ei)
+    end
 end
