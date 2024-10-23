@@ -899,17 +899,11 @@ function afterusing(string::String, startpos::Int)
     return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
 end
 
-function close_path_completion(dir, paths, str, pos)
-    length(paths) == 1 || return false  # Only close if there's a single choice...
-    path = (paths[1]::PathCompletion).path
+function close_path_completion(dir, path, str, pos)
     path = unescape_string(replace(path, "\\\$"=>"\$"))
     path = joinpath(dir, path)
     # ...except if it's a directory...
-    try
-        isdir(path)
-    catch e
-        e isa Base.IOError || rethrow() # `path` cannot be determined to be a file
-    end && return false
+    Base.isaccessibledir(path) && return false
     # ...and except if there's already a " at the cursor.
     return lastindex(str) <= pos || str[nextind(str, pos)] != '"'
 end
@@ -1308,10 +1302,12 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             if !isnothing(path)
                 paths, dir, success = complete_path(path::String, string_escape=true)
 
-                if close_path_completion(dir, paths, path, pos)
-                    p = (paths[1]::PathCompletion).path * "\""
+                if length(paths) == 1
+                    p = (paths[1]::PathCompletion).path
                     hint && was_expanded && (p = contractuser(p))
-                    paths[1] = PathCompletion(p)
+                    if close_path_completion(dir, p, path, pos)
+                        paths[1] = PathCompletion(p * "\"")
+                    end
                 end
 
                 if success && !isempty(dir)
