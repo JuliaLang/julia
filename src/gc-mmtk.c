@@ -586,7 +586,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT
             }
             if (mmtk_is_live_object(a)) {
                 // if the array has been forwarded, the reference needs to be updated
-                jl_genericmemory_t *maybe_forwarded = (jl_genericmemory_t*)mmtk_get_possibly_forwared(ma->a);
+                jl_genericmemory_t *maybe_forwarded = (jl_genericmemory_t*)mmtk_get_possibly_forwarded(ma->a);
                 ma->a = maybe_forwarded;
                 pma = &ma->next;
             }
@@ -691,7 +691,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
         while (1) {
             jl_task_t *t = (jl_task_t*)lst[n];
             if (mmtk_is_live_object(t)) {
-                jl_task_t *maybe_forwarded = (jl_task_t*)mmtk_get_possibly_forwared(t);
+                jl_task_t *maybe_forwarded = (jl_task_t*)mmtk_get_possibly_forwarded(t);
                 live_tasks->items[n] = maybe_forwarded;
                 t = maybe_forwarded;
                 assert(jl_is_task(t));
