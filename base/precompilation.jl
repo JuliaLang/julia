@@ -362,7 +362,7 @@ function printpkgstyle(io, header, msg; color=:green)
 end
 
 const Config = Pair{Cmd, Base.CacheFlags}
-const PkgConfig = Tuple{Base.PkgId,Config}
+const PkgConfig = Tuple{PkgId,Config}
 
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
@@ -375,8 +375,22 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
                         fancyprint::Bool = can_fancyprint(io) && !timing,
                         manifest::Bool=false,)
+    # monomorphize this to avoid latency problems
+    _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                   configs isa Vector{Config} ? configs : [configs],
+                   IOContext{IO}(io), fancyprint, manifest)
+end
 
-    configs = configs isa Config ? [configs] : configs
+function _precompilepkgs(pkgs::Vector{String},
+                         internal_call::Bool,
+                         strict::Bool,
+                         warn_loaded::Bool,
+                         timing::Bool,
+                         _from_loading::Bool,
+                         configs::Vector{Config},
+                         io::IOContext{IO},
+                         fancyprint::Bool,
+                         manifest::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
 
     time_start = time_ns()
@@ -393,17 +407,32 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
     if _from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)
         # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
-        io = devnull
+        io = IOContext{IO}(devnull)
     end
 
+    nconfigs = length(configs)
     hascolor = get(io, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
     stale_cache = Dict{StaleCacheKey, Bool}()
-    exts = Dict{Base.PkgId, String}() # ext -> parent
+    exts = Dict{PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
-    depsmap = Dict{Base.PkgId, Vector{Base.PkgId}}()
-    pkg_exts_map = Dict{Base.PkgId, Vector{Base.PkgId}}()
+    depsmap = Dict{PkgId, Vector{PkgId}}()
+    pkg_exts_map = Dict{PkgId, Vector{PkgId}}()
+
+    function describe_pkg(pkg::PkgId, is_direct_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
+        name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
+        name = is_direct_dep ? name : color_string(name, :light_black)
+        if nconfigs > 1 && !isempty(flags)
+            config_str = join(flags, " ")
+            name *= color_string(" `$config_str`", :light_black)
+        end
+        if nconfigs > 1
+            config_str = join(Base.translate_cache_flags(cacheflags, Base.DefaultCacheFlags), " ")
+            name *= color_string(" $config_str", :light_black)
+        end
+        return name
+    end
 
     for (dep, deps) in env.deps
         pkg = Base.PkgId(dep, env.names[dep])
@@ -569,7 +598,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         end
     end
 
-    nconfigs = length(configs)
     target = nothing
     if nconfigs == 1
         if !isempty(only(configs)[1])
@@ -584,7 +612,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     failed_deps = Dict{PkgConfig, String}()
     precomperr_deps = PkgConfig[] # packages that may succeed after a restart (i.e. loaded packages with no cache file)
 
-    print_lock = io isa Base.LibuvStream ? io.lock::ReentrantLock : ReentrantLock()
+    print_lock = io.io isa Base.LibuvStream ? io.io.lock::ReentrantLock : ReentrantLock()
     first_started = Base.Event()
     printloop_should_exit::Bool = !fancyprint # exit print loop immediately if not fancy printing
     interrupted_or_done = Base.Event()
@@ -677,7 +705,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             n_print_rows = 0
             while !printloop_should_exit
                 lock(print_lock) do
-                    term_size = Base.displaysize_(io)
+                    term_size = displaysize(io)
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -692,7 +720,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         bar.max = n_total - n_already_precomp
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = Base.displaysize_(io)[2] - 4
+                        termwidth = displaysize(io)[2] - 4
                         if !final_loop
                             str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
@@ -700,12 +728,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
-                            _name = haskey(exts, dep) ? string(exts[dep], " → ", dep.name) : dep.name
-                            name = dep in direct_deps ? _name : string(color_string(_name, :light_black))
-                            if nconfigs > 1 && !isempty(config[1])
-                                config_str = "$(join(config[1], " "))"
-                                name *= color_string(" $(config_str)", :light_black)
-                            end
+                            flags, cacheflags = config
+                            name = describe_pkg(dep, dep in direct_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
                             elseif haskey(failed_deps, pkg_config)
@@ -793,15 +817,10 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
                         t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
 
-                        _name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
-                        name = is_direct_dep ? _name : string(color_string(_name, :light_black))
-                        if nconfigs > 1 && !isempty(flags)
-                            config_str = "$(join(flags, " "))"
-                            name *= color_string(" $(config_str)", :light_black)
-                        end
+                        name = describe_pkg(pkg, is_direct_dep, flags, cacheflags)
                         lock(print_lock) do
-                            if !fancyprint && target === nothing && isempty(pkg_queue)
-                                printpkgstyle(io, :Precompiling, "packages...")
+                            if !fancyprint && isempty(pkg_queue)
+                                printpkgstyle(io, :Precompiling, something(target, "packages..."))
                             end
                         end
                         push!(pkg_queue, pkg_config)

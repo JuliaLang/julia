@@ -142,6 +142,7 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -180,6 +181,16 @@ parent(A::UpperOrLowerTriangular) = A.data
 copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
+
+function full(A::Union{UpperTriangular,LowerTriangular})
+    return _triangularize(A)(parent(A))
+end
+function full(A::UnitUpperOrUnitLowerTriangular)
+    isupper = A isa UnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
+    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    return Ap
+end
 
 function full!(A::LowerTriangular)
     B = A.data
@@ -222,7 +233,7 @@ Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
     _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
-    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : diagzero(A,i,j)
 
 _shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
 _shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
@@ -234,7 +245,7 @@ Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitL
     _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
-    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
+    _shouldforwardindex(A, b) ? A.data[b] : diagzero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
@@ -571,6 +582,8 @@ end
     return A
 end
 
+_triangularize(::UpperOrUnitUpperTriangular) = triu
+_triangularize(::LowerOrUnitLowerTriangular) = tril
 _triangularize!(::UpperOrUnitUpperTriangular) = triu!
 _triangularize!(::LowerOrUnitLowerTriangular) = tril!
 
@@ -880,7 +893,8 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
++(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
 function -(A::UpperTriangular, B::UpperTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
@@ -914,7 +928,8 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
     LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 end
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
+-(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) - copyto!(similar(parent(B), size(B)), B)
 
 function kron(A::UpperTriangular{T,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
     C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))

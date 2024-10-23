@@ -218,15 +218,18 @@ function _fieldnames(@nospecialize t)
     return t.name.names
 end
 
-const BINDING_KIND_GLOBAL       = 0x0
-const BINDING_KIND_CONST        = 0x1
-const BINDING_KIND_CONST_IMPORT = 0x2
+# N.B.: Needs to be synced with julia.h
+const BINDING_KIND_CONST        = 0x0
+const BINDING_KIND_CONST_IMPORT = 0x1
+const BINDING_KIND_GLOBAL       = 0x2
 const BINDING_KIND_IMPLICIT     = 0x3
 const BINDING_KIND_EXPLICIT     = 0x4
 const BINDING_KIND_IMPORTED     = 0x5
 const BINDING_KIND_FAILED       = 0x6
 const BINDING_KIND_DECLARED     = 0x7
 const BINDING_KIND_GUARD        = 0x8
+
+is_some_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
@@ -236,8 +239,26 @@ function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
     ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
 end
 
+partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
+
 binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
+
+"""
+    delete_binding(mod::Module, sym::Symbol)
+
+Force the binding `mod.sym` to be undefined again, allowing it be redefined.
+Note that this operation is very expensive, requirinig a full scan of all code in the system,
+as well as potential recompilation of any methods that (may) have used binding
+information.
+
+!!! warning
+    The implementation of this functionality is currently incomplete. Do not use
+    this method on versions that contain this disclaimer except for testing.
+"""
+function delete_binding(mod::Module, sym::Symbol)
+    ccall(:jl_disable_binding, Cvoid, (Any,), GlobalRef(mod, sym))
+end
 
 """
     fieldname(x::DataType, i::Integer)

@@ -1284,6 +1284,14 @@ end
             @test istril(U, k) == istril(A, k)
         end
     end
+
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,2,2)
+        U = triu(M)
+        @test iszero(U[2,1])
+        U = tril(M)
+        @test iszero(U[1,2])
+    end
 end
 
 @testset "indexing with a BandIndex" begin
@@ -1319,6 +1327,62 @@ end
     end
     for T in (LowerTriangular, UnitLowerTriangular)
         @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
+    end
+end
+
+@testset "indexing uses diagzero" begin
+    @testset "block matrix" begin
+        M = reshape([zeros(2,2), zeros(4,2), zeros(2,3), zeros(4,3)],2,2)
+        U = UpperTriangular(M)
+        @test [size(x) for x in U] == [size(x) for x in M]
+    end
+    @testset "Union eltype" begin
+        M = Matrix{Union{Int,Missing}}(missing,4,4)
+        U = UpperTriangular(M)
+        @test iszero(U[3,1])
+    end
+end
+
+@testset "addition/subtraction of mixed triangular" begin
+    for A in (Hermitian(rand(4, 4)), Diagonal(rand(5)))
+        for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            B = T(A)
+            M = Matrix(B)
+            R = B - B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M - M'
+            R = B + B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
+    end
+    @testset "unfilled parent" begin
+        @testset for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            F = Matrix{BigFloat}(undef, 2, 2)
+            B = T(F)
+            isupper = B isa Union{UpperTriangular, UnitUpperTriangular}
+            B[1+!isupper, 1+isupper] = 2
+            if !(B isa Union{UnitUpperTriangular, UnitLowerTriangular})
+                B[1,1] = B[2,2] = 3
+            end
+            M = Matrix(B)
+            @test B - B' == M - M'
+            @test B + B' == M + M'
+            @test B - copy(B') == M - M'
+            @test B + copy(B') == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
     end
 end
 

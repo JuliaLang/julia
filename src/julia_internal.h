@@ -372,6 +372,8 @@ extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
@@ -517,30 +519,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
-
-
-// Size does NOT include the type tag!!
-STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
-{
-    jl_value_t *v;
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    if (sz <= GC_MAX_SZCLASS) {
-        int pool_id = jl_gc_szclass(allocsz);
-        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
-        int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_small_alloc_noinline` instead of `jl_gc_small_alloc` to avoid double-counting in
-        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
-    }
-    else {
-        if (allocsz < sz) // overflow in adding offs, size was "negative"
-            jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc_noinline(ptls, allocsz);
-    }
-    jl_set_typeof(v, ty);
-    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
-    return v;
-}
 
 /* Programming style note: When using jl_gc_alloc, do not JL_GC_PUSH it into a
  * gc frame, until it has been fully initialized. An uninitialized value in a
@@ -910,13 +888,10 @@ EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind
 #endif
 }
 
-STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
+STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t JL_PROPAGATES_ROOT pku) JL_NOTSAFEPOINT
 {
 #ifdef _P64
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
-    // This is a little bit of a lie at the moment - it is one of the things that
-    // can go wrong with binding replacement.
-    JL_GC_PROMISE_ROOTED(val);
     return val;
 #else
     return pku.val;
@@ -950,14 +925,8 @@ STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFE
     return kind == BINDING_KIND_FAILED || kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED;
 }
 
-EXTERN_INLINE_DECLARE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
-    if (!b)
-        return NULL;
-    assert(jl_is_binding(b));
-    return jl_atomic_load_relaxed(&b->partitions);
-}
-
-JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world);
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr JL_PROPAGATES_ROOT, size_t world);
 
 EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
     return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
@@ -1715,13 +1684,14 @@ JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTS
 
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);
+JL_DLLEXPORT jl_value_t *jl_argtype_without_function(jl_value_t *ftypes);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
-void register_eh_frames(uint8_t *Addr, size_t Size);
-void deregister_eh_frames(uint8_t *Addr, size_t Size);
+void register_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
+void deregister_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 
-STATIC_INLINE void *jl_get_frame_addr(void)
+STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
 {
 #ifdef __GNUC__
     return __builtin_frame_address(0);

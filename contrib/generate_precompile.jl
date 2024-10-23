@@ -183,10 +183,10 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     # interactive startup uses this
     write(IOBuffer(), "")
 
-    # not critical, but helps hide unrelated compilation from @time when using --trace-compile
-    foo() = rand(2,2) * rand(2,2)
-    @time foo()
-    @time foo()
+    # Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
+    f55729() = Base.Experimental.@force_compile
+    @time @eval f55729()
+    @time @eval f55729()
 
     break   # only actually need to do this once
 end

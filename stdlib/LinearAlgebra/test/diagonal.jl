@@ -353,7 +353,7 @@ Random.seed!(1)
         D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
         DM3= Matrix(D3)
         @test Matrix(kron(D, D3)) ≈ kron(DM, DM3)
-        M4 = rand(elty, n÷2, n÷2)
+        M4 = rand(elty, size(D3,1) + 1, size(D3,2) + 2) # choose a different size from D3
         @test kron(D3, M4) ≈ kron(DM3, M4)
         @test kron(M4, D3) ≈ kron(M4, DM3)
         X = [ones(1,1) for i in 1:2, j in 1:2]
@@ -1392,7 +1392,7 @@ end
 end
 
 @testset "zeros in kron with block matrices" begin
-    D = Diagonal(1:2)
+    D = Diagonal(1:4)
     B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
     @test kron(D, B) == kron(Array(D), B)
     @test kron(B, D) == kron(B, Array(D))

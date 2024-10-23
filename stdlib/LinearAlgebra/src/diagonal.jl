@@ -191,8 +191,9 @@ end
 Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
 """
 diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
-diagzero(D::Diagonal{M}, i, j) where {M<:AbstractMatrix} =
-    zeroslike(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
+diagzero(A::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
+    zeroslike(M, axes(A[i,i], 1), axes(A[j,j], 2))
+diagzero(A::AbstractMatrix, inds...) = diagzero(A, to_indices(A, inds)...)
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
 zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
 """
@@ -700,16 +701,16 @@ end
             zerofilled = true
         end
     end
-    @inbounds for i = 1:nA, j = 1:nB
+    for i in eachindex(valA), j in eachindex(valB)
         idx = (i-1)*nB+j
-        C[idx, idx] = valA[i] * valB[j]
+        @inbounds C[idx, idx] = valA[i] * valB[j]
     end
     if !zerofilled
-        for j in 1:nA, i in 1:mA
+        for j in axes(A,2), i in axes(A,1)
             Δrow, Δcol = (i-1)*mB, (j-1)*nB
-            for k in 1:nB, l in 1:mB
+            for k in axes(B,2), l in axes(B,1)
                 i == j && k == l && continue
-                C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
+                @inbounds C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
             end
         end
     end
@@ -749,24 +750,24 @@ end
         end
     end
     m = 1
-    @inbounds for j = 1:nA
-        A_jj = A[j,j]
-        for k = 1:nB
-            for l = 1:mB
-                C[m] = A_jj * B[l,k]
+    for j in axes(A,2)
+        A_jj = @inbounds A[j,j]
+        for k in axes(B,2)
+            for l in axes(B,1)
+                @inbounds C[m] = A_jj * B[l,k]
                 m += 1
             end
             m += (nA - 1) * mB
         end
         if !zerofilled
             # populate the zero elements
-            for i in 1:mA
+            for i in axes(A,1)
                 i == j && continue
-                A_ij = A[i, j]
+                A_ij = @inbounds A[i, j]
                 Δrow, Δcol = (i-1)*mB, (j-1)*nB
-                for k in 1:nB, l in 1:nA
-                    B_lk = B[l, k]
-                    C[Δrow + l, Δcol + k] = A_ij * B_lk
+                for k in axes(B,2), l in axes(B,1)
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
                 end
             end
         end
@@ -792,23 +793,23 @@ end
         end
     end
     m = 1
-    @inbounds for j = 1:nA
-        for l = 1:mB
-            Bll = B[l,l]
-            for i = 1:mA
-                C[m] = A[i,j] * Bll
+    for j in axes(A,2)
+        for l in axes(B,1)
+            Bll = @inbounds B[l,l]
+            for i in axes(A,1)
+                @inbounds C[m] = A[i,j] * Bll
                 m += nB
             end
             m += 1
         end
         if !zerofilled
-            for i in 1:mA
-                A_ij = A[i, j]
+            for i in axes(A,1)
+                A_ij = @inbounds A[i, j]
                 Δrow, Δcol = (i-1)*mB, (j-1)*nB
-                for k in 1:nB, l in 1:mB
+                for k in axes(B,2), l in axes(B,1)
                     l == k && continue
-                    B_lk = B[l, k]
-                    C[Δrow + l, Δcol + k] = A_ij * B_lk
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
                 end
             end
         end

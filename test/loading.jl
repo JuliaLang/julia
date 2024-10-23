@@ -1129,25 +1129,6 @@ end
             run(cmd_proj_ext)
         end
 
-        # Sysimage extensions
-        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
-        # if it gets moved out, this test will need to be updated.
-        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
-        sysimg_ext_test_code = """
-            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
-            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
-            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
-            using HasExtensions
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
-            using LinearAlgebra
-            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
-        """
-        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
-        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
-        run(cmd)
-
-
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
         try
@@ -1225,10 +1206,7 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-
-    io = PipeBuffer()
-    show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1420,13 +1398,16 @@ end
                         "JULIA_DEPOT_PATH" => depot_path,
                         "JULIA_DEBUG" => "loading")
 
-            out = Pipe()
-            proc = run(pipeline(cmd, stdout=out, stderr=out))
-            close(out.in)
-
-            log = @async String(read(out))
-            @test success(proc)
-            fetch(log)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
         end
 
         log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)

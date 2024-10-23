@@ -525,7 +525,7 @@ function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
     end
 
     # We won't hit the limit so we'll write the full `nb` bytes
-    bytes_written = Base.unsafe_write(limiter.io, p, nb)
+    bytes_written = Base.unsafe_write(limiter.io, p, nb)::Union{Int,UInt}
     limiter.n += bytes_written
     return bytes_written
 end
@@ -1431,6 +1431,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1441,6 +1442,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1477,6 +1479,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
 
