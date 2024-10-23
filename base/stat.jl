@@ -203,7 +203,7 @@ end
     stat(file)
     stat(path_elements...)
 
-Return a structure whose fields contain information about the file. 
+Return a structure whose fields contain information about the file.
 If multiple arguments are given, they are joined by `joinpath`.
 
 The fields of the structure are:
