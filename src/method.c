@@ -1236,6 +1236,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     int32_t line = jl_linenode_line(functionloc);
 
     // TODO: derive our debug name from the syntax instead of the type
+    assert(mt != NULL);
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(argtype) : mt;
     // if we have a kwcall, try to derive the name from the callee argument method table
     name = (kwmt ? kwmt : mt)->name;
