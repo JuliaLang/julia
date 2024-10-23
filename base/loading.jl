@@ -2890,12 +2890,12 @@ julia> rm("testfile.jl")
 ```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
-    return Core.eval(Module(:__anon__),
+    m = Module(:__anon__)
+    return Core.eval(m,
         Expr(:toplevel,
              :(const ARGS = $args),
-             :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-             :(include(x::AbstractString) = $(Expr(:top, :include))(__anon__, x)),
-             :(include(mapexpr::Function, x::AbstractString) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
+             :(const include = $(Base.IncludeInto(m))),
+             :(const eval = $(Core.EvalInto(m))),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
