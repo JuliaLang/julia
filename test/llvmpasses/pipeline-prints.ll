@@ -1,5 +1,6 @@
 ; COM: This is a newpm-only test, no legacypm command
 ; COM: we run all the prefixes even though some don't have tests because we want to make sure they don't crash
+; REQUIRES: x86_64
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREOPTIMIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYSIMPLIFICATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYSIMPLIFICATION
