@@ -2385,7 +2385,7 @@ end
 function abstract_eval_get_binding_type(interp::AbstractInterpreter, sv::AbsIntState, argtypes::Vector{Any})
     if length(argtypes) == 3
         return abstract_eval_get_binding_type(interp, sv, argtypes[2], argtypes[3])
-    elseif !isvarargtype(argtypes[end]) && length(argtypes) > 4
+    elseif !isvarargtype(argtypes[end]) || length(argtypes) > 4
         return CallMeta(Union{}, ArgumentError, EFFECTS_THROWS, NoCallInfo())
     end
     return CallMeta(Type, Union{TypeError, ArgumentError}, EFFECTS_THROWS, NoCallInfo())
