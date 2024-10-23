@@ -73,7 +73,7 @@ pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_get_possibly_forwared(object: ObjectReference) -> ObjectReference {
+pub extern "C" fn mmtk_get_possibly_forwarded(object: ObjectReference) -> ObjectReference {
     match object.get_forwarded_object() {
         Some(forwarded) => forwarded,
         None => object,

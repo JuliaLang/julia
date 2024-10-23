@@ -79,7 +79,7 @@ extern void mmtk_run_finalizers_for_obj(void* obj);
 extern void mmtk_run_finalizers(bool at_exit);
 extern void mmtk_gc_poll(void *tls);
 extern void mmtk_julia_copy_stack_check(int copy_stack);
-extern void* mmtk_get_possibly_forwared(void* object);
+extern void* mmtk_get_possibly_forwarded(void* object);
 extern void mmtk_block_thread_for_gc(void);
 extern void* mmtk_new_mutator_iterator(void);
 extern void* mmtk_get_next_mutator_tls(void*);
