@@ -500,7 +500,7 @@ Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix
     _symm_hemm_generic!(C, tA, tB, A, B, αβ..., Val(_blasfn))
     return C
 end
-function _lrchar_ulchar(tA, tB)
+Base.@constprop :aggressive function _lrchar_ulchar(tA, tB)
     if uppercase(tA) == 'N'
         lrchar = 'R'
         ulchar = isuppercase(tB) ? 'U' : 'L'
@@ -526,8 +526,8 @@ function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.HEMM})
         BLAS.hemm!(lrchar, ulchar, alpha, B, A, beta, C)
     end
 end
-Base.@constprop :aggressive function _symm_hemm_generic!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.NONE})
-    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+Base.@constprop :aggressive function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.NONE})
+    @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(alpha, beta))
 end
 
 # legacy method
