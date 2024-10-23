@@ -309,17 +309,11 @@ end
 # TODO append `inlinee_debuginfo` to inner linetable when `inlined_at[2] ≠ 0`
 function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::DebugInfo, inlined_at::NTuple{3,Int32})
     # Append the linetable of the inlined function to our edges table
-    linetable_offset = 1
-    while true
-        if linetable_offset > length(debuginfo.edges)
-            push!(debuginfo.edges, inlinee_debuginfo)
-            break
-        elseif debuginfo.edges[linetable_offset] === inlinee_debuginfo
-            break
-        end
-        linetable_offset += 1
-    end
-    return (inlined_at[1], Int32(linetable_offset), Int32(0))
+    #
+    # We are not allowed to de-duplicate here, since we want to preserve the property that
+    # each DebugInfo edge corresponds to an inlined call (not just an inlined callee).
+    push!(debuginfo.edges, inlinee_debuginfo)
+    return (inlined_at[1], Int32(length(debuginfo.edges)), Int32(0))
 end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
