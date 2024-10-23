@@ -194,7 +194,8 @@ static inline void malloc_maybe_collect(jl_ptls_t ptls, size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_tls.malloc_sz_since_last_poll, 0);
         mmtk_gc_poll(ptls);
     } else {
-        jl_atomic_fetch_add_relaxed(&ptls->gc_tls.malloc_sz_since_last_poll, sz);
+        size_t curr = jl_atomic_load_relaxed(&ptls->gc_tls.malloc_sz_since_last_poll);
+        jl_atomic_store_relaxed(&ptls->gc_tls.malloc_sz_since_last_poll, curr + sz);
         jl_gc_safepoint_(ptls);
     }
 }
