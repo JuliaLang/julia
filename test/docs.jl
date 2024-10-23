@@ -1518,7 +1518,7 @@ struct B_20087 end
 # issue #27832
 
 _last_atdoc = Core.atdoc
-Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+Core.atdoc!(Base.CoreDocs.docm)  # test bootstrap doc system
 
 """
 """

@@ -6,7 +6,7 @@
 # since we won't be able to specialize & infer them at runtime
 
 let time() = ccall(:jl_clock_now, Float64, ())
-
+    println("Compiling the compiler. This may take several minutes ...")
     interp = NativeInterpreter()
 
     # analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, TODO}
@@ -48,5 +48,5 @@ let time() = ccall(:jl_clock_now, Float64, ())
         end
     end
     endtime = time()
-    println("Core.Compiler ──── ", sub_float(endtime,starttime), " seconds")
+    println("Base.Compiler ──── ", sub_float(endtime,starttime), " seconds")
 end

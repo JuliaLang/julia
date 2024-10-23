@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Compiler = Core.Compiler
-
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -151,7 +149,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match::Core.MethodMatch)
+        instance = specialize_method(match::Core.MethodMatch)
         push!(results, instance)
     end
     return results
