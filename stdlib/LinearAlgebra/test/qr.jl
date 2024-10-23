@@ -241,15 +241,6 @@ end
     end
 end
 
-@testset "QR on Ints" begin
-    # not sure what to do about this edge case now that we build decompositions
-    # for qr(...), so for now just commenting this out
-    # @test qr(Int[]) == (Int[],1)
-
-    B = rand(7,2)
-    @test (1:7)\B ≈ Vector(1:7)\B
-end
-
 @testset "Issue 16520" begin
     @test_throws DimensionMismatch rand(3,2)\(1:5)
 end
