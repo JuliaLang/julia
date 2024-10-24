@@ -148,6 +148,7 @@ Standard library changes
   Custom array types may specialize this function to return an appropriate result ([#55252]).
 * The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
   This function is now public ([#55537]).
+* Now `exp(log(A))` for matrix `A` correctly returns `A`, up to numerical precision ([#56311]).
 
 #### Logging
 
