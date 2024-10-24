@@ -135,6 +135,7 @@ in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) 
 """
 function wait(c::GenericCondition; first::Bool=false)
     ct = current_task()
+    record_cpu_time!(ct)
     _wait2(c, ct, first)
     token = unlockall(c.lock)
     try

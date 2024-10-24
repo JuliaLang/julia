@@ -87,6 +87,64 @@ end
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 """
+    task_cpu_time_ns(t::Task) -> UInt64
+
+Return the total nanoseconds that the task `t` has spent running.
+This metric is only updated when the task yields or completes.
+See also [`task_wall_time_ns`](@ref).
+
+Will be `UInt64(0)` if task timings are not enabled.
+See [`Base.task_timing`](@ref).
+
+!!! note "This metric is from the Julia scheduler"
+    A task may be running on an OS thread that is descheduled by the OS
+    scheduler, this time still counts towards the metric.
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_cpu_time_ns(t::Task)
+    return t.cpu_time_ns
+end
+
+"""
+    task_wall_time_ns(t::Task) -> UInt64
+
+Return the total nanoseconds that the task `t` was runnable.
+This is the time since the task entered the run queue until the time at which it completed,
+or until the current time if the task has not yet completed.
+See also [`task_cpu_time_ns`](@ref).
+
+Will be `UInt64(0)` if task timings are not enabled.
+See [`Base.task_timing`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_wall_time_ns(t::Task)
+    # TODO: report up til current time if not done? too racy?
+    # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_enqueued_at
+    return t.wall_time_ns
+end
+
+"""
+    Base.task_timing(::Bool)
+
+Enable or disable the collection of per-task timing information.
+Task created when Base.task_timing(true) is in effect will have [`task_cpu_time_ns`](@ref)
+and [`task_wall_time_ns`](@ref) timing information available.
+"""
+function task_timing(b::Bool)
+    if b
+        ccall(:jl_task_timing_enable, Cvoid, ())
+    else
+        # TODO: prevent decrementing the counter below zero
+        ccall(:jl_task_timing_disable, Cvoid, ())
+    end
+    return nothing
+end
+
+"""
     Base.gc_live_bytes()
 
 Return the total size (in bytes) of objects currently in memory.

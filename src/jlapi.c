@@ -810,6 +810,33 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
 }
 
 /**
+ * @brief Enable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_timing_enable(void)
+{
+    // Increment the flag to allow reentrant callers.
+    jl_atomic_fetch_add(&jl_task_timing_enabled, 1);
+}
+
+/**
+ * @brief Disable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_timing_disable(void)
+{
+    jl_atomic_fetch_add(&jl_task_timing_enabled, -1);
+}
+
+// TODO: remove this
+JL_DLLEXPORT void jl_is_task_timing_enabled(void)
+{
+    jl_atomic_load_relaxed(&jl_task_timing_enabled);
+}
+JL_DLLEXPORT void jl_is_compile_timing_enabled(void)
+{
+    jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+}
+
+/**
  * @brief Retrieve floating-point environment constants.
  *
  * Populates an array with constants related to the floating-point environment,

@@ -783,6 +783,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
+    let JL_OPTIONS_TASK_TIMING_OFF = 0, JL_OPTIONS_TASK_TIMING_ON = 1
+        @test parse(Int,readchomp(`$exename -E
+            "Int(Base.JLOptions().task_timing)"`)) == JL_OPTIONS_TASK_TIMING_OFF
+        @test parse(Int, readchomp(`$exename --task-timing -E
+            "Int(Base.JLOptions().task_timing)"`)) == JL_OPTIONS_TASK_TIMING_ON
+        @test !parse(Bool, readchomp(`$exename  -E
+            "fetch(Threads.@spawn current_task().is_timing_enabled)"`))
+        @test parse(Bool, readchomp(`$exename --task-timing -E
+            "fetch(Threads.@spawn current_task().is_timing_enabled)"`))
+    end
+
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)
