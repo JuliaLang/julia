@@ -385,7 +385,7 @@ ldiv!(Y::AbstractArray, A::AbstractMatrix, B::AbstractArray) = ldiv!(A, copyto!(
     cross(x, y)
     ×(x,y)
 
-Compute the cross product of two 3-vectors.
+Compute the cross product of two 3-vectors or 3-tuples.
 
 # Examples
 ```jldoctest
@@ -406,6 +406,9 @@ julia> cross(a,b)
  1
  0
  0
+
+julia> cross((1, 2, 3), (4, 5, 6))
+(3, -6, 3)
 ```
 """
 function cross(a::AbstractVector, b::AbstractVector)
@@ -414,7 +417,10 @@ function cross(a::AbstractVector, b::AbstractVector)
     end
     a1, a2, a3 = a
     b1, b2, b3 = b
-    [a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1]
+    collect(cross((a1, a2, a3), (b1, b2, b3)))
+end
+function cross((a1, a2, a3)::Tuple{Vararg{Any, 3}}, (b1, b2, b3)::Tuple{Vararg{Any, 3}})
+    (a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1)
 end
 
 """
