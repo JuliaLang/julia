@@ -430,6 +430,10 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
+# used by task.jl
+const task_times_per_thread = ScopedValues.ScopedValue{Vector{UInt64}}() # time_ns always returns UInt64
+const sleep_times_per_thread = ScopedValues.ScopedValue{Vector{UInt64}}()
+
 # metaprogramming
 include("meta.jl")
 
