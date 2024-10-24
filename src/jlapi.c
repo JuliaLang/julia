@@ -994,9 +994,6 @@ static void lock_low32(void)
     return;
 }
 
-// Actual definition in `ast.c`
-void jl_lisp_prompt(void);
-
 #ifdef _OS_LINUX_
 static void rr_detach_teleport(void) {
 #define RR_CALL_BASE 1000
@@ -1030,11 +1027,6 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     lock_low32();
 
     libsupport_init();
-    int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
-    if (lisp_prompt) {
-        memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
-        argc--;
-    }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
 
@@ -1051,11 +1043,6 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     }
 
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
-    if (lisp_prompt) {
-        jl_current_task->world_age = jl_get_world_counter();
-        jl_lisp_prompt();
-        return 0;
-    }
     int ret = true_main(argc, (char**)new_argv);
     jl_atexit_hook(ret);
     return ret;
