@@ -789,7 +789,7 @@ iterate(r::Iterators.Reverse{<:EachStringIndex}, i=lastindex(r.itr.s)) = i < fir
 Wrap a string (without copying) in an immutable vector-like object that accesses the code units
 of the string's representation.
 """
-struct CodeUnits{T,S<:AbstractString} <: DenseVector{T}
+struct CodeUnits{T,S<:AbstractString} <: AbstractVector{T}
     s::S
     CodeUnits(s::S) where {S<:AbstractString} = new{codeunit(s),S}(s)
 end
