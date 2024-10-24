@@ -103,6 +103,7 @@ mutable struct InferenceResult
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     ci::CodeInstance         # CodeInstance if this result may be added to the cache
+    edges::SimpleVector      # edges for locally cached const-prop'ed result
     function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
         return new(mi, argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
@@ -399,7 +400,6 @@ engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reser
 # engine_fulfill(::AbstractInterpreter, ci::CodeInstance, src::CodeInfo) = ccall(:jl_engine_fulfill, Cvoid, (Any, Any), ci, src) # currently the same as engine_reject, so just use that one
 engine_reject(::AbstractInterpreter, ci::CodeInstance) = ccall(:jl_engine_fulfill, Cvoid, (Any, Ptr{Cvoid}), ci, C_NULL)
 
-
 function already_inferred_quick_test end
 function lock_mi_inference end
 function unlock_mi_inference end
@@ -416,7 +416,6 @@ function add_remark! end
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
-verbose_stmt_info(::AbstractInterpreter) = false
 
 """
     method_table(interp::AbstractInterpreter) -> MethodTableView
@@ -463,18 +462,27 @@ abstract type CallInfo end
 
 @nospecialize
 
+function add_edges!(edges::Vector{Any}, info::CallInfo)
+    if info === NoCallInfo()
+        return nothing # just a minor optimization to avoid dynamic dispatch
+    end
+    add_edges_impl(edges, info)
+    nothing
+end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
 add_uncovered_edges!(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = add_uncovered_edges_impl(edges, info, atype)
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,ConstResult}=#
 
-getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
-
-# must implement `nsplit`, `getsplit`, and `add_uncovered_edges!` to opt in to inlining
+add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
+    All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")
 nsplit_impl(::CallInfo) = nothing
-getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
-add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("unexpected call into `add_uncovered_edges!`")
-
-# must implement `getresult` to opt in to extended lattice return information
+getsplit_impl(::CallInfo, ::Int) = error("""
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupResult`
+    in order to correctly opt in to inlining""")
+add_uncovered_edges_impl(::Vector{Any}, ::CallInfo, _) = error("""
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `add_uncovered_edges_impl(edges::Vector{Any}, info::CallInfo, atype)`
+    in order to correctly opt in to inlining""")
 getresult_impl(::CallInfo, ::Int) = nothing
 
 @specialize

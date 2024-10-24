@@ -204,7 +204,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     return Core._hasmethod(tt)
 end
 
-
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")

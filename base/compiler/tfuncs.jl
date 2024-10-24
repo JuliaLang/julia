@@ -2957,7 +2957,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
-        info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+        info = MethodResultPure(ReturnTypeCallInfo(call.info))
         rt = widenslotwrapper(call.rt)
         if isa(rt, Const)
             # output was computed to be constant
@@ -2987,13 +2987,14 @@ end
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
-    length(argtypes) < 2 && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-    isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo()))
+    length(argtypes) < 2 && return Future(CallMeta(Bottom, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
+    isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
         rt = Bool # too many matches to analyze
+        info = NoCallInfo()
     else
         (; valid_worlds, applicable) = matches
         update_valid_age!(sv, valid_worlds)
@@ -3006,16 +3007,9 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
         else
             rt = Const(true) # has applicable matches
         end
-        for i in 1:napplicable
-            match = applicable[i]::MethodMatch
-            edge = specialize_method(match)::MethodInstance
-            add_backedge!(sv, edge)
-        end
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        add_uncovered_edges!(sv, matches, atype)
+        info = MethodResultPure(matches.info) # XXX this should probably be something like `VirtualizedCallInfo`
     end
-    return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo()))
+    return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, info))
 end
 add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
 
@@ -3049,13 +3043,14 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
-        add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
+        vresults = MethodLookupResult(Any[], valid_worlds, true)
+        vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)
-        edge = specialize_method(match)::MethodInstance
-        add_invoke_backedge!(sv, types, edge)
+        vinfo = InvokeCallInfo(nothing, match, nothing, types)
     end
-    return CallMeta(rt, Any, EFFECTS_TOTAL, NoCallInfo())
+    info = MethodResultPure(vinfo) # XXX this should probably be something like `VirtualizedCallInfo`
+    return CallMeta(rt, Union{}, EFFECTS_TOTAL, info)
 end
 
 # N.B.: typename maps type equivalence classes to a single value
