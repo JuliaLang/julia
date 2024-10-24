@@ -1,7 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# These forms do not require a stack, unlike splatting:
+print(x) = print(stdout, x)
+print(x1, x2) = print(stdout, x1, x2)
+println(x) = print(stdout, x, "\n")
+println(x1, x2) = print(stdout, x1, x2, "\n")
+
 print(xs...)   = print(stdout, xs...)
-println(xs...) = print(stdout, xs..., '\n')  # 2-3 fewer allocations, this way, not calling println
+println(xs...) = print(stdout, xs..., "\n")  # 2-3 fewer allocations, this way, not calling println
 println(io::IO) = print(io, "\n")  # One less allocation than with '\n', though ok above
 
 function show end
