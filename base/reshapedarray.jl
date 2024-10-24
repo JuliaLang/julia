@@ -35,30 +35,32 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
-## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
+@noinline throw_dmrsa(dims, len) =
+    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
+
+## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions
 @eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
-    throw_dmrsa(dims, len) =
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
     len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
     if len != length(a)
         throw_dmrsa(dims, length(a))
     end
-    isbitsunion(T) && return ReshapedArray(a, dims, ())
-    if N == M && dims == size(a)
-        return a
-    end
     ref = a.ref
-    if M == 1 && N !== 1
-        mem = ref.mem::Memory{T}
-        if !(ref === memoryref(mem) && len === mem.length)
-            mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-            ref = memoryref(mem)::typeof(ref)
-        end
-    end
-    # or we could use `a = Array{T,N}(undef, ntuple(0, Val(N))); a.ref = ref; a.size = dims; return a` here
+    # or we could use `a = Array{T,N}(undef, ntuple(i->0, Val(N))); a.ref = ref; a.size = dims; return a` here to avoid the eval
     return $(Expr(:new, :(Array{T,N}), :ref, :dims))
 end
+
+## reshape!(::Array, ::Dims) returns the original array, but must have the same dimensions and length as the original
+# see also resize! for a similar operation that can change the length
+function reshape!(a::Array{T,N}, dims::NTuple{N,Int}) where {T,N}
+    len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
+    if len != length(a)
+        throw_dmrsa(dims, length(a))
+    end
+    setfield!(a, :dims, dims)
+    return a
+end
+
 
 
 """

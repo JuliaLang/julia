@@ -9,7 +9,8 @@ const Bottom = Union{}
 # Define minimal array interface here to help code used in macros:
 length(a::Array{T, 0}) where {T} = 1
 length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array) = getfield(getfield(getfield(a, :ref), :mem), :length)
+length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
+# other sizes are handled by generic prod definition for AbstractArray
 length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
