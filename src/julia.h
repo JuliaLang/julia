@@ -2338,6 +2338,8 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
+void jl_cancel_finalizer(jl_value_t *o, jl_task_t *ct, size_t lookup_idx);
+
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
 
