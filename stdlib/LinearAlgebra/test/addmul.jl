@@ -239,4 +239,26 @@ end
     end
 end
 
+@testset "Diagonal scaling of a triangular matrix with a non-triangular destination" begin
+    for MT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        U = MT(reshape([1:9;],3,3))
+        M = Array(U)
+        D = Diagonal(1:3)
+        A = reshape([1:9;],3,3)
+        @test mul!(copy(A), U, D, 2, 3) == M * D * 2 + A * 3
+        @test mul!(copy(A), D, U, 2, 3) == D * M * 2 + A * 3
+
+        # nan values with iszero(alpha)
+        D = Diagonal(fill(NaN,3))
+        @test mul!(copy(A), U, D, 0, 3) == A * 3
+        @test mul!(copy(A), D, U, 0, 3) == A * 3
+
+        # nan values with iszero(beta)
+        A = fill(NaN,3,3)
+        D = Diagonal(1:3)
+        @test mul!(copy(A), U, D, 2, 0) == M * D * 2
+        @test mul!(copy(A), D, U, 2, 0) == D * M * 2
+    end
+end
+
 end  # module
