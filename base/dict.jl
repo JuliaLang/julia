@@ -416,6 +416,8 @@ Return the value stored for the given key, or if no mapping for the key is prese
 
 This is intended to be called using `do` block syntax.
 
+When `collection` is a `Dict`, `f` is allowed to add or remove keys and/or change values.
+
 # Examples
 ```jldoctest
 julia> squares = Dict{Int, Int}();
