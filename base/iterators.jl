@@ -524,7 +524,7 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 # Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
-Base.Iterators.Filter{typeof(isodd), Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
+Iterators.Filter{typeof(isodd), Vector{Int64}}(isodd, [1, 2, 3, 4, 5])
 
 julia> foreach(println, f)
 1
