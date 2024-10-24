@@ -130,6 +130,29 @@ for cmat in mattypes,
     push!(testdata, (cmat{celt}, amat{aelt}, bmat{belt}))
 end
 
+strongzero(α) = iszero(α) ? false : α
+function compare_matmul(C, A, B, α, β,
+        rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...,
+                   rtoldefault.(real.(typeof.((α, β))))...);
+        Ac = collect(A), Bc = collect(B), Cc = collect(C))
+    @testset let A=A, B=B, C=C, α=α, β=β
+        Ccopy = copy(C)
+        returned_mat = mul!(Ccopy, A, B, α, β)
+        @test returned_mat === Ccopy
+        atol = max(maximum(eps∘real∘float∘eltype, (C,A,B)),
+                    maximum(eps∘real∘float∘typeof, (α,β)))
+        exp_val = Ac * Bc * strongzero(α) + Cc * strongzero(β)
+        @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
+        rtol_match = isapprox(collect(returned_mat), exp_val, rtol=rtol)
+        if !(rtol_match || β isa Bool || isapprox(β, 0, atol=eps(typeof(β))))
+            negβ = -β
+            returned_mat = mul!(copy(C), A, B, α, negβ)
+            exp_val = Ac * Bc * strongzero(α) + Cc * negβ
+            @test collect(returned_mat) ≈ exp_val rtol=rtol atol=atol
+        end
+    end
+end
+
 @testset "mul!(::$TC, ::$TA, ::$TB, α, β)" for (TC, TA, TB) in testdata
     if needsquare(TA)
         na1 = na2 = rand(sizecandidates)
@@ -147,32 +170,29 @@ end
     bsize = (na2, nb2)
     csize = (na1, nb2)
 
+    C = _rand(TC, csize)
+    A = _rand(TA, asize)
+    B = _rand(TB, bsize)
+    Cc = Matrix(C)
+    Ac = Matrix(A)
+    Bc = Matrix(B)
+
     @testset for α in Any[true, eltype(TC)(1), _rand(eltype(TC))],
                  β in Any[false, eltype(TC)(0), _rand(eltype(TC))]
 
-        C = _rand(TC, csize)
-        A = _rand(TA, asize)
-        B = _rand(TB, bsize)
 
         # This is similar to how `isapprox` choose `rtol` (when
         # `atol=0`) but consider all number types involved:
         rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...,
                    rtoldefault.(real.(typeof.((α, β))))...)
 
-        Cc = copy(C)
-        Ac = Matrix(A)
-        Bc = Matrix(B)
-        returned_mat = mul!(C, A, B, α, β)
-        @test returned_mat === C
-        @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
+        compare_matmul(C, A, B, α, β, rtol; Ac, Bc, Cc)
 
         y = C[:, 1]
         x = B[:, 1]
         yc = Vector(y)
         xc = Vector(x)
-        returned_vec = mul!(y, A, x, α, β)
-        @test returned_vec === y
-        @test collect(returned_vec) ≈ α * Ac * xc + β * yc  rtol=rtol
+        compare_matmul(y, A, x, α, β, rtol; Ac, Bc=xc, Cc=yc)
 
         if TC <: Matrix
             @testset "adjoint and transpose" begin
@@ -183,35 +203,24 @@ end
                     Af = fa === identity ? A : fa(_rand(TA, reverse(asize)))
                     Bf = fb === identity ? B : fb(_rand(TB, reverse(bsize)))
 
-                    Ac = collect(Af)
-                    Bc = collect(Bf)
-                    Cc = collect(C)
-
-                    returned_mat = mul!(C, Af, Bf, α, β)
-                    @test returned_mat === C
-                    @test collect(returned_mat) ≈ α * Ac * Bc + β * Cc  rtol=rtol
+                    compare_matmul(C, Af, Bf, α, β, rtol)
                 end
             end
         end
 
         if isnanfillable(C)
             @testset "β = 0 ignores C .= NaN" begin
-                parent(C) .= NaN
-                Ac = Matrix(A)
-                Bc = Matrix(B)
-                returned_mat = mul!(C, A, B, α, zero(eltype(C)))
-                @test returned_mat === C
-                @test collect(returned_mat) ≈ α * Ac * Bc  rtol=rtol
+                Ccopy = copy(C)
+                parent(Ccopy) .= NaN
+                compare_matmul(Ccopy, A, B, α, zero(eltype(C)), rtol; Ac, Bc, Cc)
             end
         end
 
         if isnanfillable(A)
             @testset "α = 0 ignores A .= NaN" begin
-                parent(A) .= NaN
-                Cc = copy(C)
-                returned_mat = mul!(C, A, B, zero(eltype(A)), β)
-                @test returned_mat === C
-                @test collect(returned_mat) ≈ β * Cc  rtol=rtol
+                Acopy = copy(A)
+                parent(Acopy) .= NaN
+                compare_matmul(C, Acopy, B, zero(eltype(A)), β, rtol; Ac, Bc, Cc)
             end
         end
     end
