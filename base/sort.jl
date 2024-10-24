@@ -1569,6 +1569,12 @@ The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are
 the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
 """
 const DEFAULT_UNSTABLE = DEFAULT_STABLE
+
+"""
+    SMALL_THRESHOLD
+    
+SMALL_THRESHOLD is a constant that is used internally to decide what is considered to be small or large.    
+"""
 const SMALL_THRESHOLD  = 20
 
 function Base.show(io::IO, alg::Algorithm)
