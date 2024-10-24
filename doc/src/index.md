@@ -1,3 +1,36 @@
+```@raw html
+---
+layout: home
+
+hero:
+  text: "The Julia Programming Language"
+  image:
+    light:
+        src: /logo.svg
+        alt: julia
+    dark:
+        src: /logo-dark.svg
+        alt: julia
+  actions:
+    - theme: brand
+      text: Getting Started
+      link: /manual/getting-started
+    - theme: alt
+      text: View on Github
+      link: https://github.com/JuliaLang/julia
+    - theme: brand
+      text: Sponsor
+      link: https://github.com/sponsors/julialang
+---
+```
+
+::: danger
+
+This is a fork from the original repo. Please visit the [official website](https://julialang.org).
+
+:::
+
+
 ```@eval
 io = IOBuffer()
 release = isempty(VERSION.prerelease)
