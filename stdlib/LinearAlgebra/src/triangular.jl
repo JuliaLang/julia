@@ -2221,7 +2221,7 @@ Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
     if iszero(s)
         A[1,1] -= 1
         A[2,2] -= 1
-        return
+        return A
     end
     _sqrt_real_2x2!(A, A0)
     if isone(s)
