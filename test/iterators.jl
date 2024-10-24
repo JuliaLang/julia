@@ -1075,3 +1075,15 @@ end
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end
+
+@testset "cycle IteratorSize (#53169)" begin
+    @test Base.IteratorSize(Iterators.cycle(1:3)) == Base.IsInfinite()
+    @test Base.IteratorSize(Iterators.cycle(1:0)) == Base.HasLength()
+    @test length(Iterators.cycle(1:0)) == 0
+    @test collect(Iterators.cycle(1:0))::Vector{Int} == Int[]
+    @test Base.IteratorSize(Iterators.cycle(Iterators.Repeated(6))) == Base.IsInfinite()
+
+    @test Base.IteratorSize(typeof(Iterators.cycle(1:3))) == Base.SizeUnknown()
+    @test Base.IteratorSize(typeof(Iterators.cycle(1:0))) == Base.SizeUnknown()
+    @test Base.IteratorSize(typeof(Iterators.cycle(Iterators.Repeated(6)))) == Base.IsInfinite()
+end
