@@ -288,6 +288,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
         jl_gc_safepoint_(ptls);
     jl_value_t *exception = ptls->sig_exception;
+    JL_GC_PROMISE_ROOTED(exception);
     if (exception) {
         int8_t oldstate = jl_gc_unsafe_enter(ptls);
         /* The temporary ptls->bt_data is rooted by special purpose code in the

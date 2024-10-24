@@ -44,7 +44,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
     di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
     stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
     meta = Expr[]
-    return IRCode(stmts, cfg, di, argtypes, meta, sptypes)
+    return IRCode(stmts, cfg, di, argtypes, meta, sptypes, WorldRange(ci.min_world, ci.max_world))
 end
 
 """

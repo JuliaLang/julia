@@ -176,7 +176,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
         end
         return (ci.ssavaluetypes::Vector{Any})[idx]
     end
-    isa(x, GlobalRef) && return abstract_eval_globalref_type(x)
+    isa(x, GlobalRef) && return abstract_eval_globalref_type(x, ci)
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return types(ir)[new_to_regular(x, length(ir.stmts))]

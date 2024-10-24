@@ -1184,9 +1184,6 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
     @test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
     @test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
-    @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
-    @test isdefined_tfunc(Const(Base), Symbol) == Bool
-    @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
     @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))

@@ -624,11 +624,13 @@ function is_call_graph_uncached(sv::CC.InferenceState)
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
 
+isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
+
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
-        if CC.isdefined_globalref(g)
+        if isdefined_globalref(g)
             return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL)
         end
         return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
@@ -655,7 +657,7 @@ function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
                 a1val, a2val = a1.val, a2.val
                 if isa(a1val, Module) && isa(a2val, Symbol)
                     g = GlobalRef(a1val, a2val)
-                    if CC.isdefined_globalref(g)
+                    if isdefined_globalref(g)
                         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
                     end
                     return Union{}
