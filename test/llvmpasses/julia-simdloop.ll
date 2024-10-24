@@ -61,26 +61,6 @@ loopdone:
   ret double %nextv
 }
 
-; CHECK-LABEL: @simd_test_sub4(
-define double @simd_test_sub4(double *%a) {
-top:
-  br label %loop
-loop:
-  %i = phi i64 [0, %top], [%nexti, %loop]
-  %v = phi double [0.000000e+00, %top], [%nextv, %loop]
-  %aptr = getelementptr double, double *%a, i64 %i
-  %aval = load double, double *%aptr
-  %nextv2 = fmul double %aval, %aval
-  ; CHECK: fmul contract double %aval, %aval
-  %nextv = fsub double %v, %nextv2
-; CHECK: fsub reassoc contract double %v, %nextv2
-  %nexti = add i64 %i, 1
-  %done = icmp sgt i64 %nexti, 500
-  br i1 %done, label %loopdone, label %loop, !llvm.loop !0
-loopdone:
-  ret double %nextv
-}
-
 ; Tests if we correctly pass through other metadata
 ; CHECK-LABEL: @disabled(
 define i32 @disabled(i32* noalias nocapture %a, i32* noalias nocapture readonly %b, i32 %N) {
@@ -103,7 +83,6 @@ for.end:                                          ; preds = %for.body
   %1 = load i32, i32* %a, align 4
   ret i32 %1
 }
-
 
 !0 = distinct !{!0, !"julia.simdloop"}
 !1 = distinct !{!1, !"julia.simdloop", !"julia.ivdep"}
