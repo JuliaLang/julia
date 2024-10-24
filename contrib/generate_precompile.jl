@@ -184,10 +184,8 @@ end
 # interactive startup uses this
 write(IOBuffer(), "")
 
-# Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
-f55729() = Base.Experimental.@force_compile
-@time @eval f55729()
-@time @eval f55729()
+# precompile @time report generation and printing
+@time @eval Base.Experimental.@force_compile
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
