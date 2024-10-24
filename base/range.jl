@@ -850,6 +850,11 @@ first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
+function first(r::OneTo, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
+    OneTo(oftype(r.stop, min(r.stop, n)))
+end
+
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
