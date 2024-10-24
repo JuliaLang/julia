@@ -285,6 +285,9 @@ reim(A::AbstractArray)
 +(x::AbstractArray{<:Number}) = x
 *(x::AbstractArray{<:Number,2}) = x
 
+rad2deg(A::AbstractArray) = broadcast_preserving_zero_d(rad2deg, A)
+deg2rad(A::AbstractArray) = broadcast_preserving_zero_d(deg2rad, A)
+
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
 """
