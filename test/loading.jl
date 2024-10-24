@@ -728,7 +728,7 @@ end
         "" => [],
         "$s" => [default; bundled],
         "$tmp$s" => [tmp; bundled],
-        "$s$tmp" => [bundled; tmp],
+        "$s$tmp" => [default; bundled; tmp],
         )
     for (env, result) in pairs(cases)
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
@@ -1212,10 +1212,7 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-
-    io = PipeBuffer()
-    show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1325,6 +1322,18 @@ end
     end
 end
 
+@testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
+        # handled by falling back to the stdlib Project.toml for dependency truth.
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+        ))
+    end
+end
+
 @testset "code coverage disabled during precompilation" begin
     mktempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
@@ -1391,13 +1400,16 @@ end
                         "JULIA_LOAD_PATH" => dir,
                         "JULIA_DEBUG" => "loading")
 
-            out = Pipe()
-            proc = run(pipeline(cmd, stdout=out, stderr=out))
-            close(out.in)
-
-            log = @async String(read(out))
-            @test success(proc)
-            fetch(log)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
         end
 
         log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
