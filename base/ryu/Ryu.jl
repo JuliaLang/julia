@@ -112,7 +112,7 @@ end
 function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
     compact = get(io, :compact, false)::Bool
     buf = Base.StringVector(neededdigits(T))
-    typed = !forceuntyped && !compact && Base.nonnothing_nonmissing_typeinfo(io) != typeof(x)
+    typed = !forceuntyped && !compact && Base.nonnothing_nonmissing_typeinfo(io) !== typeof(x)
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
     write(io, resize!(buf, pos - 1))

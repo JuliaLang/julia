@@ -161,6 +161,8 @@ runtime initialization functions of external C libraries and initializing global
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
 
+See also: [`OncePerProcess`](@ref).
+
 # Examples
 ```julia
 const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
@@ -2586,7 +2588,7 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
 julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`

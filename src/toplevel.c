@@ -206,11 +206,17 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     if (std_imports) {
         if (jl_base_module != NULL) {
             jl_add_standard_imports(newm);
+            jl_datatype_t *include_into = (jl_datatype_t *)jl_get_global(jl_base_module, jl_symbol("IncludeInto"));
+            if (include_into) {
+                form = jl_new_struct(include_into, newm);
+                jl_set_const(newm, jl_symbol("include"), form);
+            }
         }
-        // add `eval` function
-        form = jl_call_scm_on_ast_and_loc("module-default-defs", (jl_value_t*)name, newm, filename, lineno);
-        jl_toplevel_eval_flex(newm, form, 0, 1, &filename, &lineno);
-        form = NULL;
+        jl_datatype_t *eval_into = (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
+        if (eval_into) {
+            form = jl_new_struct(eval_into, newm);
+            jl_set_const(newm, jl_symbol("eval"), form);
+        }
     }
 
     newm->file = jl_symbol(filename);
@@ -318,6 +324,7 @@ void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_va
                     jl_symbol_name(mod->name), jl_symbol_name(sym));
         }
         jl_value_t *old_ty = decode_restriction_value(pku);
+        JL_GC_PROMISE_ROOTED(old_ty);
         if (!jl_types_equal(ty, old_ty)) {
             jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                     jl_symbol_name(mod->name), jl_symbol_name(sym));
@@ -738,6 +745,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
             if (!val)
                 return bpart;
             jl_value_t *old = decode_restriction_value(pku);
+            JL_GC_PROMISE_ROOTED(old);
             if (jl_egal(val, old))
                 break;
             if (!did_warn) {
