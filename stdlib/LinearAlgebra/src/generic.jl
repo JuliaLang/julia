@@ -705,13 +705,12 @@ norm(::Missing, p::Real=2) = missing
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    for j = axes(A,2)
+    for j in axes(A,2)
         nrmj::Tsum = 0
-        for i = axes(A,1)
+        for i in axes(A,1)
             nrmj += norm(@inbounds A[i,j])
         end
         nrm = max(nrm,nrmj)
@@ -730,13 +729,12 @@ end
 
 function opnormInf(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    for i = axes(A,1)
+    for i in axes(A,1)
         nrmi::Tsum = 0
-        for j = axes(A,2)
+        for j in axes(A,2)
             nrmi += norm(@inbounds A[i,j])
         end
         nrm = max(nrm,nrmi)
@@ -1592,7 +1590,7 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     if n != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    for i = eachindex(x,y)
+    for i in eachindex(x,y)
         @inbounds begin
             xi, yi = x[i], y[i]
             x[i] =       c *xi + s*yi
@@ -1617,7 +1615,7 @@ function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     if n != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    for i = eachindex(x,y)
+    for i in eachindex(x,y)
         @inbounds begin
             xi, yi = x[i], y[i]
             x[i] =      c *xi + s*yi
@@ -1641,7 +1639,7 @@ end
     ν = T(copysign(normu, real(ξ1)))
     ξ1 += ν
     @inbounds x[1] = -ν
-    for i = 2:n
+    for i in 2:n
         @inbounds x[i] /= ξ1
     end
     ξ1/ν
@@ -1659,7 +1657,7 @@ Multiplies `A` in-place by a Householder reflection on the left. It is equivalen
         throw(DimensionMismatch(lazy"reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
     m == 0 && return A
-    for j = axes(A,2)
+    for j in axes(A,2)
         Aj, xj = @inbounds view(A, 2:m, j), view(x, 2:m)
         vAj = conj(τ)*(@inbounds(A[1, j]) + dot(xj, Aj))
         @inbounds A[1, j] -= vAj
