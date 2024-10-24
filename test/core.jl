@@ -35,7 +35,7 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
-        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args, :frozen]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache]),
@@ -2650,7 +2650,7 @@ for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typ
     @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
 end
 for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
-    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+    @test_throws ErrorException("cannot add methods to or modify methods of a frozen function") @eval $f() = 1
 end
 
 # issue #33370
