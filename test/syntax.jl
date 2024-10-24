@@ -537,18 +537,19 @@ end
 # make sure that incomplete tags are detected correctly
 # (i.e. error messages in src/julia-parser.scm must be matched correctly
 # by the code in base/client.jl)
-for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
-                       "`" => :cmd, "begin;" => :block, "quote;" => :block,
-                       "let;" => :block, "for i=1;" => :block, "function f();" => :block,
-                       "f() do x;" => :block, "module X;" => :block, "mutable struct X;" => :block,
-                       "struct X;" => :block, "(" => :other, "[" => :other,
-                       "for" => :other, "function" => :other,
-                       "f() do" => :other, "module" => :other, "mutable struct" => :other,
-                       "struct" => :other,
-                       "quote" => using_JuliaSyntax ? :block : :other,
-                       "let" => using_JuliaSyntax ? :block : :other,
-                       "begin" => using_JuliaSyntax ? :block : :other,
-                      )
+@testset "incomplete tags: $str => $tag" for (str, tag) in Dict(
+        "" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
+        "`" => :cmd, "begin;" => :block, "quote;" => :block,
+        "let;" => :block, "for i=1;" => :other, "function f();" => :block,
+        "f() do x;" => :block, "module X;" => :block, "mutable struct X;" => :block,
+        "struct X;" => :block, "(" => :other, "[" => :other,
+        "for" => :other, "function" => :other,
+        "f() do" => :other, "module" => :other, "mutable struct" => :other,
+        "struct" => :other,
+        "quote" => using_JuliaSyntax ? :block : :other,
+        "let" => using_JuliaSyntax ? :block : :other,
+        "begin" => using_JuliaSyntax ? :block : :other,
+    )
     @test Base.incomplete_tag(Meta.parse(str, raise=false)) == tag
 end
 
@@ -2429,7 +2430,7 @@ end
 @test x == 6
 
 # issue #36196
-@test_parseerror "(for i=1; println())"  "\"for\" at none:1 expected \"end\", got \")\""
+@test_parseerror "(for i=1; println())"  "unexpected \")\""
 @test_parseerror "(try i=1; println())"  "\"try\" at none:1 expected \"end\", got \")\""
 
 # issue #36272
@@ -3987,3 +3988,51 @@ end
 @test f45494() === (0,)
 
 @test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))
+
+@testset "for else" begin
+    a = Int[]
+    for i in 1:0
+        push!(a, 1)
+    else
+        push!(a, 2)
+    end
+    @test a == [2]
+
+    a = Int[]
+    for i in 1:3
+        push!(a, 1)
+    else
+        push!(a, 2)
+    end
+    @test a == [1, 1, 1]
+
+    @test_throws "multi-dimensional for-loops are not allowed to have else-blocks" eval(:(
+        for i in 1:0, j in 1:3
+            print(1)
+        else
+            print(2)
+        end
+    ))
+end
+
+@testset "while else" begin
+    a = Int[]
+    i = 1
+    while i ≤ 0
+        push!(a, 1)
+        i += 1
+    else
+        push!(a, 2)
+    end
+    @test a == [2]
+
+    a = Int[]
+    i = 1
+    while i ≤ 3
+        push!(a, 1)
+        i += 1
+    else
+        push!(a, 2)
+    end
+    @test a == [1, 1, 1]
+end
