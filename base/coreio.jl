@@ -2,7 +2,7 @@
 
 print(xs...)   = print(stdout, xs...)
 println(xs...) = println(stdout, xs...)
-println(io::IO) = print(io, '\n')
+println(io::IO) = print(io, "\n")  # One less allocation than with '\n'
 
 function show end
 function repr end
