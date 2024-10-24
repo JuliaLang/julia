@@ -303,8 +303,8 @@ true
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 module BlasFlag
 @enum BlasFunction SYRK HERK GEMM SYMM HEMM NONE
-const ValSyrkHerkGemm = Union{Val{SYRK}, Val{HERK}, Val{GEMM}}
-const ValSymmHemmGeneric = Union{Val{SYMM}, Val{HEMM}, Val{NONE}}
+const SyrkHerkGemm = Union{Val{SYRK}, Val{HERK}, Val{GEMM}}
+const SymmHemmGeneric = Union{Val{SYMM}, Val{HEMM}, Val{NONE}}
 end
 @inline function _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number)
     tA = wrapper_char(A)
@@ -444,7 +444,7 @@ end
 
 # THE one big BLAS dispatch. This is split into two methods to improve latency
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, val::BlasFlag.ValSyrkHerkGemm) where {T<:BlasFloat}
+                                    α::Number, β::Number, val::BlasFlag.SyrkHerkGemm) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
@@ -478,7 +478,7 @@ Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, �
 end
 _valtypeparam(v::Val{T}) where {T} = T
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, val::BlasFlag.ValSymmHemmGeneric) where {T<:BlasFloat}
+                                    α::Number, β::Number, val::BlasFlag.SymmHemmGeneric) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
