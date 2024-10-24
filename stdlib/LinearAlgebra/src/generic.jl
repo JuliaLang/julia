@@ -174,23 +174,23 @@ end
 end
 
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if length(C) != length(X)
         throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, X[IX] * s, C, IC)
+        @inbounds @stable_muladdmul _modify!(MulAddMul(alpha,beta), X[IX] * s, C, IC)
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if length(C) != length(X)
-        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not
-match the length of the second, $(length(X))."))
+        throw(DimensionMismatch(LazyString(lazy"first array has length $(length(C)) which does not",
+            lazy"match the length of the second, $(length(X)).")))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, s * X[IX], C, IC)
+        @inbounds @stable_muladdmul _modify!(MulAddMul(alpha,beta), s * X[IX], C, IC)
     end
     C
 end
@@ -198,22 +198,51 @@ end
 @inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
     _lscale_add!(C, s, X, alpha, beta)
 
+_lscale_add!(C::StridedArray, s::Number, X::StridedArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, alpha, beta)
 @inline function _lscale_add!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if axes(C) == axes(X)
-        C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
+        if isone(alpha)
+            if iszero(beta)
+                @. C = s * X
+            else
+                @. C = s * X + C * beta
+            end
+        else
+            if iszero(beta)
+                @. C = s * X * alpha
+            else
+                @. C = s * X * alpha + C * beta
+            end
+        end
     else
-        generic_mul!(C, s, X, MulAddMul(alpha, beta))
+        generic_mul!(C, s, X, alpha, beta)
     end
     return C
 end
 @inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
     _rscale_add!(C, X, s, alpha, beta)
 
+_rscale_add!(C::StridedArray, X::StridedArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, alpha, beta)
 @inline function _rscale_add!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if axes(C) == axes(X)
-        C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
+        if isone(alpha)
+            if iszero(beta)
+                @. C = X * s
+            else
+                @. C = X * s + C * beta
+            end
+        else
+            s_alpha = s * alpha
+            if iszero(beta)
+                @. C = X * s_alpha
+            else
+                @. C = X * s_alpha + C * beta
+            end
+        end
     else
-        generic_mul!(C, X, s, MulAddMul(alpha, beta))
+        generic_mul!(C, X, s, alpha, beta)
     end
     return C
 end
