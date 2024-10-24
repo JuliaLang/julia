@@ -484,7 +484,7 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-SHOW_MAXIMUM_BYTES::Int = 20480
+SHOW_MAXIMUM_BYTES::Int = 1_048_576
 
 # Limit printing during REPL display
 mutable struct LimitIO{IO_t <: IO} <: IO
