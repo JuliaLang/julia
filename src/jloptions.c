@@ -76,6 +76,11 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // method overwrite warning
                         1,    // can_inline
                         JL_OPTIONS_POLLY_ON, // polly
+#ifdef MMTK_GC
+                        1,    // inline fastpath allocation for mmtk
+#else
+                        0,
+#endif
                         NULL, // trace_compile
                         NULL, // trace_dispatch
                         JL_OPTIONS_FAST_MATH_DEFAULT,
@@ -207,6 +212,10 @@ static const char opts[]  =
     " --polly={yes*|no}                             Enable or disable the polyhedral optimizer Polly\n"
     "                                               (overrides @polly declaration)\n"
 #endif
+#ifdef MMTK_GC
+    " --inline-fastpath={yes*|no}                   Enable or disable inlining allocation fastpath for MMTk\n"
+    "                                               during code generation.\n"
+#endif
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]            Count executions of source lines (omitting setting is\n"
@@ -293,6 +302,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_scope,
            opt_inline,
            opt_polly,
+           opt_mmtk_inline_fastpath,
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
@@ -372,6 +382,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "inline-fastpath", required_argument, 0, opt_mmtk_inline_fastpath },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
@@ -821,6 +832,21 @@ restart_switch:
                 jl_options.polly = JL_OPTIONS_POLLY_OFF;
             else {
                 jl_errorf("julia: invalid argument to --polly (%s)", optarg);
+            }
+            break;
+        case opt_mmtk_inline_fastpath:
+            if (!strcmp(optarg,"yes"))
+#ifdef MMTK_GC
+                jl_options.mmtk_inline_fastpath = 1;
+#else
+                // always set to 0 if not using MMTk
+                jl_options.mmtk_inline_fastpath = 0;
+                jl_printf(JL_STDERR, "WARNING: Attempting to set --inline-fastpath without using MMTk");
+#endif
+            else if (!strcmp(optarg,"no"))
+                jl_options.mmtk_inline_fastpath = 0;
+            else {
+                jl_errorf("julia: invalid argument to --inline-fastpath (%s)", optarg);
             }
             break;
         case opt_trace_compile:
