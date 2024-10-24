@@ -1149,6 +1149,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->is_timing_enabled = jl_atomic_load_relaxed(&jl_task_timing_enabled) != 0;
     t->first_enqueued_at = 0;
     t->last_dequeued_at = 0;
     t->cpu_time_ns = 0;
@@ -1253,9 +1254,11 @@ CFI_NORETURN
 
     ct->ctx.started = 1;
     // wait_time -task-started-> user_time
-    assert(ct->first_enqueued_at != 0);
-    assert(ct->last_dequeued_at == 0);
-    ct->last_dequeued_at = jl_hrtime();
+    if (ct->is_timing_enabled) {
+        assert(ct->first_enqueued_at != 0);
+        assert(ct->last_dequeued_at == 0);
+        ct->last_dequeued_at = jl_hrtime();
+    }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1609,9 +1612,15 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->reentrant_timing = 0;
     ct->cpu_time_ns = 0;
     ct->wall_time_ns = 0;
-    uint64_t now = jl_hrtime();
-    ct->first_enqueued_at = now;
-    ct->last_dequeued_at = now;
+    if (ct->is_timing_enabled) {
+        uint64_t now = jl_hrtime();
+        ct->first_enqueued_at = now;
+        ct->last_dequeued_at = now;
+    }
+    else {
+        ct->first_enqueued_at = 0;
+        ct->last_dequeued_at = 0;
+    }
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

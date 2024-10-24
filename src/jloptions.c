@@ -152,6 +152,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-size-hint
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // task_timing
     };
     jl_options_initialized = 1;
 }
@@ -309,13 +310,13 @@ static const char opts_hidden[]  =
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
-    "                                               complete)\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to stderr or a path. Methods that\n"
     "                                               were recompiled are printed in yellow or with a trailing\n"
     "                                               comment if color is not supported\n"
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
     "                                               compile in ms\n"
+    " --task-timing                                 Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
     " --trim={no*|safe|unsafe|unsafe-warn}\n"
@@ -347,6 +348,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
+           opt_task_timing,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -427,6 +429,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
+        { "task-timing",           no_argument, 0, opt_task_timing },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -977,6 +980,9 @@ restart_switch:
                 jl_options.trim = JL_TRIM_UNSAFE_WARN;
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
+            break;
+        case opt_task_timing:
+            jl_options.task_timing = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

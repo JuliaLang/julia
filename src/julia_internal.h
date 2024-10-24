@@ -315,6 +315,8 @@ extern JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile)
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
+// Global *atomic* integer controlling *process-wide* task timing.
+extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_timing_enabled;
 
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
@@ -328,7 +330,6 @@ STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
 //    a = (a^0xb55a4f09) ^ (a>>16);
     return a;  // identity hashing seems to work well enough here
 }
-
 
 // this is a version of memcpy that preserves atomic memory ordering
 // which makes it safe to use for objects that can contain memory references
@@ -411,7 +412,6 @@ jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
 void gc_sweep_sysimg(void);
-
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[] = {
@@ -870,7 +870,6 @@ JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig);
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world);
-
 
 jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -1523,7 +1522,6 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
 
-
 // Special filenames used to refer to internal julia libraries
 #define JL_EXE_LIBNAME                  ((const char*)1)
 #define JL_LIBJULIA_DL_LIBNAME          ((const char*)2)
@@ -1972,7 +1970,6 @@ JL_DLLIMPORT uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #endif
 
 #pragma GCC visibility pop
-
 
 #ifdef USE_DTRACE
 // Generated file, needs to be searched in include paths so that the builddir
