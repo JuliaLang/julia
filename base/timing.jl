@@ -116,8 +116,8 @@ See also [`task_cpu_time_ns`](@ref).
     This method was added in Julia 1.12.
 """
 function task_wall_time_ns(t::Task)
+    # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_enqueued_at
     return t.wall_time_ns
-    # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_scheduled_at
 end
 
 """

@@ -982,9 +982,9 @@ function enq_work(t::Task)
 end
 
 function schedule(t::Task)
-    # user_time -task-scheduled-> wait_time
-    if t.first_scheduled_at == 0
-        t.first_scheduled_at = time_ns()
+    # user_time -task-(re)scheduled-> wait_time
+    if t.first_enqueued_at == 0
+        t.first_enqueued_at = time_ns()
     end
     enq_work(t)
 end
@@ -1033,9 +1033,9 @@ true
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
-    # user_time -task-scheduled-> wait_time
-    if t.first_scheduled_at == 0
-        t.first_scheduled_at = time_ns()
+    # user_time -task-(re)scheduled-> wait_time
+    if t.first_enqueued_at == 0
+        t.first_enqueued_at = time_ns()
     end
     if error
         q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
@@ -1105,8 +1105,8 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
-    if t.first_scheduled_at == 0
-        t.first_scheduled_at = time_ns()
+    if t.first_enqueued_at == 0
+        t.first_enqueued_at = time_ns()
     end
     t.result = x
     set_next_task(t)
@@ -1123,8 +1123,8 @@ function try_yieldto(undo)
     ct = current_task()
     # scheduler -task-started-> user
     # scheduler -task-resumed-> user
-    # @assert ct.last_scheduled_at == 0
-    ct.last_scheduled_at = time_ns()
+    # @assert ct.last_dequeued_at == 0
+    ct.last_dequeued_at = time_ns()
     if ct._isexception
         exc = ct.result
         ct.result = nothing
@@ -1138,8 +1138,8 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    if t.first_scheduled_at == 0
-        t.first_scheduled_at = time_ns()
+    if t.first_enqueued_at == 0
+        t.first_enqueued_at = time_ns()
     end
     t.result = exc
     t._isexception = true
@@ -1208,15 +1208,15 @@ else
     pause() = ccall(:pause, Cvoid, ())
 end
 
-function record_cpu_time!(t::Task, done_at::UInt64=time_ns())
-    @assert t.last_scheduled_at != 0
-    t.cpu_time_ns += done_at - t.last_scheduled_at
-    t.last_scheduled_at = 0
+function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
+    @assert t.last_dequeued_at != 0
+    t.cpu_time_ns += stopped_at - t.last_dequeued_at
+    t.last_dequeued_at = 0
     return t
 end
 
 function record_wall_time!(t::Task, done_at::UInt64=time_ns())
-    @assert t.first_scheduled_at != 0
-    t.wall_time_ns = done_at - t.first_scheduled_at
+    @assert t.first_enqueued_at != 0
+    t.wall_time_ns = done_at - t.first_enqueued_at
     return t
 end
