@@ -15,7 +15,6 @@
 //#endif
 
 // this is needed for !COPY_STACKS to work on linux
-#include <stdint.h>
 #ifdef _FORTIFY_SOURCE
 // disable __longjmp_chk validation so that we can jump between stacks
 // (which would normally be invalid to do with setjmp / longjmp)
@@ -736,7 +735,6 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
-
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
@@ -1093,7 +1091,6 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
         dst[i] = c;
     }
 }
-
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {

@@ -310,6 +310,7 @@ static const char opts_hidden[]  =
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
+    "                                               complete)\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to stderr or a path. Methods that\n"
     "                                               were recompiled are printed in yellow or with a trailing\n"

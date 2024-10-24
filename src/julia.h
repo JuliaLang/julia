@@ -194,10 +194,12 @@ JL_EXTENSION typedef struct {
     size_t dimsize[]; // length for 1-D, otherwise length is mem->length
 } jl_array_t;
 
+
 typedef struct _jl_datatype_t jl_tupletype_t;
 struct _jl_code_instance_t;
 typedef struct _jl_method_instance_t jl_method_instance_t;
 typedef struct _jl_globalref_t jl_globalref_t;
+
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
@@ -867,6 +869,7 @@ static inline jl_value_t *jl_to_typeof(uintptr_t t)
 }
 #endif
 
+
 // kinds
 extern JL_DLLIMPORT jl_datatype_t *jl_typeofbottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_datatype_type JL_GLOBALLY_ROOTED;
@@ -1099,6 +1102,7 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 #define JL_GC_PUSH9(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)                               \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(9), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
 
 #define JL_GC_PUSHARGS(rts_var,n)                                                                       \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;                                      \
@@ -1507,6 +1511,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
     return 0;
 }
 
+
 // basic predicates -----------------------------------------------------------
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       (((jl_datatype_t*)jl_typeof(v))->name == jl_tuple_typename)
@@ -1663,6 +1668,7 @@ STATIC_INLINE int jl_is_addrspace(void *v) JL_NOTSAFEPOINT
     jl_value_t *t = jl_typeof(v);
     return jl_is_addrspace_type(t);
 }
+
 
 STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
 {
@@ -2280,7 +2286,7 @@ typedef struct _jl_task_t {
     // uint8_t padding1;
     // multiqueue priority
     uint16_t priority;
-    // bool indicating whether or not this to measure the wall and cpu time of this task
+    // flag indicating whether or not this to measure the wall and cpu time of this task
     uint8_t is_timing_enabled;
     // timestamp this task first entered the run queue (TODO: int32 of ms instead?)
     uint64_t first_enqueued_at;
@@ -2295,6 +2301,7 @@ typedef struct _jl_task_t {
     // cached floating point environment
     // only updated at task switch
     fenv_t fenv;
+
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id
@@ -2413,6 +2420,7 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif
 #endif
+
 
 #ifdef __clang_gcanalyzer__
 
