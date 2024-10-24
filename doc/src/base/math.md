@@ -34,6 +34,9 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
+Base.unsafe_ashr
+Base.unsafe_lshr
+Base.unsafe_shl
 Base.bitrotate
 Base.:(:)
 Base.range
