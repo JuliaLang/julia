@@ -267,12 +267,14 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::MethodMatchInfo, @nospecialize(atype))
-    fully_covering(info) || add_mt_backedge!(sv, info.mt, atype)
+function add_uncovered_edges!(sv::AbsIntState, info::MethodMatchInfo, @nospecialize(atype), force::Bool=false)
+    if !fully_covering(info) || force
+        add_mt_backedge!(sv, info.mt, atype)
+    end
     nothing
 end
-add_uncovered_edges!(sv::AbsIntState, matches::MethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
+add_uncovered_edges!(sv::AbsIntState, matches::MethodMatches, @nospecialize(atype), force::Bool=false) =
+    add_uncovered_edges!(sv, matches.info, atype, force)
 
 struct UnionSplitMethodMatches
     applicable::Vector{Any}
@@ -284,15 +286,15 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
-function add_uncovered_edges!(sv::AbsIntState, info::UnionSplitInfo, @nospecialize(atype))
-    all(fully_covering, info.split) && return nothing
+function add_uncovered_edges!(sv::AbsIntState, info::UnionSplitInfo, @nospecialize(atype), force::Bool=false)
+    all(fully_covering, info.split) && !force && return nothing
     # add mt backedges with removing duplications
     for mt in uncovered_method_tables(info)
-        add_mt_backedge!(sv, mt, atype)
+        add_mt_backedge!(sv, mt, atype, force)
     end
 end
-add_uncovered_edges!(sv::AbsIntState, matches::UnionSplitMethodMatches, @nospecialize(atype)) =
-    add_uncovered_edges!(sv, matches.info, atype)
+add_uncovered_edges!(sv::AbsIntState, matches::UnionSplitMethodMatches, @nospecialize(atype), force::Bool=false) =
+    add_uncovered_edges!(sv, matches.info, atype, force)
 function uncovered_method_tables(info::UnionSplitInfo)
     mts = MethodTable[]
     for mminfo in info.split

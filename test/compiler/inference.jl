@@ -5104,6 +5104,21 @@ fapplicable(::Integer, ::Int32) = 3
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, x...)); end) == Val
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, 2, x...)); end) === Val{false}
 
+function fapplicable2 end
+gapplicable2(args...) = Val(applicable(fapplicable2, args...))
+fapplicable2(x::Int, y) = 1
+@test Base.infer_return_type((Int,Int)) do x, y
+    gapplicable2(x, y)
+end === Val{true}
+fapplicable2(x, y::Int) = 2 # now `fapplicable2(::Int, ::Int)` is ambiguous
+@test Base.infer_return_type((Int,Int)) do x, y
+    gapplicable2(x, y)
+end === Val{false}
+fapplicable2(x::Int, y::Int) = 3 # now `fapplicable2(::Int, ::Int)` is applicable
+@test Base.infer_return_type((Int,Int)) do x, y
+    gapplicable2(x, y)
+end === Val{true}
+
 function fhasmethod end
 ghasmethod() = Val(hasmethod(fhasmethod, Tuple{}))
 @test only(Base.return_types(ghasmethod, ())) === Val{false}
