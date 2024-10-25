@@ -565,6 +565,15 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
     fflush(stderr);
 }
 
+JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
+{
+    if (jl_base_module == NULL)
+        return NULL;
+    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"), 0);
+    return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
+}
+
+# Please do not remove (again breaking r-juliacall). Maybe after https://github.com/Non-Contradiction/JuliaCall/pull/237
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
