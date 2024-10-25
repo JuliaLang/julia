@@ -2457,7 +2457,7 @@ findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where 
     1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
 findfirst(::typeof(iszero), ::OneTo) = nothing
-findfirst(::typeof(isone), r::OneTo) = oneunit(keytype(r))
+findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r))
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
