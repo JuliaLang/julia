@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 print(xs...)   = print(stdout, xs...)
-println(xs...) = println(stdout, xs...)
-println(io::IO) = print(io, '\n')
+println(xs...) = print(stdout, xs..., "\n")  # fewer allocations than `println(stdout, xs...)`
+println(io::IO) = print(io, "\n")
 
 function show end
 function repr end
