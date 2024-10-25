@@ -1296,7 +1296,7 @@ end
 # Deprecate these in v2 (RedirectStdStream support)
 iterate(p::Pipe) = (p.out, 1)
 iterate(p::Pipe, i::Int) = i == 1 ? (p.in, 2) : nothing
-getindex(p::Pipe, key::Int) = key == 1 ? p.out : key == 2 ? p.in : throw(KeyError(key))
+getindex(p::Pipe, key::Int) = key == 1 ? p.out : key == 2 ? p.in : throw(KeyError(p, key))
 
 """
     redirect_stdout([stream]) -> stream

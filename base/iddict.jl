@@ -95,7 +95,7 @@ end
 
 function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
+    val === secret_table_token && throw(KeyError(d, key))
     return val::V
 end
 
@@ -113,7 +113,7 @@ end
 
 function pop!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     val = pop!(d, key, secret_table_token)
-    val === secret_table_token && throw(KeyError(key))
+    val === secret_table_token && throw(KeyError(d, key))
     return val::V
 end
 

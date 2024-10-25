@@ -132,19 +132,19 @@ end
 map!(f, iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
 
 function get(wkh::WeakKeyDict{K}, key, default) where {K}
-    key === nothing && throw(KeyError(nothing))
+    key === nothing && throw(KeyError(wkh, nothing))
     lock(wkh) do
         return get(wkh.ht, key, default)
     end
 end
 function get(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
-    key === nothing && throw(KeyError(nothing))
+    key === nothing && throw(KeyError(wkh, nothing))
     lock(wkh) do
         return get(default, wkh.ht, key)
     end
 end
 function pop!(wkh::WeakKeyDict{K}, key) where {K}
-    key === nothing && throw(KeyError(nothing))
+    key === nothing && throw(KeyError(wkh, nothing))
     lock(wkh) do
         return pop!(wkh.ht, key)
     end
@@ -175,7 +175,7 @@ function haskey(wkh::WeakKeyDict{K}, key) where {K}
     end
 end
 function getindex(wkh::WeakKeyDict{K}, key) where {K}
-    key === nothing && throw(KeyError(nothing))
+    key === nothing && throw(KeyError(wkh, nothing))
     lock(wkh) do
         return getindex(wkh.ht, key)
     end

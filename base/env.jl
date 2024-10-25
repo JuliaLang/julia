@@ -161,7 +161,7 @@ function parse_bool_env(name::String, val::String = ENV[name]; throw::Bool=false
     end
 end
 
-getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
+getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(ENV, k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
 function get!(default::Callable, ::EnvDict, k::AbstractString)
