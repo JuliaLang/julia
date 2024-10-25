@@ -1618,8 +1618,11 @@ julia> pop!(Dict(1=>2))
 1 => 2
 ```
 """
-@propagate_inbounds function pop!(a::Vector)
-    item = a[end]
+function pop!(a::Vector)
+    if isempty(a)
+        _throw_argerror("array must be non-empty")
+    end
+    @inbounds item = last(a)
     _deleteend!(a, 1)
     return item
 end
@@ -1751,8 +1754,11 @@ julia> A
  6
 ```
 """
-@propagate_inbounds function popfirst!(a::Vector)
-    item = a[1]
+function popfirst!(a::Vector)
+    if isempty(a)
+        _throw_argerror("array must be non-empty")
+    end
+    @inbounds item = first(a)
     _deletebeg!(a, 1)
     return item
 end
