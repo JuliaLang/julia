@@ -1347,13 +1347,15 @@ end
     return getfield_tfunc(𝕃, o, f)
 end
 @nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
-    T = _fieldtype_tfunc(𝕃, o, f, isconcretetype(o))
+    o′ = widenconst(o)
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
-    T = _fieldtype_tfunc(𝕃, o, f, isconcretetype(o))
+    o′ = widenconst(o)
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
