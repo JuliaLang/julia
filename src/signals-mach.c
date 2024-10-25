@@ -724,6 +724,84 @@ void jl_unlock_stackwalk(int lockret)
     jl_unlock_profile_mach(1, lockret);
 }
 
+// assumes holding `jl_lock_profile_mach`
+void jl_profile_thread_mach(int tid)
+{
+    // if there is no space left, return early
+    if (jl_profile_is_buffer_full()) {
+        jl_profile_stop_timer();
+        return;
+    }
+    if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_prepare();
+    if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
+        _dyld_atfork_prepare(); // briefly acquire the dlsym lock
+    host_thread_state_t state;
+    int valid_thread = jl_thread_suspend_and_get_state2(tid, &state);
+    unw_context_t *uc = (unw_context_t*)&state;
+    if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
+        _dyld_atfork_parent(); // quickly release the dlsym lock
+    if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_parent();
+    if (!valid_thread)
+        return;
+    if (profile_running) {
+#ifdef LLVMLIBUNWIND
+        /*
+            *  Unfortunately compact unwind info is incorrectly generated for quite a number of
+            *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
+            *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
+            *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
+            *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
+            *  What we do here is ugly, but necessary until the compact unwind info situation improves.
+            *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
+            *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
+            *  entry will always be correct, and the number of cases in which this is an issue is rather small.
+            *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
+            *  and during stack unwinding we only ever read memory, but never write it.
+            */
+
+        forceDwarf = 0;
+        unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
+
+        if (forceDwarf == 0) {
+            // Save the backtrace
+            profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
+        }
+        else if (forceDwarf == 1) {
+            profile_bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
+        }
+        else if (forceDwarf == -1) {
+            jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+        }
+
+        forceDwarf = -2;
+#else
+        profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur, profile_bt_size_max - profile_bt_size_cur - 1, uc, NULL);
+#endif
+        jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+
+        // store threadid but add 1 as 0 is preserved to indicate end of block
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls->tid + 1;
+
+        // store task id (never null)
+        profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+
+        // store cpu cycle clock
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
+
+        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
+
+        // Mark the end of this block with two 0's
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+    }
+    // We're done! Resume the thread.
+    jl_thread_resume(tid);
+}
+
 void *mach_profile_listener(void *arg)
 {
     (void)arg;
@@ -741,88 +819,21 @@ void *mach_profile_listener(void *arg)
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
         int keymgr_locked = jl_lock_profile_mach(0);
-
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-        int *randperm = profile_get_randperm(nthreads);
-        for (int idx = nthreads; idx-- > 0; ) {
-            // Stop the threads in the random or reverse round-robin order.
-            int i = randperm[idx];
-            // if there is no space left, break early
-            if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer();
-                break;
+        if (profile_all_tasks) {
+            // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
+            jl_profile_task();
+        }
+        else {
+            int *randperm = profile_get_randperm(nthreads);
+            for (int idx = nthreads; idx-- > 0; ) {
+                // Stop the threads in random order.
+                int i = randperm[idx];
+                jl_profile_thread_mach(i);
             }
-
-            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
-                _dyld_dlopen_atfork_prepare();
-            if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
-                _dyld_atfork_prepare(); // briefly acquire the dlsym lock
-            host_thread_state_t state;
-            int valid_thread = jl_thread_suspend_and_get_state2(i, &state);
-            unw_context_t *uc = (unw_context_t*)&state;
-            if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
-                _dyld_atfork_parent(); // quickly release the dlsym lock
-            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
-                _dyld_dlopen_atfork_parent();
-            if (!valid_thread)
-                continue;
-            if (running) {
-#ifdef LLVMLIBUNWIND
-                /*
-                 *  Unfortunately compact unwind info is incorrectly generated for quite a number of
-                 *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
-                 *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
-                 *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
-                 *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
-                 *  What we do here is ugly, but necessary until the compact unwind info situation improves.
-                 *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
-                 *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
-                 *  entry will always be correct, and the number of cases in which this is an issue is rather small.
-                 *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
-                 *  and during stack unwinding we only ever read memory, but never write it.
-                 */
-
-                forceDwarf = 0;
-                unw_getcontext(&profiler_uc); // will resume from this point if the next lines segfault at any point
-
-                if (forceDwarf == 0) {
-                    // Save the backtrace
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
-                }
-                else if (forceDwarf == 1) {
-                    bt_size_cur += rec_backtrace_ctx_dwarf((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
-                }
-                else if (forceDwarf == -1) {
-                    jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-                }
-
-                forceDwarf = -2;
-#else
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
-#endif
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
-
-                // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
-
-                // META_OFFSET_TASKID store task id (never null)
-                bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
-
-                // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
-                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
-
-                // META_OFFSET_SLEEPSTATE store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
-
-                // Mark the end of this block with two 0's
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-            }
-            // We're done! Resume the thread.
-            jl_thread_resume(i);
         }
         jl_unlock_profile_mach(0, keymgr_locked);
-        if (running) {
+        if (profile_running) {
             jl_check_profile_autostop();
             // Reset the alarm
             kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
@@ -831,7 +842,8 @@ void *mach_profile_listener(void *arg)
     }
 }
 
-JL_DLLEXPORT int jl_profile_start_timer(void)
+
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     kern_return_t ret;
     if (!profile_started) {
@@ -860,7 +872,8 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.tv_sec = nsecprof/GIGA;
     timerprof.tv_nsec = nsecprof%GIGA;
 
-    running = 1;
+    profile_running = 1;
+    profile_all_tasks = all_tasks;
     // ensure the alarm is running
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
     HANDLE_MACH_ERROR("clock_alarm", ret);
@@ -870,5 +883,8 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    running = 0;
+    uv_mutex_lock(&bt_data_prof_lock);
+    profile_running = 0;
+    profile_all_tasks = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
 }

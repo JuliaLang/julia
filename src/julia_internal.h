@@ -211,6 +211,35 @@ JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEA
 int jl_lock_stackwalk(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_unlock_stackwalk(int lockret) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 
+arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT;
+typedef struct {
+    size_t bt_size;
+    int tid;
+} jl_record_backtrace_result_t;
+JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, struct _jl_bt_element_t *bt_data,
+                                                              size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT;
+extern volatile struct _jl_bt_element_t *profile_bt_data_prof;
+extern volatile size_t profile_bt_size_max;
+extern volatile size_t profile_bt_size_cur;
+extern volatile int profile_running;
+extern volatile int profile_all_tasks;
+// Ensures that we can safely read the `live_tasks`field of every TLS when profiling.
+// We want to avoid the case that a GC gets interleaved with `jl_profile_task` and shrinks
+// the `live_tasks` array while we are reading it or frees tasks that are being profiled.
+// Because of that, this lock must be held in `jl_profile_task` and `sweep_stack_pools_and_mtarraylist_buffers`.
+extern uv_mutex_t live_tasks_lock;
+// Ensures that we can safely write to `profile_bt_data_prof` and `profile_bt_size_cur`.
+// We want to avoid the case that:
+// - We start to profile a task very close to the profiling time window end.
+// - The profiling time window ends and we start to read the profile data in a compute thread.
+// - We write to the profile in a profiler thread while the compute thread is reading it.
+// Locking discipline: `bt_data_prof_lock` must be held inside the scope of `live_tasks_lock`.
+extern uv_mutex_t bt_data_prof_lock;
+#define PROFILE_STATE_THREAD_NOT_SLEEPING (1)
+#define PROFILE_STATE_THREAD_SLEEPING (2)
+#define PROFILE_STATE_WALL_TIME_PROFILING (3)
+void jl_profile_task(void);
+
 // number of cycles since power-on
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {

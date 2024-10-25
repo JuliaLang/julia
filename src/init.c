@@ -744,6 +744,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     // initialize symbol-table lock
     uv_mutex_init(&symtab_lock);
+    // initialize the live tasks lock
+    uv_mutex_init(&live_tasks_lock);
+    // initialize the profiler buffer lock
+    uv_mutex_init(&bt_data_prof_lock);
 
     // initialize backtraces
     jl_init_profile_lock();
