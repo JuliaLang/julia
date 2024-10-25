@@ -565,6 +565,7 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
     fflush(stderr);
 }
 
+// Please do not remove jl_stdout_obj (again breaking r-juliacall). Maybe after https://github.com/Non-Contradiction/JuliaCall/pull/237
 JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
@@ -573,7 +574,6 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
     return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
 }
 
-// Please do not remove (again breaking r-juliacall). Maybe after https://github.com/Non-Contradiction/JuliaCall/pull/237
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
