@@ -296,6 +296,39 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
     jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, -1);
 }
 
+// Builds a list of the live tasks. Racy: `live_tasks` can expand at any time.
+arraylist_t *jl_get_all_tasks_arraylist(void) JL_NOTSAFEPOINT
+{
+    arraylist_t *tasks = (arraylist_t*)malloc_s(sizeof(arraylist_t));
+    arraylist_new(tasks, 0);
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads...
+        if (gc_is_collector_thread(i)) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_task_t *t = ptls2->root_task;
+        if (t->ctx.stkbuf != NULL) {
+            arraylist_push(tasks, t);
+        }
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        for (size_t i = 0; i < n; i++) {
+            jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
+            assert(t != NULL);
+            if (t->ctx.stkbuf != NULL) {
+                arraylist_push(tasks, t);
+            }
+        }
+    }
+    return tasks;
+}
+
 JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);

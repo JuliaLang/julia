@@ -428,7 +428,7 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
 NOINLINE static void record_backtrace(jl_ptls_t ptls, int skip) JL_NOTSAFEPOINT
 {
     // storing bt_size in ptls ensures roots in bt_data will be found
-    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1);
+    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, skip + 1, 0);
 }
 
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT

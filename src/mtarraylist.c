@@ -37,7 +37,7 @@ static void mtarraylist_resizeto(small_mtarraylist_t *a, size_t len, size_t newl
         a->max = nm;
         if (olditems != (void*)&a->_space[0]) {
             jl_task_t *ct = jl_current_task;
-            jl_gc_add_quiescent(ct->ptls, (void**)olditems, free);
+            small_arraylist_push(&ct->ptls->lazily_freed_mtarraylist_buffers, olditems);
         }
     }
 }

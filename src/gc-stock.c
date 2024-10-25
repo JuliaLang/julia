@@ -1025,7 +1025,22 @@ void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
     }
 }
 
-void sweep_stack_pools(jl_ptls_t ptls) JL_NOTSAFEPOINT
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
+        if (ptls == NULL) {
+            continue;
+        }
+        small_arraylist_t *buffers = &ptls->lazily_freed_mtarraylist_buffers;
+        void *buf;
+        while ((buf = small_arraylist_pop(buffers)) != NULL) {
+            free(buf);
+        }
+    }
+}
+
+void sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     // initialize ptls index for parallel sweeping of stack pools
     assert(gc_n_threads);
@@ -1035,9 +1050,12 @@ void sweep_stack_pools(jl_ptls_t ptls) JL_NOTSAFEPOINT
     else
         jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
     jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
+    uv_mutex_lock(&live_tasks_lock);
     gc_sweep_wake_all_stacks(ptls);
     sweep_stack_pool_loop();
     gc_sweep_wait_for_all_stacks();
+    sweep_mtarraylist_buffers();
+    uv_mutex_unlock(&live_tasks_lock);
 }
 
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
@@ -3084,7 +3102,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         current_sweep_full = sweep_full;
         sweep_weak_refs();
         uint64_t stack_pool_time = jl_hrtime();
-        sweep_stack_pools(ptls);
+        sweep_stack_pools_and_mtarraylist_buffers(ptls);
         stack_pool_time = jl_hrtime() - stack_pool_time;
         gc_num.total_stack_pool_sweep_time += stack_pool_time;
         gc_num.stack_pool_sweep_time = stack_pool_time;
@@ -3453,6 +3471,8 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->bottom, 0);
     jl_atomic_store_relaxed(&q->array, wsa2);
     arraylist_new(&mq->reclaim_set, 32);
+    // Initialize `lazily_freed_mtarraylist_buffers`
+    small_arraylist_new(&ptls->lazily_freed_mtarraylist_buffers, 0);
 
     memset(&ptls->gc_tls_common.gc_num, 0, sizeof(ptls->gc_tls_common.gc_num));
     jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd, -(int64_t)gc_num.interval);
