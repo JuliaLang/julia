@@ -430,7 +430,7 @@
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
-    XX(jl_stdin_stream) \
+    XX(jl_stdout_obj) \
     XX(jl_stdout_stream) \
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
