@@ -1618,10 +1618,7 @@ julia> pop!(Dict(1=>2))
 1 => 2
 ```
 """
-function pop!(a::Vector)
-    if isempty(a)
-        _throw_argerror("array must be non-empty")
-    end
+@propagate_inbounds function pop!(a::Vector)
     item = a[end]
     _deleteend!(a, 1)
     return item
@@ -1659,7 +1656,7 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 [...]
 ```
 """
-function popat!(a::Vector, i::Integer)
+@propagate_inbounds function popat!(a::Vector, i::Integer)
     x = a[i]
     _deleteat!(a, i, 1)
     x
@@ -1754,10 +1751,7 @@ julia> A
  6
 ```
 """
-function popfirst!(a::Vector)
-    if isempty(a)
-        _throw_argerror("array must be non-empty")
-    end
+@propagate_inbounds function popfirst!(a::Vector)
     item = a[1]
     _deletebeg!(a, 1)
     return item
