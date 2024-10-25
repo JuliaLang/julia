@@ -37,6 +37,7 @@ typedef struct {
     int8_t warn_overwrite;
     int8_t can_inline;
     int8_t polly;
+    int8_t mmtk_inline_fastpath;
     const char *trace_compile;
     const char *trace_dispatch;
     int8_t fast_math;

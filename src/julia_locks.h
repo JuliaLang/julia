@@ -116,7 +116,7 @@ public:
     {
         jl_task_t *ct = jl_current_task;
         gc_state = jl_gc_safe_enter(ct->ptls);
-        this->native = std::unique_lock(native);
+        this->native = std::unique_lock<std::mutex>(native);
         ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
     }
     jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &&native) = delete;

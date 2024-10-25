@@ -1,7 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc-common.h"
-#include "gc-stock.h"
 #include "threading.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>

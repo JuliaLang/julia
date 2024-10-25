@@ -33,6 +33,7 @@ struct JLOptions
     warn_overwrite::Int8
     can_inline::Int8
     polly::Int8
+    mmtk_inline_fastpath::Int8
     trace_compile::Ptr{UInt8}
     trace_dispatch::Ptr{UInt8}
     fast_math::Int8

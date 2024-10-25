@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef MMTK_GC
 #include "gc-common.h"
 #include "gc-stock.h"
 #include "gc-alloc-profiler.h"
@@ -3962,12 +3963,18 @@ JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
     return sizeof(bigval_t);
 }
 
-
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)
 {
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
 }
 
+void jl_gc_notify_image_load(const char* img_data, size_t len)
+{
+    // Do nothing
+}
+
 #ifdef __cplusplus
 }
 #endif
+
+#endif // !MMTK_GC

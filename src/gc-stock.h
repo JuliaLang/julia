@@ -5,6 +5,7 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
+#ifndef MMTK_GC
 
 #ifndef JL_GC_H
 #define JL_GC_H
@@ -519,9 +520,6 @@ extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping_pools;
-extern _Atomic(int) gc_n_threads_sweeping_stacks;
-extern _Atomic(int) gc_ptls_sweep_idx;
-extern _Atomic(int) gc_stack_free_idx;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -729,3 +727,6 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
 #endif
 
 #endif
+
+
+#endif // !MMTK_GC

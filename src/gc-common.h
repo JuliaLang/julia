@@ -35,6 +35,14 @@ extern jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 extern jl_gc_callback_list_t *gc_cblist_notify_external_free;
 extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 
+
+// FIXME: These are specific to the Stock GC but being declared here
+// for now, instead of gc-stock.h. We might want to refactor the
+// code in gc-stacks.c that uses these
+extern _Atomic(int) gc_ptls_sweep_idx;
+extern _Atomic(int) gc_stack_free_idx;
+extern _Atomic(int) gc_n_threads_sweeping_stacks;
+
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
         for (jl_gc_callback_list_t *cb = list; \

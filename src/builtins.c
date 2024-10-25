@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include "julia.h"
 #include "julia_internal.h"
+#include "gc-interface.h"
 #include "builtin_proto.h"
 #include "intrinsics.h"
 #include "julia_assert.h"
