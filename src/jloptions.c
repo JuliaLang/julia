@@ -835,7 +835,7 @@ restart_switch:
             }
             break;
         case opt_mmtk_inline_fastpath:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg,"yes")) {
 #ifdef MMTK_GC
                 jl_options.mmtk_inline_fastpath = 1;
 #else
@@ -843,7 +843,7 @@ restart_switch:
                 jl_options.mmtk_inline_fastpath = 0;
                 jl_printf(JL_STDERR, "WARNING: Attempting to set --inline-fastpath without using MMTk");
 #endif
-            else if (!strcmp(optarg,"no"))
+            } else if (!strcmp(optarg,"no"))
                 jl_options.mmtk_inline_fastpath = 0;
             else {
                 jl_errorf("julia: invalid argument to --inline-fastpath (%s)", optarg);
