@@ -1033,13 +1033,6 @@ let exename = Base.julia_cmd()
     @test errors_not_signals(`$exename --startup-file=false`)
 end
 
-# Make sure `julia --lisp` doesn't break
-run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
-
-# Test that `julia [some other option] --lisp` is disallowed
-@test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
-    (false, "", "ERROR: --lisp must be specified as the first argument")
-
 # --sysimage-native-code={yes|no}
 let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename --sysimage-native-code=yes -E
