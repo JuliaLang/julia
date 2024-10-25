@@ -80,6 +80,9 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
+# Use stock if MMTK_PLAN hasn't been defined
+MMTK_PLAN ?= None
+
 # Enable DTrace support
 WITH_DTRACE := 0
 
@@ -831,6 +834,41 @@ endif
 ifeq ($(WITH_GC_DEBUG_ENV), 1)
 JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
+endif
+
+ifneq (${MMTK_PLAN},None)
+ifeq (${MMTK_JULIA_DIR},)
+$(error MMTK_JULIA_DIR must be set to use MMTk)
+endif
+JCXXFLAGS += -DMMTK_GC
+JCFLAGS += -DMMTK_GC
+ifeq (${MMTK_BUILD},)
+ifeq (debug,$(findstring debug,$(MAKECMDGOALS)))
+MMTK_BUILD = debug
+else
+MMTK_BUILD = release
+endif
+endif
+ifeq (${MMTK_PLAN},Immix)
+JCXXFLAGS += -DMMTK_PLAN_IMMIX
+JCFLAGS += -DMMTK_PLAN_IMMIX
+else
+$(error "Unsupported MMTk plan: $(MMTK_PLAN)")
+endif
+MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
+MMTK_API_INC = $(MMTK_DIR)/api
+ifeq ($(OS),Linux)
+MMTK_LIB_NAME := libmmtk_julia.so
+else
+$(error "Unsupported OS for MMTk")
+endif
+MMTK_LIB_SRC := $(MMTK_DIR)/target/$(MMTK_BUILD)/$(MMTK_LIB_NAME)
+MMTK_LIB_DST := $(BUILDROOT)/usr/lib/$(MMTK_LIB_NAME)
+MMTK_LIB := -lmmtk_julia
+LDFLAGS += -Wl,-rpath=$(MMTK_DIR)/target/$(MMTK_BUILD)/
+else
+MMTK_JULIA_INC :=
+MMTK_LIB :=
 endif
 
 ifeq ($(WITH_DTRACE), 1)
@@ -1827,6 +1865,9 @@ PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+ifneq (${MMTK_PLAN},None)
+PRINT_MMTK = printf '    %b %b\n' $(LINKCOLOR)MMTK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+endif
 
 else
 QUIET_MAKE =
@@ -1837,6 +1878,9 @@ PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
+ifneq (${MMTK_PLAN},None)
+PRINT_MMTK = echo '$(subst ','\'',$(1))'; $(1)
+endif
 
 endif # VERBOSE
 

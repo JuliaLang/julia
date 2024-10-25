@@ -659,6 +659,7 @@ static void jl_load_sysimg_so(void)
         plen = (size_t *)&jl_system_image_size;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(sysimg_data, *plen);
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
@@ -4227,6 +4228,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_dlsym(pkgimg_handle, "jl_system_image_data", (void **)&pkgimg_data, 1);
     size_t *plen;
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(pkgimg_data, *plen);
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 

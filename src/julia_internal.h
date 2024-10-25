@@ -226,7 +226,7 @@ extern volatile int profile_all_tasks;
 // Ensures that we can safely read the `live_tasks`field of every TLS when profiling.
 // We want to avoid the case that a GC gets interleaved with `jl_profile_task` and shrinks
 // the `live_tasks` array while we are reading it or frees tasks that are being profiled.
-// Because of that, this lock must be held in `jl_profile_task` and `sweep_stack_pools_and_mtarraylist_buffers`.
+// Because of that, this lock must be held in `jl_profile_task` and `jl_gc_sweep_stack_pools_and_mtarraylist_buffers`.
 extern uv_mutex_t live_tasks_lock;
 // Ensures that we can safely write to `profile_bt_data_prof` and `profile_bt_size_cur`.
 // We want to avoid the case that:
