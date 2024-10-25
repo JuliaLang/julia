@@ -1622,7 +1622,7 @@ function pop!(a::Vector)
     if isempty(a)
         _throw_argerror("array must be non-empty")
     end
-    @inbounds item = last(a)
+    @inbounds item = a[end]
     _deleteend!(a, 1)
     return item
 end
@@ -1758,7 +1758,7 @@ function popfirst!(a::Vector)
     if isempty(a)
         _throw_argerror("array must be non-empty")
     end
-    @inbounds item = first(a)
+    @inbounds item = a[1]
     _deletebeg!(a, 1)
     return item
 end
