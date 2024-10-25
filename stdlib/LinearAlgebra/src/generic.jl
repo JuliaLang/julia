@@ -734,18 +734,15 @@ norm(::Missing, p::Real=2) = missing
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    @inbounds begin
-        for j = 1:n
-            nrmj::Tsum = 0
-            for i = 1:m
-                nrmj += norm(A[i,j])
-            end
-            nrm = max(nrm,nrmj)
+    for j in axes(A,2)
+        nrmj::Tsum = 0
+        for i in axes(A,1)
+            nrmj += norm(@inbounds A[i,j])
         end
+        nrm = max(nrm,nrmj)
     end
     return convert(Tnorm, nrm)
 end
@@ -761,18 +758,15 @@ end
 
 function opnormInf(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    @inbounds begin
-        for i = 1:m
-            nrmi::Tsum = 0
-            for j = 1:n
-                nrmi += norm(A[i,j])
-            end
-            nrm = max(nrm,nrmi)
+    for i in axes(A,1)
+        nrmi::Tsum = 0
+        for j in axes(A,2)
+            nrmi += norm(@inbounds A[i,j])
         end
+        nrm = max(nrm,nrmi)
     end
     return convert(Tnorm, nrm)
 end
@@ -967,7 +961,7 @@ function dot(x::AbstractArray, y::AbstractArray)
     end
     s = zero(dot(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-        @inbounds s += dot(x[Ix], y[Iy])
+        s += dot(@inbounds(x[Ix]), @inbounds(y[Iy]))
     end
     s
 end
@@ -1008,11 +1002,11 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     s = zero(T)
     i₁ = first(eachindex(x))
     x₁ = first(x)
-    @inbounds for j in eachindex(y)
-        yj = y[j]
+    for j in eachindex(y)
+        yj = @inbounds y[j]
         if !iszero(yj)
-            temp = zero(adjoint(A[i₁,j]) * x₁)
-            @simd for i in eachindex(x)
+            temp = zero(adjoint(@inbounds A[i₁,j]) * x₁)
+            @inbounds @simd for i in eachindex(x)
                 temp += adjoint(A[i,j]) * x[i]
             end
             s += dot(temp, yj)
@@ -1625,10 +1619,12 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     if n != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    @inbounds for i = 1:n
-        xi, yi = x[i], y[i]
-        x[i] =       c *xi + s*yi
-        y[i] = -conj(s)*xi + c*yi
+    for i in eachindex(x,y)
+        @inbounds begin
+            xi, yi = x[i], y[i]
+            x[i] =       c *xi + s*yi
+            y[i] = -conj(s)*xi + c*yi
+        end
     end
     return x, y
 end
@@ -1648,10 +1644,12 @@ function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     if n != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    @inbounds for i = 1:n
-        xi, yi = x[i], y[i]
-        x[i] =      c *xi + s*yi
-        y[i] = conj(s)*xi - c*yi
+    for i in eachindex(x,y)
+        @inbounds begin
+            xi, yi = x[i], y[i]
+            x[i] =      c *xi + s*yi
+            y[i] = conj(s)*xi - c*yi
+        end
     end
     return x, y
 end
@@ -1662,18 +1660,16 @@ end
     require_one_based_indexing(x)
     n = length(x)
     n == 0 && return zero(eltype(x))
-    @inbounds begin
-        ξ1 = x[1]
-        normu = norm(x)
-        if iszero(normu)
-            return zero(ξ1/normu)
-        end
-        ν = T(copysign(normu, real(ξ1)))
-        ξ1 += ν
-        x[1] = -ν
-        for i = 2:n
-            x[i] /= ξ1
-        end
+    ξ1 = @inbounds x[1]
+    normu = norm(x)
+    if iszero(normu)
+        return zero(ξ1/normu)
+    end
+    ν = T(copysign(normu, real(ξ1)))
+    ξ1 += ν
+    @inbounds x[1] = -ν
+    for i in 2:n
+        @inbounds x[i] /= ξ1
     end
     ξ1/ν
 end
@@ -1684,16 +1680,16 @@ end
 Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - conj(τ)*[1; x[2:end]]*[1; x[2:end]]')*A`.
 """
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
-    require_one_based_indexing(x)
+    require_one_based_indexing(x, A)
     m, n = size(A, 1), size(A, 2)
     if length(x) != m
         throw(DimensionMismatch(lazy"reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
     m == 0 && return A
-    @inbounds for j = 1:n
-        Aj, xj = view(A, 2:m, j), view(x, 2:m)
-        vAj = conj(τ)*(A[1, j] + dot(xj, Aj))
-        A[1, j] -= vAj
+    for j in axes(A,2)
+        Aj, xj = @inbounds view(A, 2:m, j), view(x, 2:m)
+        vAj = conj(τ)*(@inbounds(A[1, j]) + dot(xj, Aj))
+        @inbounds A[1, j] -= vAj
         axpy!(-vAj, xj, Aj)
     end
     return A
@@ -1828,9 +1824,10 @@ julia> LinearAlgebra.det_bareiss!(M)
 ```
 """
 function det_bareiss!(M)
+    Base.require_one_based_indexing(M)
     n = checksquare(M)
     sign, prev = Int8(1), one(eltype(M))
-    for i in 1:n-1
+    for i in axes(M,2)[begin:end-1]
         if iszero(M[i,i]) # swap with another col to make nonzero
             swapto = findfirst(!iszero, @view M[i,i+1:end])
             isnothing(swapto) && return zero(prev)
@@ -2020,12 +2017,12 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     A = Base.unalias(B, A)
     if uplo == 'U'
         LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
-        for j in 1:n, i in 1:min(j,m)
+        for j in axes(A,2), i in axes(A,1)[begin : min(j,end)]
             @inbounds B[i,j] = A[i,j]
         end
     else # uplo == 'L'
         LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
-        for j in 1:n, i in j:m
+        for j in axes(A,2), i in axes(A,1)[j:end]
             @inbounds B[i,j] = A[i,j]
         end
     end
