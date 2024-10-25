@@ -891,6 +891,12 @@ LinearAlgebra.LAPACK.trsyl!
 LinearAlgebra.LAPACK.hseqr!
 ```
 
+## Developer Documentation
+
+```@docs
+LinearAlgebra.matprod_dest
+```
+
 ```@meta
 DocTestSetup = nothing
 ```

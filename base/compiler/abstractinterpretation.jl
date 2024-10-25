@@ -3648,7 +3648,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         changes = StateUpdate(lhs, VarState(rt, false))
                     elseif isa(lhs, GlobalRef)
                         handle_global_assignment!(interp, frame, lhs, rt)
-                    elseif !isa(lhs, SSAValue)
+                    else
                         merge_effects!(interp, frame, EFFECTS_UNKNOWN)
                     end
                 end
