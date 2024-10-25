@@ -166,7 +166,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)

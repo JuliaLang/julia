@@ -191,9 +191,9 @@ end
 Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
 """
 diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
-diagzero(D::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
-    zeroslike(M, axes(D[BandIndex(0,i)], 1), axes(D[BandIndex(0,j)], 2))
-diagzero(A::AbstractMatrix, b::BandIndex) = diagzero(A, Tuple(_cartinds(b))...)
+diagzero(A::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
+    zeroslike(M, axes(A[i,i], 1), axes(A[j,j], 2))
+diagzero(A::AbstractMatrix, inds...) = diagzero(A, to_indices(A, inds)...)
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
 zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
 """
@@ -687,15 +687,32 @@ for Tri in (:UpperTriangular, :LowerTriangular)
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
+    valA = A.diag; mA, nA = size(A)
+    valB = B.diag; mB, nB = size(B)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch(lazy"expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
-    @inbounds for i = 1:nA, j = 1:nB
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
+    for i in eachindex(valA), j in eachindex(valB)
         idx = (i-1)*nB+j
-        C[idx, idx] = valA[i] * valB[j]
+        @inbounds C[idx, idx] = valA[i] * valB[j]
+    end
+    if !zerofilled
+        for j in axes(A,2), i in axes(A,1)
+            Δrow, Δcol = (i-1)*mB, (j-1)*nB
+            for k in axes(B,2), l in axes(B,1)
+                i == j && k == l && continue
+                @inbounds C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
+            end
+        end
     end
     return C
 end
@@ -723,16 +740,36 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
-    @inbounds for j = 1:nA
-        A_jj = A[j,j]
-        for k = 1:nB
-            for l = 1:mB
-                C[m] = A_jj * B[l,k]
+    for j in axes(A,2)
+        A_jj = @inbounds A[j,j]
+        for k in axes(B,2)
+            for l in axes(B,1)
+                @inbounds C[m] = A_jj * B[l,k]
                 m += 1
             end
             m += (nA - 1) * mB
+        end
+        if !zerofilled
+            # populate the zero elements
+            for i in axes(A,1)
+                i == j && continue
+                A_ij = @inbounds A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in axes(B,2), l in axes(B,1)
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m += mB
     end
@@ -746,16 +783,35 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
-    @inbounds for j = 1:nA
-        for l = 1:mB
-            Bll = B[l,l]
-            for k = 1:mA
-                C[m] = A[k,j] * Bll
+    for j in axes(A,2)
+        for l in axes(B,1)
+            Bll = @inbounds B[l,l]
+            for i in axes(A,1)
+                @inbounds C[m] = A[i,j] * Bll
                 m += nB
             end
             m += 1
+        end
+        if !zerofilled
+            for i in axes(A,1)
+                A_ij = @inbounds A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in axes(B,2), l in axes(B,1)
+                    l == k && continue
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m -= nB
     end

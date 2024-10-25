@@ -823,3 +823,22 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))
 end
+
+# issue https://github.com/JuliaIO/ImageMagick.jl/issues/235
+module OuterModule
+    module InternalModule
+        struct MyType
+            x::Int
+        end
+
+        Base.@deprecate_binding MyOldType MyType
+
+        export MyType
+    end
+    using .InternalModule
+    export MyType, MyOldType
+end # module
+@testset "Subtypes and deprecations" begin
+    using .OuterModule
+    @test_nowarn subtypes(Integer);
+end

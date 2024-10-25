@@ -266,7 +266,7 @@ if opt_level > 0
     @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
 
-# Issue 22770
+# Issue JuliaLang/julia#22770
 let was_gced = false
     @noinline make_tuple(x) = tuple(x)
     @noinline use(x) = ccall(:jl_breakpoint, Cvoid, ())
