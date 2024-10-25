@@ -6063,3 +6063,18 @@ end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
 end === Union{}
+
+@test Base.infer_return_type((Nothing,)) do x
+    @atomic x.count += 1
+end == Union{}
+@test Base.infer_return_type((Nothing,)) do x
+    @atomicreplace x.count 0 => 1
+end == Union{}
+mutable struct AtomicModifySafety
+    @atomic count::Int
+end
+let src = code_typed((Union{Nothing,AtomicModifySafety},)) do x
+        @atomic x.count += 1
+    end |> only |> first
+    @test any(@nospecialize(x)->Meta.isexpr(x, :invoke_modify), src.code)
+end
