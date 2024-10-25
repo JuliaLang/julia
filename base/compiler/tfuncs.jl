@@ -3008,14 +3008,16 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
         else
             rt = Const(true) # has applicable matches
         end
-        for i in 1:napplicable
-            match = applicable[i]::MethodMatch
-            edge = specialize_method(match)::MethodInstance
-            add_backedge!(sv, edge)
+        if rt !== Bool
+            for i in 1:napplicable
+                match = applicable[i]::MethodMatch
+                edge = specialize_method(match)
+                add_backedge!(sv, edge)
+            end
+            # also need an edge to the method table in case something gets
+            # added that did not intersect with any existing method
+            add_uncovered_edges!(sv, matches, atype)
         end
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        add_uncovered_edges!(sv, matches, atype)
     end
     return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo()))
 end
