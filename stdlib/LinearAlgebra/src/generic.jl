@@ -606,7 +606,6 @@ norm1(x) = generic_norm1(x)
 norm2(x) = generic_norm2(x)
 normp(x, p) = generic_normp(x, p)
 
-
 """
     norm(A, p::Real=2)
 
@@ -669,11 +668,9 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-Base.@constprop :aggressive function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real)
     isempty(itr) && return float(norm(zero(eltype(itr))))
-    v, s = iterate(itr)
-    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
-        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
+    norm_recursive_check(itr)
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -687,6 +684,17 @@ Base.@constprop :aggressive function norm(itr, p::Real=2)
     else
         normp(itr, p)
     end
+end
+function norm(itr)
+    isempty(itr) && return float(norm(zero(eltype(itr))))
+    norm_recursive_check(itr)
+    norm2(itr)
+end
+function norm_recursive_check(itr)
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
+    return nothing
 end
 
 """
