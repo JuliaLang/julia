@@ -1758,7 +1758,7 @@ function popfirst!(a::Vector)
     if isempty(a)
         _throw_argerror("array must be non-empty")
     end
-    a[1]
+    item = a[1]
     _deletebeg!(a, 1)
     return item
 end
