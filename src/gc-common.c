@@ -540,6 +540,38 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
+JL_DLLEXPORT void *jl_malloc(size_t sz)
+{
+    return jl_gc_counted_malloc(sz);
+}
+
+//_unchecked_calloc does not check for potential overflow of nm*sz
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
+    size_t nmsz = nm*sz;
+    return jl_gc_counted_calloc(nmsz, 1);
+}
+
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+{
+    if (nm > SSIZE_MAX/sz)
+        return NULL;
+    return _unchecked_calloc(nm, sz);
+}
+
+JL_DLLEXPORT void jl_free(void *p)
+{
+    if (p != NULL) {
+        size_t sz = memory_block_usable_size(p, 0);
+        return jl_gc_counted_free_with_size(p, sz);
+    }
+}
+
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+{
+    size_t old = p ? memory_block_usable_size(p, 0) : 0;
+    return jl_gc_counted_realloc_with_old_size(p, old, sz);
+}
+
 // =========================================================================== //
 // Generic Memory
 // =========================================================================== //
@@ -666,6 +698,24 @@ JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 {
     jl_throw(jl_memory_exception);
+}
+
+// Sweeping mtarraylist_buffers:
+// These buffers are made unreachable via `mtarraylist_resizeto` from mtarraylist.c
+// and are freed at the end of GC via jl_gc_sweep_stack_pools_and_mtarraylist_buffers
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
+        if (ptls == NULL) {
+            continue;
+        }
+        small_arraylist_t *buffers = &ptls->lazily_freed_mtarraylist_buffers;
+        void *buf;
+        while ((buf = small_arraylist_pop(buffers)) != NULL) {
+            free(buf);
+        }
+    }
 }
 
 #ifdef __cplusplus
