@@ -1997,6 +1997,12 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
+@nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, m)
+    hasintersect(widenconst(m), Int) || return Bottom
+    return tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+end
+add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
+
 @nospecs function memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
     return memoryref_elemtype(mem)
