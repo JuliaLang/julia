@@ -6,6 +6,12 @@ eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, s
 eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
 eigencopy_oftype(A::Symmetric{<:Complex}, S) = copyto!(similar(parent(A), S), A)
 
+"""
+    default_eigen_alg(A)
+
+Return the default algorithm used to solve the eigensystem `A v = λ v` for a symmetric matrix `A`.
+Defaults to `LinearAlegbra.DivideAndConquer()`, which corresponds to the LAPACK function `LAPACK.syevd!`. 
+"""
 default_eigen_alg(@nospecialize(A)) = DivideAndConquer()
 
 # Eigensolvers for symmetric and Hermitian matrices
