@@ -1619,10 +1619,11 @@ julia> pop!(Dict(1=>2))
 ```
 """
 function pop!(a::Vector)
-    if isempty(a)
+    len = length(a)
+    if len == 0
         _throw_argerror("array must be non-empty")
     end
-    @inbounds item = a[end]
+    item = unsafe_getindex(a, len)
     _deleteend!(a, 1)
     return item
 end
@@ -1758,7 +1759,7 @@ function popfirst!(a::Vector)
     if isempty(a)
         _throw_argerror("array must be non-empty")
     end
-    @inbounds item = a[1]
+    item = unsafe_getindex(a, 1)
     _deletebeg!(a, 1)
     return item
 end
