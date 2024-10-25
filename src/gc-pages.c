@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef MMTK_GC
 #include "gc-common.h"
 #include "gc-stock.h"
 #ifndef _OS_WINDOWS_
@@ -205,3 +206,5 @@ void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 #ifdef __cplusplus
 }
 #endif
+
+#endif // !MMTK_GC

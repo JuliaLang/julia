@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef MMTK_GC
 #include "gc-common.h"
 #include "gc-stock.h"
 #include "gc-alloc-profiler.h"
@@ -3655,61 +3656,6 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 // allocation wrappers that add to gc pressure
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
-{
-    return jl_gc_counted_malloc(sz);
-}
-
-//_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
-    size_t nmsz = nm*sz;
-    return jl_gc_counted_calloc(nmsz, 1);
-}
-
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
-    if (nm > SSIZE_MAX/sz)
-        return NULL;
-    return _unchecked_calloc(nm, sz);
-}
-
-JL_DLLEXPORT void jl_free(void *p)
-{
-    if (p != NULL) {
-        size_t sz = memory_block_usable_size(p, 0);
-        free(p);
-        jl_task_t *ct = jl_get_current_task();
-        if (ct != NULL)
-            jl_batch_accum_free_size(ct->ptls, sz);
-    }
-}
-
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
-{
-    size_t old = p ? memory_block_usable_size(p, 0) : 0;
-    void *data = realloc(p, sz);
-    jl_task_t *ct = jl_get_current_task();
-    if (data != NULL && ct != NULL) {
-        sz = memory_block_usable_size(data, 0);
-        jl_ptls_t ptls = ct->ptls;
-        maybe_collect(ptls);
-        if (!(sz < old))
-            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
-                jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + (sz - old));
-        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.realloc,
-            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.realloc) + 1);
-
-        int64_t diff = sz - old;
-        if (diff < 0) {
-            jl_batch_accum_free_size(ptls, -diff);
-        }
-        else {
-            jl_batch_accum_heap_size(ptls, diff);
-        }
-    }
-    return data;
-}
-
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     void *data = malloc(sz);
@@ -3746,12 +3692,34 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
-    return jl_free(p);
+    free(p);
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL)
+        jl_batch_accum_free_size(ct->ptls, sz);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
-    return jl_realloc(p, sz);
+    void *data = realloc(p, sz);
+    jl_task_t *ct = jl_get_current_task();
+    if (data != NULL && ct != NULL) {
+        sz = memory_block_usable_size(data, 0);
+        jl_ptls_t ptls = ct->ptls;
+        maybe_collect(ptls);
+        if (!(sz < old))
+            jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.allocd,
+                jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.allocd) + (sz - old));
+        jl_atomic_store_relaxed(&ptls->gc_tls_common.gc_num.realloc,
+            jl_atomic_load_relaxed(&ptls->gc_tls_common.gc_num.realloc) + 1);
+        int64_t diff = sz - old;
+        if (diff < 0) {
+            jl_batch_accum_free_size(ptls, -diff);
+        }
+        else {
+            jl_batch_accum_heap_size(ptls, diff);
+        }
+    }
+    return data;
 }
 
 // allocating blocks for Arrays and Strings
@@ -4015,12 +3983,18 @@ JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
     return sizeof(bigval_t);
 }
 
-
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)
 {
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
 }
 
+void jl_gc_notify_image_load(const char* img_data, size_t len)
+{
+    // Do nothing
+}
+
 #ifdef __cplusplus
 }
 #endif
+
+#endif // !MMTK_GC

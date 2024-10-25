@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef MMTK_GC
 #include "gc-page-profiler.h"
 #include "julia.h"
 
@@ -178,3 +179,5 @@ JL_DLLEXPORT void jl_gc_take_page_profile(ios_t *stream)
 #ifdef __cplusplus
 }
 #endif
+
+#endif // !MMTK_GC
