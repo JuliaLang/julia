@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef MMTK_GC
+
 // Meant to be included in "julia_threads.h"
 #ifndef JL_GC_TLS_H
 #define JL_GC_TLS_H
@@ -66,3 +68,5 @@ typedef struct {
 #endif
 
 #endif // JL_GC_TLS_H
+
+#endif // MMTK_GC
