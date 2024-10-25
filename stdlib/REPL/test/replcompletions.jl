@@ -2472,3 +2472,19 @@ let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test res
     @test "pi" ∈ c
 end
+
+# release context once past a qualified name
+for s in ("Base.@time TestInternalBinding", "Base.@time Base.@time TestInternalBinding",
+    "Base.@time(TestInternalBinding", "@time(Base.@time TestInternalBinding", "Base.Base.@time TestInternalBinding")
+    let (c, r, res) = test_complete_context(s; shift=false)
+        @test res
+        @test "TestInternalBindingOnly" ∈ c
+    end
+end
+for s in ("Base.@time TestInternalBindingOnly.bind", "Base.@time Base.@time TestInternalBindingOnly.bind",
+    "Base.@time(TestInternalBindingOnly.bind", "@time(Base.@time TestInternalBindingOnly.bind")
+    let (c, r, res) = test_complete_context(s; shift=false)
+        @test res
+        @test "binding" ∈ c
+    end
+end

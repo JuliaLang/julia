@@ -1120,6 +1120,21 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, pkgstarts
     return suggestions
 end
 
+# Check whether we should still be limiting completions to the scope of the prefix
+# i.e. `Base.@time myvar` should complete to `Base.@time myvariable` because `myvariable`
+# is a valid expression in the active module, but not Base
+function in_scope_of_prefix(string::String, pos::Int, separatorpos::Int)
+    sep = string[separatorpos]
+    sep == ':' && return true # `using Base: foo` etc.
+    sep == '.' || return false
+    pos <= separatorpos && return true
+    after_separator = string[separatorpos+1:pos]
+    isempty(after_separator) && return true
+    startswith(after_separator, "@") || return true
+    # is a macro, so check for space or `(` that signifies the start of the macro call
+    return !any(in((' ', '(')), after_separator)
+end
+
 function complete_identifiers!(suggestions::Vector{Completion},
                                context_module::Module, string::String, name::String,
                                pos::Int, separatorpos::Int, startpos::Int;
@@ -1130,7 +1145,7 @@ function complete_identifiers!(suggestions::Vector{Completion},
         complete_keyword!(suggestions, name)
         complete_keyval!(suggestions, name)
     end
-    if separatorpos > 1 && (string[separatorpos] == '.' || string[separatorpos] == ':')
+    if separatorpos > 1 && in_scope_of_prefix(string, pos, separatorpos)
         s = string[1:prevind(string, separatorpos)]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.
         prefix = Meta.parse(s, raise=false, depwarn=false)
