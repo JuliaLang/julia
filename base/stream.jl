@@ -1100,7 +1100,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     if status < 0
         throw(_UVError("write", status))
     end
-    return Int(n)
+    return n % Int64
 end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
