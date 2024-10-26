@@ -104,6 +104,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // nprocs
                         NULL, // machine_file
                         NULL, // project
+                        NULL, // program_file
                         0,    // isinteractive
                         0,    // color
                         JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -995,6 +996,7 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
+    jl_options.program_file = optind < argc ? strdup(argv[optind]) : "";
     parsing_args_done:
     if (!jl_options.use_experimental_features) {
         if (jl_options.trim != JL_TRIM_NO)
