@@ -255,9 +255,9 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
 ifeq ($(SANITIZE),1)
 ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-1 += libclang_rt.asan
+JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
 else
-JL_PRIVATE_LIBS-1 += libasan
+JL_PRIVATE_LIBS-0 += libasan
 endif
 endif
 
