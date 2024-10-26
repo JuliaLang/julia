@@ -288,7 +288,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             program_file = program_file != C_NULL ? unsafe_string(program_file) : nothing
             isnothing(program_file) && return nothing # User did not pass a script
 
-            # Expand trailing relative path 
+            # Expand trailing relative path
             dir = dirname(program_file)
             dir = env != "@script" ? (dir * env[length("@script")+1:end]) : dir
             return current_project(dir)
