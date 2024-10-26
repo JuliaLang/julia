@@ -169,11 +169,12 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@temp|@.}]                  Set <dir> as the active project/environment.\n"
+    " --project[={<dir>|@temp|@.|@script[<rel>]}]   Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found.\n"
+    "                                               file is found. @script is similar, but searches up from\n"
+    "                                               the programfile or a path relative to programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
