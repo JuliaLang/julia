@@ -569,6 +569,13 @@ displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
+# This is a fancy way to make de-specialize a call to `displaysize(io::IO)`
+# which is unfortunately invalidated by REPL
+#  (https://github.com/JuliaLang/julia/issues/56080)
+#
+# This makes the call less efficient, but avoids being invalidated by REPL.
+displaysize_(io::IO) = Base.invoke_in_world(Base.tls_world_age(), displaysize, io)::Tuple{Int,Int}
+
 function displaysize(io::TTY)
     check_open(io)
 
@@ -934,6 +941,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
+        initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
         newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
@@ -944,7 +952,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread

@@ -398,8 +398,8 @@ Random.seed!(1)
             @test (@inferred diag(T))::typeof(dv) == dv
             @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T, -n - 1)
-            @test_throws ArgumentError diag(T,  n + 1)
+            @test isempty(@inferred diag(T, -n - 1))
+            @test isempty(@inferred diag(T,  n + 1))
             # test diag with another wrapped vector type
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)
@@ -839,6 +839,16 @@ end
         B = Bidiagonal(dv, ev, :U)
         @test B == Matrix{eltype(B)}(B)
     end
+
+    @testset "non-standard axes" begin
+        LinearAlgebra.diagzero(T::Type, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) =
+            zeros(T, ax)
+
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        B = Bidiagonal(fill(s,4), fill(s,3), :U)
+        @test @inferred(B[2,1]) isa typeof(s)
+        @test all(iszero, B[2,1])
+    end
 end
 
 @testset "copyto!" begin
@@ -969,6 +979,19 @@ end
     end
 end
 
+@testset "rmul!/lmul! with numbers" begin
+    for T in (Bidiagonal(rand(4), rand(3), :U), Bidiagonal(rand(4), rand(3), :L))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (Bidiagonal(rand(1), rand(0), :U), Bidiagonal(rand(1), rand(0), :L))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
 @testset "mul with Diagonal" begin
     for n in 0:4
         dv, ev = rand(n), rand(max(n-1,0))
@@ -1024,6 +1047,28 @@ end
 @testset "off-band indexing error" begin
     B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
     @test_throws "cannot set entry" B[1,2] = 4
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    B = Bidiagonal(zeros(0), zeros(0), :U)
+    BL = Bidiagonal(zeros(5), zeros(4), :U)
+    @test size(A * B) == size(A)
+    @test size(BL * A) == size(A)
+    @test size(B * B) == size(B)
+    C = similar(A)
+    @test mul!(C, A, B) == A * B
+    @test mul!(C, BL, A) == BL * A
+    @test mul!(similar(B), B, B) == B * B
+    @test mul!(similar(B, size(B)), B, B) == B * B
+
+    v = zeros(size(B,2))
+    @test size(B * v) == size(v)
+    @test mul!(similar(v), B, v) == B * v
+
+    D = Diagonal(zeros(size(B,2)))
+    @test size(B * D) == size(D * B) == size(D)
+    @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
 end
 
 @testset "mul for small matrices" begin

@@ -308,6 +308,21 @@ function find_package(arg) # ::Union{Nothing,String}
     return locate_package(pkg, env)
 end
 
+# is there a better/faster ground truth?
+function is_stdlib(pkgid::PkgId)
+    pkgid.name in readdir(Sys.STDLIB) || return false
+    stdlib_root = joinpath(Sys.STDLIB, pkgid.name)
+    project_file = locate_project_file(stdlib_root)
+    if project_file isa String
+        d = parsed_toml(project_file)
+        uuid = get(d, "uuid", nothing)
+        if uuid !== nothing
+            return UUID(uuid) == pkgid.uuid
+        end
+    end
+    return false
+end
+
 """
     Base.identify_package_env(name::String)::Union{Tuple{PkgId, String}, Nothing}
     Base.identify_package_env(where::Union{Module,PkgId}, name::String)::Union{Tuple{PkgId, Union{String, Nothing}}, Nothing}
@@ -336,6 +351,12 @@ function identify_package_env(where::PkgId, name::String)
             end
             break # found in implicit environment--return "not found"
         end
+        if pkg_env === nothing && is_stdlib(where)
+            # if not found it could be that manifests are from a different julia version/commit
+            # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
+            # as a fallback
+            pkg_env = identify_stdlib_project_dep(where, name)
+        end
     end
     if cache !== nothing
         cache.identified_where[(where, name)] = pkg_env
@@ -360,6 +381,22 @@ function identify_package_env(name::String)
         cache.identified[name] = pkg_env
     end
     return pkg_env
+end
+
+function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
+    @debug """
+    Stdlib $(repr("text/plain", stdlib)) is trying to load `$depname`
+    which is not listed as a dep in the load path manifests, so resorting to search
+    in the stdlib Project.tomls for true deps"""
+    stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
+    stdlib_projfile === nothing && return nothing
+    found = explicit_project_deps_get(stdlib_projfile, depname)
+    if found !== nothing
+        @debug "$(repr("text/plain", stdlib)) indeed depends on $depname in project $stdlib_projfile"
+        pkgid = PkgId(found, depname)
+        return pkgid, stdlib_projfile
+    end
+    return nothing
 end
 
 _nothing_or_first(x) = x === nothing ? nothing : first(x)
@@ -937,14 +974,14 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
+            # deps is either a list of names (deps = ["DepA", "DepB"]) or
+            # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
+            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
             if UUID(uuid) === where.uuid
                 found_where = true
-                # deps is either a list of names (deps = ["DepA", "DepB"]) or
-                # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-                deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                 if deps isa Vector{String}
                     found_name = name in deps
-                    break
+                    found_name && @goto done
                 elseif deps isa Dict{String, Any}
                     deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
@@ -963,23 +1000,25 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             return PkgId(UUID(uuid), name)
                         end
                         exts = extensions[where.name]::Union{String, Vector{String}}
+                        weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                         if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
-                            weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                            if weakdeps !== nothing
-                                if weakdeps isa Vector{String}
-                                    found_name = name in weakdeps
-                                    break
-                                elseif weakdeps isa Dict{String, Any}
-                                    weakdeps = weakdeps::Dict{String, Any}
-                                    for (dep, uuid) in weakdeps
-                                        uuid::String
-                                        if dep === name
-                                            return PkgId(UUID(uuid), name)
+                            for deps′ in [weakdeps, deps]
+                                    if deps′ !== nothing
+                                        if deps′ isa Vector{String}
+                                            found_name = name in deps′
+                                            found_name && @goto done
+                                        elseif deps′ isa Dict{String, Any}
+                                            deps′ = deps′::Dict{String, Any}
+                                            for (dep, uuid) in deps′
+                                                uuid::String
+                                                if dep === name
+                                                    return PkgId(UUID(uuid), name)
+                                                end
+                                            end
                                         end
                                     end
                                 end
                             end
-                        end
                         # `name` is not an ext, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
@@ -987,6 +1026,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             end
         end
     end
+    @label done
     found_where || return nothing
     found_name || return PkgId(name)
     # Only reach here if deps was not a dict which mean we have a unique name for the dep
@@ -1210,7 +1250,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         else
             io = open(path, "r")
             try
-                iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+                iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
                 _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
                 ignore_native = pkg_tracked(includes)
             finally
@@ -1221,47 +1261,52 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
     try
-    if timing_imports
-        t_before = time_ns()
-        cumulative_compile_timing(true)
-        t_comp_before = cumulative_compile_time_ns()
-    end
-
-    for i in eachindex(depmods)
-        dep = depmods[i]
-        dep isa Module && continue
-        _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
-        dep = loaded_precompiles[depkey => depbuild_id]
-        @assert PkgId(dep) == depkey && module_build_id(dep) === depbuild_id
-        depmods[i] = dep
-    end
-
-    if ocachepath !== nothing
-        @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
-    else
-        @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
-    end
-    if isa(sv, Exception)
-        return sv
-    end
-
-    restored = register_restored_modules(sv, pkg, path)
-
-    for M in restored
-        M = M::Module
-        if parentmodule(M) === M && PkgId(M) == pkg
-            register && register_root_module(M)
-            if timing_imports
-                elapsed_time = time_ns() - t_before
-                comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
-                print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
-            end
-            return M
+        if timing_imports
+            t_before = time_ns()
+            cumulative_compile_timing(true)
+            t_comp_before = cumulative_compile_time_ns()
         end
-    end
-    return ErrorException("Required dependency $(repr("text/plain", pkg)) failed to load from a cache file.")
+
+        for i in eachindex(depmods)
+            dep = depmods[i]
+            dep isa Module && continue
+            _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
+            dep = something(maybe_loaded_precompile(depkey, depbuild_id))
+            @assert PkgId(dep) == depkey && module_build_id(dep) === depbuild_id
+            depmods[i] = dep
+        end
+
+        unlock(require_lock) # temporarily _unlock_ during these operations
+        sv = try
+            if ocachepath !== nothing
+                @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
+                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
+            else
+                @debug "Loading cache file $path for $(repr("text/plain", pkg))"
+                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
+            end
+        finally
+            lock(require_lock)
+        end
+        if isa(sv, Exception)
+            return sv
+        end
+
+        restored = register_restored_modules(sv, pkg, path)
+
+        for M in restored
+            M = M::Module
+            if parentmodule(M) === M && PkgId(M) == pkg
+                register && register_root_module(M)
+                if timing_imports
+                    elapsed_time = time_ns() - t_before
+                    comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
+                    print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
+                end
+                return M
+            end
+        end
+        return ErrorException("Required dependency $(repr("text/plain", pkg)) failed to load from a cache file.")
 
     finally
         timing_imports && cumulative_compile_timing(false)
@@ -1337,6 +1382,7 @@ end
 
 function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     # This function is also used by PkgCacheInspector.jl
+    assert_havelock(require_lock)
     restored = sv[1]::Vector{Any}
     for M in restored
         M = M::Module
@@ -1345,7 +1391,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
         end
         if parentmodule(M) === M
             push!(loaded_modules_order, M)
-            loaded_precompiles[pkg => module_build_id(M)] = M
+            push!(get!(Vector{Module}, loaded_precompiles, pkg), M)
         end
     end
 
@@ -1387,7 +1433,9 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    run_extension_callbacks(modkey)
+    if !precompiling_extension
+        run_extension_callbacks(modkey)
+    end
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1514,7 +1562,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1642,6 +1690,8 @@ function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
         opt_level === nothing ? cf.opt_level : opt_level
     )
 end
+# reflecting jloptions.c defaults
+const DefaultCacheFlags = CacheFlags(use_pkgimages=true, debug_level=isdebugbuild() ? 2 : 1, check_bounds=0, inline=true, opt_level=2)
 
 function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     f = UInt8(0)
@@ -1653,12 +1703,29 @@ function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     return f
 end
 
+function translate_cache_flags(cacheflags::CacheFlags, defaultflags::CacheFlags)
+    opts = String[]
+    cacheflags.use_pkgimages    != defaultflags.use_pkgimages   && push!(opts, cacheflags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no")
+    cacheflags.debug_level      != defaultflags.debug_level     && push!(opts, "-g$(cacheflags.debug_level)")
+    cacheflags.check_bounds     != defaultflags.check_bounds    && push!(opts, ("--check-bounds=auto", "--check-bounds=yes", "--check-bounds=no")[cacheflags.check_bounds + 1])
+    cacheflags.inline           != defaultflags.inline          && push!(opts, cacheflags.inline ? "--inline=yes" : "--inline=no")
+    cacheflags.opt_level        != defaultflags.opt_level       && push!(opts, "-O$(cacheflags.opt_level)")
+    return opts
+end
+
 function show(io::IO, cf::CacheFlags)
-    print(io, "use_pkgimages = ", cf.use_pkgimages)
-    print(io, ", debug_level = ", cf.debug_level)
-    print(io, ", check_bounds = ", cf.check_bounds)
-    print(io, ", inline = ", cf.inline)
-    print(io, ", opt_level = ", cf.opt_level)
+    print(io, "CacheFlags(")
+    print(io, "; use_pkgimages=")
+    print(io, cf.use_pkgimages)
+    print(io, ", debug_level=")
+    print(io, cf.debug_level)
+    print(io, ", check_bounds=")
+    print(io, cf.check_bounds)
+    print(io, ", inline=")
+    print(io, cf.inline)
+    print(io, ", opt_level=")
+    print(io, cf.opt_level)
+    print(io, ")")
 end
 
 struct ImageTarget
@@ -1827,7 +1894,7 @@ function isrelocatable(pkg::PkgId)
     isnothing(path) && return false
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
         for inc in includes
             !startswith(inc.filename, "@depot") && return false
@@ -1902,7 +1969,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     io = open(path, "r")
     ignore_native = false
     try
-        iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+        iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
         _, (includes, _, _), depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
 
         ignore_native = pkg_tracked(includes)
@@ -1942,90 +2009,130 @@ end
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg, DEPOT_PATH)
     newdeps = PkgId[]
-    for path_to_try in paths::Vector{String}
-        staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; reasons, stalecheck)
-        if staledeps === true
-            continue
+    try_build_ids = UInt128[build_id]
+    if build_id == UInt128(0)
+        let loaded = get(loaded_precompiles, pkg, nothing)
+            if loaded !== nothing
+                for mod in loaded # try these in reverse original load order to see if one is already valid
+                    pushfirst!(try_build_ids, module_build_id(mod))
+                end
+            end
         end
-        try
+    end
+    for build_id in try_build_ids
+        for path_to_try in paths::Vector{String}
+            staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; reasons, stalecheck)
+            if staledeps === true
+                continue
+            end
             staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-            # finish checking staledeps module graph
-            for i in eachindex(staledeps)
-                dep = staledeps[i]
-                dep isa Module && continue
-                modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
-                modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
-                for modpath_to_try in modpaths
-                    modstaledeps = stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; stalecheck)
-                    if modstaledeps === true
-                        continue
-                    end
-                    modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
-                    staledeps[i] = (modpath, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
-                    @goto check_next_dep
-                end
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
-                @goto check_next_path
-                @label check_next_dep
-            end
-            M = get(loaded_precompiles, pkg => newbuild_id, nothing)
-            if isa(M, Module)
-                stalecheck && register_root_module(M)
-                return M
-            end
-            if stalecheck
-                try
-                    touch(path_to_try) # update timestamp of precompilation file
-                catch ex # file might be read-only and then we fail to update timestamp, which is fine
-                    ex isa IOError || rethrow()
-                end
-            end
-            # finish loading module graph into staledeps
-            # TODO: call all start_loading calls (in reverse order) before calling any _include_from_serialized, since start_loading will drop the loading lock
-            for i in eachindex(staledeps)
-                dep = staledeps[i]
-                dep isa Module && continue
-                modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
-                dep = start_loading(modkey, modbuild_id, stalecheck)
-                while true
-                    if dep isa Module
-                        if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
-                            break
-                        else
-                            @debug "Rejecting cache file $path_to_try because module $modkey got loaded at a different version than expected."
-                            @goto check_next_path
+            startedloading = length(staledeps) + 1
+            try # any exit from here (goto, break, continue, return) will end_loading
+                # finish checking staledeps module graph, while acquiring all start_loading locks
+                # so that concurrent require calls won't make any different decisions that might conflict with the decisions here
+                # note that start_loading will drop the loading lock if necessary
+                let i = 0
+                    # start_loading here has a deadlock problem if we try to load `A,B,C` and `B,A,D` at the same time:
+                    # it will claim A,B have a cycle, but really they just have an ambiguous order and need to be batch-acquired rather than singly
+                    # solve that by making sure we can start_loading everything before allocating each of those and doing all the stale checks
+                    while i < length(staledeps)
+                        i += 1
+                        dep = staledeps[i]
+                        dep isa Module && continue
+                        _, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+                        dep = canstart_loading(modkey, modbuild_id, stalecheck)
+                        if dep isa Module
+                            if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
+                                staledeps[i] = dep
+                                continue
+                            else
+                                @debug "Rejecting cache file $path_to_try because module $modkey got loaded at a different version than expected."
+                                @goto check_next_path
+                            end
+                            continue
+                        elseif dep === nothing
+                            continue
                         end
-                    end
-                    if dep === nothing
-                        try
-                            set_pkgorigin_version_path(modkey, modpath)
-                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
-                        finally
-                            end_loading(modkey, dep)
-                        end
-                        if !isa(dep, Module)
-                            @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
-                            @goto check_next_path
-                        else
-                            push!(newdeps, modkey)
-                        end
+                        wait(dep) # releases require_lock, so requires restarting this loop
+                        i = 0
                     end
                 end
-                staledeps[i] = dep
+                for i in reverse(eachindex(staledeps))
+                    dep = staledeps[i]
+                    dep isa Module && continue
+                    modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
+                    # inline a call to start_loading here
+                    @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
+                    package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+                    startedloading = i
+                    modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
+                    for modpath_to_try in modpaths
+                        modstaledeps = stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try; stalecheck)
+                        if modstaledeps === true
+                            continue
+                        end
+                        modstaledeps, modocachepath, _ = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+                        staledeps[i] = (modpath, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
+                        @goto check_next_dep
+                    end
+                    @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
+                    @goto check_next_path
+                    @label check_next_dep
+                end
+                M = maybe_loaded_precompile(pkg, newbuild_id)
+                if isa(M, Module)
+                    stalecheck && register_root_module(M)
+                    return M
+                end
+                if stalecheck
+                    try
+                        touch(path_to_try) # update timestamp of precompilation file
+                    catch ex # file might be read-only and then we fail to update timestamp, which is fine
+                        ex isa IOError || rethrow()
+                    end
+                end
+                # finish loading module graph into staledeps
+                # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
+                for i in eachindex(staledeps)
+                    dep = staledeps[i]
+                    dep isa Module && continue
+                    modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                    set_pkgorigin_version_path(modkey, modpath)
+                    dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
+                    if !isa(dep, Module)
+                        @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
+                        @goto check_next_path
+                    else
+                        startedloading = i + 1
+                        end_loading(modkey, dep)
+                        staledeps[i] = dep
+                        push!(newdeps, modkey)
+                    end
+                end
+                restored = maybe_loaded_precompile(pkg, newbuild_id)
+                if !isa(restored, Module)
+                    restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
+                end
+                isa(restored, Module) && return restored
+                @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
+                @label check_next_path
+            finally
+                # cancel all start_loading locks that were taken but not fulfilled before failing
+                for i in startedloading:length(staledeps)
+                    dep = staledeps[i]
+                    dep isa Module && continue
+                    if dep isa Tuple{String, PkgId, UInt128}
+                        _, modkey, _ = dep
+                    else
+                        _, modkey, _ = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+                    end
+                    end_loading(modkey, nothing)
+                end
+                for modkey in newdeps
+                    insert_extension_triggers(modkey)
+                    stalecheck && run_package_callbacks(modkey)
+                end
             end
-            restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
-            if !isa(restored, Module)
-                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
-            end
-            isa(restored, Module) && return restored
-            @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
-            @label check_next_path
-        finally
-            for modkey in newdeps
-                insert_extension_triggers(modkey)
-                stalecheck && run_package_callbacks(modkey)
-            end
-            empty!(newdeps)
         end
     end
     return nothing
@@ -2037,65 +2144,76 @@ const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
 debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
                                # This only triggers if you have multiple tasks trying to load the same package at the same time,
                                # so it is unlikely to make a performance difference normally.
+
+function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
+    assert_havelock(require_lock)
+    require_lock.reentrancy_cnt == 1 || throw(ConcurrencyViolationError("recursive call to start_loading"))
+    loaded = stalecheck ? maybe_root_module(modkey) : nothing
+    loaded isa Module && return loaded
+    if build_id != UInt128(0)
+        loaded = maybe_loaded_precompile(modkey, build_id)
+        loaded isa Module && return loaded
+    end
+    loading = get(package_locks, modkey, nothing)
+    loading === nothing && return nothing
+    # load already in progress for this module on the task
+    task, cond = loading
+    deps = String[modkey.name]
+    pkgid = modkey
+    assert_havelock(cond.lock)
+    if debug_loading_deadlocks && current_task() !== task
+        waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
+        for each in package_locks
+            cond2 = each[2][2]
+            assert_havelock(cond2.lock)
+            for waiting in cond2.waitq
+                push!(waiters, waiting => (each[2][1] => each[1]))
+            end
+        end
+        while true
+            running = get(waiters, task, nothing)
+            running === nothing && break
+            task, pkgid = running
+            push!(deps, pkgid.name)
+            task === current_task() && break
+        end
+    end
+    if current_task() === task
+        others = String[modkey.name] # repeat this to emphasize the cycle here
+        for each in package_locks # list the rest of the packages being loaded too
+            if each[2][1] === task
+                other = each[1].name
+                other == modkey.name || other == pkgid.name || push!(others, other)
+            end
+        end
+        msg = sprint(deps, others) do io, deps, others
+            print(io, "deadlock detected in loading ")
+            join(io, deps, " -> ")
+            print(io, " -> ")
+            join(io, others, " && ")
+        end
+        throw(ConcurrencyViolationError(msg))
+    end
+    return cond
+end
+
 function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # handle recursive and concurrent calls to require
-    assert_havelock(require_lock)
     while true
-        loaded = stalecheck ? maybe_root_module(modkey) : nothing
-        loaded isa Module && return loaded
-        if build_id != UInt128(0)
-            loaded = get(loaded_precompiles, modkey => build_id, nothing)
-            loaded isa Module && return loaded
-        end
-        loading = get(package_locks, modkey, nothing)
-        if loading === nothing
+        loaded = canstart_loading(modkey, build_id, stalecheck)
+        if loaded === nothing
             package_locks[modkey] = current_task() => Threads.Condition(require_lock)
             return nothing
+        elseif loaded isa Module
+            return loaded
         end
-        # load already in progress for this module on the task
-        task, cond = loading
-        deps = String[modkey.name]
-        pkgid = modkey
-        assert_havelock(cond.lock)
-        if debug_loading_deadlocks && current_task() !== task
-            waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
-            for each in package_locks
-                cond2 = each[2][2]
-                assert_havelock(cond2.lock)
-                for waiting in cond2.waitq
-                    push!(waiters, waiting => (each[2][1] => each[1]))
-                end
-            end
-            while true
-                running = get(waiters, task, nothing)
-                running === nothing && break
-                task, pkgid = running
-                push!(deps, pkgid.name)
-                task === current_task() && break
-            end
-        end
-        if current_task() === task
-            others = String[modkey.name] # repeat this to emphasize the cycle here
-            for each in package_locks # list the rest of the packages being loaded too
-                if each[2][1] === task
-                    other = each[1].name
-                    other == modkey.name || other == pkgid.name || push!(others, other)
-                end
-            end
-            msg = sprint(deps, others) do io, deps, others
-                print(io, "deadlock detected in loading ")
-                join(io, deps, " -> ")
-                print(io, " -> ")
-                join(io, others, " && ")
-            end
-            throw(ConcurrencyViolationError(msg))
-        end
-        loaded = wait(cond)
+        loaded = wait(loaded)
         loaded isa Module && return loaded
     end
 end
 
 function end_loading(modkey::PkgId, @nospecialize loaded)
+    assert_havelock(require_lock)
     loading = pop!(package_locks, modkey)
     notify(loading[2], loaded, all=true)
     nothing
@@ -2223,6 +2341,10 @@ function require(into::Module, mod::Symbol)
 end
 
 function __require(into::Module, mod::Symbol)
+    if into === Base.__toplevel__ && generating_output(#=incremental=#true)
+        error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
+         is not allowed during package precompilation.")
+    end
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
@@ -2352,9 +2474,8 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-    elseif !haskey(explicit_loaded_modules, uuidkey)
-        explicit_loaded_modules[uuidkey] = m
-        run_package_callbacks(uuidkey)
+    else
+        newm = root_module(uuidkey)
     end
     return m
 end
@@ -2367,13 +2488,22 @@ end
 PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
-const explicit_loaded_modules = Dict{PkgId,Module}() # Emptied on Julia start
 const loaded_modules = Dict{PkgId,Module}() # available to be explicitly loaded
-const loaded_precompiles = Dict{Pair{PkgId,UInt128},Module}() # extended (complete) list of modules, available to be loaded
+const loaded_precompiles = Dict{PkgId,Vector{Module}}() # extended (complete) list of modules, available to be loaded
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse of loaded_modules
 
 root_module_key(m::Module) = @lock require_lock module_keys[m]
+
+function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
+    @lock require_lock begin
+    mods = get(loaded_precompiles, key, nothing)
+    mods === nothing && return
+    for mod in mods
+        module_build_id(mod) == buildid && return mod
+    end
+    end
+end
 
 function module_build_id(m::Module)
     hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
@@ -2395,9 +2525,8 @@ end
             end
         end
     end
-    haskey(loaded_precompiles, key => module_build_id(m)) || push!(loaded_modules_order, m)
+    maybe_loaded_precompile(key, module_build_id(m)) === nothing && push!(loaded_modules_order, m)
     loaded_modules[key] = m
-    explicit_loaded_modules[key] = m
     module_keys[m] = key
     end
     nothing
@@ -2429,9 +2558,6 @@ loaded_modules_array() = @lock require_lock copy(loaded_modules_order)
 # after unreference_module, a subsequent require call will try to load a new copy of it, if stale
 # reload(m) = (unreference_module(m); require(m))
 function unreference_module(key::PkgId)
-    if haskey(explicit_loaded_modules, key)
-        m = pop!(explicit_loaded_modules, key)
-    end
     if haskey(loaded_modules, key)
         m = pop!(loaded_modules, key)
         # need to ensure all modules are GC rooted; will still be referenced
@@ -2567,6 +2693,7 @@ function _require(pkg::PkgId, env=nothing)
 end
 
 # load a serialized file directly, including dependencies (without checking staleness except for immediate conflicts)
+# this does not call start_loading / end_loading, so can lead to some odd behaviors
 function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Union{String, Nothing}, sourcepath::String)
     @lock require_lock begin
     set_pkgorigin_version_path(uuidkey, sourcepath)
@@ -2580,7 +2707,51 @@ function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Unio
 end
 
 # load a serialized file directly from append_bundled_depot_path for uuidkey without stalechecks
+"""
+    require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
+
+!!! warning "May load duplicate copies of stdlib packages."
+
+    This requires that all stdlib packages loaded are compatible with having concurrent
+    copies of themselves loaded into memory. It also places additional restrictions on
+    the kinds of type-piracy that are allowed in stdlibs, since type-piracy can cause the
+    dispatch table to become visibly "torn" across multiple different packages.
+
+    The specific requirements are:
+
+      The import side (caller of `require_stdlib`) must not leak any stdlib types, esp.
+      to any context that may have a conflicting copy of the stdlib(s) (or vice-versa).
+         - e.g., if an output is forwarded to user code, it must contain only Base types.
+         - e.g., if an output contains types from the stdlib, it must be consumed "internally"
+                 before reaching user code.
+
+      The imported code (loaded stdlibs) must be very careful about type piracy:
+         - It must not access any global state that may differ between stdlib copies in
+           type-pirated methods.
+         - It must not return any stdlib types from any type-pirated public methods (since
+           a loaded duplicate would overwrite the Base method again, returning different
+           types that don't correspond to the user-accessible copy of the stdlib).
+         - It must not pass / discriminate stdlib types in type-pirated methods, except
+           indirectly via methods defined in Base and implemented (w/o type-piracy) in
+           all copies of the stdlib over their respective types.
+
+      The idea behind the above restrictions is that any type-pirated methods in the stdlib
+      must return a result that is simultaneously correct for all of the stdlib's loaded
+      copies, including accounting for global state differences and split type identities.
+
+      Furthermore, any imported code must not leak any stdlib types to globals and containers
+      (e.g. Vectors and mutable structs) in upstream Modules, since this will also lead to
+      type-confusion when the type is later pulled out in user / stdlib code.
+
+    For examples of issues like the above, see:
+      [1] https://github.com/JuliaLang/Pkg.jl/issues/4017#issuecomment-2377589989
+      [2] https://github.com/JuliaLang/StyledStrings.jl/issues/91#issuecomment-2379602914
+"""
 function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
+    if generating_output(#=incremental=#true)
+        # Otherwise this would lead to awkward dependency issues by loading a package that isn't in the Project/Manifest
+        error("This interactive function requires a stdlib to be loaded, and package code should instead use it directly from that stdlib.")
+    end
     @lock require_lock begin
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
@@ -2763,12 +2934,12 @@ julia> rm("testfile.jl")
 ```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
-    return Core.eval(Module(:__anon__),
+    m = Module(:__anon__)
+    return Core.eval(m,
         Expr(:toplevel,
              :(const ARGS = $args),
-             :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
-             :(include(x) = $(Expr(:top, :include))(__anon__, x)),
-             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, __anon__, x)),
+             :(const include = $(Base.IncludeInto(m))),
+             :(const eval = $(Core.EvalInto(m))),
              :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
@@ -2792,40 +2963,12 @@ function load_path_setup_code(load_path::Bool=true)
     return code
 end
 
-"""
-    check_src_module_wrap(srcpath::String)
-
-Checks that a package entry file `srcpath` has a module declaration, and that it is before any using/import statements.
-"""
-function check_src_module_wrap(pkg::PkgId, srcpath::String)
-    module_rgx = r"^(|end |\"\"\" )\s*(?:@)*(?:bare)?module\s"
-    load_rgx = r"\b(?:using|import)\s"
-    load_seen = false
-    inside_string = false
-    for s in eachline(srcpath)
-        if count("\"\"\"", s) == 1
-            # ignore module docstrings
-            inside_string = !inside_string
-        end
-        inside_string && continue
-        if contains(s, module_rgx)
-            if load_seen
-                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
-            end
-            return true
-        end
-        if startswith(s, load_rgx)
-            load_seen = true
-        end
-    end
-    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
-end
+# Const global for GC root
+const newly_inferred = CodeInstance[]
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
-
-    check_src_module_wrap(pkg, input)
 
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
@@ -2842,8 +2985,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
-    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
-    Core.Compiler.track_newly_inferred.x = true
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -2851,13 +2993,30 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
-        Core.Compiler.track_newly_inferred.x = false
+        ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
+    # check that the package defined the expected module so we can give a nice error message if not
+    Base.check_package_module_loaded(pkg)
+
+    # Re-populate the runtime's newly-inferred array, which will be included
+    # in the output. We removed it above to avoid including any code we may
+    # have compiled for error handling and validation.
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+end
+
+function check_package_module_loaded(pkg::PkgId)
+    if !haskey(Base.loaded_modules, pkg)
+        # match compilecache error type for non-125 errors
+        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
+            check for typos in package module name")
+    end
+    return nothing
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
+                           internal_stderr::IO = stderr, internal_stdout::IO = stdout, isext::Bool=false)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2900,24 +3059,29 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     precomp_stack = "Base.PkgId[$(join(map(pkg_str, vcat(Base.precompilation_stack, pkg)), ", "))]"
 
+    if output_o === nothing
+        # remove options that make no difference given the other cache options
+        cacheflags = CacheFlags(cacheflags, opt_level=0)
+    end
+    opts = translate_cache_flags(cacheflags, CacheFlags()) # julia_cmd is generated for the running system, and must be fixed if running for precompile instead
     if output_o !== nothing
         @debug "Generating object cache file for $(repr("text/plain", pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
-        opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+        push!(opts, "--output-o", output_o)
     else
         @debug "Generating cache file for $(repr("text/plain", pkg))"
         cpu_target = nothing
-        opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
+    push!(opts, "--output-ji", output)
+    isassigned(PRECOMPILE_TRACE_COMPILE) && push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
 
-    trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[]) --trace-compile-timing` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
-                             $(flags)
-                             $(opts)
-                              --startup-file=no --history-file=no --warn-overwrite=yes
-                              --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                              $trace
-                              -`,
+                               $(flags)
+                               $(opts)
+                               --output-incremental=yes
+                               --startup-file=no --history-file=no --warn-overwrite=yes
+                               $(have_color === nothing ? "--color=auto" : have_color ? "--color=yes" : "--color=no")
+                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
@@ -2926,7 +3090,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
-        Base.precompiling_extension = $(loading_extension)
+        Base.precompiling_extension = $(loading_extension | isext)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
@@ -2983,18 +3147,18 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons, isext)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
-                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3003,7 +3167,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # build up the list of modules that we want the precompile process to preserve
     if keep_loaded_modules
         concrete_deps = copy(_concrete_dependencies)
-        for (pkgreq, modreq) in loaded_modules # TODO: convert all relevant staleness heuristics to use explicit_loaded_modules instead
+        for (pkgreq, modreq) in loaded_modules
             if !(pkgreq === Main || pkgreq === Core || pkgreq === Base)
                 push!(concrete_deps, pkgreq => module_build_id(modreq))
             end
@@ -3034,7 +3198,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, internal_stderr, internal_stdout)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, isext)
 
         if success(p)
             if cache_objects
@@ -3057,7 +3221,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if iszero(isvalid_cache_header(f))
-                    error("Invalid header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
+                    error("Incompatible header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
                 write(f, crc_so)
@@ -3176,21 +3340,27 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-function replace_depot_path(path::AbstractString)
-    for depot in DEPOT_PATH
-        !isdir(depot) && continue
-
-        # Strip extraneous pathseps through normalization.
-        if isdirpath(depot)
-            depot = dirname(depot)
-        end
-
-        if startswith(path, depot)
+function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    for depot in depots
+        if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
             path = replace(path, depot => "@depot"; count=1)
             break
         end
     end
     return path
+end
+
+function normalize_depots_for_relocation()
+    depots = String[]
+    sizehint!(depots, length(DEPOT_PATH))
+    for d in DEPOT_PATH
+        isdir(d) || continue
+        if isdirpath(d)
+            d = dirname(d)
+        end
+        push!(depots, abspath(d))
+    end
+    return depots
 end
 
 function restore_depot_path(path::AbstractString, depot::AbstractString)
@@ -3375,7 +3545,7 @@ end
 function parse_cache_header(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         ret = parse_cache_header(io, cachefile)
         return ret
     finally
@@ -3388,7 +3558,7 @@ function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
     try
         if iszero(isvalid_cache_header(io))
-            throw(ArgumentError("Invalid header in cache file $cachefile."))
+            throw(ArgumentError("Incompatible header in cache file $cachefile."))
         end
         return preferences_hash(io, cachefile)
     finally
@@ -3404,7 +3574,7 @@ end
 function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return cache_dependencies(io, cachefile)
     finally
         close(io)
@@ -3444,7 +3614,7 @@ end
 function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
-        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Incompatible header in cache file $cachefile."))
         return read_dependency_src(io, cachefile, filename)
     finally
         close(io)
@@ -3728,9 +3898,9 @@ end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
-            @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
-            record_reason(reasons, "invalid header")
-            return true # invalid cache file
+            @debug "Rejecting cache file $cachefile due to it containing an incompatible cache header"
+            record_reason(reasons, "incompatible header")
+            return true # incompatible cache file
         end
         modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, actual_flags = parse_cache_header(io, cachefile)
         if isempty(modules)
@@ -3794,8 +3964,8 @@ end
         for i in 1:ndeps
             req_key, req_build_id = required_modules[i]
             # Check if module is already loaded
-            if !stalecheck && haskey(loaded_precompiles, req_key => req_build_id)
-                M = loaded_precompiles[req_key => req_build_id]
+            M = stalecheck ? nothing : maybe_loaded_precompile(req_key, req_build_id)
+            if M !== nothing
                 @assert PkgId(M) == req_key && module_build_id(M) === req_build_id
                 depmods[i] = M
             elseif root_module_exists(req_key)
@@ -3847,10 +4017,17 @@ end
 
         # now check if this file's content hash has changed relative to its source files
         if stalecheck
-            if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
-                record_reason(reasons, "wrong source")
-                return true # cache file was compiled from a different path
+            if !samefile(includes[1].filename, modpath)
+                # In certain cases the path rewritten by `fixup_stdlib_path` may
+                # point to an unreadable directory, make sure we can `stat` the
+                # file before comparing it with `modpath`.
+                stdlib_path = fixup_stdlib_path(includes[1].filename)
+                if !(isreadable(stdlib_path) && samefile(stdlib_path, modpath))
+                    !samefile(fixup_stdlib_path(includes[1].filename), modpath)
+                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
+                    record_reason(reasons, "wrong source")
+                    return true # cache file was compiled from a different path
+                end
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
@@ -4026,5 +4203,5 @@ end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing)) || @assert false
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
-precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false
-precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, CacheFlags, IO, IO)) || @assert false

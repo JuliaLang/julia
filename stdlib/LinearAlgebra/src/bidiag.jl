@@ -118,18 +118,6 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
-function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
-    Tel = eltype(eltype(A.dv))
-    if i < j && A.uplo == 'U' #= top right zeros =#
-        return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
-    elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return zeros(Tel, size(A.ev[i-1], 1), size(A.ev[j], 2))
-    else
-        return zeros(Tel, size(A.dv[i], 1), size(A.dv[j], 2))
-    end
-end
-
 _offdiagind(uplo) = uplo == 'U' ? 1 : -1
 
 @inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
@@ -161,18 +149,19 @@ end
     elseif i == j - _offdiagind(A.uplo)
         return @inbounds A.ev[A.uplo == 'U' ? i : j]
     else
-        return bidiagzero(A, i, j)
+        return diagzero(A, i, j)
     end
 end
 
 @inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
-    @boundscheck checkbounds(A, _cartinds(b))
+    @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.dv[b.index]
-    elseif b.band == _offdiagind(A.uplo)
+    elseif b.band ∈ (-1,1) && b.band == _offdiagind(A.uplo)
+        # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
-        return bidiagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, Tuple(_cartinds(b))...)
     end
 end
 
@@ -401,23 +390,20 @@ function triu!(M::Bidiagonal{T}, k::Integer=0) where T
     return M
 end
 
-function diag(M::Bidiagonal{T}, n::Integer=0) where T
+function diag(M::Bidiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
+        copyto!(v, M.dv)
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
-        return copyto!(similar(M.ev, length(M.ev)), M.ev)
+        copyto!(v, M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        v = similar(M.dv, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
+    return v
 end
 
 function +(A::Bidiagonal, B::Bidiagonal)
@@ -441,6 +427,32 @@ end
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev,A.uplo)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.uplo)
 *(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
+function rmul!(B::Bidiagonal, x::Number)
+    if size(B,1) > 1
+        isupper = B.uplo == 'U'
+        row, col = 1 + isupper, 1 + !isupper
+        # ensure that zeros are preserved on scaling
+        y = B[row,col] * x
+        iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv *= x
+    @. B.ev *= x
+    return B
+end
+function lmul!(x::Number, B::Bidiagonal)
+    if size(B,1) > 1
+        isupper = B.uplo == 'U'
+        row, col = 1 + isupper, 1 + !isupper
+        # ensure that zeros are preserved on scaling
+        y = x * B[row,col]
+        iszero(y) || throw(ArgumentError(LazyString(lazy"cannot set index ($row, $col) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. B.dv = x * B.dv
+    @. B.ev = x * B.ev
+    return B
+end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
 \(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
@@ -578,18 +590,18 @@ function _bibimul!(C, A, B, _add)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    if n <= 3
-        # naive multiplication
-        for I in CartesianIndices(C)
-            _modify!(_add, sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)), C, I)
-        end
-        return C
-    end
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
     _rmul_or_fill!(C, _add.beta)
     iszero(_add.alpha) && return C
+    if n <= 3
+        # naive multiplication
+        for I in CartesianIndices(C)
+            C[I] += _add(sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)))
+        end
+        return C
+    end
     @inbounds begin
         # first column of C
         C[1,1] += _add(A[1,1]*B[1,1] + A[1, 2]*B[2,1])
@@ -1000,8 +1012,7 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     m = size(B,2)
-    (iszero(m) || iszero(n)) && return C
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    (iszero(_add.alpha) || iszero(m)) && return _rmul_or_fill!(C, _add.beta)
     if m == 1
         B11 = B[1,1]
         return mul!(C, A, B11, _add.alpha, _add.beta)
@@ -1065,14 +1076,17 @@ function _dibimul!(C, A, B, _add)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
+    # ensure that we fill off-band elements in the destination
+    _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return C
     if n <= 3
+        # For simplicity, use a naive multiplication for small matrices
+        # that loops over all elements.
         for I in CartesianIndices(C)
-            _modify!(_add, A.diag[I[1]] * B[I[1], I[2]], C, I)
+            C[I] += _add(A.diag[I[1]] * B[I[1], I[2]])
         end
         return C
     end
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -1106,7 +1120,8 @@ function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    # ensure that we fill off-band elements in the destination
+    _rmul_or_fill!(C, _add.beta)
     iszero(_add.alpha) && return C
     Ad = A.diag
     Bdv, Bev = B.dv, B.ev

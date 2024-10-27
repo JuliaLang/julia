@@ -3977,7 +3977,10 @@ f(x) = yt(x)
                  (val (if (equal? typ '(core Any))
                           val
                           `(call (core typeassert) ,val
-                                 ,(cl-convert typ fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))))
+                                 ,(let ((convt (cl-convert typ fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                                    (if (or (symbol-like? convt) (quoted? convt))
+                                        convt
+                                        (renumber-assigned-ssavalues convt)))))))
             `(block
                ,@(if (eq? box access) '() `((= ,access ,box)))
                ,undefcheck
@@ -4243,7 +4246,7 @@ f(x) = yt(x)
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
-                                                                `(call (core typeof) ,ve)))
+                                                                `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
                                       type-name
@@ -4851,10 +4854,14 @@ f(x) = yt(x)
                  ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
                  (if finally
-                     (begin (enter-finally-block catchcode #f) ;; enter block via exception
+                     (begin (set! finally-handler last-finally-handler)
+                            (set! catch-token-stack (cons handler-token catch-token-stack))
+                            (compile (caddr e) break-labels #f #f) ;; enter block via exception
+                            (emit '(call (top rethrow)))
+                            (emit-return tail '(null)) ; unreachable
+                            (set! catch-token-stack (cdr catch-token-stack))
                             (mark-label endl) ;; non-exceptional control flow enters here
-                            (set! finally-handler last-finally-handler)
-                            (compile (caddr e) break-labels #f #f)
+                            (compile (renumber-assigned-ssavalues (caddr e)) break-labels #f #f)
                             ;; emit actions to be taken at exit of finally
                             ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))
@@ -4997,6 +5004,10 @@ f(x) = yt(x)
             ;; unsupported assignment operators
             ((≔ ⩴ ≕ :=)
              (error (string "unsupported assignment operator \"" (deparse (car e)) "\"")))
+
+            ;; bare :escape
+            ((escape)
+             (error (string "\"esc(...)\" used outside of macro expansion")))
 
             ((error)
              (error (cadr e)))

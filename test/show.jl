@@ -928,19 +928,19 @@ end
 # string show with elision
 @testset "string show with elision" begin
     @testset "elision logic" begin
-        strs = ["A", "∀", "∀A", "A∀", "😃"]
+        strs = ["A", "∀", "∀A", "A∀", "😃", "x̂"]
         for limit = 0:100, len = 0:100, str in strs
             str = str^len
             str = str[1:nextind(str, 0, len)]
             out = sprint() do io
                 show(io, MIME"text/plain"(), str; limit)
             end
-            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
+            lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
+            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
-                @test limit-!isascii(str) <= length(out) <= limit
+                @test limit-2 <= textwidth(out) <= limit
                 re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
                 m = match(re, out)
                 head = eval(Meta.parse(m.captures[1]))
@@ -956,11 +956,11 @@ end
 
     @testset "default elision limit" begin
         r = replstr("x"^1000)
-        @test length(r) == 7*80
-        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        @test length(r) == 7*80-1
+        @test r == repr("x"^270) * " ⋯ 460 bytes ⋯ " * repr("x"^270)
         r = replstr(["x"^1000])
         @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+        @test r == "1-element Vector{String}:\n " * repr("x"^30) * " ⋯ 940 bytes ⋯ " * repr("x"^30)
     end
 end
 
@@ -2772,4 +2772,22 @@ end
 @testset "show(<do-block expr>) no trailing whitespace" begin
     do_expr1 = :(foo() do; bar(); end)
     @test !contains(sprint(show, do_expr1), " \n")
+end
+
+struct NoLengthDict{K,V} <: AbstractDict{K,V}
+    dict::Dict{K,V}
+    NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
+end
+Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
+Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
+Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
+Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
+
+# Issue 55931
+@testset "show AbstractDict with unknown length" begin
+    x = NoLengthDict{Int,Int}()
+    x[1] = 2
+    str = sprint(io->show(io, MIME("text/plain"), x))
+    @test contains(str, "NoLengthDict")
+    @test contains(str, "1 => 2")
 end

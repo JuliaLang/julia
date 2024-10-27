@@ -82,7 +82,7 @@ julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia
 julia-stdlib: | $(DIRS) julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
 
-julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac.jl $(build_datarootdir)/julia/juliac-buildscript.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -181,7 +181,7 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 	@echo Creating usr/etc/julia/startup.jl
 	@cp $< $@
 
-$(build_datarootdir)/julia/julia-config.jl: $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
+$(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
@@ -410,7 +410,7 @@ endif
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
 	# Install terminal info database
 ifneq ($(WITH_TERMINFO),0)
-	cp -R -L $(build_datarootdir)/terminfo $(DESTDIR)$(datarootdir)
+	cp -R -L $(build_datarootdir)/julia/terminfo $(DESTDIR)$(datarootdir)/julia/
 endif
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
