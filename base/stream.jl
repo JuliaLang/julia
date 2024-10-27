@@ -1067,7 +1067,7 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(
 
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    if Int == Int32 && n isa UInt32 && reinterpret(Int32, i) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
+    if Int == Int32 && n isa UInt32 && reinterpret(Int32, n) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
         throw(ArgumentError(LazyString("cannot write more than 2 GB at a time")))
     end
     uvw = uv_write_async(s, p, n)
@@ -1103,7 +1103,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     if status < 0
         throw(_UVError("write", status))
     end
-    return n % Int  # Safe (on 32-bit too, because of check at the top)
+    return n % Int # Safe (on 32-bit too, because of check at the top)
 end
 
 # helper function for uv_write that returns the uv_write_t struct for the write
