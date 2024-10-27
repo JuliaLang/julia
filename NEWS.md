@@ -150,6 +150,8 @@ Standard library changes
   Custom array types may specialize this function to return an appropriate result ([#55252]).
 * The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
   This function is now public ([#55537]).
+* The function `haszero(T::Type)` is used to check if a type `T` has a unique zero element defined as `zero(T)`.
+  This is now public.
 
 #### Logging
 
