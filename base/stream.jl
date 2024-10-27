@@ -1063,12 +1063,12 @@ function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     return out
 end
 
-uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), sizeof(p) % UInt64)  # UInt64 is safe here, also for 32-bit, then get UInt32 back from uv_write
+uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), sizeof(p) % UInt64) # UInt64 is safe here, also for 32-bit, then get UInt32 back from uv_write
 
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     ArgumentError(LazyString("
-    if Int == Int32 && n >= maxtype(Int32)
+    if Int == Int32 && n isa UInt32 && reinterpret(Int32, i) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
         throw(ArgumentError(LazyString("On 32-bit strings larger than 2 GB can't be printed in one go! Iterating over strings and printing the Chars is always safe, but splitting string into two SubStrings and printing sepratelyly may not be.")))
     end
     uvw = uv_write_async(s, p, n)
