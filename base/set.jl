@@ -549,8 +549,8 @@ function allunique(A::StridedArray)
     if length(A) < 32
         _indexed_allunique(A)
     elseif OrderStyle(eltype(A)) === Ordered()
-        a1, rest1 = Iterators.peel(A)
-        a2, rest = Iterators.peel(rest1)
+        a1, rest1 = Iterators.peel(A)::Tuple{Any,Any}
+        a2, rest = Iterators.peel(rest1)::Tuple{Any,Any}
         if !isequal(a1, a2)
             compare = isless(a1, a2) ? isless : (a,b) -> isless(b,a)
             for a in rest

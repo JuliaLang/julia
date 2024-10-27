@@ -577,6 +577,10 @@ function _doc(binding::Binding, sig::Type = Union{})
             for msig in multidoc.order
                 sig <: msig && return multidoc.docs[msig]
             end
+            # if no matching signatures, return first
+            if !isempty(multidoc.docs)
+                return first(values(multidoc.docs))
+            end
         end
     end
     return nothing

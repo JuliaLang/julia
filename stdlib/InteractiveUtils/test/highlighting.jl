@@ -34,7 +34,10 @@ end
     c = Base.text_colors[Base.warn_color()]
     InteractiveUtils.highlighting[:warntype] = false
     code_warntype(IOContext(io, :color => true), f, Tuple{Int64})
-    @test !occursin(c, String(take!(io)))
+    @test !any([
+        occursin("Body", line) && occursin(c, line)
+        for line in split(String(take!(io)), "\n")
+    ])
     InteractiveUtils.highlighting[:warntype] = true
     code_warntype(IOContext(io, :color => true), f, Tuple{Int64})
     @test occursin(c, String(take!(io)))

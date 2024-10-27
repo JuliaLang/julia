@@ -13,6 +13,10 @@ end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
     @assert ci.owner === cache.owner
+    m = mi.def
+    if isa(m, Method) && m.module != Core
+        ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
+    end
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end

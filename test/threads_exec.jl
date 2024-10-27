@@ -1235,6 +1235,7 @@ end
             @testset "throw=true" begin
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
+                wait(tasks[end]; throw=false)
 
                 @test_throws CompositeException begin
                     waitany(convert_tasks(tasks_type, tasks); throw=true)

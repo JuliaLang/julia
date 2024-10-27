@@ -36,10 +36,16 @@ struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
         SZ == size(data) || throw(ArgumentError("size mismatch!"))
         new{SZ,T,N,A}(A(data))
     end
+    function SizedArray{SZ,T,N}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
+    function SizedArray{SZ,T}(data::A) where {SZ,T,N,A<:AbstractArray{T,N}}
+        SizedArray{SZ,T,N,A}(data)
+    end
 end
 SizedMatrix{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,2,A}
 SizedVector{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,1,A}
-Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A} = SizedArray{SZ,T,N,A}(data)
+Base.convert(::Type{S}, data::AbstractArray) where {S<:SizedArray} = data isa S ? data : S(data)
 
 # Minimal AbstractArray interface
 Base.size(a::SizedArray) = size(typeof(a))
@@ -92,5 +98,8 @@ mul!(dest::AbstractMatrix, S1::SizedMatrix, S2::SizedMatrix, α::Number, β::Num
     mul!(dest, _data(S1), _data(S2), α, β)
 mul!(dest::AbstractVector, M::AbstractMatrix, v::SizedVector, α::Number, β::Number) =
     mul!(dest, M, _data(v), α, β)
+
+LinearAlgebra.zeroslike(::Type{S}, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) where {S<:SizedArray} =
+            zeros(eltype(S), ax)
 
 end

@@ -185,8 +185,28 @@ end
     end
     r
 end
-diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+"""
+    diagzero(A::AbstractMatrix, i, j)
+
+Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
+"""
+diagzero(A::AbstractMatrix, i, j) = zero(eltype(A))
+diagzero(A::AbstractMatrix{M}, i, j) where {M<:AbstractMatrix} =
+    zeroslike(M, axes(A[i,i], 1), axes(A[j,j], 2))
+diagzero(A::AbstractMatrix, inds...) = diagzero(A, to_indices(A, inds)...)
+# dispatching on the axes permits specializing on the axis types to return something other than an Array
+zeroslike(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer}}) = zeroslike(M, ax)
+"""
+    zeroslike(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
+    zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix}
+
+Return an appropriate zero-ed array similar to `M`, with either the axes `ax` or the size `sz`.
+This will be used as a structural zero element of a matrix-valued banded matrix.
+By default, `zeroslike` falls back to using the size along each axis to construct the array.
+"""
+zeroslike(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = zeroslike(M, map(length, ax))
+zeroslike(M::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(M, sz)
+zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix} = zeros(eltype(M), sz)
 
 @inline function getindex(D::Diagonal, b::BandIndex)
     @boundscheck checkbounds(D, b)
@@ -205,7 +225,7 @@ function setindex!(D::Diagonal, v, i::Int, j::Int)
     elseif !iszero(v)
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
     end
-    return v
+    return D
 end
 
 
@@ -227,7 +247,6 @@ Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
 Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
 
-ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
 issymmetric(D::Diagonal{<:Number}) = true
@@ -272,23 +291,28 @@ end
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-for f in (:+, :-)
-    @eval function $f(D::Diagonal{<:Number}, S::Symmetric)
-        return Symmetric($f(D, S.data), sym_uplo(S.uplo))
-    end
-    @eval function $f(S::Symmetric, D::Diagonal{<:Number})
-        return Symmetric($f(S.data, D), sym_uplo(S.uplo))
-    end
-    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
-        return Hermitian($f(D, H.data), sym_uplo(H.uplo))
-    end
-    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
-        return Hermitian($f(H.data, D), sym_uplo(H.uplo))
-    end
-end
-
 (*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
 (*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+function lmul!(x::Number, D::Diagonal)
+    if size(D,1) > 1
+        # ensure that zeros are preserved on scaling
+        y = D[2,1] * x
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. D.diag = x * D.diag
+    return D
+end
+function rmul!(D::Diagonal, x::Number)
+    if size(D,1) > 1
+        # ensure that zeros are preserved on scaling
+        y = x * D[2,1]
+        iszero(y) || throw(ArgumentError(LazyString("cannot set index (2, 1) off ",
+            lazy"the tridiagonal band to a nonzero value ($y)")))
+    end
+    @. D.diag *= x
+    return D
+end
 (/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
 (\)(x::Number, D::Diagonal) = Diagonal(x \ D.diag)
 (^)(D::Diagonal, a::Number) = Diagonal(D.diag .^ a)
@@ -663,15 +687,32 @@ for Tri in (:UpperTriangular, :LowerTriangular)
 end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::Diagonal)
-    valA = A.diag; nA = length(valA)
-    valB = B.diag; nB = length(valB)
+    valA = A.diag; mA, nA = size(A)
+    valB = B.diag; mB, nB = size(B)
     nC = checksquare(C)
     @boundscheck nC == nA*nB ||
         throw(DimensionMismatch(lazy"expect C to be a $(nA*nB)x$(nA*nB) matrix, got size $(nC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
-    @inbounds for i = 1:nA, j = 1:nB
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
+    for i in eachindex(valA), j in eachindex(valB)
         idx = (i-1)*nB+j
-        C[idx, idx] = valA[i] * valB[j]
+        @inbounds C[idx, idx] = valA[i] * valB[j]
+    end
+    if !zerofilled
+        for j in axes(A,2), i in axes(A,1)
+            Δrow, Δcol = (i-1)*mB, (j-1)*nB
+            for k in axes(B,2), l in axes(B,1)
+                i == j && k == l && continue
+                @inbounds C[Δrow + l, Δcol + k] = A[i,j] * B[l,k]
+            end
+        end
     end
     return C
 end
@@ -699,16 +740,36 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
-    @inbounds for j = 1:nA
-        A_jj = A[j,j]
-        for k = 1:nB
-            for l = 1:mB
-                C[m] = A_jj * B[l,k]
+    for j in axes(A,2)
+        A_jj = @inbounds A[j,j]
+        for k in axes(B,2)
+            for l in axes(B,1)
+                @inbounds C[m] = A_jj * B[l,k]
                 m += 1
             end
             m += (nA - 1) * mB
+        end
+        if !zerofilled
+            # populate the zero elements
+            for i in axes(A,1)
+                i == j && continue
+                A_ij = @inbounds A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in axes(B,2), l in axes(B,1)
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m += mB
     end
@@ -722,16 +783,35 @@ end
     (mC, nC) = size(C)
     @boundscheck (mC, nC) == (mA * mB, nA * nB) ||
         throw(DimensionMismatch(lazy"expect C to be a $(mA * mB)x$(nA * nB) matrix, got size $(mC)x$(nC)"))
-    isempty(A) || isempty(B) || fill!(C, zero(A[1,1] * B[1,1]))
+    zerofilled = false
+    if !(isempty(A) || isempty(B))
+        z = A[1,1] * B[1,1]
+        if haszero(typeof(z))
+            # in this case, the zero is unique
+            fill!(C, zero(z))
+            zerofilled = true
+        end
+    end
     m = 1
-    @inbounds for j = 1:nA
-        for l = 1:mB
-            Bll = B[l,l]
-            for k = 1:mA
-                C[m] = A[k,j] * Bll
+    for j in axes(A,2)
+        for l in axes(B,1)
+            Bll = @inbounds B[l,l]
+            for i in axes(A,1)
+                @inbounds C[m] = A[i,j] * Bll
                 m += nB
             end
             m += 1
+        end
+        if !zerofilled
+            for i in axes(A,1)
+                A_ij = @inbounds A[i, j]
+                Δrow, Δcol = (i-1)*mB, (j-1)*nB
+                for k in axes(B,2), l in axes(B,1)
+                    l == k && continue
+                    B_lk = @inbounds B[l, k]
+                    @inbounds C[Δrow + l, Δcol + k] = A_ij * B_lk
+                end
+            end
         end
         m -= nB
     end
@@ -747,17 +827,18 @@ adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(axes(D), axes(D), perm); D)
 
-function diag(D::Diagonal{T}, k::Integer=0) where T
+function diag(D::Diagonal, k::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of k
+    v = similar(D.diag, max(0, length(D.diag)-abs(k)))
     if k == 0
-        return copyto!(similar(D.diag, length(D.diag)), D.diag)
-    elseif -size(D,1) <= k <= size(D,1)
-        return fill!(similar(D.diag, size(D,1)-abs(k)), zero(T))
+        copyto!(v, D.diag)
     else
-        throw(ArgumentError(string("requested diagonal, $k, must be at least $(-size(D, 1)) ",
-            "and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
+        for i in eachindex(v)
+            v[i] = D[BandIndex(k, i)]
+        end
     end
+    return v
 end
 tr(D::Diagonal) = sum(tr, D.diag)
 det(D::Diagonal) = prod(det, D.diag)

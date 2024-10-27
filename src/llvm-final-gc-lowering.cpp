@@ -202,9 +202,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
             } while (0)
 
             LOWER_INTRINSIC(newGCFrame, lowerNewGCFrame);
+            LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
             LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
             LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
-            LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
             LOWER_INTRINSIC(GCAllocBytes, lowerGCAllocBytes);
             LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
             LOWER_INTRINSIC(safepoint, lowerSafepoint);

@@ -83,7 +83,7 @@ TOOLCHAIN_FLAGS = $\
 	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib" $\
 	"CFLAGS+=$(PGO_CFLAGS)" $\
 	"CXXFLAGS+=$(PGO_CXXFLAGS)" $\
-	"LDFLAGS+=$(PGO_LDFLAGS)"
+	"LDFLAGS+=-fuse-ld=lld $(PGO_LDFLAGS)"
 
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
@@ -99,7 +99,7 @@ stage0: | $(STAGE0_BUILD)
 $(STAGE1_BUILD): stage0
 stage1: PGO_CFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
 stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PGO_PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
-stage1: PGO_LDFLAGS:=-fuse-ld=lld -flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
+stage1: PGO_LDFLAGS:=-flto=thin -fprofile-generate=$(PGO_PROFILE_DIR)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
 	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) && touch $@
@@ -107,7 +107,7 @@ stage1: | $(STAGE1_BUILD)
 
 stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
 stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
-stage2: PGO_LDFLAGS:=-fuse-ld=lld -flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
+stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 stage2: export USE_BINARYBUILDER_LLVM=0
 stage2: $(PGO_PROFILE_FILE) | $(STAGE2_BUILD)
 	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) $(BOLT_FLAGS) julia-src-release julia-symlink julia-libccalltest \
@@ -123,22 +123,24 @@ copy_originals: stage2
 
 # I don't think there's any particular reason to have -no-huge-pages here, perhaps slightly more accurate profile data
 # as the final build uses -no-huge-pages
+# We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
+		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(BOLT_PROFILE_DIR)/$$file-prof" -no-huge-pages; \
 		mkdir -p $$(dirname "$(BOLT_PROFILE_DIR)/$$file-prof"); \
+		touch -d "@$$old_time" $$abs_file; \
 		printf "\n"; \
 	done && \
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-# We don't want to rebuild julia-src as then we lose the bolt instrumentation
-# So we have to manually build the sysimage and package image
+finish_stage2: PGO_CFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+finish_stage2: PGO_CXXFLAGS:=-fprofile-use=$(PGO_PROFILE_FILE)
+finish_stage2: PGO_LDFLAGS:=-flto=thin -fprofile-use=$(PGO_PROFILE_FILE) -Wl,--icf=safe
 finish_stage2: stage2
-	$(MAKE) -C $(STAGE2_BUILD) julia-base-cache && \
-	$(MAKE) -C $(STAGE2_BUILD) -f sysimage.mk sysimg-release && \
-	$(MAKE) -C $(STAGE2_BUILD) -f pkgimage.mk release
+	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS)
 
 merge_data: bolt_instrument
 	for file in $(FILES_TO_OPTIMIZE); do \
@@ -152,10 +154,13 @@ merge_data: bolt_instrument
 # It tries to reuse old text segments to reduce binary size
 # BOLT doesn't fully support computed gotos https://github.com/llvm/llvm-project/issues/89117, so we cannot use --use-old-text on libjulia-internal
 # That flag saves less than 1 MiB for libjulia-internal so oh well.
+# We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
+		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE2_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text -split-strategy=cdsplit"; fi); \
+		touch -d "@$$old_time" $$abs_file; \
     done && \
     touch $@
 

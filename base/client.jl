@@ -41,7 +41,6 @@ function repl_cmd(cmd, out)
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
-        new_oldpwd = pwd()
         if length(cmd.exec) > 2
             throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
@@ -52,11 +51,17 @@ function repl_cmd(cmd, out)
                 end
                 dir = ENV["OLDPWD"]
             end
-            cd(dir)
         else
-            cd()
+            dir = homedir()
         end
-        ENV["OLDPWD"] = new_oldpwd
+        try
+            ENV["OLDPWD"] = pwd()
+        catch ex
+            ex isa IOError || rethrow()
+            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+            delete!(ENV, "OLDPWD")
+        end
+        cd(dir)
         println(out, pwd())
     else
         @static if !Sys.iswindows()
@@ -292,12 +297,12 @@ function exec_options(opts)
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
         elseif cmd == 'm'
-            @eval Main import $(Symbol(arg)).main
+            entrypoint = push!(split(arg, "."), "main")
+            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !should_use_main_entrypoint()
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
             return false
-
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
@@ -417,7 +422,7 @@ function load_REPL()
     return nothing
 end
 
-global active_repl
+global active_repl::Any
 global active_repl_backend = nothing
 
 function run_fallback_repl(interactive::Bool)
