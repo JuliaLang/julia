@@ -1069,7 +1069,7 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     ArgumentError(LazyString("
     if Int == Int32 && n >= maxtype(Int32)
-        throw(ArgumentError(LazyString("On 32-bit strings larger than 2 GB can't be printed in one go! Iterating over strings and printing the Chars is always safe, but splitting string into two SubStrings and printing sepratelyly may not be.")
+        throw(ArgumentError(LazyString("On 32-bit strings larger than 2 GB can't be printed in one go! Iterating over strings and printing the Chars is always safe, but splitting string into two SubStrings and printing sepratelyly may not be.")))
     end
     uvw = uv_write_async(s, p, n)
     ct = current_task()
