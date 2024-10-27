@@ -349,7 +349,7 @@ Our goal is to detect whether there is contention on the `ch` channel—i.e., wh
 
 If we run this, we obtain the following [PProf](https://github.com/JuliaPerf/PProf.jl) flame graph:
 
-![CPU Profile](./img/cpu-profile.png)()
+![CPU Profile](./img/cpu-profile.png)
 
 This profile provides no information to help determine where contention occurs in the system’s synchronization primitives. Waiters on a channel will be blocked and descheduled, meaning no system thread will be running the tasks assigned to those waiters, and as a result, they won't be sampled by the profiler.
 
@@ -402,7 +402,7 @@ Profile.@profile_walltime main()
 
 We obtain the following flame graph:
 
-![Wall-time Profile Channel](./img/wall-time-profiler-channel-example.png)()
+![Wall-time Profile Channel](./img/wall-time-profiler-channel-example.png)
 
 We see that a large number of samples come from channel-related `take!` functions, which allows us to determine that there is indeed an excessive number of waiters in `ch`.
 
@@ -454,7 +454,7 @@ Profile.@profile_walltime main()
 
 After collecting a wall-time profile, we get the following flame graph:
 
-![Wall-time Profile Compute-Bound](./img/wall-time-profiler-compute-bound-example.png)()
+![Wall-time Profile Compute-Bound](./img/wall-time-profiler-compute-bound-example.png)
 
 Notice how many of the samples contain `sum_of_sqrt`, which is the expensive compute function in our example.
 
@@ -507,7 +507,7 @@ Notice that the tasks spawned in `spawn_a_bunch_of_short_lived_tasks` are extrem
 
 After collecting a wall-time profile, we obtain the following flame graph:
 
-![Task Sampling Failure](./img/task-sampling-failure.png)()
+![Task Sampling Failure](./img/task-sampling-failure.png)
 
 The large number of samples from `failed_to_stop_thread_fun` confirms that we have a significant number of short-lived tasks in the system.
 
