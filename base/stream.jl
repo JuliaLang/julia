@@ -1066,10 +1066,11 @@ end
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), sizeof(p) % UInt64) # UInt64 is safe here, also for 32-bit, then get UInt32 back from uv_write
 
 # caller must have acquired the iolock
-function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
-    if Int == Int32 && n isa UInt32 && reinterpret(Int32, n) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
-        throw(ArgumentError(LazyString("cannot write more than 2 GB at a time")))
+function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::Union{UInt64, UInt32})
+    if Int == Int32 && reinterpret(Int32, n % UInt32) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
+        throw(ArgumentError(LazyString("cannot write more than 2 GB at a time (workaround exists for larger strings)")))
     end
+    n = n % UInt
     uvw = uv_write_async(s, p, n)
     ct = current_task()
     preserve_handle(ct)
