@@ -606,6 +606,7 @@ norm1(x) = generic_norm1(x)
 norm2(x) = generic_norm2(x)
 normp(x, p) = generic_normp(x, p)
 
+
 """
     norm(A, p::Real=2)
 
