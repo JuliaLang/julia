@@ -685,6 +685,7 @@ Base.@constprop :aggressive function norm(itr, p::Real)
         normp(itr, p)
     end
 end
+# Split into a separate method to reduce latency in norm(x) calls
 function norm(itr)
     isempty(itr) && return float(norm(zero(eltype(itr))))
     norm_recursive_check(itr)
