@@ -1068,7 +1068,7 @@ uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(
 # caller must have acquired the iolock
 function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     if Int == Int32 && n isa UInt32 && reinterpret(Int32, i) < 0 # aka n >= typemax(Int32) on 32-bit, no-op on 64-bit
-        throw(ArgumentError(LazyString("On 32-bit strings larger than 2 GB can't be printed in one go! Iterating over strings and printing the Chars is always safe, but splitting string into two SubStrings and printing sepratelyly may not be.")))
+        throw(ArgumentError(LazyString("cannot write more than 2 GB at a time")))
     end
     uvw = uv_write_async(s, p, n)
     ct = current_task()
