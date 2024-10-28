@@ -185,13 +185,4 @@ extern jl_ptls_t* gc_all_tls_states;
 
 extern int gc_logging_enabled;
 
-// =========================================================================== //
-// Misc
-// =========================================================================== //
-
-// Allocates a new weak-reference, assigns its value and increments Julia allocation
-// counters. If thread-local allocators are used, then this function should allocate in the
-// thread-local allocator of the current thread.
-JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-
 #endif // JL_GC_COMMON_H
