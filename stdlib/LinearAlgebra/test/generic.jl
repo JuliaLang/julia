@@ -25,6 +25,12 @@ Random.seed!(123)
 
 n = 5 # should be odd
 
+@testset "_rmul_or_fill!" begin
+    D = Diagonal(fill(ones(2,2), 4))
+    LinearAlgebra._rmul_or_fill!(D, 0)
+    @test iszero(D)
+end
+
 @testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.

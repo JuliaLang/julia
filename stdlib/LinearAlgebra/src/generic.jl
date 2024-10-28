@@ -162,13 +162,16 @@ julia> C
 end
 
 @inline function _rmul_or_fill!(C::AbstractArray, beta::Number)
-    if isempty(C)
-        return C
-    end
-    if iszero(beta)
-        fill!(C, zero(eltype(C)))
-    else
-        rmul!(C, beta)
+    if !isempty(C)
+        if iszero(beta)
+            if haszero(eltype(C))
+                fill!(C, zero(eltype(C)))
+            else
+                C .= zero.(C)
+            end
+        else
+            rmul!(C, beta)
+        end
     end
     return C
 end
