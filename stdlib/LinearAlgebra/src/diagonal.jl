@@ -398,10 +398,8 @@ function lmul!(D::Diagonal, T::Tridiagonal)
 end
 
 @inline function __muldiag_nonzeroalpha!(out, D::Diagonal, B, alpha::Number, beta::Number)
-    @inbounds for j in axes(B, 2)
-        for i in axes(B, 1)
-            @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B[i,j], out, (i,j))
-        end
+    @inbounds for j in axes(B, 2), i in axes(B, 1)
+        @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B[i,j], out, (i,j))
     end
     out
 end
