@@ -1,17 +1,7 @@
 ## Pkg stuff needed before Pkg has loaded
 
 const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-
-function load_pkg()
-    REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
-    @lock Base.require_lock begin
-        # require_stdlib does not guarantee that the `__init__` of the package is done when loading is done async
-        # but we need to wait for the repl mode to be set up
-        lock = get(Base.package_locks, Base.PkgId(REPLExt), nothing)
-        lock !== nothing && wait(lock[2])
-    end
-    return REPLExt
-end
+load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt")
 
 ## Below here copied/tweaked from Pkg Types.jl so that the dummy Pkg prompt
 # can populate the env correctly before Pkg loads
