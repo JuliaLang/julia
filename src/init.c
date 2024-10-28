@@ -849,6 +849,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
+    if (jl_options.task_timing) {
+        // enable before creating the root task so it gets timings too.
+        jl_atomic_fetch_add(&jl_task_timing_enabled, 1);
+    }
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
@@ -892,9 +896,6 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         post_boot_hooks();
     }
 
-    if (jl_options.task_timing) {
-        jl_atomic_fetch_add(&jl_task_timing_enabled, 1);
-    }
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_atomic_store_relaxed(&jl_n_threads, 1);

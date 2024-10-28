@@ -1609,6 +1609,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->reentrant_timing = 0;
     ct->cpu_time_ns = 0;
     ct->wall_time_ns = 0;
+    ct->is_timing_enabled = jl_atomic_load_relaxed(&jl_task_timing_enabled) != 0;
     if (ct->is_timing_enabled) {
         uint64_t now = jl_hrtime();
         ct->first_enqueued_at = now;

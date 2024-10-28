@@ -788,10 +788,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             "Int(Base.JLOptions().task_timing)"`)) == JL_OPTIONS_TASK_TIMING_OFF
         @test parse(Int, readchomp(`$exename --task-timing -E
             "Int(Base.JLOptions().task_timing)"`)) == JL_OPTIONS_TASK_TIMING_ON
-        @test !parse(Bool, readchomp(`$exename  -E
-            "fetch(Threads.@spawn current_task().is_timing_enabled)"`))
-        @test parse(Bool, readchomp(`$exename --task-timing -E
-            "fetch(Threads.@spawn current_task().is_timing_enabled)"`))
+        @test !parse(Bool, readchomp(`$exename  -E "current_task().is_timing_enabled"`))
+        @test parse(Bool, readchomp(`$exename --task-timing -E "current_task().is_timing_enabled"`))
     end
 
     # --worker takes default / custom as argument (default/custom arguments
