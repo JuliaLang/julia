@@ -1060,8 +1060,6 @@ tasks.
 """
 function yield()
     ct = current_task()
-    # [task] user_time -yield-> wait_time
-    record_cpu_time!(ct)
     enq_work(ct)
     try
         wait()
@@ -1102,6 +1100,8 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    # [task] user_time -yield-> wait_time
+    record_cpu_time!(current_task())
     # TODO: these are legacy behaviors; these should perhaps be a scheduler
     # state error instead.
     if t._state === task_state_done
@@ -1144,6 +1144,8 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
+    # [task] user_time -yield-> wait_time
+    record_cpu_time!(current_task())
     if t.metrics_enabled && t.first_enqueued_at == 0
         # [task] created -scheduled-> wait_time
         t.first_enqueued_at = time_ns()
@@ -1200,11 +1202,8 @@ checktaskempty = Partr.multiq_check_empty
 end
 
 function wait()
-    # [task] user_time -unknown-> wait_time
-    # Make sure to stop accumulating task CPU time now we have entered the scheduler.
-    # The caller of `wait()` may have already recorded the cpu time if they were about to
-    # perform some significant scheduler work, like `enq_work`, before calling `wait`.
-    maybe_record_cpu_time!(current_task())
+    # [task] user_time -yield-or-wait-> wait_time
+    record_cpu_time!(current_task())
     GC.safepoint()
     W = workqueue_for(Threads.threadid())
     poptask(W)
@@ -1218,14 +1217,6 @@ if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
     pause() = ccall(:pause, Cvoid, ())
-end
-
-function maybe_record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
-    if t.metrics_enabled && t.last_started_running_at != 0
-        t.cpu_time_ns += stopped_at - t.last_started_running_at
-        t.last_started_running_at = 0
-    end
-    return t
 end
 
 function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
