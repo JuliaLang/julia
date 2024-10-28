@@ -398,10 +398,8 @@ function lmul!(D::Diagonal, T::Tridiagonal)
 end
 
 @inline function __muldiag_nonzeroalpha!(out, D::Diagonal, B, alpha::Number, beta::Number)
-    @inbounds for j in axes(B, 2)
-        @simd for i in axes(B, 1)
-            @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B[i,j], out, (i,j))
-        end
+    @inbounds for j in axes(B, 2), i in axes(B, 1)
+        @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B[i,j], out, (i,j))
     end
     out
 end
@@ -428,14 +426,14 @@ function __muldiag_nonzeroalpha!(out, D::Diagonal, B::UpperOrLowerTriangular, al
         end
         # The indices of out corresponding to the stored indices of B
         rowrange = _rowrange_tri_stored(B, j)
-        @inbounds @simd for i in rowrange
+        @inbounds for i in rowrange
             @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B_maybeparent[i,j], out_maybeparent, (i,j))
         end
         # Fill the indices of out corresponding to the zeros of B
         # we only fill these if out and B don't have matching zeros
         if !_has_matching_zeros(out, B)
             rowrange = _rowrange_tri_zeros(B, j)
-            @inbounds @simd for i in rowrange
+            @inbounds for i in rowrange
                 @stable_muladdmul _modify!(MulAddMul(alpha,beta), D.diag[i] * B[i,j], out, (i,j))
             end
         end
@@ -446,7 +444,7 @@ end
 @inline function __muldiag_nonzeroalpha!(out, A, D::Diagonal, alpha::Number, beta::Number)
     @inbounds for j in axes(A, 2)
         dja = @stable_muladdmul MulAddMul(alpha,false)(D.diag[j])
-        @simd for i in axes(A, 1)
+        for i in axes(A, 1)
             @stable_muladdmul _modify!(MulAddMul(true,beta), A[i,j] * dja, out, (i,j))
         end
     end
@@ -467,7 +465,7 @@ function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, al
         end
         # indices of out corresponding to the stored indices of A
         rowrange = _rowrange_tri_stored(A, j)
-        @inbounds @simd for i in rowrange
+        @inbounds for i in rowrange
             # since alpha is multiplied to the diagonal element of D,
             # we may skip alpha in the second multiplication by setting ais1 to true
             @stable_muladdmul _modify!(MulAddMul(true,beta), A_maybeparent[i,j] * dja, out_maybeparent, (i,j))
@@ -476,7 +474,7 @@ function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, al
         # we only fill these if out and A don't have matching zeros
         if !_has_matching_zeros(out, A)
             rowrange = _rowrange_tri_zeros(A, j)
-            @inbounds @simd for i in rowrange
+            @inbounds for i in rowrange
                 @stable_muladdmul _modify!(MulAddMul(true,beta), A[i,j] * dja, out, (i,j))
             end
         end
@@ -488,7 +486,7 @@ end
     d1 = D1.diag
     d2 = D2.diag
     outd = out.diag
-    @inbounds @simd for i in eachindex(d1, d2, outd)
+    @inbounds for i in eachindex(d1, d2, outd)
         @stable_muladdmul _modify!(MulAddMul(alpha,beta), d1[i] * d2[i], outd, i)
     end
     out
@@ -497,8 +495,10 @@ end
 @inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
     d1 = D1.diag
     d2 = D2.diag
-    @inbounds @simd for i in eachindex(d1, d2)
-        @stable_muladdmul _modify!(MulAddMul(alpha,beta), d1[i] * d2[i], out, (i,i))
+    # this method is only called with beta == true
+    isone(beta) || throw(ArgumentError("beta must satisfy isone(beta)"))
+    @inbounds for i in eachindex(d1, d2)
+        @stable_muladdmul _modify!(MulAddMul(alpha,true), d1[i] * d2[i], out, (i,i))
     end
     out
 end
