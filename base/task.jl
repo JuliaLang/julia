@@ -1128,7 +1128,7 @@ function try_yieldto(undo)
     ct = current_task()
     # [task] wait_time -(re)started-> user_time
     if ct.metrics_enabled
-        # @assert ct.last_started_running_at == 0
+        @assert ct.last_started_running_at == 0
         ct.last_started_running_at = time_ns()
     end
     if ct._isexception
@@ -1200,6 +1200,11 @@ checktaskempty = Partr.multiq_check_empty
 end
 
 function wait()
+    # [task] user_time -unknown-> wait_time
+    # Make sure to stop accumulating task CPU time now we have entered the scheduler.
+    # The caller of `wait()` may have already recorded the cpu time if they were about to
+    # perform some significant scheduler work, like `enq_work`, before calling `wait`.
+    maybe_record_cpu_time!(current_task())
     GC.safepoint()
     W = workqueue_for(Threads.threadid())
     poptask(W)
@@ -1215,11 +1220,19 @@ else
     pause() = ccall(:pause, Cvoid, ())
 end
 
+function maybe_record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
+    if t.metrics_enabled && t.last_started_running_at != 0
+        t.cpu_time_ns += stopped_at - t.last_started_running_at
+        t.last_started_running_at = 0
+    end
+    return t
+end
+
 function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
     if t.metrics_enabled
         @assert t.last_started_running_at != 0
         t.cpu_time_ns += stopped_at - t.last_started_running_at
-        # t.last_started_running_at = 0
+        t.last_started_running_at = 0
     end
     return t
 end
