@@ -23,7 +23,7 @@ Profiling support.
 module Profile
 
 global print
-export @profile
+export @profile, @profile_walltime
 public clear,
     print,
     fetch,
@@ -56,6 +56,28 @@ macro profile(ex)
     return quote
         try
             start_timer()
+            $(esc(ex))
+        finally
+            stop_timer()
+        end
+    end
+end
+
+"""
+    @profile_walltime
+
+`@profile_walltime <expression>` runs your expression while taking periodic backtraces of a sample of all live tasks (both running and not running).
+These are appended to an internal buffer of backtraces.
+
+It can be configured via `Profile.init`, same as the `Profile.@profile`, and that you can't use `@profile` simultaneously with `@profile_walltime`.
+
+As mentioned above, since this tool sample not only running tasks, but also sleeping tasks and tasks performing IO,
+it can be used to diagnose performance issues such as lock contention, IO bottlenecks, and other issues that are not visible in the CPU profile.
+"""
+macro profile_walltime(ex)
+    return quote
+        try
+            start_timer(true)
             $(esc(ex))
         finally
             stop_timer()
@@ -403,9 +425,10 @@ end
 
 function has_meta(data)
     for i in 6:length(data)
-        data[i] == 0 || continue            # first block end null
-        data[i - 1] == 0 || continue        # second block end null
-        data[i - META_OFFSET_SLEEPSTATE] in 1:2 || continue
+        data[i] == 0 || continue                            # first block end null
+        data[i - 1] == 0 || continue                        # second block end null
+        data[i - META_OFFSET_SLEEPSTATE] in 1:3 || continue # 1 for not sleeping, 2 for sleeping, 3 for task profiler fake state
+                                                            # See definition in `src/julia_internal.h`
         data[i - META_OFFSET_CPUCYCLECLOCK] != 0 || continue
         data[i - META_OFFSET_TASKID] != 0 || continue
         data[i - META_OFFSET_THREADID] != 0 || continue
@@ -608,9 +631,9 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
-function start_timer()
+function start_timer(all_tasks::Bool=false)
     check_init() # if the profile buffer hasn't been initialized, initialize with default size
-    status = ccall(:jl_profile_start_timer, Cint, ())
+    status = ccall(:jl_profile_start_timer, Cint, (Bool,), all_tasks)
     if status < 0
         error(error_codes[status])
     end
@@ -722,12 +745,16 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     startframe = length(data)
     skip = false
     nsleeping = 0
+    is_task_profile = false
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            thread_sleeping_state = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = data[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = data[i - META_OFFSET_TASKID]
             threadid = data[i - META_OFFSET_THREADID]
@@ -735,7 +762,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                 skip = true
                 continue
             end
-            if thread_sleeping == 1
+            if thread_sleeping_state == 1
                 nsleeping += 1
             end
             skip = false
@@ -769,14 +796,14 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
         end
     end
     @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
-    return (lilist, n, m, totalshots, nsleeping)
+    return (lilist, n, m, totalshots, nsleeping, is_task_profile)
 end
 
 const FileNameMap = Dict{Symbol,Tuple{String,String,String}}
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
-    lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
+    lilist, n, m, totalshots, nsleeping, is_task_profile = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
         lilist = lilist[keep]
@@ -796,11 +823,15 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         return true
     end
     is_subsection || print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.print(io, "Total snapshots: ", totalshots, ". Utilization: ", round(Int, util_perc), "%")
+    if is_task_profile
+        Base.print(io, "Total snapshots: ", totalshots, "\n")
+    else
+        Base.print(io, "Total snapshots: ", totalshots, ". Utilization: ", round(Int, util_perc), "%")
+    end
     if is_subsection
         println(io)
         print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    else
+    elseif !is_task_profile
         Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
@@ -1034,12 +1065,16 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     startframe = length(all)
     skip = false
     nsleeping = 0
+    is_task_profile = false
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            thread_sleeping_state = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = all[i - META_OFFSET_TASKID]
             threadid = all[i - META_OFFSET_THREADID]
@@ -1048,7 +1083,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 skip = true
                 continue
             end
-            if thread_sleeping == 1
+            if thread_sleeping_state == 1
                 nsleeping += 1
             end
             skip = false
@@ -1154,7 +1189,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         nothing
     end
     cleanup!(root)
-    return root, nsleeping
+    return root, nsleeping, is_task_profile
 end
 
 function maxstats(root::StackFrameTree)
@@ -1223,9 +1258,9 @@ end
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     if fmt.combine
-        root, nsleeping = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping, is_task_profile = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     else
-        root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping, is_task_profile = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
     util_perc = (1 - (nsleeping / root.count)) * 100
     is_subsection || print_tree(io, root, cols, fmt, is_subsection)
@@ -1239,11 +1274,15 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         end
         return true
     end
-    Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
+    if is_task_profile
+        Base.print(io, "Total snapshots: ", root.count, "\n")
+    else
+        Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
+    end
     if is_subsection
         Base.println(io)
         print_tree(io, root, cols, fmt, is_subsection)
-    else
+    elseif !is_task_profile
         Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false

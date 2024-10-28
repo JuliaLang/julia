@@ -169,6 +169,7 @@ export
 public AbstractTriangular,
         Givens,
         checksquare,
+        haszero,
         hermitian,
         hermitian_type,
         isbanded,
