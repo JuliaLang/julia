@@ -524,8 +524,7 @@ See also [`pkgdir`](@ref).
 """
 function pathof(m::Module)
     @lock require_lock begin
-    pkgid = get(module_keys, m, nothing)
-    pkgid === nothing && return nothing
+    pkgid = PkgId(m)
     origin = get(pkgorigins, pkgid, nothing)
     origin === nothing && return nothing
     path = origin.path
@@ -1652,7 +1651,7 @@ get_extension(parent::Module, ext::Symbol) = get_extension(PkgId(parent), ext)
 function get_extension(parentid::PkgId, ext::Symbol)
     parentid.uuid === nothing && return nothing
     extid = PkgId(uuid5(parentid.uuid, string(ext)), string(ext))
-    return get(loaded_modules, extid, nothing)
+    return maybe_root_module(extid)
 end
 
 # End extensions
@@ -1811,7 +1810,7 @@ function show(io::IO, it::ImageTarget)
 end
 
 # should sync with the types of arguments of `stale_cachefile`
-const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
+const StaleCacheKey = Tuple{PkgId, UInt128, String, String}
 
 function compilecache_path(pkg::PkgId;
         ignore_loaded::Bool=false,
@@ -2063,7 +2062,7 @@ end
                     modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
                     # inline a call to start_loading here
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
-                    package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+                    package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
                     modpaths = find_all_in_cache_path(modkey, DEPOT_PATH)
                     for modpath_to_try in modpaths
@@ -2139,7 +2138,7 @@ end
 end
 
 # to synchronize multiple tasks trying to import/using something
-const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
+const package_locks = Dict{PkgId,Tuple{Task,Threads.Condition,UInt128}}()
 
 debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
                                # This only triggers if you have multiple tasks trying to load the same package at the same time,
@@ -2148,14 +2147,21 @@ debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but mor
 function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     assert_havelock(require_lock)
     require_lock.reentrancy_cnt == 1 || throw(ConcurrencyViolationError("recursive call to start_loading"))
-    loaded = stalecheck ? maybe_root_module(modkey) : nothing
-    loaded isa Module && return loaded
-    if build_id != UInt128(0)
+    loading = get(package_locks, modkey, nothing)
+    if loading === nothing
+        loaded = stalecheck ? maybe_root_module(modkey) : nothing
+        loaded isa Module && return loaded
+        if build_id != UInt128(0)
+            loaded = maybe_loaded_precompile(modkey, build_id)
+            loaded isa Module && return loaded
+        end
+        return nothing
+    end
+    if !stalecheck && build_id != UInt128(0) && loading[3] != build_id
+        # don't block using an existing specific loaded module on needing a different concurrently loaded one
         loaded = maybe_loaded_precompile(modkey, build_id)
         loaded isa Module && return loaded
     end
-    loading = get(package_locks, modkey, nothing)
-    loading === nothing && return nothing
     # load already in progress for this module on the task
     task, cond = loading
     deps = String[modkey.name]
@@ -2202,7 +2208,7 @@ function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     while true
         loaded = canstart_loading(modkey, build_id, stalecheck)
         if loaded === nothing
-            package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+            package_locks[modkey] = (current_task(), Threads.Condition(require_lock), build_id)
             return nothing
         elseif loaded isa Module
             return loaded
@@ -2333,15 +2339,15 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
-    if _require_world_age[] != typemax(UInt)
-        Base.invoke_in_world(_require_world_age[], __require, into, mod)
-    else
-        @invokelatest __require(into, mod)
+    world = _require_world_age[]
+    if world == typemax(UInt)
+        world = get_world_counter()
     end
+    return invoke_in_world(world, __require, into, mod)
 end
 
 function __require(into::Module, mod::Symbol)
-    if into === Base.__toplevel__ && generating_output(#=incremental=#true)
+    if into === __toplevel__ && generating_output(#=incremental=#true)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
          is not allowed during package precompilation.")
     end
@@ -2445,24 +2451,22 @@ function collect_manifest_warnings()
     return msg
 end
 
-require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
-
-function _require_prelocked(uuidkey::PkgId, env=nothing)
-    if _require_world_age[] != typemax(UInt)
-        Base.invoke_in_world(_require_world_age[], __require_prelocked, uuidkey, env)
-    else
-        @invokelatest __require_prelocked(uuidkey, env)
+function require(uuidkey::PkgId)
+    world = _require_world_age[]
+    if world == typemax(UInt)
+        world = get_world_counter()
     end
+    return invoke_in_world(world, __require, uuidkey)
 end
-
-function __require_prelocked(uuidkey::PkgId, env=nothing)
+__require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
+function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     m = start_loading(uuidkey, UInt128(0), true)
     if m === nothing
         last = toplevel_load[]
         try
             toplevel_load[] = false
-            m = _require(uuidkey, env)
+            m = __require_prelocked(uuidkey, env)
             if m === nothing
                 error("package `$(uuidkey.name)` did not define the expected \
                       module `$(uuidkey.name)`, check for typos in package module name")
@@ -2474,8 +2478,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-    else
-        newm = root_module(uuidkey)
     end
     return m
 end
@@ -2491,9 +2493,8 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 const loaded_modules = Dict{PkgId,Module}() # available to be explicitly loaded
 const loaded_precompiles = Dict{PkgId,Vector{Module}}() # extended (complete) list of modules, available to be loaded
 const loaded_modules_order = Vector{Module}()
-const module_keys = IdDict{Module,PkgId}() # the reverse of loaded_modules
 
-root_module_key(m::Module) = @lock require_lock module_keys[m]
+root_module_key(m::Module) = PkgId(m)
 
 function maybe_loaded_precompile(key::PkgId, buildid::UInt128)
     @lock require_lock begin
@@ -2527,7 +2528,6 @@ end
     end
     maybe_loaded_precompile(key, module_build_id(m)) === nothing && push!(loaded_modules_order, m)
     loaded_modules[key] = m
-    module_keys[m] = key
     end
     nothing
 end
@@ -2544,24 +2544,27 @@ using Base
 end
 
 # get a top-level Module from the given key
+# this is similar to `require`, but worse in almost every possible way
 root_module(key::PkgId) = @lock require_lock loaded_modules[key]
 function root_module(where::Module, name::Symbol)
     key = identify_package(where, String(name))
     key isa PkgId || throw(KeyError(name))
     return root_module(key)
 end
+root_module_exists(key::PkgId) = @lock require_lock haskey(loaded_modules, key)
 maybe_root_module(key::PkgId) = @lock require_lock get(loaded_modules, key, nothing)
 
-root_module_exists(key::PkgId) = @lock require_lock haskey(loaded_modules, key)
 loaded_modules_array() = @lock require_lock copy(loaded_modules_order)
 
 # after unreference_module, a subsequent require call will try to load a new copy of it, if stale
 # reload(m) = (unreference_module(m); require(m))
 function unreference_module(key::PkgId)
+    @lock require_lock begin
     if haskey(loaded_modules, key)
         m = pop!(loaded_modules, key)
         # need to ensure all modules are GC rooted; will still be referenced
-        # in module_keys
+        # in loaded_modules_order
+    end
     end
 end
 
@@ -2582,7 +2585,7 @@ const PKG_PRECOMPILE_HOOK = Ref{Function}()
 disable_parallel_precompile::Bool = false
 
 # Returns `nothing` or the new(ish) module
-function _require(pkg::PkgId, env=nothing)
+function __require_prelocked(pkg::PkgId, env)
     assert_havelock(require_lock)
 
     # perform the search operation to select the module file require intends to load
@@ -2682,7 +2685,7 @@ function _require(pkg::PkgId, env=nothing)
     unlock(require_lock)
     try
         include(__toplevel__, path)
-        loaded = get(loaded_modules, pkg, nothing)
+        loaded = maybe_root_module(pkg)
     finally
         lock(require_lock)
         if uuid !== old_uuid
@@ -2755,38 +2758,18 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
     @lock require_lock begin
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
-    newm = maybe_root_module(this_uuidkey)
-    if newm isa Module
-        return newm
-    end
-    # first since this is a stdlib, try to look there directly first
     env = Sys.STDLIB
-    #sourcepath = ""
-    if ext === nothing
-        sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
-    else
-        sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
-    end
-    #mbypath = manifest_uuid_path(env, this_uuidkey)
-    #if mbypath isa String && isfile_casesensitive(mbypath)
-    #    sourcepath = mbypath
-    #else
-    #    # if the user deleted the stdlib folder, we next try using their environment
-    #    sourcepath = locate_package_env(this_uuidkey)
-    #    if sourcepath !== nothing
-    #        sourcepath, env = sourcepath
-    #    end
-    #end
-    #if sourcepath === nothing
-    #    throw(ArgumentError("""
-    #        Package $(repr("text/plain", this_uuidkey)) is required but does not seem to be installed.
-    #        """))
-    #end
-    set_pkgorigin_version_path(this_uuidkey, sourcepath)
-    depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
     newm = start_loading(this_uuidkey, UInt128(0), true)
     newm === nothing || return newm
     try
+        # first since this is a stdlib, try to look there directly first
+        if ext === nothing
+            sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
+        else
+            sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
+        end
+        depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
+        set_pkgorigin_version_path(this_uuidkey, sourcepath)
         newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
     finally
         end_loading(this_uuidkey, newm)
@@ -3968,32 +3951,32 @@ end
             if M !== nothing
                 @assert PkgId(M) == req_key && module_build_id(M) === req_build_id
                 depmods[i] = M
-            elseif root_module_exists(req_key)
-                M = root_module(req_key)
+                continue
+            end
+            M = maybe_root_module(req_key)
+            if M isa Module
                 if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
+                    continue
                 elseif M == Core
                     @debug "Rejecting cache file $cachefile because it was made with a different julia version"
                     record_reason(reasons, "wrong julia version")
                     return true # Won't be able to fulfill dependency
                 elseif ignore_loaded || !stalecheck
                     # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
-                    @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
                     record_reason(reasons, "wrong dep version loaded")
                     return true # Won't be able to fulfill dependency
                 end
-            else
-                @label locate_branch
-                path = locate_package(req_key) # TODO: add env and/or skip this when stalecheck is false
-                if path === nothing
-                    @debug "Rejecting cache file $cachefile because dependency $req_key not found."
-                    record_reason(reasons, "dep missing source")
-                    return true # Won't be able to fulfill dependency
-                end
-                depmods[i] = (path, req_key, req_build_id)
             end
+            path = locate_package(req_key) # TODO: add env and/or skip this when stalecheck is false
+            if path === nothing
+                @debug "Rejecting cache file $cachefile because dependency $req_key not found."
+                record_reason(reasons, "dep missing source")
+                return true # Won't be able to fulfill dependency
+            end
+            depmods[i] = (path, req_key, req_build_id)
         end
 
         # check if this file is going to provide one of our concrete dependencies
