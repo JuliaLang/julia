@@ -2218,6 +2218,11 @@ end
 # SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
 # Algorithm 5.1
 Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    if iszero(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+        return A
+    end
     _sqrt_real_2x2!(A, A0)
     if isone(s)
         A[1,1] -= 1
