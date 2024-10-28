@@ -482,7 +482,7 @@ function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, al
     out
 end
 
-@inline function __muldiag_nonzeroalpha!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
+function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
     d1 = D1.diag
     d2 = D2.diag
     outd = out.diag
