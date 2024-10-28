@@ -157,6 +157,7 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     jl_gc_tls_states_t gc_tls; // this is very large, and the offset of the first member is baked into codegen
     jl_gc_tls_states_common_t gc_tls_common; // common tls for both GCs
+    small_arraylist_t lazily_freed_mtarraylist_buffers;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;

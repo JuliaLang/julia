@@ -1409,6 +1409,14 @@ end
 end
 
 @testset "lexicographic comparison" begin
+    @testset "zero-dimensional" begin
+        vals = (0, 0.0, 1, 1.0)
+        for l ∈ vals
+            for r ∈ vals
+                @test cmp(fill(l), fill(r)) == cmp(l, r)
+            end
+        end
+    end
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0
     @test cmp([1, 1], [1, 1]) == 0

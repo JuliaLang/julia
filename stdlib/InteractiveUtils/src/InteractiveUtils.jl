@@ -16,7 +16,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
-    signature_type, format_bytes
+    signature_type, format_bytes, isbindingresolved
 using Base.Libc
 using Markdown
 
@@ -262,7 +262,7 @@ function _subtypes_in!(mods::Array, x::Type)
         m = pop!(mods)
         xt = xt::DataType
         for s in names(m, all = true)
-            if isdefined(m, s) && !isdeprecated(m, s)
+            if isbindingresolved(m, s) && !isdeprecated(m, s) && isdefined(m, s)
                 t = getfield(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
