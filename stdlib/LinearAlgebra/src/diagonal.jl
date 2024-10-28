@@ -491,7 +491,6 @@ end
     end
     out
 end
-
 @inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
     @inbounds for j in axes(D1, 2)
         dja = @stable_muladdmul MulAddMul(alpha,false)(D2.diag[j])
