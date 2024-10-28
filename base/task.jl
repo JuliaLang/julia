@@ -810,7 +810,7 @@ end
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
-    if t.is_timing_enabled
+    if t.metrics_enabled
         # user_time -task-finished-> wait_time
         now = time_ns()
         record_cpu_time!(t, now)
@@ -985,7 +985,7 @@ end
 
 function schedule(t::Task)
     # user_time -task-(re)scheduled-> wait_time
-    if t.is_timing_enabled && t.first_enqueued_at == 0
+    if t.metrics_enabled && t.first_enqueued_at == 0
         t.first_enqueued_at = time_ns()
     end
     enq_work(t)
@@ -1036,7 +1036,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     # user_time -task-(re)scheduled-> wait_time
-    if t.is_timing_enabled && t.first_enqueued_at == 0
+    if t.metrics_enabled && t.first_enqueued_at == 0
         t.first_enqueued_at = time_ns()
     end
     if error
@@ -1107,7 +1107,7 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
-    if t.is_timing_enabled && t.first_enqueued_at == 0
+    if t.metrics_enabled && t.first_enqueued_at == 0
         t.first_enqueued_at = time_ns()
     end
     t.result = x
@@ -1125,9 +1125,9 @@ function try_yieldto(undo)
     ct = current_task()
     # scheduler -task-started-> user
     # scheduler -task-resumed-> user
-    if ct.is_timing_enabled
-        # @assert ct.last_dequeued_at == 0
-        ct.last_dequeued_at = time_ns()
+    if ct.metrics_enabled
+        # @assert ct.last_started_running_at == 0
+        ct.last_started_running_at = time_ns()
     end
     if ct._isexception
         exc = ct.result
@@ -1142,7 +1142,7 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    if t.is_timing_enabled && t.first_enqueued_at == 0
+    if t.metrics_enabled && t.first_enqueued_at == 0
         t.first_enqueued_at = time_ns()
     end
     t.result = exc
@@ -1213,16 +1213,16 @@ else
 end
 
 function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
-    if t.is_timing_enabled
-        @assert t.last_dequeued_at != 0
-        t.cpu_time_ns += stopped_at - t.last_dequeued_at
-        t.last_dequeued_at = 0
+    if t.metrics_enabled
+        @assert t.last_started_running_at != 0
+        t.cpu_time_ns += stopped_at - t.last_started_running_at
+        t.last_started_running_at = 0
     end
     return t
 end
 
 function record_wall_time!(t::Task, done_at::UInt64=time_ns())
-    if t.is_timing_enabled
+    if t.metrics_enabled
         @assert t.first_enqueued_at != 0
         t.wall_time_ns = done_at - t.first_enqueued_at
     end

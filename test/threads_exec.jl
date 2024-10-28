@@ -1350,25 +1350,25 @@ end
 @testset "task time counters" begin
     @testset "enabled" begin
         try
-            Base.task_timing(true)
+            Base.task_metrics(true)
             start_time = time_ns()
             t = Threads.@spawn peakflops()
             wait(t)
             end_time = time_ns()
             wall_time_delta = end_time - start_time
-            @test t.is_timing_enabled
+            @test t.metrics_enabled
             @test Base.task_cpu_time_ns(t) > 0
             @test Base.task_wall_time_ns(t) > 0
             @test Base.task_wall_time_ns(t) >= Base.task_cpu_time_ns(t)
             @test wall_time_delta > Base.task_wall_time_ns(t)
         finally
-            Base.task_timing(false)
+            Base.task_metrics(false)
         end
     end
     @testset "disabled" begin
         t = Threads.@spawn peakflops()
         wait(t)
-        @test !t.is_timing_enabled
+        @test !t.metrics_enabled
         @test Base.task_cpu_time_ns(t) == 0
         @test Base.task_wall_time_ns(t) == 0
     end
@@ -1377,7 +1377,7 @@ end
 @testset "task time counters: lots of spawns" begin
     using Dates
     try
-        Base.task_timing(true)
+        Base.task_metrics(true)
         # create more tasks than we have threads.
         # - all tasks must have: cpu time <= wall time
         # - some tasks must have: cpu time < wall time
@@ -1418,7 +1418,7 @@ end
         summed_wall_time = sum(wall_times)
         @test summed_wall_time > summed_cpu_time
     finally
-        Base.task_timing(false)
+        Base.task_metrics(false)
     end
 end
 

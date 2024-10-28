@@ -94,7 +94,7 @@ This metric is only updated when the task yields or completes.
 See also [`task_wall_time_ns`](@ref).
 
 Will be `UInt64(0)` if task timings are not enabled.
-See [`Base.task_timing`](@ref).
+See [`Base.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
     A task may be running on an OS thread that is descheduled by the OS
@@ -116,7 +116,7 @@ or until the current time if the task has not yet completed.
 See also [`task_cpu_time_ns`](@ref).
 
 Will be `UInt64(0)` if task timings are not enabled.
-See [`Base.task_timing`](@ref).
+See [`Base.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
@@ -128,17 +128,17 @@ function task_wall_time_ns(t::Task)
 end
 
 """
-    Base.task_timing(::Bool)
+    Base.task_metrics(::Bool)
 
-Enable or disable the collection of per-task timing information.
-Task created when Base.task_timing(true) is in effect will have [`task_cpu_time_ns`](@ref)
-and [`task_wall_time_ns`](@ref) timing information available.
+Enable or disable the collection of per-task metrics.
+A `Task` created when `Base.task_metrics(true)` is in effect will have [`Base.task_cpu_time_ns`](@ref)
+and [`Base.task_wall_time_ns`](@ref) timing information available.
 """
-function task_timing(b::Bool)
+function task_metrics(b::Bool)
     if b
-        ccall(:jl_task_timing_enable, Cvoid, ())
+        ccall(:jl_task_metrics_enable, Cvoid, ())
     else
-        ccall(:jl_task_timing_disable, Cvoid, ())
+        ccall(:jl_task_metrics_disable, Cvoid, ())
     end
     return nothing
 end

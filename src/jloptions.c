@@ -152,7 +152,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-size-hint
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
-                        0, // task_timing
+                        0, // task_metrics
     };
     jl_options_initialized = 1;
 }
@@ -275,7 +275,7 @@ static const char opts[]  =
     "                                               given file path/directory. The `@` prefix is required\n"
     "                                               to select this option. A `@` with no path will track\n"
     "                                               the current directory.\n"
-    " --task-timing={yes|no*}                       Enable collection of per-task timing data.\n"
+    " --task-metrics={yes|no*}                       Enable collection of per-task timing data.\n"
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
     "                                               a REPL, run a script, or evaluate expressions. It\n"
     "                                               first tries to use BugReporting.jl installed in\n"
@@ -349,7 +349,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
-           opt_task_timing,
+           opt_task_metrics,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -430,7 +430,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
-        { "task-timing",     required_argument, 0, opt_task_timing },
+        { "task-metrics",     required_argument, 0, opt_task_metrics },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -982,8 +982,8 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
-        case opt_task_timing:
-            jl_options.task_timing = 1;
+        case opt_task_metrics:
+            jl_options.task_metrics = 1;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

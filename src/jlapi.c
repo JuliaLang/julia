@@ -812,29 +812,29 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
 /**
  * @brief Enable per-task timing.
  */
-JL_DLLEXPORT void jl_task_timing_enable(void)
+JL_DLLEXPORT void jl_task_metrics_enable(void)
 {
     // Increment the flag to allow reentrant callers.
-    jl_atomic_fetch_add(&jl_task_timing_enabled, 1);
+    jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
 }
 
 /**
  * @brief Disable per-task timing.
  */
-JL_DLLEXPORT void jl_task_timing_disable(void)
+JL_DLLEXPORT void jl_task_metrics_disable(void)
 {
     // Prevent decrementing the counter below zero
-    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_timing_enabled);
+    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled);
     while (enabled > 0) {
-        if (jl_atomic_cmpswap(&jl_task_timing_enabled, &enabled, enabled-1))
+        if (jl_atomic_cmpswap(&jl_task_metrics_enabled, &enabled, enabled-1))
             break;
     }
 }
 
 // TODO: remove this
-JL_DLLEXPORT void jl_is_task_timing_enabled(void)
+JL_DLLEXPORT void jl_is_task_metrics_enabled(void)
 {
-    jl_atomic_load_relaxed(&jl_task_timing_enabled);
+    jl_atomic_load_relaxed(&jl_task_metrics_enabled);
 }
 JL_DLLEXPORT void jl_is_compile_timing_enabled(void)
 {
