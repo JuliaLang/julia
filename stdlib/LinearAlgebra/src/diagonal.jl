@@ -520,7 +520,7 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number
     require_one_based_indexing(out)
     _rmul_or_fill!(out, beta)
     if !iszero(alpha)
-        @stable_muladdmul __muldiag_nonzeroalpha!(MulAddMul(alpha, true), D1, D2, _add_bis1)
+        __muldiag_nonzeroalpha!(out, D1, D2, alpha, true)
     end
     return out
 end
@@ -531,12 +531,18 @@ function _mul_diag!(out, A, B, alpha, beta)
     return out
 end
 
-_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
-    _mul_diag!(out, D, V, alpha, beta)
-_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, alpha::Number, beta::Number) =
-    _mul_diag!(out, D, B, alpha, beta)
-_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, alpha::Number, beta::Number) =
-    _mul_diag!(out, A, D, alpha, beta)
+for DT in (:AbstractVector, :AbstractMatrix)
+    @eval _mul!(out::$DT, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
+        _mul_diag!(out, D, V, alpha, beta)
+end
+for MT in (:AbstractMatrix, :AbstractTriangular)
+    @eval begin
+        _mul!(out::AbstractMatrix, D::Diagonal, B::$MT, alpha::Number, beta::Number) =
+            _mul_diag!(out, D, B, alpha, beta)
+        _mul!(out::AbstractMatrix, A::$MT, D::Diagonal, alpha::Number, beta::Number) =
+            _mul_diag!(out, A, D, alpha, beta)
+    end
+end
 _mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _mul_diag!(C, Da, Db, alpha, beta)
 _mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =

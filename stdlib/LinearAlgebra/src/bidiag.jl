@@ -472,10 +472,14 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+for MT in (:AbstractMatrix, :Diagonal)
+    @eval begin
+        @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::$MT, alpha::Number, beta::Number) =
+            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+        @inline _mul!(C::AbstractMatrix, A::$MT, B::BandedMatrix, alpha::Number, beta::Number) =
+            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+    end
+end
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
@@ -831,6 +835,9 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
     C
 end
 
+function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number)
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+end
 function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
@@ -1067,6 +1074,9 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAdd
     C
 end
 
+function _mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, alpha::Number, beta::Number)
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+end
 _mul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add::MulAddMul) =
     _dibimul!(C, A, B, _add)
 _mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul) =
