@@ -489,7 +489,7 @@ function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, _a
         if !_has_matching_zeros(out, A)
             rowrange = _rowrange_tri_zeros(A, j)
             @inbounds @simd for i in rowrange
-                _modify!(_add, A[i,j] * dja, out, (i,j))
+                _modify!(_add_aisone, A[i,j] * dja, out, (i,j))
             end
         end
     end
