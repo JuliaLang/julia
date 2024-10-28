@@ -496,7 +496,6 @@ end
     out
 end
 
-# ambiguity resolution
 @inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul)
     @inbounds for j in axes(D2, 2), i in axes(D2, 1)
         _modify!(_add, D1.diag[i] * D2[i,j], out, (i,j))
@@ -504,9 +503,9 @@ end
     out
 end
 
-# muldiag mainly handles the zero-alpha case, so that we need only
+# muldiag mainly handles the zero-alpha case, so that we need only 
 # specialize the non-trivial case
-function _mul_diag!(out, A, B, _add)
+function _mul_diag!(out, A, B, _add::MulAddMul)
     require_one_based_indexing(out, A, B)
     _muldiag_size_check(size(out), size(A), size(B))
     alpha, beta = _add.alpha, _add.beta
