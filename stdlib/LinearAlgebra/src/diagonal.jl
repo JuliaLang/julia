@@ -491,11 +491,11 @@ end
     end
     out
 end
-
 @inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
     d1 = D1.diag
     d2 = D2.diag
     # this method is only called with beta == true
+    # we hardcode beta == true in the loop to reduce the @stable_muladdmul branches
     isone(beta) || throw(ArgumentError("beta must satisfy isone(beta)"))
     @inbounds for i in eachindex(d1, d2)
         @stable_muladdmul _modify!(MulAddMul(alpha,true), d1[i] * d2[i], out, (i,i))
