@@ -823,7 +823,12 @@ JL_DLLEXPORT void jl_task_timing_enable(void)
  */
 JL_DLLEXPORT void jl_task_timing_disable(void)
 {
-    jl_atomic_fetch_add(&jl_task_timing_enabled, -1);
+    // Prevent decrementing the counter below zero
+    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_timing_enabled);
+    while (enabled > 0) {
+        if (jl_atomic_cmpswap(&jl_task_timing_enabled, &enabled, enabled-1))
+            break;
+    }
 }
 
 // TODO: remove this

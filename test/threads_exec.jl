@@ -1314,6 +1314,39 @@ end
     end
 end
 
+@testset "Base.task_metrics" begin
+    is_task_metrics_enabled() = fetch(Threads.@spawn current_task().metrics_enabled)
+    @test !is_task_metrics_enabled()
+    try
+        @testset "once" begin
+            Base.task_metrics(true)
+            @test is_task_metrics_enabled()
+            Base.task_metrics(false)
+            @test !is_task_metrics_enabled()
+        end
+        @testset "multiple" begin
+            Base.task_metrics(true)  # 1
+            Base.task_metrics(true)  # 2
+            Base.task_metrics(true)  # 3
+            @test is_task_metrics_enabled()
+            Base.task_metrics(false) # 2
+            @test is_task_metrics_enabled()
+            Base.task_metrics(false) # 1
+            @test is_task_metrics_enabled()
+            @sync for i in 1:5       # 0 (not negative)
+                Threads.@spawn Base.task_metrics(false)
+            end
+            @test !is_task_metrics_enabled()
+            Base.task_metrics(true)  # 1
+            @test is_task_metrics_enabled()
+        end
+    finally
+        while is_task_metrics_enabled()
+            Base.task_metrics(false)
+        end
+    end
+end
+
 @testset "task time counters" begin
     @testset "enabled" begin
         try

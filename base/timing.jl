@@ -138,7 +138,6 @@ function task_timing(b::Bool)
     if b
         ccall(:jl_task_timing_enable, Cvoid, ())
     else
-        # TODO: prevent decrementing the counter below zero
         ccall(:jl_task_timing_disable, Cvoid, ())
     end
     return nothing
