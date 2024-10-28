@@ -517,15 +517,15 @@ function _mul_diag!(out, A, B, _add::MulAddMul)
     return out
 end
 
-_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, _add::MulAddMul) =
+_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, _add) =
     _mul_diag!(out, D, V, _add)
-_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, _add::MulAddMul) =
+_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, _add) =
     _mul_diag!(out, D, B, _add)
-_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, _add::MulAddMul) =
+_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, _add) =
     _mul_diag!(out, A, D, _add)
-_mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, _add::MulAddMul) =
+_mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, _add) =
     _mul_diag!(C, Da, Db, _add)
-_mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add::MulAddMul) =
+_mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
     _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
