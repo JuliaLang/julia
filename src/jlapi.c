@@ -831,16 +831,6 @@ JL_DLLEXPORT void jl_task_metrics_disable(void)
     }
 }
 
-// TODO: remove this
-JL_DLLEXPORT void jl_is_task_metrics_enabled(void)
-{
-    jl_atomic_load_relaxed(&jl_task_metrics_enabled);
-}
-JL_DLLEXPORT void jl_is_compile_timing_enabled(void)
-{
-    jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
-}
-
 /**
  * @brief Retrieve floating-point environment constants.
  *
