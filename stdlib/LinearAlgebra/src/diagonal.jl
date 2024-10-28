@@ -440,7 +440,7 @@ function __muldiag_nonzeroalpha!(out, D::Diagonal, B::UpperOrLowerTriangular, _a
             end
         end
     end
-    out
+    return out
 end
 
 @inline function __muldiag_nonzeroalpha!(out, A, D::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
@@ -505,7 +505,7 @@ end
     out
 end
 
-# muldiag mainly handles the zero-alpha case, so that we need only 
+# muldiag mainly handles the zero-alpha case, so that we need only
 # specialize the non-trivial case
 function __muldiag!(out, A, B, _add::MulAddMul)
     require_one_based_indexing(out, A, B)
