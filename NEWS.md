@@ -17,6 +17,11 @@ New language features
   - atomic set once (`@atomiconce v[3] = 2`),
   - atomic swap (`x = @atomicswap v[3] = 2`), and
   - atomic replace (`x = @atomicreplace v[3] 2=>5`).
+- New option `--task-metrics=yes` to enable the collection of per-task timing information,
+  which can also be enabled/disabled at runtime with `Base.task_metrics(::Bool)`. ([#56320])
+  The available metrics are:
+  - scheduled cpu time for the task (`Base.task_cpu_time_ns`), and
+  - wall-time for the task (`Base.task_wall_time_ns`).
 
 Language changes
 ----------------
