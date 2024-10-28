@@ -84,7 +84,8 @@ function _unsetindex!(A::MemoryRef{T}) where T
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
     elsz = datatype_layoutsize(MemT)
-    isboxed = 1; isunion = 2
+    isbits = 0; isboxed = 1; isunion = 2
+    arrayelem == isbits && return A
     t = @_gc_preserve_begin mem
     p = Ptr{Ptr{Cvoid}}(@inbounds pointer(A))
     if arrayelem == isboxed
