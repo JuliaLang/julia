@@ -203,6 +203,7 @@ The following is a complete list of command-line switches available when launchi
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
+|`--task-timing={yes\|no*}`             |Enable tasks the collection of per-task timing metrics|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
 |`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
@@ -217,7 +218,6 @@ The following is a complete list of command-line switches available when launchi
 |`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
 |`--trace-compile-timing`               |If --trace-compile is enabled show how long each took to compile in ms|
 |`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
-|`--task-timing`                        |Enable tasks the collection of per-task timing metrics|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
 |`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|

@@ -275,6 +275,7 @@ static const char opts[]  =
     "                                               given file path/directory. The `@` prefix is required\n"
     "                                               to select this option. A `@` with no path will track\n"
     "                                               the current directory.\n"
+    " --task-timing={yes|no*}                       Enable collection of per-task timing data.\n"
     " --bug-report=KIND                             Launch a bug report session. It can be used to start\n"
     "                                               a REPL, run a script, or evaluate expressions. It\n"
     "                                               first tries to use BugReporting.jl installed in\n"
@@ -317,7 +318,6 @@ static const char opts_hidden[]  =
     "                                               comment if color is not supported\n"
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
     "                                               compile in ms\n"
-    " --task-timing                                 Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
     " --trim={no*|safe|unsafe|unsafe-warn}\n"
@@ -430,7 +430,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
-        { "task-timing",           no_argument, 0, opt_task_timing },
+        { "task-timing",     required_argument, 0, opt_task_timing },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
