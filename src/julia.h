@@ -72,6 +72,7 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 #include "uv.h"
 #endif
 #include "gc-interface.h"
+#include "gc-common.h"
 #include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
