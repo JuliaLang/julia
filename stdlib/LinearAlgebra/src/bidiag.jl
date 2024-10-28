@@ -468,20 +468,6 @@ const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const TriSym = Union{Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline _mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-for MT in (:AbstractMatrix, :Diagonal)
-    @eval begin
-        @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::$MT, alpha::Number, beta::Number) =
-            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-        @inline _mul!(C::AbstractMatrix, A::$MT, B::BandedMatrix, alpha::Number, beta::Number) =
-            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-    end
-end
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
 # B .= A * B
 function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
@@ -585,11 +571,8 @@ function _diag(A::Bidiagonal, k)
     end
 end
 
-_mul!(C::AbstractMatrix, A::BiTriSym, B::TriSym, _add::MulAddMul) =
-    _bibimul!(C, A, B, _add)
-_mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul) =
-    _bibimul!(C, A, B, _add)
-function _bibimul!(C, A, B, _add)
+_mul!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym, alpha::Number, beta::Number) = _bibimul!(C, A, B, alpha, beta)
+function _bibimul!(C, A, B, alpha, beta)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
@@ -597,41 +580,41 @@ function _bibimul!(C, A, B, _add)
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
-    _rmul_or_fill!(C, _add.beta)
-    iszero(_add.alpha) && return C
+    _rmul_or_fill!(C, beta)
+    iszero(alpha) && return C
     if n <= 3
         # naive multiplication
         for I in CartesianIndices(C)
-            C[I] += _add(sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)))
+            C[I] += @stable_muladdmul MulAddMul(alpha,false)(sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)))
         end
         return C
     end
     @inbounds begin
         # first column of C
-        C[1,1] += _add(A[1,1]*B[1,1] + A[1, 2]*B[2,1])
-        C[2,1] += _add(A[2,1]*B[1,1] + A[2,2]*B[2,1])
-        C[3,1] += _add(A[3,2]*B[2,1])
+        C[1,1] += @stable_muladdmul MulAddMul(alpha,false)(A[1,1]*B[1,1] + A[1, 2]*B[2,1])
+        C[2,1] += @stable_muladdmul MulAddMul(alpha,false)(A[2,1]*B[1,1] + A[2,2]*B[2,1])
+        C[3,1] += @stable_muladdmul MulAddMul(alpha,false)(A[3,2]*B[2,1])
         # second column of C
-        C[1,2] += _add(A[1,1]*B[1,2] + A[1,2]*B[2,2])
-        C[2,2] += _add(A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2])
-        C[3,2] += _add(A[3,2]*B[2,2] + A[3,3]*B[3,2])
-        C[4,2] += _add(A[4,3]*B[3,2])
+        C[1,2] += @stable_muladdmul MulAddMul(alpha,false)(A[1,1]*B[1,2] + A[1,2]*B[2,2])
+        C[2,2] += @stable_muladdmul MulAddMul(alpha,false)(A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2])
+        C[3,2] += @stable_muladdmul MulAddMul(alpha,false)(A[3,2]*B[2,2] + A[3,3]*B[3,2])
+        C[4,2] += @stable_muladdmul MulAddMul(alpha,false)(A[4,3]*B[3,2])
     end # inbounds
     # middle columns
-    __bibimul!(C, A, B, _add)
+    __bibimul!(C, A, B, alpha, beta)
     @inbounds begin
-        C[n-3,n-1] += _add(A[n-3,n-2]*B[n-2,n-1])
-        C[n-2,n-1] += _add(A[n-2,n-2]*B[n-2,n-1] + A[n-2,n-1]*B[n-1,n-1])
-        C[n-1,n-1] += _add(A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1])
-        C[n,  n-1] += _add(A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1])
+        C[n-3,n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n-3,n-2]*B[n-2,n-1])
+        C[n-2,n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n-2,n-2]*B[n-2,n-1] + A[n-2,n-1]*B[n-1,n-1])
+        C[n-1,n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1])
+        C[n,  n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1])
         # last column of C
-        C[n-2,  n] += _add(A[n-2,n-1]*B[n-1,n])
-        C[n-1,  n] += _add(A[n-1,n-1]*B[n-1,n  ] + A[n-1,n]*B[n,n  ])
-        C[n,    n] += _add(A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ])
+        C[n-2,  n] += @stable_muladdmul MulAddMul(alpha,false)(A[n-2,n-1]*B[n-1,n])
+        C[n-1,  n] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,n-1]*B[n-1,n  ] + A[n-1,n]*B[n,n  ])
+        C[n,    n] += @stable_muladdmul MulAddMul(alpha,false)(A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ])
     end # inbounds
     C
 end
-function __bibimul!(C, A, B, _add)
+function __bibimul!(C, A, B, alpha, beta)
     n = size(A,1)
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
@@ -654,16 +637,16 @@ function __bibimul!(C, A, B, _add)
             Bjj     = Bd[j]
             Bj₊1j   = Bl[j]
 
-            C[j-2, j] += _add(Aj₋2j₋1*Bj₋1j)
-            C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
-            C[j,   j] += _add(Ajj₋1*Bj₋1j + Ajj*Bjj + Ajj₊1*Bj₊1j)
-            C[j+1, j] += _add(Aj₊1j*Bjj + Aj₊1j₊1*Bj₊1j)
-            C[j+2, j] += _add(Aj₊2j₊1*Bj₊1j)
+            C[j-2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋2j₋1*Bj₋1j)
+            C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
+            C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj₋1*Bj₋1j + Ajj*Bjj + Ajj₊1*Bj₊1j)
+            C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj + Aj₊1j₊1*Bj₊1j)
+            C[j+2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊2j₊1*Bj₊1j)
         end
     end
     C
 end
-function __bibimul!(C, A, B::Bidiagonal, _add)
+function __bibimul!(C, A, B::Bidiagonal, alpha, beta)
     n = size(A,1)
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
@@ -682,10 +665,10 @@ function __bibimul!(C, A, B::Bidiagonal, _add)
                 Bj₋1j   = Bu[j-1]
                 Bjj     = Bd[j]
 
-                C[j-2, j] += _add(Aj₋2j₋1*Bj₋1j)
-                C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
-                C[j,   j] += _add(Ajj₋1*Bj₋1j + Ajj*Bjj)
-                C[j+1, j] += _add(Aj₊1j*Bjj)
+                C[j-2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋2j₋1*Bj₋1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj₋1*Bj₋1j + Ajj*Bjj)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj)
             end
         end
     else # B.uplo == 'L'
@@ -701,16 +684,16 @@ function __bibimul!(C, A, B::Bidiagonal, _add)
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
 
-                C[j-1, j] += _add(Aj₋1j*Bjj)
-                C[j,   j] += _add(Ajj*Bjj + Ajj₊1*Bj₊1j)
-                C[j+1, j] += _add(Aj₊1j*Bjj + Aj₊1j₊1*Bj₊1j)
-                C[j+2, j] += _add(Aj₊2j₊1*Bj₊1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j*Bjj)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bjj + Ajj₊1*Bj₊1j)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj + Aj₊1j₊1*Bj₊1j)
+                C[j+2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊2j₊1*Bj₊1j)
             end
         end
     end
     C
 end
-function __bibimul!(C, A::Bidiagonal, B, _add)
+function __bibimul!(C, A::Bidiagonal, B, alpha, beta)
     n = size(A,1)
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -730,10 +713,10 @@ function __bibimul!(C, A::Bidiagonal, B, _add)
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
 
-                C[j-2, j] += _add(Aj₋2j₋1*Bj₋1j)
-                C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
-                C[j,   j] += _add(Ajj*Bjj       + Ajj₊1*Bj₊1j)
-                C[j+1, j] += _add(Aj₊1j₊1*Bj₊1j)
+                C[j-2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋2j₋1*Bj₋1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j₊1*Bj₊1j)
             end
         end
     else # A.uplo == 'L'
@@ -750,16 +733,16 @@ function __bibimul!(C, A::Bidiagonal, B, _add)
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
 
-                C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j)
-                C[j,   j] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
-                C[j+1, j] += _add(Aj₊1j*Bjj   + Aj₊1j₊1*Bj₊1j)
-                C[j+2, j] += _add(Aj₊2j₊1*Bj₊1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj₋1*Bj₋1j   + Ajj*Bjj)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj   + Aj₊1j₊1*Bj₊1j)
+                C[j+2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊2j₊1*Bj₊1j)
             end
         end
     end
     C
 end
-function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
+function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, alpha, beta)
     n = size(A,1)
     Ad = _diag(A, 0)
     Bd = _diag(B, 0)
@@ -775,9 +758,9 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bj₋1j   = Bu[j-1]
                 Bjj     = Bd[j]
 
-                C[j-2, j] += _add(Aj₋2j₋1*Bj₋1j)
-                C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
-                C[j,   j] += _add(Ajj*Bjj)
+                C[j-2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋2j₋1*Bj₋1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j + Aj₋1j*Bjj)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bjj)
             end
         end
     elseif A.uplo == 'U' && B.uplo == 'L'
@@ -792,9 +775,9 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
 
-                C[j-1, j] += _add(Aj₋1j*Bjj)
-                C[j,   j] += _add(Ajj*Bjj + Ajj₊1*Bj₊1j)
-                C[j+1, j] += _add(Aj₊1j₊1*Bj₊1j)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j*Bjj)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bjj + Ajj₊1*Bj₊1j)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j₊1*Bj₊1j)
             end
         end
     elseif A.uplo == 'L' && B.uplo == 'U'
@@ -809,9 +792,9 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bj₋1j   = Bu[j-1]
                 Bjj     = Bd[j]
 
-                C[j-1, j] += _add(Aj₋1j₋1*Bj₋1j)
-                C[j,   j] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
-                C[j+1, j] += _add(Aj₊1j*Bjj)
+                C[j-1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₋1j₋1*Bj₋1j)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj₋1*Bj₋1j   + Ajj*Bjj)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj)
             end
         end
     else # A.uplo == 'L' && B.uplo == 'L'
@@ -826,9 +809,9 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
 
-                C[j,   j] += _add(Ajj*Bjj)
-                C[j+1, j] += _add(Aj₊1j*Bjj   + Aj₊1j₊1*Bj₊1j)
-                C[j+2, j] += _add(Aj₊2j₊1*Bj₊1j)
+                C[j,   j] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bjj)
+                C[j+1, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊1j*Bjj   + Aj₊1j₊1*Bj₊1j)
+                C[j+2, j] += @stable_muladdmul MulAddMul(alpha,false)(Aj₊2j₊1*Bj₊1j)
             end
         end
     end
@@ -836,15 +819,12 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
 end
 
 function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number)
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-end
-function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
+    _rmul_or_fill!(C, beta)  # see the same use above
+    iszero(alpha) && return C
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
@@ -852,116 +832,125 @@ function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     @inbounds begin
         # first row of C
         for j in 1:min(2, n)
-            C[1,j] += _add(A[1,j]*B[j,j])
+            C[1,j] += @stable_muladdmul MulAddMul(alpha,false)(A[1,j]*B[j,j])
         end
         # second row of C
         if n > 1
             for j in 1:min(3, n)
-                C[2,j] += _add(A[2,j]*B[j,j])
+                C[2,j] += @stable_muladdmul MulAddMul(alpha,false)(A[2,j]*B[j,j])
             end
         end
         for j in 3:n-2
-            C[j, j-1] += _add(Al[j-1]*Bd[j-1])
-            C[j, j  ] += _add(Ad[j  ]*Bd[j  ])
-            C[j, j+1] += _add(Au[j  ]*Bd[j+1])
+            C[j, j-1] += @stable_muladdmul MulAddMul(alpha,false)(Al[j-1]*Bd[j-1])
+            C[j, j  ] += @stable_muladdmul MulAddMul(alpha,false)(Ad[j  ]*Bd[j  ])
+            C[j, j+1] += @stable_muladdmul MulAddMul(alpha,false)(Au[j  ]*Bd[j+1])
         end
         if n > 3
             # row before last of C
             for j in n-2:n
-                C[n-1,j] += _add(A[n-1,j]*B[j,j])
+                C[n-1,j] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,j]*B[j,j])
             end
         end
         # last row of C
         if n > 2
             for j in n-1:n
-                C[n,j] += _add(A[n,j]*B[j,j])
+                C[n,j] += @stable_muladdmul MulAddMul(alpha,false)(A[n,j]*B[j,j])
             end
         end
     end # inbounds
     C
 end
 
-function _mul!(C::AbstractMatrix, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
+function _mul!(C::AbstractMatrix, A::Bidiagonal, B::Diagonal, alpha::Number, beta::Number)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
+    _rmul_or_fill!(C, beta)  # see the same use above
+    iszero(alpha) && return C
     (; dv, ev) = A
     Bd = B.diag
     rowshift = A.uplo == 'U' ? -1 : 1
     evshift = Int(A.uplo == 'U')
     @inbounds begin
         # first row of C
-        C[1,1] += _add(dv[1]*Bd[1])
+        C[1,1] += @stable_muladdmul MulAddMul(alpha,false)(dv[1]*Bd[1])
         if n > 1
             if A.uplo == 'L'
-                C[2,1] += _add(ev[1]*Bd[1])
+                C[2,1] += @stable_muladdmul MulAddMul(alpha,false)(ev[1]*Bd[1])
             end
             for col in 2:n-1
-                C[col+rowshift, col] += _add(ev[col - evshift]*Bd[col])
-                C[col, col] += _add(dv[col]*Bd[col])
+                C[col+rowshift, col] += @stable_muladdmul MulAddMul(alpha,false)(ev[col - evshift]*Bd[col])
+                C[col, col] += @stable_muladdmul MulAddMul(alpha,false)(dv[col]*Bd[col])
             end
             if A.uplo == 'U'
-                C[n-1,n] += _add(ev[n-1]*Bd[n])
+                C[n-1,n] += @stable_muladdmul MulAddMul(alpha,false)(ev[n-1]*Bd[n])
             end
-            C[n, n] += _add(dv[n]*Bd[n])
+            C[n, n] += @stable_muladdmul MulAddMul(alpha,false)(dv[n]*Bd[n])
         end
     end # inbounds
     C
 end
 
-function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
+function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, alpha::Number, beta::Number)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(alpha) && return _rmul_or_fill!(C, beta)
     Adv, Aev = A.dv, A.ev
     Cdv, Cev = C.dv, C.ev
     Bd = B.diag
     shift = Int(A.uplo == 'U')
     if C.uplo == A.uplo
         @inbounds begin
-            _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), Adv[1]*Bd[1], Cdv, 1)
             for j in eachindex(IndexLinear(), Aev, Cev)
-                _modify!(_add, Aev[j]*Bd[j+shift], Cev, j)
-                _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Aev[j]*Bd[j+shift], Cev, j)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Adv[j+1]*Bd[j+1], Cdv, j+1)
             end
         end # inbounds
     else
         @inbounds begin
-            _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), Adv[1]*Bd[1], Cdv, 1)
             for j in eachindex(IndexLinear(), Aev, Cev)
-                _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Adv[j+1]*Bd[j+1], Cdv, j+1)
                 # this branch will error unless the value is zero
-                _modify!(_add, Aev[j]*Bd[j+shift], C, (j+1-shift, j+shift))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Aev[j]*Bd[j+shift], C, (j+1-shift, j+shift))
                 # zeros of the correct type
-                _modify!(_add, A[j+shift, j+1-shift]*Bd[j+1-shift], Cev, j)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[j+shift, j+1-shift]*Bd[j+1-shift], Cev, j)
             end
         end
     end
     C
 end
 
-function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulAddMul)
+for T in (:AbstractVector, :AbstractMatrix)
+    @eval _mul!(C::$T, A::BiTriSym, B::AbstractVector, alpha::Number, beta::Number) = 
+            _lmul_bitrisym!(C, A, B, alpha, beta)
+end
+for T in (:AbstractMatrix, :AbstractTriangular)
+    @eval _mul!(C::AbstractMatrix, A::BiTriSym, B::$T, alpha::Number, beta::Number) = 
+            _lmul_bitrisym!(C, A, B, alpha, beta)
+end
+
+function _lmul_bitrisym!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, alpha::Number, beta::Number)
     require_one_based_indexing(C, B)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     nA = size(A,1)
     nB = size(B,2)
     (iszero(nA) || iszero(nB)) && return C
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(alpha) && return _rmul_or_fill!(C, beta)
     if nA <= 3
         # naive multiplication
         for I in CartesianIndices(C)
             col = Base.tail(Tuple(I))
-            _modify!(_add, sum(A[I[1], k] * B[k, col...] for k in axes(A,2)), C, I)
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), sum(A[I[1], k] * B[k, col...] for k in axes(A,2)), C, I)
         end
         return C
     end
-    _mul_bitrisym!(C, A, B, _add)
+    _lmul_bitrisym_large!(C, A, B, alpha, beta)
 end
-function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat, _add::MulAddMul)
+function _lmul_bitrisym_large!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat, alpha::Number, beta::Number)
     nA = size(A,1)
     nB = size(B,2)
     d = A.dv
@@ -970,12 +959,12 @@ function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat,
         @inbounds begin
             for j = 1:nB
                 b₀, b₊ = B[1, j], B[2, j]
-                _modify!(_add, d[1]*b₀ + u[1]*b₊, C, (1, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), d[1]*b₀ + u[1]*b₊, C, (1, j))
                 for i = 2:nA - 1
                     b₀, b₊ = b₊, B[i + 1, j]
-                    _modify!(_add, d[i]*b₀ + u[i]*b₊, C, (i, j))
+                    @stable_muladdmul _modify!(MulAddMul(alpha,beta), d[i]*b₀ + u[i]*b₊, C, (i, j))
                 end
-                _modify!(_add, d[nA]*b₊, C, (nA, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), d[nA]*b₊, C, (nA, j))
             end
         end
     else
@@ -983,18 +972,18 @@ function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat,
         @inbounds begin
             for j = 1:nB
                 b₀, b₊ = B[1, j], B[2, j]
-                _modify!(_add, d[1]*b₀, C, (1, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), d[1]*b₀, C, (1, j))
                 for i = 2:nA - 1
                     b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                    _modify!(_add, l[i - 1]*b₋ + d[i]*b₀, C, (i, j))
+                    @stable_muladdmul _modify!(MulAddMul(alpha,beta), l[i - 1]*b₋ + d[i]*b₀, C, (i, j))
                 end
-                _modify!(_add, l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
             end
         end
     end
     C
 end
-function _mul_bitrisym!(C::AbstractVecOrMat, A::TriSym, B::AbstractVecOrMat, _add::MulAddMul)
+function _lmul_bitrisym_large!(C::AbstractVecOrMat, A::TriSym, B::AbstractVecOrMat, alpha::Number, beta::Number)
     nA = size(A,1)
     nB = size(B,2)
     l = _diag(A, -1)
@@ -1003,26 +992,31 @@ function _mul_bitrisym!(C::AbstractVecOrMat, A::TriSym, B::AbstractVecOrMat, _ad
     @inbounds begin
         for j = 1:nB
             b₀, b₊ = B[1, j], B[2, j]
-            _modify!(_add, d[1]*b₀ + u[1]*b₊, C, (1, j))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), d[1]*b₀ + u[1]*b₊, C, (1, j))
             for i = 2:nA - 1
                 b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                _modify!(_add, l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊, C, (i, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊, C, (i, j))
             end
-            _modify!(_add, l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
         end
     end
     C
 end
 
-function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
+for T in (:AbstractMatrix, :AbstractTriangular)
+    @eval function _mul!(C::AbstractMatrix, A::$T, B::BiTriSym, alpha::Number, beta::Number)
+        _rmul_bitrisym!(C, A, B, alpha, beta)
+    end
+end
+function _rmul_bitrisym!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, alpha::Number, beta::Number)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     m = size(B,2)
-    (iszero(_add.alpha) || iszero(m)) && return _rmul_or_fill!(C, _add.beta)
+    (iszero(alpha) || iszero(m)) && return _rmul_or_fill!(C, beta)
     if m == 1
         B11 = B[1,1]
-        return mul!(C, A, B11, _add.alpha, _add.beta)
+        return mul!(C, A, B11, alpha, beta)
     end
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -1034,8 +1028,8 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
         Bmm = Bd[m]
         Bm₋1m = Bu[m-1]
         for i in 1:n
-            _modify!(_add, A[i,1] * B11 + A[i, 2] * B21, C, (i, 1))
-            _modify!(_add, A[i, m-1] * Bm₋1m + A[i, m] * Bmm, C, (i, m))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i,1] * B11 + A[i, 2] * B21, C, (i, 1))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i, m-1] * Bm₋1m + A[i, m] * Bmm, C, (i, m))
         end
         # middle columns of C
         for j = 2:m-1
@@ -1043,57 +1037,52 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
             Bjj = Bd[j]
             Bj₊1j = Bl[j]
             for i = 1:n
-                _modify!(_add, A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j, C, (i, j))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j, C, (i, j))
             end
         end
     end # inbounds
     C
 end
 
-function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul)
+function _rmul_bitrisym!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, alpha::Number, beta::Number)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     m, n = size(A)
     (iszero(m) || iszero(n)) && return C
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(alpha) && return _rmul_or_fill!(C, beta)
     @inbounds if B.uplo == 'U'
         for j in n:-1:2, i in 1:m
-            _modify!(_add, A[i,j] * B.dv[j] + A[i,j-1] * B.ev[j-1], C, (i, j))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i,j] * B.dv[j] + A[i,j-1] * B.ev[j-1], C, (i, j))
         end
         for i in 1:m
-            _modify!(_add, A[i,1] * B.dv[1], C, (i, 1))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i,1] * B.dv[1], C, (i, 1))
         end
     else # uplo == 'L'
         for j in 1:n-1, i in 1:m
-            _modify!(_add, A[i,j] * B.dv[j] + A[i,j+1] * B.ev[j], C, (i, j))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i,j] * B.dv[j] + A[i,j+1] * B.ev[j], C, (i, j))
         end
         for i in 1:m
-            _modify!(_add, A[i,n] * B.dv[n], C, (i, n))
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), A[i,n] * B.dv[n], C, (i, n))
         end
     end
     C
 end
 
-function _mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, alpha::Number, beta::Number)
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-end
-_mul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add::MulAddMul) =
-    _dibimul!(C, A, B, _add)
-_mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul) =
-    _dibimul!(C, A, B, _add)
-function _dibimul!(C, A, B, _add)
+_mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, alpha::Number, beta::Number) =
+    _dibimul!(C, A, B, alpha, beta)
+function _dibimul!(C, A, B, alpha, beta)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     # ensure that we fill off-band elements in the destination
-    _rmul_or_fill!(C, _add.beta)
-    iszero(_add.alpha) && return C
+    _rmul_or_fill!(C, beta)
+    iszero(alpha) && return C
     if n <= 3
         # For simplicity, use a naive multiplication for small matrices
         # that loops over all elements.
         for I in CartesianIndices(C)
-            C[I] += _add(A.diag[I[1]] * B[I[1], I[2]])
+            C[I] += @stable_muladdmul MulAddMul(alpha,false)(A.diag[I[1]] * B[I[1], I[2]])
         end
         return C
     end
@@ -1103,86 +1092,86 @@ function _dibimul!(C, A, B, _add)
     Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
-        C[1,1] += _add(A[1,1]*B[1,1])
-        C[1,2] += _add(A[1,1]*B[1,2])
+        C[1,1] += @stable_muladdmul MulAddMul(alpha,false)(A[1,1]*B[1,1])
+        C[1,2] += @stable_muladdmul MulAddMul(alpha,false)(A[1,1]*B[1,2])
         # second row of C
-        C[2,1] += _add(A[2,2]*B[2,1])
-        C[2,2] += _add(A[2,2]*B[2,2])
-        C[2,3] += _add(A[2,2]*B[2,3])
+        C[2,1] += @stable_muladdmul MulAddMul(alpha,false)(A[2,2]*B[2,1])
+        C[2,2] += @stable_muladdmul MulAddMul(alpha,false)(A[2,2]*B[2,2])
+        C[2,3] += @stable_muladdmul MulAddMul(alpha,false)(A[2,2]*B[2,3])
         for j in 3:n-2
             Ajj       = Ad[j]
-            C[j, j-1] += _add(Ajj*Bl[j-1])
-            C[j, j  ] += _add(Ajj*Bd[j])
-            C[j, j+1] += _add(Ajj*Bu[j])
+            C[j, j-1] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bl[j-1])
+            C[j, j  ] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bd[j])
+            C[j, j+1] += @stable_muladdmul MulAddMul(alpha,false)(Ajj*Bu[j])
         end
         # row before last of C
-        C[n-1,n-2] += _add(A[n-1,n-1]*B[n-1,n-2])
-        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
-        C[n-1,n  ] += _add(A[n-1,n-1]*B[n-1,n  ])
+        C[n-1,n-2] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,n-1]*B[n-1,n-2])
+        C[n-1,n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,n-1]*B[n-1,n-1])
+        C[n-1,n  ] += @stable_muladdmul MulAddMul(alpha,false)(A[n-1,n-1]*B[n-1,n  ])
         # last row of C
-        C[n,n-1] += _add(A[n,n]*B[n,n-1])
-        C[n,n  ] += _add(A[n,n]*B[n,n  ])
+        C[n,n-1] += @stable_muladdmul MulAddMul(alpha,false)(A[n,n]*B[n,n-1])
+        C[n,n  ] += @stable_muladdmul MulAddMul(alpha,false)(A[n,n]*B[n,n  ])
     end # inbounds
     C
 end
-function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
+function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, alpha, beta)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     # ensure that we fill off-band elements in the destination
-    _rmul_or_fill!(C, _add.beta)
-    iszero(_add.alpha) && return C
+    _rmul_or_fill!(C, beta)
+    iszero(alpha) && return C
     Ad = A.diag
     Bdv, Bev = B.dv, B.ev
     rowshift = B.uplo == 'U' ? -1 : 1
     evshift = Int(B.uplo == 'U')
     @inbounds begin
         # first row of C
-        C[1,1] += _add(Ad[1]*Bdv[1])
+        C[1,1] += @stable_muladdmul MulAddMul(alpha,false)(Ad[1]*Bdv[1])
         if n > 1
             if B.uplo == 'L'
-                C[2,1] += _add(Ad[2]*Bev[1])
+                C[2,1] += @stable_muladdmul MulAddMul(alpha,false)(Ad[2]*Bev[1])
             end
             for col in 2:n-1
                 evrow = col+rowshift
-                C[evrow, col] += _add(Ad[evrow]*Bev[col - evshift])
-                C[col, col] += _add(Ad[col]*Bdv[col])
+                C[evrow, col] += @stable_muladdmul MulAddMul(alpha,false)(Ad[evrow]*Bev[col - evshift])
+                C[col, col] += @stable_muladdmul MulAddMul(alpha,false)(Ad[col]*Bdv[col])
             end
             if B.uplo == 'U'
-                C[n-1,n] += _add(Ad[n-1]*Bev[n-1])
+                C[n-1,n] += @stable_muladdmul MulAddMul(alpha,false)(Ad[n-1]*Bev[n-1])
             end
-            C[n, n] += _add(Ad[n]*Bdv[n])
+            C[n, n] += @stable_muladdmul MulAddMul(alpha,false)(Ad[n]*Bdv[n])
         end
     end # inbounds
     C
 end
-function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, _add)
+function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, alpha, beta)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n == 0 && return C
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(alpha) && return _rmul_or_fill!(C, beta)
     Ad = A.diag
     Bdv, Bev = B.dv, B.ev
     Cdv, Cev = C.dv, C.ev
     shift = Int(B.uplo == 'L')
     if C.uplo == B.uplo
         @inbounds begin
-            _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[1]*Bdv[1], Cdv, 1)
             for j in eachindex(IndexLinear(), Bev, Cev)
-                _modify!(_add, Ad[j+shift]*Bev[j], Cev, j)
-                _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[j+shift]*Bev[j], Cev, j)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[j+1]*Bdv[j+1], Cdv, j+1)
             end
         end # inbounds
     else
         @inbounds begin
-            _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
+            @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[1]*Bdv[1], Cdv, 1)
             for j in eachindex(IndexLinear(), Bev, Cev)
-                _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[j+1]*Bdv[j+1], Cdv, j+1)
                 # this branch will error unless the value is zero
-                _modify!(_add, Ad[j+shift]*Bev[j], C, (j+shift, j+1-shift))
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[j+shift]*Bev[j], C, (j+shift, j+1-shift))
                 # zeros of the correct type
-                _modify!(_add, Ad[j+1-shift]*B[j+1-shift,j+shift], Cev, j)
+                @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ad[j+1-shift]*B[j+1-shift,j+shift], Cev, j)
             end
         end
     end
