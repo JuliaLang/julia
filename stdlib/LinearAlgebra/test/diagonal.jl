@@ -822,6 +822,19 @@ end
         @test @inferred(D[1,2]) isa typeof(s)
         @test all(iszero, D[1,2])
     end
+
+    @testset "mul!" begin
+        D1 = Diagonal(fill(ones(2,3), 2))
+        D2 = Diagonal(fill(ones(3,2), 2))
+        C = similar(D1, size(D1))
+        mul!(C, D1, D2)
+        @test all(x -> size(x) == (2,2), C)
+        @test C == D1 * D2
+        D = similar(D1) 
+        mul!(D, D1, D2)
+        @test all(x -> size(x) == (2,2), D)
+        @test D == D1 * D2
+    end
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin

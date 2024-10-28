@@ -496,43 +496,25 @@ end
     out
 end
 
+# ambiguity resolution
 @inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul)
-    d1 = D1.diag
-    d2 = D2.diag
-    @inbounds @simd for i in eachindex(d1, d2)
-        _modify!(_add, d1[i] * d2[i], out, (i,i))
+    @inbounds for j in axes(D2, 2), i in axes(D2, 1)
+        _modify!(_add, D1.diag[i] * D2[i,j], out, (i,j))
     end
     out
 end
 
 # muldiag mainly handles the zero-alpha case, so that we need only
 # specialize the non-trivial case
-function __muldiag!(out, A, B, _add::MulAddMul)
+function _mul_diag!(out, A, B, _add)
     require_one_based_indexing(out, A, B)
+    _muldiag_size_check(size(out), size(A), size(B))
     alpha, beta = _add.alpha, _add.beta
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
     else
         __muldiag_nonzeroalpha!(out, A, B, _add)
     end
-    return out
-end
-
-function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1}) where {ais1}
-    require_one_based_indexing(out)
-    alpha, beta = _add.alpha, _add.beta
-    _rmul_or_fill!(out, beta)
-    if !iszero(alpha)
-        # we ony update the diagonal
-        _add_bis1 = MulAddMul{ais1,false,typeof(alpha),Bool}(alpha,true)
-        __muldiag_nonzeroalpha!(out, D1, D2, _add_bis1)
-    end
-    return out
-end
-
-function _mul_diag!(out, A, B, _add)
-    _muldiag_size_check(size(out), size(A), size(B))
-    __muldiag!(out, A, B, _add)
     return out
 end
 
