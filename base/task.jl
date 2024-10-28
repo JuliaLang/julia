@@ -811,7 +811,7 @@ end
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
     if t.metrics_enabled
-        # user_time -task-finished-> wait_time
+        # [task] user_time -finished-> wait_time
         now = time_ns()
         record_cpu_time!(t, now)
         record_wall_time!(t, now)
@@ -984,8 +984,8 @@ function enq_work(t::Task)
 end
 
 function schedule(t::Task)
-    # user_time -task-(re)scheduled-> wait_time
     if t.metrics_enabled && t.first_enqueued_at == 0
+        # [task] created -scheduled-> wait_time
         t.first_enqueued_at = time_ns()
     end
     enq_work(t)
@@ -1035,8 +1035,8 @@ true
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
-    # user_time -task-(re)scheduled-> wait_time
     if t.metrics_enabled && t.first_enqueued_at == 0
+        # [task] created -scheduled-> wait_time
         t.first_enqueued_at = time_ns()
     end
     if error
@@ -1060,6 +1060,7 @@ tasks.
 """
 function yield()
     ct = current_task()
+    # [task] user_time -yield-> wait_time
     record_cpu_time!(ct)
     enq_work(ct)
     try
@@ -1082,6 +1083,7 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
     current = current_task()
+    # [task] user_time -yield-> wait_time
     record_cpu_time!(current)
     t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
@@ -1108,6 +1110,7 @@ function yieldto(t::Task, @nospecialize(x=nothing))
         throw(t.result)
     end
     if t.metrics_enabled && t.first_enqueued_at == 0
+        # [task] created -scheduled-> wait_time
         t.first_enqueued_at = time_ns()
     end
     t.result = x
@@ -1123,8 +1126,7 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
-    # scheduler -task-started-> user
-    # scheduler -task-resumed-> user
+    # [task] wait_time -(re)started-> user_time
     if ct.metrics_enabled
         # @assert ct.last_started_running_at == 0
         ct.last_started_running_at = time_ns()
@@ -1143,6 +1145,7 @@ end
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
     if t.metrics_enabled && t.first_enqueued_at == 0
+        # [task] created -scheduled-> wait_time
         t.first_enqueued_at = time_ns()
     end
     t.result = exc
@@ -1216,7 +1219,7 @@ function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
     if t.metrics_enabled
         @assert t.last_started_running_at != 0
         t.cpu_time_ns += stopped_at - t.last_started_running_at
-        t.last_started_running_at = 0
+        # t.last_started_running_at = 0
     end
     return t
 end

@@ -1250,8 +1250,8 @@ CFI_NORETURN
     fesetenv(&ct->fenv);
 
     ct->ctx.started = 1;
-    // wait_time -task-started-> user_time
     if (ct->metrics_enabled) {
+        // [task] wait_time -started-> user_time
         assert(ct->first_enqueued_at != 0);
         assert(ct->last_started_running_at == 0);
         ct->last_started_running_at = jl_hrtime();
@@ -1611,6 +1611,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->wall_time_ns = 0;
     ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     if (ct->metrics_enabled) {
+        // [task] created -started-> user_time
         uint64_t now = jl_hrtime();
         ct->first_enqueued_at = now;
         ct->last_started_running_at = now;
