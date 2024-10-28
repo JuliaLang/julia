@@ -877,6 +877,43 @@ signature, the `:nothrow` bit gets tainted.
     The `Base.infer_effects` function should not be used from generated functions;
     doing so will result in an error.
 
+## Key for `show` output of Effects:
+
+The output represents the state of different effect properties in the following order:
+
+1. `consistent` (`c`):
+    - `+c` (green): `ALWAYS_TRUE`
+    - `-c` (red): `ALWAYS_FALSE`
+    - `?c` (yellow): `CONSISTENT_IF_NOTRETURNED` and/or `CONSISTENT_IF_INACCESSIBLEMEMONLY`
+2. `effect_free` (`e`):
+    - `+e` (green): `ALWAYS_TRUE`
+    - `-e` (red): `ALWAYS_FALSE`
+    - `?e` (yellow): `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`
+3. `nothrow` (`n`):
+    - `+n` (green): `true`
+    - `-n` (red): `false`
+4. `terminates` (`t`):
+    - `+t` (green): `true`
+    - `-t` (red): `false`
+5. `notaskstate` (`s`):
+    - `+s` (green): `true`
+    - `-s` (red): `false`
+6. `inaccessiblememonly` (`m`):
+    - `+m` (green): `ALWAYS_TRUE`
+    - `-m` (red): `ALWAYS_FALSE`
+    - `?m` (yellow): `INACCESSIBLEMEM_OR_ARGMEMONLY`
+7. `noub` (`u`):
+    - `+u` (green): `true`
+    - `-u` (red): `false`
+    - `?u` (yellow): `NOUB_IF_NOINBOUNDS`
+8. `:nonoverlayed` (`o`):
+    - `+o` (green): `ALWAYS_TRUE`
+    - `-o` (red): `ALWAYS_FALSE`
+    - `?o` (yellow): `CONSISTENT_OVERLAY`
+9. `:nortcall` (`r`):
+    - `+r` (green): `true`
+    - `-r` (red): `false`
+
 # See Also
 - [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
