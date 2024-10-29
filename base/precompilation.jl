@@ -2,7 +2,7 @@ module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project
+            base_project, PackagePrecompileError
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -343,14 +343,14 @@ end
 
 
 ############
-struct PkgPrecompileError <: Exception
+struct PrecompilePkgsError <: Exception
     msg::String
 end
-Base.showerror(io::IO, err::PkgPrecompileError) = print(io, err.msg)
-Base.showerror(io::IO, err::PkgPrecompileError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
+Base.showerror(io::IO, err::PrecompilePkgsError) = print(io, err.msg)
+Base.showerror(io::IO, err::PrecompilePkgsError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
 
 # This needs a show method to make `julia> err` show nicely
-Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", err.msg)
+Base.show(io::IO, err::PrecompilePkgsError) = print(io, "PrecompilePkgsError: ", err.msg)
 
 import Base: StaleCacheKey
 
@@ -856,7 +856,7 @@ function _precompilepkgs(pkgs::Vector{String},
                             # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
-                            if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
+                            if err isa PackagePrecompileError || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
                                 failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg_config, ""))) : ""
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 !fancyprint && lock(print_lock) do
@@ -978,7 +978,7 @@ function _precompilepkgs(pkgs::Vector{String},
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"
                     println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
                     println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
-                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg))
+                    setglobal!(Base.MainInclude, :err, PrecompilePkgsError(err_msg))
                 else
                     # auto-precompilation shouldn't throw but if the user can't easily access the
                     # error messages, just show them
@@ -986,7 +986,7 @@ function _precompilepkgs(pkgs::Vector{String},
                 end
             else
                 println(io)
-                throw(PkgPrecompileError(err_msg))
+                throw(PrecompilePkgsError(err_msg))
             end
         end
     end

@@ -3139,6 +3139,17 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
+struct PackagePrecompileError <: Exception
+    pkg::PkgId
+    path::String
+end
+function showerror(io::IO, ex::PackagePrecompileError, bt; backtrace)
+    showerror(io, ex)
+end
+function showerror(io::IO, ex::PackagePrecompileError)
+    print(io, "Failed to precompile $(repr("text/plain", ex.pkg)) to $(repr(ex.path)).")
+end
+
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), isext::Bool=false)
@@ -3261,7 +3272,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)).")
+        throw(PackagePrecompileError(pkg, tmppath))
     end
 end
 
