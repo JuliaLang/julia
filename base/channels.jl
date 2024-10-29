@@ -224,11 +224,11 @@ Buffered channel with task:
 ```jldoctest
 julia> c = Channel(ch -> put!(ch, 1), 1);
 
-julia> isopen(c)
-false # channel is closed to new `put!`s
+julia> isopen(c) # The channel is closed to new `put!`s
+false
 
-julia> isready(c)
-true # The channel is closed but still contains elements
+julia> isready(c) # The channel is closed but still contains elements
+true 
 
 juiia> take!(c)
 1
