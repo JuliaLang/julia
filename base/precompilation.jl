@@ -826,15 +826,11 @@ function _precompilepkgs(pkgs::Vector{String},
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
                                     keep_loaded_modules = false
-                                    if haskey(exts, pkg)
-                                        # any extension in our direct dependencies is one we have a right to load
-                                        loadable_exts = filter((dep)->haskey(exts, dep), depsmap[pkg])
-                                        Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
-                                                          flags, cacheflags, loadable_exts)
-                                    else
-                                        Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
-                                                          flags, cacheflags)
-                                    end
+                                    # for extensions, any extension in our direct dependencies is one we have a right to load
+                                    # for packages, we may load any extension (all possible triggers are accounted for above)
+                                    loadable_exts = haskey(exts, pkg) ? filter((dep)->haskey(exts, dep), depsmap[pkg]) : nothing
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
+                                                      flags, cacheflags, loadable_exts)
                                 end
                             end
                             if ret isa Base.PrecompilableError
