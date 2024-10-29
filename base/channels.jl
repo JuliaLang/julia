@@ -227,9 +227,8 @@ julia> c = Channel(ch -> put!(ch, 1), 1);
 julia> isopen(c)
 false # channel is closed to new `put!`s
 
-# even though the channel is closed, it still contains elements
 julia> isready(c)
-true
+true # The channel is closed but still contains elements
 
 juiia> take!(c)
 1
