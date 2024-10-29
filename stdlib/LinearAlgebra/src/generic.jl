@@ -669,11 +669,9 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-Base.@constprop :aggressive function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real)
     isempty(itr) && return float(norm(zero(eltype(itr))))
-    v, s = iterate(itr)
-    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
-        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
+    norm_recursive_check(itr)
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -687,6 +685,18 @@ Base.@constprop :aggressive function norm(itr, p::Real=2)
     else
         normp(itr, p)
     end
+end
+# Split into a separate method to reduce latency in norm(x) calls (#56330)
+function norm(itr)
+    isempty(itr) && return float(norm(zero(eltype(itr))))
+    norm_recursive_check(itr)
+    norm2(itr)
+end
+function norm_recursive_check(itr)
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
+    return nothing
 end
 
 """
@@ -808,7 +818,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -819,6 +829,7 @@ Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
         throw(ArgumentError(lazy"invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
+opnorm(A::AbstractMatrix) = opnorm2(A)
 
 """
     opnorm(x::Number, p::Real=2)
