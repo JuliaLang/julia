@@ -2543,7 +2543,17 @@ function _require(pkg::PkgId, env=nothing)
                 # double-check the search now that we have lock
                 m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                 m isa Module && return m
-                return compilecache(pkg, path; reasons)
+                triggers = get(EXT_PRIMED, pkg, nothing)
+                loadable_exts = nothing
+                if triggers !== nothing # extension
+                    loadable_exts = PkgId[]
+                    for (ext′, triggers′) in EXT_PRIMED
+                        if triggers′ ⊊ triggers
+                            push!(loadable_exts, ext′)
+                        end
+                    end
+                end
+                return compilecache(pkg, path; reasons, loadable_exts)
             end
             loaded isa Module && return loaded
             if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
