@@ -994,48 +994,59 @@ _generic_matmatmul!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMa
     if BxN != CxN
         throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
-    if isbitstype(R) && sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
-        _rmul_or_fill!(C, beta)
-        (iszero(alpha) || isempty(A) || isempty(B)) && return C
-        @inbounds for n in BxN, k in BxK
-            # Balpha = B[k,n] * alpha, but we skip the multiplication in case isone(alpha)
-            Balpha = @stable_muladdmul MulAddMul(alpha, false)(B[k,n])
-            @simd for m in AxM
-                C[m,n] = muladd(A[m,k], Balpha, C[m,n])
-            end
-        end
-    elseif isbitstype(R) && sizeof(R) ≤ 16 && ((A isa Adjoint && B isa Adjoint) || (A isa Transpose && B isa Transpose))
-        _rmul_or_fill!(C, beta)
-        (iszero(alpha) || isempty(A) || isempty(B)) && return C
-        t = wrapperop(A)
-        pB = parent(B)
-        pA = parent(A)
-        tmp = similar(C, CxN)
-        ci = first(CxM)
-        ta = t(alpha)
-        for i in AxM
-            mul!(tmp, pB, view(pA, :, i))
-            @views C[ci,:] .+= t.(ta .* tmp)
-            ci += 1
-        end
-    else
-        if iszero(alpha) || isempty(A) || isempty(B)
-            return _rmul_or_fill!(C, beta)
-        end
-        a1 = first(AxK)
-        b1 = first(BxK)
-        @inbounds for i in AxM, j in BxN
-            z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
-            Ctmp = convert(promote_type(R, typeof(z2)), z2)
-            @simd for k in AxK
-                Ctmp = muladd(A[i, k], B[k, j], Ctmp)
-            end
-            @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ctmp, C, (i,j))
-        end
-    end
+    __generic_matmatmul!(C, A, B, alpha, beta, Val(isbitstype(R) && sizeof(R) ≤ 16))
     return C
 end
+__generic_matmatmul!(C, A::Adjoint, B::Adjoint, alpha, beta, ::Val{true}) = _generic_matmatmul_adjtrans!(C, A, B, alpha, beta)
+__generic_matmatmul!(C, A::Transpose, B::Transpose, alpha, beta, ::Val{true}) = _generic_matmatmul_adjtrans!(C, A, B, alpha, beta)
+__generic_matmatmul!(C, A::Union{Adjoint, Transpose}, B, alpha, beta, ::Val{true}) = _generic_matmatmul_generic!(C, A, B, alpha, beta)
+__generic_matmatmul!(C, A, B, alpha, beta, ::Val{true}) = _generic_matmatmul_nonadjtrans!(C, A, B, alpha, beta)
+__generic_matmatmul!(C, A, B, alpha, beta, ::Val{false}) = _generic_matmatmul_generic!(C, A, B, alpha, beta)
 
+function _generic_matmatmul_nonadjtrans!(C, A, B, alpha, beta)
+    _rmul_or_fill!(C, beta)
+    (iszero(alpha) || isempty(A) || isempty(B)) && return C
+    @inbounds for n in axes(B, 2), k in axes(B, 1)
+        # Balpha = B[k,n] * alpha, but we skip the multiplication in case isone(alpha)
+        Balpha = @stable_muladdmul MulAddMul(alpha, false)(B[k,n])
+        @simd for m in axes(A, 1)
+            C[m,n] = muladd(A[m,k], Balpha, C[m,n])
+        end
+    end
+    C
+end
+function _generic_matmatmul_adjtrans!(C, A, B, alpha, beta)
+    _rmul_or_fill!(C, beta)
+    (iszero(alpha) || isempty(A) || isempty(B)) && return C
+    t = wrapperop(A)
+    pB = parent(B)
+    pA = parent(A)
+    tmp = similar(C, axes(C, 2))
+    ci = firstindex(C, 1)
+    ta = t(alpha)
+    for i in axes(A, 1)
+        mul!(tmp, pB, view(pA, :, i))
+        @views C[ci,:] .+= t.(ta .* tmp)
+        ci += 1
+    end
+    C
+end
+function _generic_matmatmul_generic!(C, A, B, alpha, beta)
+    if iszero(alpha) || isempty(A) || isempty(B)
+        return _rmul_or_fill!(C, beta)
+    end
+    a1 = firstindex(A, 2)
+    b1 = firstindex(B, 1)
+    @inbounds for i in axes(A, 1), j in axes(B, 2)
+        z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
+        Ctmp = convert(promote_type(eltype(C), typeof(z2)), z2)
+        @simd for k in axes(A, 2)
+            Ctmp = muladd(A[i, k], B[k, j], Ctmp)
+        end
+        @stable_muladdmul _modify!(MulAddMul(alpha,beta), Ctmp, C, (i,j))
+    end
+    C
+end
 
 # multiply 2x2 matrices
 Base.@constprop :aggressive function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
