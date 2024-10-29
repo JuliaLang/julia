@@ -1815,7 +1815,8 @@ const StaleCacheKey = Tuple{PkgId, UInt128, String, String}
 function compilecache_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
-        cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
+        cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
+        cachepaths::Vector{String}=get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
         flags::CacheFlags=CacheFlags())
     path = nothing
@@ -1830,7 +1831,7 @@ function compilecache_path(pkg::PkgId;
         for dep in staledeps
             dep isa Module && continue
             modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
-            modpaths = find_all_in_cache_path(modkey)
+            modpaths = get!(() -> find_all_in_cache_path(modkey), cachepath_cache, modkey)
             for modpath_to_try in modpaths::Vector{String}
                 stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
                 if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded, requested_flags=flags) === true,
@@ -1872,10 +1873,11 @@ fresh julia session specify `ignore_loaded=true`.
 function isprecompiled(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
-        cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
+        cachepath_cache::Dict{PkgId, Vector{String}}=Dict{PkgId, Vector{String}}(),
+        cachepaths::Vector{String}=get!(() -> find_all_in_cache_path(pkg), cachepath_cache, pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
         flags::CacheFlags=CacheFlags())
-    path = compilecache_path(pkg; ignore_loaded, stale_cache, cachepaths, sourcepath, flags)
+    path = compilecache_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags)
     return !isnothing(path)
 end
 
