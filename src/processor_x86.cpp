@@ -4,6 +4,7 @@
 
 // CPUID
 
+#include "julia.h"
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     asm volatile (
@@ -94,6 +95,7 @@ enum class CPU : uint32_t {
     amd_znver1,
     amd_znver2,
     amd_znver3,
+    amd_znver4,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -142,8 +144,6 @@ static constexpr FeatureDep deps[] = {
     {avx512f, avx2},
     {avx512dq, avx512f},
     {avx512ifma, avx512f},
-    {avx512pf, avx512f},
-    {avx512er, avx512f},
     {avx512cd, avx512f},
     {avx512bw, avx512f},
     {avx512bf16, avx512bw},
@@ -181,7 +181,7 @@ constexpr auto tremont = goldmont_plus | get_feature_masks(clwb, gfni);
 constexpr auto knl = get_feature_masks(sse3, ssse3, sse41, sse42, cx16, sahf, popcnt,
                                        aes, pclmul, avx, xsave, xsaveopt, rdrnd, f16c, fsgsbase,
                                        avx2, bmi, bmi2, fma, lzcnt, movbe, adx, rdseed, prfchw,
-                                       avx512f, avx512er, avx512cd, avx512pf, prefetchwt1);
+                                       avx512f, avx512cd);
 constexpr auto knm = knl | get_feature_masks(avx512vpopcntdq);
 constexpr auto yonah = get_feature_masks(sse3);
 constexpr auto prescott = yonah;
@@ -227,10 +227,15 @@ constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
 constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);
 
+// technically xsaves is part of znver1, znver2, and znver3
+// Disabled due to Erratum 1386
+// See: https://github.com/JuliaLang/julia/issues/50102
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
-                                                    rdseed, sha, sse4a, xsavec, xsaves);
+                                                    rdseed, sha, sse4a, xsavec);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
+constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
+                                                   avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
 
 }
 
@@ -292,6 +297,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
+    {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -559,9 +565,15 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
         if (model >= 0x30)
             return CPU::amd_znver2;
         return CPU::amd_znver1;
-    case 0x19:  // AMD Family 19h
-        if (model <= 0x0f || model == 0x21)
+    case 25:  // AMD Family 19h
+        if (model <= 0x0f || (model >= 0x20 && model <= 0x5f))
             return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
+        if ((model >= 0x10 && model <= 0x1f) ||
+            (model >= 0x60 && model <= 0x74) ||
+            (model >= 0x78 && model <= 0x7b) ||
+            (model >= 0xA0 && model <= 0xAf)) {
+                return CPU::amd_znver4;
+            }
         return CPU::amd_znver3; // fallback
     }
 }
@@ -570,7 +582,7 @@ template<typename T>
 static inline void features_disable_avx512(T &features)
 {
     using namespace Feature;
-    unset_bits(features, avx512f, avx512dq, avx512ifma, avx512pf, avx512er, avx512cd,
+    unset_bits(features, avx512f, avx512dq, avx512ifma, avx512cd,
                avx512bw, avx512vl, avx512vbmi, avx512vpopcntdq, avx512vbmi2, avx512vnni,
                avx512bitalg, avx512vp2intersect, avx512bf16);
 }
@@ -768,11 +780,11 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
-        if (fbit == (uint32_t)-1)
+        if (fbit == UINT32_MAX)
             return false;
         set_bit(list, fbit, true);
         return true;
@@ -786,7 +798,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
     return targets;
 }
 
-static std::vector<TargetData<feature_sz>> jit_targets;
+static llvm::SmallVector<TargetData<feature_sz>, 0> jit_targets;
 
 static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg, bool require_host)
 {
@@ -837,7 +849,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
     return 16;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -865,7 +877,9 @@ static uint32_t sysimg_init_cb(const void *id)
                  "virtualized environment.  Please read "
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if (match.best_idx == UINT32_MAX)
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -881,7 +895,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -890,10 +904,12 @@ static uint32_t pkgimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
+//This function serves as a fallback during bootstrapping, at that point we don't have a sysimage with native code
+// so we won't call sysimg_init_cb, else this function shouldn't do anything.
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -930,7 +946,6 @@ static void ensure_jit_target(bool imaging)
                                                   Feature::vaes, Feature::vpclmulqdq,
                                                   Feature::sse4a, Feature::avx512f,
                                                   Feature::avx512dq, Feature::avx512ifma,
-                                                  Feature::avx512pf, Feature::avx512er,
                                                   Feature::avx512cd, Feature::avx512bw,
                                                   Feature::avx512vl, Feature::avx512vbmi,
                                                   Feature::avx512vpopcntdq, Feature::avxvnni,
@@ -956,10 +971,17 @@ static void ensure_jit_target(bool imaging)
                 break;
             }
         }
+        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
+        for (auto fe: clone_bf16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
+                break;
+            }
+        }
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<feature_sz> &data)
 {
     std::string name = data.name;
@@ -978,7 +1000,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         name = "x86-64";
 #endif
     }
-    std::vector<std::string> features;
+    llvm::SmallVector<std::string, 0> features;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
             continue;
@@ -1002,7 +1024,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     return std::make_pair(std::move(name), std::move(features));
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<feature_sz> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -1029,14 +1051,25 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == UINT32_MAX)
+        return rejection_reason;
+    return jl_nothing;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return jl_cstr_to_string(host_cpu_name().c_str());
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if ((bits == 32 || bits == 64) && (test_nbit(features, Feature::fma) || test_nbit(features, Feature::fma4)))
+        return jl_true;
+    else
+        return jl_false;
 }
 
 jl_image_t jl_init_processor_sysimg(void *hdl)
@@ -1055,26 +1088,94 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
 
-extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
+const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{"generic", "",
             {feature_masks, 0}, {{}, 0}, 0});
     return res;
 }
-
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+//This function parses the -C command line to figure out which targets to multiversion to.
+#ifndef __clang_gcanalyzer__
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
-    if (jit_targets.empty())
-        jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
-    for (auto &target: jit_targets) {
+    auto &cmdline = get_cmdline_targets();
+    check_cmdline(cmdline, true);
+    llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
+    for (auto &arg: cmdline) {
+        auto data = arg_target_data(arg, image_targets.empty());
+        image_targets.push_back(std::move(data));
+    }
+
+    auto ntargets = image_targets.size();
+    // Now decide the clone condition.
+    for (size_t i = 1; i < ntargets; i++) {
+        auto &t = image_targets[i];
+        if (t.en.flags & JL_TARGET_CLONE_ALL)
+            continue;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
+        // The most useful one in general...
+        t.en.flags |= JL_TARGET_CLONE_LOOP;
+        auto &features0 = image_targets[t.base].en.features;
+        // Special case for KNL/KNM since they're so different
+        if (!(t.dis.flags & JL_TARGET_CLONE_ALL)) {
+            if ((t.name == "knl" || t.name == "knm") &&
+                image_targets[t.base].name != "knl" && image_targets[t.base].name != "knm") {
+                t.en.flags |= JL_TARGET_CLONE_ALL;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_math[] = {Feature::fma, Feature::fma4};
+        static constexpr uint32_t clone_simd[] = {Feature::sse3, Feature::ssse3,
+                                                  Feature::sse41, Feature::sse42,
+                                                  Feature::avx, Feature::avx2,
+                                                  Feature::vaes, Feature::vpclmulqdq,
+                                                  Feature::sse4a, Feature::avx512f,
+                                                  Feature::avx512dq, Feature::avx512ifma,
+                                                  Feature::avx512cd, Feature::avx512bw,
+                                                  Feature::avx512vl, Feature::avx512vbmi,
+                                                  Feature::avx512vpopcntdq, Feature::avxvnni,
+                                                  Feature::avx512vbmi2, Feature::avx512vnni,
+                                                  Feature::avx512bitalg, Feature::avx512bf16,
+                                                  Feature::avx512vp2intersect, Feature::avx512fp16};
+        for (auto fe: clone_math) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_MATH;
+                break;
+            }
+        }
+        for (auto fe: clone_simd) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_SIMD;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_fp16[] = {Feature::avx512fp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
+        for (auto fe: clone_bf16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
+                break;
+            }
+        }
+    }
+    if (image_targets.empty())
+        jl_error("No targets specified");
+    llvm::SmallVector<jl_target_spec_t, 0> res;
+    for (auto &target: image_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;
         for (auto &fename: feature_names) {
@@ -1094,6 +1195,7 @@ extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(
     }
     return res;
 }
+#endif
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {

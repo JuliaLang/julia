@@ -125,6 +125,32 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #endif
 }
 
+#if defined(_OS_WINDOWS_)
+void win32_formatmessage(DWORD code, char *reason, int len) {
+    DWORD res;
+    LPWSTR errmsg;
+    res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                         FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS |
+                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                         NULL, code,
+                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                         (LPWSTR)&errmsg, 0, NULL);
+    if (!res && (GetLastError() == ERROR_MUI_FILE_NOT_FOUND ||
+                 GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND)) {
+      res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS |
+                           FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                           NULL, code,
+                           0, (LPWSTR)&errmsg, 0, NULL);
+    }
+    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
+    reason[len - 1] = '\0';
+    LocalFree(errmsg);
+}
+#endif
+
 // Find the location of libjulia.
 char *lib_dir = NULL;
 JL_DLLEXPORT const char * jl_get_libdir()
@@ -135,21 +161,21 @@ JL_DLLEXPORT const char * jl_get_libdir()
     }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
-    wchar_t *libjulia_path = utf8_to_wchar(LIBJULIA_NAME);
     HMODULE libjulia = NULL;
 
-    // Get a handle to libjulia.
-    if (!libjulia_path) {
-        jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
+    // Get a handle to libjulia
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)jl_get_libdir, &libjulia)) {
+        DWORD err = GetLastError();
+        jl_loader_print_stderr3("ERROR: could not locate library \"", LIBJULIA_NAME, "\"\n");
+
+        char msg[2048];
+        win32_formatmessage(err, msg, sizeof(msg));
+        jl_loader_print_stderr(msg);
         exit(1);
     }
-    libjulia = LoadLibraryW(libjulia_path);
-    if (libjulia == NULL) {
-        jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
-        exit(1);
-    }
-    free(libjulia_path);
-    libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
+
+    wchar_t *libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
     if (!GetModuleFileNameW(libjulia, libjulia_path, 32768)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
@@ -281,6 +307,7 @@ static char *libstdcxxprobe(void)
         // See if the version is compatible
         char *dlerr = dlerror(); // clear out dlerror
         void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
+        (void)sym;
         dlerr = dlerror();
         if (dlerr) {
             // We can't use the library that was found, so don't write anything.
@@ -375,7 +402,6 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(&dep_libs[1]);
     char *curr_dep = &dep_libs[1];
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
@@ -451,6 +477,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                     char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
+                        (void)cxx_handle;
                         const char *dlr = dlerror();
                         if (dlr) {
                             jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
@@ -519,7 +546,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
+#if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
     void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
     if (jl_pgcstack_setkey == NULL) {
         jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
@@ -527,8 +554,13 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr != NULL && key != NULL)
-        jl_pgcstack_setkey(fptr, key);
+    _Atomic(char) *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
+    if (fptr != NULL && key != NULL && semaphore != NULL) {
+        char already_used = 0;
+        atomic_compare_exchange_strong(semaphore, &already_used, 1);
+        if (already_used == 0) // RMW succeeded - we have exclusive access
+            jl_pgcstack_setkey(fptr, key);
+    }
 #endif
 
     // jl_options must be initialized very early, in case an embedder sets some

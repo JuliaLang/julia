@@ -13,7 +13,8 @@
 # CHECK-NOT: internal global
 # CHECK-NOT: private global
 # CHECK: jl_global
-# CHECK-SAME: = global
+# COM: we emit both declarations and definitions, so we may see either style in the IR
+# CHECK-SAME: = {{(external )?}}global
 # CHECK: julia_f_
 # CHECK-NOT: internal global
 # CHECK-NOT: private global

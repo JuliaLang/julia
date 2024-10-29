@@ -2,7 +2,7 @@
 
 using Base: something
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG, GIT_OID_TYPE
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -78,7 +78,7 @@ When fetching data from LibGit2, a typical usage would look like:
 ```julia
 sa_ref = Ref(StrArrayStruct())
 @check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
-res = convert(Vector{String}, sa_ref[])
+res = collect(sa_ref[])
 free(sa_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
@@ -99,7 +99,7 @@ StrArrayStruct() = StrArrayStruct(C_NULL, 0)
 
 function free(sa_ref::Base.Ref{StrArrayStruct})
     ensure_initialized()
-    ccall((:git_strarray_free, :libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
+    ccall((:git_strarray_free, libgit2), Cvoid, (Ptr{StrArrayStruct},), sa_ref)
 end
 
 """
@@ -126,7 +126,7 @@ Buffer() = Buffer(C_NULL, 0, 0)
 
 function free(buf_ref::Base.Ref{Buffer})
     ensure_initialized()
-    ccall((:git_buf_free, :libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
+    ccall((:git_buf_free, libgit2), Cvoid, (Ptr{Buffer},), buf_ref)
 end
 
 """
@@ -346,6 +346,9 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
     end
+    @static if LibGit2.VERSION >= v"1.7.0"
+        depth::Cuint                   = Cuint(Consts.FETCH_DEPTH_FULL)
+    end
     @static if LibGit2.VERSION >= v"1.4.0"
         follow_redirects::Cuint        = Cuint(0)
     end
@@ -439,6 +442,9 @@ The fields represent:
     # options controlling how the diff text is generated
     context_lines::UInt32                    = UInt32(3)
     interhunk_lines::UInt32                  = UInt32(0)
+    @static if LibGit2.VERSION >= v"1.7.0"
+        oid_type::GIT_OID_TYPE               = Consts.OID_DEFAULT
+    end
     id_abbrev::UInt16                        = UInt16(7)
     max_size::Int64                          = Int64(512*1024*1024) #512Mb
     old_prefix::Cstring                      = Cstring(C_NULL)
@@ -672,6 +678,8 @@ The fields represent:
      for more information.
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
+  * `remote_push_options`: only relevant if the LibGit2 version is greater than or equal to `1.8.0`.
+     "Push options" to deliver to the remote.
 """
 @kwdef struct PushOptions
     version::Cuint                     = Cuint(1)
@@ -685,6 +693,9 @@ The fields represent:
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
+    end
+    @static if LibGit2.VERSION >= v"1.8.0"
+        remote_push_options::StrArrayStruct = StrArrayStruct()
     end
 end
 @assert Base.allocatedinline(PushOptions)
@@ -904,12 +915,20 @@ end
 
 Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_entry) struct.
 """
-@kwdef struct ConfigEntry
-    name::Cstring       = Cstring(C_NULL)
-    value::Cstring      = Cstring(C_NULL)
-    level::GIT_CONFIG   = Consts.CONFIG_LEVEL_DEFAULT
-    free::Ptr{Cvoid}    = C_NULL
-    payload::Any        = nothing
+struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    @static if LibGit2.VERSION >= v"1.8.0"
+        backend_type::Cstring
+        origin_path::Cstring
+    end
+    include_depth::Cuint
+    level::GIT_CONFIG
+    free::Ptr{Cvoid}
+    @static if LibGit2.VERSION < v"1.8.0"
+        # In 1.8.0, the unused payload value has been removed
+        payload::Ptr{Cvoid}
+    end
 end
 @assert Base.allocatedinline(ConfigEntry)
 
@@ -1003,7 +1022,7 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     (:GitRepo,           nothing,                 :AbstractGitObject, :git_repository),
     (:GitConfig,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_config),
     (:GitIndex,          :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_index),
-    (:GitRemote,         :GitRepo,                :AbstractGitObject, :git_remote),
+    (:GitRemote,         :(Union{GitRepo, Nothing}), :AbstractGitObject, :git_remote),
     (:GitRevWalker,      :GitRepo,                :AbstractGitObject, :git_revwalk),
     (:GitReference,      :GitRepo,                :AbstractGitObject, :git_reference),
     (:GitDescribeResult, :GitRepo,                :AbstractGitObject, :git_describe_result),
@@ -1038,7 +1057,6 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
@@ -1053,21 +1071,21 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
         if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
         end
     end
+    @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, obj::$typ) = obj.ptr
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), :libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
-                ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+                ccall((:git_libgit2_shutdown, libgit2), Cint, ())
             end
         end
     end
@@ -1097,10 +1115,11 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, :libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj)
         obj.ptr = C_NULL
     end
 end
+Base.unsafe_convert(::Type{Ptr{SignatureStruct}}, obj::GitSignature) = obj.ptr
 
 # Structure has the same layout as SignatureStruct
 mutable struct Signature
@@ -1196,7 +1215,7 @@ Consts.OBJECT(::Type{GitObject})        = Consts.OBJ_ANY
 
 function Consts.OBJECT(ptr::Ptr{Cvoid})
     ensure_initialized()
-    ccall((:git_object_type, :libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
+    ccall((:git_object_type, libgit2), Consts.OBJECT, (Ptr{Cvoid},), ptr)
 end
 
 """
@@ -1479,3 +1498,26 @@ end
 
 # Useful for functions which can handle various kinds of credentials
 const Creds = Union{CredentialPayload, AbstractCredential, CachedCredentials, Nothing}
+
+struct _GitRemoteHead
+    available_local::Cint
+    oid::GitHash
+    loid::GitHash
+    name::Cstring
+    symref_target::Cstring
+end
+
+struct GitRemoteHead
+    available_local::Bool
+    oid::GitHash
+    loid::GitHash
+    name::String
+    symref_target::Union{Nothing,String}
+    function GitRemoteHead(head::_GitRemoteHead)
+        name = unsafe_string(head.name)
+        symref_target = (head.symref_target != C_NULL ?
+            unsafe_string(head.symref_target) : nothing)
+        return new(head.available_local != 0,
+                   head.oid, head.loid, name, symref_target)
+    end
+end

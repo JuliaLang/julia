@@ -297,10 +297,224 @@ Of course, you can decrease the delay as well as increase it; however, the overh
 grows once the delay becomes similar to the amount of time needed to take a backtrace (~30 microseconds
 on the author's laptop).
 
+## Wall-time Profiler
+
+### Introduction & Problem Motivation
+
+The profiler described in the previous section is a sampling CPU profiler. At a high level, the profiler periodically stops all Julia compute threads to collect their backtraces and estimates the time spent in each function based on the number of backtrace samples that include a frame from that function. However, note that only tasks currently running on system threads just before the profiler stops them will have their backtraces collected.
+
+While this profiler is typically well-suited for workloads where the majority of tasks are compute-bound, it is less helpful for systems where most tasks are IO-heavy or for diagnosing contention on synchronization primitives in your code.
+
+Let's consider this simple workload:
+
+```Julia
+using Base.Threads
+using Profile
+using PProf
+
+ch = Channel(1)
+
+const N_SPAWNED_TASKS = (1 << 10)
+const WAIT_TIME_NS = 10_000_000
+
+function spawn_a_bunch_of_tasks_waiting_on_channel()
+    for i in 1:N_SPAWNED_TASKS
+        Threads.@spawn begin
+            take!(ch)
+        end
+    end
+end
+
+function busywait()
+    t0 = time_ns()
+    while true
+        if time_ns() - t0 > WAIT_TIME_NS
+            break
+        end
+    end
+end
+
+function main()
+    spawn_a_bunch_of_tasks_waiting_on_channel()
+    for i in 1:N_SPAWNED_TASKS
+        put!(ch, i)
+        busywait()
+    end
+end
+
+Profile.@profile main()
+```
+
+Our goal is to detect whether there is contention on the `ch` channel—i.e., whether the number of waiters is excessive given the rate at which work items are being produced in the channel.
+
+If we run this, we obtain the following [PProf](https://github.com/JuliaPerf/PProf.jl) flame graph:
+
+![CPU Profile](./img/cpu-profile.png)
+
+This profile provides no information to help determine where contention occurs in the system’s synchronization primitives. Waiters on a channel will be blocked and descheduled, meaning no system thread will be running the tasks assigned to those waiters, and as a result, they won't be sampled by the profiler.
+
+### Wall-time Profiler
+
+Instead of sampling threads—and thus only sampling tasks that are running—a wall-time task profiler samples tasks independently of their scheduling state. For example, tasks that are sleeping on a synchronization primitive at the time the profiler is running will be sampled with the same probability as tasks that were actively running when the profiler attempted to capture backtraces.
+
+This approach allows us to construct a profile where backtraces from tasks blocked on the `ch` channel, as in the example above, are actually represented.
+
+Let's run the same example, but now with a wall-time profiler:
+
+
+```Julia
+using Base.Threads
+using Profile
+using PProf
+
+ch = Channel(1)
+
+const N_SPAWNED_TASKS = (1 << 10)
+const WAIT_TIME_NS = 10_000_000
+
+function spawn_a_bunch_of_tasks_waiting_on_channel()
+    for i in 1:N_SPAWNED_TASKS
+        Threads.@spawn begin
+            take!(ch)
+        end
+    end
+end
+
+function busywait()
+    t0 = time_ns()
+    while true
+        if time_ns() - t0 > WAIT_TIME_NS
+            break
+        end
+    end
+end
+
+function main()
+    spawn_a_bunch_of_tasks_waiting_on_channel()
+    for i in 1:N_SPAWNED_TASKS
+        put!(ch, i)
+        busywait()
+    end
+end
+
+Profile.@profile_walltime main()
+```
+
+We obtain the following flame graph:
+
+![Wall-time Profile Channel](./img/wall-time-profiler-channel-example.png)
+
+We see that a large number of samples come from channel-related `take!` functions, which allows us to determine that there is indeed an excessive number of waiters in `ch`.
+
+### A Compute-Bound Workload
+
+Despite the wall-time profiler sampling all live tasks in the system and not just the currently running ones, it can still be helpful for identifying performance hotspots, even if your code is compute-bound. Let’s consider a simple example:
+
+```Julia
+using Base.Threads
+using Profile
+using PProf
+
+ch = Channel(1)
+
+const MAX_ITERS = (1 << 22)
+const N_TASKS = (1 << 12)
+
+function spawn_a_task_waiting_on_channel()
+    Threads.@spawn begin
+        take!(ch)
+    end
+end
+
+function sum_of_sqrt()
+    sum_of_sqrt = 0.0
+    for i in 1:MAX_ITERS
+        sum_of_sqrt += sqrt(i)
+    end
+    return sum_of_sqrt
+end
+
+function spawn_a_bunch_of_compute_heavy_tasks()
+    Threads.@sync begin
+        for i in 1:N_TASKS
+            Threads.@spawn begin
+                sum_of_sqrt()
+            end
+        end
+    end
+end
+
+function main()
+    spawn_a_task_waiting_on_channel()
+    spawn_a_bunch_of_compute_heavy_tasks()
+end
+
+Profile.@profile_walltime main()
+```
+
+After collecting a wall-time profile, we get the following flame graph:
+
+![Wall-time Profile Compute-Bound](./img/wall-time-profiler-compute-bound-example.png)
+
+Notice how many of the samples contain `sum_of_sqrt`, which is the expensive compute function in our example.
+
+### Identifying Task Sampling Failures in your Profile
+
+In the current implementation, the wall-time profiler attempts to sample from tasks that have been alive since the last garbage collection, along with those created afterward. However, if most tasks are extremely short-lived, you may end up sampling tasks that have already completed, resulting in missed backtrace captures.
+
+If you encounter samples containing `failed_to_sample_task_fun` or `failed_to_stop_thread_fun`, this likely indicates a high volume of short-lived tasks, which prevented their backtraces from being collected.
+
+Let's consider this simple example:
+
+```Julia
+using Base.Threads
+using Profile
+using PProf
+
+const N_SPAWNED_TASKS = (1 << 16)
+const WAIT_TIME_NS = 100_000
+
+function spawn_a_bunch_of_short_lived_tasks()
+    for i in 1:N_SPAWNED_TASKS
+        Threads.@spawn begin
+            # Do nothing
+        end
+    end
+end
+
+function busywait()
+    t0 = time_ns()
+    while true
+        if time_ns() - t0 > WAIT_TIME_NS
+            break
+        end
+    end
+end
+
+function main()
+    GC.enable(false)
+    spawn_a_bunch_of_short_lived_tasks()
+    for i in 1:N_SPAWNED_TASKS
+        busywait()
+    end
+    GC.enable(true)
+end
+
+Profile.@profile_walltime main()
+```
+
+Notice that the tasks spawned in `spawn_a_bunch_of_short_lived_tasks` are extremely short-lived. Since these tasks constitute the majority in the system, we will likely miss capturing a backtrace for most sampled tasks.
+
+After collecting a wall-time profile, we obtain the following flame graph:
+
+![Task Sampling Failure](./img/task-sampling-failure.png)
+
+The large number of samples from `failed_to_stop_thread_fun` confirms that we have a significant number of short-lived tasks in the system.
+
 ## Memory allocation analysis
 
 One of the most common techniques to improve performance is to reduce memory allocation. Julia
-provides several tools measure this:
+provides several tools to measure this:
 
 ### `@time`
 
@@ -338,15 +552,91 @@ argument can be passed to speed it up by making it skip some allocations.
 Passing `sample_rate=1.0` will make it record everything (which is slow);
 `sample_rate=0.1` will record only 10% of the allocations (faster), etc.
 
-!!! note
+!!! compat "Julia 1.11"
 
-    The current implementation of the Allocations Profiler _does not
-    capture types for all allocations._ Allocations for which the profiler
-    could not capture the type are represented as having type
-    `Profile.Allocs.UnknownType`.
+    Older versions of Julia could not capture types in all cases. In older versions of
+    Julia, if you see an allocation of type `Profile.Allocs.UnknownType`, it means that
+    the profiler doesn't know what type of object was allocated. This mainly happened when
+    the allocation was coming from generated code produced by the compiler. See
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688) for more info.
 
-    You can read more about the missing types and the plan to improve this, here:
-    [issue #43688](https://github.com/JuliaLang/julia/issues/43688).
+    Since Julia 1.11, all allocations should have a type reported.
+
+For more details on how to use this tool, please see the following talk from JuliaCon 2022:
+https://www.youtube.com/watch?v=BFvpwC8hEWQ
+
+##### Allocation Profiler Example
+
+In this simple example, we use PProf to visualize the alloc profile. You could use another
+visualization tool instead. We collect the profile (specifying a sample rate), then we visualize it.
+```julia
+using Profile, PProf
+Profile.Allocs.clear()
+Profile.Allocs.@profile sample_rate=0.0001 my_function()
+PProf.Allocs.pprof()
+```
+
+Here is a more in-depth example, showing how we can tune the sample rate. A
+good number of samples to aim for is around 1 - 10 thousand. Too many, and the
+profile visualizer can get overwhelmed, and profiling will be slow. Too few,
+and you don't have a representative sample.
+
+
+```julia-repl
+julia> import Profile
+
+julia> @time my_function()  # Estimate allocations from a (second-run) of the function
+  0.110018 seconds (1.50 M allocations: 58.725 MiB, 17.17% gc time)
+500000
+
+julia> Profile.Allocs.clear()
+
+julia> Profile.Allocs.@profile sample_rate=0.001 begin   # 1.5 M * 0.001 = ~1.5K allocs.
+           my_function()
+       end
+500000
+
+julia> prof = Profile.Allocs.fetch();  # If you want, you can also manually inspect the results.
+
+julia> length(prof.allocs)  # Confirm we have expected number of allocations.
+1515
+
+julia> using PProf  # Now, visualize with an external tool, like PProf or ProfileCanvas.
+
+julia> PProf.Allocs.pprof(prof; from_c=false)  # You can optionally pass in a previously fetched profile result.
+Analyzing 1515 allocation samples... 100%|████████████████████████████████| Time: 0:00:00
+Main binary filename not available.
+Serving web UI on http://localhost:62261
+"alloc-profile.pb.gz"
+```
+Then you can view the profile by navigating to http://localhost:62261, and the profile is saved to disk.
+See PProf package for more options.
+
+##### Allocation Profiling Tips
+
+As stated above, aim for around 1-10 thousand samples in your profile.
+
+Note that we are uniformly sampling in the space of _all allocations_, and are not weighting
+our samples by the size of the allocation. So a given allocation profile may not give a
+representative profile of where most bytes are allocated in your program, unless you had set
+`sample_rate=1`.
+
+Allocations can come from users directly constructing objects, but can also come from inside
+the runtime or be inserted into compiled code to handle type instability. Looking at the
+"source code" view can be helpful to isolate them, and then other external tools such as
+[`Cthulhu.jl`](https://github.com/JuliaDebug/Cthulhu.jl) can be useful for identifying the
+cause of the allocation.
+
+##### Allocation Profile Visualization Tools
+
+There are several profiling visualization tools now that can all display Allocation
+Profiles. Here is a small list of some of the main ones we know about:
+- [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
+- [ProfileCanvas.jl](https://github.com/pfitzseb/ProfileCanvas.jl)
+- VSCode's built-in profile visualizer (`@profview_allocs`) [docs needed]
+- Viewing the results directly in the REPL
+  - You can inspect the results in the REPL via [`Profile.Allocs.fetch()`](@ref), to view
+    the stacktrace and type of each allocation.
 
 #### Line-by-Line Allocation Tracking
 
@@ -381,7 +671,7 @@ Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profil
 Depending on the tool you choose, compile with `USE_INTEL_JITEVENTS`, `USE_OPROFILE_JITEVENTS` and
 `USE_PERF_JITEVENTS` set to 1 in `Make.user`. Multiple flags are supported.
 
-Before running Julia set the environment variable `ENABLE_JITPROFILING` to 1.
+Before running Julia set the environment variable [`ENABLE_JITPROFILING`](@ref ENABLE_JITPROFILING) to 1.
 
 Now you have a multitude of ways to employ those tools!
 For example with `OProfile` you can try a simple recording :

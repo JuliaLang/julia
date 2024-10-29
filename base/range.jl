@@ -32,7 +32,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     (:)(start, [step], stop)
 
 Range operator. `a:b` constructs a range from `a` to `b` with a step size
-equal to 1, which produces:
+equal to +1, which produces:
 
 * a [`UnitRange`](@ref) when `a` and `b` are integers, or
 * a [`StepRange`](@ref) when `a` and `b` are characters, or
@@ -40,6 +40,9 @@ equal to 1, which produces:
 
 `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref) or
 [`StepRangeLen`](@ref)). See also [`range`](@ref) for more control.
+
+To create a descending range, use `reverse(a:b)` or a negative step size, e.g. `b:-1:a`.
+Otherwise, when `b < a`, an empty range will be constructed and normalized to `a:a-1`.
 
 The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 
@@ -66,10 +69,15 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
-* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+  to be positive one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+* Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be positive one.
+
+To construct a descending range, specify a negative step size, e.g. `range(5, 1; step = -1)` => [5,4,3,2,1]. Otherwise,
+a `stop` value less than the `start` value, with the default `step` of `+1`, constructs an empty range. Empty ranges
+are normalized such that the `stop` is one less than the `start`, e.g. `range(5, 1) == 5:4`.
 
 See Extended Help for additional details on the returned type.
+See also [`logrange`](@ref) for logarithmically spaced points.
 
 # Examples
 ```jldoctest
@@ -252,10 +260,13 @@ end
 ## 1-dimensional ranges ##
 
 """
-    AbstractRange{T}
+    AbstractRange{T} <: AbstractVector{T}
 
-Supertype for ranges with elements of type `T`.
-[`UnitRange`](@ref) and other types are subtypes of this.
+Supertype for linear ranges with elements of type `T`.
+[`UnitRange`](@ref), [`LinRange`](@ref) and other types are subtypes of this.
+
+All subtypes must define [`step`](@ref).
+Thus [`LogRange`](@ref Base.LogRange) is not a subtype of `AbstractRange`.
 """
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
@@ -347,7 +358,7 @@ function steprange_last(start, step, stop)::typeof(stop)
             # (to simplify handling both signed and unsigned T and checking for signed overflow):
             absdiff, absstep = stop > start ? (stop - start, step) : (start - stop, -step)
 
-            # Compute remainder as a nonnegative number:
+            # Compute remainder as a non-negative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
                 # unlikely, but handle the signed overflow case with unsigned rem
                 overflow_case(absdiff, absstep) = (@noinline; convert(typeof(absdiff), unsigned(absdiff) % absstep))
@@ -372,6 +383,7 @@ function steprange_last_empty(start::Integer, step, stop)::typeof(stop)
     end
     return last
 end
+steprange_last_empty(start::Bool, step, stop) = start ⊻ (step > zero(step)) # isnegative(step) ? start : !start
 # For types where x+oneunit(x) may not be well-defined use the user-given value for stop
 steprange_last_empty(start, step, stop) = stop
 
@@ -404,7 +416,11 @@ struct UnitRange{T<:Real} <: AbstractUnitRange{T}
 end
 UnitRange{T}(start, stop) where {T<:Real} = UnitRange{T}(convert(T, start), convert(T, stop))
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
-UnitRange(start, stop) = UnitRange(promote(start, stop)...)
+function UnitRange(start, stop)
+    startstop_promoted = promote(start, stop)
+    not_sametype((start, stop), startstop_promoted)
+    UnitRange(startstop_promoted...)
+end
 
 # if stop and start are integral, we know that their difference is a multiple of 1
 unitrange_last(start::Integer, stop::Integer) =
@@ -443,7 +459,7 @@ distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
 struct OneTo{T<:Integer} <: AbstractUnitRange{T}
-    stop::T
+    stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
         T === Bool && throwbool(stop)
@@ -459,6 +475,8 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
         T === Bool && throwbool(r)
         return new(max(zero(T), last(r)))
     end
+
+    global unchecked_oneto(stop::Integer) = new{typeof(stop)}(stop)
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 OneTo(r::AbstractRange{T}) where {T<:Integer} = OneTo{T}(r)
@@ -543,6 +561,8 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.19999999999999998
   0.3
 ```
+
+See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
@@ -591,7 +611,7 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, "LinRange{")
     show(io, T)
     print(io, "}(")
-    ioc = IOContext(io, :typeinto=>T)
+    ioc = IOContext(io, :typeinfo=>T)
     show(ioc, first(r))
     print(io, ", ")
     show(ioc, last(r))
@@ -613,7 +633,7 @@ parameters `pre` and `post` characters for each printed row,
 `sep` separator string between printed elements,
 `hdots` string for the horizontal ellipsis.
 """
-function print_range(io::IO, r::AbstractRange,
+function print_range(io::IO, r::AbstractArray,
                      pre::AbstractString = " ",
                      sep::AbstractString = ", ",
                      post::AbstractString = "",
@@ -698,8 +718,6 @@ step(r::LinRange) = (last(r)-first(r))/r.lendiv
 # high-precision step
 step_hp(r::StepRangeLen) = r.step
 step_hp(r::AbstractRange) = step(r)
-
-axes(r::AbstractRange) = (oneto(length(r)),)
 
 # Needed to ensure `has_offset_axes` can constant-fold.
 has_offset_axes(::StepRange) = false
@@ -832,6 +850,11 @@ first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
+function first(r::OneTo, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
+    OneTo(oftype(r.stop, min(r.stop, n)))
+end
+
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
@@ -901,11 +924,20 @@ end
 
 ## indexing
 
+function isassigned(r::AbstractRange, i::Integer)
+    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+    firstindex(r) <= i <= lastindex(r)
+end
+
+# `_getindex` is like `getindex` but does not check if `i isa Bool`
+function _getindex(v::AbstractRange, i::Integer)
+    @boundscheck checkbounds(v, i)
+    unsafe_getindex(v, i)
+end
+
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 
-function getindex(v::UnitRange{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+function _getindex(v::UnitRange{T}, i::Integer) where T
     val = convert(T, v.start + (i - oneunit(i)))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val
@@ -914,63 +946,37 @@ end
 const OverflowSafe = Union{Bool,Int8,Int16,Int32,Int64,Int128,
                            UInt8,UInt16,UInt32,UInt64,UInt128}
 
-function getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
+function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
     val = v.start + (i - oneunit(i))
     @boundscheck _in_unit_range(v, val, i) || throw_boundserror(v, i)
     val % T
 end
 
-function getindex(v::OneTo{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    @boundscheck ((i > 0) & (i <= v.stop)) || throw_boundserror(v, i)
-    convert(T, i)
+let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
+    function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+        res = widemul(step(v), i-oneunit(i)) + first(v)
+        (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
+    end
 end
 
-function getindex(v::AbstractRange{T}, i::Integer) where T
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    ret = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
-    ok = ifelse(step(v) > zero(step(v)),
-                (ret <= last(v)) & (ret >= first(v)),
-                (ret <= first(v)) & (ret >= last(v)))
-    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
-    ret
-end
-
-function getindex(r::Union{StepRangeLen,LinRange}, i::Integer)
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    @boundscheck checkbounds(r, i)
-    unsafe_getindex(r, i)
-end
-
-# This is separate to make it useful even when running with --check-bounds=yes
+# unsafe_getindex is separate to make it useful even when running with --check-bounds=yes
+# it assumes the index is inbounds but does not segfault even if the index is out of bounds.
+# it does not check if the index isa bool.
+unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
+unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     T(r.ref + u*r.step)
 end
-
-function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
-    r.ref + u*r.step
-end
-
-function unsafe_getindex(r::LinRange, i::Integer)
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
-end
+unsafe_getindex(r::LinRange, i::Integer) = lerpi(i-oneunit(i), r.lendiv, r.start, r.stop)
 
 function lerpi(j::Integer, d::Integer, a::T, b::T) where T
-    @inline
     t = j/d # ∈ [0,1]
     # compute approximately fma(t, b, -fma(t, a, a))
     return T((1-t)*a + t*b)
 end
+
+# non-scalar indexing
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
 
@@ -1000,13 +1006,14 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=last(s))
+        len = Int(last(s))
+        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
         start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
         return range(start, stop; step=st)
     end
 end
@@ -1016,26 +1023,22 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            start, len = first(r), 0
-        elseif length(s) == 1
-            if first(s)
-                start, len = first(r), 1
-            else
-                start, len = first(r), 0
-            end
-        else # length(s) == 2
-            start, len = last(r), 1
-        end
-        return range(start, step=step(r); length=len)
+        # treat as a zero, one, or two-element vector, where at most one element is true
+        # staying inbounds on the original range (preserving either start or
+        # stop as either stop or start, depending on the length)
+        st = step(s)
+        nonempty = st > zero(st) ? last(s) : first(s)
+        # n.b. isempty(r) implies isempty(r) which means !nonempty and !first(s)
+        range((first(s) ⊻ nonempty) ⊻ isempty(r) ? last(r) : first(r), step=step(r), length=Int(nonempty))
     else
         f = r.start
         fs = first(s)
         st = r.step
-        start = oftype(f, f + (fs - oneunit(fs)) * st)
-        st = st * step(s)
+        start = oftype(f, f + (fs - firstindex(r)) * st)
+        st *= step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        # mimic steprange_last_empty here, to try to avoid overflow
+        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
         return range(start, stop; step=st)
     end
 end
@@ -1068,6 +1071,11 @@ function getindex(r::StepRangeLen{T}, s::OrdinalRange{S}) where {T, S<:Integer}
         ref = _getindex_hiprec(r, first(s) + (offset - oneunit(offset)) * sstep)
         return StepRangeLen{T}(ref, rstep*sstep, len, offset)
     end
+end
+
+function _getindex_hiprec(r::StepRangeLen, i::Integer)  # without rounding by T
+    u = oftype(r.offset, i) - r.offset
+    r.ref + u*r.step
 end
 
 function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
@@ -1291,6 +1299,9 @@ promote_rule(a::Type{OneTo{T1}}, b::Type{OneTo{T2}}) where {T1,T2} =
 OneTo{T}(r::OneTo{T}) where {T<:Integer} = r
 OneTo{T}(r::OneTo) where {T<:Integer} = OneTo{T}(r.stop)
 
+promote_rule(a::Type{OneTo{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
+    promote_rule(UnitRange{T1}, UR)
+
 promote_rule(a::Type{UnitRange{T1}}, ::Type{UR}) where {T1,UR<:AbstractUnitRange} =
     promote_rule(a, UnitRange{eltype(UR)})
 UnitRange{T}(r::AbstractUnitRange) where {T<:Real} = UnitRange{T}(first(r), last(r))
@@ -1367,8 +1378,21 @@ function vcat(rs::AbstractRange{T}...) where T
     return a
 end
 
-Array{T,1}(r::AbstractRange{T}) where {T} = vcat(r)
-collect(r::AbstractRange) = vcat(r)
+# This method differs from that for AbstractArrays as it
+# use iteration instead of indexing. This works even if certain
+# non-standard ranges don't support indexing.
+# See https://github.com/JuliaLang/julia/pull/27302
+# Similarly, collect(r::AbstractRange) uses iteration
+function Array{T,1}(r::AbstractRange{T}) where {T}
+    a = Vector{T}(undef, length(r))
+    i = 1
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    return a
+end
+collect(r::AbstractRange) = Array(r)
 
 _reverse(r::OrdinalRange, ::Colon) = (:)(last(r), negate(step(r)), first(r))
 function _reverse(r::StepRangeLen, ::Colon)
@@ -1390,8 +1414,8 @@ sort!(r::AbstractUnitRange) = r
 
 sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
 
-sortperm(r::AbstractUnitRange) = 1:length(r)
-sortperm(r::AbstractRange) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::AbstractUnitRange) = eachindex(r)
+sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
 
 function sum(r::AbstractRange{<:Real})
     l = length(r)
@@ -1466,7 +1490,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).
@@ -1485,3 +1509,190 @@ julia> mod(3, 0:2)  # mod(3, 3)
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
+
+
+"""
+    logrange(start, stop, length)
+    logrange(start, stop; length)
+
+Construct a specialized array whose elements are spaced logarithmically
+between the given endpoints. That is, the ratio of successive elements is
+a constant, calculated from the length.
+
+This is similar to `geomspace` in Python. Unlike `PowerRange` in Mathematica,
+you specify the number of elements not the ratio.
+Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
+always the first and last elements of the result, not powers applied to some base.
+
+# Examples
+```jldoctest
+julia> logrange(10, 4000, length=3)
+3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 10.0, 200.0, 4000.0
+
+julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
+true
+
+julia> range(10, 40, length=3)[2] ≈ (10 + 40)/2  # arithmetic mean
+true
+
+julia> logrange(1f0, 32f0, 11)
+11-element Base.LogRange{Float32, Float64}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
+
+julia> logrange(1, 1000, length=4) ≈ 10 .^ (0:3)
+true
+```
+
+See the [`LogRange`](@ref Base.LogRange) type for further details.
+
+See also [`range`](@ref) for linearly spaced points.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+logrange(start::Real, stop::Real, length::Integer) = LogRange(start, stop, Int(length))
+logrange(start::Real, stop::Real; length::Integer) = logrange(start, stop, length)
+
+
+"""
+    LogRange{T}(start, stop, len) <: AbstractVector{T}
+
+A range whose elements are spaced logarithmically between `start` and `stop`,
+with spacing controlled by `len`. Returned by [`logrange`](@ref).
+
+Like [`LinRange`](@ref), the first and last elements will be exactly those
+provided, but intermediate values may have small floating-point errors.
+These are calculated using the logs of the endpoints, which are
+stored on construction, often in higher precision than `T`.
+
+# Examples
+```jldoctest
+julia> logrange(1, 4, length=5)
+5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0
+
+julia> Base.LogRange{Float16}(1, 4, 5)
+5-element Base.LogRange{Float16, Float64}:
+ 1.0, 1.414, 2.0, 2.828, 4.0
+
+julia> logrange(1e-310, 1e-300, 11)[1:2:end]
+6-element Vector{Float64}:
+ 1.0e-310
+ 9.999999999999974e-309
+ 9.999999999999981e-307
+ 9.999999999999988e-305
+ 9.999999999999994e-303
+ 1.0e-300
+
+julia> prevfloat(1e-308, 5) == ans[2]
+true
+```
+
+Note that integer eltype `T` is not allowed.
+Use for instance `round.(Int, xs)`, or explicit powers of some integer base:
+
+```jldoctest
+julia> xs = logrange(1, 512, 4)
+4-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 8.0, 64.0, 512.0
+
+julia> 2 .^ (0:3:9) |> println
+[1, 8, 64, 512]
+```
+
+!!! compat "Julia 1.11"
+    This type requires at least Julia 1.11.
+"""
+struct LogRange{T<:Real,X} <: AbstractArray{T,1}
+    start::T
+    stop::T
+    len::Int
+    extra::Tuple{X,X}
+    function LogRange{T}(start::T, stop::T, len::Int) where {T<:Real}
+        if T <: Integer
+            # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
+            throw(ArgumentError("LogRange{T} does not support integer types"))
+        end
+        if iszero(start) || iszero(stop)
+            throw(DomainError((start, stop),
+                "LogRange cannot start or stop at zero"))
+        elseif start < 0 || stop < 0
+            # log would throw, but _log_twice64_unchecked does not
+            throw(DomainError((start, stop),
+                "LogRange does not accept negative numbers"))
+        elseif !isfinite(start) || !isfinite(stop)
+            throw(DomainError((start, stop),
+                "LogRange is only defined for finite start & stop"))
+        elseif len < 0
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
+        elseif len == 1 && start != stop
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
+        end
+        ex = _logrange_extra(start, stop, len)
+        new{T,typeof(ex[1])}(start, stop, len, ex)
+    end
+end
+
+function LogRange{T}(start::Real, stop::Real, len::Integer) where {T}
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
+end
+function LogRange(start::Real, stop::Real, len::Integer)
+    T = float(promote_type(typeof(start), typeof(stop)))
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
+end
+
+size(r::LogRange) = (r.len,)
+length(r::LogRange) = r.len
+
+first(r::LogRange) = r.start
+last(r::LogRange) = r.stop
+
+function _logrange_extra(a::Real, b::Real, len::Int)
+    loga = log(1.0 * a)  # widen to at least Float64
+    logb = log(1.0 * b)
+    (loga/(len-1), logb/(len-1))
+end
+function _logrange_extra(a::Float64, b::Float64, len::Int)
+    loga = _log_twice64_unchecked(a)
+    logb = _log_twice64_unchecked(b)
+    # The reason not to do linear interpolation on log(a)..log(b) in `getindex` is
+    # that division of TwicePrecision is quite slow, so do it once on construction:
+    (loga/(len-1), logb/(len-1))
+end
+
+function getindex(r::LogRange{T}, i::Int) where {T}
+    @inline
+    @boundscheck checkbounds(r, i)
+    i == 1 && return r.start
+    i == r.len && return r.stop
+    # Main path uses Math.exp_impl for TwicePrecision, but is not perfectly
+    # accurate, hence the special cases for endpoints above.
+    logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
+    x = _exp_allowing_twice64(logx)
+    return T(x)
+end
+
+function show(io::IO, r::LogRange{T}) where {T}
+    print(io, "LogRange{", T, "}(")
+    ioc = IOContext(io, :typeinfo => T)
+    show(ioc, first(r))
+    print(io, ", ")
+    show(ioc, last(r))
+    print(io, ", ")
+    show(io, length(r))
+    print(io, ')')
+end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bpart = lookup_binding_partition(UInt(first(worlds)), gr)
+    if bpart.max_world < last(worlds)
+        error("Binding does not cover the full world range")
+    end
+    _resolve_in_world(UInt(last(worlds)), gr)
+end

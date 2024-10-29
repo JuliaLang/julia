@@ -17,7 +17,7 @@ end
 
 # CHECK-LABEL: @julia_haszerolayout
 # CHECK: top:
-# CHECK-NOT: @jl_gc_pool_alloc
+# CHECK-NOT: @jl_gc_small_alloc
 # CHECK: extractelement
 # CHECK: ret i8
 emit(haszerolayout, NTuple{32,VecElement{UInt8}})

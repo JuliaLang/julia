@@ -176,8 +176,11 @@ end
     x = "abcdefg"
     @testset "basic unit range" begin
         @test SubString(x, 2:4) == "bcd"
-        @test view(x, 2:4) == "bcd"
-        @test view(x, 2:4) isa SubString
+        sx = view(x, 2:4)
+        @test sx == "bcd"
+        @test sx isa SubString
+        @test parent(sx) === x
+        @test parentindices(sx) == (2:4,)
         @test (@view x[4:end]) == "defg"
         @test (@view x[4:end]) isa SubString
     end
@@ -199,6 +202,12 @@ end
 
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
     end
 end
 
@@ -247,8 +256,6 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
-        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -758,11 +765,6 @@ function getData(dic)
 end
 @test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
 
-@testset "unrecognized escapes in string/char literals" begin
-    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
-    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
-end
-
 @testset "thisind" begin
     let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",
                    SubString("123∀α>β:α+1>β123", 4, 18),
@@ -1091,6 +1093,17 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
+# issue #54369
+let v = Base.StringMemory(3)
+    v .= [0x41,0x42,0x43]
+    s = String(v)
+    @test s == "ABC"
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
+    @test s == "ABC"
+    @test v == [0x43,0x42,0x43]
+end
+
 # make sure length for identical String and AbstractString return the same value, PR #25533
 let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
                                    String(rand(rng, UInt8, 200))]
@@ -1168,7 +1181,7 @@ end
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
     @test Base.elsize(code_units) == sizeof(UInt8)
-    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
 end
 
 @testset "LazyString" begin
@@ -1233,6 +1246,8 @@ end
         @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
+
+    @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin
@@ -1384,5 +1399,24 @@ end
         for b4 = setdiff(0x00:0xFF,table_row[4])
             @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end
+    end
+end
+
+@testset "transcode" begin
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    # string starting with a 4 byte UTF-8 character
+    str_4 = "𒃵𒃰"
+    @testset for str in (str_1, str_2, str_3, str_4)
+        @test transcode(String, str) === str
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
     end
 end

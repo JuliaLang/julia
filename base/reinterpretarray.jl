@@ -13,15 +13,16 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     function throwbits(S::Type, T::Type, U::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
+        throw(ArgumentError(LazyString("cannot reinterpret `", S, "` as `", T, "`, type `", U, "` is not a bits type")))
     end
     function throwsize0(S::Type, T::Type, msg)
         @noinline
-        throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
+        throw(ArgumentError(LazyString("cannot reinterpret a zero-dimensional `", S, "` array to `", T,
+            "` which is of a ", msg, " size")))
     end
     function throwsingleton(S::Type, T::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` which is a singleton type"))
+        throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T, "` which is a singleton type")))
     end
 
     global reinterpret
@@ -46,18 +47,35 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
      3 + 4im
      5 + 6im
     ```
+
+    If the location of padding bits does not line up between `T` and `eltype(A)`, the resulting array will be
+    read-only or write-only, to prevent invalid bits from being written to or read from, respectively.
+
+    ```jldoctest
+    julia> a = reinterpret(Tuple{UInt8, UInt32}, UInt32[1, 2])
+    1-element reinterpret(Tuple{UInt8, UInt32}, ::Vector{UInt32}):
+     (0x01, 0x00000002)
+
+    julia> a[1] = 3
+    ERROR: Padding of type Tuple{UInt8, UInt32} is not compatible with type UInt32.
+
+    julia> b = reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)]); # showing will error
+
+    julia> b[1]
+    ERROR: Padding of type UInt32 is not compatible with type Tuple{UInt8, UInt32}.
+    ```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
             @noinline
-            throw(ArgumentError("""
-                cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
-                The resulting array would have non-integral first dimension.
-                """))
+            throw(ArgumentError(LazyString(
+                "cannot reinterpret an `", S, "` array to `", T, "` whose first dimension has size `", dim,
+                "`. The resulting array would have a non-integral first dimension.")))
         end
         function throwaxes1(S::Type, T::Type, ax1)
             @noinline
-            throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
+            throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T,
+                "` when the first axis is ", ax1, ". Try reshaping first.")))
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
@@ -82,15 +100,19 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got ",
+                sizeof(T), ") and `sizeof(eltype(a))` (got ", sizeof(S), ") be an integer multiple of the other")))
         end
         function throwsize1(a::AbstractArray, T::Type)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, ", T, ", a)` where `eltype(a)` is ", eltype(a),
+                " requires that `axes(a, 1)` (got ", axes(a, 1), ") be equal to 1:",
+                sizeof(T) ÷ sizeof(eltype(a)), " (from the ratio of element sizes)")))
         end
         function throwfromsingleton(S, T)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $S requires that $T be a singleton type, since $S is one"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, ", T, ", a)` where `eltype(a)` is ", S,
+                " requires that ", T, " be a singleton type, since ", S, " is one")))
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
@@ -350,9 +372,10 @@ axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
+cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
-@inline @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
+@propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if isprimitivetype(T) && isprimitivetype(S)
         reinterpret(T, a.parent[])
     else
@@ -360,15 +383,28 @@ unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} =
     end
 end
 
-@inline @propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::ReshapedArray, sz) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
+check_ptr_indexable(a::Memory, sz) = true
+check_ptr_indexable(a::AbstractArray, sz) = false
 
-@inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
+@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
+@propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
+
+@propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
+    check_ptr_indexable(a) && return _getindex_ptr(a, inds...)
     _getindex_ra(a, inds[1], tail(inds))
 end
 
-@inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
+@propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
+    check_ptr_indexable(a) && return _getindex_ptr(a, i)
     if isa(IndexStyle(a), IndexLinear)
         return _getindex_ra(a, i, ())
     end
@@ -378,18 +414,22 @@ end
     isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
 end
 
-@inline @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
+@propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
     check_readable(a)
     s = Ref{S}(a.parent[ind.j])
-    GC.@preserve s begin
-        tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
-        return unsafe_load(tptr, ind.i)
-    end
+    tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+    GC.@preserve s return unsafe_load(tptr, ind.i)
 end
 
-@inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
+@inline function _getindex_ptr(a::ReinterpretArray{T}, inds...) where {T}
+    @boundscheck checkbounds(a, inds...)
+    li = _to_linear_index(a, inds...)
+    ap = cconvert(Ptr{T}, a)
+    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    GC.@preserve ap return unsafe_load(p)
+end
 
-@inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+@propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         if issingletontype(T) # singleton types
@@ -434,7 +474,7 @@ end
                 while nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                    memcpy(tptr + nbytes_copied, sptr + sidx, nb)
                     nbytes_copied += nb
                     sidx = 0
                     i += 1
@@ -445,7 +485,7 @@ end
     end
 end
 
-@inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+@propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         if issingletontype(T) # singleton types
@@ -492,7 +532,7 @@ end
     end
 end
 
-@inline @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
+@propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
     if isprimitivetype(S) && isprimitivetype(T)
         a.parent[] = reinterpret(S, v)
         return a
@@ -500,15 +540,17 @@ end
     setindex!(a, v, firstindex(a))
 end
 
-@inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
+@propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
-@inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
+@propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, inds...)
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
-@inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
+@propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
     check_writable(a)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, i)
     if isa(IndexStyle(a), IndexLinear)
         return _setindex_ra!(a, v, i, ())
     end
@@ -516,7 +558,7 @@ end
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
-@inline @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
+@propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
     check_writable(a)
     v = convert(T, v)::T
     s = Ref{S}(a.parent[ind.j])
@@ -528,7 +570,16 @@ end
     return a
 end
 
-@inline @propagate_inbounds function _setindex_ra!(a::NonReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
+@inline function _setindex_ptr!(a::ReinterpretArray{T}, v, inds...) where {T}
+    @boundscheck checkbounds(a, inds...)
+    li = _to_linear_index(a, inds...)
+    ap = cconvert(Ptr{T}, a)
+    p = unsafe_convert(Ptr{T}, ap) + sizeof(T) * (li - 1)
+    GC.@preserve ap unsafe_store!(p, v)
+    return a
+end
+
+@propagate_inbounds function _setindex_ra!(a::NonReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -574,7 +625,7 @@ end
                 if sidx != 0
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
-                    _memcpy!(sptr + sidx, tptr, nb)
+                    memcpy(sptr + sidx, tptr, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -583,7 +634,7 @@ end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -592,7 +643,7 @@ end
                 if nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
             end
@@ -601,7 +652,7 @@ end
     return a
 end
 
-@inline @propagate_inbounds function _setindex_ra!(a::ReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
+@propagate_inbounds function _setindex_ra!(a::ReshapedReinterpretArray{T,N,S}, v, i1::Int, tailinds::TT) where {T,N,S,TT}
     v = convert(T, v)::T
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -653,8 +704,8 @@ end
 
 # Padding
 struct Padding
-    offset::Int
-    size::Int
+    offset::Int # 0-indexed offset of the next valid byte; sizeof(T) indicates trailing padding
+    size::Int   # bytes of padding before a valid byte
 end
 function intersect(p1::Padding, p2::Padding)
     start = max(p1.offset, p2.offset)
@@ -674,7 +725,7 @@ end
 """
     CyclePadding(padding, total_size)
 
-Cylces an iterator of `Padding` structs, restarting the padding at `total_size`.
+Cycles an iterator of `Padding` structs, restarting the padding at `total_size`.
 E.g. if `padding` is all the padding in a struct and `total_size` is the total
 aligned size of that array, `CyclePadding` will correspond to the padding in an
 infinite vector of such structs.
@@ -698,27 +749,33 @@ function iterate(cp::CyclePadding, state::Tuple)
 end
 
 """
-    Compute the location of padding in a type.
+    Compute the location of padding in an isbits datatype. Recursive over the fields of that type.
 """
-function padding(T)
-    padding = Padding[]
-    last_end::Int = 0
+@assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
+    pads = Padding[]
+    last_end::Int = baseoffset
     for i = 1:fieldcount(T)
-        offset = fieldoffset(T, i)
+        offset = baseoffset + Int(fieldoffset(T, i))
         fT = fieldtype(T, i)
+        append!(pads, padding(fT, offset))
         if offset != last_end
-            push!(padding, Padding(offset, offset-last_end))
+            push!(pads, Padding(offset, offset-last_end))
         end
         last_end = offset + sizeof(fT)
     end
-    padding
+    if 0 < last_end - baseoffset < sizeof(T)
+        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end + baseoffset))
+    end
+    return Core.svec(pads...)
 end
 
 function CyclePadding(T::DataType)
     a, s = datatype_alignment(T), sizeof(T)
     as = s + (a - (s % a)) % a
     pad = padding(T)
-    s != as && push!(pad, Padding(s, as - s))
+    if s != as
+        pad = Core.svec(pad..., Padding(s, as - s))
+    end
     CyclePadding(pad, as)
 end
 
@@ -749,6 +806,92 @@ end
     end
     return true
 end
+
+@assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
+    padding(Out) == padding(In)
+end
+
+@assume_effects :foldable function packedsize(::Type{T}) where T
+    pads = padding(T)
+    return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
+end
+
+@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+
+function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    writeoffset = 0
+    for i ∈ 1:fieldcount(In)
+        readoffset = fieldoffset(In, i)
+        fT = fieldtype(In, i)
+        if ispacked(fT)
+            readsize = sizeof(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+            writeoffset += readsize
+        else # nested padded type
+            _copytopacked!(ptr_out + writeoffset, Ptr{fT}(ptr_in + readoffset))
+            writeoffset += packedsize(fT)
+        end
+    end
+end
+
+function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
+    readoffset = 0
+    for i ∈ 1:fieldcount(Out)
+        writeoffset = fieldoffset(Out, i)
+        fT = fieldtype(Out, i)
+        if ispacked(fT)
+            writesize = sizeof(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+            readoffset += writesize
+        else # nested padded type
+            _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
+            readoffset += packedsize(fT)
+        end
+    end
+end
+
+@inline function _reinterpret(::Type{Out}, x::In) where {Out, In}
+    # handle non-primitive types
+    isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
+    isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    inpackedsize = packedsize(In)
+    outpackedsize = packedsize(Out)
+    inpackedsize == outpackedsize ||
+        throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
+            " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
+    in = Ref{In}(x)
+    out = Ref{Out}()
+    if struct_subpadding(Out, In)
+        # if packed the same, just copy
+        GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
+            memcpy(ptr_out, ptr_in, sizeof(Out))
+        end
+        return out[]
+    else
+        # mismatched padding
+        GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
+
+            if fieldcount(In) > 0 && ispacked(Out)
+                _copytopacked!(ptr_out, ptr_in)
+            elseif fieldcount(Out) > 0 && ispacked(In)
+                _copyfrompacked!(ptr_out, ptr_in)
+            else
+                packed = Ref{NTuple{inpackedsize, UInt8}}()
+                GC.@preserve packed begin
+                    ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                    _copytopacked!(ptr_packed, ptr_in)
+                    _copyfrompacked!(ptr_out, ptr_packed)
+                end
+            end
+        end
+        return out[]
+    end
+end
+
 
 # Reductions with IndexSCartesian2
 

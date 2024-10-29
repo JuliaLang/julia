@@ -217,4 +217,48 @@ end
     end
 end
 
+@testset "issue #55727" begin
+    C = zeros(1,1)
+    @testset "$(nameof(typeof(A)))" for A in Any[Diagonal([NaN]),
+                Bidiagonal([NaN], Float64[], :U),
+                Bidiagonal([NaN], Float64[], :L),
+                SymTridiagonal([NaN], Float64[]),
+                Tridiagonal(Float64[], [NaN], Float64[]),
+                ]
+        @testset "$(nameof(typeof(B)))" for B in Any[
+                    Diagonal([1.0]),
+                    Bidiagonal([1.0], Float64[], :U),
+                    Bidiagonal([1.0], Float64[], :L),
+                    SymTridiagonal([1.0], Float64[]),
+                    Tridiagonal(Float64[], [1.0], Float64[]),
+                    ]
+            C .= 0
+            @test mul!(C, A, B, 0.0, false)[] === 0.0
+            @test mul!(C, B, A, 0.0, false)[] === 0.0
+        end
+    end
+end
+
+@testset "Diagonal scaling of a triangular matrix with a non-triangular destination" begin
+    for MT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        U = MT(reshape([1:9;],3,3))
+        M = Array(U)
+        D = Diagonal(1:3)
+        A = reshape([1:9;],3,3)
+        @test mul!(copy(A), U, D, 2, 3) == M * D * 2 + A * 3
+        @test mul!(copy(A), D, U, 2, 3) == D * M * 2 + A * 3
+
+        # nan values with iszero(alpha)
+        D = Diagonal(fill(NaN,3))
+        @test mul!(copy(A), U, D, 0, 3) == A * 3
+        @test mul!(copy(A), D, U, 0, 3) == A * 3
+
+        # nan values with iszero(beta)
+        A = fill(NaN,3,3)
+        D = Diagonal(1:3)
+        @test mul!(copy(A), U, D, 2, 0) == M * D * 2
+        @test mul!(copy(A), D, U, 2, 0) == D * M * 2
+    end
+end
+
 end  # module

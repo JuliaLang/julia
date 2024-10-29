@@ -36,7 +36,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS :=
+DEP_LIBS := JuliaSyntax
 
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
@@ -44,6 +44,10 @@ endif
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
+endif
+
+ifeq ($(SANITIZE), 1)
+DEP_LIBS += sanitizers
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -60,13 +64,15 @@ ifeq ($(OS), Linux)
 DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
+else ifeq ($(OS), OpenBSD)
+DEP_LIBS += llvmunwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += llvmunwind
 endif
 endif
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
@@ -113,7 +119,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 DEP_LIBS += mbedtls
 endif
@@ -130,17 +135,18 @@ ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
-endif # USE_SYSTEM_LIBGIT2
+endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
 
-ifeq ($(USE_GPL_LIBS), 1)
+# Only some of the modules in SuiteSparse are GPL.
+# xref: `remove-libsuitesparse-gpl-lib` in libsuitesparse.mk
 ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 0)
 DEP_LIBS += libsuitesparse
-endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
@@ -165,6 +171,13 @@ ifeq ($(WITH_ITTAPI),1)
 DEP_LIBS += ittapi
 endif
 
+ifeq ($(WITH_NVTX),1)
+DEP_LIBS += nvtx
+endif
+
+ifneq ($(WITH_TERMINFO),0)
+DEP_LIBS += terminfo
+endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
@@ -188,7 +201,8 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse lld libtracyclient ittapi
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
+	terminfo
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -222,8 +236,11 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
+include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
+include $(SRCDIR)/nvtx.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
@@ -247,5 +264,9 @@ include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
+include $(SRCDIR)/terminfo.mk
+
+# vendored Julia libs
+include $(SRCDIR)/JuliaSyntax.mk
 
 include $(SRCDIR)/tools/uninstallers.mk
