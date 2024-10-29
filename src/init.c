@@ -747,6 +747,11 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
 
+    // initialize the live tasks lock
+    uv_mutex_init(&live_tasks_lock);
+    // initialize the profiler buffer lock
+    uv_mutex_init(&bt_data_prof_lock);
+
     // initialize backtraces
     jl_init_profile_lock();
 #ifdef _OS_WINDOWS_
