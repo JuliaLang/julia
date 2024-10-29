@@ -400,6 +400,8 @@ function _precompilepkgs(pkgs::Vector{String},
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
     stale_cache = Dict{StaleCacheKey, Bool}()
+    cachepath_cache = Dict{PkgId, Vector{String}}()
+
     exts = Dict{PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
     depsmap = Dict{PkgId, Vector{PkgId}}()
@@ -773,7 +775,7 @@ function _precompilepkgs(pkgs::Vector{String},
     ## precompilation loop
 
     for (pkg, deps) in depsmap
-        cachepaths = Base.find_all_in_cache_path(pkg)
+        cachepaths = get!(() -> Base.find_all_in_cache_path(pkg), cachepath_cache, pkg)
         sourcepath = Base.locate_package(pkg)
         single_requested_pkg = length(pkgs) == 1 && only(pkgs) == pkg.name
         for config in configs
@@ -796,7 +798,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         wait(was_processed[(dep,config)])
                     end
                     circular = pkg in circular_deps
-                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepaths, sourcepath, flags=cacheflags)
+                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
                         is_direct_dep = pkg in direct_deps
