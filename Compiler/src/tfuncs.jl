@@ -189,6 +189,8 @@ add_tfunc(add_float, 2, 2, math_tfunc, 2)
 add_tfunc(sub_float, 2, 2, math_tfunc, 2)
 add_tfunc(mul_float, 2, 2, math_tfunc, 8)
 add_tfunc(div_float, 2, 2, math_tfunc, 10)
+add_tfunc(min_float, 2, 2, math_tfunc, 1)
+add_tfunc(max_float, 2, 2, math_tfunc, 1)
 add_tfunc(fma_float, 3, 3, math_tfunc, 8)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 8)
 
@@ -198,6 +200,8 @@ add_tfunc(add_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 8)
 add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
+add_tfunc(min_float_fast, 2, 2, math_tfunc, 1)
+add_tfunc(max_float_fast, 2, 2, math_tfunc, 1)
 
 # bitwise operators
 # -----------------
