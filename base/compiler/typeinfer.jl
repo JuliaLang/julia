@@ -1036,6 +1036,14 @@ end
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
     ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
+function force_compile_inlineable(codeinst::CodeInstance)
+    inferred = @atomic :monotonic codeinst.inferred
+    if inferred isa MaybeCompressed && is_inlineable(inferred)
+        ccall(:jl_force_compile_codeinst, Cvoid, (Any,), codeinst)
+    end
+    nothing
+end
+
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
@@ -1048,6 +1056,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
                 return code
             end
             if ci_meets_requirement(code, source_mode)
+                force_compile_inlineable(code)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
             end
@@ -1075,6 +1084,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
                 return code
             end
             if ci_meets_requirement(code, source_mode)
+                force_compile_inlineable(code)
                 engine_reject(interp, ci)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
@@ -1112,6 +1122,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         finish!(interp, frame; can_discard_trees) # redo finish! with the correct can_discard_trees parameter value
         @assert ci_meets_requirement(ci, source_mode)
     end
+    force_compile_inlineable(ci)
     return ci
 end
 

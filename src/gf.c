@@ -581,6 +581,10 @@ JL_DLLEXPORT void jl_update_codeinst(
     jl_atomic_store_relaxed(&codeinst->max_world, max_world); // since the edges shouldn't change after jl_fill_codeinst
 }
 
+JL_DLLEXPORT void jl_force_compile_codeinst(jl_code_instance_t *codeinst) {
+    jl_atomic_store_relaxed(&codeinst->precompile, 1);
+}
+
 JL_DLLEXPORT void jl_fill_codeinst(
         jl_code_instance_t *codeinst,
         jl_value_t *rettype, jl_value_t *exctype,
