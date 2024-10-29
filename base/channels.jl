@@ -240,7 +240,7 @@ false
 
 Unbuffered channel:
 ```jldoctest
-julia> c = Channel{Int}()
+julia> c = Channel{Int}();
 
 julia> isopen(c)
 true
