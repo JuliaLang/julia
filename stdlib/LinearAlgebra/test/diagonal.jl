@@ -830,7 +830,7 @@ end
         mul!(C, D1, D2)
         @test all(x -> size(x) == (2,2), C)
         @test C == D1 * D2
-        D = similar(D1) 
+        D = similar(D1)
         mul!(D, D1, D2)
         @test all(x -> size(x) == (2,2), D)
         @test D == D1 * D2
