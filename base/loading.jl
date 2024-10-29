@@ -733,8 +733,9 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         proj = implicit_manifest_uuid_path(env, pkg)
         proj === nothing || return proj
         # if not found
-        parentid = get(EXT_PRIMED, pkg, nothing)
-        if parentid !== nothing
+        triggers = get(EXT_PRIMED, pkg, nothing)
+        if triggers !== nothing
+            parentid = triggers[1]
             _, parent_project_file = entry_point_and_project_file(env, parentid.name)
             if parent_project_file !== nothing
                 parentproj = project_file_name_uuid(parent_project_file, parentid.name)
@@ -1416,7 +1417,7 @@ mutable struct ExtensionId
     ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
-const EXT_PRIMED = Dict{PkgId, PkgId}() # Extension -> Parent
+const EXT_PRIMED = Dict{PkgId,Vector{PkgId}}() # Extension -> Parent + Triggers (parent is always first)
 const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}() # Trigger -> Extensions that can be triggered by it
 const EXT_DORMITORY_FAILED = ExtensionId[]
 
@@ -1507,7 +1508,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
-        EXT_PRIMED[id] = parent
+        EXT_PRIMED[id] = trigger_ids = PkgId[parent]
         gid = ExtensionId(id, parent, 1 + length(triggers), 1 + length(triggers))
         trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
         push!(trigger1, gid)
@@ -1515,6 +1516,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
+            push!(trigger_ids, trigger_id)
             if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
@@ -2875,8 +2877,9 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
     # if pkg is a stdlib, append its parent Project.toml to the load path
-    parentid = get(EXT_PRIMED, pkg, nothing)
-    if parentid !== nothing
+    triggers = get(EXT_PRIMED, pkg, nothing)
+    if triggers !== nothing
+        parentid = triggers[1]
         for env in load_path
             project_file = env_project_file(env)
             if project_file === true
