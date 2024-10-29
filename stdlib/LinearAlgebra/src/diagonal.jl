@@ -441,7 +441,7 @@ function __muldiag_nonzeroalpha!(out, D::Diagonal, B::UpperOrLowerTriangular, al
     out
 end
 
-@inline function __muldiag_nonzeroalpha!(out, A, D::Diagonal, alpha::Number, beta::Number)
+@inline function __muldiag_nonzeroalpha_right!(out, A, D::Diagonal, alpha::Number, beta::Number)
     @inbounds for j in axes(A, 2)
         dja = @stable_muladdmul MulAddMul(alpha,false)(D.diag[j])
         for i in axes(A, 1)
@@ -449,6 +449,10 @@ end
         end
     end
     out
+end
+
+function __muldiag_nonzeroalpha!(out, A, D::Diagonal, alpha::Number, beta::Number)
+    __muldiag_nonzeroalpha_right!(out, A, D, alpha, beta)
 end
 function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, alpha::Number, beta::Number)
     isunit = A isa UnitUpperOrUnitLowerTriangular
@@ -482,21 +486,17 @@ function __muldiag_nonzeroalpha!(out, A::UpperOrLowerTriangular, D::Diagonal, al
     out
 end
 
+# ambiguity resolution
+function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
+    __muldiag_nonzeroalpha_right!(out, D1, D2, alpha, beta)
+end
+
 @inline function __muldiag_nonzeroalpha!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
     d1 = D1.diag
     d2 = D2.diag
     outd = out.diag
     @inbounds for i in eachindex(d1, d2, outd)
         @stable_muladdmul _modify!(MulAddMul(alpha,beta), d1[i] * d2[i], outd, i)
-    end
-    out
-end
-@inline function __muldiag_nonzeroalpha!(out, D1::Diagonal, D2::Diagonal, alpha::Number, beta::Number)
-    @inbounds for j in axes(D1, 2)
-        dja = @stable_muladdmul MulAddMul(alpha,false)(D2.diag[j])
-        for i in axes(D1, 1)
-            @stable_muladdmul _modify!(MulAddMul(true,beta), D1[i,j] * dja, out, (i,j))
-        end
     end
     out
 end
