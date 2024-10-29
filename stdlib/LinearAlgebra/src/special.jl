@@ -114,12 +114,6 @@ end
 
 (*)(Da::Diagonal, A::BandedMatrix, Db::Diagonal) = _tri_matmul(Da, A, Db)
 
-# disambiguation between triangular and banded matrices, banded ones "dominate"
-_mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-_mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)
