@@ -671,7 +671,7 @@ end
         @test has_all_escape(result.state[Argument(3)]) # b
     end
     let result = @eval EATModule() begin
-            const Rx = SafeRef{Base.RefValue{String}}()
+            const Rx = SafeRef(Ref(""))
             $code_escapes((Base.RefValue{String},)) do s
                 Rx[] = s
                 Core.sizeof(Rx[])
