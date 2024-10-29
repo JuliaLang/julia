@@ -228,7 +228,7 @@ julia> isopen(c) # The channel is closed to new `put!`s
 false
 
 julia> isready(c) # The channel is closed but still contains elements
-true 
+true
 
 juiia> take!(c)
 1
