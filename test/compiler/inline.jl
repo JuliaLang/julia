@@ -2282,3 +2282,10 @@ let;Base.Experimental.@force_compile
     f_EA_finalizer(42000)
     @test foreign_buffer_checker.finalized
 end
+
+# Test that inlining doesn't unnecessarily move things to statement position
+@noinline f_noinline_invoke(x::Union{Symbol,Nothing}=nothing) = Core.donotdelete(x)
+g_noinline_invoke(x) = f_noinline_invoke(x)
+let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
+    @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
+end
