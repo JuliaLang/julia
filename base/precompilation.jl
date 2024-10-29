@@ -937,7 +937,7 @@ function _precompilepkgs(pkgs::Vector{String},
             end
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
             # interrupting a hanging precompile job with stderr output. julia#48371
-            let std_outputs = eltype(std_outputs)[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
+            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
                 filter!(kv -> !isempty(last(kv)), std_outputs)
                 if !isempty(std_outputs)
                     plural1 = length(std_outputs) == 1 ? "y" : "ies"
