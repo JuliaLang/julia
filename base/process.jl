@@ -679,7 +679,7 @@ process_signaled(s::Process) = (s.termsignal > 0)
 function process_status(s::Process)
     return process_running(s) ? "ProcessRunning" :
            process_signaled(s) ? "ProcessSignaled(" * string(s.termsignal) * ")" :
-           process_exited(s) ? "ProcessExited(" * (Sys.iswindows() ? ("0x" * uppercase(string(s.exitcode, 16))) : string(s.exitcode)) * (
+           process_exited(s) ? "ProcessExited(" * (Sys.iswindows() ? ("0x" * uppercase(string(s.exitcode, base=16))) : string(s.exitcode)) * (
                s.exitcode == 0xC0000139 ? " Hint: Could be a PATH problem)" : ")"  # likely(?) related to libLLVM (i.e. a procedure entry point could not be located in the dynamic link library)
            ) :
            error("process status error")
