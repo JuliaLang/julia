@@ -34,6 +34,9 @@ abstract type AbstractSpinLock <: AbstractLock end
     SpinLock() <: AbstractSpinLock
 
 Spinlocks are not padded, and so may suffer from false sharing.
+See also [`PaddedSpinLock`](@ref).
+
+See the documentation for [`AbstractSpinLock`](@ref) regarding correct usage.
 """
 mutable struct SpinLock <: AbstractSpinLock
     # we make this much larger than necessary to minimize false-sharing
