@@ -50,6 +50,9 @@ const CACHE_LINE_SIZE = 64
 
 PaddedSpinLocks are padded so that each is guaranteed to be on its own cache line, to avoid
 false sharing.
+See also [`SpinLock`](@ref).
+
+See the documentation for [`AbstractSpinLock`](@ref) regarding correct usage.
 """
 mutable struct PaddedSpinLock <: AbstractSpinLock
     # we make this much larger than necessary to minimize false-sharing
