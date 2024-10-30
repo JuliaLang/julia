@@ -1368,6 +1368,9 @@ promote_rule(a::Type{LinRange{T,L}}, ::Type{OR}) where {T,L,OR<:OrdinalRange} =
 promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A,L,T2,R2,S2,L2} =
     promote_rule(StepRangeLen{A,A,A,L}, b)
 
+AbstractRange{T}(r::StepRangeLen) where T = StepRangeLen{T}(r)
+AbstractRange{T}(r::LinRange) where T = LinRange{T}(r)
+
 ## concatenation ##
 
 function vcat(rs::AbstractRange{T}...) where T
