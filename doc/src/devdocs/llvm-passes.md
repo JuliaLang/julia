@@ -144,6 +144,6 @@ This pass is used to hoist Julia-specific intrinsics out of loops. Specifically,
 3. Hoist allocations out of loops when they do not escape the loop
    1. We use a very conservative definition of escape here, the same as the one used in `AllocOptPass`. This transformation can reduce the number of allocations in the IR, even when an allocation escapes the function altogether.
 
-!!!note
+!!! note
 
     This pass is required to preserve LLVM's [MemorySSA](https://llvm.org/docs/MemorySSA.html) ([Short Video](https://www.youtube.com/watch?v=bdxWmryoHak), [Longer Video](https://www.youtube.com/watch?v=1e5y6WDbXCQ)) and [ScalarEvolution](https://baziotis.cs.illinois.edu/compilers/introduction-to-scalar-evolution.html) ([Newer Slides](https://llvm.org/devmtg/2018-04/slides/Absar-ScalarEvolution.pdf) [Older Slides](https://llvm.org/devmtg/2009-10/ScalarEvolutionAndLoopOptimization.pdf)) analyses.
