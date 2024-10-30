@@ -275,10 +275,9 @@ RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 
-# there is no complex range
-AbstractRange{T}(r::AbstractRange) where T<:Real = T(first(r)):T(step(r)):T(last(r))
-AbstractArray{T,1}(r::AbstractRange) where T<:Real = AbstractRange{T}(r)
-AbstractArray{T}(r::AbstractRange) where T<:Real = AbstractRange{T}(r)
+AbstractRange{T}(r::AbstractRange) where T = T(first(r)):T(step(r)):T(last(r))
+AbstractArray{T,1}(r::AbstractRange) where T = AbstractRange{T}(r)
+AbstractArray{T}(r::AbstractRange) where T = AbstractRange{T}(r)
 
 ## ordinal ranges
 
