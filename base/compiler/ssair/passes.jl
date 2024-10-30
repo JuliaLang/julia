@@ -2114,18 +2114,19 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         unionphi = unionphis[i]
         phi = unionphi[1]
         t = unionphi[2]
+        inst = compact.result[phi]
         if t === Union{}
-            stmt = compact[SSAValue(phi)][:stmt]::PhiNode
+            stmt = inst[:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
             made_changes = true
             continue
         elseif t === Any
             continue
-        elseif ⊑(𝕃ₒ, compact.result[phi][:type], t)
-            continue
         end
+        ⊏ = strictpartialorder(𝕃ₒ)
+        t ⊏ inst[:type] || continue
         to_drop = Int[]
-        stmt = compact[SSAValue(phi)][:stmt]
+        stmt = inst[:stmt]
         stmt === nothing && continue
         stmt = stmt::PhiNode
         for i = 1:length(stmt.values)
@@ -2137,7 +2138,8 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 push!(to_drop, i)
             end
         end
-        compact.result[phi][:type] = t
+        inst[:type] = t
+        add_flag!(inst, IR_FLAG_REFINED) # t ⊏ inst[:type]
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
         made_changes = true
     end
