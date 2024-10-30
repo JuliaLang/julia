@@ -1314,37 +1314,37 @@ end
     end
 end
 
-@testset "Base.task_metrics" begin
+@testset "Base.Experimental.task_metrics" begin
     t = Task(() -> nothing)
     @test_throws "const field" t.metrics_enabled = true
     is_task_metrics_enabled() = fetch(Threads.@spawn current_task().metrics_enabled)
     @test !is_task_metrics_enabled()
     try
         @testset "once" begin
-            Base.task_metrics(true)
+            Base.Experimental.task_metrics(true)
             @test is_task_metrics_enabled()
-            Base.task_metrics(false)
+            Base.Experimental.task_metrics(false)
             @test !is_task_metrics_enabled()
         end
         @testset "multiple" begin
-            Base.task_metrics(true)  # 1
-            Base.task_metrics(true)  # 2
-            Base.task_metrics(true)  # 3
+            Base.Experimental.task_metrics(true)  # 1
+            Base.Experimental.task_metrics(true)  # 2
+            Base.Experimental.task_metrics(true)  # 3
             @test is_task_metrics_enabled()
-            Base.task_metrics(false) # 2
+            Base.Experimental.task_metrics(false) # 2
             @test is_task_metrics_enabled()
-            Base.task_metrics(false) # 1
+            Base.Experimental.task_metrics(false) # 1
             @test is_task_metrics_enabled()
-            @sync for i in 1:5       # 0 (not negative)
-                Threads.@spawn Base.task_metrics(false)
+            @sync for i in 1:5                    # 0 (not negative)
+                Threads.@spawn Base.Experimental.task_metrics(false)
             end
             @test !is_task_metrics_enabled()
-            Base.task_metrics(true)  # 1
+            Base.Experimental.task_metrics(true)  # 1
             @test is_task_metrics_enabled()
         end
     finally
         while is_task_metrics_enabled()
-            Base.task_metrics(false)
+            Base.Experimental.task_metrics(false)
         end
     end
 end
@@ -1352,34 +1352,34 @@ end
 @testset "task time counters" begin
     @testset "enabled" begin
         try
-            Base.task_metrics(true)
+            Base.Experimental.task_metrics(true)
             start_time = time_ns()
             t = Threads.@spawn peakflops()
             wait(t)
             end_time = time_ns()
             wall_time_delta = end_time - start_time
             @test t.metrics_enabled
-            @test Base.task_cpu_time_ns(t) > 0
-            @test Base.task_wall_time_ns(t) > 0
-            @test Base.task_wall_time_ns(t) >= Base.task_cpu_time_ns(t)
-            @test wall_time_delta > Base.task_wall_time_ns(t)
+            @test Base.Experimental.task_cpu_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_cpu_time_ns(t)
+            @test wall_time_delta > Base.Experimental.task_wall_time_ns(t)
         finally
-            Base.task_metrics(false)
+            Base.Experimental.task_metrics(false)
         end
     end
     @testset "disabled" begin
         t = Threads.@spawn peakflops()
         wait(t)
         @test !t.metrics_enabled
-        @test Base.task_cpu_time_ns(t) == 0
-        @test Base.task_wall_time_ns(t) == 0
+        @test Base.Experimental.task_cpu_time_ns(t) == 0
+        @test Base.Experimental.task_wall_time_ns(t) == 0
     end
 end
 
 @testset "task time counters: lots of spawns" begin
     using Dates
     try
-        Base.task_metrics(true)
+        Base.Experimental.task_metrics(true)
         # create more tasks than we have threads.
         # - all tasks must have: cpu time <= wall time
         # - some tasks must have: cpu time < wall time
@@ -1396,8 +1396,8 @@ end
                     wait(task_i)
                     end_time_i = time_ns()
                     wall_time_delta_i = end_time_i - start_time_i
-                    cpu_times[$i] = cpu_time_i = Base.task_cpu_time_ns(task_i)
-                    wall_times[$i] = wall_time_i = Base.task_wall_time_ns(task_i)
+                    cpu_times[$i] = cpu_time_i = Base.Experimental.task_cpu_time_ns(task_i)
+                    wall_times[$i] = wall_time_i = Base.Experimental.task_wall_time_ns(task_i)
                     # task should have recorded some cpu-time and some wall-time
                     @test cpu_time_i > 0
                     @test wall_time_i > 0
@@ -1420,7 +1420,7 @@ end
         summed_wall_time = sum(wall_times)
         @test summed_wall_time > summed_cpu_time
     finally
-        Base.task_metrics(false)
+        Base.Experimental.task_metrics(false)
     end
 end
 
