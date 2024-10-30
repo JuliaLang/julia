@@ -1601,6 +1601,7 @@ function run_extension_callbacks(pkgid::PkgId)
     extids === nothing && return
     extids_to_load = Vector{ExtensionId}()
     for extid in extids
+        @assert extid.ntriggers > 0
         extid.ntriggers -= 1
         if extid.ntriggers == 0
             push!(extids_to_load, extid)
