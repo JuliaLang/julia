@@ -1374,6 +1374,44 @@ end
         @test isnothing(Base.Experimental.task_cpu_time_ns(t))
         @test isnothing(Base.Experimental.task_wall_time_ns(t))
     end
+    @testset "continuously update until task done" begin
+        try
+            Base.Experimental.task_metrics(true)
+            last_cpu_time = Ref(typemax(Int))
+            last_wall_time = Ref(typemax(Int))
+            t = Threads.@spawn begin
+                cpu_time = Base.Experimental.task_cpu_time_ns(current_task())
+                wall_time = Base.Experimental.task_wall_time_ns(current_task())
+                for _ in 1:5
+                    x = time_ns()
+                    while time_ns() < x + 100
+                    end
+                    new_cpu_time = Base.Experimental.task_cpu_time_ns(current_task())
+                    new_wall_time = Base.Experimental.task_wall_time_ns(current_task())
+                    @test new_cpu_time > cpu_time
+                    @test new_wall_time > wall_time
+                    cpu_time = new_cpu_time
+                    wall_time = new_wall_time
+                end
+                last_cpu_time[] = cpu_time
+                last_wall_time[] = wall_time
+            end
+            wait(t)
+            final_cpu_time = Base.Experimental.task_cpu_time_ns(t)
+            final_wall_time = Base.Experimental.task_wall_time_ns(t)
+            @test last_cpu_time[] < final_cpu_time
+            @test last_wall_time[] < final_wall_time
+            # ensure many more tasks are run to make sure the counters are
+            # not being updated after a task is done e.g. only when a new task is found
+            @sync for _ in 1:Threads.nthreads()
+                Threads.@spawn rand()
+            end
+            @test final_cpu_time == Base.Experimental.task_cpu_time_ns(t)
+            @test final_wall_time == Base.Experimental.task_wall_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
 end
 
 @testset "task time counters: lots of spawns" begin
