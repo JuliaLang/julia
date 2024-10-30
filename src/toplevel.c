@@ -665,11 +665,16 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
-    if (jl_get_binding_value_if_const(b) == (jl_value_t*)import)
-        return;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (decode_restriction_kind(pku) != BINDING_KIND_GUARD && decode_restriction_kind(pku) != BINDING_KIND_FAILED) {
+        // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
+        pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
+            // Already declared (e.g. on another thread) or imported.
+            if (decode_restriction_value(pku) == (jl_value_t*)import)
+                return;
+        }
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
