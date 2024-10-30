@@ -2622,6 +2622,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_TRIM_UNSAFE 2
 #define JL_TRIM_UNSAFE_WARN 3
 
+#define JL_OPTIONS_TASK_METRICS_OFF 0
+#define JL_OPTIONS_TASK_METRICS_ON 1
+
 // Version information
 #include <julia_version.h> // Generated file
 
