@@ -3,7 +3,7 @@
 import .Base: unsafe_convert, lock, trylock, unlock, islocked, wait, notify, AbstractLock
 
 export SpinLock
-
+public PaddedSpinLock
 # Important Note: these low-level primitives defined here
 #   are typically not for general usage
 

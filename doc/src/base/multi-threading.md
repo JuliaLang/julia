@@ -64,4 +64,5 @@ These building blocks are used to create the regular synchronization objects.
 
 ```@docs
 Base.Threads.SpinLock
+Base.Threads.PaddedSpinLock
 ```
