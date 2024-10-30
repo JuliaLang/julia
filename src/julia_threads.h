@@ -5,6 +5,7 @@
 #define JL_THREADS_H
 
 #include "gc-tls.h"
+#include "gc-tls-common.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
@@ -18,6 +19,8 @@ extern "C" {
 
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -54,7 +57,7 @@ typedef struct {
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
-     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
 #define JL_HAVE_ASM
 #endif
 #if 0
@@ -86,9 +89,13 @@ typedef ucontext_t _jl_ucontext_t;
 
 typedef struct {
     union {
-        _jl_ucontext_t ctx;
-        jl_stack_context_t copy_ctx;
+        _jl_ucontext_t *ctx;
+        jl_stack_context_t *copy_ctx;
     };
+    void *stkbuf; // malloc'd memory (either copybuf or stack)
+    size_t bufsz; // actual sizeof stkbuf
+    unsigned int copy_stack:31; // sizeof stack for copybuf
+    unsigned int started:1;
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
@@ -149,19 +156,17 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_gc_tls_states_t gc_tls; // this is very large, and the offset of the first member is baked into codegen
+    jl_gc_tls_states_common_t gc_tls_common; // common tls for both GCs
+    small_arraylist_t lazily_freed_mtarraylist_buffers;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
+    // This is the location of our copy_stack
     void *stackbase;
     size_t stacksize;
-    union {
-        _jl_ucontext_t base_ctx; // base context of stack
-        // This hack is needed to support always_copy_stacks:
-        jl_stack_context_t copy_stack_ctx;
-    };
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
@@ -187,6 +192,9 @@ typedef struct _jl_tls_states_t {
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+#ifdef _OS_DARWIN_
+    jl_jmp_buf *volatile safe_restore;
+#endif
 
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;

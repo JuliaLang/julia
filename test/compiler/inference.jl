@@ -1065,7 +1065,7 @@ gl_17003 = [1, 2, 3]
 f2_17003(item::AVector_17003) = nothing
 f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 
-@test f2_17003(1) == nothing
+@test f2_17003(1) === nothing
 
 # issue #20847
 function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
@@ -1076,7 +1076,7 @@ end
 tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
 
 for A in (1,)
-    @test segfaultfunction_20847(tuplevec_20847) == nothing
+    @test segfaultfunction_20847(tuplevec_20847) === nothing
 end
 
 # Issue #20902, check that this doesn't error.
@@ -1538,7 +1538,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.Compiler.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -2647,7 +2647,7 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+let ct = code_typed(f26826, (Float64,))[1]
     typed_code, retty = ct.first, ct.second
     found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
@@ -3887,113 +3887,6 @@ f_apply_cglobal(args...) = cglobal(args...)
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
 
-# PR #37749
-# Helper functions for Core.Compiler.Timings. These are normally accessed via a package -
-# usually (SnoopCompileCore).
-function time_inference(f)
-    Core.Compiler.Timings.reset_timings()
-    Core.Compiler.__set_measure_typeinf(true)
-    f()
-    Core.Compiler.__set_measure_typeinf(false)
-    Core.Compiler.Timings.close_current_timer()
-    return Core.Compiler.Timings._timings[1]
-end
-function depth(t::Core.Compiler.Timings.Timing)
-    maximum(depth.(t.children), init=0) + 1
-end
-function flatten_times(t::Core.Compiler.Timings.Timing)
-    collect(Iterators.flatten([(t.time => t.mi_info,), flatten_times.(t.children)...]))
-end
-# Some very limited testing of timing the type inference (#37749).
-@testset "Core.Compiler.Timings" begin
-    # Functions that call each other
-    @eval module M1
-        i(x) = x+5
-        i2(x) = x+2
-        h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
-        g(y::Integer, x) = h(Any[y]) + Int(x)
-    end
-    timing1 = time_inference() do
-        @eval M1.g(2, 3.0)
-    end
-    @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
-    # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
-    # their concrete types.
-    @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
-    @test all(child->isa(child.bt, Vector), timing1.children)
-    @test all(child->child.bt===nothing, timing1.children[1].children)
-    # Test the stacktrace
-    @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
-    # Test that inference has cached some of the Method Instances
-    timing2 = time_inference() do
-        @eval M1.g(2, 3.0)
-    end
-    @test length(flatten_times(timing2)) < length(flatten_times(timing1))
-    # Printing of InferenceFrameInfo for mi.def isa Module
-    @eval module M2
-        i(x) = x+5
-        i2(x) = x+2
-        h(a::Array) = i2(a[1]::Integer) + i(a[1]::Integer) + 2
-        g(y::Integer, x) = h(Any[y]) + Int(x)
-    end
-    # BEGIN LINE NUMBER SENSITIVITY (adjust the line offset below as needed)
-    timingmod = time_inference() do
-        @eval @testset "Outer" begin
-            @testset "Inner" begin
-                for i = 1:2 M2.g(2, 3.0) end
-            end
-        end
-    end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 6)", string(timingmod.children))
-    # END LINE NUMBER SENSITIVITY
-
-    # Recursive function
-    @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
-    timing = time_inference() do
-        @eval _Recursive.f(Base.inferencebarrier(5))
-    end
-    @test 2 <= depth(timing) <= 3  # root -> f (-> +)
-    @test 2 <= length(flatten_times(timing)) <= 3  # root, f, +
-
-    # Functions inferred with multiple constants
-    @eval module C
-        i(x) = x === 0 ? 0 : 1 / x
-        a(x) = i(0) * i(x)
-        b() = i(0) * i(1) * i(0)
-        function loopc(n)
-            s = 0
-            for i = 1:n
-                s += i
-            end
-            return s
-        end
-        call_loopc() = loopc(5)
-        myfloor(::Type{T}, x) where T = floor(T, x)
-        d(x) = myfloor(Int16, x)
-    end
-    timing = time_inference() do
-        @eval C.a(2)
-        @eval C.b()
-        @eval C.call_loopc()
-        @eval C.d(3.2)
-    end
-    ft = flatten_times(timing)
-    @test !isempty(ft)
-    str = sprint(show, ft)
-    @test occursin("InferenceFrameInfo for /(1::$Int, ::$Int)", str)  # inference constants
-    @test occursin("InferenceFrameInfo for Core.Compiler.Timings.ROOT()", str) # qualified
-    # loopc has internal slots, check constant printing in this case
-    sel = filter(ti -> ti.second.mi.def.name === :loopc, ft)
-    ifi = sel[end].second
-    @test length(ifi.slottypes) > ifi.nargs
-    str = sprint(show, sel)
-    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.loopc(5::$Int)", str)
-    # check that types aren't double-printed as `T::Type{T}`
-    sel = filter(ti -> ti.second.mi.def.name === :myfloor, ft)
-    str = sprint(show, sel)
-    @test occursin("InferenceFrameInfo for $(@__MODULE__).C.myfloor(::Type{Int16}, ::Float64)", str)
-end
-
 # issue #37638
 @test only(Base.return_types(() -> (nothing, Any[]...)[2])) isa Type
 
@@ -4743,32 +4636,80 @@ end
 
 # issue #43784
 @testset "issue #43784" begin
-    init = Base.ImmutableDict{Any,Any}()
-    a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
+    ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    init = Base.ImmutableDict{Number,Number}()
-    a = Const(init)
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c === typeof(init)
-
-    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c.fields[2] === Any # or Number
-    @test c.fields[3] === ComplexF64
-
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
-    @test c.fields[2] === Complex
-    @test c.fields[3] === Complex
+    let init = Base.ImmutableDict{Any,Any}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Any,Any}(1,2)
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 3
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Number
+        @test c.fields[3] === ComplexF64
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Complex
+        @test c.fields[3] === Complex
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = PartialStruct(T, Any[T, Number, Number])
+        @test b ⊑ a
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 1
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = Const(T())
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = PartialStruct(T, Any[T])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = Const(T(1,2))
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
 
     global const ginit43784 = Base.ImmutableDict{Any,Any}()
     @test Base.return_types() do
@@ -4800,6 +4741,31 @@ end
     @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
+end
+
+let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
+
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+
+    t = Const((false, false)) ⊔ Const((false, true))
+    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+    t = t ⊔ Const((false, false, 0))
+    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -5867,7 +5833,248 @@ bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
 
+# `PartialStruct` for partially initialized structs:
+struct PartiallyInitialized1
+    a; b; c
+    PartiallyInitialized1(a) = (@nospecialize; new(a))
+    PartiallyInitialized1(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized1(a, b, c) = (@nospecialize; new(a, b, c))
+end
+mutable struct PartiallyInitialized2
+    a; b; c
+    PartiallyInitialized2(a) = (@nospecialize; new(a))
+    PartiallyInitialized2(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized2(a, b, c) = (@nospecialize; new(a, b, c))
+end
+
+# 1. isdefined modeling for partial struct
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((PartiallyInitialized1,)) do x
+    @assert isdefined(x, :a)
+    return Val(isdefined(x, :c))
+end == Val
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized1(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    s = PartiallyInitialized2(a, b)
+    s.c = c
+    Val(isdefined(s, :c))
+end >: Val{true}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized2(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 1))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 2))
+end == Val
+
+# 2. getfield modeling for partial struct
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized1(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized1(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized2(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized2(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+
+# isdefined-Conditionals
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isdefined(x, :x)
+        return getfield(x, :x)
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isassigned(x)
+        return x[]
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, c
+    x = PartiallyInitialized2(a)
+    x.c = c
+    if isdefined(x, :c)
+        return x.b
+    end
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((PartiallyInitialized2,); optimize=false) do x
+    if isdefined(x, :b)
+        if isdefined(x, :c)
+            return x.c
+        end
+        return x.b
+    end
+    return nothing
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Bool,Int,); optimize=false) do c, b
+    x = c ? PartiallyInitialized1(true) : PartiallyInitialized1(true, b)
+    if isdefined(x, :b)
+        return Val(x.a), x.b
+    end
+    return nothing
+end |> Core.Compiler.is_nothrow
+
+# refine `undef` information from `@isdefined` check
+function isdefined_nothrow(c, x)
+    local val
+    if c
+        val = x
+    end
+    if @isdefined val
+        return val
+    end
+    return zero(Int)
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(isdefined_nothrow, (Bool,Int)))
+@test !any(first(only(code_typed(isdefined_nothrow, (Bool,Int)))).code) do @nospecialize x
+    Meta.isexpr(x, :throw_undef_if_not)
+end
+
+# End to end test case for the partially initialized struct with `PartialStruct`
+@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
+@test fully_eliminated() do
+    broadcast_noescape1(Ref("x"))
+end
+
 # InterConditional rt with Vararg argtypes
 fcondvarargs(a, b, c, d) = isa(d, Int64)
 gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, Int64)
 @test Core.Compiler.return_type(gcondvarargs, Tuple{Vararg{Any}}) === Bool
+
+# JuliaLang/julia#55627: argtypes check in `abstract_call_opaque_closure`
+issue55627_make_oc() = Base.Experimental.@opaque (x::Int) -> 2x
+@test Base.infer_return_type() do
+    f = issue55627_make_oc()
+    return f(1), f()
+end == Union{}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    f = issue55627_make_oc()
+    return f(1), f(xs...)
+end == Tuple{Int,Int}
+@test Base.infer_exception_type() do
+    f = issue55627_make_oc()
+    return f(1), f()
+end >: MethodError
+@test Base.infer_exception_type() do
+    f = issue55627_make_oc()
+    return f(1), f('1')
+end >: TypeError
+
+# `exct` modeling for opaque closure
+oc_exct_1() = Base.Experimental.@opaque (x) -> x < 0 ? throw(x) : x
+@test Base.infer_exception_type((Int,)) do x
+    oc_exct_1()(x)
+end == Int
+oc_exct_2() = Base.Experimental.@opaque Tuple{Number}->Number (x) -> '1'
+@test Base.infer_exception_type((Int,)) do x
+    oc_exct_2()(x)
+end == TypeError
+
+# nothrow modeling for `invoke` calls
+f_invoke_nothrow(::Number) = :number
+f_invoke_nothrow(::Int) = :int
+@test Base.infer_effects((Int,)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Char,)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Union{Nothing,Int},)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> !Core.Compiler.is_nothrow
+
+# `exct` modeling for `invoke` calls
+f_invoke_exct(x::Number) = x < 0 ? throw(x) : x
+f_invoke_exct(x::Int) = x
+@test Base.infer_exception_type((Int,)) do x
+    @invoke f_invoke_exct(x::Number)
+end == Int
+@test Base.infer_exception_type() do
+    @invoke f_invoke_exct(42::Number)
+end == Union{}
+@test Base.infer_exception_type((Union{Nothing,Int},)) do x
+    @invoke f_invoke_exct(x::Number)
+end == Union{Int,TypeError}
+@test Base.infer_exception_type((Int,)) do x
+    invoke(f_invoke_exct, Number, x)
+end == TypeError
+@test Base.infer_exception_type((Char,)) do x
+    invoke(f_invoke_exct, Tuple{Number}, x)
+end == TypeError
+
+@test Base.infer_exception_type((Vector{Any},)) do args
+    Core.throw_methoderror(args...)
+end == Union{MethodError,ArgumentError}
+
+# Issue https://github.com/JuliaLang/julia/issues/55751
+
+abstract type AbstractGrid55751{T, N} <: AbstractArray{T, N} end
+struct Grid55751{T, N, AT} <: AbstractGrid55751{T, N}
+    axes::AT
+end
+
+t155751 = Union{AbstractArray{UInt8, 4}, Array{Float32, 4}, Grid55751{Float32, 3, _A} where _A}
+t255751 = Array{Float32, 3}
+@test Core.Compiler.tmerge_types_slow(t155751,t255751) == AbstractArray # shouldn't hang
+
+issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
+@test Base.infer_return_type(issue55882_nfields) <: Int
+
+# issue #55916
+f55916(x) = 1
+f55916(::Vararg{T,T}) where {T} = "2"
+g55916(x) = f55916(x)
+# this shouldn't error
+@test only(code_typed(g55916, (Any,); optimize=false))[2] == Int
+
+# JuliaLang/julia#56248
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, 1)
+end === Union{}
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, Any, 1)
+end === Union{}
+
+@test Base.infer_return_type((Nothing,)) do x
+    @atomic x.count += 1
+end == Union{}
+@test Base.infer_return_type((Nothing,)) do x
+    @atomicreplace x.count 0 => 1
+end == Union{}
+mutable struct AtomicModifySafety
+    @atomic count::Int
+end
+let src = code_typed((Union{Nothing,AtomicModifySafety},)) do x
+        @atomic x.count += 1
+    end |> only |> first
+    @test any(@nospecialize(x)->Meta.isexpr(x, :invoke_modify), src.code)
+end

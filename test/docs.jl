@@ -4,6 +4,7 @@ import Base.Docs: meta, @var, DocStr, parsedoc
 
 # check that @doc can work before REPL is loaded
 @test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc @time'`, String), "nothing")
 
 using Markdown
 using REPL
@@ -100,7 +101,7 @@ end
 
 @test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:g]
 
 
 # issue #11548
@@ -574,8 +575,8 @@ end
 
 let T = meta(DocVars)[@var(DocVars.T)],
     S = meta(DocVars)[@var(DocVars.S)],
-    Tname = Markdown.parse("```\n$(curmod_prefix)DocVars.T\n```"),
-    Sname = Markdown.parse("```\n$(curmod_prefix)DocVars.S\n```")
+    Tname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.T\n```"),
+    Sname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.S\n```")
     # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""

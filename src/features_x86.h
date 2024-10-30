@@ -45,15 +45,15 @@ JL_FEATURE_DEF(avx512ifma, 32 * 2 + 21, 0)
 // JL_FEATURE_DEF(pcommit, 32 * 2 + 22, 0) // Deprecated
 JL_FEATURE_DEF(clflushopt, 32 * 2 + 23, 0)
 JL_FEATURE_DEF(clwb, 32 * 2 + 24, 0)
-JL_FEATURE_DEF(avx512pf, 32 * 2 + 26, 0)
-JL_FEATURE_DEF(avx512er, 32 * 2 + 27, 0)
+// JL_FEATURE_DEF(avx512pf, 32 * 2 + 26, 0) // Deprecated in LLVM 19
+// JL_FEATURE_DEF(avx512er, 32 * 2 + 27, 0) // Deprecated in LLVM 19
 JL_FEATURE_DEF(avx512cd, 32 * 2 + 28, 0)
 JL_FEATURE_DEF(sha, 32 * 2 + 29, 0)
 JL_FEATURE_DEF(avx512bw, 32 * 2 + 30, 0)
 JL_FEATURE_DEF(avx512vl, 32 * 2 + 31, 0)
 
 // EAX=7,ECX=0: ECX
-JL_FEATURE_DEF(prefetchwt1, 32 * 3 + 0, 0)
+// JL_FEATURE_DEF(prefetchwt1, 32 * 3 + 0, 0) // Deprecated in LLVM 19
 JL_FEATURE_DEF(avx512vbmi, 32 * 3 + 1, 0)
 JL_FEATURE_DEF(pku, 32 * 3 + 4, 0) // ospke
 JL_FEATURE_DEF(waitpkg, 32 * 3 + 5, 0)

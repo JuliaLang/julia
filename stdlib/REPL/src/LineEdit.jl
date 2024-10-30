@@ -166,7 +166,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -382,7 +382,13 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+
+    completions, partial, should_complete = try
+        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+    catch
+        @debug "error completing line for hint" exception=current_exceptions()
+        return clear_hint(st)
+    end
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete

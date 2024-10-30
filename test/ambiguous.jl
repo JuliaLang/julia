@@ -162,6 +162,22 @@ end
 ambs = detect_ambiguities(Ambig48312)
 @test length(ambs) == 4
 
+module UnboundAmbig55868
+    module B
+        struct C end
+        export C
+        Base.@deprecate_binding D C
+    end
+    using .B
+    export C, D
+end
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+@test isempty(detect_unbound_args(UnboundAmbig55868))
+@test isempty(detect_ambiguities(UnboundAmbig55868))
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin

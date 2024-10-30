@@ -47,7 +47,8 @@ following meanings:
   * `ALWAYS_TRUE`: this method is guaranteed to not execute any undefined behavior (for any input).
   * `ALWAYS_FALSE`: this method may execute undefined behavior.
   * `NOUB_IF_NOINBOUNDS`: this method is guaranteed to not execute any undefined behavior
-    if the caller does not set nor propagate the `@inbounds` context.
+    under the assumption that its `@boundscheck` code is not elided (which happens when the
+    caller does not set nor propagate the `@inbounds` context)
   Note that undefined behavior may technically cause the method to violate any other effect
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
   and they assume the absence of undefined behavior.
@@ -169,12 +170,12 @@ const NOUB_IF_NOINBOUNDS = 0x01 << 1
 # :nonoverlayed bits
 const CONSISTENT_OVERLAY = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_TRUE,  false) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false) # unknown really
+const EFFECTS_TOTAL   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
+const EFFECTS_THROWS  = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE, true)
+const EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_TRUE, false) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
 
-function Effects(effects::Effects = _EFFECTS_UNKNOWN;
+function Effects(effects::Effects=Effects(
+    ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false);
     consistent::UInt8 = effects.consistent,
     effect_free::UInt8 = effects.effect_free,
     nothrow::Bool = effects.nothrow,
@@ -352,37 +353,6 @@ function decode_effects(e::UInt32)
         UInt8((e >> 10) & 0x03),
         UInt8((e >> 12) & 0x03),
         _Bool((e >> 14) & 0x01))
-end
-
-function encode_effects_override(eo::EffectsOverride)
-    e = 0x0000
-    eo.consistent          && (e |= (0x0001 << 0))
-    eo.effect_free         && (e |= (0x0001 << 1))
-    eo.nothrow             && (e |= (0x0001 << 2))
-    eo.terminates_globally && (e |= (0x0001 << 3))
-    eo.terminates_locally  && (e |= (0x0001 << 4))
-    eo.notaskstate         && (e |= (0x0001 << 5))
-    eo.inaccessiblememonly && (e |= (0x0001 << 6))
-    eo.noub                && (e |= (0x0001 << 7))
-    eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
-    eo.consistent_overlay  && (e |= (0x0001 << 9))
-    eo.nortcall            && (e |= (0x0001 << 10))
-    return e
-end
-
-function decode_effects_override(e::UInt16)
-    return EffectsOverride(
-        !iszero(e & (0x0001 << 0)),
-        !iszero(e & (0x0001 << 1)),
-        !iszero(e & (0x0001 << 2)),
-        !iszero(e & (0x0001 << 3)),
-        !iszero(e & (0x0001 << 4)),
-        !iszero(e & (0x0001 << 5)),
-        !iszero(e & (0x0001 << 6)),
-        !iszero(e & (0x0001 << 7)),
-        !iszero(e & (0x0001 << 8)),
-        !iszero(e & (0x0001 << 9)),
-        !iszero(e & (0x0001 << 10)))
 end
 
 decode_statement_effects_override(ssaflag::UInt32) =

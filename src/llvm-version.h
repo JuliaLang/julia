@@ -18,6 +18,10 @@
     #define JL_LLVM_OPAQUE_POINTERS 1
 #endif
 
+#if JL_LLVM_VERSION < 19000 && defined(_CPU_RISCV64_)
+    #error Only LLVM versions >= 19.0.0 are supported by Julia on RISC-V
+#endif
+
 #ifdef __cplusplus
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying

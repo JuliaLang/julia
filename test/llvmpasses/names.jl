@@ -135,7 +135,8 @@ emit(f2, Float64, Float64, Float64, Float64, Float64, Float64, Float64)
 
 # CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f5
 # CHECK-SAME: %"a::A"
-# CHECK: %"a::A.b_ptr.c_ptr.d
+# CHECK: %"a::A.d
+# COM: this text check relies on our LLVM code emission being relatively poor, which is not always the case
 emit(f5, A)
 
 # CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f6
