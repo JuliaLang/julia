@@ -3795,7 +3795,11 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
-    const static uint32_t task_atomicfields[1] = {0x00001000}; // Set fields 13 as atomic
+    // Set field 17 (metrics_enabled) as const
+    // Set fields 13 (_state) and 18-21 (metric counters) as atomic
+    const static uint32_t task_constfields[1]  = { 0b000010000000000000000 };
+    const static uint32_t task_atomicfields[1] = { 0b111100001000000000000 };
+    jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 
     tv = jl_svec2(tvar("A"), tvar("R"));

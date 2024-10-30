@@ -104,7 +104,12 @@ See [`Base.task_metrics`](@ref).
     This method was added in Julia 1.12.
 """
 function task_cpu_time_ns(t::Task)
-    return t.cpu_time_ns
+    t.metrics_enabled || return UInt64(0)
+    if t.last_started_running_at == 0
+        return t.cpu_time_ns
+    else
+        return t.cpu_time_ns + (time_ns() - t.last_started_running_at)
+    end
 end
 
 """
@@ -122,10 +127,8 @@ See [`Base.task_metrics`](@ref).
     This method was added in Julia 1.12.
 """
 function task_wall_time_ns(t::Task)
-    # TODO: report up til current time if not done? too racy?
-    # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_enqueued_at
     t.metrics_enabled || return UInt64(0)
-    return t.finished_at - t.first_enqueued_at
+    return (t.finished_at != 0 ? t.finished_at : time_ns()) - t.first_enqueued_at
 end
 
 """

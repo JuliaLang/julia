@@ -2286,16 +2286,16 @@ typedef struct _jl_task_t {
     // uint8_t padding1;
     // multiqueue priority
     uint16_t priority;
-    // flag indicating whether or not this to measure the wall and cpu time of this task
+    // flag indicating whether or not to record timing metrics for this task
     uint8_t metrics_enabled;
     // timestamp this task first entered the run queue (TODO: int32 of ms instead?)
-    uint64_t first_enqueued_at;
+    _Atomic(uint64_t) first_enqueued_at;
     // timestamp this task was most recently scheduled to run
-    uint64_t last_started_running_at;
+    _Atomic(uint64_t) last_started_running_at;
     // time this task has spent running; updated when it yields or finishes.
-    uint64_t cpu_time_ns;
-    // timestamp this task became DONE or FAILED.
-    uint64_t finished_at;
+    _Atomic(uint64_t) cpu_time_ns;
+    // timestamp this task finished (i.e. entered state DONE or FAILED).
+    _Atomic(uint64_t) finished_at;
 
 // hidden state:
     // cached floating point environment

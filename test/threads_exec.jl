@@ -1315,6 +1315,8 @@ end
 end
 
 @testset "Base.task_metrics" begin
+    t = Task(() -> nothing)
+    @test_throws "const field" t.metrics_enabled = true
     is_task_metrics_enabled() = fetch(Threads.@spawn current_task().metrics_enabled)
     @test !is_task_metrics_enabled()
     try

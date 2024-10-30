@@ -978,10 +978,8 @@ function enq_work(t::Task)
 end
 
 function schedule(t::Task)
-    if t.metrics_enabled && t.first_enqueued_at == 0
-        # [task] created -scheduled-> wait_time
-        t.first_enqueued_at = time_ns()
-    end
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     enq_work(t)
 end
 
@@ -1029,10 +1027,6 @@ true
 function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
-    if t.metrics_enabled && t.first_enqueued_at == 0
-        # [task] created -scheduled-> wait_time
-        t.first_enqueued_at = time_ns()
-    end
     if error
         q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
@@ -1041,6 +1035,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
     end
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     enq_work(t)
     return t
 end
@@ -1079,6 +1075,8 @@ function yield(t::Task, @nospecialize(x=nothing))
     record_cpu_time!(current)
     t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
     enq_work(current)
     set_next_task(t)
@@ -1103,10 +1101,8 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
-    if t.metrics_enabled && t.first_enqueued_at == 0
-        # [task] created -scheduled-> wait_time
-        t.first_enqueued_at = time_ns()
-    end
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -1123,7 +1119,7 @@ function try_yieldto(undo)
     # [task] wait_time -(re)started-> user_time
     if ct.metrics_enabled
         @assert ct.last_started_running_at == 0
-        ct.last_started_running_at = time_ns()
+        @atomic :monotonic ct.last_started_running_at = time_ns()
     end
     if ct._isexception
         exc = ct.result
@@ -1140,10 +1136,8 @@ end
 function throwto(t::Task, @nospecialize exc)
     # [task] user_time -yield-> wait_time
     record_cpu_time!(current_task())
-    if t.metrics_enabled && t.first_enqueued_at == 0
-        # [task] created -scheduled-> wait_time
-        t.first_enqueued_at = time_ns()
-    end
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = exc
     t._isexception = true
     set_next_task(t)
@@ -1213,12 +1207,23 @@ else
     pause() = ccall(:pause, Cvoid, ())
 end
 
+# update the `cpu_time_ns` field of `t` to include the time since it last started running.
 function record_cpu_time!(t::Task)
     if t.metrics_enabled
         stopped_at = t.finished_at == 0 ? time_ns() : t.finished_at
         @assert t.last_started_running_at != 0
-        t.cpu_time_ns += stopped_at - t.last_started_running_at
-        t.last_started_running_at = 0
+        @atomic :monotonic t.cpu_time_ns += stopped_at - t.last_started_running_at
+        # set to 0 to indicate that the task is not running
+        @atomic :monotonic t.last_started_running_at = 0
+    end
+    return t
+end
+# if this is the first time `t` has been added to the run queue
+# (or the first time it has been unfairly yielded to without being added to the run queue)
+# then set the `first_enqueued_at` field to the current time.
+function maybe_record_enqueued!(t::Task)
+    if t.metrics_enabled && t.first_enqueued_at == 0
+        @atomic :monotonic t.first_enqueued_at = time_ns()
     end
     return t
 end
