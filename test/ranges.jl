@@ -1281,6 +1281,10 @@ end
           convert(AbstractRange{Float64},0:1:5) === convert(AbstractVector{Float64},0:1:5) === convert(AbstractArray{Float64},0:1:5) ===
           convert(AbstractRange{Float64},0.0:1.0:5.0) === convert(AbstractVector{Float64},0.0:1.0:5.0) === convert(AbstractArray{Float64},0.0:1.0:5.0) === 0.:1.:5.
 
+    @test convert(AbstractArray{Float64}, 0*(1:10)) === range(0.0,0.0,10) # https://github.com/JuliaLang/julia/pull/48894#discussion_r1822771487
+    @test length(convert(AbstractArray{Float16}, range(1/43^2, 1, 43))) == 43 # https://github.com/JuliaLang/julia/pull/48894#discussion_r1822771487
+    @test convert(AbstractArray{Float64}, LinRange(1,5,5) === LinRange(1.0,5.0,5) # LinRange support
+
     @test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
 end
@@ -2459,7 +2463,7 @@ end
         print(io, " with indices $(axes(A,1))")
     end
 
-    r = ZeroBasedUnitRange(5:8)
+    r = BasedUnitRange(5:8)
     @test r[0:2] == r[0]:r[2]
     @test r[0:1:2] == r[0]:1:r[2]
 end
