@@ -1371,8 +1371,8 @@ end
         t = Threads.@spawn peakflops()
         wait(t)
         @test !t.metrics_enabled
-        @test Base.Experimental.task_cpu_time_ns(t) == 0
-        @test Base.Experimental.task_wall_time_ns(t) == 0
+        @test isnothing(Base.Experimental.task_cpu_time_ns(t))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t))
     end
 end
 

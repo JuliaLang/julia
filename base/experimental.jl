@@ -512,6 +512,9 @@ Enable or disable the collection of per-task metrics.
 A `Task` created when `Base.task_metrics(true)` is in effect will have
 [`Base.Experimental.task_cpu_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
 timing information available.
+
+!!! note
+    Task metrics can be enabled at start-up via the `--task-metrics=yes` command line option.
 """
 function task_metrics(b::Bool)
     if b
@@ -523,12 +526,12 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_cpu_time_ns(t::Task) -> UInt64
+    Base.Experimental.task_cpu_time_ns(t::Task) -> Union{Int, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
-Will be `UInt64(0)` if task timings are not enabled.
+Will be `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
@@ -539,31 +542,31 @@ See [`Base.Experimental.task_metrics`](@ref).
     This method was added in Julia 1.12.
 """
 function task_cpu_time_ns(t::Task)
-    t.metrics_enabled || return UInt64(0)
+    t.metrics_enabled || return nothing
     if t.last_started_running_at == 0
-        return t.cpu_time_ns
+        return Int(t.cpu_time_ns)
     else
-        return t.cpu_time_ns + (time_ns() - t.last_started_running_at)
+        return Int(t.cpu_time_ns + (time_ns() - t.last_started_running_at))
     end
 end
 
 """
-    Base.Experimental.task_wall_time_ns(t::Task) -> UInt64
+    Base.Experimental.task_wall_time_ns(t::Task) -> Union{Int, Nothing}
 
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task entered the run queue until the time at which it completed,
 or until the current time if the task has not yet completed.
 See also [`task_cpu_time_ns`](@ref).
 
-Will be `UInt64(0)` if task timings are not enabled.
+Will be `nothing` if task timings are not enabled.
 See [`Base.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
 function task_wall_time_ns(t::Task)
-    t.metrics_enabled || return UInt64(0)
-    return (t.finished_at != 0 ? t.finished_at : time_ns()) - t.first_enqueued_at
+    t.metrics_enabled || return nothing
+    return Int((t.finished_at != 0 ? t.finished_at : time_ns()) - t.first_enqueued_at)
 end
 
 end # module
