@@ -1329,8 +1329,10 @@ end
     @test kron(D, B) == kron(Array(D), B)
     @test kron(B, D) == kron(B, Array(D))
     D2 = Diagonal([ones(2,2), ones(3,3)])
-    @test kron(D, D2) == Diagonal([diag(D2); 2diag(D2)])
-    @test kron(D2, D) == Diagonal([ones(2,2), fill(2.0,2,2), ones(3,3), fill(2.0,3,3)])
+    A = kron(D, D2)
+    @test A == kron!(similar(A), D, D2) == kron!(similar(A, size(A)), D, D2)
+    A = kron(D2, D)
+    @test A == kron!(similar(A), D2, D) == kron!(similar(A, size(A)), D2, D)
 end
 
 end # module TestDiagonal
