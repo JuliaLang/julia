@@ -313,6 +313,10 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
+    if (ct->metrics_enabled) {
+        assert(ct->first_enqueued_at != 0);
+        ct->finished_at = jl_hrtime();
+    }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
@@ -1150,7 +1154,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->first_enqueued_at = 0;
     t->last_started_running_at = 0;
     t->cpu_time_ns = 0;
-    t->wall_time_ns = 0;
+    t->finished_at = 0;
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1608,7 +1612,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
     ct->cpu_time_ns = 0;
-    ct->wall_time_ns = 0;
+    ct->finished_at = 0;
     ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     if (ct->metrics_enabled) {
         // [task] created -started-> user_time

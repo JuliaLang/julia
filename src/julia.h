@@ -2294,8 +2294,8 @@ typedef struct _jl_task_t {
     uint64_t last_started_running_at;
     // time this task has spent running; updated when it yields or finishes.
     uint64_t cpu_time_ns;
-    // time between first entering the run queue and being done/failed.
-    uint64_t wall_time_ns;
+    // timestamp this task became DONE or FAILED.
+    uint64_t finished_at;
 
 // hidden state:
     // cached floating point environment

@@ -3767,7 +3767,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "first_enqueued_at",
                                         "last_started_running_at",
                                         "cpu_time_ns",
-                                        "wall_time_ns"),
+                                        "finished_at"),
                         jl_svec(21,
                                 jl_any_type,
                                 jl_any_type,

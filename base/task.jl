@@ -810,12 +810,6 @@ end
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
-    if t.metrics_enabled
-        # [task] user_time -finished-> wait_time
-        now = time_ns()
-        record_cpu_time!(t, now)
-        record_wall_time!(t, now)
-    end
     err = istaskfailed(t)
     result = task_result(t)
     handled = false
@@ -1202,7 +1196,7 @@ checktaskempty = Partr.multiq_check_empty
 end
 
 function wait()
-    # [task] user_time -yield-or-wait-> wait_time
+    # [task] user_time -yield-or-done-> wait_time
     record_cpu_time!(current_task())
     GC.safepoint()
     W = workqueue_for(Threads.threadid())
@@ -1219,19 +1213,12 @@ else
     pause() = ccall(:pause, Cvoid, ())
 end
 
-function record_cpu_time!(t::Task, stopped_at::UInt64=time_ns())
+function record_cpu_time!(t::Task)
     if t.metrics_enabled
+        stopped_at = t.finished_at == 0 ? time_ns() : t.finished_at
         @assert t.last_started_running_at != 0
         t.cpu_time_ns += stopped_at - t.last_started_running_at
         t.last_started_running_at = 0
-    end
-    return t
-end
-
-function record_wall_time!(t::Task, done_at::UInt64=time_ns())
-    if t.metrics_enabled
-        @assert t.first_enqueued_at != 0
-        t.wall_time_ns = done_at - t.first_enqueued_at
     end
     return t
 end

@@ -124,7 +124,8 @@ See [`Base.task_metrics`](@ref).
 function task_wall_time_ns(t::Task)
     # TODO: report up til current time if not done? too racy?
     # return istaskdone(t) ? t.wall_time_ns : time_ns() - t.first_enqueued_at
-    return t.wall_time_ns
+    t.metrics_enabled || return UInt64(0)
+    return t.finished_at - t.first_enqueued_at
 end
 
 """
