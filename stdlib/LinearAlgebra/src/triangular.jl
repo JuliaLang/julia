@@ -350,8 +350,7 @@ Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
 end
 @inline function _istril(A::LowerTriangular, k)
     P = parent(A)
-    m = size(A, 1)
-    for j in max(1, k + 2):lastindex(P,2)
+    for j in max(firstindex(P,2), k + 2):lastindex(P,2)
         all(iszero, @view(P[j:min(j - k - 1, end), j])) || return false
     end
     return true
@@ -363,7 +362,7 @@ end
 @inline function _istriu(A::UpperTriangular, k)
     P = parent(A)
     m = size(A, 1)
-    for j in firstindex(P,2):min(m, m + k - 1)
+    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
         all(iszero, @view(P[max(begin, j - k + 1):j, j])) || return false
     end
     return true
