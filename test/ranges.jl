@@ -1277,8 +1277,14 @@ end
     @test convert(LinRange, 0.0:0.1:0.3) === LinRange{Float64}(0.0, 0.3, 4)
     @test convert(LinRange, 0:3) === LinRange{Int}(0, 3, 4)
 
-    @test convert(AbstractRange{Int8},0:5) === convert(AbstractVector{Int8},0:5) === convert(AbstractArray{Int8},0:5) === Int8(0):Int8(5)
-    @test convert(AbstractRange{Float64},0:5) === convert(AbstractVector{Float64},0:5) === convert(AbstractArray{Float64},0:5) === 0.:1.:5.
+    @test convert(AbstractRange{Int8},0:5) === convert(AbstractVector{Int8},0:5) === convert(AbstractArray{Int8},0:5) ===
+          convert(AbstractRange{Int8},0.0:5.0) === convert(AbstractVector{Int8},0.0:5.0) === convert(AbstractArray{Int8},0.0:5.0) === Int8(0):Int8(5)
+    @test convert(AbstractRange{Int8},0:1:5) === convert(AbstractVector{Int8},0:1:5) === convert(AbstractArray{Int8},0:1:5) ===
+          convert(AbstractRange{Int8},0.0:1.0:5.0) === convert(AbstractVector{Int8},0.0:1.0:5.0) === convert(AbstractArray{Int8},0.0:1.0:5.0) === Int8(0):Int8(1):Int8(5)
+    @test convert(AbstractRange{Float64},0:5) === convert(AbstractVector{Float64},0:5) === convert(AbstractArray{Float64},0:5) ===
+          convert(AbstractRange{Float64},0.0:5.0) === convert(AbstractVector{Float64},0.0:5.0) === convert(AbstractArray{Float64},0.0:5.0) ===
+          convert(AbstractRange{Float64},0:1:5) === convert(AbstractVector{Float64},0:1:5) === convert(AbstractArray{Float64},0:1:5) ===
+          convert(AbstractRange{Float64},0.0:1.0:5.0) === convert(AbstractVector{Float64},0.0:1.0:5.0) === convert(AbstractArray{Float64},0.0:1.0:5.0) === 0.:1.:5.
 
     @test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
