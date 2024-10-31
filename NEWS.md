@@ -37,6 +37,10 @@ Language changes
   omit the default user depot ([#51448]).
 * Precompilation cache files are now relocatable and their validity is now verified through
   a content hash of their source files instead of their `mtime` ([#49866]).
+* Extensions may now depend on other extensions, if their triggers include all triggers of any
+  extension they wish to depend upon (+ at least one other trigger). Ext-to-ext dependencies
+  that don't meet this requirement are now blocked from using `Base.get_extension` during pre-
+  compilation, to prevent extension cycles [#55557].
 
 Compiler/Runtime improvements
 -----------------------------
