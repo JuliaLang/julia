@@ -65,6 +65,8 @@ using .Main.OffsetArrays
 
     unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
     @test_throws unitrangeerrstr UnitRange('a', 'b')
+
+    @test step(false:true) === true # PR 56405
 end
 
 using Dates, Random
