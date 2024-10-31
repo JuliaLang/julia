@@ -314,8 +314,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
     if (ct->metrics_enabled) {
-        assert(ct->first_enqueued_at != 0);
-        ct->finished_at = jl_hrtime();
+        // [task] user_time -finished-> wait_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        jl_atomic_store_relaxed(&ct->finished_at, jl_hrtime());
     }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
