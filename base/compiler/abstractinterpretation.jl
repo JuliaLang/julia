@@ -3272,8 +3272,7 @@ function force_binding_resolution!(g::GlobalRef)
     return nothing
 end
 
-function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
-    force_binding_resolution!(g)
+function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}, retry_after_resolve::Bool=true)
     worlds = world_range(src)
     partition = lookup_binding_partition(min_world(worlds), g)
     partition.max_world < max_world(worlds) && return Any
@@ -3283,6 +3282,13 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
         partition.max_world < max_world(worlds) && return Any
     end
     if is_some_guard(binding_kind(partition))
+        if retry_after_resolve
+            # This method is surprisingly hot. For performance, don't ask the runtime to resolve
+            # the binding unless necessary - doing so triggers an additional lookup, which though
+            # not super expensive is hot enough to show up in benchmarks.
+            force_binding_resolution!(g)
+            return abstract_eval_globalref_type(g, src, false)
+        end
         # return Union{}
         return Any
     end
