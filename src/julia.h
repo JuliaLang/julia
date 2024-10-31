@@ -408,7 +408,7 @@ struct _jl_method_instance_t {
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
-    jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
+    jl_array_t *backedges; // list of code-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t cache_with_orig; // !cache_with_specTypes
 
@@ -453,6 +453,7 @@ typedef struct _jl_code_instance_t {
     // - null, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
+    _Atomic(jl_svec_t *) edges; // forward edge info
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
@@ -789,7 +790,7 @@ typedef struct _jl_methtable_t {
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
     jl_module_t *module; // sometimes used for debug printing
-    jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
+    jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
     uint8_t frozen; // whether this accepts adding new methods
