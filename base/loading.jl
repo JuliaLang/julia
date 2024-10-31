@@ -878,14 +878,14 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
+            # deps is either a list of names (deps = ["DepA", "DepB"]) or
+            # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
+            deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
             if UUID(uuid) === where.uuid
                 found_where = true
-                # deps is either a list of names (deps = ["DepA", "DepB"]) or
-                # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-                deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                 if deps isa Vector{String}
                     found_name = name in deps
-                    break
+                    found_name && @goto done
                 elseif deps isa Dict{String, Any}
                     deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
@@ -904,23 +904,25 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             return PkgId(UUID(uuid), name)
                         end
                         exts = extensions[where.name]::Union{String, Vector{String}}
+                        weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                         if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
-                            weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                            if weakdeps !== nothing
-                                if weakdeps isa Vector{String}
-                                    found_name = name in weakdeps
-                                    break
-                                elseif weakdeps isa Dict{String, Any}
-                                    weakdeps = weakdeps::Dict{String, Any}
-                                    for (dep, uuid) in weakdeps
-                                        uuid::String
-                                        if dep === name
-                                            return PkgId(UUID(uuid), name)
+                            for deps′ in [weakdeps, deps]
+                                    if deps′ !== nothing
+                                        if deps′ isa Vector{String}
+                                            found_name = name in deps′
+                                            found_name && @goto done
+                                        elseif deps′ isa Dict{String, Any}
+                                            deps′ = deps′::Dict{String, Any}
+                                            for (dep, uuid) in deps′
+                                                uuid::String
+                                                if dep === name
+                                                    return PkgId(UUID(uuid), name)
+                                                end
+                                            end
                                         end
                                     end
                                 end
                             end
-                        end
                         # `name` is not an ext, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
@@ -928,6 +930,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             end
         end
     end
+    @label done
     found_where || return nothing
     found_name || return PkgId(name)
     # Only reach here if deps was not a dict which mean we have a unique name for the dep
@@ -1262,12 +1265,13 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         proj_pkg = project_file_name_uuid(project_file, pkg.name)
         if pkg == proj_pkg
             d_proj = parsed_toml(project_file)
-            weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
-            weakdeps === nothing && return
-            if weakdeps isa Dict{String, Any}
-                return _insert_extension_triggers(pkg, extensions, weakdeps)
+            weakdeps = get(Dict{String, Any}, d_proj, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
+            deps = get(Dict{String, Any}, d_proj, "deps")::Union{Vector{String}, Dict{String,Any}}
+            if weakdeps isa Dict{String,Any} && deps isa Dict{String,Any}
+                total_deps = merge(weakdeps, deps)
+                return _insert_extension_triggers(pkg, extensions, total_deps)
             end
         end
 
@@ -1282,27 +1286,35 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
                 uuid === nothing && continue
                 if UUID(uuid) == pkg.uuid
-                    weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps === nothing && return
-                    if weakdeps isa Dict{String, Any}
-                        return _insert_extension_triggers(pkg, extensions, weakdeps)
+                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
+                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+
+                    function expand_deps_list(deps′::Vector{String})
+                        deps′_expanded = Dict{String, Any}()
+                        for (dep_name, entries) in d
+                            dep_name in deps′ || continue
+                            entries::Vector{Any}
+                            if length(entries) != 1
+                                error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
+                            end
+                            entry = first(entries)::Dict{String, Any}
+                            uuid = entry["uuid"]::String
+                            deps′_expanded[dep_name] = uuid
+                        end
+                        return deps′_expanded
                     end
 
-                    d_weakdeps = Dict{String, Any}()
-                    for (dep_name, entries) in d
-                        dep_name in weakdeps || continue
-                        entries::Vector{Any}
-                        if length(entries) != 1
-                            error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
-                        end
-                        entry = first(entries)::Dict{String, Any}
-                        uuid = entry["uuid"]::String
-                        d_weakdeps[dep_name] = uuid
+                    if weakdeps isa Vector{String}
+                        weakdeps = expand_deps_list(weakdeps)
                     end
-                    @assert length(d_weakdeps) == length(weakdeps)
-                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
+                    if deps isa Vector{String}
+                        deps = expand_deps_list(deps)
+                    end
+
+                    total_deps = merge(weakdeps, deps)
+                    return _insert_extension_triggers(pkg, extensions, total_deps)
                 end
             end
         end
@@ -1310,7 +1322,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
-function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, totaldeps::Dict{String, Any})
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
@@ -1324,7 +1336,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         push!(trigger1, gid)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
-            uuid_trigger = UUID(weakdeps[trigger]::String)
+            uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
