@@ -1454,14 +1454,14 @@ end
             last_cpu_time = Ref(typemax(Int))
             last_wall_time = Ref(typemax(Int))
             t = Threads.@spawn begin
-                cpu_time = Base.Experimental.current_task_cpu_time_ns()
-                wall_time = Base.Experimental.current_task_wall_time_ns()
+                cpu_time = Base.Experimental.task_cpu_time_ns()
+                wall_time = Base.Experimental.task_wall_time_ns()
                 for _ in 1:5
                     x = time_ns()
                     while time_ns() < x + 100
                     end
-                    new_cpu_time = Base.Experimental.current_task_cpu_time_ns()
-                    new_wall_time = Base.Experimental.current_task_wall_time_ns()
+                    new_cpu_time = Base.Experimental.task_cpu_time_ns()
+                    new_wall_time = Base.Experimental.task_wall_time_ns()
                     @test new_cpu_time > cpu_time
                     @test new_wall_time > wall_time
                     cpu_time = new_cpu_time

@@ -529,6 +529,8 @@ end
     Base.Experimental.task_cpu_time_ns(t::Task) -> Union{Int, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
+This metric only updates when `t` yields or completes, unless `t` is the current task
+in which it will update continuously.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
 Will be `nothing` if task timings are not enabled.
@@ -541,30 +543,15 @@ See [`Base.Experimental.task_metrics`](@ref).
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
-function task_cpu_time_ns(t::Task)
+function task_cpu_time_ns(t::Task=current_task())
     t.metrics_enabled || return nothing
     if t == current_task()
-        current_task_cpu_time_ns()
+        # These metrics fields can't update while we're running.
+        # But since we're running we need to include the time since we last started running!
+        return Int(t.cpu_time_ns + (time_ns() - t.last_started_running_at))
     else
         return Int(t.cpu_time_ns)
     end
-end
-
-"""
-    Base.Experimental.current_task_cpu_time_ns() -> Union{Int, Nothing}
-
-Return the total nanoseconds that the current task `t` has spent running.
-
-Like [`Base.Experimental.task_cpu_time_ns`](@ref), but returns an up-to-date value for the
-currently running task, whereas `task_cpu_time_ns(t)` for another task `t` only updates when
-`t` yields or completes.
-"""
-function current_task_cpu_time_ns()
-    t = current_task()
-    t.metrics_enabled || return nothing
-    # These metrics fields can't update while we're running.
-    # But since we're running we need to include the time since we last started running!
-    return Int(t.cpu_time_ns + (time_ns() - t.last_started_running_at))
 end
 
 """
@@ -581,7 +568,7 @@ See [`Base.task_metrics`](@ref).
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
-function task_wall_time_ns(t::Task)
+function task_wall_time_ns(t::Task=current_task())
     t.metrics_enabled || return nothing
     start_at = t.first_enqueued_at
     start_at == 0 && return 0
@@ -589,13 +576,5 @@ function task_wall_time_ns(t::Task)
     end_at == 0 && return Int(time_ns() - start_at)
     return Int(end_at - start_at)
 end
-
-"""
-    Base.Experimental.current_task_wall_time_ns() -> Union{Int, Nothing}
-
-Report the total wall time that the current task has been running.
-See [`Base.Experimental.task_wall_time_ns`](@ref) for more details.
-"""
-current_task_wall_time_ns() = task_wall_time_ns(current_task())
 
 end # module
