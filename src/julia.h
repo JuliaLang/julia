@@ -1128,6 +1128,11 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o);
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 
+// Allocates a new weak-reference, assigns its value and increments Julia allocation
+// counters. If thread-local allocators are used, then this function should allocate in the
+// thread-local allocator of the current thread.
+JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
+
 // GC write barriers
 
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
