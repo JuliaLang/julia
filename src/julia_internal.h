@@ -1349,7 +1349,14 @@ extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
 #  include <libunwind.h>
 #pragma GCC visibility pop
 typedef unw_context_t bt_context_t;
+#if defined(_CPU_AARCH64_) && defined(_OS_DARWIN_) // Apple Silicon...
+typedef struct {
+    uintptr_t ip;
+    uintptr_t fp;
+} bt_cursor_t;
+#else
 typedef unw_cursor_t bt_cursor_t;
+#endif
 #  if (!defined(SYSTEM_LIBUNWIND) || UNW_VERSION_MAJOR > 1 ||   \
        (UNW_VERSION_MAJOR == 1 && UNW_VERSION_MINOR != 0 && UNW_VERSION_MINOR != 1))
 // Enable our memory manager only for libunwind with our patch or

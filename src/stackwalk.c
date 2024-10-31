@@ -554,6 +554,62 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 }
 
 #elif !defined(JL_DISABLE_LIBUNWIND)
+
+#if defined(_CPU_AARCH64_) && defined(_OS_DARWIN_) // Apple Silicon...
+
+// Inline an ARM assembly instruction to read the program counter
+#define READ_PC_AARCH64(pc) \
+    do { \
+        __asm__ __volatile__("adr %0, ." : "=r"(pc)); \
+    } while (0)
+
+// Inline an ARM assembly instruction to read the frame pointer
+#define READ_FP_AARCH64(fp) \
+    do { \
+        __asm__ __volatile__("mov %0, x29" : "=r"(fp)); \
+    } while (0)
+
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+{
+    (void)context;
+    uintptr_t ip, fp;
+    READ_PC_AARCH64(ip);
+    READ_FP_AARCH64(fp);
+    cursor->ip = ip;
+    cursor->fp = fp;
+    // Return success
+    return 1;
+}
+
+// Use the stack layout to fetch the next frame address and to update the
+// instruction pointer based on link register information.
+static int fp_based_step(bt_cursor_t *cursor)
+{
+    uintptr_t fp = cursor->fp;
+    if (fp == 0) {
+        return 0;
+    }
+    uintptr_t lr = *(uintptr_t*)(fp + 8);
+    if (lr == 0) {
+        return 0;
+    }
+    uintptr_t next_fp = *(uintptr_t*)fp;
+    cursor->ip = lr;
+    cursor->fp = next_fp;
+    return 1;
+}
+
+// Work-around Libunwind bug on Apple Silicon
+static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
+{
+    (void)from_signal_handler; // libunwind also tracks this
+    *ip = cursor->ip;
+    *sp = cursor->fp; // use fp as sp
+    return fp_based_step(cursor) > 0;
+}
+
+#else
+
 // stacktrace using libunwind
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
@@ -573,6 +629,8 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     *sp = reg;
     return unw_step(cursor) > 0;
 }
+
+#endif
 
 #ifdef LLVMLIBUNWIND
 NOINLINE size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize,
