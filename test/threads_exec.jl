@@ -1439,15 +1439,11 @@ end
             schedule(t2)
             yield()
             @assert istaskstarted(t1) && !istaskdone(t2)
-            cpu1 = Base.Experimental.task_cpu_time_ns(t2)
-            wall1 = Base.Experimental.task_wall_time_ns(t2)
-            @test cpu1 > 0
-            @test wall1 > 0
             schedule(t2, 1)
             yield()
             @assert istaskfailed(t2)
-            @test Base.Experimental.task_cpu_time_ns(t2) > cpu1
-            @test Base.Experimental.task_wall_time_ns(t2) > wall1
+            @test Base.Experimental.task_cpu_time_ns(t2) > 0
+            @test Base.Experimental.task_wall_time_ns(t2) > 0
         finally
             Base.Experimental.task_metrics(false)
         end
@@ -1458,14 +1454,14 @@ end
             last_cpu_time = Ref(typemax(Int))
             last_wall_time = Ref(typemax(Int))
             t = Threads.@spawn begin
-                cpu_time = Base.Experimental.task_cpu_time_ns(current_task())
-                wall_time = Base.Experimental.task_wall_time_ns(current_task())
+                cpu_time = Base.Experimental.current_task_cpu_time_ns()
+                wall_time = Base.Experimental.current_task_wall_time_ns()
                 for _ in 1:5
                     x = time_ns()
                     while time_ns() < x + 100
                     end
-                    new_cpu_time = Base.Experimental.task_cpu_time_ns(current_task())
-                    new_wall_time = Base.Experimental.task_wall_time_ns(current_task())
+                    new_cpu_time = Base.Experimental.current_task_cpu_time_ns()
+                    new_wall_time = Base.Experimental.current_task_wall_time_ns()
                     @test new_cpu_time > cpu_time
                     @test new_wall_time > wall_time
                     cpu_time = new_cpu_time
