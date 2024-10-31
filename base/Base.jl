@@ -1,54 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-had_compiler = isdefined(Base, :Compiler)
-if had_compiler; else
-include("Base_compiler.jl")
-end
-
 const start_base_include = time_ns()
 
 include("reflection.jl")
-
-# define invoke(f, T, args...; kwargs...), without kwargs wrapping
-# to forward to invoke
-function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
-    @inline
-    # prepend kwargs and f to the invoked from the user
-    T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
-    return invoke(Core.kwcall, T, kwargs, f, args...)
-end
-# invoke does not have its own call cache, but kwcall for invoke does
-setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
-
-# define applicable(f, T, args...; kwargs...), without kwargs wrapping
-# to forward to applicable
-function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
-    @inline
-    return applicable(Core.kwcall, kwargs, args...)
-end
-function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
-    tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
-    return Core._hasmethod(tt)
-end
-
-# core operations & types
-include("promotion.jl")
-include("tuple.jl")
-include("expr.jl")
-include("pair.jl")
-include("traits.jl")
-include("range.jl")
-include("error.jl")
-
-# core numeric operations & types
-==(x, y) = x === y
-include("bool.jl")
-include("number.jl")
-include("int.jl")
-include("operators.jl")
-include("pointer.jl")
-include("refvalue.jl")
-include("cmem.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
@@ -60,37 +14,7 @@ end
 
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}(Base)
-
-
-# For OS specific stuff
-# We need to strcat things here, before strings are really defined
-function strcat(x::String, y::String)
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
-    GC.@preserve x y out begin
-        out_ptr = unsafe_convert(Ptr{UInt8}, out)
-        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
-        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
-    end
-    return out
-end
-
-BUILDROOT::String = ""
-
-baremodule BuildSettings
-end
-
-let i = 1
-    global BUILDROOT
-    while i <= length(Core.ARGS)
-        if Core.ARGS[i] == "--buildsettings"
-            include(BuildSettings, ARGS[i+1])
-            i += 1
-        else
-            BUILDROOT = Core.ARGS[i]
-        end
-        i += 1
-    end
-end
+process_sysimg_args!()
 
 include(strcat(BUILDROOT, "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
@@ -380,6 +304,7 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # Compatibility with when Compiler was in Core
 @eval Core const Compiler = Main.Base.Compiler
+@eval Compiler const fl_parse = Core.Main.Base.fl_parse
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
@@ -471,10 +396,21 @@ end
 # enable threads support
 @eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
 
+# Record dependency information for files belonging to the Compiler, so that
+# we know whether the .ji can just give the Base copy or not.
+# TODO: We may want to do this earlier to avoid TOCTOU issues.
+const _compiler_require_dependencies = Any[]
+for i = 1:length(_included_files)
+    isassigned(_included_files, i) || continue
+    (mod, file) = _included_files[i]
+    if mod === Compiler || parentmodule(mod) === Compiler || endswith(file, "/Compiler.jl")
+        _include_dependency!(_compiler_require_dependencies, true, mod, file, true, false)
+    end
+end
+@assert length(_compiler_require_dependencies) >= 15
+
 end
 
 # Ensure this file is also tracked
 @assert !isassigned(_included_files, 1)
 _included_files[1] = (parentmodule(Base), abspath(@__FILE__))
-
-had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)

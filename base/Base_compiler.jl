@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+baremodule Base
 using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
@@ -198,7 +199,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     return Core._hasmethod(tt)
 end
 
-
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
@@ -252,15 +252,51 @@ include("namedtuple.jl")
 include("ordering.jl")
 using .Order
 
-include("compiler/compiler.jl")
+include("coreir.jl")
+
+
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
+    GC.@preserve x y out begin
+        out_ptr = unsafe_convert(Ptr{UInt8}, out)
+        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    end
+    return out
+end
+
+BUILDROOT::String = ""
+
+baremodule BuildSettings
+end
+
+function process_sysimg_args!()
+    let i = 1
+        global BUILDROOT
+        while i <= length(Core.ARGS)
+            if Core.ARGS[i] == "--buildsettings"
+                include(BuildSettings, ARGS[i+1])
+                i += 1
+            else
+                BUILDROOT = Core.ARGS[i]
+            end
+            i += 1
+        end
+    end
+end
+process_sysimg_args!()
+
+include(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
 
 const _return_type = Compiler.return_type
 
 # Enable compiler
-Core.eval(Compiler, quote
-include("compiler/bootstrap.jl")
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+Compiler.bootstrap!()
 
-include("compiler/parsing.jl")
+include("flparse.jl")
 Core._setparser!(fl_parse)
-end)
+
+# Further definition of Base will happen in Base.jl if loaded.
+end

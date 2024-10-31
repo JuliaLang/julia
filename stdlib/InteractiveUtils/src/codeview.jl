@@ -239,7 +239,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             if !isa(f, Core.OpaqueClosure)
                 src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
             else
-                src, rt = Base.get_oc_code_rt(f, tt, true)
+                src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
             end
             src isa Core.CodeInfo || error("failed to infer source for $mi")
             str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
@@ -248,7 +248,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         if !isa(f, Core.OpaqueClosure)
             src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
         else
-            src, rt = Base.get_oc_code_rt(f, tt, true)
+            src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)

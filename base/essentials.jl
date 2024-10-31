@@ -184,7 +184,8 @@ end
 _nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
-    return true
+    return _nameof(__module__) === :Base ||
+      _nameof(ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module) === :Compiler
 end
 
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)

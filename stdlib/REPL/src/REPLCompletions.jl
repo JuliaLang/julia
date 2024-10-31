@@ -5,6 +5,9 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions, completion_text
 
 using Core: Const
+# We want to insulate the REPLCompletion module from any changes the user may
+# make to the compiler, since it runs by default and the system becomes unusable
+# if it breaks.
 const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet

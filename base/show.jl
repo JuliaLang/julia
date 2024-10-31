@@ -1385,32 +1385,6 @@ function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
     end
 end
 
-# These sometimes show up as Const-values in InferenceFrameInfo signatures
-function show(io::IO, mi_info::Compiler.Timings.InferenceFrameInfo)
-    mi = mi_info.mi
-    def = mi.def
-    if isa(def, Method)
-        if isdefined(def, :generator) && mi === def.generator
-            print(io, "InferenceFrameInfo generator for ")
-            show(io, def)
-        else
-            print(io, "InferenceFrameInfo for ")
-            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
-            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
-        end
-    else
-        di = mi.cache.inferred.debuginfo
-        file, line = IRShow.debuginfo_firstline(di)
-        file = string(file)
-        line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
-    end
-end
-
-function show(io::IO, tinf::Compiler.Timings.Timing)
-    print(io, "Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
-end
-
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
@@ -2855,8 +2829,10 @@ module IRShow
         isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
         Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
         VarState, InvalidIRError, argextype, widenconst, singleton_type,
-        sptypes_from_meth_instance, EMPTY_SPTYPES
-    include("compiler/ssair/show.jl")
+        sptypes_from_meth_instance, EMPTY_SPTYPES, InferenceState,
+        NativeInterpreter, CachedMethodTable, LimitedAccuracy, Timings
+
+    Base.include(IRShow, Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/ssair/show.jl"))
 
     const __debuginfo = Dict{Symbol, Any}(
         # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
@@ -2883,34 +2859,63 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
-function show(io::IO, inferred::Compiler.InferenceResult)
-    mi = inferred.linfo
-    tt = mi.specTypes.parameters[2:end]
-    tts = join(["::$(t)" for t in tt], ", ")
-    rettype = inferred.result
-    if isa(rettype, Compiler.InferenceState)
-        rettype = rettype.bestguess
+show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
+
+show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
+    args = String[let
+        e = stmt.edges[i]
+        v = !isassigned(stmt.values, i) ? "#undef" :
+            sprint(; context=io) do io′
+                show_unquoted(io′, stmt.values[i], indent)
+            end
+        "$prefix$e => $v"
+        end for i in 1:length(stmt.edges)
+    ]
+    print(io, "φ ", '(')
+    join(io, args, ", ")
+    print(io, ')')
+end
+
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+    print(io, "φᶜ (")
+    first = true
+    for v in stmt.values
+        first ? (first = false) : print(io, ", ")
+        show_unquoted(io, v, indent)
     end
-    if isa(mi.def, Method)
-        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
+    print(io, "π (")
+    show_unquoted(io, stmt.val, indent)
+    print(io, ", ")
+    printstyled(io, stmt.typ, color=:cyan)
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
+    print(io, "ϒ (")
+    isdefined(stmt, :val) ?
+        show_unquoted(io, stmt.val, indent) :
+        print(io, "#undef")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
+    if !isdefined(stmt, :val)
+        print(io, "unreachable")
     else
-        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+        print(io, "return ")
+        show_unquoted(io, stmt.val, indent)
     end
 end
 
-show(io::IO, sv::Compiler.InferenceState) =
-    (print(io, "InferenceState for "); show(io, sv.linfo))
-
-show(io::IO, ::Compiler.NativeInterpreter) =
-    print(io, "Core.Compiler.NativeInterpreter(...)")
-
-show(io::IO, cache::Compiler.CachedMethodTable) =
-    print(io, typeof(cache), "(", Compiler.length(cache.cache), " entries)")
-
-function show(io::IO, limited::Compiler.LimitedAccuracy)
-    print(io, "Compiler.LimitedAccuracy(")
-    show(io, limited.typ)
-    print(io, ", #= ", Compiler.length(limited.causes), " cause(s) =#)")
+show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
+    print(io, "goto ", prefix, stmt.dest, " if not ")
+    show_unquoted(io, stmt.cond, indent)
 end
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)

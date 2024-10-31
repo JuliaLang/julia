@@ -5,13 +5,6 @@
 
 @nospecialize
 
-if Pair != Base.Pair
-import Base: Base, IOContext, string, join, sprint
-IOContext(io::IO, KV::Pair) = IOContext(io, Base.Pair(KV[1], KV[2]))
-length(s::String) = Base.length(s)
-^(s::String, i::Int) = Base.:^(s, i)
-end
-
 import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
 
@@ -141,73 +134,14 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
-        show_unquoted_phinode(io, stmt, indent, "#")
+        Base.show_unquoted_phinode(io, stmt, indent, "#")
     elseif stmt isa GotoIfNot
-        show_unquoted_gotoifnot(io, stmt, indent, "#")
+        Base.show_unquoted_gotoifnot(io, stmt, indent, "#")
     # everything else in the IR, defer to the generic AST printer
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
     nothing
-end
-
-show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
-
-show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
-function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
-    args = String[let
-        e = stmt.edges[i]
-        v = !isassigned(stmt.values, i) ? "#undef" :
-            sprint(; context=io) do io′
-                show_unquoted(io′, stmt.values[i], indent)
-            end
-        "$prefix$e => $v"
-        end for i in 1:length(stmt.edges)
-    ]
-    print(io, "φ ", '(')
-    join(io, args, ", ")
-    print(io, ')')
-end
-
-function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
-    print(io, "φᶜ (")
-    first = true
-    for v in stmt.values
-        first ? (first = false) : print(io, ", ")
-        show_unquoted(io, v, indent)
-    end
-    print(io, ")")
-end
-
-function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
-    print(io, "π (")
-    show_unquoted(io, stmt.val, indent)
-    print(io, ", ")
-    printstyled(io, stmt.typ, color=:cyan)
-    print(io, ")")
-end
-
-function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
-    print(io, "ϒ (")
-    isdefined(stmt, :val) ?
-        show_unquoted(io, stmt.val, indent) :
-        print(io, "#undef")
-    print(io, ")")
-end
-
-function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
-    if !isdefined(stmt, :val)
-        print(io, "unreachable")
-    else
-        print(io, "return ")
-        show_unquoted(io, stmt.val, indent)
-    end
-end
-
-show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
-function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
-    print(io, "goto ", prefix, stmt.dest, " if not ")
-    show_unquoted(io, stmt.cond, indent)
 end
 
 function should_print_ssa_type(@nospecialize node)
@@ -1135,6 +1069,64 @@ function Base.show(io::IO, e::Effects)
     print(io, ',')
     printstyled(io, effectbits_letter(e, :nortcall, 'r'); color=effectbits_color(e, :nortcall))
     print(io, ')')
+end
+
+
+function show(io::IO, inferred::Compiler.InferenceResult)
+    mi = inferred.linfo
+    tt = mi.specTypes.parameters[2:end]
+    tts = join(["::$(t)" for t in tt], ", ")
+    rettype = inferred.result
+    if isa(rettype, Compiler.InferenceState)
+        rettype = rettype.bestguess
+    end
+    if isa(mi.def, Method)
+        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    else
+        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+    end
+end
+
+Base.show(io::IO, sv::InferenceState) =
+    (print(io, "InferenceState for "); show(io, sv.linfo))
+
+Base.show(io::IO, ::NativeInterpreter) =
+    print(io, "Compiler.NativeInterpreter(...)")
+
+Base.show(io::IO, cache::CachedMethodTable) =
+    print(io, typeof(cache), "(", length(cache.cache), " entries)")
+
+function Base.show(io::IO, limited::LimitedAccuracy)
+    print(io, "LimitedAccuracy(")
+    show(io, limited.typ)
+    print(io, ", #= ", length(limited.causes), " cause(s) =#)")
+end
+
+
+# These sometimes show up as Const-values in InferenceFrameInfo signatures
+function show(io::IO, mi_info::Timings.InferenceFrameInfo)
+    mi = mi_info.mi
+    def = mi.def
+    if isa(def, Method)
+        if isdefined(def, :generator) && mi === def.generator
+            print(io, "InferenceFrameInfo generator for ")
+            show(io, def)
+        else
+            print(io, "InferenceFrameInfo for ")
+            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
+            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
+        end
+    else
+        di = mi.cache.inferred.debuginfo
+        file, line = debuginfo_firstline(di)
+        file = string(file)
+        line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
+    end
+end
+
+function show(io::IO, tinf::Timings.Timing)
+    print(io, "Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
 @specialize

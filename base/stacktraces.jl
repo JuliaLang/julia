@@ -124,7 +124,7 @@ end
 
 const top_level_scope_sym = Symbol("top-level scope")
 
-function lookup(ip::Union{Base.InterpreterIP})
+function lookup(ip::Base.InterpreterIP)
     code = ip.code
     if code === nothing
         # interpreted top-level expression with no CodeInfo
