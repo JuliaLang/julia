@@ -120,6 +120,11 @@ _mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, 
 _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
+generic_matmatmul!(C::StridedMatrix, A::HermOrSym{<:Any, <:StridedMatrix}, B::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, alpha, beta) =
+    _generic_matmatmul!(C, A, B, alpha, beta)
+generic_matmatmul!(C::StridedMatrix, A::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, B::HermOrSym{<:Any, <:StridedMatrix}, alpha, beta) =
+    _generic_matmatmul!(C, A, B, alpha, beta)
+
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)

@@ -1078,10 +1078,17 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return generic_matmatmul!(C, StaticChar('N'), StaticChar('N'), A, B, alpha, beta)
+            return generic_matmatmul!(C, A, B, alpha, beta)
         end
     end
 end
+generic_matmatmul!(C::StridedMatrix, A::StridedMatrix, B::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, alpha, beta) =
+    _generic_matmatmul!(C, A, B, alpha, beta)
+generic_matmatmul!(C::StridedMatrix, A::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, B::StridedMatrix, alpha, beta) =
+    _generic_matmatmul!(C, A, B, alpha, beta)
+generic_matmatmul!(C::StridedMatrix, A::UpperOrLowerTriangular{<:Any, <:StridedMatrix},
+        B::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, alpha, beta) =
+    _generic_matmatmul!(C, A, B, alpha, beta)
 
 ldiv!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _ldiv!(C, A, B)
 # generic fallback for AbstractTriangular, directs to 2-arg [l/r]div!
