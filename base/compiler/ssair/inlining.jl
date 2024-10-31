@@ -939,7 +939,6 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing,
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
     method = match.method
-    spec_types = match.spec_types
 
     # Check that we have the correct number of arguments
     na = Int(method.nargs)
@@ -954,6 +953,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     if !match.fully_covers
         # type-intersection was not able to give us a simple list of types, so
         # ir_inline_unionsplit won't be able to deal with inlining this
+        spec_types = match.spec_types
         if !(spec_types isa DataType && length(spec_types.parameters) == npassedargs &&
              !isvarargtype(spec_types.parameters[end]))
             return nothing
@@ -1428,14 +1428,13 @@ function handle_match!(cases::Vector{InliningCase},
     match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
     state::InliningState;
     allow_typevars::Bool, volatile_inf_result::Union{Nothing,VolatileInferenceResult})
-    spec_types = match.spec_types
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
-    !allow_typevars && any(case::InliningCase->case.sig === spec_types, cases) && return true
+    !allow_typevars && any(case::InliningCase->case.sig === match.spec_types, cases) && return true
     item = analyze_method!(match, argtypes, info, flag, state; allow_typevars, volatile_inf_result)
     item === nothing && return false
-    push!(cases, InliningCase(spec_types, item))
+    push!(cases, InliningCase(match.spec_types, item))
     return true
 end
 
@@ -1443,13 +1442,12 @@ function handle_const_prop_result!(cases::Vector{InliningCase}, result::ConstPro
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
     allow_typevars::Bool)
     mi = result.result.linfo
-    spec_types = match.spec_types
     if !validate_sparams(mi.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
     item = resolve_todo(mi, result.result, info, flag, state)
     item === nothing && return false
-    push!(cases, InliningCase(spec_types, item))
+    push!(cases, InliningCase(match.spec_types, item))
     return true
 end
 
@@ -1479,11 +1477,10 @@ end
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     mi = result.mi
-    spec_types = match.spec_types
     validate_sparams(mi.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
     item === nothing && return false
-    push!(cases, InliningCase(spec_types, item))
+    push!(cases, InliningCase(match.spec_types, item))
     return true
 end
 
