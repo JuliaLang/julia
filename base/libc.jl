@@ -387,7 +387,7 @@ on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained fro
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
-free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
+free(p::Ptr) = ccall(:jl_free, Cvoid, (Ptr{Cvoid},), p)
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
@@ -396,7 +396,7 @@ free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 Call `malloc` from the C standard library.
 """
-malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
+malloc(size::Integer) = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 """
     realloc(addr::Ptr, size::Integer) -> Ptr{Cvoid}
@@ -406,20 +406,20 @@ Call `realloc` from the C standard library.
 See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
 obtained from [`malloc`](@ref).
 """
-realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
+realloc(p::Ptr, size::Integer) = ccall(:jl_realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
 """
     calloc(num::Integer, size::Integer) -> Ptr{Cvoid}
 
 Call `calloc` from the C standard library.
 """
-calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
+calloc(num::Integer, size::Integer) = ccall(:jl_calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
 
 
 ## Random numbers ##
 
-# Access to very high quality (kernel) randomness
+# Access to very high-quality (kernel) randomness
 function getrandom!(A::Union{Array,Base.RefValue})
     ret = ccall(:uv_random, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t,   Cuint, Ptr{Cvoid}),
                                    C_NULL,     C_NULL,     A,          sizeof(A), 0,     C_NULL)
