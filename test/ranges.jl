@@ -2463,7 +2463,7 @@ end
         print(io, " with indices $(axes(A,1))")
     end
 
-    r = BasedUnitRange(5:8)
+    r = ZeroBasedUnitRange(5:8)
     @test r[0:2] == r[0]:r[2]
     @test r[0:1:2] == r[0]:1:r[2]
 end
