@@ -2288,7 +2288,7 @@ typedef struct _jl_task_t {
     uint16_t priority;
     // flag indicating whether or not to record timing metrics for this task
     uint8_t metrics_enabled;
-    // timestamp this task first entered the run queue (TODO: int32 of ms instead?)
+    // timestamp this task first entered the run queue
     _Atomic(uint64_t) first_enqueued_at;
     // timestamp this task was most recently scheduled to run
     _Atomic(uint64_t) last_started_running_at;
