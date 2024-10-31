@@ -1288,7 +1288,7 @@ end
     @test AbstractArray{Int128}(0:2:5) === Int128(0):2:4 # StepRange
     @test AbstractArray{Float64}(LinRange(1,5,5)) === LinRange(1.0,5.0,5) # LinRange
     @test AbstractArray{Float64}(oneto(5)) === AbstractArray{Float64}(1:5) === AbstractArray{Float64}(1:1:5) === 1.:1.:5. # fallback
-    
+
     # Edge cases where floating point can be glitchy. Credit: @mcabbott
     @test convert(AbstractArray{Float64}, 0*(1:10)) === range(0.0,0.0,10)
     @test length(convert(AbstractArray{Float16}, range(1/43^2, 1, 43))) == 43
