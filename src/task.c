@@ -316,7 +316,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     if (ct->metrics_enabled) {
         // [task] user_time -finished-> wait_time
         assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
-        jl_atomic_store_relaxed(&ct->finished_at, jl_hrtime());
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->finished_at, now);
+        jl_atomic_fetch_add_relaxed(&ct->cpu_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
     }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);

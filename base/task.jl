@@ -1118,7 +1118,6 @@ function try_yieldto(undo)
     ct = current_task()
     # [task] wait_time -(re)started-> user_time
     if ct.metrics_enabled
-        @assert ct.last_started_running_at == 0
         @atomic :monotonic ct.last_started_running_at = time_ns()
     end
     if ct._isexception
@@ -1209,12 +1208,8 @@ end
 
 # update the `cpu_time_ns` field of `t` to include the time since it last started running.
 function record_cpu_time!(t::Task)
-    if t.metrics_enabled
-        stopped_at = t.finished_at == 0 ? time_ns() : t.finished_at
-        @assert t.last_started_running_at != 0
-        @atomic :monotonic t.cpu_time_ns += stopped_at - t.last_started_running_at
-        # set to 0 to indicate that the task is not running
-        @atomic :monotonic t.last_started_running_at = 0
+    if t.metrics_enabled && !istaskdone(t)
+        @atomic :monotonic t.cpu_time_ns += time_ns() - t.last_started_running_at
     end
     return t
 end
