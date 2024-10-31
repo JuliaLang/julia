@@ -6,48 +6,7 @@
 
 # N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
-
-import Core: Const, PartialStruct
-
-"""
-    struct Const
-        val
-    end
-
-The type representing a constant value.
-"""
-:(Const)
-
-"""
-    struct PartialStruct
-        typ
-        fields::Vector{Any} # elements are other type lattice members
-    end
-
-This extended lattice element is introduced when we have information about an object's
-fields beyond what can be obtained from the object type. E.g. it represents a tuple where
-some elements are known to be constants or a struct whose `Any`-typed field is initialized
-with `Int` values.
-
-- `typ` indicates the type of the object
-- `fields` holds the lattice elements corresponding to each field of the object
-
-If `typ` is a struct, `fields` represents the fields of the struct that are guaranteed to be
-initialized. For instance, if the length of `fields` of `PartialStruct` representing a
-struct with 4 fields is 3, the 4th field may not be initialized. If the length is 4, all
-fields are guaranteed to be initialized.
-
-If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
-guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
-exact number of elements is unknown.
-"""
-:(PartialStruct)
-function PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    for i = 1:length(fields)
-        assert_nested_slotwrapper(fields[i])
-    end
-    return Core._PartialStruct(typ, fields)
-end
+import Core: Const, InterConditional, PartialStruct
 
 """
     cnd::Conditional
@@ -86,23 +45,6 @@ struct Conditional
 end
 Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype); isdefined::Bool=false) =
     Conditional(slot_id(var), thentype, elsetype; isdefined)
-
-import Core: InterConditional
-"""
-    struct InterConditional
-        slot::Int
-        thentype
-        elsetype
-    end
-
-Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
-This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
-while processing a call, then `Conditional` everywhere else. Thus `InterConditional` does not appear in
-`CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
-"""
-:(InterConditional)
-InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
-    InterConditional(slot_id(var), thentype, elsetype)
 
 const AnyConditional = Union{Conditional,InterConditional}
 Conditional(cnd::InterConditional) = Conditional(cnd.slot, cnd.thentype, cnd.elsetype)
@@ -388,8 +330,8 @@ end
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(vartyp.typ, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(vartyp.typ, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, elsefields))
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
@@ -405,8 +347,8 @@ end
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(vartyp_widened, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(vartyp_widened, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
     end
 end
 
@@ -734,7 +676,7 @@ widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
 widenconst(::PartialTypeVar) = TypeVar
-widenconst(t::PartialStruct) = t.typ
+widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 @nospecializeinfer widenconst(@nospecialize t::Type) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
@@ -798,4 +740,14 @@ function stoverwrite1!(state::VarTable, change::StateUpdate)
     newtype = change.vtype
     state[changeid] = newtype
     return state
+end
+
+# The ::AbstractLattice argument is unused and simply serves to disambiguate
+# different instances of the compiler that may share the `Core.PartialStruct`
+# type.
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
+    for i = 1:length(fields)
+        assert_nested_slotwrapper(fields[i])
+    end
+    return Core._PartialStruct(typ, fields)
 end

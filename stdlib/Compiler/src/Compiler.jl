@@ -12,8 +12,8 @@ import Core: print, println, show, write, unsafe_write,
              memoryref_isassigned, memoryrefnew, memoryrefoffset, memoryrefget,
              memoryrefset!, typename
 
-using ..Base
-using ..Base: Ordering, vect, EffectsOverride, BitVector, @_gc_preserve_begin, @_gc_preserve_end, RefValue,
+using Base
+using Base: Ordering, vect, EffectsOverride, BitVector, @_gc_preserve_begin, @_gc_preserve_end, RefValue,
     @nospecializeinfer, @_foldable_meta, fieldindex, is_function_def, indexed_iterate, isexpr, methods,
     get_world_counter, JLOptions, _methods_by_ftype, unwrap_unionall, cconvert, unsafe_convert,
     issingletontype, isType, rewrap_unionall, has_free_typevars, isvarargtype, hasgenerator,
@@ -29,8 +29,8 @@ using ..Base: Ordering, vect, EffectsOverride, BitVector, @_gc_preserve_begin, @
     specialize_method, hasintersect, is_nospecializeinfer, is_nospecialized,
     get_nospecializeinfer_sig, tls_world_age, uniontype_layout, kwerr,
     moduleroot, is_file_tracked, decode_effects_override
-using ..Base.Order
-import ..Base: getindex, setindex!, length, iterate, push!, isempty, first, convert, ==,
+using Base.Order
+import Base: getindex, setindex!, length, iterate, push!, isempty, first, convert, ==,
     copy, popfirst!, in, haskey, resize!, copy!, append!, last, get!, size,
     get, iterate, findall
 
@@ -46,8 +46,21 @@ ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 eval(x) = Core.eval(Compiler, x)
 eval(m, x) = Core.eval(m, x)
 
-include(x) = Base.include(Compiler, x)
-include(mod, x) = Base.include(mod, x)
+function include(x::String)
+    if !isdefined(Base, :end_base_include)
+        # During bootstrap, all includes are relative to `base/`
+        x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "../stdlib/Compiler/src/", x)
+    end
+    Base.include(Compiler, x)
+end
+
+function include(mod::Module, x::String)
+    if !isdefined(Base, :end_base_include)
+        x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "../stdlib/Compiler/src/", x)
+    end
+    Base.include(mod, x)
+end
+
 
 macro _boundscheck() Expr(:boundscheck) end
 
@@ -59,7 +72,7 @@ abstract type AbstractInterpreter end
 function return_type end # promotion.jl expects this to exist
 is_return_type(Core.@nospecialize(f)) = f === return_type
 
-include("compiler/sort.jl")
+include("sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -94,30 +107,32 @@ else
     end
 end
 
-include("compiler/cicache.jl")
-include("compiler/methodtable.jl")
-include("compiler/effects.jl")
-include("compiler/types.jl")
-include("compiler/utilities.jl")
-include("compiler/validation.jl")
+include("cicache.jl")
+include("methodtable.jl")
+include("effects.jl")
+include("types.jl")
+include("utilities.jl")
+include("validation.jl")
 
-include("compiler/ssair/basicblock.jl")
-include("compiler/ssair/domtree.jl")
-include("compiler/ssair/ir.jl")
-include("compiler/ssair/tarjan.jl")
+include("ssair/basicblock.jl")
+include("ssair/domtree.jl")
+include("ssair/ir.jl")
+include("ssair/tarjan.jl")
 
-include("compiler/abstractlattice.jl")
-include("compiler/stmtinfo.jl")
-include("compiler/inferenceresult.jl")
-include("compiler/inferencestate.jl")
+include("abstractlattice.jl")
+include("stmtinfo.jl")
+include("inferenceresult.jl")
+include("inferencestate.jl")
 
-include("compiler/typeutils.jl")
-include("compiler/typelimits.jl")
-include("compiler/typelattice.jl")
-include("compiler/tfuncs.jl")
+include("typeutils.jl")
+include("typelimits.jl")
+include("typelattice.jl")
+include("tfuncs.jl")
 
-include("compiler/abstractinterpretation.jl")
-include("compiler/typeinfer.jl")
-include("compiler/optimize.jl")
+include("abstractinterpretation.jl")
+include("typeinfer.jl")
+include("optimize.jl")
+
+include("bootstrap.jl")
 
 end

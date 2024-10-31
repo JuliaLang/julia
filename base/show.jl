@@ -2826,7 +2826,7 @@ module IRShow
         Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
         VarState, InvalidIRError, argextype, widenconst, singleton_type,
         sptypes_from_meth_instance, EMPTY_SPTYPES
-    include("compiler/ssair/show.jl")
+    include("../stdlib/Compiler/src/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
         # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information

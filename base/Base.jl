@@ -335,6 +335,7 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # Compatibility with when Compiler was in Core
 @eval Core const Compiler = Main.Base.Compiler
+@eval Compiler const fl_parse = Core.Main.Base.fl_parse
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")

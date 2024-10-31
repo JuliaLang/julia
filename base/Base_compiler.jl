@@ -247,15 +247,14 @@ include("namedtuple.jl")
 include("ordering.jl")
 using .Order
 
-include("compiler/compiler.jl")
+include("coreir.jl")
+
+include("../stdlib/Compiler/src/Compiler.jl")
 
 const _return_type = Compiler.return_type
 
 # Enable compiler
-Core.eval(Compiler, quote
-include("compiler/bootstrap.jl")
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+Compiler.bootstrap!()
 
-include("compiler/parsing.jl")
+include("flparse.jl")
 Core._setparser!(fl_parse)
-end)

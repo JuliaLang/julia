@@ -30,12 +30,15 @@ using ..Compiler: # Core.Compiler specific definitions
     is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
     singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, Compiler
 
-include(x) = _TOP_MOD.include(@__MODULE__, x)
-if _TOP_MOD === Compiler
-    include("compiler/ssair/EscapeAnalysis/disjoint_set.jl")
-else
-    include("disjoint_set.jl")
+function include(x)
+    if !isdefined(_TOP_MOD.Base, :end_base_include)
+        # During bootstrap, all includes are relative to `base/`
+        x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "ssair/EscapeAnalysis/", x)
+    end
+    _TOP_MOD.include(@__MODULE__, x)
 end
+
+include("disjoint_set.jl")
 
 const AInfo = IdSet{Any}
 
