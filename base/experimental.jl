@@ -509,7 +509,7 @@ disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
     Base.Experimental.task_metrics(::Bool)
 
 Enable or disable the collection of per-task metrics.
-A `Task` created when `Base.task_metrics(true)` is in effect will have
+A `Task` created when `Base.Experimental.task_metrics(true)` is in effect will have
 [`Base.Experimental.task_cpu_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
 timing information available.
 
@@ -560,10 +560,10 @@ end
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task entered the run queue until the time at which it completed,
 or until the current time if the task has not yet completed.
-See also [`task_cpu_time_ns`](@ref).
+See also [`Base.Experimental.task_cpu_time_ns`](@ref).
 
 Will be `nothing` if task timings are not enabled.
-See [`Base.task_metrics`](@ref).
+See [`Base.Experimental.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
