@@ -64,8 +64,8 @@
 #   }
 #end
 
-# struct GenericMemoryRef{kind::Symbol, T, AS::AddrSpace}
-#    mem::Memory{kind, T, AS}
+#struct GenericMemoryRef{kind::Symbol, T, AS::AddrSpace}
+#    mem::GenericMemory{kind, T, AS}
 #    data::Ptr{Cvoid} # make this GenericPtr{addrspace, Cvoid}
 #end
 
@@ -125,12 +125,13 @@
 #    file::Union{Symbol,Nothing}
 #end
 
-#struct LineInfoNode
-#    module::Module
-#    method::Any (Union{Symbol, Method, MethodInstance})
-#    file::Symbol
-#    line::Int32
-#    inlined_at::Int32
+#struct LegacyLineInfoNode end # only used internally during lowering
+
+#struct DebugInfo
+#    def::Any # (Union{Symbol, Method, MethodInstance})
+#    linetable::Any # (Union{Nothing,DebugInfo})
+#    edges::SimpleVector # Vector{DebugInfo}
+#    codelocs::String # compressed Vector{UInt8}
 #end
 
 #struct GotoNode
@@ -191,8 +192,8 @@ export
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
-    Function, Method, Array, Memory, MemoryRef, GenericMemory, GenericMemoryRef,
-    Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -205,14 +206,14 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
     nfields, throw, tuple, ===, isdefined, eval,
     # access to globals
-    getglobal, setglobal!,
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
@@ -271,6 +272,21 @@ end
 Expr(@nospecialize args...) = _expr(args...)
 
 _is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
+macro _total_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
+end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -282,7 +298,9 @@ macro _foldable_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 
 macro inline()   Expr(:meta, :inline)   end
@@ -296,6 +314,9 @@ TypeVar(@nospecialize(n), @nospecialize(ub)) = _typevar(n::Symbol, Union{}, ub)
 TypeVar(@nospecialize(n), @nospecialize(lb), @nospecialize(ub)) = _typevar(n::Symbol, lb, ub)
 UnionAll(@nospecialize(v), @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v::TypeVar, t)
 
+const Memory{T} = GenericMemory{:not_atomic, T, CPU}
+const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
+
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
@@ -303,6 +324,11 @@ convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
+
+# will be inserted by the frontend for closures
+_typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
+
+has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
@@ -400,6 +426,11 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
+struct FieldError <: Exception
+    type::DataType
+    field::Symbol
+end
+
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
@@ -423,9 +454,13 @@ Nothing() = nothing
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
-include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
+include(m::Module, fname::String) = (@noinline; ccall(:jl_load_, Any, (Any, Any), m, fname))
+eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e))
 
-eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+struct EvalInto <: Function
+    m::Module
+end
+(this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
 mutable struct Box
     contents::Any
@@ -466,8 +501,10 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
-        $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}, linetable::Union{Nothing,DebugInfo}, edges::SimpleVector, codelocs::String) =
+        $(Expr(:new, :DebugInfo, :def, :linetable, :edges, :codelocs))
+    DebugInfo(def::Union{Method,MethodInstance,Symbol}) =
+        $(Expr(:new, :DebugInfo, :def, nothing, Core.svec(), ""))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
     PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
@@ -482,16 +519,27 @@ eval(Core, quote
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
+const NullDebugInfo = DebugInfo(:none)
+
+struct LineInfoNode # legacy support for aiding Serializer.deserialize of old IR
+    mod::Module
+    method
+    file::Symbol
+    line::Int32
+    inlined_at::Int32
+    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) = new(mod, method, file, line, inlined_at)
+end
+
+
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
-    relocatability::UInt8)
+    effects::UInt32, @nospecialize(analysis_results),
+    relocatability::UInt8, edges::Union{DebugInfo,Nothing})
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, analysis_results,
-        relocatability)
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
+        mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        effects, analysis_results, relocatability, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
@@ -516,22 +564,19 @@ const undef = UndefInitializer()
 (self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, d::NTuple{1,Int}) where {T,kind,addrspace} = self(undef, getfield(d,1))
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
-# copy constructors
 
-const Memory{T} = GenericMemory{:not_atomic, T, CPU}
-const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
+memoryref(mem::GenericMemory) = memoryrefnew(mem)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-MemoryRef(mem::Memory) = memoryref(mem)
-MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
-MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-MemoryRef{T}(mem::Memory{T}) where {T} = memoryref(mem)
-MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), @_boundscheck)
-MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), @_boundscheck)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
+GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
+
+const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
+const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
 
 # construction helpers for Array
-new_as_memoryref(self::Type{GenericMemoryRef{isatomic,T,addrspace}}, m::Int) where {T,isatomic,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
+new_as_memoryref(self::Type{GenericMemoryRef{kind,T,addrspace}}, m::Int) where {T,kind,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
 
 # checked-multiply intrinsic function for dimensions
 _checked_mul_dims() = 1, false
@@ -545,19 +590,22 @@ function _checked_mul_dims(m::Int, n::Int)
     return a, ovflw
 end
 function _checked_mul_dims(m::Int, d::Int...)
-   @_foldable_meta # the compiler needs to know this loop terminates
-   a = m
-   i = 1
-   ovflw = false
-   while Intrinsics.sle_int(i, nfields(d))
-     di = getfield(d, i)
-     b = Intrinsics.checked_smul_int(a, di)
-     ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
-     ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, di))
-     a = getfield(b, 1)
-     i = Intrinsics.add_int(i, 1)
+    @_foldable_meta # the compiler needs to know this loop terminates
+    a = m
+    i = 1
+    ovflw = false
+    neg = Intrinsics.ule_int(typemax_Int, m)
+    zero = false # if m==0 we won't have overflow since we go left to right
+    while Intrinsics.sle_int(i, nfields(d))
+        di = getfield(d, i)
+        b = Intrinsics.checked_smul_int(a, di)
+        zero = Intrinsics.or_int(zero, di === 0)
+        ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
+        neg = Intrinsics.or_int(neg, Intrinsics.ule_int(typemax_Int, di))
+        a = getfield(b, 1)
+        i = Intrinsics.add_int(i, 1)
    end
-   return a, ovflw
+   return a, Intrinsics.or_int(neg, Intrinsics.and_int(ovflw, Intrinsics.not_int(zero)))
 end
 
 # convert a set of dims to a length, with overflow checking
@@ -627,13 +675,13 @@ module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional, EnterNode
+    PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional, EnterNode
+    PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 end # module IR
 
@@ -646,8 +694,17 @@ end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
-atdoc!(λ) = global atdoc = λ
+
+isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+iscallexpr(ex) = false
+function ignoredoc(source, mod, str, expr)
+    (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
+    Expr(:escape, expr)
+end
+
+global atdoc = ignoredoc
+atdoc!(λ)    = global atdoc = λ
 
 # macros for big integer syntax
 macro int128_str end
@@ -718,6 +775,13 @@ function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospec
     end
 end
 
+# If the generator is a subtype of this trait, inference caches the generated unoptimized
+# code, sacrificing memory space to improve the performance of subsequent inferences.
+# This tradeoff is not appropriate in general cases (e.g., for `GeneratedFunctionStub`s
+# generated from the front end), but it can be justified for generators involving complex
+# code transformations, such as a Cassette-like system.
+abstract type CachedGenerator end
+
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
 eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
@@ -725,8 +789,8 @@ eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
 
 using .Intrinsics: sle_int, add_int
 
-eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
-             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
+eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :NT, :args))))
 
 # constructors for built-in types
 
@@ -742,12 +806,14 @@ function is_top_bit_set(x::Union{Int8,UInt8})
     eq_int(lshr_int(x, 7), trunc_int(typeof(x), 1))
 end
 
-#TODO delete this function (but see #48097):
-throw_inexacterror(args...) = throw(InexactError(args...))
+# n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
+throw_inexacterror(func::Symbol, to, val) = throw(InexactError(func, to, val))
 
-function check_top_bit(::Type{To}, x) where {To}
+function check_sign_bit(::Type{To}, x) where {To}
     @inline
-    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, To, x)
+    # the top bit is the sign bit of x but "sign bit" sounds better in stacktraces
+    # n.b. if x is signed, then sizeof(x) === sizeof(To), otherwise sizeof(x) >= sizeof(To)
+    is_top_bit_set(x) && throw_inexacterror(sizeof(x) === sizeof(To) ? :convert : :trunc, To, x)
     x
 end
 
@@ -772,11 +838,11 @@ toInt8(x::Int16)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int32)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int64)      = checked_trunc_sint(Int8, x)
 toInt8(x::Int128)     = checked_trunc_sint(Int8, x)
-toInt8(x::UInt8)      = bitcast(Int8, check_top_bit(Int8, x))
-toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
-toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
-toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_top_bit(Int8, x))
-toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_top_bit(Int8, x))
+toInt8(x::UInt8)      = bitcast(Int8, check_sign_bit(Int8, x))
+toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
+toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
+toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
+toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
 toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
@@ -784,10 +850,10 @@ toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int64)     = checked_trunc_sint(Int16, x)
 toInt16(x::Int128)    = checked_trunc_sint(Int16, x)
 toInt16(x::UInt8)     = zext_int(Int16, x)
-toInt16(x::UInt16)    = bitcast(Int16, check_top_bit(Int16, x))
-toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
-toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_top_bit(Int16, x))
-toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_top_bit(Int16, x))
+toInt16(x::UInt16)    = bitcast(Int16, check_sign_bit(Int16, x))
+toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
+toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
+toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
 toInt16(x::Bool)      = and_int(zext_int(Int16, x), Int16(1))
 toInt32(x::Int8)      = sext_int(Int32, x)
 toInt32(x::Int16)     = sext_int(Int32, x)
@@ -796,9 +862,9 @@ toInt32(x::Int64)     = checked_trunc_sint(Int32, x)
 toInt32(x::Int128)    = checked_trunc_sint(Int32, x)
 toInt32(x::UInt8)     = zext_int(Int32, x)
 toInt32(x::UInt16)    = zext_int(Int32, x)
-toInt32(x::UInt32)    = bitcast(Int32, check_top_bit(Int32, x))
-toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_top_bit(Int32, x))
-toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_top_bit(Int32, x))
+toInt32(x::UInt32)    = bitcast(Int32, check_sign_bit(Int32, x))
+toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_sign_bit(Int32, x))
+toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_sign_bit(Int32, x))
 toInt32(x::Bool)      = and_int(zext_int(Int32, x), Int32(1))
 toInt64(x::Int8)      = sext_int(Int64, x)
 toInt64(x::Int16)     = sext_int(Int64, x)
@@ -808,8 +874,8 @@ toInt64(x::Int128)    = checked_trunc_sint(Int64, x)
 toInt64(x::UInt8)     = zext_int(Int64, x)
 toInt64(x::UInt16)    = zext_int(Int64, x)
 toInt64(x::UInt32)    = zext_int(Int64, x)
-toInt64(x::UInt64)    = bitcast(Int64, check_top_bit(Int64, x))
-toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_top_bit(Int64, x))
+toInt64(x::UInt64)    = bitcast(Int64, check_sign_bit(Int64, x))
+toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_sign_bit(Int64, x))
 toInt64(x::Bool)      = and_int(zext_int(Int64, x), Int64(1))
 toInt128(x::Int8)     = sext_int(Int128, x)
 toInt128(x::Int16)    = sext_int(Int128, x)
@@ -820,9 +886,9 @@ toInt128(x::UInt8)    = zext_int(Int128, x)
 toInt128(x::UInt16)   = zext_int(Int128, x)
 toInt128(x::UInt32)   = zext_int(Int128, x)
 toInt128(x::UInt64)   = zext_int(Int128, x)
-toInt128(x::UInt128)  = bitcast(Int128, check_top_bit(Int128, x))
+toInt128(x::UInt128)  = bitcast(Int128, check_sign_bit(Int128, x))
 toInt128(x::Bool)     = and_int(zext_int(Int128, x), Int128(1))
-toUInt8(x::Int8)      = bitcast(UInt8, check_top_bit(UInt8, x))
+toUInt8(x::Int8)      = bitcast(UInt8, check_sign_bit(UInt8, x))
 toUInt8(x::Int16)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int32)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int64)     = checked_trunc_uint(UInt8, x)
@@ -833,8 +899,8 @@ toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
 toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
-toUInt16(x::Int8)     = sext_int(UInt16, check_top_bit(UInt16, x))
-toUInt16(x::Int16)    = bitcast(UInt16, check_top_bit(UInt16, x))
+toUInt16(x::Int8)     = sext_int(UInt16, check_sign_bit(UInt16, x))
+toUInt16(x::Int16)    = bitcast(UInt16, check_sign_bit(UInt16, x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int64)    = checked_trunc_uint(UInt16, x)
 toUInt16(x::Int128)   = checked_trunc_uint(UInt16, x)
@@ -844,9 +910,9 @@ toUInt16(x::UInt32)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt64)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt128)  = checked_trunc_uint(UInt16, x)
 toUInt16(x::Bool)     = and_int(zext_int(UInt16, x), UInt16(1))
-toUInt32(x::Int8)     = sext_int(UInt32, check_top_bit(UInt32, x))
-toUInt32(x::Int16)    = sext_int(UInt32, check_top_bit(UInt32, x))
-toUInt32(x::Int32)    = bitcast(UInt32, check_top_bit(UInt32, x))
+toUInt32(x::Int8)     = sext_int(UInt32, check_sign_bit(UInt32, x))
+toUInt32(x::Int16)    = sext_int(UInt32, check_sign_bit(UInt32, x))
+toUInt32(x::Int32)    = bitcast(UInt32, check_sign_bit(UInt32, x))
 toUInt32(x::Int64)    = checked_trunc_uint(UInt32, x)
 toUInt32(x::Int128)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt8)    = zext_int(UInt32, x)
@@ -855,10 +921,10 @@ toUInt32(x::UInt32)   = x
 toUInt32(x::UInt64)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt128)  = checked_trunc_uint(UInt32, x)
 toUInt32(x::Bool)     = and_int(zext_int(UInt32, x), UInt32(1))
-toUInt64(x::Int8)     = sext_int(UInt64, check_top_bit(UInt64, x))
-toUInt64(x::Int16)    = sext_int(UInt64, check_top_bit(UInt64, x))
-toUInt64(x::Int32)    = sext_int(UInt64, check_top_bit(UInt64, x))
-toUInt64(x::Int64)    = bitcast(UInt64, check_top_bit(UInt64, x))
+toUInt64(x::Int8)     = sext_int(UInt64, check_sign_bit(UInt64, x))
+toUInt64(x::Int16)    = sext_int(UInt64, check_sign_bit(UInt64, x))
+toUInt64(x::Int32)    = sext_int(UInt64, check_sign_bit(UInt64, x))
+toUInt64(x::Int64)    = bitcast(UInt64, check_sign_bit(UInt64, x))
 toUInt64(x::Int128)   = checked_trunc_uint(UInt64, x)
 toUInt64(x::UInt8)    = zext_int(UInt64, x)
 toUInt64(x::UInt16)   = zext_int(UInt64, x)
@@ -866,11 +932,11 @@ toUInt64(x::UInt32)   = zext_int(UInt64, x)
 toUInt64(x::UInt64)   = x
 toUInt64(x::UInt128)  = checked_trunc_uint(UInt64, x)
 toUInt64(x::Bool)     = and_int(zext_int(UInt64, x), UInt64(1))
-toUInt128(x::Int8)    = sext_int(UInt128, check_top_bit(UInt128, x))
-toUInt128(x::Int16)   = sext_int(UInt128, check_top_bit(UInt128, x))
-toUInt128(x::Int32)   = sext_int(UInt128, check_top_bit(UInt128, x))
-toUInt128(x::Int64)   = sext_int(UInt128, check_top_bit(UInt128, x))
-toUInt128(x::Int128)  = bitcast(UInt128, check_top_bit(UInt128, x))
+toUInt128(x::Int8)    = sext_int(UInt128, check_sign_bit(UInt128, x))
+toUInt128(x::Int16)   = sext_int(UInt128, check_sign_bit(UInt128, x))
+toUInt128(x::Int32)   = sext_int(UInt128, check_sign_bit(UInt128, x))
+toUInt128(x::Int64)   = sext_int(UInt128, check_sign_bit(UInt128, x))
+toUInt128(x::Int128)  = bitcast(UInt128, check_sign_bit(UInt128, x))
 toUInt128(x::UInt8)   = zext_int(UInt128, x)
 toUInt128(x::UInt16)  = zext_int(UInt128, x)
 toUInt128(x::UInt32)  = zext_int(UInt128, x)
@@ -954,7 +1020,7 @@ struct Pair{A, B}
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
@@ -965,10 +1031,40 @@ arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.s
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref
+const check_top_bit = check_sign_bit
 
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
+
+# typename(_).constprop_heuristic
+const FORCE_CONST_PROP      = 0x1
+const ARRAY_INDEX_HEURISTIC = 0x2
+const ITERATE_HEURISTIC     = 0x3
+const SAMETYPE_HEURISTIC    = 0x4
+
+# `typename` has special tfunc support in inference to improve
+# the result for `Type{Union{...}}`. It is defined here, so that the Compiler
+# can look it up by value.
+struct TypeNameError <: Exception
+    a
+    TypeNameError(@nospecialize(a)) = new(a)
+end
+
+typename(a) = throw(TypeNameError(a))
+typename(a::DataType) = a.name
+function typename(a::Union)
+    ta = typename(a.a)
+    tb = typename(a.b)
+    ta === tb || throw(TypeNameError(a))
+    return tb
+end
+typename(union::UnionAll) = typename(union.body)
+
+# Special inference support to avoid execess specialization of these methods.
+# TODO: Replace this by a generic heuristic.
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 

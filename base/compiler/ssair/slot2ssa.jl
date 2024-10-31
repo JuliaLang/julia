@@ -88,6 +88,9 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
         return UNDEF_TOKEN
+    elseif has_flag(ir.stmts[idx], IR_FLAG_NOTHROW)
+        # if the `isdefined`-ness of this slot is guaranteed by abstract interpretation,
+        # there is no need to form a `:throw_undef_if_not`
     elseif def_ssa !== true
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
@@ -153,46 +156,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, stmt::SlotNumber->(ssa, true), ir, ci, use, code[use])
+        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, ::SlotNumber->Pair{Any,Any}(ssa, true), ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Pair{Any, Any}})
-    return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
-end
-
-function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
-    # Remove `nothing`s at the end, we don't handle them well
-    # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    (; codelocs, ssaflags) = ci
-    for i = length(code):-1:1
-        if code[i] !== nothing
-            resize!(code, i)
-            resize!(ssavaluetypes, i)
-            resize!(codelocs, i)
-            resize!(info, i)
-            resize!(ssaflags, i)
-            break
-        end
-    end
-    # If the last instruction is not a terminator, add one. This can
-    # happen for implicit return on dead branches.
-    term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
-        push!(code, ReturnNode())
-        push!(ssavaluetypes, Union{})
-        push!(codelocs, 0)
-        push!(info, NoCallInfo())
-        push!(ssaflags, IR_FLAG_NOTHROW)
-
-        # Update CFG to include appended terminator
-        old_range = cfg.blocks[end].stmts
-        new_range = StmtRange(first(old_range), last(old_range) + 1)
-        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
-        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
-    end
-    nothing
+    return fixemup!(::SlotNumber->true, x::SlotNumber->renames[slot_id(x)], ir, ci, idx, stmt)
 end
 
 # maybe use expr_type?
@@ -370,43 +339,58 @@ RPO traversal and in particular, any use of an SSA value must come after
 (by linear order) its definition.
 """
 function domsort_ssa!(ir::IRCode, domtree::DomTree)
-    # First compute the new order of basic blocks
+    # Mapping from new → old BB index
+    # An "old" index of 0 means that this was a BB inserted as part of a fixup (see below)
     result_order = Int[]
-    stack = Int[]
+
+    # Mapping from old → new BB index
     bb_rename = fill(-1, length(ir.cfg.blocks))
-    node = 1
-    ncritbreaks = 0
-    nnewfallthroughs = 0
-    while node !== -1
-        push!(result_order, node)
-        bb_rename[node] = length(result_order)
-        cs = domtree.nodes[node].children
-        terminator = ir[SSAValue(last(ir.cfg.blocks[node].stmts))][:stmt]
-        next_node = node + 1
-        node = -1
+
+    # The number of GotoNodes we need to insert to preserve control-flow after sorting
+    nfixupstmts = 0
+
+    # node queued up for scheduling (-1 === nothing)
+    node_to_schedule = 1
+    worklist = Int[]
+    while node_to_schedule !== -1
+        # First assign a new BB index to `node_to_schedule`
+        push!(result_order, node_to_schedule)
+        bb_rename[node_to_schedule] = length(result_order)
+        cs = domtree.nodes[node_to_schedule].children
+        terminator = ir[SSAValue(last(ir.cfg.blocks[node_to_schedule].stmts))][:stmt]
+        fallthrough = node_to_schedule + 1
+        node_to_schedule = -1
+
         # Adding the nodes in reverse sorted order attempts to retain
         # the original source order of the nodes as much as possible.
         # This is not required for correctness, but is easier on the humans
-        for child in Iterators.Reverse(cs)
-            if child == next_node
+        for node in Iterators.Reverse(cs)
+            if node == fallthrough
                 # Schedule the fall through node first,
                 # so we can retain the fall through
-                node = next_node
+                node_to_schedule = node
             else
-                push!(stack, child)
+                push!(worklist, node)
             end
         end
-        if node == -1 && !isempty(stack)
-            node = pop!(stack)
+        if node_to_schedule == -1 && !isempty(worklist)
+            node_to_schedule = pop!(worklist)
         end
-        if node != next_node && !isa(terminator, Union{GotoNode, ReturnNode})
+        # If a fallthrough successor is no longer the fallthrough after sorting, we need to
+        # add a GotoNode (and either extend or split the basic block as necessary)
+        if node_to_schedule != fallthrough && !isa(terminator, Union{GotoNode, ReturnNode})
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
-                ncritbreaks += 1
+                push!(result_order, 0)
+            elseif isa(terminator, EnterNode) || isexpr(terminator, :leave)
+                # Cannot extend the BasicBlock with a goto, have to split it
                 push!(result_order, 0)
             else
-                nnewfallthroughs += 1
+                # No need for a new block, just extend
+                @assert !isterminator(terminator)
             end
+            # Reserve space for the fixup goto
+            nfixupstmts += 1
         end
     end
     new_bbs = Vector{BasicBlock}(undef, length(result_order))
@@ -416,7 +400,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             nstmts += length(ir.cfg.blocks[i].stmts)
         end
     end
-    result = InstructionStream(nstmts + ncritbreaks + nnewfallthroughs)
+    result = InstructionStream(nstmts + nfixupstmts)
     inst_rename = Vector{SSAValue}(undef, length(ir.stmts) + length(ir.new_nodes))
     @inbounds for i = 1:length(ir.stmts)
         inst_rename[i] = SSAValue(-1)
@@ -425,7 +409,6 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         inst_rename[i + length(ir.stmts)] = SSAValue(i + length(result))
     end
     bb_start_off = 0
-    crit_edge_breaks_fixup = Tuple{Int, Int}[]
     for (new_bb, bb) in pairs(result_order)
         if bb == 0
             nidx = bb_start_off + 1
@@ -457,25 +440,28 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             else
                 result[inst_range[end]][:stmt] = GotoNode(bb_rename[terminator.label])
             end
-        elseif isa(terminator, GotoIfNot)
-            # Check if we need to break the critical edge
+        elseif isa(terminator, GotoIfNot) || isa(terminator, EnterNode) || isexpr(terminator, :leave)
+            # Check if we need to break the critical edge or split the block
             if bb_rename[bb + 1] != new_bb + 1
                 @assert result_order[new_bb + 1] == 0
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
-            result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
-        elseif !isa(terminator, ReturnNode)
-            if isa(terminator, EnterNode)
+            if isa(terminator, GotoIfNot)
+                result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
+            elseif isa(terminator, EnterNode)
                 result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
+            else
+                @assert isexpr(terminator, :leave)
             end
+        elseif !isa(terminator, ReturnNode)
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -483,7 +469,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
             new_preds = Int[bb for bb in (rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds) if bb != -1]
-            new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
+            new_succs = Int[              rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
@@ -504,6 +490,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
+    ir.debuginfo.codelocs = result.line
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
     return new_ir
 end
@@ -582,7 +569,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     end
 
     # Record the correct exception handler for all critical sections
-    handler_at, handlers = compute_trycatch(code, BitSet())
+    handler_info = compute_trycatch(code)
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
@@ -689,7 +676,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     visited = BitSet()
     new_nodes = ir.new_nodes
     @timeit "SSA Rename" while !isempty(worklist)
-        (item::Int, pred, incoming_vals) = pop!(worklist)
+        (item, pred, incoming_vals) = pop!(worklist)
         if sv.bb_vartables[item] === nothing
             continue
         end
@@ -813,8 +800,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
                         enter_idx = idx
-                        while handler_at[enter_idx][1] != 0
-                            (; enter_idx) = handlers[handler_at[enter_idx][1]]
+                        while (handler = gethandler(handler_info, enter_idx)) !== nothing
+                            (; enter_idx) = handler
                             leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing

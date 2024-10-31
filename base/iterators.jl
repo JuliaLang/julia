@@ -13,9 +13,9 @@ using .Base:
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
+    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
 using Core: @doc
 
 if Base !== Core.Compiler
@@ -30,12 +30,13 @@ end
 import .Base:
     first, last,
     isempty, length, size, axes, ndims,
-    eltype, IteratorSize, IteratorEltype,
+    eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+public accumulate, filter, map, peel, reverse, Stateful
 
 if Base !== Core.Compiler
 export partition
@@ -60,9 +61,6 @@ julia> collect(Iterators.map(x -> x^2, 1:3))
 ```
 """
 map(f, arg, args...) = Base.Generator(f, arg, args...)
-
-tail_if_any(::Tuple{}) = ()
-tail_if_any(x::Tuple) = tail(x)
 
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
@@ -953,12 +951,17 @@ struct Cycle{I}
 end
 
 """
-    cycle(iter)
+    cycle(iter[, n::Int])
 
 An iterator that cycles through `iter` forever.
-If `iter` is empty, so is `cycle(iter)`.
+If `n` is specified, then it cycles through `iter` that many times.
+When `iter` is empty, so are `cycle(iter)` and `cycle(iter, n)`.
 
-See also: [`Iterators.repeated`](@ref), [`Base.repeat`](@ref).
+`Iterators.cycle(iter, n)` is the lazy equivalent of [`Base.repeat`](@ref)`(vector, n)`,
+while [`Iterators.repeated`](@ref)`(iter, n)` is the lazy [`Base.fill`](@ref)`(item, n)`.
+
+!!! compat "Julia 1.11"
+    The method `cycle(iter, n)` was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -967,9 +970,19 @@ julia> for (i, v) in enumerate(Iterators.cycle("hello"))
            i > 10 && break
        end
 hellohelloh
+
+julia> foreach(print, Iterators.cycle(['j', 'u', 'l', 'i', 'a'], 3))
+juliajuliajulia
+
+julia> repeat([1,2,3], 4) == collect(Iterators.cycle([1,2,3], 4))
+true
+
+julia> fill([1,2,3], 4) == collect(Iterators.repeated([1,2,3], 4))
+true
 ```
 """
 cycle(xs) = Cycle(xs)
+cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
@@ -1000,7 +1013,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
-See also: [`Iterators.cycle`](@ref), [`Base.repeat`](@ref).
+See also [`fill`](@ref Base.fill), and compare [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -1012,6 +1025,12 @@ julia> collect(a)
  [1 2]
  [1 2]
  [1 2]
+
+julia> ans == fill([1 2], 4)
+true
+
+julia> Iterators.cycle([1 2], 4) |> collect |> println
+[1, 2, 1, 2, 1, 2, 1, 2]
 ```
 """
 repeated(x, n::Integer) = take(repeated(x), Int(n))
@@ -1078,7 +1097,7 @@ _prod_size(t::Tuple) = (_prod_size1(t[1], IteratorSize(t[1]))..., _prod_size(tai
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute size for object of type ", typeof(a))))
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
@@ -1086,7 +1105,7 @@ _prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indic
 _prod_axes1(a, ::HasShape)  = axes(a)
 _prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_axes1(a, A) =
-    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute indices for object of type ", typeof(a))))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
@@ -1194,6 +1213,7 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
+eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}} = promote_typejoin(map(eltype, fieldtypes(I))...)
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
@@ -1553,5 +1573,40 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    IterableStatePairs(x)
+
+This internal type is returned by [`pairs`](@ref), when the key is the same as
+the state of `iterate`. This allows the iterator to determine the key => value
+pairs by only calling iterate on the values.
+
+"""
+struct IterableStatePairs{T}
+    x::T
+end
+
+IteratorSize(::Type{<:IterableStatePairs{T}}) where T = IteratorSize(T)
+length(x::IterableStatePairs) = length(x.x)
+Base.eltype(::Type{IterableStatePairs{T}}) where T = Pair{<:Any, eltype(T)}
+
+function iterate(x::IterableStatePairs, state=first(keys(x.x)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+reverse(x::IterableStatePairs) = IterableStatePairs(Iterators.reverse(x.x))
+reverse(x::IterableStatePairs{<:Iterators.Reverse}) = IterableStatePairs(x.x.itr)
+
+function iterate(x::IterableStatePairs{<:Iterators.Reverse}, state=last(keys(x.x.itr)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+# According to the docs of iterate(::AbstractString), the iteration state must
+# be the same as the keys, so this is a valid optimization (see #51631)
+pairs(s::AbstractString) = IterableStatePairs(s)
 
 end

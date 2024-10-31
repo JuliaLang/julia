@@ -2,7 +2,11 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
+import Base: typesof, insert!, replace_ref_begin_end!, infer_effects, code_ircode
+
+# defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
+# via. `Base.@time_imports` etc.
+import Base: @time_imports, @trace_compile, @trace_dispatch
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -35,6 +39,10 @@ end
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if Meta.isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
+    end
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
@@ -102,6 +110,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                        $(kws...))
             end
         elseif ex0.head === :call
+            if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
+                return Expr(:call, fcn, :(Base.literal_pow),
+                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
+                                 esc(Val(ex0.args[3]))))
+            end
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...),
                         kws...)
@@ -236,14 +249,11 @@ macro code_lowered(ex0...)
     end
 end
 
-macro time_imports(ex)
+macro code_ircode(ex0...)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_ircode, ex0)
     quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
+        local results = $thecall
+        length(results) == 1 ? results[1] : results
     end
 end
 
@@ -400,3 +410,36 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch

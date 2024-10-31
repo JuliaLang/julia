@@ -114,45 +114,7 @@ const AnyDict = Dict{Any,Any}
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
 Dict(ps::Pair...)                  = Dict(ps)
 
-function Dict(kv)
-    try
-        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
-    catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
-
-function grow_to!(dest::AbstractDict{K, V}, itr) where V where K
-    y = iterate(itr)
-    y === nothing && return dest
-    ((k,v), st) = y
-    dest2 = empty(dest, typeof(k), typeof(v))
-    dest2[k] = v
-    grow_to!(dest2, itr, st)
-end
-
-# this is a special case due to (1) allowing both Pairs and Tuples as elements,
-# and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
-    y = iterate(itr, st)
-    while y !== nothing
-        (k,v), st = y
-        if isa(k,K) && isa(v,V)
-            dest[k] = v
-        else
-            new = empty(dest, promote_typejoin(K,typeof(k)), promote_typejoin(V,typeof(v)))
-            merge!(new, dest)
-            new[k] = v
-            return grow_to!(new, itr, st)
-        end
-        y = iterate(itr, st)
-    end
-    return dest
-end
+Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
@@ -906,34 +868,25 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     @noinline function KeyValue.set(::Type{PersistentDict{K, V}}, ::Nothing, key, val) where {K, V}
         new{K, V}(HAMT.HAMT{K, V}(key => val))
     end
-    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key, val) where {K, V}
+    @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
+    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
+    global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=#true)
         HAMT.insert!(found, present, trie, i, bi, hs, val)
         return new{K, V}(top)
     end
-    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K, val::V) where {K, V}
+    @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key) where {K, V} = @inline _keyvalueset(dict, key)
+    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key::K) where {K, V} = @inline _keyvalueset(dict, key)
+    global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
-        HAMT.insert!(found, present, trie, i, bi, hs, val)
-        return new{K, V}(top)
-    end
-    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key) where {K, V}
-        trie = dict.trie
-        h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
-        if found && present
-            deleteat!(trie.data, i)
-            HAMT.unset!(trie, bi)
-        end
-        return new{K, V}(top)
-    end
-    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K) where {K, V}
-        trie = dict.trie
-        h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=#true)
         if found && present
             deleteat!(trie.data, i)
             HAMT.unset!(trie, bi)

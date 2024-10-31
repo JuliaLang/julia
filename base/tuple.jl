@@ -68,6 +68,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
+    @_nothrow_meta
     return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 
@@ -76,8 +77,8 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 """
     prevind(A, i)
 
-Return the index before `i` in `A`. The returned index is often equivalent to `i
-- 1` for an integer `i`. This function can be useful for generic code.
+Return the index before `i` in `A`. The returned index is often equivalent to
+`i - 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -110,8 +111,8 @@ function prevind end
 """
     nextind(A, i)
 
-Return the index after `i` in `A`. The returned index is often equivalent to `i
-+ 1` for an integer `i`. This function can be useful for generic code.
+Return the index after `i` in `A`. The returned index is often equivalent to
+`i + 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -308,6 +309,13 @@ end
 #  @ tuple.jl:209
 typeof(function eltype end).name.max_methods = UInt8(4)
 
+# key/val types
+keytype(@nospecialize t::Tuple) = keytype(typeof(t))
+keytype(@nospecialize T::Type{<:Tuple}) = Int
+
+valtype(@nospecialize t::Tuple) = valtype(typeof(t))
+valtype(@nospecialize T::Type{<:Tuple}) = eltype(T)
+
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()
@@ -451,7 +459,7 @@ _totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @noinline
-    throw(ArgumentError("too few elements for tuple type $T"))
+    throw(ArgumentError(LazyString("too few elements for tuple type ", T)))
 end
 
 function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
@@ -495,7 +503,7 @@ end
 _findfirst_rec(f, i::Int, ::Tuple{}) = nothing
 _findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
 function _findfirst_loop(f::Function, t)
-    for i in 1:length(t)
+    for i in eachindex(t)
         f(t[i]) && return i
     end
     return nothing
@@ -529,7 +537,7 @@ function _isequal(t1::Tuple{Any,Vararg{Any}}, t2::Tuple{Any,Vararg{Any}})
     return isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
 end
 function _isequal(t1::Any32, t2::Any32)
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         if !isequal(t1[i], t2[i])
             return false
         end
@@ -560,7 +568,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
 end
 function _eq(t1::Any32, t2::Any32)
     anymissing = false
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
             anymissing = true
@@ -684,3 +692,12 @@ empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
+
+circshift((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
+circshift(t::Tuple{Any,Any}, shift::Integer) = iseven(shift) ? t : reverse(t)
+function circshift(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
+    @inline
+    len = N + 3
+    j = mod1(shift, len)
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
+end

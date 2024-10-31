@@ -202,7 +202,7 @@ DFS(blocks::Vector{BasicBlock}, is_post_dominator::Bool=false) = DFS!(DFSTree(0)
 """
 Keeps the per-BB state of the Semi NCA algorithm. In the original formulation,
 there are three separate length `n` arrays, `label`, `semi` and `ancestor`.
-Instead, for efficiency, we use one array in a array-of-structs style setup.
+Instead, for efficiency, we use one array in an array-of-structs style setup.
 """
 struct SNCAData
     semi::PreNumber
@@ -345,10 +345,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
     ancestors = copy(D.to_parent_pre)
     relevant_blocks = IsPostDom ? (1:max_pre) : (2:max_pre)
     for w::PreNumber in reverse(relevant_blocks)
-        # LLVM initializes this to the parent, the paper initializes this to
-        # `w`, but it doesn't really matter (the parent is a predecessor, so at
-        # worst we'll discover it below). Save a memory reference here.
-        semi_w = typemax(PreNumber)
+        semi_w = ancestors[w]
         last_linked = PreNumber(w + 1)
         for v ∈ dom_edges(domtree, blocks, D.from_pre[w])
             # For the purpose of the domtree, ignore virtual predecessors into
@@ -660,6 +657,8 @@ end
 Compute the nearest common (post-)dominator of `a` and `b`.
 """
 function nearest_common_dominator(domtree::GenericDomTree, a::BBNumber, b::BBNumber)
+    a == 0 && return a
+    b == 0 && return b
     alevel = domtree.nodes[a].level
     blevel = domtree.nodes[b].level
     # W.l.g. assume blevel <= alevel

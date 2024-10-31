@@ -2,6 +2,7 @@
 
 using Test, FileWatching
 using Base: uv_error, Experimental
+using Base.Filesystem: StatStruct
 
 @testset "FileWatching" begin
 
@@ -161,19 +162,20 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple() # platforms where F_GETPATH is available
 F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 
 # initialize a watch_folder instance and create afile.txt
 function test_init_afile()
-    @test isempty(FileWatching.watched_folders)
+    watched_folders = FileWatching.watched_folders
+    @test @lock watched_folders isempty(watched_folders[])
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
     @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
-    @test length(FileWatching.watched_folders) == 1
+    @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     @test unwatch_folder(dir) === nothing
-    @test isempty(FileWatching.watched_folders)
+    @test @lock watched_folders isempty(watched_folders[])
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
     @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test unwatch_folder(dir) === nothing
@@ -203,7 +205,7 @@ function test_init_afile()
     @test unwatch_folder(dir) === nothing
     @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
     @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
-    @test length(FileWatching.watched_folders) == 1
+    @test @lock(watched_folders, length(FileWatching.watched_folders[])) == 1
     nothing
 end
 
@@ -218,7 +220,7 @@ function test_timeout(tval)
         @async test_file_poll(channel, 10, tval)
         tr = take!(channel)
     end
-    @test tr[1] === Base.Filesystem.StatStruct() && tr[2] === EOFError()
+    @test ispath(tr[1]::StatStruct) && tr[2] === EOFError()
     @test tval <= t_elapsed
 end
 
@@ -231,7 +233,7 @@ function test_touch(slval)
     write(f, "Hello World\n")
     close(f)
     tr = take!(channel)
-    @test ispath(tr[1]) && ispath(tr[2])
+    @test ispath(tr[1]::StatStruct) && ispath(tr[2]::StatStruct)
     fetch(t)
 end
 
@@ -276,7 +278,7 @@ function test_dirmonitor_wait(tval)
             end
         end
         fname, events = wait(fm)::Pair
-        @test fname == F_PATH
+        @test fname == basename(file)
         @test events.changed && !events.timedout && !events.renamed
         close(fm)
     end
@@ -435,22 +437,21 @@ end
 @test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
              watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
-    @test(poll_file("____nonexistent_file", 1, 3.1) ===
-          (Base.Filesystem.StatStruct(), EOFError()))) > 3)
+    @test(poll_file("____nonexistent_file", 1, 3.1) ==
+          (StatStruct(), EOFError()))) > 3)
 
 unwatch_folder(dir)
-@test isempty(FileWatching.watched_folders)
+@test @lock FileWatching.watched_folders isempty(FileWatching.watched_folders[])
 rm(file)
 rm(dir)
+
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
 
 @testset "Pidfile" begin
     include("pidfile.jl")
 end
 
-@testset "Docstrings" begin
-    undoc = Docs.undocumented_names(FileWatching)
-    @test_broken isempty(undoc)
-    @test undoc == [:FDWatcher, :FileMonitor, :FolderMonitor, :PollingFileWatcher]
-end
+@test isempty(Docs.undocumented_names(FileWatching))
 
 end # testset

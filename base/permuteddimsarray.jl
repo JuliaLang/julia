@@ -12,7 +12,7 @@ struct PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
     function PermutedDimsArray{T,N,perm,iperm,AA}(data::AA) where {T,N,perm,iperm,AA<:AbstractArray}
         (isa(perm, NTuple{N,Int}) && isa(iperm, NTuple{N,Int})) || error("perm and iperm must both be NTuple{$N,Int}")
         isperm(perm) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
-        all(map(d->iperm[perm[d]]==d, 1:N)) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
+        all(d->iperm[perm[d]]==d, 1:N) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
         new(data)
     end
 end
@@ -39,7 +39,7 @@ julia> B[3,1,2] == A[1,2,3]
 true
 ```
 """
-function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
+Base.@constprop :aggressive function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
     length(perm) == N || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
     iperm = invperm(perm)
     PermutedDimsArray{T,N,(perm...,),(iperm...,),typeof(data)}(data)
@@ -282,7 +282,7 @@ regions.
 See also [`permutedims`](@ref).
 """
 function permutedims!(dest, src::AbstractArray, perm)
-    Base.checkdims_perm(dest, src, perm)
+    Base.checkdims_perm(axes(dest), axes(src), perm)
     P = PermutedDimsArray(dest, invperm(perm))
     _copy!(P, src)
     return dest

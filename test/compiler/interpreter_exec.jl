@@ -20,10 +20,9 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(6)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
@@ -61,13 +60,14 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(18)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.debuginfo = Core.DebugInfo(:none)
+    m.args[1] = copy(src)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
+    m.args[1] = copy(src)
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
@@ -81,7 +81,7 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        EnterNode(11),
+        EnterNode(12),
         # block 3
         UpsilonNode(),
         UpsilonNode(),
@@ -91,34 +91,22 @@ let m = Meta.@lower 1 + 1
         UpsilonNode(SSAValue(1)),
         # block 5
         Expr(:throw_undef_if_not, :expected, false),
+        ReturnNode(), # unreachable
         # block 6
         PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]), # NULL, :a, :b
         PhiCNode(Any[SSAValue(6)]), # NULL
+        Expr(:pop_exception, SSAValue(4)),
         # block 7
-        ReturnNode(SSAValue(11)),
+        ReturnNode(SSAValue(12)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false
     @test :b === @eval $m
+    @test isempty(current_exceptions())
 end
-
-# https://github.com/JuliaLang/julia/issues/47065
-# `Core.Compiler.sort!` should be able to handle a big list
-let n = 1000
-    ex = :(return 1)
-    for _ in 1:n
-        ex = :(rand() < .1 && $(ex))
-    end
-    @eval global function f_1000_blocks()
-        $ex
-        return 0
-    end
-end
-@test f_1000_blocks() == 0

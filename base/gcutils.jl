@@ -38,7 +38,7 @@ WeakRef
 # Used by `Base.finalizer` to validate mutability of an object being finalized.
 function _check_mutable(@nospecialize(o)) @noinline
     if !ismutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
+        error("objects of type ", typeof(o), " cannot be finalized because they are not mutable")
     end
 end
 
@@ -70,7 +70,6 @@ end
 A finalizer may be registered at object construction. In the following example note that
 we implicitly rely on the finalizer returning the newly created mutable struct `x`.
 
-# Example
 ```julia
 mutable struct MyMutableStruct
     bar
@@ -109,6 +108,8 @@ finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Any, Any,),
 Module with garbage collection utilities.
 """
 module GC
+
+public gc, enable, @preserve, safepoint, enable_logging, logging_enabled
 
 # mirrored from julia.h
 const GC_AUTO = 0

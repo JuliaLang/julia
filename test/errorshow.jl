@@ -8,7 +8,10 @@ include("testenv.jl")
 # re-register only the error hints that are being tested here (
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.min_max_on_iterable, MethodError)
+Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
+Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -78,8 +81,12 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
-# Have no matches so should return empty
+# Have no matches, but still print up to 3
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
+@test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
+
+function nomethodsfunc end
+Base.show_method_candidates(buf, Base.MethodError(nomethodsfunc,(1, 1, 1)))
 @test isempty(String(take!(buf)))
 
 # matches the implicit constructor -> convert method
@@ -208,6 +215,7 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 @test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
 
 macro except_str(expr, err_type)
+    source_info = __source__
     return quote
         let err = nothing
             try
@@ -215,7 +223,9 @@ macro except_str(expr, err_type)
             catch err
             end
             err === nothing && error("expected failure, but no exception thrown")
-            @test typeof(err) === $(esc(err_type))
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
             buf = IOBuffer()
             showerror(buf, err)
             String(take!(buf))
@@ -224,6 +234,7 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    source_info = __source__
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
@@ -232,7 +243,9 @@ macro except_strbt(expr, err_type)
             catch err
             end
             err === nothing && error($errmsg)
-            @test typeof(err) === $(esc(err_type))
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
             String(take!(buf))
@@ -241,6 +254,7 @@ macro except_strbt(expr, err_type)
 end
 
 macro except_stackframe(expr, err_type)
+    source_info = __source__
     return quote
        let err = nothing
            local st
@@ -250,7 +264,9 @@ macro except_stackframe(expr, err_type)
                st = stacktrace(catch_backtrace())
            end
            err === nothing && error("expected failure, but no exception thrown")
-           @test typeof(err) === $(esc(err_type))
+           @testset let expr=$(repr(expr))
+               $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+           end
            sprint(show, st[1])
        end
     end
@@ -586,11 +602,12 @@ module EnclosingModule
     abstract type AbstractTypeNoConstructors end
 end
 let
-    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
+    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, (), Base.get_world_counter())
 
     # Test that it shows a special message when no constructors have been defined by the user.
-    @test sprint(showerror, method_error) ==
-        "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+    @test startswith(sprint(showerror, method_error),
+        """MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)
+           The type `$(EnclosingModule.AbstractTypeNoConstructors)` exists, but no method is defined for this combination of argument types when trying to construct it.""")
 
     # Does it go back to previous behaviour when there *is* at least
     # one constructor defined?
@@ -649,6 +666,24 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This method does not support all of the given keyword arguments", str)
+
+    @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
 
 # Issue #50200
@@ -657,8 +692,9 @@ using Base.Experimental: @opaque
     test_no_error(f) = @test f() === nothing
     function test_worldage_error(f)
         ex = try; f(); error("Should not have been reached") catch ex; ex; end
-        @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
-        @test !occursin("!Matched::", sprint(Base.showerror, ex))
+        strex = sprint(Base.showerror, ex)
+        @test occursin("The applicable method may be too new", strex)
+        @test !occursin("!Matched::", sprint(Base.showerror, strex))
     end
 
     global callback50200
@@ -712,13 +748,31 @@ end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
 struct ANumber <: Number end
-let err_str
-    err_str = @except_str ANumber()(3 + 4) MethodError
+let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
     # issue 40478
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+let a = [1 2; 3 4];
+    err_str = @except_str (a[1][2] = 5) MethodError
+    @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
+    @test occursin("a[1, 2]", err_str)
+    @test occursin("rather than a[1][2]", err_str)
+end
+
+let d = Dict
+    err_str = @except_str (d[1] = 5) MethodError
+    @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
+    @test occursin("d = Dict([...])", err_str)
+    @test occursin(" rather than d = Dict", err_str)
+end
+
+let s = Some("foo")
+    err_str = @except_str (s[] = "bar") MethodError
+    @test !occursin("You attempted to index the type String", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
@@ -765,6 +819,47 @@ end
 # issue #30633
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
+
+# issue #53618, pr #55165
+@testset "FieldErrorHints" begin
+    struct FieldFoo
+        a::Float32
+        b::Int
+    end
+    Base.propertynames(foo::FieldFoo) = (:a, :x, :y)
+
+    s = FieldFoo(1, 2)
+
+    test = @test_throws FieldError s.c
+
+    ex = test.value::FieldError
+
+    # Check error message first
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("available fields: `a`, `b`", errorMsg)
+    @test occursin("Available properties: `x`, `y`", errorMsg)
+
+    d = Dict(s => 1)
+
+    for fld in fieldnames(Dict)
+        ex = try
+            getfield(d, fld)
+        catch e
+            print(e)
+        end
+        @test !(ex isa Type) || ex <: FieldError
+    end
+    test = @test_throws FieldError d.c
+
+    ex = test.value::FieldError
+
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type Dict has no field `c`", errorMsg)
+    # Check hint message
+    hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
+    @test occursin(hintExpected, errorMsg)
+end
 
 # test showing MethodError with type argument
 struct NoMethodsDefinedHere; end
@@ -999,13 +1094,38 @@ let err_str
     @test occursin("String concatenation is performed with *", err_str)
 end
 
+# https://github.com/JuliaLang/julia/issues/55745
 let err_str
+    err_str = @except_str +() MethodError
+    @test !occursin("String concatenation is performed with *", err_str)
+end
+
+struct MissingLength; end
+struct MissingSize; end
+Base.IteratorSize(::Type{MissingSize}) = Base.HasShape{2}()
+Base.iterate(::MissingLength) = nothing
+Base.iterate(::MissingSize) = nothing
+
+let err_str
+    expected = "Finding the minimum of an iterable is performed with `minimum`."
     err_str = @except_str min([1,2,3]) MethodError
-    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    @test occursin(expected, err_str)
     err_str = @except_str min((i for i in 1:3)) MethodError
-    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    @test occursin(expected, err_str)
+    expected = "Finding the maximum of an iterable is performed with `maximum`."
     err_str = @except_str max([1,2,3]) MethodError
-    @test occursin("Finding the maximum of an iterable is performed with `maximum`.", err_str)
+    @test occursin(expected, err_str)
+
+    expected = "You may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`."
+    err_str = @except_str length(MissingLength()) MethodError
+    @test occursin(expected, err_str)
+    err_str = @except_str collect(MissingLength()) MethodError
+    @test occursin(expected, err_str)
+    expected = "You may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`."
+    err_str = @except_str size(MissingSize()) MethodError
+    @test occursin(expected, err_str)
+    err_str = @except_str collect(MissingSize()) MethodError
+    @test occursin(expected, err_str)
 end
 
 @testset "unused argument names" begin
@@ -1114,3 +1234,14 @@ end
         end
     end
 end
+
+# error message hint from PR #22647
+@test_throws "Many shells" cd("~")
+@test occursin("Many shells", sprint(showerror, Base.IOError("~", Base.UV_ENOENT)))
+
+# issue #47559"
+@test_throws("MethodError: no method matching invoke Returns(::Any, ::Val{N}) where N",
+             invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)))
+
+f33793(x::Float32, y::Float32) = 1
+@test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))

@@ -6,76 +6,22 @@ const CC = Core.Compiler
 using ..EscapeAnalysis
 const EA = EscapeAnalysis
 
-# entries
-# -------
-
-using Base: IdSet, unwrap_unionall, rewrap_unionall
-using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
-
-"""
-    @code_escapes [options...] f(args...)
-
-Evaluates the arguments to the function call, determines its types, and then calls
-[`code_escapes`](@ref) on the resulting expression.
-As with `@code_typed` and its family, any of `code_escapes` keyword arguments can be given
-as the optional arguments like `@code_escapes optimize=false myfunc(myargs...)`.
-"""
-macro code_escapes(ex0...)
-    return gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
-end
-
-"""
-    code_escapes(f, argtypes=Tuple{}; [debuginfo::Symbol = :none], [optimize::Bool = true]) -> result::EscapeResult
-
-Runs the escape analysis on optimized IR of a generic function call with the given type signature.
-
-# Keyword Arguments
-
-- `optimize::Bool = true`:
-  if `true` returns escape information of post-inlining IR (used for local optimization),
-  otherwise returns escape information of pre-inlining IR (used for interprocedural escape information generation)
-- `debuginfo::Symbol = :none`:
-  controls the amount of code metadata present in the output, possible options are `:none` or `:source`.
-"""
-function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                      world::UInt = get_world_counter(),
-                      debuginfo::Symbol = :none)
-    tt = Base.signature_type(f, types)
-    match = Base._which(tt; world, raise=true)
-    mi = Core.Compiler.specialize_method(match)::MethodInstance
-    interp = EscapeAnalyzer(world, mi)
-    frame = Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
-    isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
-    slotnames = let src = frame.src
-        src isa CodeInfo ? src.slotnames : nothing
-    end
-    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi,
-                        slotnames, debuginfo === :source, interp)
-end
-
-# in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
-__clear_cache!() = empty!(GLOBAL_EA_CODE_CACHE)
-
 # AbstractInterpreter
 # -------------------
 
 # imports
 import .CC:
     AbstractInterpreter, NativeInterpreter, WorldView, WorldRange,
-    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache, code_cache,
+    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache,
     ipo_dataflow_analysis!, cache_result!
 # usings
 using Core:
     CodeInstance, MethodInstance, CodeInfo
 using .CC:
-    InferenceResult, OptimizationState, IRCode
+    InferenceResult, InferenceState, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
-struct CodeCache
-    cache::IdDict{MethodInstance,CodeInstance}
-end
-CodeCache() = CodeCache(IdDict{MethodInstance,CodeInstance}())
-const GLOBAL_CODE_CACHE = CodeCache()
+struct EAToken end
 
 # when working outside of Core.Compiler,
 # cache entire escape state for later inspection and debugging
@@ -86,7 +32,7 @@ struct EscapeCacheInfo
 end
 
 struct EscapeCache
-    cache::IdDict{MethodInstance,EscapeCacheInfo}
+    cache::IdDict{MethodInstance,EscapeCacheInfo} # TODO(aviatesk) Should this be CodeInstance to EscapeCacheInfo?
 end
 EscapeCache() = EscapeCache(IdDict{MethodInstance,EscapeCacheInfo}())
 const GLOBAL_ESCAPE_CACHE = EscapeCache()
@@ -102,56 +48,37 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const inf_params::InferenceParams
     const opt_params::OptimizationParams
     const inf_cache::Vector{InferenceResult}
-    const code_cache::CodeCache
     const escape_cache::EscapeCache
-    const entry_mi::MethodInstance
+    const entry_mi::Union{Nothing,MethodInstance}
     result::EscapeResultForEntry
-    function EscapeAnalyzer(world::UInt, entry_mi::MethodInstance,
-                            code_cache::CodeCache=GLOBAL_CODE_CACHE,
-                            escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
+    function EscapeAnalyzer(world::UInt, escape_cache::EscapeCache;
+                            entry_mi::Union{Nothing,MethodInstance}=nothing)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, entry_mi)
+        return new(world, inf_params, opt_params, inf_cache, escape_cache, entry_mi)
     end
 end
 
 CC.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
 CC.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
-CC.get_world_counter(interp::EscapeAnalyzer) = interp.world
+CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
+CC.cache_owner(::EscapeAnalyzer) = EAToken()
+CC.get_escape_cache(interp::EscapeAnalyzer) = GetEscapeCache(interp)
 
-struct EscapeAnalyzerCacheView
-    code_cache::CodeCache
-    escape_cache::EscapeCache
-end
-
-function CC.code_cache(interp::EscapeAnalyzer)
-    worlds = WorldRange(get_world_counter(interp))
-    return WorldView(EscapeAnalyzerCacheView(interp.code_cache, interp.escape_cache), worlds)
-end
-CC.haskey(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = haskey(wvc.cache.code_cache.cache, mi)
-CC.get(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance, default) = get(wvc.cache.code_cache.cache, mi, default)
-CC.getindex(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = getindex(wvc.cache.code_cache.cache, mi)
-function CC.setindex!(wvc::WorldView{EscapeAnalyzerCacheView}, ci::CodeInstance, mi::MethodInstance)
-    wvc.cache.code_cache.cache[mi] = ci
-    # register the callback on invalidation
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.code_cache.cache, replaced)
-        delete!(wvc.cache.escape_cache.cache, replaced)
-    end
-    return wvc
-end
-
-function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::InferenceResult)
+function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationState,
+                                   ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized
-    nargs = let def = caller.linfo.def; isa(def, Method) ? Int(def.nargs) : 0; end
+    nargs = Int(opt.src.nargs)
+    𝕃ₒ = CC.optimizer_lattice(interp)
     get_escape_cache = GetEscapeCache(interp)
     estate = try
-        analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), get_escape_cache)
+        analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache)
     catch err
-        @error "error happened within EA, inspect `Main.failed_escapeanalysis`"
-        Main.failed_escapeanalysis = FailedAnalysis(ir, nargs, get_escape_cache)
+        @error "error happened within EA, inspect `Main.failedanalysis`"
+        failedanalysis = FailedAnalysis(caller, ir, nargs, get_escape_cache)
+        Core.eval(Main, :(failedanalysis = $failedanalysis))
         rethrow(err)
     end
     if caller.linfo === interp.entry_mi
@@ -160,7 +87,8 @@ function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::I
     end
     record_escapes!(interp, caller, estate, ir)
 
-    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, ir::IRCode, caller::InferenceResult)
+    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+                                      ir::IRCode, caller::InferenceResult)
 end
 
 function record_escapes!(interp::EscapeAnalyzer,
@@ -180,17 +108,18 @@ function ((; escape_cache)::GetEscapeCache)(mi::MethodInstance)
 end
 
 struct FailedAnalysis
+    caller::InferenceResult
     ir::IRCode
     nargs::Int
     get_escape_cache::GetEscapeCache
 end
 
-function CC.cache_result!(interp::EscapeAnalyzer, inf_result::InferenceResult)
-    ecacheinfo = CC.traverse_analysis_results(inf_result) do @nospecialize result
+function CC.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=CC.may_discard_trees(interp))
+    ecacheinfo = CC.traverse_analysis_results(state.result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
-    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[inf_result.linfo] = ecacheinfo)
-    return @invoke CC.cache_result!(interp::AbstractInterpreter, inf_result::InferenceResult)
+    ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[state.linfo] = ecacheinfo)
+    return @invoke CC.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
 end
 
 # printing
@@ -315,7 +244,7 @@ function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
     bb_idx_prev = bb_idx = 1
     for idx = 1:length(ir.stmts)
         preprint(io, idx)
-        bb_idx = Base.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, used, ir.cfg, bb_idx)
+        bb_idx = Base.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, ir.sptypes, used, ir.cfg, bb_idx)
         postprint(io, idx, bb_idx != bb_idx_prev)
         bb_idx_prev = bb_idx
     end
@@ -324,5 +253,84 @@ function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
     postprint(io)
     return nothing
 end
+
+# entries
+# -------
+
+using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
+
+"""
+    @code_escapes [options...] f(args...)
+
+Evaluates the arguments to the function call, determines its types, and then calls
+[`code_escapes`](@ref) on the resulting expression.
+As with `@code_typed` and its family, any of `code_escapes` keyword arguments can be given
+as the optional arguments like `@code_escapes optimize=false myfunc(myargs...)`.
+"""
+macro code_escapes(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :code_escapes, ex0)
+end
+
+"""
+    code_escapes(f, argtypes=Tuple{}; [world::UInt], [debuginfo::Symbol]) -> result::EscapeResult
+    code_escapes(mi::MethodInstance; [world::UInt], [interp::EscapeAnalyzer], [debuginfo::Symbol]) -> result::EscapeResult
+
+Runs the escape analysis on optimized IR of a generic function call with the given type signature,
+while caching the analysis results.
+
+# Keyword Arguments
+
+- `world::UInt = Base.get_world_counter()`:
+  controls the world age to use when looking up methods, use current world age if not specified.
+- `interp::EscapeAnalyzer = EscapeAnalyzer(world)`:
+  specifies the escape analyzer to use, by default a new analyzer with the global cache is created.
+- `debuginfo::Symbol = :none`:
+  controls the amount of code metadata present in the output, possible options are `:none` or `:source`.
+"""
+function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
+                      world::UInt = get_world_counter(),
+                      debuginfo::Symbol = :none)
+    tt = Base.signature_type(f, types)
+    match = Base._which(tt; world, raise=true)
+    mi = Core.Compiler.specialize_method(match)
+    return code_escapes(mi; world, debuginfo)
+end
+
+function code_escapes(mi::MethodInstance;
+                      world::UInt = get_world_counter(),
+                      interp::EscapeAnalyzer=EscapeAnalyzer(world, GLOBAL_ESCAPE_CACHE; entry_mi=mi),
+                      debuginfo::Symbol = :none)
+    frame = Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
+    isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
+    slotnames = let src = frame.src
+        src isa CodeInfo ? src.slotnames : nothing
+    end
+    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi,
+                        slotnames, debuginfo === :source, interp)
+end
+
+"""
+    code_escapes(ir::IRCode, nargs::Int; [world::UInt], [interp::AbstractInterpreter]) -> result::EscapeResult
+
+Runs the escape analysis on `ir::IRCode`.
+`ir` is supposed to be optimized already, specifically after inlining has been applied.
+Note that this version does not cache the analysis results.
+
+# Keyword Arguments
+
+- `world::UInt = Base.get_world_counter()`:
+  controls the world age to use when looking up methods, use current world age if not specified.
+- `interp::AbstractInterpreter = EscapeAnalyzer(world, EscapeCache())`:
+  specifies the abstract interpreter to use, by default a new `EscapeAnalyzer` with an empty cache is created.
+"""
+function code_escapes(ir::IRCode, nargs::Int;
+                      world::UInt = get_world_counter(),
+                      interp::AbstractInterpreter=EscapeAnalyzer(world, EscapeCache()))
+    estate = analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), CC.get_escape_cache(interp))
+    return EscapeResult(ir, estate) # return back the result
+end
+
+# in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
+__clear_cache!() = empty!(GLOBAL_EA_CODE_CACHE)
 
 end # module EAUtils

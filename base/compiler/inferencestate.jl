@@ -177,7 +177,7 @@ mutable struct LazyCFGReachability
 end
 function get!(x::LazyCFGReachability)
     isdefined(x, :reachability) && return x.reachability
-    domtree = construct_domtree(x.ir.cfg.blocks)
+    domtree = construct_domtree(x.ir)
     return x.reachability = CFGReachability(x.ir.cfg, domtree)
 end
 
@@ -189,8 +189,8 @@ end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
+        construct_postdomtree(x.ir) :
+        construct_domtree(x.ir)
 end
 
 const LazyDomtree = LazyGenericDomtree{false}
@@ -209,10 +209,10 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
-const CACHE_MODE_NULL     = 0x00      # not cached, without optimization
-const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization allowed
-const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization allowed
-const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
+const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
+const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
+const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
+const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
 mutable struct TryCatchFrame
     exct
@@ -220,6 +220,11 @@ mutable struct TryCatchFrame
     const enter_idx::Int
     scope_uses::Vector{Int}
     TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
+end
+
+struct HandlerInfo
+    handlers::Vector{TryCatchFrame}
+    handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
 mutable struct InferenceState
@@ -231,28 +236,31 @@ mutable struct InferenceState
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
-    method_info::MethodInfo
+    spec_info::SpecInfo
 
     #= intermediate states for local abstract interpretation =#
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handlers::Vector{TryCatchFrame}
-    handler_at::Vector{Tuple{Int, Int}} # tuple of current (handler, exception stack) value at the pc
+    handler_info::Union{Nothing,HandlerInfo}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Union{Nothing,Vector{Any}}}
+    stmt_edges::Vector{Vector{Any}}
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
+    tasks::Vector{WorkThunk}
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
-    callers_in_cycle::Vector{InferenceState}
-    dont_work_on_me::Bool
-    parent # ::Union{Nothing,AbsIntState}
+
+    # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
+    callstack #::Vector{AbsIntState}
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call frame_parent to extract the current parent of the SCC)
+    frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
+    cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
 
     #= results =#
     result::InferenceResult # remember where to put the result
@@ -276,22 +284,25 @@ mutable struct InferenceState
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
-        linfo = result.linfo
-        world = get_world_counter(interp)
-        def = linfo.def
+        mi = result.linfo
+        world = get_inference_world(interp)
+        if world == typemax(UInt)
+            error("Entering inference from a generated function with an invalid world")
+        end
+        def = mi.def
         mod = isa(def, Method) ? def.module : def
-        sptypes = sptypes_from_meth_instance(linfo)
+        sptypes = sptypes_from_meth_instance(mi)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
-        method_info = MethodInfo(src)
+        spec_info = SpecInfo(src)
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_at, handlers = compute_trycatch(code, BitSet())
+        handler_info = compute_trycatch(code)
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        stmt_edges = Vector{Vector{Any}}(undef, nstmts)
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -299,9 +310,15 @@ mutable struct InferenceState
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
+
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
+            if argtyp === Bool && has_conditional(typeinf_lattice(interp))
+                argtyp = Conditional(i, Const(true), Const(false))
+            end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
@@ -311,38 +328,61 @@ mutable struct InferenceState
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
-        callers_in_cycle = Vector{InferenceState}()
-        dont_work_on_me = false
-        parent = nothing
+        callstack = AbsIntState[]
+        tasks = WorkThunk[]
 
-        valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+        valid_worlds = WorldRange(1, get_world_counter())
         bestguess = Bottom
         exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
-        insert_coverage = should_insert_coverage(mod, src)
+        insert_coverage = should_insert_coverage(mod, src.debuginfo)
         if insert_coverage
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
 
         if def isa Method
-            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+                ALWAYS_FALSE
+            ipo_effects = Effects(ipo_effects; nonoverlayed)
         end
 
         restrict_abstract_call_sites = isa(def, Module)
 
-        # some more setups
-        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-        !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
-
-        return new(
-            linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
+        this = new(
+            mi, world, mod, sptypes, slottypes, src, cfg, spec_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            tasks, pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
+
+        # some more setups
+        if !iszero(cache_mode & CACHE_MODE_LOCAL)
+            push!(get_inference_cache(interp), result)
+        end
+        if !iszero(cache_mode & CACHE_MODE_GLOBAL)
+            push!(callstack, this)
+            this.cycleid = this.frameid = length(callstack)
+        end
+
+        # Apply generated function restrictions
+        if src.min_world != 1 || src.max_world != typemax(UInt)
+            # From generated functions
+            this.valid_worlds = WorldRange(src.min_world, src.max_world)
+        end
+
+        return this
     end
+end
+
+gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
+gethandler(::Nothing, ::Int) = nothing
+function gethandler(handler_info::HandlerInfo, pc::Int)
+    handler_idx = handler_info.handler_at[pc][1]
+    handler_idx == 0 && return nothing
+    return handler_info.handlers[handler_idx]
 end
 
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
@@ -357,7 +397,21 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-function compute_trycatch(code::Vector{Any}, ip::BitSet)
+compute_trycatch(ir::IRCode) = compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
+
+"""
+    compute_trycatch(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo}
+
+Given the code of a function, compute, at every statement, the current
+try/catch handler, and the current exception stack top. This function returns
+a tuple of:
+
+    1. `handler_info.handler_at`: A statement length vector of tuples
+       `(catch_handler, exception_stack)`, which are indices into `handlers`
+
+    2. `handler_info.handlers`: A `TryCatchFrame` vector of handlers
+"""
+function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -366,17 +420,19 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # then we can find all `try`s by walking backwards from :enter statements,
     # and all `catch`es by looking at the statement after the :enter
     n = length(code)
-    empty!(ip)
+    ip = BitSet()
     ip.offset = 0 # for _bits_findnext
     push!(ip, n + 1)
-    handler_at = fill((0, 0), n)
-    handlers = TryCatchFrame[]
+    handler_info = nothing
 
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
         if isa(stmt, EnterNode)
+            (;handlers, handler_at) = handler_info =
+                (handler_info === nothing ? HandlerInfo(TryCatchFrame[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
+            (bbs !== nothing) && (l = first(bbs[l].stmts))
             push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
@@ -388,7 +444,12 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         end
     end
 
+    if handler_info === nothing
+        return nothing
+    end
+
     # now forward those marks to all :leave statements
+    (;handlers, handler_at) = handler_info
     while true
         # make progress on the active ip set
         pc = _bits_findnext(ip.bits, 0)::Int
@@ -401,8 +462,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             stmt = code[pc]
             if isa(stmt, GotoNode)
                 pc´ = stmt.label
+                (bbs !== nothing) && (pc´ = first(bbs[pc´].stmts))
             elseif isa(stmt, GotoIfNot)
                 l = stmt.dest::Int
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 if handler_at[l] != cur_stacks
                     @assert handler_at[l][1] == 0 || handler_at[l][1] == cur_stacks[1] "unbalanced try/catch"
                     handler_at[l] = cur_stacks
@@ -413,6 +476,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
@@ -459,38 +523,35 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     end
 
     @assert first(ip) == n + 1
-    return handler_at, handlers
+    return handler_info
 end
 
 # check if coverage mode is enabled
-function should_insert_coverage(mod::Module, src::CodeInfo)
+function should_insert_coverage(mod::Module, debuginfo::DebugInfo)
     coverage_enabled(mod) && return true
     JLOptions().code_coverage == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
-    linetable = src.linetable
-    if isa(linetable, Vector{Any})
-        for line in linetable
-            line = line::LineInfoNode
-            if is_file_tracked(line.file)
-                return true
-            end
-        end
-    elseif isa(linetable, Vector{LineInfoNode})
-        for line in linetable
-            if is_file_tracked(line.file)
-                return true
-            end
-        end
-    end
+    return _should_insert_coverage(debuginfo)
+end
+
+_should_insert_coverage(mod::Symbol) = is_file_tracked(mod)
+_should_insert_coverage(mod::Method) = _should_insert_coverage(mod.file)
+_should_insert_coverage(mod::MethodInstance) = _should_insert_coverage(mod.def)
+_should_insert_coverage(mod::Module) = false
+function _should_insert_coverage(info::DebugInfo)
+    linetable = info.linetable
+    linetable === nothing || (_should_insert_coverage(linetable) && return true)
+    _should_insert_coverage(info.def) && return true
     return false
 end
 
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
-    world = get_world_counter(interp)
-    src = retrieve_code_info(result.linfo, world)
+    world = get_inference_world(interp)
+    mi = result.linfo
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    maybe_validate_code(result.linfo, src, "lowered")
+    maybe_validate_code(mi, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
@@ -575,13 +636,13 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
-function sptypes_from_meth_instance(linfo::MethodInstance)
-    def = linfo.def
+function sptypes_from_meth_instance(mi::MethodInstance)
+    def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
-    if isempty(linfo.sparam_vals)
+    if isempty(mi.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
-        # linfo is unspecialized
+        # mi is unspecialized
         spvals = Any[]
         sig′ = sig
         while isa(sig′, UnionAll)
@@ -589,7 +650,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             sig′ = sig′.body
         end
     else
-        spvals = linfo.sparam_vals
+        spvals = mi.sparam_vals
     end
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)
@@ -607,7 +668,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
                     # if this parameter came from `arg::Type{T}`,
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
-                    ty = fieldtype(linfo.specTypes, j)
+                    ty = fieldtype(mi.specTypes, j)
                     @goto ty_computed
                 elseif (va = va_from_vatuple(sⱼ)) !== nothing
                     # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
@@ -638,8 +699,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 # type variables, we can use it for a more accurate analysis of whether `v`
                 # is constrained or not, otherwise we should use `def.sig` which always
                 # doesn't contain any free type variables
-                if !has_free_typevars(linfo.specTypes)
-                    sig = linfo.specTypes
+                if !has_free_typevars(mi.specTypes)
+                    sig = mi.specTypes
                 end
                 @assert !has_free_typevars(sig)
                 constrains_param(v, sig, #=covariant=#true)
@@ -684,10 +745,7 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
                 usebb = block_for_inst(frame.cfg, r)
-                # We're guaranteed to visit the statement if it's in the current
-                # basic block, since SSA values can only ever appear after their
-                # def.
-                if usebb != frame.currbb
+                if usebb != frame.currbb || r < ssa_id
                     push!(W, usebb)
                 end
             end
@@ -696,9 +754,9 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
     return nothing
 end
 
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, currpc::Int)
+function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, currpc)
+    backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     add_backedge!(caller, frame.linfo)
     return frame
@@ -706,37 +764,24 @@ end
 
 function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
     stmt_edges = caller.stmt_edges
-    edges = stmt_edges[currpc]
-    if edges === nothing
-        edges = stmt_edges[currpc] = []
+    if !isassigned(stmt_edges, currpc)
+        return stmt_edges[currpc] = Any[]
+    else
+        return stmt_edges[currpc]
     end
-    return edges
 end
 
 function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
-    edges = frame.stmt_edges[currpc]
-    edges === nothing || empty!(edges)
+    if isassigned(frame.stmt_edges, currpc)
+        empty!(frame.stmt_edges[currpc])
+    end
     return nothing
 end
 
-function print_callstack(sv::InferenceState)
-    while sv !== nothing
-        print(sv.linfo)
-        is_cached(sv) || print("  [uncached]")
-        println()
-        for cycle in sv.callers_in_cycle
-            print(' ', cycle.linfo)
-            println()
-        end
-        sv = sv.parent
-    end
-end
-
 function narguments(sv::InferenceState, include_va::Bool=true)
-    def = sv.linfo.def
-    nargs = length(sv.result.argtypes)
+    nargs = Int(sv.src.nargs)
     if !include_va
-        nargs -= isa(def, Method) && def.isva
+        nargs -= sv.src.isva
     end
     return nargs
 end
@@ -746,7 +791,7 @@ end
 
 # TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
 mutable struct IRInterpretationState
-    const method_info::MethodInfo
+    const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
     const world::UInt
@@ -757,52 +802,83 @@ mutable struct IRInterpretationState
     const ssa_refined::BitSet
     const lazyreachability::LazyCFGReachability
     valid_worlds::WorldRange
+    const tasks::Vector{WorkThunk}
     const edges::Vector{Any}
-    parent # ::Union{Nothing,AbsIntState}
+    callstack #::Vector{AbsIntState}
+    frameid::Int
+    parentid::Int
 
     function IRInterpretationState(interp::AbstractInterpreter,
-        method_info::MethodInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
+        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
         world::UInt, min_world::UInt, max_world::UInt)
         curridx = 1
         given_argtypes = Vector{Any}(undef, length(argtypes))
         for i = 1:length(given_argtypes)
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
-        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-            for i = 1:length(given_argtypes)]
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+        end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        tasks = WorkThunk[]
         edges = Any[]
-        parent = nothing
-        return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                   ssa_refined, lazyreachability, valid_worlds, edges, parent)
+        callstack = AbsIntState[]
+        return new(spec_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, valid_worlds, tasks, edges, callstack, 0, 0)
     end
 end
 
 function IRInterpretationState(interp::AbstractInterpreter,
-    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
-    @assert code.def === mi
-    src = @atomic :monotonic code.inferred
+    codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+    @assert codeinst.def === mi "method instance is not synced with code instance"
+    src = @atomic :monotonic codeinst.inferred
     if isa(src, String)
-        src = _uncompressed_ir(mi.def, src)
+        src = _uncompressed_ir(codeinst, src)
     else
         isa(src, CodeInfo) || return nothing
     end
-    method_info = MethodInfo(src)
+    spec_info = SpecInfo(src)
     ir = inflate_ir(src, mi)
-    return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                 src.min_world, src.max_world)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
+    return IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
+                                 codeinst.min_world, codeinst.max_world)
 end
 
 # AbsIntState
 # ===========
 
 const AbsIntState = Union{InferenceState,IRInterpretationState}
+
+function print_callstack(frame::AbsIntState)
+    print("=================== Callstack: ==================\n")
+    frames = frame.callstack::Vector{AbsIntState}
+    for idx = (frame.frameid == 0 ? 0 : 1):length(frames)
+        sv = (idx == 0 ? frame : frames[idx])
+        idx == frame.frameid && print("*")
+        print("[")
+        print(idx)
+        if sv isa InferenceState && !isa(sv.interp, NativeInterpreter)
+            print(", ")
+            print(typeof(sv.interp))
+        end
+        print("] ")
+        print(frame_instance(sv))
+        is_cached(sv) || print("  [uncached]")
+        sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
+        isempty(callers_in_cycle(sv)) || print(" [cycle=", sv.cycleid, "]")
+        println()
+        @assert sv.frameid == idx
+    end
+    print("================= End callstack ==================\n")
+end
 
 frame_instance(sv::InferenceState) = sv.linfo
 frame_instance(sv::IRInterpretationState) = sv.mi
@@ -814,26 +890,50 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-frame_parent(sv::InferenceState) = sv.parent::Union{Nothing,AbsIntState}
-frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
+function frame_parent(sv::InferenceState)
+    sv.parentid == 0 && return nothing
+    callstack = sv.callstack::Vector{AbsIntState}
+    sv = callstack[sv.cycleid]::InferenceState
+    sv.parentid == 0 && return nothing
+    return callstack[sv.parentid]
+end
+frame_parent(sv::IRInterpretationState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
 
-is_constproped(sv::InferenceState) = any(sv.result.overridden_by_const)
+# add the orphan child to the parent and the parent to the child
+function assign_parentchild!(child::InferenceState, parent::AbsIntState)
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.cycleid = child.frameid = length(callstack)
+    nothing
+end
+function assign_parentchild!(child::IRInterpretationState, parent::AbsIntState)
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.frameid = length(callstack)
+    nothing
+end
+
+function is_constproped(sv::InferenceState)
+    (;overridden_by_const) = sv.result
+    return overridden_by_const !== nothing
+end
 is_constproped(::IRInterpretationState) = true
 
 is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
 is_cached(::IRInterpretationState) = false
 
-method_info(sv::InferenceState) = sv.method_info
-method_info(sv::IRInterpretationState) = sv.method_info
+spec_info(sv::InferenceState) = sv.spec_info
+spec_info(sv::IRInterpretationState) = sv.spec_info
 
-propagate_inbounds(sv::AbsIntState) = method_info(sv).propagate_inbounds
-method_for_inference_limit_heuristics(sv::AbsIntState) = method_info(sv).method_for_inference_limit_heuristics
+propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
+method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
 
 frame_world(sv::InferenceState) = sv.world
 frame_world(sv::IRInterpretationState) = sv.world
-
-callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
-callers_in_cycle(sv::IRInterpretationState) = ()
 
 function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     if is_effect_overridden(frame_instance(sv), effect)
@@ -843,8 +943,8 @@ function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     end
     return false
 end
-function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
-    def = linfo.def
+function is_effect_overridden(mi::MethodInstance, effect::Symbol)
+    def = mi.def
     return isa(def, Method) && is_effect_overridden(def, effect)
 end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
@@ -871,20 +971,42 @@ Note that cycles may be visited in any order.
 struct AbsIntStackUnwind
     sv::AbsIntState
 end
-iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
-function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
-    # iterate through the cycle before walking to the parent
-    callers = callers_in_cycle(sv)
-    if callers !== () && cyclei < length(callers)
-        cyclei += 1
-        parent = callers[cyclei]
-    else
-        cyclei = 0
-        parent = frame_parent(sv)
-    end
-    parent === nothing && return nothing
-    return (parent, (parent, cyclei))
+iterate(unw::AbsIntStackUnwind) = (unw.sv, length(unw.sv.callstack::Vector{AbsIntState}))
+function iterate(unw::AbsIntStackUnwind, frame::Int)
+    frame == 0 && return nothing
+    return ((unw.sv.callstack::Vector{AbsIntState})[frame], frame - 1)
 end
+
+struct AbsIntCycle
+    frames::Vector{AbsIntState}
+    cycleid::Int
+    cycletop::Int
+end
+iterate(unw::AbsIntCycle) = unw.cycleid == 0 ? nothing : (unw.frames[unw.cycletop], unw.cycletop)
+function iterate(unw::AbsIntCycle, frame::Int)
+    frame == unw.cycleid && return nothing
+    return (unw.frames[frame - 1], frame - 1)
+end
+
+"""
+    callers_in_cycle(sv::AbsIntState)
+
+Iterate through all callers of the given `AbsIntState` in the abstract
+interpretation stack (including the given `AbsIntState` itself) that are part
+of the same cycle, only if it is part of a cycle with multiple frames.
+"""
+function callers_in_cycle(sv::InferenceState)
+    callstack = sv.callstack::Vector{AbsIntState}
+    cycletop = cycleid = sv.cycleid
+    while cycletop < length(callstack)
+        frame = callstack[cycletop + 1]
+        frame isa InferenceState || break
+        frame.cycleid == cycleid || break
+        cycletop += 1
+    end
+    return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
+end
+callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
 
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(caller::InferenceState, mi::MethodInstance)
@@ -939,6 +1061,7 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
         effects = Effects(effects; effect_free=ALWAYS_TRUE)
     end
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+    nothing
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
@@ -967,30 +1090,6 @@ bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceStat
     state.rt === Any
 bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
     state.rt === Any
-
-function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
-    if InferenceParams(interp).unoptimize_throw_blocks
-        # Disable inference of calls in throw blocks, since we're unlikely to
-        # need their types. There is one exception however: If up until now, the
-        # function has not seen any side effects, we would like to make sure there
-        # aren't any in the throw block either to enable other optimizations.
-        if is_stmt_throw_block(get_curr_ssaflag(sv))
-            should_infer_for_effects(sv) || return false
-        end
-    end
-    return true
-end
-function should_infer_for_effects(sv::InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
-    effects = sv.ipo_effects
-    override = decode_effects_override(def.purity)
-    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
-    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
-    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
-    return true
-end
-should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 
 add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
 add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
@@ -1025,3 +1124,104 @@ function get_max_methods_for_module(mod::Module)
     max_methods < 0 && return nothing
     return max_methods
 end
+
+"""
+    Future{T}
+
+Assign-once delayed return value for a value of type `T`, similar to RefValue{T}.
+Can be constructed in one of three ways:
+
+1. With an immediate as `Future{T}(val)`
+2. As an assign-once storage location with `Future{T}()`. Assigned (once) using `f[] = val`.
+3. As a delayed computation with `Future{T}(callback, dep, interp, sv)` to have
+   `sv` arrange to call the `callback` with the result of `dep` when it is ready.
+
+Use `isready` to check if the value is ready, and `getindex` to get the value.
+"""
+struct Future{T}
+    later::Union{Nothing,RefValue{T}}
+    now::Union{Nothing,T}
+    function Future{T}() where {T}
+        later = RefValue{T}()
+        @assert !isassigned(later) "Future{T}() is not allowed for inlinealloc T"
+        new{T}(later, nothing)
+    end
+    Future{T}(x) where {T} = new{T}(nothing, x)
+    Future(x::T) where {T} = new{T}(nothing, x)
+end
+isready(f::Future) = f.later === nothing || isassigned(f.later)
+getindex(f::Future{T}) where {T} = (later = f.later; later === nothing ? f.now::T : later[])
+function setindex!(f::Future, v)
+    later = something(f.later)
+    @assert !isassigned(later)
+    later[] = v
+    return f
+end
+convert(::Type{Future{T}}, x) where {T} = Future{T}(x) # support return type conversion
+convert(::Type{Future{T}}, x::Future) where {T} = x::Future{T}
+function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntState) where {T}
+    if immediate
+        return Future{T}(f(interp, sv))
+    else
+        @assert applicable(f, interp, sv)
+        result = Future{T}()
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(interp, sv)
+            return true
+        end)
+        return result
+    end
+end
+function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntState) where {T, S}
+    later = prev.later
+    if later === nothing
+        return Future{T}(f(prev[], interp, sv))
+    else
+        @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
+        result = Future{T}()
+        push!(sv.tasks, function (interp, sv)
+            result[] = f(later[], interp, sv) # capture just later, instead of all of prev
+            return true
+        end)
+        return result
+    end
+end
+
+"""
+    doworkloop(args...)
+
+Run a tasks inside the abstract interpreter, returning false if there are none.
+Tasks will be run in DFS post-order tree order, such that all child tasks will
+be run in the order scheduled, prior to running any subsequent tasks. This
+allows tasks to generate more child tasks, which will be run before anything else.
+Each task will be run repeatedly when returning `false`, until it returns `true`.
+"""
+function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
+    tasks = sv.tasks
+    prev = length(tasks)
+    prevcallstack = length(sv.callstack)
+    prev == 0 && return false
+    task = pop!(tasks)
+    completed = task(interp, sv)
+    tasks = sv.tasks # allow dropping gc root over the previous call
+    completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
+    if !completed
+        @assert (length(tasks) >= prev || length(sv.callstack) > prevcallstack) "Task did not complete, but also did not create any child tasks"
+        push!(tasks, task)
+    end
+    # efficient post-order visitor: items pushed are executed in reverse post order such
+    # that later items are executed before earlier ones, but are fully executed
+    # (including any dependencies scheduled by them) before going on to the next item
+    reverse!(tasks, #=start=#prev)
+    return true
+end
+
+
+#macro workthunk(name::Symbol, body)
+#    name = esc(name)
+#    body = esc(body)
+#    return replace_linenums!(
+#        :(function $name($(esc(interp)), $(esc(sv)))
+#              $body
+#          end), __source__)
+#end

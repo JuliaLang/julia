@@ -1,13 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
+"""
+    Base.Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
+
+An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
+of several string-matching functions such as [`startswith`](@ref) and [`strip`](@ref).
+
+!!! compat "Julia 1.11"
+    Julia versions prior to 1.11 only included `Set`, not `AbstractSet`, in `Base.Chars` types.
+"""
+const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
 # starts with and ends with predicates
 
 """
-    startswith(s::AbstractString, prefix::AbstractString)
+    startswith(s::AbstractString, prefix::Union{AbstractString,Base.Chars})
 
-Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
+Return `true` if `s` starts with `prefix`, which can be a string, a character,
+or a tuple/vector/set of characters. If `prefix` is a tuple/vector/set
 of characters, test whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref), [`contains`](@ref).
@@ -30,10 +40,11 @@ end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
-    endswith(s::AbstractString, suffix::AbstractString)
+    endswith(s::AbstractString, suffix::Union{AbstractString,Base.Chars})
 
-Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
-characters, test whether the last character of `s` belongs to that set.
+Return `true` if `s` ends with `suffix`, which can be a string, a character,
+or a tuple/vector/set of characters. If `suffix` is a tuple/vector/set
+of characters, test whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref), [`contains`](@ref).
 
@@ -70,7 +81,8 @@ end
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
-Check if an `IO` object starts with a prefix.  See also [`peek`](@ref).
+Check if an `IO` object starts with a prefix, which can be either a string, a
+character, or a tuple/vector/set of characters.  See also [`peek`](@ref).
 """
 function Base.startswith(io::IO, prefix::Base.Chars)
     mark(io)
@@ -499,6 +511,157 @@ function rpad(
     l = textwidth(p)
     q, r = divrem(m, l)
     r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
+end
+
+"""
+    rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = rtruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 I lo…"
+
+julia> textwidth(s)
+10
+
+julia> rtruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
+    if isnothing(ret)
+        return string(str)
+    else
+        left, _ = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement
+    end
+end
+
+"""
+    ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = ltruncate("🍕🍕 I love 🍕", 10)
+"…I love 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ltruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
+    if isnothing(ret)
+        return string(str)
+    else
+        _, right = ret::Tuple{Int,Int}
+        @views return replacement * str[right:end]
+    end
+end
+
+"""
+    ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
+with `replacement` if necessary. The default replacement string is "…". By default, the truncation
+prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
+
+# Examples
+```jldoctest
+julia> s = ctruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 …e 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ctruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
+"""
+function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
+    if isnothing(ret)
+        return string(str)
+    else
+        left, right = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement * str[right:end]
+    end
+end
+
+# return whether textwidth(str) <= maxwidth
+function check_textwidth(str::AbstractString, maxwidth::Integer)
+    # check efficiently for early return if str is wider than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && return false
+    end
+    return true
+end
+
+function string_truncate_boundaries(
+            str::AbstractString,
+            maxwidth::Integer,
+            replacement::Union{AbstractString,AbstractChar},
+            ::Val{mode},
+            prefer_left::Bool = true) where {mode}
+    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
+    check_textwidth(str, maxwidth) && return nothing
+
+    l0, _ = left, right = firstindex(str), lastindex(str)
+    width = textwidth(replacement)
+    # used to balance the truncated width on either side
+    rm_width_left, rm_width_right, force_other = 0, 0, false
+    @inbounds while true
+        if mode === :left || (mode === :center && (!prefer_left || left > l0))
+            rm_width = textwidth(str[right])
+            if mode === :left || (rm_width_right <= rm_width_left || force_other)
+                force_other = false
+                (width += rm_width) <= maxwidth || break
+                rm_width_right += rm_width
+                right = prevind(str, right)
+            else
+                force_other = true
+            end
+        end
+        if mode ∈ (:right, :center)
+            rm_width = textwidth(str[left])
+            if mode === :left || (rm_width_left <= rm_width_right || force_other)
+                force_other = false
+                (width += textwidth(str[left])) <= maxwidth || break
+                rm_width_left += rm_width
+                left = nextind(str, left)
+            else
+                force_other = true
+            end
+        end
+    end
+    return prevind(str, left), nextind(str, right)
 end
 
 """
@@ -1049,12 +1212,12 @@ function bytes2hex end
 
 function bytes2hex(itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
-    b = Base.StringVector(2*length(itr))
+    b = Base.StringMemory(2*length(itr))
     @inbounds for (i, x) in enumerate(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
-    return String(b)
+    return unsafe_takestring(b)
 end
 
 function bytes2hex(io::IO, itr)

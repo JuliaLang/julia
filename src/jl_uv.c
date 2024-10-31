@@ -39,21 +39,24 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     const char *type = uv_handle_type_name(h->type);
     if (!type)
         type = "<unknown>";
+    size_t resource_id; // fits an int or pid_t on Unix, HANDLE or PID on Windows
     uv_os_fd_t fd;
     if (h->type == UV_PROCESS)
-        fd = uv_process_get_pid((uv_process_t*)h);
-    else if (uv_fileno(h, &fd))
-        fd = (uv_os_fd_t)-1;
+        resource_id = (size_t)uv_process_get_pid((uv_process_t*)h);
+    else if (uv_fileno(h, &fd) == 0)
+        resource_id = (size_t)fd;
+    else
+        resource_id = -1;
     const char *pad = "                "; // 16 spaces
-    int npad = fd == -1 ? 0 : snprintf(NULL, 0, "%zd", (size_t)fd);
+    int npad = resource_id == -1 ? 0 : snprintf(NULL, 0, "%zd", resource_id);
     if (npad < 0)
         npad = 0;
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
-    if (fd == -1)
+    if (resource_id == -1)
         jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
@@ -370,8 +373,6 @@ JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data;
  */
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern _Atomic(unsigned) _threadedregion;
-
 /**
  * @brief Process pending UV events.
  *
@@ -384,7 +385,7 @@ JL_DLLEXPORT int jl_process_events(void)
     jl_task_t *ct = jl_current_task;
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
-    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
+    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == jl_atomic_load_relaxed(&io_loop_tid))) {
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
@@ -634,7 +635,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
 {
     jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0)
+    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid))
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -660,25 +661,6 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
-}
-
-JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
-{
-    uv_fs_t req;
-    unsigned char c;
-    uv_buf_t buf[1];
-    buf[0].base = (char*)&c;
-    buf[0].len = 1;
-    int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
-    uv_fs_req_cleanup(&req);
-    switch (ret) {
-    case -1: return ret;
-    case  0: jl_eof_error();
-    case  1: return (int)c;
-    default:
-        assert(0 && "jl_fs_read_byte: Invalid return value from uv_fs_read");
-        return -1;
-    }
 }
 
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
@@ -734,7 +716,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
 
     // TODO: Hack to make CoreIO thread-safer
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0) {
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid)) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }
@@ -1129,31 +1111,39 @@ static inline int ishexchar(char c)
 
 JL_DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
 {
-    if (pipe->type != UV_NAMED_PIPE) return 0;
+    char namebuf[0];
     size_t len = 0;
-    if (uv_pipe_getpeername(pipe, NULL, &len) != UV_ENOBUFS) return 0;
+    if (pipe->type != UV_NAMED_PIPE)
+        return 0;
+    if (uv_pipe_getpeername(pipe, namebuf, &len) != UV_ENOBUFS)
+        return 0;
     char *name = (char*)alloca(len + 1);
-    if (uv_pipe_getpeername(pipe, name, &len)) return 0;
+    if (uv_pipe_getpeername(pipe, name, &len))
+        return 0;
     name[len] = '\0';
     // return true if name matches regex:
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
     //jl_printf(JL_STDERR,"pipe_name: %s\n", name);
     int n = 0;
-    if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
+    if (!strncmp(name, "\\\\?\\pipe\\msys-", 14))
         n = 14;
-    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16))
+    else if (!strncmp(name, "\\\\?\\pipe\\cygwin-", 16))
         n = 16;
     else
         return 0;
     //jl_printf(JL_STDERR,"prefix pass\n");
     name += n;
     for (int n = 0; n < 16; n++)
-        if (!ishexchar(*name++)) return 0;
+        if (!ishexchar(*name++))
+            return 0;
     //jl_printf(JL_STDERR,"hex pass\n");
-    if ((*name++)!='-') return 0;
-    if (*name != 'p' && *name != 't') return 0;
+    if ((*name++)!='-')
+        return 0;
+    if (*name != 'p' && *name != 't')
+        return 0;
     name++;
-    if (*name++ != 't' || *name++ != 'y') return 0;
+    if (*name++ != 't' || *name++ != 'y')
+        return 0;
     //jl_printf(JL_STDERR,"tty pass\n");
     return 1;
 }

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This type must be kept in sync with the C struct in src/gc.h
+# This type must be kept in sync with the C struct in src/gc-interface.h
 struct GC_Num
     allocd          ::Int64 # GC internal
     deferred_alloc  ::Int64 # GC internal
@@ -22,14 +22,15 @@ struct GC_Num
     total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
+    stack_pool_sweep_time ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
-reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
@@ -48,7 +49,7 @@ gc_total_bytes(gc_num::GC_Num) =
     gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from `src/gc.c:jl_gc_total_bytes`
+    # logic from `jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd       - old_allocd,
@@ -105,6 +106,33 @@ function gc_page_utilization_data()
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
+# must be kept in sync with `src/gc-stock.h``
+const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+
+"""
+    Base.full_sweep_reasons()
+
+Return a dictionary of the number of times each full sweep reason has occurred.
+
+The reasons are:
+- `:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL`: Full sweep was caused due to `always_full` being set in the GC debug environment
+- `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
+- `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
+- `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+
+Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
+"""
+function full_sweep_reasons()
+    reason = cglobal(:jl_full_sweep_reasons, UInt64)
+    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+    d = Dict{Symbol, Int64}()
+    for (i, r) in enumerate(FULL_SWEEP_REASONS)
+        d[r] = reasons_as_array[i]
+    end
+    return d
+end
+
 """
     Base.jit_total_bytes()
 
@@ -135,6 +163,30 @@ function padded_nonzero_print(value, str, always_print = true)
     end
 end
 
+"""
+    format_bytes(bytes; binary=true)
+
+Format a given number of bytes into a human-readable string.
+
+# Arguments
+- `bytes`: The number of bytes to format.
+- `binary=true`: If `true`, formats the bytes in binary units (powers of 1024). If `false`, uses decimal units (powers of 1000).
+
+# Returns
+`String`: A human-readable string representation of the bytes, formatted in either binary or decimal units based on the `binary` argument.
+
+# Examples
+```jldoctest
+julia> Base.format_bytes(1024)
+"1024 bytes"
+
+julia> Base.format_bytes(10000)
+"9.766 KiB"
+
+julia> Base.format_bytes(10000, binary=false)
+"10.000 kB"
+```
+"""
 function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     units = binary ? _mem_units : _cnt_units
     factor = binary ? 1024 : 1000
@@ -146,7 +198,8 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false; msg::Union{String,Nothing}=nothing)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
+                    msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         if msg isa String
@@ -155,7 +208,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -172,8 +225,15 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        if compile_time > 0
+        if lock_conflicts > 0
             if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            plural = lock_conflicts == 1 ? "" : "s"
+            print(io, lock_conflicts, " lock conflict$plural")
+        end
+        if compile_time > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -190,11 +250,11 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_times; msg::Union{String,Nothing}=nothing)
+function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true; msg)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -226,7 +286,8 @@ end
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc), compiling
-new code, or recompiling invalidated code is shown as a percentage.
+new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
 Optionally provide a description string to print before the time report.
 
@@ -246,6 +307,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
     The option to add a description was introduced in Julia 1.8.
 
     Recompilation time being shown separately from compilation time was introduced in Julia 1.8
+
+!!! compat "Julia 1.11"
+    The reporting of any lock conflicts was added in Julia 1.11.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -283,7 +347,8 @@ macro time(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        local _msg_str = _msg === nothing ? _msg : string(_msg)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
         ret.value
     end
 end
@@ -355,7 +420,8 @@ macro timev(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        timev_print(ret.time*1e9, ret.gcstats, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        local _msg_str = _msg === nothing ? _msg : string(_msg)
+        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
         ret.value
     end
 end
@@ -450,18 +516,56 @@ macro allocations(ex)
 end
 
 """
+    @lock_conflicts
+
+A macro to evaluate an expression, discard the resulting value, and instead return the
+total number of lock conflicts during evaluation, where a lock attempt on a [`ReentrantLock`](@ref)
+resulted in a wait because the lock was already held.
+
+See also [`@time`](@ref), [`@timev`](@ref) and [`@timed`](@ref).
+
+```julia-repl
+julia> @lock_conflicts begin
+    l = ReentrantLock()
+    Threads.@threads for i in 1:Threads.nthreads()
+        lock(l) do
+        sleep(1)
+        end
+    end
+end
+5
+```
+
+!!! compat "Julia 1.11"
+    This macro was added in Julia 1.11.
+"""
+macro lock_conflicts(ex)
+    quote
+        Threads.lock_profiling(true)
+        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
+        try
+            $(esc(ex))
+        finally
+            Threads.lock_profiling(false)
+        end
+        Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts
+    end
+end
+
+"""
     @timed
 
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
-counters, compilation time in seconds, and recompilation time in seconds.
+counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocations`](@ref).
+[`@allocated`](@ref), [`@allocations`](@ref), and [`@lock_conflicts`](@ref).
 
 ```julia-repl
 julia> stats = @timed rand(10^6);
@@ -493,11 +597,13 @@ julia> stats.recompile_time
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
 
 !!! compat "Julia 1.11"
-    The `compile_time` and `recompile_time` fields were added in Julia 1.11.
+    The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
+        Threads.lock_profiling(true)
+        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
         local stats = gc_num()
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
@@ -505,9 +611,55 @@ macro timed(ex)
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
             cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+            lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
+            Threads.lock_profiling(false))
         )
         local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff, compile_time=compile_elapsedtimes[1]/1e9, recompile_time=compile_elapsedtimes[2]/1e9)
+        (
+            value=val,
+            time=elapsedtime/1e9,
+            bytes=diff.allocd,
+            gctime=diff.total_time/1e9,
+            gcstats=diff,
+            lock_conflicts=lock_conflicts,
+            compile_time=compile_elapsedtimes[1]/1e9,
+            recompile_time=compile_elapsedtimes[2]/1e9
+        )
+    end
+end
+
+# Exported, documented, and tested in InteractiveUtils
+# here so it's possible to time/trace all imports, including InteractiveUtils and its deps
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
+        end
     end
 end

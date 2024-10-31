@@ -86,9 +86,13 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, SIGTERM, SIGILL, SIGABRT
-        if (sig == SIGSEGV && jl_get_safe_restore()) {
-            signal(sig, (void (__cdecl *)(int))crt_sig_handler);
-            jl_sig_throw();
+        if (sig == SIGSEGV) { // restarting jl_ or profile
+            jl_jmp_buf *saferestore = jl_get_safe_restore();
+            if (saferestore) {
+                signal(sig, (void (__cdecl *)(int))crt_sig_handler);
+                jl_longjmp(*saferestore, 1);
+                return;
+            }
         }
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
@@ -109,6 +113,8 @@ static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
+    // print the warning (this mysteriously needs a lot of stack for the WriteFile syscall)
+    stack_overflow_warning();
     // collect the backtrace
     stkerror_ptls->bt_size =
         rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
@@ -124,41 +130,41 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c);
+
+static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
 {
-#if defined(_CPU_X86_64_)
-    DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
-#elif defined(_CPU_X86_)
-    DWORD32 Esp = (ctxThread->Esp & (DWORD32)-16) - 4;
-#else
-#error WIN16 not supported :P
-#endif
-    if (ct && !jl_get_safe_restore()) {
-        assert(excpt != NULL);
-        jl_ptls_t ptls = ct->ptls;
-        ptls->bt_size = 0;
-        if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
-                                              ct->gcstack);
-        }
-        else if (have_backtrace_fiber) {
-            uv_mutex_lock(&backtrace_lock);
-            stkerror_ctx = ctxThread;
-            stkerror_ptls = ptls;
-            jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
-            uv_mutex_unlock(&backtrace_lock);
-        }
-        ptls->sig_exception = excpt;
+    jl_jmp_buf *saferestore = jl_get_safe_restore();
+    if (saferestore) { // restarting jl_ or profile
+        if (!jl_simulate_longjmp(*saferestore, ctxThread))
+            abort();
+        return;
     }
-#if defined(_CPU_X86_64_)
-    *(DWORD64*)Rsp = 0;
-    ctxThread->Rsp = Rsp;
-    ctxThread->Rip = (DWORD64)&jl_sig_throw;
-#elif defined(_CPU_X86_)
-    *(DWORD32*)Esp = 0;
-    ctxThread->Esp = Esp;
-    ctxThread->Eip = (DWORD)&jl_sig_throw;
-#endif
+    assert(ct && excpt);
+    jl_ptls_t ptls = ct->ptls;
+    ptls->bt_size = 0;
+    if (excpt != jl_stackovf_exception) {
+        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
+                                          ct->gcstack);
+    }
+    else if (have_backtrace_fiber) {
+        uv_mutex_lock(&backtrace_lock);
+        stkerror_ctx = ctxThread;
+        stkerror_ptls = ptls;
+        jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
+        uv_mutex_unlock(&backtrace_lock);
+    }
+    ptls->sig_exception = excpt;
+    ptls->io_wait = 0;
+    jl_handler_t *eh = ct->eh;
+    if (eh != NULL) {
+        asan_unpoison_task_stack(ct, &eh->eh_ctx);
+        if (!jl_simulate_longjmp(eh->eh_ctx, ctxThread))
+            abort();
+    }
+    else {
+        jl_no_exc_handler(excpt, ct);
+    }
 }
 
 HANDLE hMainThread = INVALID_HANDLE_VALUE;
@@ -326,7 +332,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     default:
         jl_safe_printf("UNKNOWN"); break;
     }
-    jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
     jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
     jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
@@ -398,11 +404,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
-        if (running) {
+        if (profile_running) {
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer(); // does not change the thread state
                 SuspendThread(GetCurrentThread());
                 continue;
+            }
+            else if (profile_all_tasks) {
+                // Don't take the stackwalk lock here since it's already taken in `jl_rec_backtrace`
+                jl_profile_task();
             }
             else {
                 // TODO: bring this up to parity with other OS by adding loop over tid here
@@ -415,26 +425,27 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     break;
                 }
                 // Get backtrace data
-                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+                profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                        profile_bt_size_max - profile_bt_size_cur - 1, &ctxThread, NULL);
 
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
-                // store threadid but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls->tid + 1;
 
-                // store task id (never null)
-                bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                // META_OFFSET_TASKID store task id (never null)
+                profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
-                // store cpu cycle clock
-                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
 
-                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
 
                 // Mark the end of this block with two 0's
-                bt_data_prof[bt_size_cur++].uintptr = 0;
-                bt_data_prof[bt_size_cur++].uintptr = 0;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+                profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
                 jl_unlock_stackwalk(lockret);
                 jl_thread_resume(0);
                 jl_check_profile_autostop();
@@ -449,7 +460,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
 
 static volatile TIMECAPS timecaps;
 
-JL_DLLEXPORT int jl_profile_start_timer(void)
+JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     if (hBtThread == NULL) {
 
@@ -477,20 +488,24 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
             return -2;
         }
     }
-    if (running == 0) {
+    if (profile_running == 0) {
         // Failure to change the timer resolution is not fatal. However, it is important to
         // ensure that the timeBeginPeriod/timeEndPeriod is paired.
         if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
             timecaps.wPeriodMin = 0;
     }
-    running = 1; // set `running` finally
+    profile_all_tasks = all_tasks;
+    profile_running = 1; // set `profile_running` finally
     return 0;
 }
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running && timecaps.wPeriodMin)
+    uv_mutex_lock(&bt_data_prof_lock);
+    if (profile_running && timecaps.wPeriodMin)
         timeEndPeriod(timecaps.wPeriodMin);
-    running = 0;
+    profile_running = 0;
+    profile_all_tasks = 0;
+    uv_mutex_unlock(&bt_data_prof_lock);
 }
 
 void jl_install_default_signal_handlers(void)

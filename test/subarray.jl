@@ -339,6 +339,7 @@ end
     A = copy(reshape(1:120, 3, 5, 8))
     sA = view(A, 2:2, 1:5, :)
     @test @inferred(strides(sA)) == (1, 3, 15)
+    @test IndexStyle(sA) == IndexStyle(typeof(sA)) == IndexCartesian()
     @test parent(sA) == A
     @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
     @test size(sA) == (1, 5, 8)
@@ -826,6 +827,25 @@ end
     @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i2, i3]
     V = view(A, i1, 1:5, i3, i2)
     @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i3, i2]
+
+    @testset "custom ranges" begin
+        struct MyStepRange{T} <: OrdinalRange{T,T}
+            r::StepRange{T,T}
+        end
+
+        for f in (:first, :last, :step, :length, :size)
+            @eval Base.$f(r::MyStepRange) = $f(r.r)
+        end
+        Base.getindex(r::MyStepRange, i::Int) = r.r[i]
+
+        a = rand(6)
+        V = view(a, MyStepRange(2:2:4))
+        @test @inferred(Base.unaliascopy(V))::typeof(V) == V
+
+        # empty range
+        V = view(a, MyStepRange(2:2:1))
+        @test @inferred(Base.unaliascopy(V))::typeof(V) == V
+    end
 end
 
 @testset "issue #27632" begin
@@ -923,15 +943,22 @@ end
 
 @testset "issue #41221: view(::Vector, :, 1)" begin
     v = randn(3)
-    @test view(v,:,1) == v
-    @test parent(view(v,:,1)) === v
-    @test parent(view(v,2:3,1,1)) === v
+    @test @inferred(view(v,:,1)) == v
+    @test parent(@inferred(view(v,:,1))) === v
+    @test parent(@inferred(view(v,2:3,1,1))) === v
     @test_throws BoundsError view(v,:,2)
     @test_throws BoundsError view(v,:,1,2)
 
     m = randn(4,5).+im
     @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
     @test parent(view(m, 1:2, 3, 1, 1)) === m
+end
+
+@testset "issue #53209: avoid invalid elimination of singleton indices" begin
+    A = randn(4,5)
+    @test A[CartesianIndices(()), :, 3] == @inferred(view(A, CartesianIndices(()), :, 3))
+    @test parent(@inferred(view(A, :, 3, 1, CartesianIndices(()), 1))) === A
+    @test_throws BoundsError view(A, :, 3, 2, CartesianIndices(()), 1)
 end
 
 @testset "replace_in_print_matrix" begin
@@ -998,4 +1025,101 @@ end
     false
 catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
+end
+
+
+@testset "avoid allocating in reindex" begin
+    a = reshape(1:16, 4, 4)
+    inds = ([2,3], [3,4])
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (2,3)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
+
+    inds = (reshape([eachindex(a);], size(a)),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
+
+    inds = (reshape([eachindex(a);], size(a)..., 1),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2, 1:1)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
+end
+
+@testset "isassigned" begin
+    a = Vector{BigFloat}(undef, 5)
+    a[2] = 0
+    for v in (view(a, 2:3), # FastContiguousSubArray
+               view(a, 2:2:4), # FastSubArray
+               view(a, [2:2:4;]), # SlowSubArray
+            )
+        @test !isassigned(v, 0) # out-of-bounds
+        @test isassigned(v, 1) # inbounds and assigned
+        @test !isassigned(v, 2) # inbounds but not assigned
+        @test !isassigned(v, 4) # out-of-bounds
+    end
+
+    a = Array{BigFloat}(undef,3,3,3)
+    a[1,1,1] = 0
+    for v in (view(a, :, 1:3, 1), # FastContiguousSubArray
+               view(a, 1, :, 1:2), # FastSubArray
+            )
+        @test !isassigned(v, 0, 0) # out-of-bounds
+        @test isassigned(v, 1, 1) # inbounds and assigned
+        @test !isassigned(v, 1, 2) # inbounds but not assigned
+        @test !isassigned(v, 3, 3) # out-of-bounds
+    end
+end
+
+@testset "aliasing checks with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
+
+@testset "aliasing checks with disjoint arrays" begin
+    A = rand(3,4,5)
+    @test Base.mightalias(view(A, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(A, :, :, 1), view(A, :, :, 2))
+
+    B = reinterpret(UInt64, A)
+    @test Base.mightalias(view(B, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(B, :, :, 1), view(A, :, :, 2))
+
+    C = reinterpret(UInt32, A)
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 1))
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 2)) # This is overly conservative
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 1))
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 2)) # This is overly conservative
+end
+
+@testset "aliasing check with reshaped subarrays" begin
+    C = rand(2,1)
+    V1 = @view C[1, :]
+    V2 = @view C[2, :]
+
+    @test !Base.mightalias(V1, V2)
+    @test !Base.mightalias(V1, permutedims(V2))
+    @test !Base.mightalias(permutedims(V1), V2)
+    @test !Base.mightalias(permutedims(V1), permutedims(V2))
+
+    @test Base.mightalias(V1, V1)
+    @test Base.mightalias(V1, permutedims(V1))
+    @test Base.mightalias(permutedims(V1), V1)
+    @test Base.mightalias(permutedims(V1), permutedims(V1))
 end

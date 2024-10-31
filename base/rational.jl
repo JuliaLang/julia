@@ -27,19 +27,30 @@ end
 checked_den(num::T, den::T) where T<:Integer = checked_den(T, num, den)
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 
-@noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+@noinline __throw_rational_argerror_zero(T) = throw(ArgumentError(LazyString("invalid rational: zero(", T, ")//zero(", T, ")")))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
-    num, den = divgcd(num, den)
-    return checked_den(T, T(num), T(den))
+    if T <: Union{Unsigned, Bool}
+        # Throw InexactError if the result is negative.
+        if !iszero(num) && (signbit(den) ⊻ signbit(num))
+            throw(InexactError(:Rational, Rational{T}, num, den))
+        end
+        unum = uabs(num)
+        uden = uabs(den)
+        r_unum, r_uden = divgcd(unum, uden)
+        return unsafe_rational(T, promote(T(r_unum), T(r_uden))...)
+    else
+        r_num, r_den = divgcd(num, den)
+        return checked_den(T, promote(T(r_num), T(r_den))...)
+    end
 end
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
-function divgcd(x::Integer,y::Integer)
-    g = gcd(x,y)
+function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
+    g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
 end
 
@@ -130,7 +141,7 @@ function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))
 end
 function Rational{T}(x::Integer) where T<:Integer
-    unsafe_rational(T, convert(T, x), one(T))
+    unsafe_rational(T, T(x), T(one(x)))
 end
 
 Rational(x::Rational) = x
@@ -145,6 +156,14 @@ function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
+ # avoid spurious overflow (#52394).  (Needed for UInt16 or larger;
+ # we also include Int16 for consistency of accuracy.)
+Float16(x::Rational{<:Union{Int16,Int32,Int64,UInt16,UInt32,UInt64}}) =
+    Float16(Float32(x))
+Float16(x::Rational{<:Union{Int128,UInt128}}) =
+    Float16(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
+Float32(x::Rational{<:Union{Int128,UInt128}}) =
+    Float32(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
@@ -274,8 +293,14 @@ julia> numerator(4)
 4
 ```
 """
-numerator(x::Integer) = x
+numerator(x::Union{Integer,Complex{<:Integer}}) = x
 numerator(x::Rational) = x.num
+function numerator(z::Complex{<:Rational})
+    den = denominator(z)
+    reim = (real(z), imag(z))
+    result = checked_mul.(numerator.(reim), div.(den, denominator.(reim)))
+    complex(result...)
+end
 
 """
     denominator(x)
@@ -291,13 +316,12 @@ julia> denominator(4)
 1
 ```
 """
-denominator(x::Integer) = one(x)
+denominator(x::Union{Integer,Complex{<:Integer}}) = one(x)
 denominator(x::Rational) = x.den
+denominator(z::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
-copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
-copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
 
 abs(x::Rational) = unsafe_rational(checked_abs(x.num), x.den)
 
@@ -315,7 +339,7 @@ function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && __throw_rational_numerator_typemin(T)
     unsafe_rational(-x.num, x.den)
 end
-@noinline __throw_rational_numerator_typemin(T) = throw(OverflowError("rational numerator is typemin($T)"))
+@noinline __throw_rational_numerator_typemin(T) = throw(OverflowError(LazyString("rational numerator is typemin(", T, ")")))
 
 function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && __throw_negate_unsigned()
@@ -538,7 +562,7 @@ lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)
-        a, b = one(c.num), c.num
+        a, b = zero(c.num), c.num
     elseif iszero(c.den)
         a = ifelse(iszero(x.den), one(c.den), c.den)
         b = ifelse(iszero(y.den), one(c.den), c.den)

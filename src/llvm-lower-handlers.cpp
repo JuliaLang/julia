@@ -8,7 +8,11 @@
 
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/ADT/Statistic.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -37,13 +41,14 @@ using namespace llvm;
 /* Lowers Julia Exception Handlers and colors EH frames.
  *
  *  Our task is to lower:
- * call void @julia.except_enter()
+ * call {i32, ptr} @julia.except_enter(ct)
  * <...>
  * call void jl_pop_handler(1)
  *
  * to
  *
- * call void @jl_enter_handler(jl_handler *%buff)
+ * call void @jl_enter_handler(ct, jl_handler *%buff)
+ * call i32 @jl_setjmp(jmpbuf[] %buff, 0)
  * <...>
  * call void jl_pop_handler(1)
  *
@@ -81,25 +86,18 @@ namespace {
  * If the module doesn't have declarations for the jl_enter_handler and setjmp
  * functions, insert them.
  */
-static void ensure_enter_function(Module &M, const Triple &TT)
+static void ensure_enter_function(Module &M, Type *T_pjlvalue, const Triple &TT)
 {
-    auto T_int8  = Type::getInt8Ty(M.getContext());
-    auto T_pint8 = PointerType::get(T_int8, 0);
+    auto T_ptr = PointerType::get(M.getContext(), 0);
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
     if (!M.getNamedValue(XSTR(jl_enter_handler))) {
-        SmallVector<Type*, 0> ehargs(0);
-        ehargs.push_back(T_pint8);
-        Function::Create(FunctionType::get(T_void, ehargs, false),
+        Function::Create(FunctionType::get(T_void, {T_pjlvalue, T_ptr}, false),
                          Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
-        SmallVector<Type*, 0> args2(0);
-        args2.push_back(T_pint8);
-        if (!TT.isOSWindows()) {
-            args2.push_back(T_int32);
-        }
-        Function::Create(FunctionType::get(T_int32, args2, false),
+        Type *args2[] = {T_ptr, T_int32};
+        Function::Create(FunctionType::get(T_int32, ArrayRef(args2, TT.isOSWindows() ? 1 : 2), false),
                          Function::ExternalLinkage, jl_setjmp_name, &M)
             ->addFnAttr(Attribute::ReturnsTwice);
     }
@@ -111,14 +109,14 @@ static bool lowerExcHandlers(Function &F) {
     Function *except_enter_func = M.getFunction("julia.except_enter");
     if (!except_enter_func)
         return false; // No EH frames in this module
-    ensure_enter_function(M, TT);
+    ensure_enter_function(M, except_enter_func->getFunctionType()->getParamType(0), TT);
     Function *leave_func = M.getFunction(XSTR(jl_pop_handler));
+    Function *leave_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
-
-    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
-    Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
+    auto T_ptr = PointerType::get(M.getContext(), 0);
+    Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_ptr });
+    Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_ptr });
 
     /* Step 1: EH Depth Numbering */
     std::map<llvm::CallInst *, int> EnterDepth;
@@ -150,9 +148,9 @@ static bool lowerExcHandlers(Function &F) {
                 continue;
             if (Callee == except_enter_func)
                 EnterDepth[CI] = Depth++;
-            else if (Callee == leave_func) {
+            else if (Callee == leave_func || Callee == leave_noexcept_func) {
                 LeaveDepth[CI] = Depth;
-                Depth -= cast<ConstantInt>(CI->getArgOperand(0))->getLimitedValue();
+                Depth -= cast<ConstantInt>(CI->getArgOperand(1))->getLimitedValue();
             }
             assert(Depth >= 0);
             if (Depth > MaxDepth)
@@ -179,7 +177,7 @@ static bool lowerExcHandlers(Function &F) {
         auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
                 handler_sz, Align(16), "", firstInst);
         if (allocaAddressSpace) {
-            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, Type::getInt8PtrTy(F.getContext(), AddressSpace::Generic));
+            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, PointerType::get(F.getContext(), AddressSpace::Generic));
             buff_casted->insertAfter(buff);
             buffs.push_back(buff_casted);
         } else {
@@ -192,7 +190,7 @@ static bool lowerExcHandlers(Function &F) {
         assert(it.second >= 0);
         Instruction *buff = buffs[it.second];
         CallInst *enter = it.first;
-        auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
+        auto new_enter = CallInst::Create(jlenter_func, {enter->getArgOperand(0), buff}, "", enter);
         Value *lifetime_args[] = {
             handler_sz64,
             buff
@@ -200,10 +198,7 @@ static bool lowerExcHandlers(Function &F) {
         CallInst::Create(lifetime_start, lifetime_args, "", new_enter);
         CallInst *sj;
         if (!TT.isOSWindows()) {
-            // For LLVM 3.3 compatibility
-            Value *args[] = {buff,
-                            ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
-            sj = CallInst::Create(setjmp_func, args, "", enter);
+            sj = CallInst::Create(setjmp_func, {buff, ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)}, "", enter);
         } else {
             sj = CallInst::Create(setjmp_func, buff, "", enter);
         }
@@ -213,13 +208,31 @@ static bool lowerExcHandlers(Function &F) {
             new_enter->setMetadata(LLVMContext::MD_dbg, dbg);
             sj->setMetadata(LLVMContext::MD_dbg, dbg);
         }
-        enter->replaceAllUsesWith(sj);
+        SmallVector<Instruction*> ToErase;
+        for (auto *U : enter->users()) {
+            if (auto *EEI = dyn_cast<ExtractValueInst>(U)) {
+                if (EEI->getNumIndices() == 1) {
+                    if (EEI->getIndices()[0] == 0)
+                        EEI->replaceAllUsesWith(sj);
+                    else
+                        EEI->replaceAllUsesWith(buff);
+                    ToErase.push_back(EEI);
+                }
+            }
+        }
+        for (auto *EEI : ToErase)
+            EEI->eraseFromParent();
+        if (!enter->use_empty()) {
+            Value *agg = InsertValueInst::Create(UndefValue::get(enter->getType()), sj, ArrayRef<unsigned>(0), "", enter);
+            agg = InsertValueInst::Create(agg, buff, ArrayRef<unsigned>(1), "", enter);
+            enter->replaceAllUsesWith(agg);
+        }
         enter->eraseFromParent();
     }
     // Insert lifetime end intrinsics after every leave.
     for (auto it : LeaveDepth) {
         int StartDepth = it.second - 1;
-        int npops = cast<ConstantInt>(it.first->getArgOperand(0))->getLimitedValue();
+        int npops = cast<ConstantInt>(it.first->getArgOperand(1))->getLimitedValue();
         for (int i = 0; i < npops; ++i) {
             assert(StartDepth-i >= 0);
             Value *lifetime_args[] = {

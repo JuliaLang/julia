@@ -118,7 +118,7 @@ dlopen(s::Symbol, flags::Integer = default_rtld_flags; kwargs...) =
 
 function dlopen(s::AbstractString, flags::Integer = default_rtld_flags; throw_error::Bool = true)
     ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
-    if ret == C_NULL
+    if !throw_error && ret == C_NULL
         return nothing
     end
     return ret
@@ -130,7 +130,7 @@ end
 Wrapper for usage with `do` blocks to automatically close the dynamic library once
 control flow leaves the `do` block scope.
 
-# Example
+# Examples
 ```julia
 vendor = dlopen("libblas") do lib
     if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
@@ -234,7 +234,7 @@ end
 
 Get the full path of the library `libname`.
 
-# Example
+# Examples
 ```julia-repl
 julia> dlpath("libjulia")
 ```
@@ -334,7 +334,7 @@ struct LazyLibraryPath
     LazyLibraryPath(pieces::Vector) = new(pieces)
 end
 LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
-Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)
+Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)::String
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))

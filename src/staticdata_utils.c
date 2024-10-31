@@ -91,12 +91,16 @@ extern jl_mutex_t world_counter_lock;
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
-    assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
+    assert(_newly_inferred == NULL || _newly_inferred == jl_nothing || jl_is_array(_newly_inferred));
+    if (_newly_inferred == jl_nothing)
+        _newly_inferred = NULL;
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
+    if (!newly_inferred)
+        return;
     JL_LOCK(&newly_inferred_mutex);
     size_t end = jl_array_nrows(newly_inferred);
     jl_array_grow_end(newly_inferred, 1);
@@ -159,7 +163,8 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (jl_atomic_load_relaxed(&mi->precompiled) || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
+    uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -209,6 +214,17 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return found;
 }
 
+static int is_relocatable_ci(htable_t *relocatable_ext_cis, jl_code_instance_t *ci)
+{
+    if (!ci->relocatability)
+        return 0;
+    jl_method_instance_t *mi = ci->def;
+    jl_method_t *m = mi->def.method;
+    if (!ptrhash_has(relocatable_ext_cis, ci) && jl_object_in_image((jl_value_t*)m) && (!jl_is_method(m) || jl_object_in_image((jl_value_t*)m->module)))
+        return 0;
+    return 1;
+}
+
 // Given the list of CodeInstances that were inferred during the build, select
 // those that are (1) external, (2) still valid, (3) are inferred to be called
 // from the worklist or explicitly added by a `precompile` statement, and
@@ -239,11 +255,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
             if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
-                void **bp = ptrhash_bp(&visited, mi);
-                if (*bp != (void*)((char*)HT_NOTFOUND + 3)) {
-                    *bp = (void*)((char*)HT_NOTFOUND + 3);
-                    jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
-                }
+                jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
         }
     }
@@ -262,7 +274,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
 }
 
 // New roots for external methods
-static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
+static void jl_collect_new_roots(htable_t *relocatable_ext_cis, jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
 {
     htable_t mset;
     htable_new(&mset, 0);
@@ -273,6 +285,7 @@ static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uin
         jl_method_t *m = ci->def->def.method;
         assert(jl_is_method(m));
         ptrhash_put(&mset, (void*)m, (void*)m);
+        ptrhash_put(relocatable_ext_cis, (void*)ci, (void*)ci);
     }
     int nwithkey;
     void *const *table = mset.table;
@@ -592,47 +605,76 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
-// OPT_LEVEL should always be the upper bits
 #define OPT_LEVEL 6
+#define DEBUG_LEVEL 1
 
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
     // OOICCDDP
     uint8_t flags = 0;
     flags |= (jl_options.use_pkgimages & 1); // 0-bit
-    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
+    flags |= (jl_options.debug_level & 3) << DEBUG_LEVEL; // 1-2 bit
     flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
     flags |= (jl_options.can_inline & 1) << 5; // 5-bit
     flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
     return flags;
 }
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actual_flags)
 {
-    // 1. Check which flags are relevant
-    uint8_t current_flags = jl_cache_flags();
-    uint8_t supports_pkgimage = (current_flags & 1);
-    uint8_t is_pkgimage = (flags & 1);
+    uint8_t supports_pkgimage = (requested_flags & 1);
+    uint8_t is_pkgimage = (actual_flags & 1);
 
     // For .ji packages ignore other flags
     if (!supports_pkgimage && !is_pkgimage) {
         return 1;
     }
 
-    // If package images are optional, ignore that bit (it will be unset in current_flags)
+    // If package images are optional, ignore that bit (it will be unset in requested_flags)
     if (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_EXISTING) {
-        flags &= ~1;
+        actual_flags &= ~1;
     }
 
-    // 2. Check all flags, execept opt level must be exact
-    uint8_t mask = (1 << OPT_LEVEL)-1;
-    if ((flags & mask) != (current_flags & mask))
+    // 2. Check all flags, except opt level and debug level must be exact
+    uint8_t mask = (~(3u << OPT_LEVEL) & ~(3u << DEBUG_LEVEL)) & 0x7f;
+    if ((actual_flags & mask) != (requested_flags & mask))
         return 0;
-    // 3. allow for higher optimization flags in cache
-    flags >>= OPT_LEVEL;
-    current_flags >>= OPT_LEVEL;
-    return flags >= current_flags;
+    // 3. allow for higher optimization and debug level flags in cache to minimize required compile option combinations
+    return ((actual_flags >> OPT_LEVEL) & 3) >= ((requested_flags >> OPT_LEVEL) & 3) &&
+           ((actual_flags >> DEBUG_LEVEL) & 3) >= ((requested_flags >> DEBUG_LEVEL) & 3);
 }
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
+{
+    return jl_match_cache_flags(jl_cache_flags(), flags);
+}
+
+// return char* from String field in Base.GIT_VERSION_INFO
+static const char *git_info_string(const char *fld)
+{
+    static jl_value_t *GIT_VERSION_INFO = NULL;
+    if (!GIT_VERSION_INFO)
+        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
+    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
+    assert(jl_is_string(f));
+    return jl_string_data(f);
+}
+
+static const char *jl_git_branch(void)
+{
+    static const char *branch = NULL;
+    if (!branch) branch = git_info_string("branch");
+    return branch;
+}
+
+static const char *jl_git_commit(void)
+{
+    static const char *commit = NULL;
+    if (!commit) commit = git_info_string("commit");
+    return commit;
+}
+
 
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
@@ -714,6 +756,16 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     static jl_value_t *replace_depot_func = NULL;
     if (!replace_depot_func)
         replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
+    static jl_value_t *normalize_depots_func = NULL;
+    if (!normalize_depots_func)
+        normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
+
+    jl_value_t *depots = NULL, *prefs_hash = NULL, *prefs_list = NULL;
+    JL_GC_PUSH2(&depots, &prefs_list);
+    last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    depots = jl_apply(&normalize_depots_func, 1);
+    ct->world_age = last_age;
 
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
@@ -726,13 +778,14 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 
         if (replace_depot_func) {
             jl_value_t **replace_depot_args;
-            JL_GC_PUSHARGS(replace_depot_args, 2);
+            JL_GC_PUSHARGS(replace_depot_args, 3);
             replace_depot_args[0] = replace_depot_func;
             replace_depot_args[1] = deppath;
+            replace_depot_args[2] = depots;
             ct = jl_current_task;
             size_t last_age = ct->world_age;
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-            deppath = (jl_value_t*)jl_apply(replace_depot_args, 2);
+            deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
             ct->world_age = last_age;
             JL_GC_POP();
         }
@@ -765,9 +818,6 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     write_int32(s, 0); // terminator, for ease of reading
 
     // Calculate Preferences hash for current package.
-    jl_value_t *prefs_hash = NULL;
-    jl_value_t *prefs_list = NULL;
-    JL_GC_PUSH1(&prefs_list);
     if (jl_base_module) {
         // Toplevel module is the module we're currently compiling, use it to get our preferences hash
         jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
@@ -814,7 +864,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_int32(s, 0);
         write_uint64(s, 0);
     }
-    JL_GC_POP(); // for prefs_list
+    JL_GC_POP(); // for depots, prefs_list
 
     // write a dummy file position to indicate the beginning of the source-text
     pos = ios_pos(s);
@@ -1162,13 +1212,23 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(ext_ci_list, i);
         if (jl_atomic_load_relaxed(&ci->max_world) == WORLD_AGE_REVALIDATION_SENTINEL) {
             assert(jl_atomic_load_relaxed(&ci->min_world) == minworld);
-            ptrhash_put(&cis_pending_validation, (void*)ci->def, (void*)ci);
+            void **bp = ptrhash_bp(&cis_pending_validation, (void*)ci->def);
+            assert(!jl_atomic_load_relaxed(&ci->next));
+            if (*bp == HT_NOTFOUND)
+                *bp = (void*)ci;
+            else {
+                // Do ci->owner bifurcates the cache, we temporarily
+                // form a linked list of all the CI that need to be connected later
+                jl_code_instance_t *prev_ci = (jl_code_instance_t *)*bp;
+                jl_atomic_store_relaxed(&ci->next, prev_ci);
+                *bp = (void*)ci;
+            }
         }
         else {
             assert(jl_atomic_load_relaxed(&ci->min_world) == 1);
             assert(jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(ci->owner, caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
             }
             //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
@@ -1211,18 +1271,27 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             // Update any external CIs and add them to the cache.
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
-            assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
-            assert(jl_atomic_load_relaxed(&codeinst->inferred));
-            jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
+            while (codeinst) {
+                jl_code_instance_t *next_ci = jl_atomic_load_relaxed(&codeinst->next);
+                jl_atomic_store_relaxed(&codeinst->next, NULL);
 
-            if (jl_rettype_inferred(caller, minworld, maxvalid) != jl_nothing) {
-                // We already got a code instance for this world age range from somewhere else - we don't need
-                // this one.
-                continue;
+                jl_value_t *owner = codeinst->owner;
+                JL_GC_PROMISE_ROOTED(owner);
+
+                assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
+                // See #53586, #53109
+                // assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+                assert(jl_atomic_load_relaxed(&codeinst->inferred));
+                jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
+
+                if (jl_rettype_inferred(owner, caller, minworld, maxvalid) != jl_nothing) {
+                    // We already got a code instance for this world age range from somewhere else - we don't need
+                    // this one.
+                } else {
+                    jl_mi_cache_insert(caller, codeinst);
+                }
+                codeinst = next_ci;
             }
-
-            jl_mi_cache_insert(caller, codeinst);
         }
         else {
             // Likely internal. Find the CI already in the cache hierarchy.
