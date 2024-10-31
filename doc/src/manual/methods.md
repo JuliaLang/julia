@@ -969,8 +969,24 @@ arguments which method is invoked. When optional arguments are defined in terms 
 the type of the optional argument may even change at run-time.
 
 Keyword arguments behave quite differently from ordinary positional arguments. In particular,
-they do not participate in method dispatch. Methods are dispatched based only on positional arguments,
-with keyword arguments processed after the matching method is identified.
+their names and types do not participate in method dispatch. Methods are dispatched based only on positional arguments and the presence of absence of keyword arguments,
+with keyword arguments processed after the matching method is identified:
+```julia
+julia> f(x, y; z) = :kwargs
+julia> f(x, y) = :nokwargs
+
+# dispatches to the first method
+julia> f(1, 2; z=3)
+:kwargs
+
+# dispatches to the first method even though keyword arguments are different
+julia> f(1, 2; y=3)
+ERROR: UndefKeywordError: keyword argument `z` not assigned
+
+# dispatches to the second method
+julia> f(1, 2)
+:nokwargs
+```
 
 ## Function-like objects
 
