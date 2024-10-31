@@ -230,7 +230,7 @@ false
 julia> isready(c) # The channel is closed but still contains elements
 true
 
-juiia> take!(c)
+julia> take!(c)
 1
 
 julia> isready(c)
