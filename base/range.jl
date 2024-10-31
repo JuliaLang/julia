@@ -275,10 +275,6 @@ RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 
-AbstractRange{T}(r::AbstractRange) where T = range(T(first(r)), T(last(r)), length(r))
-AbstractArray{T,1}(r::AbstractRange) where T = AbstractRange{T}(r)
-AbstractArray{T}(r::AbstractRange) where T = AbstractRange{T}(r)
-
 ## ordinal ranges
 
 """
@@ -1318,6 +1314,7 @@ AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
 OrdinalRange{T, S}(r::OrdinalRange) where {T, S} = StepRange{T, S}(r)
+OrdinalRange{T}(r::OrdinalRange{R,S}) where {T, R, S} = OrdinalRange{T, promote_type(T,S)}(r)
 OrdinalRange{T, T}(r::AbstractUnitRange) where {T} = AbstractUnitRange{T}(r)
 
 function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b}
@@ -1368,9 +1365,14 @@ promote_rule(a::Type{LinRange{T,L}}, ::Type{OR}) where {T,L,OR<:OrdinalRange} =
 promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A,L,T2,R2,S2,L2} =
     promote_rule(StepRangeLen{A,A,A,L}, b)
 
+AbstractRange{T}(r::AbstractRange) where T = range(T(first(r)), T(last(r)), length(r))
+
 AbstractRange{T}(r::OrdinalRange) where T<:Integer = OrdinalRange{T}(r) # float should fall back to StepRangeLen
 AbstractRange{T}(r::StepRangeLen) where T = StepRangeLen{T}(r)
 AbstractRange{T}(r::LinRange) where T = LinRange{T}(r)
+
+AbstractArray{T,1}(r::AbstractRange) where T = AbstractRange{T}(r)
+AbstractArray{T}(r::AbstractRange) where T = AbstractRange{T}(r)
 
 ## concatenation ##
 
