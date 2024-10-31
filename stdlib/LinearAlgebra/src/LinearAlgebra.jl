@@ -622,6 +622,16 @@ Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     return B::AbstractVecOrMat
 end
 
+struct StaticChar{C} <: AbstractChar end
+StaticChar(x::AbstractChar) = StaticChar{x}()
+Base.Char(::StaticChar{C}) where {C} = Char(C)
+Base.codepoint(::StaticChar{C}) where {C} = Base.codepoint(C)
+StaticChar{C}(x::UInt32) where {C} = Char(x) == Char(C) ? StaticChar{C}() : throw(ArgumentError(lazy"invalid argument $x"))
+
+wrap(A::AbstractVecOrMat, ::StaticChar{'N'}) = A
+wrap(A::AbstractVecOrMat, ::StaticChar{'T'}) = transpose(A)
+wrap(A::AbstractVecOrMat, ::StaticChar{'C'}) = adjoint(A)
+
 _unwrap(A::AbstractVecOrMat) = A
 
 ## convenience methods

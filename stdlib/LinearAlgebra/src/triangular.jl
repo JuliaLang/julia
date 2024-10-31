@@ -1078,7 +1078,7 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return _generic_matmatmul!(C, A, B, alpha, beta)
+            return generic_matmatmul!(C, StaticChar('N'), StaticChar('N'), A, B, alpha, beta)
         end
     end
 end
