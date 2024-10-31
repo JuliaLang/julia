@@ -970,7 +970,7 @@ the type of the optional argument may even change at run-time.
 
 Keyword arguments behave quite differently from ordinary positional arguments. In particular,
 their names and types do not participate in method dispatch. Methods are dispatched based only on positional arguments and the presence of absence of keyword arguments,
-with keyword arguments processed after the matching method is identified:
+with keyword arguments names and values processed after the matching method is identified:
 ```julia
 julia> f(x, y; z) = :kwargs
 julia> f(x, y) = :nokwargs
