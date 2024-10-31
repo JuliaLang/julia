@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
+import Base: typesof, insert!, replace_ref_begin_end!, infer_effects, code_ircode
 
 # defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
 # via. `Base.@time_imports` etc.
@@ -243,6 +243,14 @@ end
 
 macro code_lowered(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
+    quote
+        local results = $thecall
+        length(results) == 1 ? results[1] : results
+    end
+end
+
+macro code_ircode(ex0...)
+    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_ircode, ex0)
     quote
         local results = $thecall
         length(results) == 1 ? results[1] : results
