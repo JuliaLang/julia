@@ -275,7 +275,7 @@ RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 
-AbstractRange{T}(r::AbstractRange) where T = T(first(r)):T(step(r)):T(last(r))
+AbstractRange{T}(r::AbstractRange) where T = range(T(first(r)), T(last(r)), length(r))
 AbstractArray{T,1}(r::AbstractRange) where T = AbstractRange{T}(r)
 AbstractArray{T}(r::AbstractRange) where T = AbstractRange{T}(r)
 
@@ -1368,6 +1368,7 @@ promote_rule(a::Type{LinRange{T,L}}, ::Type{OR}) where {T,L,OR<:OrdinalRange} =
 promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A,L,T2,R2,S2,L2} =
     promote_rule(StepRangeLen{A,A,A,L}, b)
 
+AbstractRange{T}(r::OrdinalRange) where T<:Integer = OrdinalRange{T}(r) # float should fall back to StepRangeLen
 AbstractRange{T}(r::StepRangeLen) where T = StepRangeLen{T}(r)
 AbstractRange{T}(r::LinRange) where T = LinRange{T}(r)
 
