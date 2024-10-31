@@ -1374,6 +1374,84 @@ end
         @test isnothing(Base.Experimental.task_cpu_time_ns(t))
         @test isnothing(Base.Experimental.task_wall_time_ns(t))
     end
+    @testset "task not run" begin
+        t1 = Task(() -> nothing)
+        @test !t1.metrics_enabled
+        @test isnothing(Base.Experimental.task_cpu_time_ns(t1))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t1))
+        try
+            Base.Experimental.task_metrics(true)
+            t2 = Task(() -> nothing)
+            @test t2.metrics_enabled
+            @test Base.Experimental.task_cpu_time_ns(t2) == 0
+            @test Base.Experimental.task_wall_time_ns(t2) == 0
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "task failure" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t = Threads.@spawn error("this task failed")
+            @test_throws "this task failed" wait(t)
+            @test Base.Experimental.task_cpu_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_cpu_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "direct yield(t)" begin
+        try
+            Base.Experimental.task_metrics(true)
+            start = time_ns()
+            t_outer = Threads.@spawn begin
+                t_inner = Task(() -> peakflops())
+                t_inner.sticky = false
+                # directly yield to `t_inner` rather calling `schedule(t_inner)`
+                yield(t_inner)
+                wait(t_inner)
+                @test Base.Experimental.task_cpu_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) >= Base.Experimental.task_cpu_time_ns(t_inner)
+            end
+            wait(t_outer)
+            delta = time_ns() - start
+            @test Base.Experimental.task_cpu_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) >= Base.Experimental.task_cpu_time_ns(t_outer)
+            @test Base.Experimental.task_wall_time_ns(t_outer) < delta
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "bad schedule" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t1 = Task((x) -> 1)
+            schedule(t1) # MethodError
+            yield()
+            @assert istaskfailed(t1)
+            @test Base.Experimental.task_cpu_time_ns(t1) > 0
+            @test Base.Experimental.task_wall_time_ns(t1) > 0
+            foo(a, b) = a + b
+            t2 = Task(() -> (peakflops(); foo(wait())))
+            schedule(t2)
+            yield()
+            @assert istaskstarted(t1) && !istaskdone(t2)
+            cpu1 = Base.Experimental.task_cpu_time_ns(t2)
+            wall1 = Base.Experimental.task_wall_time_ns(t2)
+            @test cpu1 > 0
+            @test wall1 > 0
+            schedule(t2, 1)
+            yield()
+            @assert istaskfailed(t2)
+            @test Base.Experimental.task_cpu_time_ns(t2) > cpu1
+            @test Base.Experimental.task_wall_time_ns(t2) > wall1
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
     @testset "continuously update until task done" begin
         try
             Base.Experimental.task_metrics(true)

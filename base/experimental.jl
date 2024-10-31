@@ -566,7 +566,11 @@ See [`Base.task_metrics`](@ref).
 """
 function task_wall_time_ns(t::Task)
     t.metrics_enabled || return nothing
-    return Int((t.finished_at != 0 ? t.finished_at : time_ns()) - t.first_enqueued_at)
+    start_at = t.first_enqueued_at
+    start_at == 0 && return 0
+    end_at = t.finished_at
+    end_at == 0 && return Int(time_ns() - start_at)
+    return Int(end_at - start_at)
 end
 
 end # module
