@@ -1283,7 +1283,7 @@ end
 
     @test convert(AbstractArray{Float64}, 0*(1:10)) === range(0.0,0.0,10) # https://github.com/JuliaLang/julia/pull/48894#discussion_r1822771487
     @test length(convert(AbstractArray{Float16}, range(1/43^2, 1, 43))) == 43 # https://github.com/JuliaLang/julia/pull/48894#discussion_r1822771487
-    @test convert(AbstractArray{Float64}, LinRange(1,5,5) === LinRange(1.0,5.0,5) # LinRange support
+    @test convert(AbstractArray{Float64}, LinRange(1,5,5)) === LinRange(1.0,5.0,5) # LinRange support
 
     @test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
     @test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
