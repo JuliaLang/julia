@@ -588,7 +588,7 @@ CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 CC.may_optimize(::REPLInterpreter) = false
 
 # REPLInterpreter doesn't need any sources to be cached, so discard them aggressively
-CC.transform_result_for_cache(::REPLInterpreter, ::Core.MethodInstance, ::CC.WorldRange, ::CC.InferenceResult) = nothing
+CC.transform_result_for_cache(::REPLInterpreter, ::CC.InferenceResult) = nothing
 
 # REPLInterpreter analyzes a top-level frame, so better to not bail out from it
 CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.InferenceState) = false
@@ -673,8 +673,8 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
-        result = CC.MethodCallResult(result.rt, result.exct, result.edgecycle, result.edgelimited,
-                                     result.edge, neweffects)
+        result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
+                                     result.edgecycle, result.edgelimited, result.volatile_inf_result)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
