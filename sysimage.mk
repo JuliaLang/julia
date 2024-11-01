@@ -55,7 +55,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/traits.jl \
 		base/refvalue.jl \
 		base/tuple.jl)
-COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
+COMPILER_SRCS += $(shell find $(JULIAHOME)/stdlib/Compiler/src -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))

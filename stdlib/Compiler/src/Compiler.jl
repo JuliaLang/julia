@@ -1,7 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# When generating an incremental precompile file, we first check whether we
+# already have a copy of this *exact* code in the system image. If so, we
+# simply generates a pkgimage that has the dependency edges we recorded in
+# the system image and simply returns that copy of the compiler. If not,
+# we proceed to load/precompile this as an ordinary package.
+if isdefined(Base, :generating_output) && Base.generating_output(true) &&
+        Base.samefile(Base._compiler_require_dependencies[1][2], @eval @__FILE__) &&
+        !Base.any_includes_stale(
+            map(Base.CacheHeaderIncludes, Base._compiler_require_dependencies),
+            "sysimg", nothing)
 
-baremodule Compiler
+    Base.prepare_compiler_stub_image!()
+    append!(Base._require_dependencies, Base._compiler_require_dependencies)
+    # There isn't much point in precompiling native code - downstream users will
+    # specialize their own versions of the compiler code and we don't activate
+    # the compiler by default anyway, so let's save ourselves some disk space.
+    ccall(:jl_suppress_precompile, Cvoid, (Cint,), 1)
+
+else
+
+@eval baremodule Compiler
+
+# Needs to match UUID defined in Project.toml
+ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
+    (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
+ccall(:jl_set_module_parent, Cvoid, (Any, Any), Compiler, Compiler)
 
 using Core.Intrinsics, Core.IR
 
@@ -134,5 +158,7 @@ include("typeinfer.jl")
 include("optimize.jl")
 
 include("bootstrap.jl")
+
+end
 
 end
