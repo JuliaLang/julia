@@ -453,7 +453,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                     @goto done
                 end
             end
-            if !(loading_extension || precompiling_extension)
+            if !(loading_extension[] || precompiling_extension[])
                 stopenv == env && @goto done
             end
         end
@@ -469,7 +469,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 env′ = env
                 @goto done
             end
-            if !(loading_extension || precompiling_extension)
+            if !(loading_extension[] || precompiling_extension[])
                 stopenv == env && break
             end
         end
@@ -1432,7 +1432,7 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    if !precompiling_extension
+    if !precompiling_extension[]
         run_extension_callbacks(modkey)
     end
     assert_havelock(require_lock)
@@ -1572,24 +1572,24 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     end
 end
 
-loading_extension::Bool = false
-precompiling_extension::Bool = false
+const loading_extension = ScopedValues.ScopedValue(false)
+const precompiling_extension = ScopedValues.ScopedValue(false)
+
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
-    succeeded = try
-        # Used by Distributed to now load extensions in the package callback
-        global loading_extension = true
-        _require_prelocked(extid.id)
-        @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
-        true
-    catch
-        # Try to continue loading if loading an extension errors
-        errs = current_exceptions()
-        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
-                use `Base.retry_load_extensions()` to retry." exception=errs
-        false
-    finally
-        global loading_extension = false
+    ScopedValues.@with loading_extension => true begin
+        succeeded = try
+            # Used by Distributed to now load extensions in the package callback
+            _require_prelocked(extid.id)
+            @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
+            true
+        catch
+            # Try to continue loading if loading an extension errors
+            errs = current_exceptions()
+            @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
+                    use `Base.retry_load_extensions()` to retry." exception=errs
+            false
+        end
     end
     return succeeded
 end
@@ -3073,9 +3073,10 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.track_nested_precomp($precomp_stack)
-        Base.precompiling_extension = $(loading_extension | isext)
-        Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $deps, $(repr(source_path(nothing))))
+        Base.ScopedValues.@with Base.precompiling_extension => $(loading_extension[] | isext) begin
+            Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+                $(repr(load_path)), $deps, $(repr(source_path(nothing))))
+        end
         """)
     close(io.in)
     return io
