@@ -248,7 +248,7 @@ binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_w
     delete_binding(mod::Module, sym::Symbol)
 
 Force the binding `mod.sym` to be undefined again, allowing it be redefined.
-Note that this operation is very expensive, requirinig a full scan of all code in the system,
+Note that this operation is very expensive, requiring a full scan of all code in the system,
 as well as potential recompilation of any methods that (may) have used binding
 information.
 

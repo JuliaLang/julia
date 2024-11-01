@@ -1350,7 +1350,11 @@ function sourceinfo_slotnames(slotnames::Vector{Symbol})
     return printnames
 end
 
-show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
+show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
+function show(io::IO, codeinst::Core.CodeInstance)
+    print(io, "CodeInstance for ")
+    show_mi(io, codeinst.def)
+end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
     def = mi.def

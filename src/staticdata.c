@@ -548,9 +548,6 @@ typedef struct {
     jl_array_t *link_ids_gvars;
     jl_array_t *link_ids_external_fnvars;
     jl_ptls_t ptls;
-    // Set (implemented has a hasmap of MethodInstances to themselves) of which MethodInstances have (forward) edges
-    // to other MethodInstances.
-    htable_t callers_with_edges;
     jl_image_t *image;
     int8_t incremental;
 } jl_serializer_state;
@@ -1767,6 +1764,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                         if (jl_atomic_load_relaxed(&newci->min_world) > 1) {
+                            //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
                             jl_atomic_store_release(&newci->min_world, ~(size_t)0);
                             jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
                             arraylist_push(&s->fixup_objs, (void*)reloc_offset);
@@ -2801,25 +2799,21 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 }
 
 static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred, uint64_t worklist_key,
-                           /* outputs */  jl_array_t **extext_methods, jl_array_t **new_ext_cis,
-                                          jl_array_t **method_roots_list, jl_array_t **ext_targets, jl_array_t **edges)
+                           /* outputs */  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
+                                          jl_array_t **new_ext_cis JL_REQUIRE_ROOTED_SLOT,
+                                          jl_array_t **method_roots_list JL_REQUIRE_ROOTED_SLOT,
+                                          jl_array_t **edges JL_REQUIRE_ROOTED_SLOT)
 {
     // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
-    // ext_targets: [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
-    //              ordinary dispatch: invokesig=NULL, callee is MethodInstance
-    //              `invoke` dispatch: invokesig is signature, callee is MethodInstance
-    //              abstract call: callee is signature
-    // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
-    assert(edges_map == NULL);
+    // edges: [caller1, ext_targets, ...] for worklist-owned methods calling external methods
 
     // Save the inferred code from newly inferred, external methods
     *new_ext_cis = queue_external_cis(newly_inferred);
 
     // Collect method extensions and edges data
-    JL_GC_PUSH1(&edges_map);
-    if (edges)
-        edges_map = jl_alloc_memory_any(0);
     *extext_methods = jl_alloc_vec_any(0);
+    internal_methods = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&internal_methods);
     jl_collect_methtable_from_mod(jl_type_type_mt, *extext_methods);
     jl_collect_methtable_from_mod(jl_nonfunction_mt, *extext_methods);
     size_t i, len = jl_array_len(mod_array);
@@ -2832,18 +2826,14 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 
     if (edges) {
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
-        jl_collect_missing_backedges(jl_type_type_mt);
-        jl_collect_missing_backedges(jl_nonfunction_mt);
-        // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
-        // Process this to extract `edges` and `ext_targets`.
-        *ext_targets = jl_alloc_vec_any(0);
-        *edges = jl_alloc_vec_any(0);
+        // Extract `new_ext_cis` and `edges` now (from info prepared by jl_collect_methcache_from_mod)
         *method_roots_list = jl_alloc_vec_any(0);
         // Collect the new method roots for external specializations
         jl_collect_new_roots(&relocatable_ext_cis, *method_roots_list, *new_ext_cis, worklist_key);
-        jl_collect_edges(*edges, *ext_targets, *new_ext_cis, world);
+        *edges = jl_alloc_vec_any(0);
+        jl_collect_internal_cis(*edges, world);
     }
-    assert(edges_map == NULL); // jl_collect_edges clears this when done
+    internal_methods = NULL;
 
     JL_GC_POP();
 }
@@ -2852,7 +2842,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_ext_cis, jl_array_t *method_roots_list,
-                                           jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
+                                           jl_array_t *edges) JL_GC_DISABLED
 {
     htable_new(&field_replace, 0);
     htable_new(&bits_replace, 0);
@@ -2972,7 +2962,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
-    htable_new(&s.callers_with_edges, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
 
@@ -3012,12 +3001,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, jl_module_init_order);
-            // Classify the CodeInstances with respect to their need for validation
-            classify_callers(&s.callers_with_edges, edges);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
-            assert(ext_targets);
             assert(edges);
             // Queue method extensions
             jl_queue_for_serialization(&s, extext_methods);
@@ -3026,7 +3012,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the new roots
             jl_queue_for_serialization(&s, method_roots_list);
             // Queue the edges
-            jl_queue_for_serialization(&s, ext_targets);
             jl_queue_for_serialization(&s, edges);
         }
         jl_serialize_reachable(&s);
@@ -3117,7 +3102,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         );
         jl_exit(1);
     }
-    htable_free(&s.callers_with_edges);
 
     // step 3: combine all of the sections into one file
     assert(ios_pos(f) % JL_CACHE_BYTE_ALIGNMENT == 0);
@@ -3206,7 +3190,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext_cis);
             jl_write_value(&s, method_roots_list);
-            jl_write_value(&s, ext_targets);
             jl_write_value(&s, edges);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
@@ -3297,18 +3280,18 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL;
-    jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *method_roots_list = NULL, *edges = NULL;
     int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
-    JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+    JL_GC_PUSH5(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &edges);
 
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
         // Generate _native_data`
         if (_native_data != NULL) {
             jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                          &extext_methods, &new_ext_cis, NULL, NULL, NULL);
+                                          &extext_methods, &new_ext_cis, NULL, NULL);
             jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
             *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
             jl_precompile_toplevel_module = NULL;
@@ -3341,7 +3324,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     if (worklist) {
         htable_new(&relocatable_ext_cis, 0);
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                      &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+                                      &extext_methods, &new_ext_cis, &method_roots_list, &edges);
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
@@ -3353,7 +3336,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, edges);
     if (_native_data != NULL)
         native_functions = NULL;
     if (worklist)
@@ -3443,7 +3426,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
                                                  jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
-                                                 jl_array_t **ext_targets, jl_array_t **edges,
+                                                 jl_array_t **edges,
                                                  char **base, arraylist_t *ccallable_list, pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
     jl_task_t *ct = jl_current_task;
@@ -3514,7 +3497,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext_cis = 0, offset_method_roots_list = 0;
-    uintptr_t offset_ext_targets = 0, offset_edges = 0;
+    uintptr_t offset_edges = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -3547,7 +3530,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_extext_methods = jl_read_offset(&s);
         offset_new_ext_cis = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
-        offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
@@ -3574,13 +3556,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     uint32_t external_fns_begin = read_uint32(f);
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
     if (s.incremental) {
-        assert(restored && init_order && extext_methods && internal_methods && new_ext_cis && method_roots_list && ext_targets && edges);
+        assert(restored && init_order && extext_methods && internal_methods && new_ext_cis && method_roots_list && edges);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
         *new_ext_cis = (jl_array_t*)jl_delayed_reloc(&s, offset_new_ext_cis);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
-        *ext_targets = (jl_array_t*)jl_delayed_reloc(&s, offset_ext_targets);
         *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
         *internal_methods = jl_alloc_vec_any(0);
     }
@@ -4021,9 +4002,9 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
     arraylist_t ccallable_list;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *edges = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH9(&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &cachesizes_sv);
+    JL_GC_PUSH8(&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list, &edges, &cachesizes_sv);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -4048,7 +4029,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list,
-                                                 &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
+                                                 &edges, &base, &ccallable_list, &cachesizes);
             JL_SIGATOMIC_END();
 
             // No special processing of `new_ext_cis` is required because recaching handled it
@@ -4062,7 +4043,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
               // allow users to start running in this updated world
             jl_atomic_store_release(&jl_world_counter, world);
               // but one of those immediate users is going to be our cache updates
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
+            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
               // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
             // reinit ccallables
@@ -4078,9 +4059,9 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
                 jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
                 jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
                 jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
-                restored = (jl_value_t*)jl_svec(8, restored, init_order, extext_methods,
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, extext_methods,
                                                    new_ext_cis ? (jl_value_t*)new_ext_cis : jl_nothing,
-                                                   method_roots_list, ext_targets, edges, cachesizes_sv);
+                                                   method_roots_list, edges, cachesizes_sv);
             }
             else {
                 restored = (jl_value_t*)jl_svec(2, restored, init_order);
@@ -4095,7 +4076,7 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)

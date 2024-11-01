@@ -37,6 +37,7 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
     _Atomic(jl_binding_partition_t *)*insert = &b->partitions;
     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(insert);
     size_t max_world = (size_t)-1;
+    jl_binding_partition_t *new_bpart = NULL;
     while (1) {
         while (bpart && world < bpart->min_world) {
             insert = &bpart->next;
@@ -46,11 +47,11 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
         }
         if (bpart && world <= jl_atomic_load_relaxed(&bpart->max_world))
             return bpart;
-        jl_binding_partition_t *new_bpart = new_binding_partition();
+        if (!new_bpart)
+            new_bpart = new_binding_partition();
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
         jl_gc_wb_fresh(new_bpart, bpart);
-        if (bpart)
-            new_bpart->min_world = jl_atomic_load_relaxed(&bpart->max_world) + 1;
+        new_bpart->min_world = bpart ? jl_atomic_load_relaxed(&bpart->max_world) + 1 : 0;
         jl_atomic_store_relaxed(&new_bpart->max_world, max_world);
         if (jl_atomic_cmpswap(insert, &bpart, new_bpart)) {
             jl_gc_wb(parent, new_bpart);
@@ -548,6 +549,7 @@ retry:
         // changing, for example if this var is assigned to later.
         if (!jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction((jl_value_t*)b2, BINDING_KIND_IMPLICIT)))
             goto retry;
+        jl_gc_wb(bpart, b2);
         if (b2->deprecated) {
             b->deprecated = 1; // we will warn about this below, but we might want to warn at the use sites too
             if (m != jl_main_module && m != jl_base_module &&
@@ -740,6 +742,7 @@ retry:
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)b, (explici != 0) ? BINDING_KIND_IMPORTED : BINDING_KIND_EXPLICIT);
             if (!jl_atomic_cmpswap(&btopart->restriction, &bto_pku, new_pku))
                 goto retry;
+            jl_gc_wb(btopart, b);
             bto->deprecated |= b->deprecated; // we already warned about this above, but we might want to warn at the use sites too
         }
         else {
@@ -749,6 +752,7 @@ retry:
                     jl_ptr_kind_union_t new_pku = encode_restriction(decode_restriction_value(bto_pku), (explici != 0) ? BINDING_KIND_IMPORTED : BINDING_KIND_EXPLICIT);
                     if (!jl_atomic_cmpswap(&btopart->restriction, &bto_pku, new_pku))
                         goto retry;
+                    // No wb, because the value is unchanged
                 }
             }
             else if (jl_bkind_is_some_import(decode_restriction_kind(bto_pku))) {
