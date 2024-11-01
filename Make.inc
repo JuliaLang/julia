@@ -118,6 +118,51 @@ SPACE:=$(eval) $(eval)
 export LC_ALL=C
 export LANG=C
 
+# Respect `FORCE_COLOR` environment variable: <https://force-color.org/>.
+ifndef FORCE_COLOR
+FORCE_COLOR := ""
+endif
+
+# Respect `NO_COLOR` environment variable: <https://no-color.org/>.
+ifndef NO_COLOR
+NO_COLOR := ""
+endif
+
+# When both `FORCE_COLOR` and `NO_COLOR` are defined, the former has precedence.
+ifneq ($(FORCE_COLOR), "")
+NO_COLOR = ""
+endif
+
+WARNCOLOR:="\033[33;1m"
+ENDCOLOR:="\033[0m"
+
+CCCOLOR:="\033[34m"
+LINKCOLOR:="\033[34;1m"
+PERLCOLOR:="\033[35m"
+FLISPCOLOR:="\033[32m"
+JULIACOLOR:="\033[32;1m"
+DTRACECOLOR:="\033[32;1m"
+
+SRCCOLOR:="\033[33m"
+BINCOLOR:="\033[37;1m"
+JULCOLOR:="\033[34;1m"
+
+ifneq ($(NO_COLOR), "")
+WARNCOLOR:=""
+ENDCOLOR:=""
+
+CCCOLOR:=""
+LINKCOLOR:=""
+PERLCOLOR:=""
+FLISPCOLOR:=""
+JULIACOLOR:=""
+DTRACECOLOR:=""
+
+SRCCOLOR:=""
+BINCOLOR:=""
+JULCOLOR:=""
+endif
+
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
 PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
@@ -140,7 +185,7 @@ ifeq ($(BUILDROOT),)
 ifeq ("$(origin O)", "command line")
   BUILDROOT := $(abspath $O)
   BUILDDIR := $(abspath $(BUILDROOT)/$(call rel_path,$(JULIAHOME),$(SRCDIR)))
-  $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
+  $(info $(shell printf '$(JULIACOLOR)Building into $(BUILDROOT)$(ENDCOLOR)')) # use printf to expand the escape sequences
 else
   BUILDROOT:=$(JULIAHOME)
 endif
@@ -1759,23 +1804,9 @@ ifndef VERBOSE
 VERBOSE := 0
 endif
 
-WARNCOLOR:="\033[33;1m"
-ENDCOLOR:="\033[0m"
-
 ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
-
-CCCOLOR:="\033[34m"
-LINKCOLOR:="\033[34;1m"
-PERLCOLOR:="\033[35m"
-FLISPCOLOR:="\033[32m"
-JULIACOLOR:="\033[32;1m"
-DTRACECOLOR:="\033[32;1m"
-
-SRCCOLOR:="\033[33m"
-BINCOLOR:="\033[37;1m"
-JULCOLOR:="\033[34;1m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
@@ -1797,7 +1828,7 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
 
-endif
+endif # VERBOSE
 
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable
