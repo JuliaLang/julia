@@ -141,8 +141,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]
-    return InliningState(edges, sv.world, interp)
+    return InliningState(sv.edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
     return InliningState(Any[], get_inference_world(interp), interp)
@@ -225,6 +224,7 @@ include("compiler/ssair/irinterp.jl")
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
+    src.edges = opt.inlining.edges
     opt.ir = nothing
     maybe_validate_code(linfo, src, "optimized")
     return src
