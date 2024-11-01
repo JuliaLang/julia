@@ -1515,7 +1515,7 @@ kw"new"
 """
     where
 
-The `where` keyword creates a type that is an iterated union of other types, over all
+The `where` keyword creates a [`UnionAll`](@ref) type, which may be thought of as an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
