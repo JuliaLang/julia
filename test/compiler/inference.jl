@@ -5693,3 +5693,15 @@ end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
 end === Union{}
+
+function issue56387(nt::NamedTuple, field::Symbol=:a)
+    NT = typeof(nt)
+    names = fieldnames(NT)
+    types = fieldtypes(NT)
+    index = findfirst(==(field), names)
+    if index === nothing
+        throw(ArgumentError("Field $field not found"))
+    end
+    types[index]
+end
+@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
