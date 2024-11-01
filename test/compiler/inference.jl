@@ -6078,3 +6078,15 @@ let src = code_typed((Union{Nothing,AtomicModifySafety},)) do x
     end |> only |> first
     @test any(@nospecialize(x)->Meta.isexpr(x, :invoke_modify), src.code)
 end
+
+function issue56387(nt::NamedTuple, field::Symbol=:a)
+    NT = typeof(nt)
+    names = fieldnames(NT)
+    types = fieldtypes(NT)
+    index = findfirst(==(field), names)
+    if index === nothing
+        throw(ArgumentError("Field $field not found"))
+    end
+    types[index]
+end
+@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
