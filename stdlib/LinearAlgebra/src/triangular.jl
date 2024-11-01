@@ -548,7 +548,6 @@ for (T, UT) in ((:UpperTriangular, :UnitUpperTriangular), (:LowerTriangular, :Un
 end
 @inline function _copyto!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
-    n = size(B,1)
     B2 = Base.unalias(A, B)
     Ap = parent(A)
     B2p = parent(B2)
@@ -564,7 +563,6 @@ end
 end
 @inline function _copyto!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
-    n = size(B,1)
     B2 = Base.unalias(A, B)
     Ap = parent(A)
     B2p = parent(B2)
@@ -608,10 +606,10 @@ end
     @boundscheck checkbounds(dest, axes(U)...)
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)
-        for row in 1:col-isunit
+        for row in firstindex(dest,1):col-isunit
             @inbounds dest[row,col] = U.data[row,col]
         end
-        for row in col+!isunit:size(U,1)
+        for row in col+!isunit:lastindex(dest,1)
             @inbounds dest[row,col] = U[row,col]
         end
     end
@@ -621,10 +619,10 @@ end
     @boundscheck checkbounds(dest, axes(L)...)
     isunit = L isa UnitLowerTriangular
     for col in axes(dest,2)
-        for row in 1:col-!isunit
+        for row in firstindex(dest,1):col-!isunit
             @inbounds dest[row,col] = L[row,col]
         end
-        for row in col+isunit:size(L,1)
+        for row in col+isunit:lastindex(dest,1)
             @inbounds dest[row,col] = L.data[row,col]
         end
     end
