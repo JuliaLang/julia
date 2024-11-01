@@ -650,7 +650,7 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE) .FORCE
 	@([ $$(( $$(date +%s) - $$(date -r $(build_private_libdir)/sys.$(SHLIB_EXT) +%s) )) -le 100 ] && \
-		printf '\033[93m    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. \033[0m\n') || true
+		printf '$(WARNCOLOR)    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. $(ENDCOLOR)\n') || true
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 test-revise-%: .FORCE

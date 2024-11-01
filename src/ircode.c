@@ -25,6 +25,7 @@ typedef struct {
     ios_t *s;
     // method we're compressing for
     jl_method_t *method;
+    jl_svec_t *edges;
     jl_ptls_t ptls;
     uint8_t relocatability;
 } jl_ircode_state;
@@ -72,7 +73,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_nrows(rs);
-    if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
+    if (jl_is_symbol(v) || jl_is_concrete_type(v)) { // TODO: or more generally, any ptr-egal value
         for (i = 0; i < l; i++) {
             if (jl_array_ptr_ref(rs, i) == v)
                 return tagged_root(rr, s, i);
@@ -82,6 +83,12 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
         for (i = 0; i < l; i++) {
             if (jl_egal(jl_array_ptr_ref(rs, i), v))
                 return tagged_root(rr, s, i);
+        }
+    }
+    for (size_t i = 0; i < jl_svec_len(s->edges); i++) {
+        if (jl_svecref(s->edges, i) == v) {
+            rr->index = i;
+            return;
         }
     }
     jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
@@ -102,13 +109,24 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
 
 static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
-    rle_reference rr;
+    rle_reference rr = {.key = -1, .index = -1};
 
     if (jl_is_string(v))
         v = jl_as_global_root(v, 1);
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);
+    if (rr.key == -1) {
+        if (id <= UINT8_MAX) {
+            write_uint8(s->s, TAG_EDGE);
+            write_uint8(s->s, id);
+        }
+        else {
+            write_uint8(s->s, TAG_LONG_EDGE);
+            write_uint32(s->s, id);
+        }
+        return;
+    }
     if (rr.key) {
         write_uint8(s->s, TAG_RELOC_METHODROOT);
         write_uint64(s->s, rr.key);
@@ -689,6 +707,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
+    case TAG_EDGE:
+        return jl_svecref(s->edges, read_uint8(s->s));
+    case TAG_LONG_EDGE:
+        return jl_svecref(s->edges, read_uint32(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -865,9 +887,11 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m->roots = jl_alloc_vec_any(0);
         jl_gc_wb(m, m->roots);
     }
+    jl_value_t *edges = code->edges;
     jl_ircode_state s = {
         &dest,
         m,
+        (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
         jl_current_task->ptls,
         1
     };
@@ -950,6 +974,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
+        metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
         1
     };
@@ -1015,6 +1040,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         jl_gc_wb(code, code->rettype);
         code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
         code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
+        code->edges = (jl_value_t*)s.edges;
+        jl_gc_wb(code, s.edges);
     }
 
     return code;
