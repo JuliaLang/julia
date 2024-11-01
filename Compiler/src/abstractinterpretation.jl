@@ -2199,9 +2199,13 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
+    ft_box = Core.Box(ft)
+    ft′_box = Core.Box(ft′)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
-        res = nothing
+        local argtypes = arginfo.argtypes
+        local ft = ft_box.contents
+        local ft′ = ft′_box.contents
         sig = match.spec_types
         argtypes′ = invoke_rewrite(argtypes)
         fargs = arginfo.fargs
