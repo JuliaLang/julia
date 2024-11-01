@@ -238,7 +238,12 @@ function lookup_binding_partition(world::UInt, b::Core.Binding)
 end
 
 function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
-    ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
+    if isdefined(gr, :binding)
+        b = gr.binding
+    else
+        b = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
+    end
+    return lookup_binding_partition(world, b)
 end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)

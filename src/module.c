@@ -60,18 +60,6 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
     }
 }
 
-JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world)
-{
-    if (!gr)
-        return NULL;
-    jl_binding_t *b = NULL;
-    if (gr)
-        b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 0);
-    return jl_get_binding_partition(b, world);
-}
-
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
