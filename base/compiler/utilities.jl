@@ -252,8 +252,6 @@ struct BackedgeIterator
     backedges::Vector{Any}
 end
 
-const empty_backedge_iter = BackedgeIterator(Any[])
-
 struct BackedgePair
     sig # ::Union{Nothing,Type}
     caller::Union{MethodInstance,MethodTable}
@@ -262,11 +260,36 @@ end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
-    i > length(backedges) && return nothing
-    item = backedges[i]
-    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
-    isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
-    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
+    while true
+        i > length(backedges) && return nothing
+        item = backedges[i]
+        if item isa Int
+            i += 2
+            continue # ignore the query information if present
+        elseif isa(item, Method)
+            # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            i += 1
+            continue
+        end
+        if isa(item, CodeInstance)
+            item = item.def
+        end
+        if isa(item, MethodInstance) # regular dispatch
+            return BackedgePair(nothing, item), i+1
+        elseif isa(item, MethodTable) # abstract dispatch (legacy style edges)
+            return BackedgePair(backedges[i+1], item), i+2
+        else # `invoke` call
+            callee = backedges[i+1]
+            if isa(callee, Method)
+                i += 2
+                continue
+            end
+            if isa(callee, CodeInstance)
+                callee = callee.def
+            end
+            return BackedgePair(item, callee::MethodInstance), i+2
+        end
+    end
 end
 
 #########

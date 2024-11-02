@@ -877,6 +877,8 @@ signature, the `:nothrow` bit gets tainted.
     The `Base.infer_effects` function should not be used from generated functions;
     doing so will result in an error.
 
+$(Core.Compiler.effects_key_string)
+
 # See Also
 - [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
