@@ -59,6 +59,15 @@ It may take optional keyword arguments:
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
+!!! warning "Passing `data` as scratch space to `IOBuffer` with `write=true` may give unexpected behavior"
+    Once `write` is called on an `IOBuffer`, it is best to consider any
+    previous references to `data` invalidated; in effect `IOBuffer` "owns"
+    this data until a call to `take!`. Any indirect mutations to `data`
+    could lead to undefined behavior by breaking the abstractions expected
+    by `IOBuffer`. If `write=true` the IOBuffer may store data at any
+    offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
+    the IOBuffer might re-allocate the data entirely, which
+    may or may not be visible in any outstanding bindings to `array`.
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -185,11 +194,30 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     adv = min(avail, nb)
-    GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
+    unsafe_read!(p, from.data, from.ptr, adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
     end
+    nothing
+end
+
+function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
+    for i in 1:nbytes
+        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
+    end
+end
+
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
+
+function unsafe_read!(dest::Ptr{UInt8}, src::DenseBytes, so::Integer, nbytes::UInt)
+    GC.@preserve src unsafe_copyto!(dest, pointer(src, so), nbytes)
     nothing
 end
 

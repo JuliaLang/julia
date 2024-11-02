@@ -171,7 +171,7 @@ end
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
     fzerobc = fzeropreserving(bc)
-    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
+    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
     elseif fzerobc && T <: UnitLowerTriangular
         return similar(convert(Broadcasted{StructuredMatrixStyle{LowerTriangular}}, bc), ElType)
@@ -240,7 +240,8 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     end
     for i = 1:size(dest, 1)-1
         v = @inbounds bc[BandIndex(1, i)]
-        v == (@inbounds bc[BandIndex(-1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v == transpose(@inbounds bc[BandIndex(-1, i)]) ||
+            throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest

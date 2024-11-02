@@ -141,8 +141,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]
-    return InliningState(edges, sv.world, interp)
+    return InliningState(sv.edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
     return InliningState(Any[], get_inference_world(interp), interp)
@@ -225,6 +224,7 @@ include("compiler/ssair/irinterp.jl")
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
+    src.edges = opt.inlining.edges
     opt.ir = nothing
     maybe_validate_code(linfo, src, "optimized")
     return src
@@ -307,8 +307,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = consistent = isdefinedconst_globalref(stmt)
-        return (consistent, nothrow, nothrow)
+        # Modeled more precisely in abstract_eval_globalref. In general, if a
+        # GlobalRef was moved to statement position, it is probably not `const`,
+        # so we can't say much about it anyway.
+        return (false, false, false)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
@@ -411,31 +413,40 @@ function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vecto
     isa(x, AnySSAValue) && return types(compact)[x]
     return argextype(x, compact, sptypes, compact.ir.argtypes)
 end
-argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
+function argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState})
+    return argextype(x, src, sptypes, src.slottypes::Union{Vector{Any},Nothing})
+end
 function argextype(
     @nospecialize(x), src::Union{IRCode,IncrementalCompact,CodeInfo},
-    sptypes::Vector{VarState}, slottypes::Vector{Any})
+    sptypes::Vector{VarState}, slottypes::Union{Vector{Any},Nothing})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int].typ
+            idx = x.args[1]::Int
+            (1 ≤ idx ≤ length(sptypes)) || throw(InvalidIRError())
+            return sptypes[idx].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
+            length(x.args) == 0 && throw(InvalidIRError())
             return argextype(x.args[1], src, sptypes, slottypes)
         end
         Core.println("argextype called on Expr with head ", x.head,
                      " which is not valid for IR in argument-position.")
         @assert false
     elseif isa(x, SlotNumber)
+        slottypes === nothing && return Any
+        (1 ≤ x.id ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.id]
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x, src)
     elseif isa(x, Argument)
+        slottypes === nothing && return Any
+        (1 ≤ x.n ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.n]
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref_type(x)
+        return abstract_eval_globalref_type(x, src)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -444,7 +455,15 @@ function argextype(
         return Const(x)
     end
 end
-abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
+function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
+    ssavaluetypes = src.ssavaluetypes
+    if ssavaluetypes isa Int
+        (1 ≤ s.id ≤ ssavaluetypes) || throw(InvalidIRError())
+        return Any
+    else
+        return abstract_eval_ssavalue(s, ssavaluetypes::Vector{Any})
+    end
+end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
@@ -648,7 +667,7 @@ function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
         nargs = Int(opt.src.nargs)
-        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
+        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), get_escape_cache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
         validate_mutable_arg_escapes!(estate, sv)
@@ -1260,7 +1279,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, WorldRange(ci.min_world, ci.max_world))
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

@@ -951,34 +951,34 @@ end
 end
 
 # issue 43104
-
+_has_free_typevars(t) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 @inline isGoodType(@nospecialize x::Type) =
-    x !== Any && !(@noinline Base.has_free_typevars(x))
+    x !== Any && !(@noinline _has_free_typevars(x))
 let # aggressive inlining of single, abstract method match
     src = code_typed((Type, Any,)) do x, y
         isGoodType(x), isGoodType(y)
     end |> only |> first
     # both callsites should be inlined
-    @test count(isinvoke(:has_free_typevars), src.code) == 2
+    @test count(isinvoke(:_has_free_typevars), src.code) == 2
     # `isGoodType(y::Any)` isn't fully covered, so the fallback is a method error
     @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 
 @inline isGoodType2(cnd, @nospecialize x::Type) =
-    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : Base.has_free_typevars)(x))
+    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : _has_free_typevars)(x))
 let # aggressive inlining of single, abstract method match (with constant-prop'ed)
     src = code_typed((Type, Any,)) do x, y
         isGoodType2(true, x), isGoodType2(true, y)
     end |> only |> first
     # both callsite should be inlined with constant-prop'ed result
     @test count(isinvoke(:isType), src.code) == 2
-    @test count(isinvoke(:has_free_typevars), src.code) == 0
+    @test count(isinvoke(:_has_free_typevars), src.code) == 0
     # `isGoodType(y::Any)` isn't fully covered, thus a MethodError gets inserted
     @test count(iscall((src, Core.throw_methoderror)), src.code) == 1 # fallback method error
 end
 
 @noinline function checkBadType!(@nospecialize x::Type)
-    if x === Any || Base.has_free_typevars(x)
+    if x === Any || _has_free_typevars(x)
         println(x)
     end
     return nothing
@@ -2248,4 +2248,44 @@ let src = code_typed1(bar_split_error, Tuple{})
     # Should inline method errors
     @test count(iscall((src, foo_split)), src.code) == 0
     @test count(iscall((src, Core.throw_methoderror)), src.code) > 0
+end
+
+# finalizer inlining with EA
+mutable struct ForeignBuffer{T}
+    const ptr::Ptr{T}
+end
+mutable struct ForeignBufferChecker
+    @atomic finalized::Bool
+end
+const foreign_buffer_checker = ForeignBufferChecker(false)
+function foreign_alloc(::Type{T}, length) where T
+    ptr = Libc.malloc(sizeof(T) * length)
+    ptr = Base.unsafe_convert(Ptr{T}, ptr)
+    obj = ForeignBuffer{T}(ptr)
+    return finalizer(obj) do obj
+        Base.@assume_effects :notaskstate :nothrow
+        @atomic foreign_buffer_checker.finalized = true
+        Libc.free(obj.ptr)
+    end
+end
+function f_EA_finalizer(N::Int)
+    workspace = foreign_alloc(Float64, N)
+    GC.@preserve workspace begin
+        (;ptr) = workspace
+        Base.@assume_effects :nothrow @noinline println(devnull, "ptr = ", ptr)
+    end
+end
+let src = code_typed1(f_EA_finalizer, (Int,))
+    @test count(iscall((src, Core.finalizer)), src.code) == 0
+end
+let;Base.Experimental.@force_compile
+    f_EA_finalizer(42000)
+    @test foreign_buffer_checker.finalized
+end
+
+# Test that inlining doesn't unnecessarily move things to statement position
+@noinline f_noinline_invoke(x::Union{Symbol,Nothing}=nothing) = Core.donotdelete(x)
+g_noinline_invoke(x) = f_noinline_invoke(x)
+let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
+    @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end

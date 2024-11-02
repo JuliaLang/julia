@@ -247,7 +247,7 @@ mutable struct InferenceState
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Vector{Any}}
+    edges::Vector{Any}
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
@@ -302,7 +302,7 @@ mutable struct InferenceState
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Vector{Vector{Any}}(undef, nstmts)
+        edges = []
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -327,7 +327,7 @@ mutable struct InferenceState
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
-        cycle_backedges = Vector{Tuple{InferenceState,Int}}()
+        cycle_backedges = Tuple{InferenceState,Int}[]
         callstack = AbsIntState[]
         tasks = WorkThunk[]
 
@@ -350,10 +350,12 @@ mutable struct InferenceState
 
         restrict_abstract_call_sites = isa(def, Module)
 
+        parentid = frameid = cycleid = 0
+
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, edges, stmt_info,
+            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
@@ -754,30 +756,6 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
     return nothing
 end
 
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, caller.currpc)
-    contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
-    add_backedge!(caller, frame.linfo)
-    return frame
-end
-
-function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
-    stmt_edges = caller.stmt_edges
-    if !isassigned(stmt_edges, currpc)
-        return stmt_edges[currpc] = Any[]
-    else
-        return stmt_edges[currpc]
-    end
-end
-
-function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
-    if isassigned(frame.stmt_edges, currpc)
-        empty!(frame.stmt_edges[currpc])
-    end
-    return nothing
-end
-
 function narguments(sv::InferenceState, include_va::Bool=true)
     nargs = Int(sv.src.nargs)
     if !include_va
@@ -1008,32 +986,6 @@ function callers_in_cycle(sv::InferenceState)
 end
 callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
 
-# temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(caller::InferenceState, mi::MethodInstance)
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), mi)
-end
-function add_backedge!(irsv::IRInterpretationState, mi::MethodInstance)
-    return push!(irsv.edges, mi)
-end
-
-function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), mi::MethodInstance)
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), invokesig, mi)
-end
-function add_invoke_backedge!(irsv::IRInterpretationState, @nospecialize(invokesig::Type), mi::MethodInstance)
-    return push!(irsv.edges, invokesig, mi)
-end
-
-# used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(caller::InferenceState, mt::MethodTable, @nospecialize(typ))
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), mt, typ)
-end
-function add_mt_backedge!(irsv::IRInterpretationState, mt::MethodTable, @nospecialize(typ))
-    return push!(irsv.edges, mt, typ)
-end
-
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
@@ -1128,24 +1080,35 @@ end
 """
     Future{T}
 
-Delayed return value for a value of type `T`, similar to RefValue{T}, but
-explicitly represents completed as a `Bool` rather than as `isdefined`.
-Set once with `f[] = v` and accessed with `f[]` afterwards.
+Assign-once delayed return value for a value of type `T`, similar to RefValue{T}.
+Can be constructed in one of three ways:
 
-Can also be constructed with the `completed` flag value and a closure to
-produce `x`, as well as the additional arguments to avoid always capturing the
-same couple of values.
+1. With an immediate as `Future{T}(val)`
+2. As an assign-once storage location with `Future{T}()`. Assigned (once) using `f[] = val`.
+3. As a delayed computation with `Future{T}(callback, dep, interp, sv)` to have
+   `sv` arrange to call the `callback` with the result of `dep` when it is ready.
+
+Use `isready` to check if the value is ready, and `getindex` to get the value.
 """
 struct Future{T}
     later::Union{Nothing,RefValue{T}}
     now::Union{Nothing,T}
-    Future{T}() where {T} = new{T}(RefValue{T}(), nothing)
+    function Future{T}() where {T}
+        later = RefValue{T}()
+        @assert !isassigned(later) "Future{T}() is not allowed for inlinealloc T"
+        new{T}(later, nothing)
+    end
     Future{T}(x) where {T} = new{T}(nothing, x)
     Future(x::T) where {T} = new{T}(nothing, x)
 end
-isready(f::Future) = f.later === nothing
+isready(f::Future) = f.later === nothing || isassigned(f.later)
 getindex(f::Future{T}) where {T} = (later = f.later; later === nothing ? f.now::T : later[])
-setindex!(f::Future, v) = something(f.later)[] = v
+function setindex!(f::Future, v)
+    later = something(f.later)
+    @assert !isassigned(later)
+    later[] = v
+    return f
+end
 convert(::Type{Future{T}}, x) where {T} = Future{T}(x) # support return type conversion
 convert(::Type{Future{T}}, x::Future) where {T} = x::Future{T}
 function Future{T}(f, immediate::Bool, interp::AbstractInterpreter, sv::AbsIntState) where {T}
@@ -1176,7 +1139,6 @@ function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntSt
     end
 end
 
-
 """
     doworkloop(args...)
 
@@ -1189,12 +1151,16 @@ Each task will be run repeatedly when returning `false`, until it returns `true`
 function doworkloop(interp::AbstractInterpreter, sv::AbsIntState)
     tasks = sv.tasks
     prev = length(tasks)
+    prevcallstack = length(sv.callstack)
     prev == 0 && return false
     task = pop!(tasks)
     completed = task(interp, sv)
     tasks = sv.tasks # allow dropping gc root over the previous call
     completed isa Bool || throw(TypeError(:return, "", Bool, task)) # print the task on failure as part of the error message, instead of just "@ workloop:line"
-    completed || push!(tasks, task)
+    if !completed
+        @assert (length(tasks) >= prev || length(sv.callstack) > prevcallstack) "Task did not complete, but also did not create any child tasks"
+        push!(tasks, task)
+    end
     # efficient post-order visitor: items pushed are executed in reverse post order such
     # that later items are executed before earlier ones, but are fully executed
     # (including any dependencies scheduled by them) before going on to the next item

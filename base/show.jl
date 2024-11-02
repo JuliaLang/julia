@@ -72,13 +72,13 @@ ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
 textwidth(::ANSIDelimiter) = 0
 
 # An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
-struct ANSIIterator
-    captures::RegexMatchIterator
+struct ANSIIterator{S}
+    captures::RegexMatchIterator{S}
 end
 ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
 
-IteratorSize(::Type{ANSIIterator}) = SizeUnknown()
-eltype(::Type{ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
+IteratorSize(::Type{<:ANSIIterator}) = SizeUnknown()
+eltype(::Type{<:ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
 function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
     m_st === nothing && return nothing
     m, (j, new_m_st) = m_st
@@ -152,7 +152,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
-    isempty(t) && return show(io, t)
+    (isempty(t) || !haslength(t)) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit = get(io, :limit, false)::Bool
@@ -324,8 +324,11 @@ end
 
 convert(::Type{IOContext}, io::IOContext) = io
 convert(::Type{IOContext}, io::IO) = IOContext(io, ioproperties(io))::IOContext
+convert(::Type{IOContext{IO_t}}, io::IOContext{IO_t}) where {IO_t} = io
+convert(::Type{IOContext{IO_t}}, io::IO) where {IO_t} = IOContext{IO_t}(io, ioproperties(io))::IOContext{IO_t}
 
 IOContext(io::IO) = convert(IOContext, io)
+IOContext{IO_t}(io::IO) where {IO_t} = convert(IOContext{IO_t}, io)
 
 function IOContext(io::IO, KV::Pair)
     d = ioproperties(io)
@@ -336,6 +339,11 @@ end
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
+
+!!! note
+    Unless explicitly set in the wrapped `io` the `displaysize` of `io` will not be inherited.
+    This is because by default `displaysize` is not a property of IO objects themselves, but lazily inferred,
+    as the size of the terminal window can change during the lifetime of the IO object.
 """
 IOContext(io::IO, context::IO) = IOContext(io, ioproperties(context))
 
@@ -1032,6 +1040,21 @@ function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     return false
 end
 
+function check_world_bounded(tn::Core.TypeName)
+    bnd = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), tn.module, tn.name, true)
+    isdefined(bnd, :partitions) || return nothing
+    partition = @atomic bnd.partitions
+    while true
+        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
+            max_world = @atomic partition.max_world
+            max_world == typemax(UInt) && return nothing
+            return Int(partition.min_world):Int(max_world)
+        end
+        isdefined(partition, :next) || return nothing
+        partition = @atomic partition.next
+    end
+end
+
 function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
@@ -1043,6 +1066,8 @@ function show_type_name(io::IO, tn::Core.TypeName)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
+    world = check_world_bounded(tn)
+    world !== nothing && print(io, "@world(")
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
         # IOContext If :module is not set, default to Main.
@@ -1061,6 +1086,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         end
     end
     show_sym(io, sym)
+    world !== nothing && print(io, ", ", world, ")")
     quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing
@@ -1324,7 +1350,11 @@ function sourceinfo_slotnames(slotnames::Vector{Symbol})
     return printnames
 end
 
-show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
+show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
+function show(io::IO, codeinst::Core.CodeInstance)
+    print(io, "CodeInstance for ")
+    show_mi(io, codeinst.def)
+end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
     def = mi.def
@@ -2622,7 +2652,7 @@ end
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
+        sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
@@ -3337,4 +3367,82 @@ end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
     show(io, oc)
+end
+
+# printing bindings and partitions
+function print_partition(io::IO, partition::Core.BindingPartition)
+    print(io, partition.min_world)
+    print(io, ":")
+    max_world = @atomic partition.max_world
+    if max_world == typemax(UInt)
+        print(io, '∞')
+    else
+        print(io, max_world)
+    end
+    print(io, " - ")
+    kind = binding_kind(partition)
+    if is_some_const_binding(kind)
+        print(io, "constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_GUARD
+        print(io, "undefined binding - guard entry")
+    elseif kind == BINDING_KIND_FAILED
+        print(io, "ambiguous binding - guard entry")
+    elseif kind == BINDING_KIND_DECLARED
+        print(io, "undefined, but declared using `global` - guard entry")
+    elseif kind == BINDING_KIND_IMPLICIT
+        print(io, "implicit `using` from ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_EXPLICIT
+        print(io, "explicit `using` from ")
+        print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_IMPORTED
+        print(io, "explicit `import` from ")
+        print(io, partition_restriction(partition))
+    else
+        @assert kind == BINDING_KIND_GLOBAL
+        print(io, "global variable with type ")
+        print(io, partition_restriction(partition))
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
+    print(io, "BindingPartition ")
+    print_partition(io, partition)
+end
+
+function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
+    print(io, "Binding ")
+    print(io, bnd.globalref)
+    if !isdefined(bnd, :partitions)
+        print(io, "No partitions")
+    else
+        partition = @atomic bnd.partitions
+        while true
+            println(io)
+            print(io, "   ")
+            print_partition(io, partition)
+            isdefined(partition, :next) || break
+            partition = @atomic partition.next
+        end
+    end
+end
+
+# Special pretty printing for EvalInto/IncludeInto
+function show(io::IO, ii::IncludeInto)
+    if getglobal(ii.m, :include) === ii
+        print(io, ii.m)
+        print(io, ".include")
+    else
+        show_default(io, ii)
+    end
+end
+
+function show(io::IO, ei::Core.EvalInto)
+    if getglobal(ei.m, :eval) === ei
+        print(io, ei.m)
+        print(io, ".eval")
+    else
+        show_default(io, ei)
+    end
 end

@@ -52,7 +52,7 @@ end
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
     call = abstract_call(interp, arginfo, si, irsv)::Future
-    Future{Nothing}(call, interp, irsv) do call, interp, irsv
+    Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
         nothing
     end
@@ -448,12 +448,6 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
         noub &= has_flag(flag, IR_FLAG_NOUB)
         (nothrow | noub) || break
-    end
-
-    if last(irsv.valid_worlds) >= get_world_counter()
-        # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
-        store_backedges(frame_instance(irsv), irsv.edges)
     end
 
     if irsv.frameid != 0

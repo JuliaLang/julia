@@ -109,8 +109,8 @@ Random.seed!(1)
     end
 
     @testset "diag" begin
-        @test_throws ArgumentError diag(D,  n+1)
-        @test_throws ArgumentError diag(D, -n-1)
+        @test isempty(@inferred diag(D,  n+1))
+        @test isempty(@inferred diag(D, -n-1))
         @test (@inferred diag(D))::typeof(dd) == dd
         @test (@inferred diag(D, 0))::typeof(dd) == dd
         @test (@inferred diag(D, 1))::typeof(dd) == zeros(elty, n-1)
@@ -353,7 +353,7 @@ Random.seed!(1)
         D3 = Diagonal(convert(Vector{elty}, rand(n÷2)))
         DM3= Matrix(D3)
         @test Matrix(kron(D, D3)) ≈ kron(DM, DM3)
-        M4 = rand(elty, n÷2, n÷2)
+        M4 = rand(elty, size(D3,1) + 1, size(D3,2) + 2) # choose a different size from D3
         @test kron(D3, M4) ≈ kron(DM3, M4)
         @test kron(M4, D3) ≈ kron(M4, DM3)
         X = [ones(1,1) for i in 1:2, j in 1:2]
@@ -815,6 +815,26 @@ end
     D = Diagonal(fill(S,3))
     @test D * fill(S,2,3)' == fill(S * S', 3, 2)
     @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
+
+    @testset "indexing with non-standard-axes" begin
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        D = Diagonal(fill(s,3))
+        @test @inferred(D[1,2]) isa typeof(s)
+        @test all(iszero, D[1,2])
+    end
+
+    @testset "mul!" begin
+        D1 = Diagonal(fill(ones(2,3), 2))
+        D2 = Diagonal(fill(ones(3,2), 2))
+        C = similar(D1, size(D1))
+        mul!(C, D1, D2)
+        @test all(x -> size(x) == (2,2), C)
+        @test C == D1 * D2
+        D = similar(D1)
+        mul!(D, D1, D2)
+        @test all(x -> size(x) == (2,2), D)
+        @test D == D1 * D2
+    end
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin
@@ -1181,7 +1201,7 @@ end
     @test oneunit(D3) isa typeof(D3)
 end
 
-@testset "AbstractTriangular" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+@testset "$Tri" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
     A = randn(4, 4)
     TriA = Tri(A)
     UTriA = UTri(A)
@@ -1211,6 +1231,44 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+
+    # we may write to a Unit triangular if the diagonal is preserved
+    ID = Diagonal(ones(size(UTriA,2)))
+    @test mul!(copy(UTriA), UTriA, ID) == UTriA
+    @test mul!(copy(UTriA), ID, UTriA) == UTriA
+
+    @testset "partly filled parents" begin
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = 3
+        isupper = Tri == UpperTriangular
+        M[1+!isupper, 1+isupper] = 3
+        D = Diagonal(1:2)
+        T = Tri(M)
+        TA = Array(T)
+        @test T * D == TA * D
+        @test D * T == D * TA
+        @test mul!(copy(T), T, D, 2, 3) == 2T * D + 3T
+        @test mul!(copy(T), D, T, 2, 3) == 2D * T + 3T
+
+        U = UTri(M)
+        UA = Array(U)
+        @test U * D == UA * D
+        @test D * U == D * UA
+        @test mul!(copy(T), U, D, 2, 3) == 2 * UA * D + 3TA
+        @test mul!(copy(T), D, U, 2, 3) == 2 * D * UA + 3TA
+
+        M2 = Matrix{BigFloat}(undef, 2, 2)
+        M2[1+!isupper, 1+isupper] = 3
+        U = UTri(M2)
+        UA = Array(U)
+        @test U * D == UA * D
+        @test D * U == D * UA
+        ID = Diagonal(ones(size(U,2)))
+        @test mul!(copy(U), U, ID) == U
+        @test mul!(copy(U), ID, U) == U
+        @test mul!(copy(U), U, ID, 2, -1) == U
+        @test mul!(copy(U), ID, U, 2, -1) == U
+    end
 end
 
 struct SMatrix1{T} <: AbstractArray{T,2}
@@ -1382,6 +1440,16 @@ end
 @testset "bounds-check with CartesianIndex ranges" begin
     D = Diagonal(1:typemax(Int))
     @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
+end
+
+@testset "zeros in kron with block matrices" begin
+    D = Diagonal(1:4)
+    B = reshape([ones(2,2), ones(3,2), ones(2,3), ones(3,3)], 2, 2)
+    @test kron(D, B) == kron(Array(D), B)
+    @test kron(B, D) == kron(B, Array(D))
+    D2 = Diagonal([ones(2,2), ones(3,3)])
+    @test kron(D, D2) == kron(D, Array{eltype(D2)}(D2))
+    @test kron(D2, D) == kron(Array{eltype(D2)}(D2), D)
 end
 
 end # module TestDiagonal

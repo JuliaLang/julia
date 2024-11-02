@@ -1964,6 +1964,46 @@ end
     @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end
 
+struct A40735
+    str::String
+end
+
+# https://github.com/JuliaLang/julia/issues/40735
+@testset "Long printing" begin
+    previous = REPL.SHOW_MAXIMUM_BYTES
+    try
+        REPL.SHOW_MAXIMUM_BYTES = 1000
+        str = string(('a':'z')...)^50
+        @test length(str) > 1100
+        # For a raw string, we correctly get the standard abbreviated output
+        output = sprint(REPL.show_limited, MIME"text/plain"(), str; context=:limit => true)
+        hint = """call `show(stdout, MIME"text/plain"(), ans)` to print without truncation"""
+        suffix = "[printing stopped after displaying 1000 bytes; $hint]"
+        @test !endswith(output, suffix)
+        @test contains(output, "bytes ⋯")
+        # For a struct without a custom `show` method, we don't hit the abbreviated
+        # 3-arg show on the inner string, so here we check that the REPL print-limiting
+        # feature is correctly kicking in.
+        a = A40735(str)
+        output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
+        @test endswith(output, suffix)
+        @test length(output) <= 1200
+        # We also check some extreme cases
+        REPL.SHOW_MAXIMUM_BYTES = 1
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "1"
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 12)
+        @test output == "1…[printing stopped after displaying 1 byte; $hint]"
+        REPL.SHOW_MAXIMUM_BYTES = 0
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "…[printing stopped after displaying 0 bytes; $hint]"
+        @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
+        @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+    finally
+        REPL.SHOW_MAXIMUM_BYTES = previous
+    end
+end
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
     withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do

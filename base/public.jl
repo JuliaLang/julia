@@ -28,6 +28,10 @@ public
     acquire,
     release,
 
+# arrays
+    has_offset_axes,
+    require_one_based_indexing,
+
 # collections
     IteratorEltype,
     IteratorSize,
@@ -102,6 +106,7 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
 
 # filesystem operations
     rename,

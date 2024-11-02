@@ -19,6 +19,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 
@@ -332,6 +333,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ForceFunctionAttrsPass());
       invokePipelineStartCallbacks(MPM, PB, O);
       MPM.addPass(Annotation2MetadataPass());
+      MPM.addPass(InferFunctionAttrsPass());
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
@@ -568,7 +570,6 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
     if (options.cleanup) {
         if (O.getSpeedupLevel() >= 2) {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(CombineMulAddPass()));
             FPM.addPass(DivRemPairsPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
@@ -616,29 +617,29 @@ namespace {
 
     void adjustPIC(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT {
 //Borrowed from LLVM PassBuilder.cpp:386
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS)                                         \
+#define MODULE_PASS(NAME, CREATE_PASS)                                         \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define MODULE_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)      \
+#define MODULE_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)      \
 PIC.addClassToPassName(CLASS, NAME);
 #define MODULE_ANALYSIS(NAME, CREATE_PASS)                                     \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS)                                       \
+#define FUNCTION_PASS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)    \
+#define FUNCTION_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)    \
 PIC.addClassToPassName(CLASS, NAME);
 #define FUNCTION_ANALYSIS(NAME, CREATE_PASS)                                   \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOPNEST_PASS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS)                                           \
+#define LOOP_PASS(NAME, CREATE_PASS)                                           \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)        \
+#define LOOP_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)        \
 PIC.addClassToPassName(CLASS, NAME);
 #define LOOP_ANALYSIS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS(NAME, CLASS, CREATE_PASS)                                          \
+#define CGSCC_PASS(NAME, CREATE_PASS)                                          \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)       \
+#define CGSCC_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)       \
 PIC.addClassToPassName(CLASS, NAME);
 #define CGSCC_ANALYSIS(NAME, CREATE_PASS)                                      \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
@@ -898,7 +899,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef FUNCTION_PASS
             if (Name.consume_front("GCInvariantVerifier")) {
@@ -920,7 +921,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef MODULE_PASS
             if (Name.consume_front("LowerPTLSPass")) {
@@ -963,7 +964,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef LOOP_PASS
             return false;
@@ -978,4 +979,10 @@ void jl_register_passbuilder_callbacks_impl(void *PB) JL_NOTSAFEPOINT {
 extern "C" JL_DLLEXPORT_CODEGEN
 ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
+}
+
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }

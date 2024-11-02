@@ -25,6 +25,11 @@ function include(mod::Module, path::String)
 end
 include(path::String) = include(Base, path)
 
+struct IncludeInto <: Function
+    m::Module
+end
+(this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
+
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
@@ -173,6 +178,7 @@ include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
+include("runtime_internals.jl")
 include("reflection.jl")
 include("options.jl")
 
@@ -197,7 +203,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
-
 
 # core operations & types
 include("promotion.jl")
@@ -532,6 +537,7 @@ include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+include("util.jl")
 
 include("initdefs.jl")
 Filesystem.__postinit__()
@@ -548,7 +554,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
 
@@ -571,6 +576,9 @@ include("precompilation.jl")
 for m in methods(include)
     delete_method(m)
 end
+for m in methods(IncludeInto(Base))
+    delete_method(m)
+end
 
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
@@ -578,8 +586,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
@@ -645,10 +655,9 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
-    empty!(explicit_loaded_modules)
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
-    for (mod, key) in module_keys
-        push!(get!(Vector{Module}, loaded_precompiles, key), mod)
+    for mod in loaded_modules_order
+        push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
     end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])

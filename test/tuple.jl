@@ -534,6 +534,11 @@ end
     end
 
     @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
 end
 
 struct A_15703{N}
