@@ -607,6 +607,16 @@ end
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
+"""
+    isstored(A::AbstractArray, inds...)::Bool
+
+This is a function for testing if the array `A` stores and actual value at the index specified by `inds`,
+i.e. if `A[inds...]` will look up a value from some storage, or if it gives some computed fallback value.
+
+A result of `true` does *not* guarantee that there is truly a stored value at that index since the default
+implementation of this function simply returns `true` unconditionally (or erros if out of bounds). However,
+a result of `false` *is* a guarantee that there is no stored value at that index.
+"""
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)
     return true
