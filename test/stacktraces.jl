@@ -103,10 +103,7 @@ end
 end
 
 let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
-    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
-    @atomic li.cache = ccall(:jl_new_codeinst_for_uninferred, Ref{Core.CodeInstance}, (Any, Any), li, src)
-    li.specTypes = Tuple{}
-    li.def = @__MODULE__
+    li = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, @__MODULE__)
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"

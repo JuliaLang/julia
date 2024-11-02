@@ -18,16 +18,16 @@ import ._TOP_MOD: ==, getindex, setindex!
 using Core: MethodMatch, SimpleVector, ifelse, sizeof
 using Core.IR
 using ._TOP_MOD:     # Base definitions
-    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline,
+    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline, @show,
     @nospecialize, @specialize, BitSet, Callable, Csize_t, IdDict, IdSet, UnitRange, Vector,
     copy, delete!, empty!, enumerate, error, first, get, get!, haskey, in, isassigned,
     isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
-    Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
+    AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -657,11 +657,13 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     # `escape_exception!` conservatively propagates `AllEscape` anyway,
                     # and so escape information imposed on `:the_exception` isn't computed
                     continue
+                elseif head === :gc_preserve_begin
+                    # GC preserve is handled by `escape_gc_preserve!`
+                elseif head === :gc_preserve_end
+                    escape_gc_preserve!(astate, pc, stmt.args)
                 elseif head === :static_parameter ||  # this exists statically, not interested in its escape
-                       head === :copyast ||           # XXX can this account for some escapes?
-                       head === :isdefined ||         # just returns `Bool`, nothing accounts for any escapes
-                       head === :gc_preserve_begin || # `GC.@preserve` expressions themselves won't be used anywhere
-                       head === :gc_preserve_end      # `GC.@preserve` expressions themselves won't be used anywhere
+                       head === :copyast ||           # XXX escape something?
+                       head === :isdefined            # just returns `Bool`, nothing accounts for any escapes
                     continue
                 else
                     add_conservative_changes!(astate, pc, stmt.args)
@@ -732,11 +734,13 @@ function compute_frameinfo(ir::IRCode)
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
         if isa(stmt, EnterNode)
-            @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
-            tryregions === nothing && (tryregions = UnitRange{Int}[])
             leave_block = stmt.catch_dest
-            leave_pc = first(ir.cfg.blocks[leave_block].stmts)
-            push!(tryregions, idx:leave_pc)
+            if leave_block ≠ 0
+                @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
+                tryregions === nothing && (tryregions = UnitRange{Int}[])
+                leave_pc = first(ir.cfg.blocks[leave_block].stmts)
+                push!(tryregions, idx:leave_pc)
+            end
         elseif arrayinfo !== nothing
             # TODO this super limited alias analysis is able to handle only very simple cases
             # this should be replaced with a proper forward dimension analysis
@@ -857,7 +861,7 @@ function add_escape_change!(astate::AnalysisState, @nospecialize(x), xinfo::Esca
     xinfo === ⊥ && return nothing # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if force || !isbitstype(widenconst(argextype(x, astate.ir)))
+        if force || !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, EscapeChange(xidx, xinfo))
         end
     end
@@ -867,7 +871,7 @@ end
 function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::Int)
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if !isbitstype(widenconst(argextype(x, astate.ir)))
+        if !is_mutation_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, LivenessChange(xidx, livepc))
         end
     end
@@ -1062,17 +1066,27 @@ end
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     mi = first(args)::MethodInstance
     first_idx, last_idx = 2, length(args)
+    add_liveness_changes!(astate, pc, args, first_idx, last_idx)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
+    ret = SSAValue(pc)
     if cache isa Bool
         if cache
-            return nothing # guaranteed to have no escape
+            # This method call is very simple and has good effects, so there's no need to
+            # escape its arguments. However, since the arguments might be returned, we need
+            # to consider the possibility of aliasing between them and the return value.
+            for argidx = first_idx:last_idx
+                arg = args[argidx]
+                if !is_mutation_free_argtype(argextype(arg, astate.ir))
+                    add_alias_change!(astate, ret, arg)
+                end
+            end
+            return nothing
         else
             return add_conservative_changes!(astate, pc, args, 2)
         end
     end
     cache = cache::ArgEscapeCache
-    ret = SSAValue(pc)
     retinfo = astate.estate[ret] # escape information imposed on the call statement
     method = mi.def::Method
     nargs = Int(method.nargs)
@@ -1160,6 +1174,17 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
+function escape_gc_preserve!(astate::AnalysisState, pc::Int, args::Vector{Any})
+    @assert length(args) == 1 "invalid :gc_preserve_end"
+    val = args[1]
+    @assert val isa SSAValue "invalid :gc_preserve_end"
+    beginstmt = astate.ir[val][:stmt]
+    @assert isexpr(beginstmt, :gc_preserve_begin) "invalid :gc_preserve_end"
+    beginargs = beginstmt.args
+    # COMBAK we might need to add liveness for all statements from `:gc_preserve_begin` to `:gc_preserve_end`
+    add_liveness_changes!(astate, pc, beginargs)
+end
+
 normalize(@nospecialize x) = isa(x, QuoteNode) ? x.value : x
 
 function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1185,20 +1210,12 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     if result === missing
         # if this call hasn't been handled by any of pre-defined handlers, escape it conservatively
         add_conservative_changes!(astate, pc, args)
-        return
     elseif result === true
         add_liveness_changes!(astate, pc, args, 2)
-        return # ThrownEscape is already checked
+    elseif is_nothrow(astate.ir, pc)
+        add_liveness_changes!(astate, pc, args, 2)
     else
-        # we escape statements with the `ThrownEscape` property using the effect-freeness
-        # computed by `stmt_effect_flags` invoked within inlining
-        # TODO throwness ≠ "effect-free-ness"
-        if is_nothrow(astate.ir, pc)
-            add_liveness_changes!(astate, pc, args, 2)
-        else
-            add_fallback_changes!(astate, pc, args, 2)
-        end
-        return
+        add_fallback_changes!(astate, pc, args, 2)
     end
 end
 
@@ -1213,6 +1230,7 @@ escape_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
 escape_builtin!(::typeof(isdefined), _...) = false
 escape_builtin!(::typeof(throw), _...) = false
+escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
@@ -1523,6 +1541,14 @@ function escape_array_copy!(astate::AnalysisState, pc::Int, args::Vector{Any})
         add_escape_change!(astate, ary, newaryinfo)
     end
     add_liveness_changes!(astate, pc, args, 6)
+end
+
+function escape_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})
+    if length(args) ≥ 3
+        obj = args[3]
+        add_liveness_change!(astate, obj, pc) # TODO setup a proper FinalizerEscape?
+    end
+    return false
 end
 
 end # baremodule EscapeAnalysis

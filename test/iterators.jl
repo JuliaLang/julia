@@ -499,7 +499,7 @@ end
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
 @test Base.iterate(product()) == ((), true)
-@test Base.iterate(product(), 1) == nothing
+@test Base.iterate(product(), 1) === nothing
 
 # intersection
 @test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
@@ -513,6 +513,8 @@ end
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
 @test collect(flatten(Any[2:1])) == Any[]
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test eltype(flatten(([1, 2], [3.0, 4.0]))) == Real
+@test eltype(flatten((a = [1, 2], b = Int8[3, 4]))) == Signed
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
@@ -993,7 +995,7 @@ end
 end
 
 @testset "Iterators.peel" begin
-    @test Iterators.peel([]) == nothing
+    @test Iterators.peel([]) === nothing
     @test Iterators.peel(1:10)[1] == 1
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4

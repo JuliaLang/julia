@@ -249,7 +249,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
 end
 
 function julia_exename()
-    if !Base.isdebugbuild()
+    if !isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -530,7 +530,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =

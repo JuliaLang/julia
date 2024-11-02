@@ -546,7 +546,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_) && !defined(_OS_OPENBSD_)
+#if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
     void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
     if (jl_pgcstack_setkey == NULL) {
         jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");

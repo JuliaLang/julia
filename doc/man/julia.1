@@ -28,7 +28,7 @@
 julia - a high-level, high-performance dynamic programming language for technical computing
 
 .SH SYNOPSIS
-\fBjulia\fR [OPTIONS...] \fB--\fR [PROGRAMMFILE] [ARGS...]
+\fBjulia\fR [OPTIONS...] \fB--\fR [PROGRAMFILE] [ARGS...]
 
 If a Julia source file is given as a \fIPROGRAMFILE\fP (optionally followed by
 arguments in \fIARGS\fP) Julia will execute the program and exit.
@@ -283,11 +283,16 @@ Generate an incremental output file (rather than complete)
 
 .TP
 --trace-compile={stderr|name}
-Print precompile statements for methods compiled during execution or save to a path
+Print precompile statements for methods compiled during execution or save to stderr or a path.
+Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported
 
 .TP
 --trace-compile-timing=
 If --trace-compile is enabled show how long each took to compile in ms
+
+.TP
+--trace-dispatch={stderr|name}
+Print precompile statements for methods dispatched during execution or save to stderr or a path.
 
 .TP
 -image-codegen

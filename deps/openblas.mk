@@ -43,7 +43,7 @@ OPENBLAS_FFLAGS := $(JFFLAGS) $(USE_BLAS_FFLAGS)
 OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
-ifneq ($(BUILD_OS),$(OS))
+ifneq ($(XC_HOST),)
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
 endif
 ifeq ($(OS),WINNT)
@@ -90,7 +90,12 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OP
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-memory-buffer-multi-threading.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-memory-buffer-multi-threading.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-memory-buffer-multi-threading.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
 	echo 1 > $@

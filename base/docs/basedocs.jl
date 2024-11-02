@@ -37,6 +37,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -152,6 +160,8 @@ functions of submodules will be executed first. Two typical uses of `__init__` a
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
+
+See also: [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -937,11 +947,14 @@ expression, rather than the side effects that evaluating `b` or `c` may have.
 See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
 
 # Examples
-```
+```jldoctest
 julia> x = 1; y = 2;
 
-julia> x > y ? println("x is larger") : println("y is larger")
-y is larger
+julia> x > y ? println("x is larger") : println("x is not larger")
+x is not larger
+
+julia> x > y ? "x is larger" : x == y ? "x and y are equal" : "y is larger"
+"y is larger"
 ```
 """
 kw"?", kw"?:"
@@ -1694,7 +1707,7 @@ julia> ab = AB(1, 3)
 AB(1.0f0, 3.0)
 
 julia> ab.c # field `c` doesn't exist
-ERROR: FieldError: type AB has no field c
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
 Stacktrace:
 [...]
 ```
@@ -2575,7 +2588,7 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
 julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
@@ -3711,6 +3724,9 @@ unused and delete the entire benchmark code).
     *if* the intrinsic is semantically executed, then there is some program state at
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 
 # Examples
 

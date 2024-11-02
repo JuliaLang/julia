@@ -96,7 +96,7 @@ structured_broadcast_alloc(bc, ::Type{UnitLowerTriangular}, ::Type{ElType}, n) w
 structured_broadcast_alloc(bc, ::Type{UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
     UnitUpperTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{Matrix}, ::Type{ElType}, n) where {ElType} =
-    Matrix(Array{ElType}(undef, n, n))
+    Array{ElType}(undef, n, n)
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
@@ -171,7 +171,7 @@ end
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
     fzerobc = fzeropreserving(bc)
-    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
+    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
     elseif fzerobc && T <: UnitLowerTriangular
         return similar(convert(Broadcasted{StructuredMatrixStyle{LowerTriangular}}, bc), ElType)
@@ -199,6 +199,8 @@ function Broadcast.newindex(A::StructuredMatrix, b::BandIndex)
     # and we apply newindex to both the axes at once to obtain the result
     size(A,1) > 1 ? b : BandIndex(0, 1)
 end
+# All structured matrices are square, and therefore they only broadcast out if they are size (1, 1)
+Broadcast.newindex(D::StructuredMatrix, I::CartesianIndex{2}) = size(D) == (1,1) ? CartesianIndex(1,1) : I
 
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
@@ -238,7 +240,8 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     end
     for i = 1:size(dest, 1)-1
         v = @inbounds bc[BandIndex(1, i)]
-        v == (@inbounds bc[BandIndex(-1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v == transpose(@inbounds bc[BandIndex(-1, i)]) ||
+            throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest

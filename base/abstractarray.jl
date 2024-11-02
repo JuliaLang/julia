@@ -1101,11 +1101,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
-                ret = iterate(iterdest, state)
+            for (Idest, Isrc) in zip(iterdest, itersrc)
+                @inbounds dest[Idest] = src[Isrc]
             end
         end
     end
@@ -3048,6 +3045,15 @@ function cmp(A::AbstractVector, B::AbstractVector)
 end
 
 """
+    isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+
+Return `true` when the only element of `A` is less than the only element of `B`.
+"""
+function isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+    isless(only(A), only(B))
+end
+
+"""
     isless(A::AbstractVector, B::AbstractVector)
 
 Return `true` when `A` is less than `B` in lexicographic order.
@@ -3532,7 +3538,7 @@ function push!(a::AbstractVector{T}, item) where T
     itemT = item isa T ? item : convert(T, item)::T
     new_length = length(a) + 1
     resize!(a, new_length)
-    a[new_length] = itemT
+    a[end] = itemT
     return a
 end
 
@@ -3540,7 +3546,7 @@ end
 function push!(a::AbstractVector{Any}, @nospecialize x)
     new_length = length(a) + 1
     resize!(a, new_length)
-    a[new_length] = x
+    a[end] = x
     return a
 end
 function push!(a::AbstractVector{Any}, @nospecialize x...)
@@ -3548,8 +3554,9 @@ function push!(a::AbstractVector{Any}, @nospecialize x...)
     na = length(a)
     nx = length(x)
     resize!(a, na + nx)
+    e = lastindex(a) - nx
     for i = 1:nx
-        a[na+i] = x[i]
+        a[e+i] = x[i]
     end
     return a
 end

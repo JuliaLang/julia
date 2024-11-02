@@ -56,6 +56,8 @@ global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSI
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
+# Similarly, this is the root of the julia repo directory that julia was built from
+const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 

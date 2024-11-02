@@ -33,35 +33,19 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
-            if isdefined(bnd, :owner)
-                owner = bnd.owner
-                if owner === bnd
-                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-                end
+            bpart = Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(scope, var))
+            kind = Base.binding_kind(bpart)
+            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_CONST || kind == Base.BINDING_KIND_DECLARED
+                print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+            elseif kind === Base.BINDING_KIND_FAILED
+                print(io, "\nHint: It looks like two or more modules export different ",
+                "bindings with this name, resulting in ambiguity. Try explicitly ",
+                "importing it from a particular module, or qualifying the name ",
+                "with the module it should come from.")
+            elseif kind === Base.BINDING_KIND_GUARD
+                print(io, "\nSuggestion: check for spelling errors or missing imports.")
             else
-                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
-                if C_NULL == owner
-                    # No global of this name exists in this module.
-                    # This is the common case, so do not print that information.
-                    # It could be the binding was exported by two modules, which we can detect
-                    # by the `usingfailed` flag in the binding:
-                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
-                        print(io, "\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-                    else
-                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
-                    end
-                    owner = bnd
-                else
-                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
-                end
-            end
-            if owner !== bnd
-                # this could use jl_binding_dbgmodule for the exported location in the message too
-                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
+                print(io, "\nSuggestion: this global was defined as `$(bpart.restriction.globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
@@ -90,7 +74,17 @@ end
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
     Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
-    print(io, "\nHint: a global variable of this name also exists in $m.")
+    active_mod = Base.active_module()
+    print(io, "\nHint: ")
+    if isdefined(active_mod, Symbol(m))
+        print(io, "a global variable of this name also exists in $m.")
+    else
+        if Symbol(m) == var
+            print(io, "$m is loaded but not imported in the active module $active_mod.")
+        else
+            print(io, "a global variable of this name may be made accessible by importing $m in the current active module $active_mod")
+        end
+    end
     return true
 end
 
@@ -329,7 +323,7 @@ function warn_on_non_owning_accesses(current_mod, ast)
     end
     return ast
 end
-warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(REPL.active_module(), ast)
+warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
 const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 
@@ -490,14 +484,74 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
+SHOW_MAXIMUM_BYTES::Int = 20480
+
+# Limit printing during REPL display
+mutable struct LimitIO{IO_t <: IO} <: IO
+    io::IO_t
+    maxbytes::Int
+    n::Int # max bytes to write
+end
+LimitIO(io::IO, maxbytes) = LimitIO(io, maxbytes, 0)
+
+struct LimitIOException <: Exception
+    maxbytes::Int
+end
+
+function Base.showerror(io::IO, e::LimitIOException)
+    print(io, "$LimitIOException: aborted printing after attempting to print more than $(Base.format_bytes(e.maxbytes)) within a `LimitIO`.")
+end
+
+function Base.write(io::LimitIO, v::UInt8)
+    io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
+    n_bytes = write(io.io, v)
+    io.n += n_bytes
+    return n_bytes
+end
+
+# Semantically, we only need to override `Base.write`, but we also
+# override `unsafe_write` for performance.
+function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
+    # already exceeded? throw
+    limiter.n > limiter.maxbytes && throw(LimitIOException(limiter.maxbytes))
+    remaining = limiter.maxbytes - limiter.n # >= 0
+
+    # Not enough bytes left; we will print up to the limit, then throw
+    if remaining < nb
+        if remaining > 0
+            Base.unsafe_write(limiter.io, p, remaining)
+        end
+        throw(LimitIOException(limiter.maxbytes))
+    end
+
+    # We won't hit the limit so we'll write the full `nb` bytes
+    bytes_written = Base.unsafe_write(limiter.io, p, nb)::Union{Int,UInt}
+    limiter.n += bytes_written
+    return bytes_written
+end
+
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
+end
+
+function show_limited(io::IO, mime::MIME, x)
+    try
+        # We wrap in a LimitIO to limit the amount of printing.
+        # We unpack `IOContext`s, since we will pass the properties on the outside.
+        inner = io isa IOContext ? io.io : io
+        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), io)
+        # `show_repl` to allow the hook with special syntax highlighting
+        show_repl(wrapped_limiter, mime, x)
+    catch e
+        e isa LimitIOException || rethrow()
+        printstyled(io, """…[printing stopped after displaying $(Base.format_bytes(e.maxbytes)); call `show(stdout, MIME"text/plain"(), ans)` to print without truncation]"""; color=:light_yellow, bold=true)
+    end
 end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
+        io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
@@ -510,7 +564,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show_repl(io, mime, x[])
+        show_limited(io, mime, x[])
         println(io)
     end
     return nothing
@@ -527,7 +581,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => active_module(repl)::Module)
+        io = IOContext(io, :module => Base.active_module(repl)::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
@@ -628,7 +682,7 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
-    get_module = () -> active_module(repl)
+    get_module = () -> Base.active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         errormonitor(t)
@@ -760,14 +814,9 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-function active_module() # this method is also called from Base
-    isdefined(Base, :active_repl) || return Main
-    Base.active_repl === nothing && return Main
-    return active_module(Base.active_repl::AbstractREPL)
-end
-active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
-active_module(::AbstractREPL) = Main
-active_module(d::REPLDisplay) = active_module(d.repl)
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(::AbstractREPL) = Main
+Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
 setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
@@ -779,11 +828,11 @@ setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = 
 Set `mod` as the default contextual module in the REPL,
 both for evaluating expressions and printing them.
 """
-function activate(mod::Module=Main)
+function activate(mod::Module=Main; interactive_utils::Bool=true)
     mistate = (Base.active_repl::LineEditREPL).mistate
     mistate === nothing && return nothing
     mistate.active_module = mod
-    Base.load_InteractiveUtils(mod)
+    interactive_utils && Base.load_InteractiveUtils(mod)
     return nothing
 end
 
@@ -1206,7 +1255,7 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
-        mod = active_module(repl)
+        mod = Base.active_module(repl)
         prefix = mod == Main ? "" : string('(', mod, ") ")
         pr = prompt isa String ? prompt : prompt()
         prefix * pr
@@ -1382,6 +1431,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1392,6 +1442,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1428,6 +1479,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
 

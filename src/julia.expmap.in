@@ -5,8 +5,8 @@
     asprintf;
     bitvector_*;
     ios_*;
-    arraylist_grow;
-    small_arraylist_grow;
+    arraylist_*;
+    small_arraylist_*;
     jl_*;
     ijl_*;
     _jl_mutex_*;

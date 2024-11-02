@@ -82,7 +82,7 @@ julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia
 julia-stdlib: | $(DIRS) julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/stdlib
 
-julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/startup.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl $(build_datarootdir)/julia/juliac.jl $(build_datarootdir)/julia/juliac-buildscript.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -181,7 +181,7 @@ $(build_sysconfdir)/julia/startup.jl: $(JULIAHOME)/etc/startup.jl | $(build_sysc
 	@echo Creating usr/etc/julia/startup.jl
 	@cp $< $@
 
-$(build_datarootdir)/julia/julia-config.jl: $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
+$(build_datarootdir)/julia/%: $(JULIAHOME)/contrib/% | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
 
 $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_depsbindir)
@@ -255,9 +255,9 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
 ifeq ($(SANITIZE),1)
 ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-1 += libclang_rt.asan
+JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
 else
-JL_PRIVATE_LIBS-1 += libasan
+JL_PRIVATE_LIBS-0 += libasan
 endif
 endif
 
@@ -382,6 +382,11 @@ endif
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
+
+	# Set .jl sources as read-only to match package directories
+	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;
+	find $(DESTDIR)$(datarootdir)/julia/test -type f -name \*.jl -exec chmod 0444 '{}' \;
+
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove various files which should not be installed
@@ -405,7 +410,7 @@ endif
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
 	# Install terminal info database
 ifneq ($(WITH_TERMINFO),0)
-	cp -R -L $(build_datarootdir)/terminfo $(DESTDIR)$(datarootdir)
+	cp -R -L $(build_datarootdir)/julia/terminfo $(DESTDIR)$(datarootdir)/julia/
 endif
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
@@ -645,7 +650,7 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE) .FORCE
 	@([ $$(( $$(date +%s) - $$(date -r $(build_private_libdir)/sys.$(SHLIB_EXT) +%s) )) -le 100 ] && \
-		printf '\033[93m    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. \033[0m\n') || true
+		printf '$(WARNCOLOR)    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. $(ENDCOLOR)\n') || true
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 test-revise-%: .FORCE

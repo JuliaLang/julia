@@ -25,8 +25,6 @@ else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),OpenBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
-else ifeq ($(OS),Darwin)
-LOADER_LDFLAGS += -lSystem
 endif
 
 # Build list of dependent libraries that must be opened
@@ -152,7 +150,7 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
-$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
+$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
 
 clean: | $(CLEAN_TARGETS)

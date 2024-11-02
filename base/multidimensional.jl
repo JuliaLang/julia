@@ -615,6 +615,8 @@ module IteratorsMD
     # array operations
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
         CartesianIndices(intersect.(a.indices, b.indices))
+    Base.issubset(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        isempty(a) || all(map(issubset, a.indices, b.indices))
 
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,<:Tuple{AbstractUnitRange{Int}},false}
@@ -730,6 +732,8 @@ end
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
+@inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,

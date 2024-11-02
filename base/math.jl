@@ -1276,14 +1276,12 @@ end
     return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
-function ^(x::Float32, n::Integer)
+function ^(x::Union{Float16,Float32}, n::Integer)
     n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
-    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
-    Float32(Base.power_by_squaring(Float64(x),n))
+    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
+    oftype(x, Base.power_by_squaring(widen(x),n))
 end
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
-@inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 ## rem2pi-related calculations ##
 

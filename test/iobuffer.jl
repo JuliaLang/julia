@@ -351,7 +351,7 @@ end
     a = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
     mark(a) # mark at position 0
     write(a, "Hello!")
-    @test Base.compact(a) == nothing # because pointer > mark
+    @test Base.compact(a) === nothing # because pointer > mark
     close(a)
     b = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
     write(b, "Hello!")
@@ -388,4 +388,14 @@ end
 @testset "with offset" begin
     b = pushfirst!([0x02], 0x01)
     @test take!(IOBuffer(b)) == [0x01, 0x02]
+end
+
+@testset "#54636 reading from non-dense vectors" begin
+    data = 0x00:0xFF
+    io = IOBuffer(data)
+    @test read(io) == data
+
+    data = @view(collect(0x00:0x0f)[begin:2:end])
+    io = IOBuffer(data)
+    @test read(io) == data
 end
