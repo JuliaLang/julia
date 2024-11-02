@@ -199,9 +199,8 @@ end
 
 function typejoin_union_tuple(T::DataType)
     @_foldable_meta
-    u = Base.unwrap_unionall(T)
-    p = (u::DataType).parameters
-    lr = length(p)::Int
+    p = T.parameters
+    lr = length(p)
     if lr == 0
         return Tuple{}
     end

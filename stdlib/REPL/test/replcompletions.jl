@@ -1347,9 +1347,9 @@ mktempdir() do path
 end
 
 # Test tilde path completion
-let (c, r, res) = test_complete("\"~/julia")
+let (c, r, res) = test_complete("\"~/ka8w5rsz")
     if !Sys.iswindows()
-        @test res && c == String[homedir() * "/julia"]
+        @test res && c == String[homedir() * "/ka8w5rsz"]
     else
         @test !res
     end
@@ -1546,6 +1546,16 @@ end
     @test "testcmd`" in c
     c, r, res = test_complete("CompletionFoo.tϵsτc")
     @test "tϵsτcmδ`" in c
+
+    # Issue #56071: don't complete string and command macros when the input matches the internal name like `r_` to `r"`
+    c, r, res = test_complete("CompletionFoo.teststr_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.teststr_s")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_c")
+    @test isempty(c)
 end
 
 @testset "Keyword-argument completion" begin

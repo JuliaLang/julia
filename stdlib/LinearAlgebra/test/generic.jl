@@ -131,53 +131,54 @@ end
 
 
 @testset "array and subarray" begin
-    aa = reshape([1.:6;], (2,3))
-    for a in (aa, view(aa, 1:2, 1:2))
-        am, an = size(a)
-        @testset "Scaling with rmul! and lmul" begin
-            @test rmul!(copy(a), 5.) == a*5
-            @test lmul!(5., copy(a)) == a*5
-            b = randn(2048)
-            subB = view(b, :, :)
-            @test rmul!(copy(b), 5.) == b*5
-            @test rmul!(copy(subB), 5.) == subB*5
-            @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
-            @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
-            @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
-        end
+    for aa in (reshape([1.:6;], (2,3)), fill(float.(rand(Int8,2,2)), 2,3))
+        for a in (aa, view(aa, 1:2, 1:2))
+            am, an = size(a)
+            @testset "Scaling with rmul! and lmul" begin
+                @test rmul!(copy(a), 5.) == a*5
+                @test lmul!(5., copy(a)) == a*5
+                b = randn(2048)
+                subB = view(b, :, :)
+                @test rmul!(copy(b), 5.) == b*5
+                @test rmul!(copy(subB), 5.) == subB*5
+                @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
+                @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
+                @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
+                @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+                @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
+            end
 
-        @testset "Scaling with rdiv! and ldiv!" begin
-            @test rdiv!(copy(a), 5.) == a/5
-            @test ldiv!(5., copy(a)) == a/5
-            @test ldiv!(zero(a), 5., copy(a)) == a/5
-        end
+            @testset "Scaling with rdiv! and ldiv!" begin
+                @test rdiv!(copy(a), 5.) == a/5
+                @test ldiv!(5., copy(a)) == a/5
+                @test ldiv!(zero(a), 5., copy(a)) == a/5
+            end
 
-        @testset "Scaling with 3-argument mul!" begin
-            @test mul!(similar(a), 5., a) == a*5
-            @test mul!(similar(a), a, 5.) == a*5
-            @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
-            @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
-        end
+            @testset "Scaling with 3-argument mul!" begin
+                @test mul!(similar(a), 5., a) == a*5
+                @test mul!(similar(a), a, 5.) == a*5
+                @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
+                @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
+                @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+                @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
+            end
 
-        @testset "Scaling with 5-argument mul!" begin
-            @test mul!(copy(a), 5., a, 10, 100) == a*150
-            @test mul!(copy(a), a, 5., 10, 100) == a*150
-            @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
-            @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
-            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
-            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            @testset "Scaling with 5-argument mul!" begin
+                @test mul!(copy(a), 5., a, 10, 100) == a*150
+                @test mul!(copy(a), a, 5., 10, 100) == a*150
+                @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
+                @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
+                @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+                @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            end
         end
     end
 end

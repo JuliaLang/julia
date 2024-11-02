@@ -18,14 +18,14 @@ function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
-        _isone_triacheck(A, m)
+        _isone_triacheck(A)
     else
-        _isone_cachefriendly(A, m)
+        _isone_cachefriendly(A)
     end
 end
 
-@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in i:m
+@inline function _isone_triacheck(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -36,8 +36,8 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in 1:m
+@inline function _isone_cachefriendly(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -108,6 +108,18 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 # Conservative assessment of types that have zero(T) defined for themselves
+"""
+    haszero(T::Type)
+
+Return whether a type `T` has a unique zero element defined using `zero(T)`.
+If a type `M` specializes `zero(M)`, it may also choose to set `haszero(M)` to `true`.
+By default, `haszero` is assumed to be `false`, in which case the zero elements
+are deduced from values rather than the type.
+
+!!! note
+    `haszero` is a conservative check that is used to dispatch to
+    optimized paths. Extending it is optional, but encouraged.
+"""
 haszero(::Type) = false
 haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
 haszero(::Type{Union{Missing,T}}) where {T<:Number} = haszero(T)
@@ -198,7 +210,7 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
-    for j in 1:n
+    for j in axes(A,2)
         for i in max(1,j-u):min(m,j-l)
             @inbounds A[i, j] = xT
         end
@@ -553,7 +565,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
         retmat = copymutable_oftype(A, TT)
-        for i in 1:n
+        for i in axes(retmat,1)
             retmat[i, i] = retmat[i, i] ^ p
         end
         return retmat
@@ -792,10 +804,10 @@ end
 
 ## Swap rows i and j and columns i and j in X
 function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
-    for k = 1:size(X,1)
+    for k = axes(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
-    for k = 1:size(X,2)
+    for k = axes(X,2)
         X[i,k], X[j,k] = X[j,k], X[i,k]
     end
 end
