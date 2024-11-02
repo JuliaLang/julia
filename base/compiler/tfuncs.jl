@@ -407,10 +407,7 @@ end
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
-            if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) &&
-               isdefinedconst_globalref(GlobalRef(arg1.val::Module, sym.val::Symbol))
-                return Const(true)
-            end
+            # isa(sym, Const) case intercepted in abstract interpretation
         elseif isa(sym, Const)
             val = sym.val
             if isa(val, Symbol)
@@ -1160,7 +1157,9 @@ end
             if isa(sv, Module)
                 setfield && return Bottom
                 if isa(nv, Symbol)
-                    return abstract_eval_global(sv, nv)
+                    # In ordinary inference, this case is intercepted early and
+                    # re-routed to `getglobal`.
+                    return Any
                 end
                 return Bottom
             end
@@ -1407,8 +1406,9 @@ end
     elseif ff === Core.modifyglobal!
         o = unwrapva(argtypes[2])
         f = unwrapva(argtypes[3])
-        RT = modifyglobal!_tfunc(𝕃ᵢ, o, f, Any, Any, Symbol)
-        TF = getglobal_tfunc(𝕃ᵢ, o, f, Symbol)
+        GT = abstract_eval_get_binding_type(interp, sv, o, f).rt
+        RT = isa(GT, Const) ? Pair{GT.val, GT.val} : Pair
+        TF = isa(GT, Const) ? GT.val : Any
     elseif ff === Core.memoryrefmodify!
         o = unwrapva(argtypes[2])
         RT = memoryrefmodify!_tfunc(𝕃ᵢ, o, Any, Any, Symbol, Bool)
@@ -2277,20 +2277,6 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === typeassert
         na == 2 || return false
         return typeassert_nothrow(𝕃, argtypes[1], argtypes[2])
-    elseif f === getglobal
-        if na == 2
-            return getglobal_nothrow(argtypes[1], argtypes[2])
-        elseif na == 3
-            return getglobal_nothrow(argtypes[1], argtypes[2], argtypes[3])
-        end
-        return false
-    elseif f === setglobal!
-        if na == 3
-            return setglobal!_nothrow(argtypes[1], argtypes[2], argtypes[3])
-        elseif na == 4
-            return setglobal!_nothrow(argtypes[1], argtypes[2], argtypes[3], argtypes[4])
-        end
-        return false
     elseif f === Core.get_binding_type
         na == 2 || return false
         return get_binding_type_nothrow(𝕃, argtypes[1], argtypes[2])
@@ -2473,7 +2459,8 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
         end
     end
     if hasintersect(widenconst(obj), Module)
-        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+        # Modeled more precisely in abstract_eval_getglobal
+        inaccessiblememonly = ALWAYS_FALSE
     elseif is_mutation_free_argtype(obj)
         inaccessiblememonly = ALWAYS_TRUE
     else
@@ -2482,24 +2469,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
-function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
-    2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
-    consistent = inaccessiblememonly = ALWAYS_FALSE
-    nothrow = false
-    M, s = argtypes[1], argtypes[2]
-    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
-        nothrow = true
-        # typeasserts below are already checked in `getglobal_nothrow`
-        Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
-        if isconst(Mval, sval)
-            consistent = ALWAYS_TRUE
-            if is_mutation_free_argtype(rt)
-                inaccessiblememonly = ALWAYS_TRUE
-            end
-        end
-    end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
-end
+
 
 """
     builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Effects
@@ -2525,11 +2495,13 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
     elseif f === getglobal
-        return getglobal_effects(argtypes, rt)
+        2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
+        # Modeled more precisely in abstract_eval_getglobal
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
-        effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
-        return Effects(EFFECTS_TOTAL; effect_free)
+        # Modeled more precisely in abstract_eval_get_binding_type
+        return Effects(EFFECTS_TOTAL; effect_free=ALWAYS_FALSE)
     elseif f === compilerbarrier
         length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
         setting = argtypes[1]
@@ -3065,118 +3037,28 @@ function typename_static(@nospecialize(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 
-function global_order_nothrow(@nospecialize(o), loading::Bool, storing::Bool)
-    o isa Const || return false
+function global_order_exct(@nospecialize(o), loading::Bool, storing::Bool)
+    if !(o isa Const)
+        if o === Symbol
+            return ConcurrencyViolationError
+        elseif !hasintersect(o, Symbol)
+            return TypeError
+        else
+            return Union{ConcurrencyViolationError, TypeError}
+        end
+    end
     sym = o.val
     if sym isa Symbol
         order = get_atomic_order(sym, loading, storing)
-        return order !== MEMORY_ORDER_INVALID && order !== MEMORY_ORDER_NOTATOMIC
-    end
-    return false
-end
-@nospecs function getglobal_nothrow(M, s, o)
-    global_order_nothrow(o, #=loading=#true, #=storing=#false) || return false
-    return getglobal_nothrow(M, s)
-end
-@nospecs function getglobal_nothrow(M, s)
-    if M isa Const && s isa Const
-        M, s = M.val, s.val
-        if M isa Module && s isa Symbol
-            return isdefinedconst_globalref(GlobalRef(M, s))
+        if order !== MEMORY_ORDER_INVALID && order !== MEMORY_ORDER_NOTATOMIC
+            return Union{}
+        else
+            return ConcurrencyViolationError
         end
+    else
+        return TypeError
     end
-    return false
 end
-@nospecs function getglobal_tfunc(𝕃::AbstractLattice, M, s, order=Symbol)
-    if M isa Const && s isa Const
-        M, s = M.val, s.val
-        if M isa Module && s isa Symbol
-            return abstract_eval_global(M, s)
-        end
-        return Bottom
-    elseif !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
-        return Bottom
-    end
-    T = get_binding_type_tfunc(𝕃, M, s)
-    T isa Const && return T.val
-    return Any
-end
-@nospecs function setglobal!_tfunc(𝕃::AbstractLattice, M, s, v, order=Symbol)
-    if !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
-        return Bottom
-    end
-    return v
-end
-@nospecs function swapglobal!_tfunc(𝕃::AbstractLattice, M, s, v, order=Symbol)
-    setglobal!_tfunc(𝕃, M, s, v) === Bottom && return Bottom
-    return getglobal_tfunc(𝕃, M, s)
-end
-@nospecs function modifyglobal!_tfunc(𝕃::AbstractLattice, M, s, op, v, order=Symbol)
-    T = get_binding_type_tfunc(𝕃, M, s)
-    T === Bottom && return Bottom
-    T isa Const || return Pair
-    T = T.val
-    return Pair{T, T}
-end
-@nospecs function replaceglobal!_tfunc(𝕃::AbstractLattice, M, s, x, v, success_order=Symbol, failure_order=Symbol)
-    v = setglobal!_tfunc(𝕃, M, s, v)
-    v === Bottom && return Bottom
-    T = get_binding_type_tfunc(𝕃, M, s)
-    T === Bottom && return Bottom
-    T isa Const || return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
-    T = T.val
-    return ccall(:jl_apply_cmpswap_type, Any, (Any,), T)
-end
-@nospecs function setglobalonce!_tfunc(𝕃::AbstractLattice, M, s, v, success_order=Symbol, failure_order=Symbol)
-    setglobal!_tfunc(𝕃, M, s, v) === Bottom && return Bottom
-    return Bool
-end
-
-add_tfunc(Core.getglobal, 2, 3, getglobal_tfunc, 1)
-add_tfunc(Core.setglobal!, 3, 4, setglobal!_tfunc, 3)
-add_tfunc(Core.swapglobal!, 3, 4, swapglobal!_tfunc, 3)
-add_tfunc(Core.modifyglobal!, 4, 5, modifyglobal!_tfunc, 3)
-add_tfunc(Core.replaceglobal!, 4, 6, replaceglobal!_tfunc, 3)
-add_tfunc(Core.setglobalonce!, 3, 5, setglobalonce!_tfunc, 3)
-
-@nospecs function setglobal!_nothrow(M, s, newty, o)
-    global_order_nothrow(o, #=loading=#false, #=storing=#true) || return false
-    return setglobal!_nothrow(M, s, newty)
-end
-@nospecs function setglobal!_nothrow(M, s, newty)
-    if M isa Const && s isa Const
-        M, s = M.val, s.val
-        if isa(M, Module) && isa(s, Symbol)
-            return global_assignment_nothrow(M, s, newty)
-        end
-    end
-    return false
-end
-
-function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
-    if !isconst(M, s)
-        ty = ccall(:jl_get_binding_type, Any, (Any, Any), M, s)
-        return ty isa Type && widenconst(newty) <: ty
-    end
-    return false
-end
-
-@nospecs function get_binding_type_effect_free(M, s)
-    if M isa Const && s isa Const
-        M, s = M.val, s.val
-        if M isa Module && s isa Symbol
-            return ccall(:jl_get_binding_type, Any, (Any, Any), M, s) !== nothing
-        end
-    end
-    return false
-end
-@nospecs function get_binding_type_tfunc(𝕃::AbstractLattice, M, s)
-    if get_binding_type_effect_free(M, s)
-        return Const(Core.get_binding_type((M::Const).val::Module, (s::Const).val::Symbol))
-    end
-    return Type
-end
-add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
 
 @nospecs function get_binding_type_nothrow(𝕃::AbstractLattice, M, s)
     ⊑ = partialorder(𝕃)

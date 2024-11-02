@@ -307,8 +307,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = consistent = isdefinedconst_globalref(stmt)
-        return (consistent, nothrow, nothrow)
+        # Modeled more precisely in abstract_eval_globalref. In general, if a
+        # GlobalRef was moved to statement position, it is probably not `const`,
+        # so we can't say much about it anyway.
+        return (false, false, false)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
@@ -444,7 +446,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref_type(x)
+        return abstract_eval_globalref_type(x, src)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -1277,7 +1279,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, WorldRange(ci.min_world, ci.max_world))
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

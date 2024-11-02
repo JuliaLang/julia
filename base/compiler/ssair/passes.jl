@@ -474,9 +474,9 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
         elseif isa(leaf, GlobalRef)
-            mod, name = leaf.mod, leaf.name
-            if isdefined(mod, name) && isconst(mod, name)
-                leaf = getglobal(mod, name)
+            typ = argextype(leaf, compact)
+            if isa(typ, Const)
+                leaf = typ.val
             else
                 return nothing
             end

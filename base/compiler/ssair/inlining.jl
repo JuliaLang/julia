@@ -1694,11 +1694,6 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
             if has_flag(flag, IR_FLAG_NOTHROW)
                 return SomeCase(quoted(val))
             end
-        elseif f === Core.get_binding_type
-            length(argtypes) == 3 || return nothing
-            if get_binding_type_effect_free(argtypes[2], argtypes[3])
-                return SomeCase(quoted(val))
-            end
         end
     end
     if f === compilerbarrier
