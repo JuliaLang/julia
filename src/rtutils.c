@@ -567,7 +567,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_get_binding_value(stderr_obj) : NULL;
+    return stderr_obj ? jl_get_binding_value_if_resolved(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------

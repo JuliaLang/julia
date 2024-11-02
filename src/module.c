@@ -360,6 +360,28 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t
     return decode_restriction_value(pku);
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b)
+{
+    // Unlike jl_get_binding_value this doesn't try to allocate new binding partitions if they
+    // don't already exist, making this JL_NOTSAFEPOINT.
+    if (!b)
+        return NULL;
+    jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
+    if (!bpart)
+        return NULL;
+    size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
+    if (bpart->min_world > jl_current_task->world_age || jl_current_task->world_age > max_world)
+        return NULL;
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
+        return NULL;
+    if (jl_bkind_is_some_import(decode_restriction_kind(pku)))
+        return NULL;
+    if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+        return decode_restriction_value(pku);
+    return jl_atomic_load_relaxed(&b->value);
+}
+
 JL_DLLEXPORT jl_value_t *jl_bpart_get_restriction_value(jl_binding_partition_t *bpart)
 {
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
