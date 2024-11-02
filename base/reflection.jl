@@ -347,16 +347,40 @@ function raise_match_failure(name::Symbol, @nospecialize(tt))
 end
 
 """
+    default_compiler_module()
+
+In order to facilitate working on the compiler, we'd like to make it easy for
+our users to switch all the ordinary compiler-based reflection to a new copy of the
+compiler, if they `dev` and load a new version of the compiler. However, it would
+be confusing if the result of reflection functions changed, simply because some
+downstream package happens to load a new copy of `Compiler`. Thus, we look for
+a special rendezvous binding `var"#_interactive_compiler_reference` in Main.
+This binding is exported by the compiler, so if the user does `using Compiler` to
+load a dev'ed version of the Compiler from `Main`, we will see that and pick up
+the new Compiler, but if the using statement is in some downstream package, we
+will not.
+"""
+function default_compiler_module()
+    # If the user has explicitly loaded a new compiler into Main, prefer that.
+    if isdefined(Core.Main, :var"#_interactive_compiler_reference")
+        return Core.Main.var"#_interactive_compiler_reference"
+    end
+    # Otherwise return a private reference to the internal compiler
+    return Base.Compiler
+end
+
+"""
     code_typed_by_type(types::Type{<:Tuple}; ...)
 
 Similar to [`code_typed`](@ref), except the argument is a tuple type describing
 a full signature to query.
 """
 function code_typed_by_type(@nospecialize(tt::Type);
+                            Compiler::Module = default_compiler_module(),
                             optimize::Bool=true,
                             debuginfo::Symbol=:default,
                             world::UInt=get_world_counter(),
-                            interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                            interp=Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if @isdefined(IRShow)
@@ -384,7 +408,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+function get_oc_code_rt(Compiler::Module, oc::Core.OpaqueClosure, types, optimize::Bool)
     @nospecialize oc types
     ccall(:jl_is_in_pure_context, Bool, ()) &&
         error("code reflection cannot be used from generated functions")
@@ -416,11 +440,12 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
 end
 
 function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
+                                   Compiler::Module = default_compiler_module(),
                                    debuginfo::Symbol=:default,
                                    optimize::Bool=true,
                                    _...)
     @nospecialize oc types
-    (code, rt) = get_oc_code_rt(oc, types, optimize)
+    (code, rt) = get_oc_code_rt(Compiler, oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
@@ -484,8 +509,9 @@ a full signature to query.
 """
 function code_ircode_by_type(
     @nospecialize(tt::Type);
+    Compiler::Module = default_compiler_module(),
     world::UInt=get_world_counter(),
-    interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world),
+    interp=Compiler.NativeInterpreter(world),
     optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
 )
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
@@ -506,22 +532,25 @@ function code_ircode_by_type(
     return asts
 end
 
-function _builtin_return_type(interp::Compiler.AbstractInterpreter,
+function _builtin_return_type(interp,
                               @nospecialize(f::Core.Builtin), @nospecialize(types))
+    Compiler = typename(typeof(interp))
     argtypes = Any[to_tuple_type(types).parameters...]
     rt = Compiler.builtin_tfunction(interp, f, argtypes, nothing)
     return Compiler.widenconst(rt)
 end
 
-function _builtin_effects(interp::Compiler.AbstractInterpreter,
+function _builtin_effects(interp,
                           @nospecialize(f::Core.Builtin), @nospecialize(types))
+    Compiler = typename(typeof(interp))
     argtypes = Any[to_tuple_type(types).parameters...]
     rt = Compiler.builtin_tfunction(interp, f, argtypes, nothing)
     return Compiler.builtin_effects(Compiler.typeinf_lattice(interp), f, argtypes, rt)
 end
 
-function _builtin_exception_type(interp::Compiler.AbstractInterpreter,
+function _builtin_exception_type(interp,
                                  @nospecialize(f::Core.Builtin), @nospecialize(types))
+    Compiler = typename(typeof(interp))
     effects = _builtin_effects(interp, f, types)
     return Compiler.is_nothrow(effects) ? Union{} : Any
 end
@@ -578,11 +607,12 @@ julia> Base.return_types(sum, (Union{Vector{Int},UnitRange{Int}},))
     doing so will result in an error.
 """
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                      Compiler::Module = default_compiler_module(),
                       world::UInt=get_world_counter(),
-                      interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                      interp=Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types))
+        _, rt = only(code_typed_opaque_closure(Compiler, f, types))
         return Any[rt]
     elseif isa(f, Core.Builtin)
         return Any[_builtin_return_type(interp, f, types)]
@@ -646,11 +676,12 @@ On the other hand `Base.infer_return_type` returns one collective result that su
     doing so will result in an error.
 """
 function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
+                           Compiler::Module = default_compiler_module(),
                            world::UInt=get_world_counter(),
-                           interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                           interp=Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        return last(only(code_typed_opaque_closure(f, types)))
+        return last(only(code_typed_opaque_closure(Compiler, f, types)))
     elseif isa(f, Core.Builtin)
         return _builtin_return_type(interp, f, types)
     end
@@ -716,8 +747,9 @@ julia> Base.infer_exception_types(throw_if_number, (Any,))
     doing so will result in an error.
 """
 function infer_exception_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                               Compiler::Module = default_compiler_module(),
                                world::UInt=get_world_counter(),
-                               interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                               interp=Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any[Any] # TODO
@@ -795,8 +827,9 @@ signature, the exception type is widened to `MethodError`.
     doing so will result in an error.
 """
 function infer_exception_type(@nospecialize(f), @nospecialize(types=default_tt(f));
+                              Compiler::Module = default_compiler_module(),
                               world::UInt=get_world_counter(),
-                              interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                              interp=Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any # TODO
@@ -880,9 +913,10 @@ signature, the `:nothrow` bit gets tainted.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       Compiler::Module = default_compiler_module(),
                        optimize::Bool=true,
                        world::UInt=get_world_counter(),
-                       interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                       interp=Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.Builtin)
         return _builtin_effects(interp, f, types)
@@ -916,8 +950,9 @@ function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwarg
 end
 
 function print_statement_costs(io::IO, @nospecialize(tt::Type);
+                               Compiler::Module = default_compiler_module(),
                                world::UInt=get_world_counter(),
-                               interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                               interp=Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     matches = Compiler.findall(tt, Compiler.method_table(interp))

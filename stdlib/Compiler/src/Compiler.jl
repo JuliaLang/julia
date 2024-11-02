@@ -27,6 +27,13 @@ ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
     (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
 ccall(:jl_set_module_parent, Cvoid, (Any, Any), Compiler, Compiler)
 
+# The interactive reflection utilities (`code_`, etc.) look for this symbol
+# in Main and if present use that Compiler instead of the builtin one. By
+# exporting this symbol, we can make `using Compiler` switch over these utilities
+# to the loaded compiler.
+const var"#_interactive_compiler_reference" = Compiler
+export var"#_interactive_compiler_reference"
+
 using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write,
