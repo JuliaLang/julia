@@ -560,7 +560,6 @@ Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetVector, ::Colon) = A
 Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
-Base.reshape(A::OffsetArray, ::Colon) = reshape(A, (Colon(),))
 Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(A, inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = _reshape_nov(A, inds)
 # The following two additional methods for Colon are added to resolve method ambiguities to

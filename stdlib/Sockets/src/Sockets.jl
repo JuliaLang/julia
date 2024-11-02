@@ -107,6 +107,8 @@ if OS_HANDLE != RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
 
+Base.fd(sock::TCPSocket) = Base._fd(sock)
+
 
 mutable struct TCPServer <: LibuvServer
     handle::Ptr{Cvoid}
@@ -138,6 +140,8 @@ function TCPServer(; delay=true)
     iolock_end()
     return tcp
 end
+
+Base.fd(server::TCPServer) = Base._fd(server)
 
 """
     accept(server[, client])
@@ -198,6 +202,8 @@ function UDPSocket()
 end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
+
+Base.fd(sock::UDPSocket) = Base._fd(sock)
 
 function _uv_hook_close(sock::UDPSocket)
     lock(sock.cond)
@@ -450,7 +456,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later

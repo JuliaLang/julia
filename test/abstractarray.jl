@@ -2,6 +2,8 @@
 
 using Random, LinearAlgebra
 
+include("compiler/irutils.jl")
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
@@ -1403,6 +1405,8 @@ end
 Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
 Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
 
+push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int, @nospecialize(y)) = push!(v, (; x, y))
+
 @testset "push! and pushfirst!" begin
     a_orig = [1]
     tpa = TestPushArray{Int, 2}(a_orig)
@@ -1412,6 +1416,11 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
+        # After optimization, all `push!` and `convert` calls should have been inlined
+        @test all((x)->!iscall((src, push!))(x) && !iscall((src, convert))(x), src.code)
+    end
 end
 
 mutable struct SimpleArray{T} <: AbstractVector{T}
@@ -1434,6 +1443,31 @@ using .Main.OffsetArrays
         @test_throws Exception f(a, args...)
         @test a == orig
     end
+end
+
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin

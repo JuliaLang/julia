@@ -214,11 +214,12 @@ The following is a complete list of command-line switches available when launchi
 |`--output-bc <name>`                   |Generate LLVM bitcode (.bc)|
 |`--output-asm <name>`                  |Generate an assembly file (.s)|
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
-|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to a path|
+|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
 |`--trace-compile-timing`               |If --trace-compile is enabled show how long each took to compile in ms|
+|`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
-
+|`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|
 
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root

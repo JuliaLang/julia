@@ -311,6 +311,19 @@
         test_relpath()
     end
 
+    @testset "uripath" begin
+        host = if Sys.iswindows() "" else gethostname() end
+        sysdrive, uridrive = if Sys.iswindows() "C:\\", "C:/" else "/", "" end
+        @test Base.Filesystem.uripath("$(sysdrive)some$(sep)file.txt") == "file://$host/$(uridrive)some/file.txt"
+        @test Base.Filesystem.uripath("$(sysdrive)another$(sep)$(sep)folder$(sep)file.md") == "file://$host/$(uridrive)another/folder/file.md"
+        @test Base.Filesystem.uripath("$(sysdrive)some file with ^odd% chars") == "file://$host/$(uridrive)some%20file%20with%20%5Eodd%25%20chars"
+        @test Base.Filesystem.uripath("$(sysdrive)weird chars like @#&()[]{}") == "file://$host/$(uridrive)weird%20chars%20like%20%40%23%26%28%29%5B%5D%7B%7D"
+        @test Base.Filesystem.uripath("$sysdrive") == "file://$host/$uridrive"
+        @test Base.Filesystem.uripath(".") == Base.Filesystem.uripath(pwd())
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)Δεδομένα") == "file://$host/$(uridrive)unicode/%CE%94%CE%B5%CE%B4%CE%BF%CE%BC%CE%AD%CE%BD%CE%B1"
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)🧮🐛🔨") == "file://$host/$(uridrive)unicode/%F0%9F%A7%AE%F0%9F%90%9B%F0%9F%94%A8"
+    end
+
     if Sys.iswindows()
         @testset "issue #23646" begin
             @test lowercase(relpath("E:\\a\\b", "C:\\c")) == "e:\\a\\b"

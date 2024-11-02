@@ -159,6 +159,16 @@ let
     @test @lock(lockable2, lockable2[]["foo"]) == "hello"
 end
 
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -349,6 +359,15 @@ end
 let foo() = 1
     @test @timev foo() true
 end
+
+# this is internal, but used for easy testing
+@test sprint(Base.time_print, 1e9) == "  1.000000 seconds"
+@test sprint(Base.time_print, 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true

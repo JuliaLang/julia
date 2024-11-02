@@ -212,11 +212,51 @@ function close(c::Channel, @nospecialize(excp::Exception))
     nothing
 end
 
-# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
-# are forced to see `isready == true` if they see `isopen == false`. This means users must
-# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
-# does this right for you).
-isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
+"""
+    isopen(c::Channel)
+Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
+Notice that a `Channel`` can be closed and still have
+buffered elements which can be consumed with [`take!`](@ref).
+
+# Examples
+
+Buffered channel with task:
+```jldoctest
+julia> c = Channel(ch -> put!(ch, 1), 1);
+
+julia> isopen(c) # The channel is closed to new `put!`s
+false
+
+julia> isready(c) # The channel is closed but still contains elements
+true
+
+julia> take!(c)
+1
+
+julia> isready(c)
+false
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel{Int}();
+
+julia> isopen(c)
+true
+
+julia> close(c)
+
+julia> isopen(c)
+false
+```
+"""
+function isopen(c::Channel)
+    # Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+    # are forced to see `isready == true` if they see `isopen == false`. This means users must
+    # call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+    # does this right for you).
+    return ((@atomic :acquire c.state) === :open)
+end
 
 """
     empty!(c::Channel)

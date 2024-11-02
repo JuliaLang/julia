@@ -66,6 +66,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 mutable struct MIState
     interface::ModalInterface
     active_module::Module
+    previous_active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -78,7 +79,7 @@ mutable struct MIState
     async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -165,7 +166,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -381,7 +382,13 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+
+    completions, partial, should_complete = try
+        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+    catch
+        @debug "error completing line for hint" exception=current_exceptions()
+        return clear_hint(st)
+    end
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -1510,13 +1517,11 @@ end
 
 current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
-previous_active_module::Module = Main
-
 function activate_module(s::MIState)
     word = current_word_with_dots(s);
     empty = isempty(word)
     mod = if empty
-        previous_active_module
+        s.previous_active_module
     else
         try
             Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
@@ -1532,7 +1537,7 @@ function activate_module(s::MIState)
     if Base.active_module() == Main || mod == Main
         # At least one needs to be Main. Disallows toggling between two non-Main modules because it's
         # otherwise hard to get back to Main
-        global previous_active_module = Base.active_module()
+        s.previous_active_module = Base.active_module()
     end
     REPL.activate(mod)
     edit_clear(s)

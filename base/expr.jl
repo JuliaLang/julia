@@ -79,7 +79,7 @@ function copy(c::CodeInfo)
         cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
     cnew.ssaflags  = copy(cnew.ssaflags)
-    cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
+    cnew.edges     = cnew.edges === nothing || cnew.edges isa Core.SimpleVector ? cnew.edges : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
     ssavaluetypes isa Vector{Any} && (cnew.ssavaluetypes = copy(ssavaluetypes))
     return cnew
@@ -505,6 +505,7 @@ The following `setting`s are supported.
 - `:inaccessiblememonly`
 - `:noub`
 - `:noub_if_noinbounds`
+- `:nortcall`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -674,6 +675,20 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
+## `:nortcall`
+
+The `:nortcall` setting asserts that the method does not call `Core.Compiler.return_type`,
+and that any other methods this method might call also do not call `Core.Compiler.return_type`.
+
+!!! note
+    To be precise, this assertion can be used when a call to `Core.Compiler.return_type` is
+    not made at runtime; that is, when the result of `Core.Compiler.return_type` is known
+    exactly at compile time and the call is eliminated by the optimizer. However, since
+    whether the result of `Core.Compiler.return_type` is folded at compile time depends
+    heavily on the compiler's implementation, it is generally risky to assert this if
+    the method in question uses `Core.Compiler.return_type` in any form.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -683,6 +698,7 @@ currently equivalent to the following `setting`s:
 - `:effect_free`
 - `:terminates_globally`
 - `:noub`
+- `:nortcall`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -716,6 +732,7 @@ the following other `setting`s:
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:noub`
+- `:nortcall`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -740,7 +757,7 @@ macro assume_effects(args...)
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
+        insert!(lastex.args, 3, encode_effects_override(override))
         return esc(lastex)
     end
     override′ = compute_assumed_setting(override, lastex)
@@ -767,7 +784,49 @@ function compute_assumed_settings(settings)
     return override
 end
 
-using Core.Compiler: EffectsOverride
+struct EffectsOverride
+    consistent::Bool
+    effect_free::Bool
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+    notaskstate::Bool
+    inaccessiblememonly::Bool
+    noub::Bool
+    noub_if_noinbounds::Bool
+    consistent_overlay::Bool
+    nortcall::Bool
+end
+
+function EffectsOverride(
+    override::EffectsOverride =
+        EffectsOverride(false, false, false, false, false, false, false, false, false, false, false);
+    consistent::Bool = override.consistent,
+    effect_free::Bool = override.effect_free,
+    nothrow::Bool = override.nothrow,
+    terminates_globally::Bool = override.terminates_globally,
+    terminates_locally::Bool = override.terminates_locally,
+    notaskstate::Bool = override.notaskstate,
+    inaccessiblememonly::Bool = override.inaccessiblememonly,
+    noub::Bool = override.noub,
+    noub_if_noinbounds::Bool = override.noub_if_noinbounds,
+    consistent_overlay::Bool = override.consistent_overlay,
+    nortcall::Bool = override.nortcall)
+    return EffectsOverride(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates_globally,
+        terminates_locally,
+        notaskstate,
+        inaccessiblememonly,
+        noub,
+        noub_if_noinbounds,
+        consistent_overlay,
+        nortcall)
+end
+
+const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
@@ -794,24 +853,55 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
     elseif setting === :foldable
-        consistent = effect_free = terminates_globally = noub = val
-        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
+        consistent = effect_free = terminates_globally = noub = nortcall = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub, nortcall)
     elseif setting === :removable
         effect_free = nothrow = terminates_globally = val
         return EffectsOverride(override; effect_free, nothrow, terminates_globally)
     elseif setting === :total
         consistent = effect_free = nothrow = terminates_globally = notaskstate =
-            inaccessiblememonly = noub = val
+            inaccessiblememonly = noub = nortcall = val
         return EffectsOverride(override;
             consistent, effect_free, nothrow, terminates_globally, notaskstate,
-            inaccessiblememonly, noub)
+            inaccessiblememonly, noub, nortcall)
     end
     return nothing
 end
 
+function encode_effects_override(eo::EffectsOverride)
+    e = 0x0000
+    eo.consistent          && (e |= (0x0001 << 0))
+    eo.effect_free         && (e |= (0x0001 << 1))
+    eo.nothrow             && (e |= (0x0001 << 2))
+    eo.terminates_globally && (e |= (0x0001 << 3))
+    eo.terminates_locally  && (e |= (0x0001 << 4))
+    eo.notaskstate         && (e |= (0x0001 << 5))
+    eo.inaccessiblememonly && (e |= (0x0001 << 6))
+    eo.noub                && (e |= (0x0001 << 7))
+    eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
+    eo.consistent_overlay  && (e |= (0x0001 << 9))
+    eo.nortcall            && (e |= (0x0001 << 10))
+    return e
+end
+
+function decode_effects_override(e::UInt16)
+    return EffectsOverride(
+        !iszero(e & (0x0001 << 0)),
+        !iszero(e & (0x0001 << 1)),
+        !iszero(e & (0x0001 << 2)),
+        !iszero(e & (0x0001 << 3)),
+        !iszero(e & (0x0001 << 4)),
+        !iszero(e & (0x0001 << 5)),
+        !iszero(e & (0x0001 << 6)),
+        !iszero(e & (0x0001 << 7)),
+        !iszero(e & (0x0001 << 8)),
+        !iszero(e & (0x0001 << 9)),
+        !iszero(e & (0x0001 << 10)))
+end
+
 function form_purity_expr(override::EffectsOverride)
     ex = Expr(:purity)
-    for i = 1:Core.Compiler.NUM_EFFECTS_OVERRIDES
+    for i = 1:NUM_EFFECTS_OVERRIDES
         push!(ex.args, getfield(override, i))
     end
     return ex
@@ -885,8 +975,8 @@ end
 unwrap_macrocalls(@nospecialize(x)) = x
 function unwrap_macrocalls(ex::Expr)
     inner = ex
-    while inner.head === :macrocall
-        inner = inner.args[end]::Expr
+    while isexpr(inner, :macrocall)
+        inner = inner.args[end]
     end
     return inner
 end
@@ -1542,4 +1632,18 @@ function make_atomiconce(success_order, fail_order, ex)
         return :(setindexonce_atomic!($x, $success_order, $fail_order, $val, $(idcs...)))
     end
     error("@atomiconce expression missing field access or indexing")
+end
+
+# Meta expression head, these generally can't be deleted even when they are
+# in a dead branch but can be ignored when analyzing uses/liveness.
+is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
+
+function is_self_quoting(@nospecialize(x))
+    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
+        isa(x,Char) || x === nothing || isa(x,Function)
+end
+
+function quoted(@nospecialize(x))
+    return is_self_quoting(x) ? x : QuoteNode(x)
 end

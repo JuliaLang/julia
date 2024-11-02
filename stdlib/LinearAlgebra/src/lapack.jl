@@ -6452,7 +6452,7 @@ for (gees, gges, gges3, elty) in
                     resize!(work, lwork)
                 end
             end
-            A, vs, iszero(wi) ? wr : complex.(wr, wi)
+            iszero(wi) ? (A, vs, wr) : (A, vs, complex.(wr, wi))
         end
 
         # *     .. Scalar Arguments ..
@@ -6833,7 +6833,7 @@ for (trexc, trsen, tgsen, elty) in
                     resize!(iwork, liwork)
                 end
             end
-            T, Q, iszero(wi) ? wr : complex.(wr, wi), s[], sep[]
+            iszero(wi) ? (T, Q, wr, s[], sep[]) : (T, Q, complex.(wr, wi), s[], sep[])
         end
         trsen!(select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)
