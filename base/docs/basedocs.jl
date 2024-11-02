@@ -1309,7 +1309,7 @@ This is equivalent to `x ? y : false`: it returns `false` if `x` is `false` and 
 Note that if `y` is an expression, it is only evaluated when `x` is `true`, which is called "short-circuiting" behavior.
 
 Also, `y` does not need to have a boolean value.  This means that `(condition) && (statement)` can be used as shorthand for
-`if condition; statement; end` for an arbitrary `statement`
+`if condition; statement; end` for an arbitrary `statement`.
 
 See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
@@ -1338,7 +1338,7 @@ This is equivalent to `x ? true : y`: it returns `true` if `x` is `true` and the
 Note that if `y` is an expression, it is only evaluated when `x` is `false`, which is called "short-circuiting" behavior.
 
 Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
-`if !(condition); statement; end` for an arbitrary `statement`
+`if !(condition); statement; end` for an arbitrary `statement`.
 
 See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
