@@ -1,5 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module _TupleTypeByLength
+    export Tuple1OrMore, Tuple2OrMore, Tuple32OrMore
+    const Tuple1OrMore = Tuple{Any, Vararg}
+    const Tuple2OrMore = Tuple{Any, Any, Vararg}
+    const Tuple32OrMore = Tuple{
+        Any, Any, Any, Any, Any, Any, Any, Any,
+        Any, Any, Any, Any, Any, Any, Any, Any,
+        Any, Any, Any, Any, Any, Any, Any, Any,
+        Any, Any, Any, Any, Any, Any, Any, Any,
+        Vararg{Any, N},
+    } where {N}
+end
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
@@ -358,11 +371,7 @@ map(f, t::Tuple{Any, Any})      = (@inline; (f(t[1]), f(t[2])))
 map(f, t::Tuple{Any, Any, Any}) = (@inline; (f(t[1]), f(t[2]), f(t[3])))
 map(f, t::Tuple)                = (@inline; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,
-                       Vararg{Any,N}}
+const Any32 = _TupleTypeByLength.Tuple32OrMore
 const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,
                          T,T,T,T,T,T,T,T,

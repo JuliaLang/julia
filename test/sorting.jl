@@ -92,6 +92,50 @@ end
     end
     @test sort(1:2000, by=x->x÷100, rev=true) == sort(1:2000, by=x->-x÷100) ==
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
+    @testset "tuples" begin
+        tup = Tuple(0:9)
+        @test tup === sort(tup; by = _ -> 0)
+        @test (0, 2, 4, 6, 8, 1, 3, 5, 7, 9) === sort(tup; by = x -> isodd(x))
+        @test (1, 3, 5, 7, 9, 0, 2, 4, 6, 8) === sort(tup; by = x -> iseven(x))
+    end
+end
+
+@testset "tuple sorting" begin
+    max_unrolled_length = 31
+    @testset "correctness" begin
+        tup = Tuple(0:9)
+        tup_rev = reverse(tup)
+        @test tup === @inferred sort(tup)
+        @test tup === sort(tup; rev = false)
+        @test tup_rev === sort(tup; rev = true)
+        @test tup_rev === sort(tup; lt = >)
+    end
+    @testset "inference" begin
+        known_length = (Tuple{Vararg{Int, max_unrolled_length}}, Tuple{Vararg{Float64, max_unrolled_length}})
+        unknown_length = (Tuple{Vararg{Int}}, Tuple{Vararg{Float64}})
+        for Tup ∈ (known_length..., unknown_length...)
+            @test Tup == Base.infer_return_type(sort, Tuple{Tup})
+        end
+        for Tup ∈ (known_length...,)
+            @test Core.Compiler.is_foldable(Base.infer_effects(sort, Tuple{Tup}))
+        end
+    end
+    @testset "alloc" begin
+        function test_zero_allocated(tup::Tuple)
+            @test iszero(@allocated sort(tup))
+        end
+        test_zero_allocated(ntuple(identity, max_unrolled_length))
+    end
+    @testset "heterogeneous" begin
+        @testset "stability" begin
+            tup = (0, 0x0, 0x000)
+            @test tup === sort(tup)
+        end
+        tup = (1, 2, 3, missing, missing)
+        for t ∈ (tup, (1, missing, 2, missing, 3), (missing, missing, 1, 2, 3))
+            @test tup === @inferred sort(t)
+        end
+    end
 end
 
 @testset "partialsort" begin

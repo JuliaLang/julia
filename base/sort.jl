@@ -1736,6 +1736,82 @@ julia> v
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
+module _SortTupleStable
+    using
+        Base._TypeDomainNumbers.PositiveIntegers, Base._TypeDomainNumbers.IntegersGreaterThanOne,
+        Base._TypeDomainNumberTupleUtils, Base._TupleTypeByLength
+    using Base: tail
+    using Base.Order: Ordering, lt
+    function merge_recursive((@nospecialize ord::Ordering), a::Tuple, b::Tuple)
+        if a isa Tuple1OrMore
+            a
+        else
+            b
+        end
+    end
+    function merge_recursive(ord::Ordering, a::Tuple1OrMore, b::Tuple1OrMore)
+        l = first(a)
+        r = first(b)
+        x = tail(a)
+        y = tail(b)
+        if lt(ord, r, l)
+            let rec = merge_recursive(ord, a, y)
+                (r, rec...)
+            end
+        else
+            let rec = merge_recursive(ord, x, b)
+                (l, rec...)
+            end
+        end
+    end
+    function merge_nontrivial(ord::Ordering, a::Tuple1OrMore, b::Tuple1OrMore)
+        merge_recursive(ord, a, b)
+    end
+    function sort_recursive((@nospecialize ord::Ordering), @nospecialize tup::Tuple{Any})
+        tup
+    end
+    function sort_recursive(ord::Ordering, tup::Tuple2OrMore)
+        (tup_l, tup_r) = split_tuple_into_halves(tup)
+        sorted_l = sort_recursive(ord, tup_l)
+        sorted_r = sort_recursive(ord, tup_r)
+        merge_nontrivial(ord, sorted_l, sorted_r)
+    end
+    function sort_tuple_stable_2_or_more(ord::Ordering, tup::Tuple2OrMore)
+        sort_recursive(ord, tup)
+    end
+    function sort_tuple_array_fallback(ord::Ordering, tup::Tuple2OrMore)
+        vec = if tup isa NTuple
+            [tup...]
+        else
+            Any[tup...]
+        end
+        sort!(vec; order = ord)
+        (vec...,)
+    end
+    function sort_tuple_stable((@nospecialize ord::Ordering), @nospecialize tup::Tuple)
+        if tup isa Tuple2OrMore
+            if tup isa Tuple32OrMore
+                sort_tuple_array_fallback(ord, tup)
+            else
+                sort_tuple_stable_2_or_more(ord, tup)
+            end
+        else
+            tup
+        end
+    end
+end
+
+function sort(
+    tup::Tuple;
+    lt = isless,
+    by = identity,
+    rev::Union{Nothing, Bool} = nothing,
+    order::Ordering = Forward,
+)
+    o = ord(lt, by, rev, order)
+    _SortTupleStable.sort_tuple_stable(o, tup)
+end
+
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
