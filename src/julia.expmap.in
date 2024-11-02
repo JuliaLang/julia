@@ -25,7 +25,7 @@
     utf8proc_*;
     jlbacktrace*;
     jlbacktracet*;
-    _IO_stdin_used*; /* See https://git.kongjian.xin:8442/FGCOM/asterisk/commit/80edcdcc45c0ed6c9223af59b2c6961df2e7a325 for why this is necessary */
+    _IO_stdin_used*; /* glibc expects this to be exported to detect which version of glibc is being used, see https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=634261#109 for further details */
     _Z24jl_coverage_data_pointerN4llvm9StringRefEi*;
     _Z22jl_coverage_alloc_lineN4llvm9StringRefEi*;
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi*;
