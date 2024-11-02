@@ -2158,7 +2158,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     // even though that shouldn't be the case and might be unwise
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the analyzer thinks might be a safepoint
         ES.reportError(Obj.takeError());
+#endif
         errs() << "Failed to add module to JIT!\n";
         errs() << "Dumping failing module\n" << M << "\n";
         return;
@@ -2166,7 +2168,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     { auto release = std::move(Lock); }
     auto Err = JuliaOJIT::addObjectFile(JD, std::move(*Obj));
     if (Err) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the analyzer thinks might be a safepoint
         ES.reportError(std::move(Err));
+#endif
         errs() << "Failed to add objectfile to JIT!\n";
         abort();
     }
