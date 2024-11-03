@@ -1766,7 +1766,7 @@ function sort(x::NTuple{N,T};
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
               scratch::Union{Vector{T}, Nothing}=nothing) where {N,T}
-    _sort(x, alg, ord(lt,by,rev,order), (;scratch))
+    _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
 end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
 # or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N

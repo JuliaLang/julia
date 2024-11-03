@@ -106,6 +106,7 @@ end
         tuple_sort_test(rand(NTuple{i, Float64}))
     end
     @test_throws MethodError sort((1,2,3.0))
+    @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
 end
 
 @testset "partialsort" begin
