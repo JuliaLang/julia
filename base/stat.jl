@@ -546,18 +546,18 @@ julia> rm("dummy_file")     # Clean up test-file
 uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
 
 """
-    gperm(stat_struct)
     gperm(path)
     gperm(path_elements...)
+    gperm(stat_struct)
 
 Like [`uperm`](@ref) but gets the permissions of the group owning the file.
 """
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
 """
-    operm(stat_struct)
     operm(path)
     operm(path_elements...)
+    operm(stat_struct)
 
 Like [`uperm`](@ref) but gets the permissions for people who neither own the 
 file nor are a member of the group owning the file.
