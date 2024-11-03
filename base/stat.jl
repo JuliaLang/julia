@@ -31,9 +31,10 @@ export
 A struct which stores information about a file. Usually 
 constructed by calling [`stat`](@ref) on a path. 
 
-This struct is used internally as the foundation of a number of 
-convenience-functions that return specific parts of the information stored 
-in it. This includes [`filesize`](@ref), [`ispath`](@ref), [`mtime`](@ref), and many more.
+This struct is used internally as the foundation of a number of utility 
+functions. Some return specific parts of the information stored in it 
+directly, such as [`filesize`](@ref), [`mtime`](@ref) and [`ctime`](@ref). Others add 
+some logic on top using bit-manipulation, such as [`isfifo`](@ref), [`ischardev`](@ref), and [`issetuid`](@ref).
 
 The following fields of this struct are considered public API:
 
