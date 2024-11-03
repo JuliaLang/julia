@@ -28,8 +28,14 @@ export
 """
     StatStruct
 
-A struct which stores the information from `stat`.
-The following fields of this struct is considered public API:
+A struct which stores information about a file. Usually 
+constructed by calling [`stat`](@ref) on a path. 
+
+This struct is used internally as the foundation of a number of 
+convenience-functions that return specific parts of the information stored 
+in it. This includes [`filesize`](@ref), [`ispath`](@ref), [`mtime`](@ref), and many more.
+
+The following fields of this struct are considered public API:
 
 | Name    | Type                            | Description                                                        |
 |:--------|:--------------------------------|:-------------------------------------------------------------------|
@@ -200,11 +206,11 @@ if RawFD !== OS_HANDLE
 end
 
 """
-    stat(file)
+    stat(path)
     stat(path_elements...)
 
 Return a structure whose fields contain information about the file.
-If multiple arguments are given, they are joined by `joinpath`.
+If multiple arguments are given, they are joined by [`joinpath`](@ref).
 
 The fields of the structure are:
 
@@ -228,13 +234,14 @@ stat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("stat not i
 stat(path...) = stat(joinpath(path...))
 
 """
-    lstat(file)
-    lstat(joinpath...)
+    lstat(path)
+    lstat(path_elements...)
 
-Like [`stat`](@ref), but for symbolic links gets the info for the link
-itself rather than the file it refers to.
-This function must be called on a file path rather than a file object or a file
-descriptor.
+Like [`stat`](@ref), but for symbolic links gets the info 
+for the link itself rather than the file it refers to.
+
+This function must be called on a file path rather 
+than a file object or a file descriptor.
 """
 lstat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("lstat not implemented for $(typeof(path))") : lstat(path2))
 lstat(path...) = lstat(joinpath(path...))
@@ -287,9 +294,14 @@ const filemode_table = (
 )
 
 """
-    filemode(file)
+    filemode(path)
+    filemode(path_elements...)
+    filemode(stat_struct)
 
-Equivalent to `stat(file).mode`.
+Return the mode of the file located at `path`, 
+or the mode indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).mode` or `stat_struct.mode`.
 """
 filemode(st::StatStruct) = st.mode
 filemode_string(st::StatStruct) = filemode_string(st.mode)
@@ -310,25 +322,38 @@ function filemode_string(mode)
 end
 
 """
-    filesize(file)
+    filesize(path)
     filesize(path_elements...)
+    filesize(stat_struct)
 
-Equivalent to `stat(file).size`.
-If multiple arguments are given, they are joined by `joinpath`.
+Return the size of the file located at `path`, 
+or the size indicated by file descriptor `stat_struct`.
+
+Equivalent to `stat(path).size` or `stat_struct.size`.
 """
 filesize(st::StatStruct) = st.size
 
 """
-    mtime(file)
+    mtime(path)
+    mtime(path_elements...)
+    mtime(stat_struct)
 
-Equivalent to `stat(file).mtime`.
+Return the unix timestamp of when the file at `path` was last modified, 
+or the last modified timestamp indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).mtime` or `stat_struct.mtime`.
 """
 mtime(st::StatStruct) = st.mtime
 
 """
-    ctime(file)
+    ctime(path)
+    ctime(path_elements...)
+    ctime(stat_struct)
 
-Equivalent to `stat(file).ctime`.
+Return the unix timestamp of when the metadata of the file at `path` was last modified, 
+or the last modified metadata timestamp indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).ctime` or `stat_struct.ctime`.
 """
 ctime(st::StatStruct) = st.ctime
 
@@ -336,9 +361,11 @@ ctime(st::StatStruct) = st.ctime
 
 """
     ispath(path) -> Bool
+    ispath(path_elements...) -> Bool
 
 Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
+
 This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
 ispath(st::StatStruct) = st.ioerrno == 0
@@ -355,22 +382,29 @@ ispath(path::AbstractString) = ispath(String(path))
 
 """
     isfifo(path) -> Bool
+    isfifo(path_elements...) -> Bool
+    isfifo(stat_struct) -> Bool
 
-Return `true` if `path` is a FIFO, `false` otherwise.
+Return `true` if the file at `path` is FIFO, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
     ischardev(path) -> Bool
+    ischardev(path_elements...) -> Bool
+    ischardev(stat_struct) -> Bool
 
-Return `true` if `path` is a character device, `false` otherwise.
+Return `true` if `path` points to a character device, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
 """
     isdir(path) -> Bool
+    isdir(path_elements...) -> Bool
 
-Return `true` if `path` is a directory, `false` otherwise.
+Return `true` if `path` points to a directory, `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -387,15 +421,19 @@ isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
     isblockdev(path) -> Bool
+    isblockdev(path_elements...) -> Bool
+    isblockdev(stat_struct) -> Bool
 
-Return `true` if `path` is a block device, `false` otherwise.
+Return `true` if `path` points to a block device, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 """
     isfile(path) -> Bool
+    isfile(path_elements...) -> Bool
 
-Return `true` if `path` is a regular file, `false` otherwise.
+Return `true` if `path` points to a regular file, `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -421,15 +459,17 @@ isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
     islink(path) -> Bool
+    islink(path_elements...) -> Bool
 
-Return `true` if `path` is a symbolic link, `false` otherwise.
+Return `true` if `path` points to a symbolic link, `false` otherwise.
 """
 islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
     issocket(path) -> Bool
+    issocket(path_elements...) -> Bool
 
-Return `true` if `path` is a socket, `false` otherwise.
+Return `true` if `path` points to a socket, `false` otherwise.
 """
 issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
@@ -437,29 +477,42 @@ issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 """
     issetuid(path) -> Bool
+    issetuid(path_elements...) -> Bool
+    issetuid(stat_struct) -> Bool
 
-Return `true` if `path` has the setuid flag set, `false` otherwise.
+Return `true` if the file at `path` has the setuid flag set, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
 
 """
     issetgid(path) -> Bool
+    issetgid(path_elements...) -> Bool
+    issetgid(stat_struct) -> Bool
 
-Return `true` if `path` has the setgid flag set, `false` otherwise.
+Return `true` if the file at `path` has the setgid flag set, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
 
 """
     issticky(path) -> Bool
+    issticky(path_elements...) -> Bool
+    issticky(stat_struct) -> Bool
 
-Return `true` if `path` has the sticky bit set, `false` otherwise.
+Return `true` if the file at `path` has the sticky bit set, `false` otherwise.
+Or the equivalent as indicated by the file descriptor `stat_struct`.
 """
 issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
 
 """
-    uperm(file)
+    uperm(path)
+    uperm(path_elements...)
+    uperm(stat_struct)
 
-Get the permissions of the owner of the file as a bitfield of
+Get the permissions of the owner of the file at `path` as a bitfield,
+Or the equivalent as indicated by the file descriptor `stat_struct`.
+
 
 | Value | Description        |
 |:------|:-------------------|
@@ -467,22 +520,46 @@ Get the permissions of the owner of the file as a bitfield of
 | 02    | Write Permission   |
 | 04    | Read Permission    |
 
-For allowed arguments, see [`stat`](@ref).
+The fact that a bitfield is returned means that if the premission 
+is read+write, the bitfield is "110", which maps to the decimal 
+value of 0+2+4=6. This is reflected in the printing of the 
+returned `UInt8` value.
+
+```jldoctest
+julia> touch("dummy_file")  # Create test-file without contents;
+
+julia> uperm("dummy_file")
+0x06
+
+julia> bitstring(ans)
+"00000110"
+
+julia> has_read_permission(path) = bitstring(uperm(path))[end-2]=='1';
+
+julia> has_read_premission("dummy_file")
+true
+
+julia> rm("dummy_file")     # Clean up test-file
+```
 """
 uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
 
 """
-    gperm(file)
+    gperm(stat_struct)
+    gperm(path)
+    gperm(path_elements...)
 
 Like [`uperm`](@ref) but gets the permissions of the group owning the file.
 """
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
 """
-    operm(file)
+    operm(stat_struct)
+    operm(path)
+    operm(path_elements...)
 
-Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
-the group owning the file
+Like [`uperm`](@ref) but gets the permissions for people who neither own the 
+file nor are a member of the group owning the file.
 """
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 
@@ -518,7 +595,7 @@ function samefile(a::StatStruct, b::StatStruct)
 end
 
 """
-    samefile(path_a::AbstractString, path_b::AbstractString)
+    samefile(path_a, path_b)
 
 Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
 """
