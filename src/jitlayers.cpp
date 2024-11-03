@@ -2113,7 +2113,7 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin))), JITSymbolFlags::Exported};
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
-#if JL_LLVM_VERSION < 190000
+#if JL_LLVM_VERSION < 200000
 #ifdef _COMPILER_ASAN_ENABLED_
     // this is a hack to work around a bad assertion:
     //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
