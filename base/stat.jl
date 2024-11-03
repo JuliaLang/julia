@@ -28,12 +28,12 @@ export
 """
     StatStruct
 
-A struct which stores information about a file. Usually 
-constructed by calling [`stat`](@ref) on a path. 
+A struct which stores information about a file. Usually
+constructed by calling [`stat`](@ref) on a path.
 
-This struct is used internally as the foundation of a number of utility 
-functions. Some return specific parts of the information stored in it 
-directly, such as [`filesize`](@ref), [`mtime`](@ref) and [`ctime`](@ref). Others add 
+This struct is used internally as the foundation of a number of utility
+functions. Some return specific parts of the information stored in it
+directly, such as [`filesize`](@ref), [`mtime`](@ref) and [`ctime`](@ref). Others add
 some logic on top using bit-manipulation, such as [`isfifo`](@ref), [`ischardev`](@ref), and [`issetuid`](@ref).
 
 The following fields of this struct are considered public API:
@@ -238,10 +238,10 @@ stat(path...) = stat(joinpath(path...))
     lstat(path)
     lstat(path_elements...)
 
-Like [`stat`](@ref), but for symbolic links gets the info 
+Like [`stat`](@ref), but for symbolic links gets the info
 for the link itself rather than the file it refers to.
 
-This function must be called on a file path rather 
+This function must be called on a file path rather
 than a file object or a file descriptor.
 """
 lstat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("lstat not implemented for $(typeof(path))") : lstat(path2))
@@ -299,7 +299,7 @@ const filemode_table = (
     filemode(path_elements...)
     filemode(stat_struct)
 
-Return the mode of the file located at `path`, 
+Return the mode of the file located at `path`,
 or the mode indicated by the file descriptor `stat_struct`.
 
 Equivalent to `stat(path).mode` or `stat_struct.mode`.
@@ -327,7 +327,7 @@ end
     filesize(path_elements...)
     filesize(stat_struct)
 
-Return the size of the file located at `path`, 
+Return the size of the file located at `path`,
 or the size indicated by file descriptor `stat_struct`.
 
 Equivalent to `stat(path).size` or `stat_struct.size`.
@@ -339,7 +339,7 @@ filesize(st::StatStruct) = st.size
     mtime(path_elements...)
     mtime(stat_struct)
 
-Return the unix timestamp of when the file at `path` was last modified, 
+Return the unix timestamp of when the file at `path` was last modified,
 or the last modified timestamp indicated by the file descriptor `stat_struct`.
 
 Equivalent to `stat(path).mtime` or `stat_struct.mtime`.
@@ -521,9 +521,9 @@ Or the equivalent as indicated by the file descriptor `stat_struct`.
 | 02    | Write Permission   |
 | 04    | Read Permission    |
 
-The fact that a bitfield is returned means that if the premission 
-is read+write, the bitfield is "110", which maps to the decimal 
-value of 0+2+4=6. This is reflected in the printing of the 
+The fact that a bitfield is returned means that if the premission
+is read+write, the bitfield is "110", which maps to the decimal
+value of 0+2+4=6. This is reflected in the printing of the
 returned `UInt8` value.
 
 ```jldoctest
