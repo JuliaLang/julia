@@ -610,7 +610,7 @@ size_to_strides(s) = ()
 """
     isstored(A::AbstractArray, inds...)::Bool
 
-This is a function for testing if the array `A` stores and actual value at the index specified by `inds`,
+This is a function for testing if the array `A` stores an actual value at the index specified by `inds`,
 i.e. if `A[inds...]` will look up a value from some storage, or if it gives some computed fallback value.
 
 A result of `true` does *not* guarantee that there is truly a stored value at that index since the default
