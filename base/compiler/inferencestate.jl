@@ -247,7 +247,7 @@ mutable struct InferenceState
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Vector{Any}}
+    edges::Vector{Any}
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
@@ -302,7 +302,7 @@ mutable struct InferenceState
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Vector{Vector{Any}}(undef, nstmts)
+        edges = []
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -327,7 +327,7 @@ mutable struct InferenceState
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
-        cycle_backedges = Vector{Tuple{InferenceState,Int}}()
+        cycle_backedges = Tuple{InferenceState,Int}[]
         callstack = AbsIntState[]
         tasks = WorkThunk[]
 
@@ -350,10 +350,12 @@ mutable struct InferenceState
 
         restrict_abstract_call_sites = isa(def, Module)
 
+        parentid = frameid = cycleid = 0
+
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, edges, stmt_info,
+            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
@@ -754,30 +756,6 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
     return nothing
 end
 
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, caller.currpc)
-    contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
-    add_backedge!(caller, frame.linfo)
-    return frame
-end
-
-function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
-    stmt_edges = caller.stmt_edges
-    if !isassigned(stmt_edges, currpc)
-        return stmt_edges[currpc] = Any[]
-    else
-        return stmt_edges[currpc]
-    end
-end
-
-function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
-    if isassigned(frame.stmt_edges, currpc)
-        empty!(frame.stmt_edges[currpc])
-    end
-    return nothing
-end
-
 function narguments(sv::InferenceState, include_va::Bool=true)
     nargs = Int(sv.src.nargs)
     if !include_va
@@ -1007,32 +985,6 @@ function callers_in_cycle(sv::InferenceState)
     return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
 end
 callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
-
-# temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(caller::InferenceState, mi::MethodInstance)
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), mi)
-end
-function add_backedge!(irsv::IRInterpretationState, mi::MethodInstance)
-    return push!(irsv.edges, mi)
-end
-
-function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), mi::MethodInstance)
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), invokesig, mi)
-end
-function add_invoke_backedge!(irsv::IRInterpretationState, @nospecialize(invokesig::Type), mi::MethodInstance)
-    return push!(irsv.edges, invokesig, mi)
-end
-
-# used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(caller::InferenceState, mt::MethodTable, @nospecialize(typ))
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return push!(get_stmt_edges!(caller), mt, typ)
-end
-function add_mt_backedge!(irsv::IRInterpretationState, mt::MethodTable, @nospecialize(typ))
-    return push!(irsv.edges, mt, typ)
-end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]

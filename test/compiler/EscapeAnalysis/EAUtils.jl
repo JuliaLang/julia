@@ -11,9 +11,8 @@ const EA = EscapeAnalysis
 
 # imports
 import .CC:
-    AbstractInterpreter, NativeInterpreter, WorldView, WorldRange,
-    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache,
-    ipo_dataflow_analysis!, cache_result!
+    AbstractInterpreter, NativeInterpreter, WorldView, WorldRange, InferenceParams,
+    OptimizationParams, get_world_counter, get_inference_cache, ipo_dataflow_analysis!
 # usings
 using Core:
     CodeInstance, MethodInstance, CodeInfo

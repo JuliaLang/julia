@@ -98,7 +98,7 @@ This pass performs modifications to a module to create functions that are optimi
 
 !!! warning
 
-   Use of `llvmcall` with multiversioning is dangerous. `llvmcall` enables access to features not typically exposed by the Julia APIs, and are therefore usually not available on all architectures. If multiversioning is enabled and code generation is requested for a target architecture that does not support the feature required by an `llvmcall` expression, LLVM will probably error out, likely with an abort and the message `LLVM ERROR: Do not know how to split the result of this operator!`.
+    Use of `llvmcall` with multiversioning is dangerous. `llvmcall` enables access to features not typically exposed by the Julia APIs, and are therefore usually not available on all architectures. If multiversioning is enabled and code generation is requested for a target architecture that does not support the feature required by an `llvmcall` expression, LLVM will probably error out, likely with an abort and the message `LLVM ERROR: Do not know how to split the result of this operator!`.
 
 ### GCInvariantVerifier
 

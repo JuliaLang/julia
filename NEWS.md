@@ -57,8 +57,8 @@ Command-line option changes
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
   This `main` function should be declared using `@main` to indicate that it is an entry point.
 * Enabling or disabling color text in Julia can now be controlled with the
-[`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
-variables. ([#53742]).
+  [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
+  variables. These variables are also honored by Julia's build system ([#53742], [#56346]).
 * `--project=@temp` starts Julia with a temporary environment.
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
