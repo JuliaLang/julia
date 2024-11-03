@@ -169,12 +169,15 @@ export
 public AbstractTriangular,
         Givens,
         checksquare,
+        haszero,
         hermitian,
         hermitian_type,
         isbanded,
         peakflops,
         symmetric,
-        symmetric_type
+        symmetric_type,
+        zeroslike,
+        matprod_dest
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -394,17 +397,8 @@ julia> Y = zero(X);
 
 julia> ldiv!(Y, qr(A), X);
 
-julia> Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> Y ≈ A\\X
+true
 ```
 """
 ldiv!(Y, A, B)
@@ -435,17 +429,8 @@ julia> Y = copy(X);
 
 julia> ldiv!(qr(A), X);
 
-julia> X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> X ≈ A\\Y
+true
 ```
 """
 ldiv!(A, B)
@@ -655,10 +640,6 @@ _evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
-# convert to Vector, if necessary
-_makevector(x::Vector) = x
-_makevector(x::AbstractVector) = Vector(x)
-
 # append a zero element / drop the last element
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
@@ -669,9 +650,20 @@ matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
 # diagonal is special, as it does not change the structure of the other matrix
 # we call similar without a size to preserve the type of the matrix wherever possible
-matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
-matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
-matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+# reroute through _matprod_dest_diag to allow speicalizing on the type of the StructuredMatrix
+# without defining methods for both the orderings
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
+_matprod_dest_diag(A, TS) = similar(A, TS)
+_matprod_dest_diag(A::UnitUpperTriangular, TS) = UpperTriangular(similar(parent(A), TS))
+_matprod_dest_diag(A::UnitLowerTriangular, TS) = LowerTriangular(similar(parent(A), TS))
+function _matprod_dest_diag(A::SymTridiagonal, TS)
+    n = size(A, 1)
+    ev = similar(A, TS, max(0, n-1))
+    dv = similar(A, TS, n)
+    Tridiagonal(ev, dv, similar(ev))
+end
 
 # Special handling for adj/trans vec
 matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
@@ -840,9 +832,9 @@ function __init__()
     # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
     if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
         @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint)))
         else
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint) ÷ 2))
         end
     end
 end

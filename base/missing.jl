@@ -36,7 +36,7 @@ Any
 !!! compat "Julia 1.3"
     This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
+nonmissingtype(@nospecialize(T::Type)) = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -135,6 +135,7 @@ min(::Any,     ::Missing) = missing
 max(::Missing, ::Missing) = missing
 max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
+clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =
     LazyString("cannot convert a missing value to type ", T, ": use Union{", T, ", Missing} instead")

@@ -97,10 +97,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([
-    GlobalRef(Base, :active_repl),
-    GlobalRef(Base, :active_repl_backend),
-])
+const allowed_undefineds = Set([])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -164,6 +161,22 @@ ambig(::Int, ::Signed) = 4
 end
 ambs = detect_ambiguities(Ambig48312)
 @test length(ambs) == 4
+
+module UnboundAmbig55868
+    module B
+        struct C end
+        export C
+        Base.@deprecate_binding D C
+    end
+    using .B
+    export C, D
+end
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+@test isempty(detect_unbound_args(UnboundAmbig55868))
+@test isempty(detect_ambiguities(UnboundAmbig55868))
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
@@ -449,5 +462,21 @@ cc46601(::Type{T}, x::Number) where {T<:Number} = 6
 cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 @test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
+
+# Issue #55231
+struct U55231{P} end
+struct V55231{P} end
+U55231(::V55231) = nothing
+(::Type{T})(::V55231) where {T<:U55231} = nothing
+@test length(methods(U55231)) == 2
+U55231(a, b) = nothing
+@test length(methods(U55231)) == 3
+struct S55231{P} end
+struct T55231{P} end
+(::Type{T})(::T55231) where {T<:S55231} = nothing
+S55231(::T55231) = nothing
+@test length(methods(S55231)) == 2
+S55231(a, b) = nothing
+@test length(methods(S55231)) == 3
 
 nothing

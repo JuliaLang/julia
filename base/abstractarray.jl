@@ -1101,11 +1101,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
-                ret = iterate(iterdest, state)
+            for (Idest, Isrc) in zip(iterdest, itersrc)
+                @inbounds dest[Idest] = src[Isrc]
             end
         end
     end
@@ -1263,6 +1260,10 @@ function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     J = _to_subscript_indices(x, I...)
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
+
+## Special constprop heuristics for getindex/setindex
+typename(typeof(function getindex end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+typename(typeof(function setindex! end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
 
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
@@ -1659,10 +1660,10 @@ typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()
 
 ## cat: special cases
-vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
-vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
-hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
-hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
+vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
+vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
@@ -1917,7 +1918,7 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  2.0
 
 julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
-([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
+(adjoint([10, 20, 30]), [4.0 5.0 6.0; 7.0 8.0 9.0])
 
 julia> vcat(two...)
 3×3 Matrix{Float64}:
@@ -3007,7 +3008,7 @@ end
 @inline function _stack_size_check(x, ax1::Tuple)
     if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
+        uaxN = map(UnitRange, _iterator_axes(x))
         throw(DimensionMismatch(
             LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
     end
@@ -3041,6 +3042,15 @@ function cmp(A::AbstractVector, B::AbstractVector)
         end
     end
     return cmp(length(A), length(B))
+end
+
+"""
+    isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+
+Return `true` when the only element of `A` is less than the only element of `B`.
+"""
+function isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+    isless(only(A), only(B))
 end
 
 """
@@ -3404,6 +3414,8 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when any of them is exhausted.
 
+The element type of the result is determined in the same manner as in [`collect`](@ref).
+
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
@@ -3519,12 +3531,45 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
 """
 map(f, it, iters...) = collect(Generator(f, it, iters...))
 
+# Generic versions of push! for AbstractVector
+# These are specialized further for Vector for faster resizing and setindexing
+function push!(a::AbstractVector{T}, item) where T
+    # convert first so we don't grow the array if the assignment won't work
+    itemT = item isa T ? item : convert(T, item)::T
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = itemT
+    return a
+end
+
+# specialize and optimize the single argument case
+function push!(a::AbstractVector{Any}, @nospecialize x)
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = x
+    return a
+end
+function push!(a::AbstractVector{Any}, @nospecialize x...)
+    @_terminates_locally_meta
+    na = length(a)
+    nx = length(x)
+    resize!(a, na + nx)
+    e = lastindex(a) - nx
+    for i = 1:nx
+        a[e+i] = x[i]
+    end
+    return a
+end
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
+
+# sizehint! does not nothing by default
+sizehint!(a::AbstractVector, _) = a
 
 ## hashing AbstractArray ##
 

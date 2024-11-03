@@ -91,6 +91,7 @@ primitive type Int24 <: Signed 24 end # integral padding
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
 Base.Int(x::PadIntB) = x.a + (Int(x.b) << 8) + (Int(x.c) << 16)
 Base.:(+)(x::PadIntA, b::Int) = PadIntA(x.b + b)
+Base.:(==)(x::PadIntA, b::Int) = x == PadIntA(b)
 Base.:(+)(x::PadIntB, b::Int) = PadIntB(Int(x) + b)
 Base.:(+)(x::Int24, b::Int) = Core.Intrinsics.add_int(x, Int24(b))
 Base.show(io::IO, x::PadIntA) = print(io, "PadIntA(", x.b, ")")
@@ -128,6 +129,7 @@ test_field_operators(ARefxy{Any}(123_10, 123_20))
 test_field_operators(ARefxy{Union{Nothing,Int}}(123_10, nothing))
 test_field_operators(ARefxy{Complex{Int32}}(123_10, 123_20))
 test_field_operators(ARefxy{Complex{Int128}}(123_10, 123_20))
+test_field_operators(ARefxy{Complex{Real}}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntA}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntB}(123_10, 123_20))
 #FIXME: test_field_operators(ARefxy{Int24}(123_10, 123_20))
@@ -316,6 +318,8 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_field_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
@@ -423,6 +427,92 @@ let a = ARefxy(1, -1)
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
 end
 
+function _test_atomic_get_set_swap_modify(T, x, y, z)
+    @testset "atomic get,set,swap,modify" begin
+        mem = AtomicMemory{T}(undef, 2)
+        @test_throws CanonicalIndexError mem[1] = 3
+
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), x, 1) == x
+        @test mem[1] == x
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), y, 2) == y
+        @test mem[2] == y
+
+        idx = UInt32(2)
+
+        @test (@atomic mem[1]) == x
+        @test (@atomic mem[idx]) == y
+
+        (old, new) = (mem[idx], z)
+        # old and new are intentionally of different types to test inner conversion
+        @test (@atomic mem[idx] = new) == new
+        @test mem[idx] == new
+        @atomic mem[idx] = old
+
+        @test (@atomicswap mem[idx] = new) == old
+        @test mem[idx] == new
+        @atomic mem[idx] = old
+
+        try
+            old + new
+            @test (@atomic mem[idx] += new) == old + new
+            @test mem[idx] == old + new
+            @atomic mem[idx] = old
+        catch err
+            if !(err isa MethodError)
+                rethrow(err)
+            end
+        end
+    end
+end
+
+function _test_atomic_setonce_replace(T, initial, desired)
+    @testset "atomic setonce,replace" begin
+        mem = AtomicMemory{T}(undef, 2)
+        if isassigned(mem, 2)
+            @test (@atomiconce mem[2] = initial) == false
+            @atomic mem[2] = initial
+        else
+            @test (@atomiconce mem[2] = initial) == true
+            @test mem[2] == initial
+            @test (@atomiconce mem[2] = desired) == false
+            @test mem[2] == initial
+            @test !isassigned(mem, 1)
+        end
+
+        idx = UInt(2)
+
+        expected = @atomic mem[idx]
+        @test (@atomicreplace mem[idx] expected => desired) == (old=expected, success=true)
+        @test mem[idx] == desired
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] desired => desired) == (old=expected, success=false)
+        @test mem[idx] == expected
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(expected, desired)) == (old=expected, success=true)
+        @test mem[idx] == desired
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(desired, desired)) == (old=initial, success=false)
+        @test mem[idx] == expected
+    end
+end
+@testset "@atomic with AtomicMemory" begin
+
+    _test_atomic_get_set_swap_modify(Float64, rand(), rand(), 10)
+    _test_atomic_get_set_swap_modify(PadIntA, 123_1, 123_2, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, nothing, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, 234_5, 10)
+    _test_atomic_get_set_swap_modify(Vector{BigInt}, BigInt[1, 2, 3], BigInt[1, 2], [2, 4])
+
+    _test_atomic_setonce_replace(Float64, rand(), 42)
+    _test_atomic_setonce_replace(PadIntA, 123_1, 123_2)
+    _test_atomic_setonce_replace(Union{Nothing,Int}, 123_1, nothing)
+    _test_atomic_setonce_replace(Vector{BigInt}, BigInt[1, 2], [3, 4])
+    _test_atomic_setonce_replace(String, "abc", "cab")
+end
+
 let a = ARefxy{Union{Nothing,Integer}}()
     @test_throws ConcurrencyViolationError @atomiconce :not_atomic a.x = 2
     @test true === @atomiconce a.x = 1
@@ -481,6 +571,7 @@ test_global_operators(Any)
 test_global_operators(Union{Nothing,Int})
 test_global_operators(Complex{Int32})
 test_global_operators(Complex{Int128})
+test_global_operators(Complex{Real})
 test_global_operators(PadIntA)
 test_global_operators(PadIntB)
 #FIXME: test_global_operators(Int24)
@@ -604,6 +695,7 @@ test_global_orderings(Any, true, false)
 test_global_orderings(Union{Nothing,Missing}, nothing, missing)
 test_global_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_global_orderings(Complex{Int128}, Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_global_orderings(Complex{Real}, Complex{Real}(10, 30), Complex{Real}(20, 40))
 test_global_orderings(Float64, 10.0, 20.0)
 test_global_orderings(Float64, NaN, Inf)
 
@@ -757,6 +849,7 @@ test_memory_operators(Any)
 test_memory_operators(Union{Nothing,Int})
 test_memory_operators(Complex{Int32})
 test_memory_operators(Complex{Int128})
+test_memory_operators(Complex{Real})
 test_memory_operators(PadIntA)
 test_memory_operators(PadIntB)
 #FIXME: test_memory_operators(Int24)
@@ -944,6 +1037,7 @@ test_memory_orderings(Any, true, false)
 test_memory_orderings(Union{Nothing,Missing}, nothing, missing)
 test_memory_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_memory_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_memory_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
 test_memory_orderings(10.0, 20.0)
 test_memory_orderings(NaN, Inf)
 

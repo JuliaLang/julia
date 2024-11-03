@@ -4,8 +4,19 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
+- New option `--trim` for building "trimmed" binaries, where code not provably reachable from entry points
+  is removed. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
 
 Language changes
 ----------------
@@ -26,6 +37,10 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - Trivial infinite loops (like `while true; end`) are no longer undefined
+   behavior. Infinite loops that actually do things (e.g. have side effects
+   or sleep) were never and are still not undefined behavior. ([#52999])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -42,17 +57,27 @@ Command-line option changes
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
   This `main` function should be declared using `@main` to indicate that it is an entry point.
 * Enabling or disabling color text in Julia can now be controlled with the
-[`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
-variables. ([#53742]).
+  [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
+  variables. These variables are also honored by Julia's build system ([#53742], [#56346]).
 * `--project=@temp` starts Julia with a temporary environment.
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
+* New `--trace-dispatch` option to report methods that are dynamically dispatched ([#55848]).
 
 Multi-threading changes
 -----------------------
 
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
+
 Build system changes
 --------------------
+
+* There are new `Makefile`s to build Julia and LLVM using the Binary Optimization and Layout Tool (BOLT), see  `contrib/bolt` and `contrib/pgo-lto-bolt` ([#54107]).
 
 New library functions
 ---------------------
@@ -61,6 +86,8 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------
@@ -81,19 +108,31 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `escape_string` takes additional keyword arguments `ascii=true` (to escape all
+  non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
+  for u/U escapes, e.g. for C compatibility) [#55099]).
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `Lockable` is now exported ([#54595])
+* `Base.require_one_based_indexing` and `Base.has_offset_axes` are now public ([#56196])
+* New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
+* `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
 
 Standard library changes
 ------------------------
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
 #### StyledStrings
 
 #### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
@@ -105,12 +144,27 @@ Standard library changes
   between different eigendecomposition algorithms ([#49355]).
 * Added a generic version of the (unblocked) pivoted Cholesky decomposition
   (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
+* The number of default BLAS threads now respects process affinity, instead of
+  using total number of logical threads available on the system ([#55574]).
+* A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
+  Custom array types may specialize this function to return an appropriate result ([#55252]).
+* The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
+  This function is now public ([#55537]).
+* The function `haszero(T::Type)` is used to check if a type `T` has a unique zero element defined as `zero(T)`.
+  This is now public.
 
 #### Logging
 
 #### Printf
 
 #### Profile
+
+* `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
+  that is `true` by default. When set, the contents of Julia objects are not emitted
+  in the heap snapshot. This currently only applies to strings. ([#55326])
+* `Profile.print()` now colors Base/Core/Package modules similarly to how they are in stacktraces.
+  Also paths, even if truncated, are now clickable in terminals that support URI links
+  to take you to the specified `JULIA_EDITOR` for the given file & line number. ([#55335])
 
 #### Random
 
@@ -120,6 +174,11 @@ Standard library changes
   complete names that have been explicitly `using`-ed. ([#54610])
 - REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
   complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
+- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
+  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
+  in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 
@@ -139,13 +198,23 @@ Standard library changes
 
 #### InteractiveUtils
 
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
+
 Deprecated or removed
 ---------------------
 
 External dependencies
 ---------------------
 
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
+
 Tooling Improvements
 --------------------
+
+- A wall-time profiler is now available for users who need a sampling profiler that captures tasks regardless of their scheduling or running state. This type of profiler enables profiling of I/O-heavy tasks and helps detect areas of heavy contention in the system ([#55889]).
 
 <!--- generated by NEWS-update.jl: -->

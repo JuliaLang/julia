@@ -197,8 +197,8 @@ for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :se
     @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
     @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
 end
-@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
-@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
+@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)

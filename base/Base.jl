@@ -25,6 +25,11 @@ function include(mod::Module, path::String)
 end
 include(path::String) = include(Base, path)
 
+struct IncludeInto <: Function
+    m::Module
+end
+(this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
+
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
@@ -52,6 +57,9 @@ function setproperty!(x, f::Symbol, v)
     val = v isa ty ? v : convert(ty, v)
     return setfield!(x, f, val)
 end
+
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)
 
@@ -170,6 +178,7 @@ include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
+include("runtime_internals.jl")
 include("reflection.jl")
 include("options.jl")
 
@@ -194,7 +203,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
-
 
 # core operations & types
 include("promotion.jl")
@@ -224,7 +232,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked
@@ -303,7 +311,6 @@ end
 include("hashing.jl")
 include("rounding.jl")
 include("div.jl")
-include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -421,7 +428,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-using .ScopedValues
 
 # metaprogramming
 include("meta.jl")
@@ -531,6 +537,7 @@ include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+include("util.jl")
 
 include("initdefs.jl")
 Filesystem.__postinit__()
@@ -547,7 +554,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
 
@@ -570,6 +576,9 @@ include("precompilation.jl")
 for m in methods(include)
     delete_method(m)
 end
+for m in methods(IncludeInto(Base))
+    delete_method(m)
+end
 
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
@@ -577,8 +586,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
@@ -614,6 +625,25 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     nothing
 end
 
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -625,10 +655,9 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
-    empty!(explicit_loaded_modules)
-    @assert isempty(loaded_precompiles)
-    for (mod, key) in module_keys
-        loaded_precompiles[key => module_build_id(mod)] = mod
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    for mod in loaded_modules_order
+        push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
     end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
@@ -636,22 +665,7 @@ function __init__()
     # Profiling helper
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        cond = Base.AsyncCondition()
-        Base.uv_unref(cond.handle)
-        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
-        atexit() do
-            # destroy this callback when exiting
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-            # this will prompt any ongoing or pending event to flush also
-            close(cond)
-            # error-propagation is not needed, since the errormonitor will handle printing that better
-            _wait(t)
-        end
-        finalizer(cond) do c
-            # if something goes south, still make sure we aren't keeping a reference in C to this
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        end
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+        start_profile_listener()
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

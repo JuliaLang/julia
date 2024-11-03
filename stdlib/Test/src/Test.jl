@@ -812,7 +812,11 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
                 extype = extype.error # deprecated
             end
-            if isa(exc, typeof(extype))
+            # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
+            # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
+            if isa(extype, UndefVarError) && !isdefined(extype, :scope)
+                success = exc isa UndefVarError && exc.var == extype.var
+            else isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
                     if !isequal(getfield(extype, fld), getfield(exc, fld))
@@ -1838,9 +1842,19 @@ function parse_testset_args(args)
         # a standalone symbol is assumed to be the test set we should use
         # the same is true for a symbol that's not exported from a module
         if isa(arg, Symbol) || Base.isexpr(arg, :.)
+            if testsettype !== nothing
+                msg = """Multiple testset types provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_testset_types; force=true)
+            end
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
+            if desc !== nothing
+                msg = """Multiple descriptions provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_descriptions; force=true)
+            end
             desc = esc(arg)
         # an assignment is an option
         elseif isa(arg, Expr) && arg.head === :(=)
@@ -2077,7 +2091,7 @@ function detect_ambiguities(mods::Module...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -2148,7 +2162,7 @@ function detect_unbound_args(mods...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds

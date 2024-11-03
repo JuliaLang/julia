@@ -67,9 +67,7 @@ function ldlibs(doframework)
         "julia"
     end
     if Sys.isunix()
-        return "-Wl,-rpath,$(shell_escape(libDir())) " *
-            (Sys.isapple() ? string() : "-Wl,-rpath,$(shell_escape(private_libDir())) ") *
-            "-l$libname"
+        return "-L$(shell_escape(private_libDir())) -Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
     else
         return "-l$libname -lopenlibm"
     end

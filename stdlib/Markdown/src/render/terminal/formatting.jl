@@ -19,9 +19,9 @@ function with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, 
     start = position(aio) + 1
     f(io)
     stop = position(aio)
-    sortedindex = searchsortedlast(aio.annotations, (start:stop,), by=first)
+    sortedindex = searchsortedlast(aio.annotations, (region=start:stop,), by=a -> a.region)
     for (i, annot) in enumerate(annots)
-        insert!(aio.annotations, sortedindex + i, (start:stop, annot))
+        insert!(aio.annotations, sortedindex + i, (start:stop, annot...))
     end
 end
 
@@ -65,4 +65,18 @@ function wraplines(content::Union{Annot, SubString{<:Annot}}, width::Integer = 8
         push!(lines, content[nextind(s, lastwrap):end])
     end
     lines
+end
+
+# Print horizontal lines between each docstring if there are multiple docs
+function insert_hlines(docs)
+    if !isa(docs, MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
+        return docs
+    end
+    docs = docs::MD
+    v = Any[]
+    for (n, doc) in enumerate(docs.content)
+        push!(v, doc)
+        n == length(docs.content) || push!(v, HorizontalRule())
+    end
+    return MD(v)
 end

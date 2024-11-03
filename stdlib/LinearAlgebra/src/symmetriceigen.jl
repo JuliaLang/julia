@@ -4,6 +4,7 @@
 # Call `copytrito!` instead of `copy_similar` to only copy the matching triangular half
 eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
 eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric{<:Complex}, S) = copyto!(similar(parent(A), S), A)
 
 default_eigen_alg(A) = DivideAndConquer()
 
@@ -18,13 +19,6 @@ function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algo
     else
         throw(ArgumentError("Unsupported value for `alg` keyword."))
     end
-end
-function eigen(A::RealHermSymComplexHerm{Float16}; sortby::Union{Function,Nothing}=nothing)
-    S = eigtype(eltype(A))
-    E = eigen!(eigencopy_oftype(A, S), sortby=sortby)
-    values = convert(AbstractVector{Float16}, E.values)
-    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
-    return Eigen(values, vectors)
 end
 
 """
@@ -52,10 +46,22 @@ The default `alg` used may change in the future.
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 """
 function eigen(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    _eigen(A, alg; sortby)
+end
+
+# we dispatch on the eltype in an internal method to avoid ambiguities
+function _eigen(A::RealHermSymComplexHerm, alg::Algorithm; sortby)
     S = eigtype(eltype(A))
     eigen!(eigencopy_oftype(A, S), alg; sortby)
 end
 
+function _eigen(A::RealHermSymComplexHerm{Float16}, alg::Algorithm; sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), alg, sortby=sortby)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
+end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
     Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)

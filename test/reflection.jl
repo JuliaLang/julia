@@ -179,7 +179,7 @@ let
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
     defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
-        Symbol("#eval"), Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#include"),
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
@@ -265,7 +265,7 @@ let defaultset = Set((:A,))
     imported = Set((:M2,))
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
-    allset = Set((:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")))
+    allset = Set((:A, :B, :C, :eval, :include))
     @test Set(names(TestMod54609.A)) == defaultset
     @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
     @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings
@@ -686,7 +686,7 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+    @test_throws(Core.TypeNameError(Union{Int, Float64}),
                  Base.typename(Union{Int, Float64}))
 end
 
@@ -1296,3 +1296,5 @@ end
 
 @test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
+
+@test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, UUIDs, Random
-
+using UUIDs: _build_uuid1, _build_uuid7
 
 # results similar to Python builtin uuid
 # To reproduce the sequence
@@ -56,9 +56,22 @@ end
     @test u7 == UUID(UInt128(u7))
 end
 
-@testset "uuid4 & uuid7 RNG stability" begin
+@testset "Passing an RNG" begin
+    rng = Xoshiro(0)
+    @test uuid1(rng) isa UUID
+    @test uuid4(rng) isa UUID
+    @test uuid7(rng) isa UUID
+end
+
+@testset "uuid1, uuid4 & uuid7 RNG stability" begin
     @test uuid4(Xoshiro(0)) == uuid4(Xoshiro(0))
-    @test uuid7(Xoshiro(0)) == uuid7(Xoshiro(0))
+
+    time_uuid1 = rand(UInt64)
+    time_uuid7 = rand(UInt128)
+
+    # we need to go through the internal function to test RNG stability
+    @test _build_uuid1(Xoshiro(0), time_uuid1) == _build_uuid1(Xoshiro(0), time_uuid1)
+    @test _build_uuid7(Xoshiro(0), time_uuid7) == _build_uuid7(Xoshiro(0), time_uuid7)
 end
 
 @testset "Rejection of invalid UUID strings" begin

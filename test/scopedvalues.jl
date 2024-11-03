@@ -138,6 +138,12 @@ end
         @test sval[] == 1
         @test sval_float[] == 1.0
     end
+    @with sval=>2 sval_float=>2.0 begin
+        @with begin
+            @test sval[] == 2
+            @test sval_float[] == 2.0
+        end
+    end
 end
 
 @testset "isassigned" begin
