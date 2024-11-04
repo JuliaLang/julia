@@ -839,7 +839,7 @@ end
 """
     isdispatchtuple(T)
 
-Determine whether type `T` is a tuple "leaf type",
+Determine whether type `T` is a tuple of concrete types,
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 If `T` is not a type, then return `false`.
@@ -894,7 +894,7 @@ isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 using Core: has_free_typevars
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
-# and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
+# and is thus perhaps most similar to the old (pre-1.0) `isconcretetype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
         (isType(v) && !has_free_typevars(v))
