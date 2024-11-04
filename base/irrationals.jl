@@ -180,6 +180,27 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+for op in (:+, :-)
+    for (prec, twiceprec) in ((Float16, Float32), (Float32, Float64))
+        @eval $op(a::AbstractIrrational, b::$prec) = $prec($op($twiceprec(a), b))
+        @eval $op(a::$prec, b::AbstractIrrational) = $prec($op(a, $twiceprec(b)))
+    end
+    @eval function $op(a::AbstractIrrational, b::T) where T<:AbstractFloat
+        o = precision(BigFloat)
+        setprecision(BigFloat,2*precision(b)+1)
+        ret = $op(BigFloat(a),b)
+        setprecision(BigFloat,o)
+        T(ret)
+    end
+    @eval function $op(a::T, b::AbstractIrrational) where T<:AbstractFloat
+        o = precision(BigFloat)
+        setprecision(BigFloat,2*precision(a)+1)
+        ret = $op(a,BigFloat(b))
+        setprecision(BigFloat,o)
+        T(ret)
+    end
+end
+
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
