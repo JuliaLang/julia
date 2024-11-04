@@ -327,7 +327,7 @@ end
 
 @nospecs function preferred_vector_width_tfunc(𝕃::ConstsLattice, t)
     # Want to return Union(Const(1), Const(2))
-    # hardcode AVX512
+    # hardcode AVX256
     if sizeof(widenconst(t)) === 1
         return Const(32)
     elseif sizeof(widenconst(t)) === 2
@@ -337,7 +337,7 @@ end
     elseif sizeof(widenconst(t)) === 8
         return Const(4)
     elseif sizeof(widenconst(t)) === 16
-        return Const(4)
+        return Const(2)
     end
     return Union{Nothing, Int}
 end
