@@ -179,6 +179,7 @@ for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
+TwicePrecision(x::AbstractIrrational) = TwicePrecision{Float64}(x)
 
 for op in (:+, :-)
     for (prec, twiceprec) in ((Float16, Float32), (Float32, Float64))
