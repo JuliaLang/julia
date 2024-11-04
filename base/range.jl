@@ -15,8 +15,6 @@
 
 (:)(a::T, b::AbstractFloat, c::T) where {T<:Real} = (:)(promote(a, b, c)...)
 (:)(a::T, b::AbstractFloat, c::T) where {T<:AbstractFloat} = (:)(promote(a, b, c)...)
-(:)(a::T, b::Irrational, c::T) where {T<:Real} = (:)(promote(a, b, c)...)
-(:)(a::T, b::Irrational, c::T) where {T<:AbstractFloat} = (:)(promote(a, b, c)...)
 (:)(a::T, b::Real, c::T) where {T<:AbstractFloat} = (:)(promote(a, b, c)...)
 
 (:)(start::T, step::T, stop::T) where {T<:AbstractFloat} =
