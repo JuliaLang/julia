@@ -46,6 +46,14 @@ function Base.show(io::IO, v::Vec{N, T}) where {N, T}
     print(io, "]")
 end
 
+# TODO: llvm.vp expects a mask of i1
+struct Mask{N}
+    data::NTuple{N, VecElement{Bool}}
+end
+
+function mask_all(::Val{N}, val::Bool) where N
+    Mask(ntuple(_->VecElement(val),Val(N)))
+end
 
 # Mocked vload/vstore! relying on SLP
 
