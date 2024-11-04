@@ -226,8 +226,8 @@ const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, S
 const RealHermSymSymTriComplexHerm{T<:Real} = Union{RealHermSymComplexSym{T}, SymTridiagonal{T}}
 const SelfAdjoint = Union{Symmetric{<:Real}, Hermitian{<:Number}}
 
-wrapperop(::Union{Symmetric, SymTridiagonal}) = Symmetric
-wrapperop(::Hermitian) = Hermitian
+wrappertype(::Union{Symmetric, SymTridiagonal}) = Symmetric
+wrappertype(::Hermitian) = Hermitian
 
 size(A::HermOrSym) = size(A.data)
 axes(A::HermOrSym) = axes(A.data)
@@ -882,7 +882,7 @@ for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh,
     @eval begin
         function ($func)(A::RealHermSymSymTri)
             F = eigen(A)
-            return wrapperop(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
+            return wrappertype(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
         end
         function ($func)(A::Hermitian{<:Complex})
             F = eigen(A)
@@ -910,7 +910,7 @@ for func in (:acos, :asin)
         function ($func)(A::RealHermSymSymTri)
             F = eigen(A)
             if all(λ -> -1 ≤ λ ≤ 1, F.values)
-                return wrapperop(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
+                return wrappertype(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
             else
                 return Symmetric((F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors')
             end
@@ -933,7 +933,7 @@ end
 function acosh(A::RealHermSymSymTri)
     F = eigen(A)
     if all(λ -> λ ≥ 1, F.values)
-        return wrapperop(A)((F.vectors * Diagonal(acosh.(F.values))) * F.vectors')
+        return wrappertype(A)((F.vectors * Diagonal(acosh.(F.values))) * F.vectors')
     else
         return Symmetric((F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors')
     end
@@ -959,7 +959,7 @@ function sincos(A::RealHermSymSymTri)
     for i in eachindex(S.diag, C.diag, F.values)
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
-    return wrapperop(A)((F.vectors * S) * F.vectors'), wrapperop(A)((F.vectors * C) * F.vectors')
+    return wrappertype(A)((F.vectors * S) * F.vectors'), wrappertype(A)((F.vectors * C) * F.vectors')
 end
 function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
@@ -987,7 +987,7 @@ for func in (:log, :sqrt)
             F = eigen(A)
             λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
             if all(λ -> λ ≥ λ₀, F.values)
-                return wrapperop(A)((F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors')
+                return wrappertype(A)((F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors')
             else
                 return Symmetric((F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors')
             end
