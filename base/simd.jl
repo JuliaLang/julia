@@ -1,6 +1,6 @@
 module SIMD
 
-import Base: VecElement, Memory, MemoryRef
+import Base: VecElement, Memory, MemoryRef, IEEEFloat
 import Base: @propagate_inbounds, @_propagate_inbounds_meta, @_boundscheck, @_noub_if_noinbounds_meta
 import Base: memoryrefget, memoryrefnew, memoryrefset!
 
@@ -46,7 +46,6 @@ function Base.show(io::IO, v::Vec{N, T}) where {N, T}
     print(io, "]")
 end
 
-import Base: +, -, *
 
 # Mocked vload/vstore! relying on SLP
 
@@ -79,5 +78,27 @@ end
     end
     return nothing
 end
+
+import Base: +, -, *, /, muladd, promote_rule, widen
+import Core.Intrinsics: add_float, sub_float, mul_float, div_float, muladd_float, neg_float
+
+## floating point promotions ##
+promote_rule(::Type{Vec{N, Float32}}, ::Type{Vec{N, Float16}}) where N = Vec{N, Float32}
+promote_rule(::Type{Vec{N, Float64}}, ::Type{Vec{N, Float16}}) where N = Vec{N, Float64}
+promote_rule(::Type{Vec{N, Float64}}, ::Type{Vec{N, Float32}}) where N = Vec{N, Float64}
+
+widen(::Type{Vec{N, Float16}}) where N = Vec{N, Float16}
+widen(::Type{Vec{N, Float32}}) where N = Vec{N, Float32}
+
+## floating point arithmetic ##
+-(x::Vec{N,T}) where {N,T<:IEEEFloat} = neg_float(x.data)
+
++(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = add_float(x.data, y.data)
+-(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = sub_float(x.data, y.data)
+*(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = mul_float(x.data, y.data)
+/(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = div_float(x.data, y.data)
+
+muladd(x::Vec{N,T}, y::Vec{N,T}, z::Vec{N,T}) where {N, T<:IEEEFloat} =
+    muladd_float(x.data, y.data, z.data)
 
 end # module

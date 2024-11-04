@@ -46,3 +46,24 @@ end
     @test contains(ir, "load <4 x double>")
     @test !contains(ir, "call void @j_throw_boundserror")
 end
+
+@testset "basic arithmetic" begin
+    ir = sprint(io->code_llvm(io, +, (Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "fadd <4 x double>")
+    ir = sprint(io->code_llvm(io, -, (Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "fsub <4 x double>")
+    ir = sprint(io->code_llvm(io, *, (Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "fmul <4 x double>")
+    ir = sprint(io->code_llvm(io, /, (Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "fdiv <4 x double>")
+
+    ir = sprint(io->code_llvm(io, muladd, (Vec{4, Float64}, Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "fmul contract <4 x double>")
+    @test contains(ir, "fadd contract <4 x double>")
+
+    ir = sprint(io->code_llvm(io, -, (Vec{4, Float64},)))
+    @test contains(ir, "fneg <4 x double>")
+
+    # TODO: Way to test Intrinsics directly?
+    #`-v` -> ERROR: neg_float_withtype: value is not a primitive type
+end
