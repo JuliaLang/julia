@@ -151,7 +151,7 @@ lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
 gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
 function lcm(abc::AbstractArray{<:Real})
-    # Setting init=one(eltype(abc)) is buggy for Rationals.
+    # Using reduce with init=one(eltype(abc)) is buggy for Rationals.
     l = length(abc)
     l == 0 && return one(eltype(abc))
     l == 1 && return abs(only(abc))
