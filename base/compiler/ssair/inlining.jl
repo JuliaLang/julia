@@ -665,18 +665,6 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     compact.active_result_bb -= 1
                     refinish = true
                 end
-                # It is possible for GlobalRefs and Exprs to be in argument position
-                # at this point in the IR, though in that case they are required
-                # to be effect-free. However, we must still move them out of argument
-                # position, since `Argument` is allowed in PhiNodes, but `GlobalRef`
-                # and `Expr` are not, so a substitution could anger the verifier.
-                for aidx in 1:length(argexprs)
-                    aexpr = argexprs[aidx]
-                    if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
-                        ninst = removable_if_unused(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
-                        argexprs[aidx] = insert_node_here!(compact, ninst)
-                    end
-                end
                 if isa(item, InliningTodo)
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
@@ -1692,11 +1680,6 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
             if has_flag(flag, IR_FLAG_NOTHROW)
-                return SomeCase(quoted(val))
-            end
-        elseif f === Core.get_binding_type
-            length(argtypes) == 3 || return nothing
-            if get_binding_type_effect_free(argtypes[2], argtypes[3])
                 return SomeCase(quoted(val))
             end
         end

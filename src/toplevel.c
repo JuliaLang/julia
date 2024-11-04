@@ -742,13 +742,16 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
 
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, enum jl_partition_kind constant_kind)
 {
+    JL_GC_PUSH1(&val);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     int did_warn = 0;
     while (1) {
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            if (!val)
+            if (!val) {
+                JL_GC_POP();
                 return bpart;
+            }
             jl_value_t *old = decode_restriction_value(pku);
             JL_GC_PROMISE_ROOTED(old);
             if (jl_egal(val, old))
@@ -778,6 +781,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
             break;
         }
     }
+    JL_GC_POP();
     return bpart;
 }
 
