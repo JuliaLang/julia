@@ -67,3 +67,9 @@ end
     # TODO: Way to test Intrinsics directly?
     #`-v` -> ERROR: neg_float_withtype: value is not a primitive type
 end
+
+@testset "select" begin
+    ir = sprint(io->code_llvm(io, select, (Vec{4, Bool}, Vec{4, Float64}, Vec{4, Float64})))
+    @test contains(ir, "icmp eq <4 x i8>")
+    @test contains(ir, "select <4 x i1>")
+end
