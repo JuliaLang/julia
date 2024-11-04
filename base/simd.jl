@@ -7,7 +7,7 @@ import Base: memoryrefget, memoryrefnew, memoryrefset!
 import Core.Intrinsics: preferred_vector_width
 
 export Vec
-export vload, vstore!, preferred_vector, width
+export vload, vstore!, preferred_vector, width, select
 
 # TODO: See C# and Co Vec type 
 # TODO: Hardware portable vector types...
@@ -47,12 +47,20 @@ function Base.show(io::IO, v::Vec{N, T}) where {N, T}
 end
 
 # TODO: llvm.vp expects a mask of i1
-struct Mask{N}
-    data::NTuple{N, VecElement{Bool}}
-end
+const Mask{N} = Vec{N, Bool}
 
 function mask_all(::Val{N}, val::Bool) where N
-    Mask(ntuple(_->VecElement(val),Val(N)))
+    Vec(ntuple(_->VecElement(val),Val(N)))
+end
+
+# select(m::Mask{N}, a::Vec{N, T}, b::Vec{N,T}) where {N,T} = Core.ifelse(m.data, a.data, b.data)
+# ERROR: TypeError: non-boolean (NTuple{4, VecElement{Bool}}) used in boolean context
+# Mocked select, relying on SLP
+function select(m::Mask{N}, a::Vec{N, T}, b::Vec{N,T}) where {N,T}
+    data = ntuple(Val(N)) do j
+        VecElement(Core.ifelse(m.data[j].value, a.data[j].value, b.data[j].value))
+    end
+    return Vec(data)
 end
 
 # Mocked vload/vstore! relying on SLP
