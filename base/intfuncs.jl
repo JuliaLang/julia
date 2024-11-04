@@ -150,7 +150,13 @@ gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
 lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
 gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
-lcm(abc::AbstractArray{<:Real}) = isempty(abc) ? one(eltype(abc)) : reduce(lcm, abc) # lcm(Rational[]) is not an identity
+function lcm(abc::AbstractArray{<:Real})
+    # Setting init=one(eltype(abc)) is buggy for Rationals.
+    l = length(abc)
+    l == 0 && return one(eltype(abc))
+    l == 1 && return abs(only(abc))
+    return reduce(lcm, abc)
+end
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
