@@ -47,6 +47,7 @@ using .Main.OffsetArrays
         @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
     end
 
+    @test 1:π:100 isa StepRangeLen{Float64}
 
     @test first(10:3) === 10
     @test last(10:3) === 9
