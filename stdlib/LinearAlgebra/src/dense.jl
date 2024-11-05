@@ -559,14 +559,13 @@ function schurpow(A::AbstractMatrix, p)
     end
 end
 function (^)(A::AbstractMatrix{T}, p::Real) where T
-    n = checksquare(A)
-
+    checksquare(A)
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
         retmat = copymutable_oftype(A, TT)
-        for i in axes(retmat,1)
-            retmat[i, i] = retmat[i, i] ^ p
+        for i in diagind(retmat, IndexStyle(retmat))
+            retmat[i] = retmat[i] ^ p
         end
         return retmat
     end
@@ -1080,7 +1079,7 @@ function sin(A::AbstractMatrix{<:Complex})
     T = complex(float(eltype(A)))
     X = exp!(T.(im .* A))
     Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
     end
@@ -1128,7 +1127,7 @@ function sincos(A::AbstractMatrix{<:Complex})
     T = complex(float(eltype(A)))
     X = exp!(T.(im .* A))
     Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
         Y[i] = x+y
@@ -1200,7 +1199,7 @@ function tanh(A::AbstractMatrix)
     end
     X = exp(A)
     Y = exp!(float.(.-A))
-    @inbounds for i in eachindex(X)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i], Y[i]
         X[i] = x - y
         Y[i] = x + y
