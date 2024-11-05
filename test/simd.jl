@@ -47,20 +47,32 @@ end
     @test !contains(ir, "call void @j_throw_boundserror")
 end
 
-@testset "basic arithmetic" begin
+@testset "basic floating-point arithmetic" begin
+    A = rand(64)
+    v = vload(Vec{4, Float64}, A, 1)
+
+    @test v+v isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, +, (Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "fadd <4 x double>")
+    
+    @test v-v isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, -, (Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "fsub <4 x double>")
+
+    @test v*v isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, *, (Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "fmul <4 x double>")
+
+    @test v/v isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, /, (Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "fdiv <4 x double>")
 
+    @test muladd(v, v, v) isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, muladd, (Vec{4, Float64}, Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "fmul contract <4 x double>")
     @test contains(ir, "fadd contract <4 x double>")
 
+    @test -v isa Vec{4, Float64}
     ir = sprint(io->code_llvm(io, -, (Vec{4, Float64},)))
     @test contains(ir, "fneg <4 x double>")
 
@@ -72,4 +84,10 @@ end
     ir = sprint(io->code_llvm(io, select, (Vec{4, Bool}, Vec{4, Float64}, Vec{4, Float64})))
     @test contains(ir, "icmp eq <4 x i8>")
     @test contains(ir, "select <4 x i1>")
+end
+
+@test "basic integer arithmetic" begin
+end
+
+@test "basic logical operations" begin
 end
