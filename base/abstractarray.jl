@@ -599,7 +599,7 @@ function stride(A::AbstractArray, k::Integer)
         return nothing
     else
         k ≤ ndims(A) && return st[k]
-        ndims(A) == 0 && return 1                      
+        ndims(A) == 0 && return 1
         return sum(st .* size(A))
     end
 end
