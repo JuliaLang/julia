@@ -255,9 +255,9 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
 ifeq ($(SANITIZE),1)
 ifeq ($(USECLANG),1)
-JL_PRIVATE_LIBS-1 += libclang_rt.asan
+JL_PRIVATE_LIBS-0 += libclang_rt.asan-*
 else
-JL_PRIVATE_LIBS-1 += libasan
+JL_PRIVATE_LIBS-0 += libasan
 endif
 endif
 
@@ -650,7 +650,7 @@ testall1: check-whitespace $(JULIA_BUILD_MODE)
 
 test-%: check-whitespace $(JULIA_BUILD_MODE) .FORCE
 	@([ $$(( $$(date +%s) - $$(date -r $(build_private_libdir)/sys.$(SHLIB_EXT) +%s) )) -le 100 ] && \
-		printf '\033[93m    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. \033[0m\n') || true
+		printf '$(WARNCOLOR)    HINT The system image was recently rebuilt. Are you aware of the test-revise-* targets? See CONTRIBUTING.md. $(ENDCOLOR)\n') || true
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test $* JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 test-revise-%: .FORCE

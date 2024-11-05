@@ -337,7 +337,7 @@ end
 # this indirection allows is to specialize on the types of the wrappers of A and B to some extent,
 # even though the wrappers are stripped off in mul!
 # By default, we ignore the wrapper info and forward the arguments to generic_matmatmul!
-Base.@constprop :aggressive function generic_matmatmul_wrapper!(C, tA, tB, A, B, α, β, @nospecialize(val))
+function generic_matmatmul_wrapper!(C, tA, tB, A, B, α, β, @nospecialize(val))
     generic_matmatmul!(C, tA, tB, A, B, α, β)
 end
 
