@@ -708,8 +708,13 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Compute U and V: Even/odd terms in Padé numerator & denom
         # Expansion of k=1 in for loop
         P = A2
-        U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
-        V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
+        U = similar(P)
+        V = similar(P)
+        for ind in CartesianIndices(P)
+            i, j = Tuple(ind)
+            U[ind] = C[4]*P[ind] + C[2]*I[i, j]
+            V[ind] = C[3]*P[ind] + C[1]*I[i, j]
+        end
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
             for ind in eachindex(P)
