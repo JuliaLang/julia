@@ -1033,7 +1033,7 @@ function run_passes_ipo_safe(
     end
     if is_asserts()
         @timeit "verify 3" begin
-            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
