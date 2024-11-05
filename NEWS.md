@@ -4,7 +4,7 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
-- New option `--trim` for building "trimmed" binaries, where code not provably reachable from entry points
+- New option `--trim` for building "trimmed" binaries, where code provably not reachable from entry points
   is removed. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
