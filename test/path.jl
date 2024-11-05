@@ -34,11 +34,11 @@
         @test expanduser(S("x")) == "x"
         @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
     end
-    @testset "Base.contractuser" begin
-        @test Base.contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
-        @test Base.contractuser(S(joinpath(homedir(), "x"))) ==
+    @testset "contractuser" begin
+        @test contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
+        @test contractuser(S(joinpath(homedir(), "x"))) ==
               (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
-        @test Base.contractuser(S("/foo/bar")) == "/foo/bar"
+        @test contractuser(S("/foo/bar")) == "/foo/bar"
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
@@ -170,6 +170,9 @@
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
+
+        @test splitdir("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b", "c.ext")
+        @test splitext("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b/c", ".ext")
 
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
@@ -306,6 +309,19 @@
             @test relpath(abspath(path)) == path
         end
         test_relpath()
+    end
+
+    @testset "uripath" begin
+        host = if Sys.iswindows() "" else gethostname() end
+        sysdrive, uridrive = if Sys.iswindows() "C:\\", "C:/" else "/", "" end
+        @test Base.Filesystem.uripath("$(sysdrive)some$(sep)file.txt") == "file://$host/$(uridrive)some/file.txt"
+        @test Base.Filesystem.uripath("$(sysdrive)another$(sep)$(sep)folder$(sep)file.md") == "file://$host/$(uridrive)another/folder/file.md"
+        @test Base.Filesystem.uripath("$(sysdrive)some file with ^odd% chars") == "file://$host/$(uridrive)some%20file%20with%20%5Eodd%25%20chars"
+        @test Base.Filesystem.uripath("$(sysdrive)weird chars like @#&()[]{}") == "file://$host/$(uridrive)weird%20chars%20like%20%40%23%26%28%29%5B%5D%7B%7D"
+        @test Base.Filesystem.uripath("$sysdrive") == "file://$host/$uridrive"
+        @test Base.Filesystem.uripath(".") == Base.Filesystem.uripath(pwd())
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)Δεδομένα") == "file://$host/$(uridrive)unicode/%CE%94%CE%B5%CE%B4%CE%BF%CE%BC%CE%AD%CE%BD%CE%B1"
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)🧮🐛🔨") == "file://$host/$(uridrive)unicode/%F0%9F%A7%AE%F0%9F%90%9B%F0%9F%94%A8"
     end
 
     if Sys.iswindows()

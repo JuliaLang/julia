@@ -160,4 +160,3 @@ for lib in libopenblas libcholmod liblapack $SONAMES; do
         done
     done
 done
-

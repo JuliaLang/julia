@@ -7,8 +7,23 @@ using LinearAlgebra: BlasReal, BlasFloat
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
 
 include("testutils.jl") # test_approx_eq_modphase
 
@@ -49,6 +64,9 @@ Random.seed!(1)
             # from matrix
             @test Bidiagonal(ubd, :U) == Bidiagonal(Matrix(ubd), :U) == ubd
             @test Bidiagonal(lbd, :L) == Bidiagonal(Matrix(lbd), :L) == lbd
+            # from its own type
+            @test typeof(ubd)(ubd) === ubd
+            @test typeof(lbd)(lbd) === lbd
         end
         @test eltype(Bidiagonal{elty}([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == elty
         @test eltype(Bidiagonal([1,2,3,4], [1.0f0,2.0f0,3.0f0], :U)) == Float32 # promotion test
@@ -90,7 +108,7 @@ Random.seed!(1)
         @test_throws BoundsError ubd[1, n + 1] = 1
         @test ((cubd[2, 2] = 10) == 10; cubd[2, 2] == 10)
         # bidiagonal size
-        @test_throws ArgumentError size(ubd, 0)
+        @test_throws BoundsError size(ubd, 0)
         @test size(ubd, 1) == size(ubd, 2) == n
         @test size(ubd, 3) == 1
         # bidiagonal similar
@@ -106,15 +124,31 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+
+        # setindex should return the destination
+        @test setindex!(ubd, 1, 1, 1) === ubd
+    end
+
+    @testset "isstored" begin
+        ubd = Bidiagonal(dv, ev, :U)
+        lbd = Bidiagonal(dv, ev, :L)
+        # bidiagonal isstored / upper & lower
+        @test_throws BoundsError Base.isstored(ubd, n + 1, 1)
+        @test_throws BoundsError Base.isstored(ubd, 1, n + 1)
+        @test Base.isstored(ubd, 2, 2)
+        # bidiagonal isstored / upper
+        @test Base.isstored(ubd, 2, 3)
+        @test !Base.isstored(ubd, 3, 2)
+        # bidiagonal isstored / lower
+        @test Base.isstored(lbd, 3, 2)
+        @test !Base.isstored(lbd, 2, 3)
     end
 
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
-        dstring = sprint(Base.print_matrix,BD.dv')
-        estring = sprint(Base.print_matrix,BD.ev')
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :U)"
         BD = Bidiagonal(dv,ev,:L)
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :L)"
     end
 
     @testset for uplo in (:U, :L)
@@ -123,16 +157,26 @@ Random.seed!(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
+            @test Array(T) == diagm(0 => dv, (uplo === :U ? 1 : -1) => ev)
             @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(real(T)) == real(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
         end
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
+        end
+
+        @testset "permutedims(::Bidiagonal)" begin
+            @test permutedims(permutedims(T)) === T
+            @test permutedims(T) == transpose.(transpose(T))
+            @test permutedims(T, [1, 2]) === T
+            @test permutedims(T, (2, 1)) == permutedims(T)
         end
 
         @testset "triu and tril" begin
@@ -205,6 +249,17 @@ Random.seed!(1)
             end
         end
 
+        @testset "trace" begin
+            for uplo in (:U, :L)
+                B = Bidiagonal(dv, ev, uplo)
+                if relty <: Integer
+                    @test tr(B) == tr(Matrix(B))
+                else
+                    @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(relty)
+                end
+            end
+        end
+
         Tfull = Array(T)
         @testset "Linear solves" begin
             if relty <: AbstractFloat
@@ -262,6 +317,13 @@ Random.seed!(1)
                 x = transpose(T) \ b
                 tx = transpose(Tfull) \ b
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = copy(transpose(b)) / T
+                tx = copy(transpose(b)) / Tfull
+                @test_throws DimensionMismatch rdiv!(Matrix{elty}(undef, 1, n+1), T)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = copy(transpose(b)) / transpose(T)
+                tx = copy(transpose(b)) / transpose(Tfull)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
                 @testset "Generic Mat-vec ops" begin
                     @test T*b ≈ Tfull*b
                     @test T'*b ≈ Tfull'*b
@@ -275,6 +337,54 @@ Random.seed!(1)
             zA  = Bidiagonal(zdv, zev, :U)
             zb  = Vector{elty}(undef, 0)
             @test ldiv!(zA, zb) === zb
+            @testset "linear solves with abstract matrices" begin
+                diag = b[:,1]
+                D = Diagonal(diag)
+                x = T \ D
+                tx = Tfull \ D
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = D / T
+                tx = D / Tfull
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = transpose(T) \ D
+                tx = transpose(Tfull) \ D
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+                x = D / transpose(T)
+                tx = D / transpose(Tfull)
+                @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
+            end
+            @testset "Specialized multiplication/division" begin
+                getval(x) = x
+                getval(x::Furlong) = x.val
+                function _bidiagdivmultest(T,
+                        x,
+                        typemul=T.uplo == 'U' ? UpperTriangular : Matrix,
+                        typediv=T.uplo == 'U' ? UpperTriangular : Matrix,
+                        typediv2=T.uplo == 'U' ? UpperTriangular : Matrix)
+                    TM = Matrix(T)
+                    @test map(getval, (T*x)::typemul) ≈ map(getval, TM*x)
+                    @test map(getval, (x*T)::typemul) ≈ map(getval, x*TM)
+                    @test map(getval, (x\T)::typediv) ≈ map(getval, x\TM)
+                    @test map(getval, (T/x)::typediv) ≈ map(getval, TM/x)
+                    if !isa(x, Number)
+                        @test map(getval, Array((T\x)::typediv2)) ≈ map(getval, Array(TM\x))
+                        @test map(getval, Array((x/T)::typediv2)) ≈ map(getval, Array(x/TM))
+                    end
+                    return nothing
+                end
+                A = Matrix(T)
+                for t in (T, Furlong.(T)), (A, dv, ev) in ((A, dv, ev), (Furlong.(A), Furlong.(dv), Furlong.(ev)))
+                    _bidiagdivmultest(t, 5, Bidiagonal, Bidiagonal)
+                    _bidiagdivmultest(t, 5I, Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, Diagonal(dv), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, UpperTriangular(A))
+                    _bidiagdivmultest(t, UnitUpperTriangular(A))
+                    _bidiagdivmultest(t, LowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
+                    _bidiagdivmultest(t, UnitLowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :U), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :L), Matrix, Matrix, Matrix)
+                end
+            end
         end
 
         if elty <: BlasReal
@@ -286,15 +396,15 @@ Random.seed!(1)
 
         @testset "diag" begin
             @test (@inferred diag(T))::typeof(dv) == dv
-            @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
+            @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
-            @test_throws ArgumentError diag(T, -n - 1)
-            @test_throws ArgumentError diag(T,  n + 1)
+            @test isempty(@inferred diag(T, -n - 1))
+            @test isempty(@inferred diag(T,  n + 1))
             # test diag with another wrapped vector type
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)
             @test (@inferred diag(G))::typeof(gdv) == gdv
-            @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
+            @test (@inferred diag(G, uplo === :U ? 1 : -1))::typeof(gdv) == gev
             @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
         end
 
@@ -302,9 +412,9 @@ Random.seed!(1)
             if relty <: AbstractFloat
                 d1, v1 = eigen(T)
                 d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
-                @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
+                @test (uplo === :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
-                    test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
+                    test_approx_eq_modphase(v1, uplo === :U ? v2 : v2[:,n:-1:1])
                 end
             end
         end
@@ -339,6 +449,9 @@ Random.seed!(1)
                 for op in (+, -, *)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
+                A = kron(T.dv, T.dv')
+                @test T * A ≈ lmul!(T, copy(A))
+                @test A * T ≈ rmul!(copy(A), T)
             end
             # test pass-through of mul! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
@@ -346,7 +459,8 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             Dia = Diagonal(T.dv)
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T) ≈ rmul!(copy(Tri), T)
+            @test Array(T*Tri) ≈ Array(T)*Array(Tri) ≈ lmul!(T, copy(Tri))
             # test mul! itself for these types
             for AA in (Tri, Dia)
                 for f in (identity, transpose, adjoint)
@@ -359,8 +473,10 @@ Random.seed!(1)
             for f in (identity, transpose, adjoint)
                 C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
                 B = rand(elty, n, n)
-                D = copy(C) + 2.0 * Array(T*f(B))
-                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                D = C + 2.0 * Array(T*f(B))
+                @test mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                @test lmul!(T, copy(f(B))) ≈ T * f(B)
+                @test rmul!(copy(f(B)), T) ≈ f(B) * T
             end
 
             # Issue #31870
@@ -371,7 +487,7 @@ Random.seed!(1)
             Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
             SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
 
-            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            mats = Any[Diag, BidiagU, BidiagL, Tridiag, SymTri]
             for a in mats
                 for b in mats
                     @test a*b ≈ Matrix(a)*Matrix(b)
@@ -488,6 +604,19 @@ end
     bb = Any[b[1:3], b[4:6], b[7:9]]
     @test vcat((Alb\bb)...) ≈ LowerTriangular(A)\b
     @test vcat((Aub\bb)...) ≈ UpperTriangular(A)\b
+    Alb = Bidiagonal([tril(A[1:3,1:3]), tril(A[4:6,4:6]), tril(A[7:9,7:9])],
+                     [triu(A[4:6,1:3]), triu(A[7:9,4:6])], 'L')
+    Aub = Bidiagonal([triu(A[1:3,1:3]), triu(A[4:6,4:6]), triu(A[7:9,7:9])],
+                     [tril(A[1:3,4:6]), tril(A[4:6,7:9])], 'U')
+    d = [randn(3,3) for _ in 1:3]
+    dl = [randn(3,3) for _ in 1:2]
+    B = [randn(3,3) for _ in 1:3, _ in 1:3]
+    for W in (UpperTriangular, LowerTriangular), t in (identity, adjoint, transpose)
+        @test Matrix(t(Alb) \ W(B)) ≈ t(Alb) \ Matrix(W(B))
+        @test Matrix(t(Aub) \ W(B)) ≈ t(Aub) \ Matrix(W(B))
+        @test Matrix(W(B) / t(Alb)) ≈ Matrix(W(B)) / t(Alb)
+        @test Matrix(W(B) / t(Aub)) ≈ Matrix(W(B)) / t(Aub)
+    end
 end
 
 @testset "sum, mapreduce" begin
@@ -544,14 +673,14 @@ end
 end
 
 @testset "generalized dot" begin
-    for elty in (Float64, ComplexF64)
-        dv = randn(elty, 5)
-        ev = randn(elty, 4)
-        x = randn(elty, 5)
-        y = randn(elty, 5)
+    for elty in (Float64, ComplexF64), n in (5, 1)
+        dv = randn(elty, n)
+        ev = randn(elty, n-1)
+        x = randn(elty, n)
+        y = randn(elty, n)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, B*y) ≈ dot(x, Matrix(B), y)
         end
         dv = Vector{elty}(undef, 0)
         ev = Vector{elty}(undef, 0)
@@ -559,7 +688,7 @@ end
         y = Vector{elty}(undef, 0)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(zero(elty), zero(elty), zero(elty))
+            @test dot(x, B, y) === zero(elty)
         end
     end
 end
@@ -698,6 +827,314 @@ end
         if j < i-1 || j > i
             @test iszero(BL[i,j])
         end
+    end
+
+    @test diag(BU, -1) == [zeros(size(dv[i+1], 1), size(dv[i],2)) for i in 1:length(dv)-1]
+    @test diag(BL, 1) == [zeros(size(dv[i], 1), size(dv[i+1],2)) for i in 1:length(dv)-1]
+
+    M = ones(2,2)
+    for n in 0:1
+        dv = fill(M, n)
+        ev = fill(M, 0)
+        B = Bidiagonal(dv, ev, :U)
+        @test B == Matrix{eltype(B)}(B)
+    end
+
+    @testset "non-standard axes" begin
+        LinearAlgebra.diagzero(T::Type, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) =
+            zeros(T, ax)
+
+        s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+        B = Bidiagonal(fill(s,4), fill(s,3), :U)
+        @test @inferred(B[2,1]) isa typeof(s)
+        @test all(iszero, B[2,1])
+    end
+end
+
+@testset "copyto!" begin
+    ev, dv = [1:4;], [1:5;]
+    B = Bidiagonal(dv, ev, :U)
+    B2 = copyto!(zero(B), B)
+    @test B2 == B
+    for (ul1, ul2) in ((:U, :L), (:L, :U))
+        B3 = Bidiagonal(dv, zero(ev), ul1)
+        B2 = Bidiagonal(zero(dv), zero(ev), ul2)
+        @test copyto!(B2, B3) == B3
+    end
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(B, Bidiagonal([4], Int[], :U)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal([4], Int[], :L)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :U)) == Bidiagonal(dv, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :L)) == Bidiagonal(dv, ev, :U)
+    end
+end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            ud = FillArrays.Fill(0, len-1)
+            B = Bidiagonal(d, ud, :U)
+            @test copyto!(B, I) === B
+        end
+    end
+    B = Bidiagonal(fill(2, 4), fill(3, 3), :U)
+    copyto!(B, I)
+    @test all(isone, diag(B))
+    @test all(iszero, diag(B, 1))
+end
+
+@testset "diagind" begin
+    B = Bidiagonal(1:4, 1:3, :U)
+    M = Matrix(B)
+    @testset for k in -4:4
+        @test B[diagind(B,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Bidiagonal(dv, uv, :U)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    B = Bidiagonal([1:2;], [1;], :U)
+    @test S * B == A * B
+    @test B * S == B * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, B) == mul!(C2, A, B)
+    @test mul!(C1, S, B, 1, 2) == mul!(C2, A, B, 1 ,2)
+    @test mul!(C1, B, S) == mul!(C2, B, A)
+    @test mul!(C1, B, S, 1, 2) == mul!(C2, B, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test B * sv == B * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, B, sv) == mul!(C2, B, v)
+    @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
+end
+
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
+    M = Matrix{eltype(B)}(B)
+    @test M isa Matrix{eltype(B)}
+    @test M == B
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    B = Bidiagonal(dv, ev, :U)
+    @test_throws "invalid index" B[3, true]
+    @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    dv, ev = rand(4), rand(3)
+    for A in (Bidiagonal(dv, ev, :U), Bidiagonal(dv, ev, :L))
+        @testset "$(nameof(typeof(B)))" for B in (
+                                Bidiagonal(dv, ev, :U),
+                                Bidiagonal(dv, ev, :L),
+                                Diagonal(dv)
+                        )
+            @test_throws ArgumentError rmul!(B, A)
+            @test_throws ArgumentError lmul!(A, B)
+        end
+    end
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        for uplo in (:L, :U)
+            B = Bidiagonal(fill(S32, 4), fill(S32, 3), uplo)
+            D = Diagonal(fill(S22, size(B,2)))
+            @test rmul!(copy(B), D) ≈ B * D
+            D = Diagonal(fill(S33, size(B,1)))
+            @test lmul!(D, copy(B)) ≈ D * B
+        end
+
+        B = Bidiagonal(fill(S33, 4), fill(S33, 3), :U)
+        D = Diagonal(fill(S32, 4))
+        @test lmul!(B, Array(D)) ≈ B * D
+        B = Bidiagonal(fill(S22, 4), fill(S22, 3), :U)
+        @test rmul!(Array(D), B) ≈ D * B
+    end
+end
+
+@testset "rmul!/lmul! with numbers" begin
+    for T in (Bidiagonal(rand(4), rand(3), :U), Bidiagonal(rand(4), rand(3), :L))
+        @test rmul!(copy(T), 0.2) ≈ rmul!(Array(T), 0.2)
+        @test lmul!(0.2, copy(T)) ≈ lmul!(0.2, Array(T))
+        @test_throws ArgumentError rmul!(T, NaN)
+        @test_throws ArgumentError lmul!(NaN, T)
+    end
+    for T in (Bidiagonal(rand(1), rand(0), :U), Bidiagonal(rand(1), rand(0), :L))
+        @test all(isnan, rmul!(copy(T), NaN))
+        @test all(isnan, lmul!(NaN, copy(T)))
+    end
+end
+
+@testset "mul with Diagonal" begin
+    for n in 0:4
+        dv, ev = rand(n), rand(max(n-1,0))
+        d = rand(n)
+        for uplo in (:U, :L)
+            A = Bidiagonal(dv, ev, uplo)
+            D = Diagonal(d)
+            M = Matrix(A)
+            S = similar(A, size(A))
+            @test A * D ≈ mul!(S, A, D) ≈ M * D
+            @test D * A ≈ mul!(S, D, A) ≈ D * M
+            @test mul!(copy(S), D, A, 2, 2) ≈ D * M * 2 + S * 2
+            @test mul!(copy(S), A, D, 2, 2) ≈ M * D * 2 + S * 2
+
+            A2 = Bidiagonal(dv, zero(ev), uplo)
+            M2 = Array(A2)
+            S2 = Bidiagonal(copy(dv), copy(ev), uplo == (:U) ? (:L) : (:U))
+            MS2 = Array(S2)
+            @test mul!(copy(S2), D, A2) ≈ D * M2
+            @test mul!(copy(S2), A2, D) ≈ M2 * D
+            @test mul!(copy(S2), A2, D, 2, 2) ≈ M2 * D * 2 + MS2 * 2
+            @test mul!(copy(S2), D, A2, 2, 2) ≈ D * M2 * 2 + MS2 * 2
+        end
+    end
+
+    t1 = SizedArrays.SizedArray{(2,3)}([1 2 3; 3 4 5])
+    t2 = SizedArrays.SizedArray{(3,2)}([1 2; 3 4; 5 6])
+    dv, ev, d = fill(t1, 4), fill(2t1, 3), fill(t2, 4)
+    for uplo in (:U, :L)
+        A = Bidiagonal(dv, ev, uplo)
+        D = Diagonal(d)
+        @test A * D ≈ Array(A) * Array(D)
+        @test D * A ≈ Array(D) * Array(A)
+    end
+end
+
+@testset "conversion to Tridiagonal for immutable bands" begin
+    n = 4
+    dv = FillArrays.Fill(3, n)
+    ev = FillArrays.Fill(2, n-1)
+    z = FillArrays.Fill(0, n-1)
+    dvf = FillArrays.Fill(Float64(3), n)
+    evf = FillArrays.Fill(Float64(2), n-1)
+    zf = FillArrays.Fill(Float64(0), n-1)
+    B = Bidiagonal(dv, ev, :U)
+    @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(z, dv, ev)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(zf, dvf, evf)
+    B = Bidiagonal(dv, ev, :L)
+    @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(ev, dv, z)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(evf, dvf, zf)
+end
+
+@testset "off-band indexing error" begin
+    B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
+    @test_throws "cannot set entry" B[1,2] = 4
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    B = Bidiagonal(zeros(0), zeros(0), :U)
+    BL = Bidiagonal(zeros(5), zeros(4), :U)
+    @test size(A * B) == size(A)
+    @test size(BL * A) == size(A)
+    @test size(B * B) == size(B)
+    C = similar(A)
+    @test mul!(C, A, B) == A * B
+    @test mul!(C, BL, A) == BL * A
+    @test mul!(similar(B), B, B) == B * B
+    @test mul!(similar(B, size(B)), B, B) == B * B
+
+    v = zeros(size(B,2))
+    @test size(B * v) == size(v)
+    @test mul!(similar(v), B, v) == B * v
+
+    D = Diagonal(zeros(size(B,2)))
+    @test size(B * D) == size(D * B) == size(D)
+    @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
+end
+
+@testset "mul for small matrices" begin
+    @testset for n in 0:6
+        D = Diagonal(rand(n))
+        v = rand(n)
+        @testset for uplo in (:L, :U)
+            B = Bidiagonal(rand(n), rand(max(n-1,0)), uplo)
+            M = Matrix(B)
+
+            @test B * v ≈ M * v
+            @test mul!(similar(v), B, v) ≈ M * v
+            @test mul!(ones(size(v)), B, v, 2, 3) ≈ M * v * 2 .+ 3
+
+            @test B * B ≈ M * M
+            @test mul!(similar(B, size(B)), B, B) ≈ M * M
+            @test mul!(ones(size(B)), B, B, 2, 4) ≈ M * M * 2 .+ 4
+
+            for m in 0:6
+                AL = rand(m,n)
+                AR = rand(n,m)
+                @test AL * B ≈ AL * M
+                @test B * AR ≈ M * AR
+                @test mul!(similar(AL), AL, B) ≈ AL * M
+                @test mul!(similar(AR), B, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, B, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), B, AR, 2, 4) ≈ M * AR * 2 .+ 4
+            end
+
+            @test B * D ≈ M * D
+            @test D * B ≈ D * M
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B, size(B)), D, B) ≈ D * M
+            @test mul!(similar(B, size(B)), B, D) ≈ M * D
+            @test mul!(ones(size(B)), D, B, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(B)), B, D, 2, 4) ≈ M * D * 2 .+ 4
+        end
+        BL = Bidiagonal(rand(n), rand(max(0, n-1)), :L)
+        ML = Matrix(BL)
+        BU = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
+        MU = Matrix(BU)
+        T = Tridiagonal(zeros(max(0, n-1)), zeros(n), zeros(max(0, n-1)))
+        @test mul!(T, BL, BU) ≈ ML * MU
+        @test mul!(T, BU, BL) ≈ MU * ML
+        T = Tridiagonal(ones(max(0, n-1)), ones(n), ones(max(0, n-1)))
+        @test mul!(copy(T), BL, BU, 2, 3) ≈ ML * MU * 2 + T * 3
+        @test mul!(copy(T), BU, BL, 2, 3) ≈ MU * ML * 2 + T * 3
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for B in (
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :L),
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :U),
+            )
+        @test B * B ≈ Matrix(B) * Matrix(B)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * B ≈ Matrix(BL) * Matrix(B)
+        @test BU * B ≈ Matrix(BU) * Matrix(B)
+        @test B * BL ≈ Matrix(B) * Matrix(BL)
+        @test B * BU ≈ Matrix(B) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * B ≈ Matrix(D) * Matrix(B)
+        @test B * D ≈ Matrix(B) * Matrix(D)
     end
 end
 

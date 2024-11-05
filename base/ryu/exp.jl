@@ -7,34 +7,34 @@ function writeexp(buf, pos, v::T,
     pos = append_sign(x, plus, space, buf, pos)
 
     # special cases
-    if x == 0
-        buf[pos] = UInt8('0')
+    if iszero(x)
+        @inbounds buf[pos] = UInt8('0')
         pos += 1
         if precision > 0 && !trimtrailingzeros
-            buf[pos] = decchar
+            @inbounds buf[pos] = decchar
             pos += 1
             for _ = 1:precision
-                buf[pos] = UInt8('0')
+                @inbounds buf[pos] = UInt8('0')
                 pos += 1
             end
         elseif hash
-            buf[pos] = decchar
+            @inbounds buf[pos] = decchar
             pos += 1
         end
-        buf[pos] = expchar
-        buf[pos + 1] = UInt8('+')
-        buf[pos + 2] = UInt8('0')
-        buf[pos + 3] = UInt8('0')
+        @inbounds buf[pos] = expchar
+        @inbounds buf[pos + 1] = UInt8('+')
+        @inbounds buf[pos + 2] = UInt8('0')
+        @inbounds buf[pos + 3] = UInt8('0')
         return pos + 4
     elseif isnan(x)
-        buf[pos] = UInt8('N')
-        buf[pos + 1] = UInt8('a')
-        buf[pos + 2] = UInt8('N')
+        @inbounds buf[pos] = UInt8('N')
+        @inbounds buf[pos + 1] = UInt8('a')
+        @inbounds buf[pos + 2] = UInt8('N')
         return pos + 3
     elseif !isfinite(x)
-        buf[pos] = UInt8('I')
-        buf[pos + 1] = UInt8('n')
-        buf[pos + 2] = UInt8('f')
+        @inbounds buf[pos] = UInt8('I')
+        @inbounds buf[pos + 1] = UInt8('n')
+        @inbounds buf[pos + 2] = UInt8('f')
         return pos + 3
     end
 
@@ -42,7 +42,7 @@ function writeexp(buf, pos, v::T,
     mant = bits & MANTISSA_MASK
     exp = Int((bits >> 52) & EXP_MASK)
 
-    if exp == 0
+    if iszero(exp)
         e2 = 1 - 1023 - 52
         m2 = mant
     else
@@ -51,7 +51,7 @@ function writeexp(buf, pos, v::T,
     end
     nonzero = false
     precision += 1
-    digits = 0
+    digits = zero(UInt32)
     printedDigits = 0
     availableDigits = 0
     e = 0
@@ -64,14 +64,14 @@ function writeexp(buf, pos, v::T,
             j = p10bits - e2
             #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
-            if printedDigits != 0
+            if !iszero(printedDigits)
                 if printedDigits + 9 > precision
                     availableDigits = 9
                     break
                 end
                 pos = append_nine_digits(digits, buf, pos)
                 printedDigits += 9
-            elseif digits != 0
+            elseif !iszero(digits)
                 availableDigits = decimallength(digits)
                 e = i * 9 + availableDigits - 1
                 if availableDigits > precision
@@ -80,10 +80,10 @@ function writeexp(buf, pos, v::T,
                 if precision > 1
                     pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
-                    buf[pos] = UInt8('0') + digits
+                    @inbounds buf[pos] = UInt8('0') + digits
                     pos += 1
                     if hash
-                        buf[pos] = decchar
+                        @inbounds buf[pos] = decchar
                         pos += 1
                     end
                 end
@@ -93,26 +93,26 @@ function writeexp(buf, pos, v::T,
             i -= 1
         end
     end
-    if e2 < 0 && availableDigits == 0
+    if e2 < 0 && iszero(availableDigits)
         idx = div(-e2, 16)
-        i = MIN_BLOCK_2[idx + 1]
+        i = Int(MIN_BLOCK_2[idx + 1])
         while i < 200
             j = 120 + (-e2 - 16 * idx)
             p = POW10_OFFSET_2[idx + 1] + i - MIN_BLOCK_2[idx + 1]
             if p >= POW10_OFFSET_2[idx + 2]
-                digits = 0
+                digits = zero(UInt32)
             else
                 #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
                 digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             end
-            if printedDigits != 0
+            if !iszero(printedDigits)
                 if printedDigits + 9 > precision
                     availableDigits = 9
                     break
                 end
                 pos = append_nine_digits(digits, buf, pos)
                 printedDigits += 9
-            elseif digits != 0
+            elseif !iszero(digits)
                 availableDigits = decimallength(digits)
                 e = -(i + 1) * 9 + availableDigits - 1
                 if availableDigits > precision
@@ -121,10 +121,10 @@ function writeexp(buf, pos, v::T,
                 if precision > 1
                     pos = append_d_digits(availableDigits, digits, buf, pos, decchar)
                 else
-                    buf[pos] = UInt8('0') + digits
+                    @inbounds buf[pos] = UInt8('0') + digits
                     pos += 1
                     if hash
-                        buf[pos] = decchar
+                        @inbounds buf[pos] = decchar
                         pos += 1
                     end
                 end
@@ -135,19 +135,19 @@ function writeexp(buf, pos, v::T,
         end
     end
     maximum = precision - printedDigits
-    if availableDigits == 0
-        digits = 0
+    if iszero(availableDigits)
+        digits = zero(UInt32)
     end
-    lastDigit = 0
+    lastDigit = zero(UInt32)
     if availableDigits > maximum
         for k = 0:(availableDigits - maximum - 1)
-            lastDigit = digits % 10
-            digits = div(digits, 10)
+            lastDigit = digits % UInt32(10)
+            digits = div(digits, UInt32(10))
         end
     end
     roundUp = 0
     if lastDigit != 5
-        roundUp = lastDigit > 5
+        roundUp = lastDigit > 5 ? 1 : 0
     else
         rexp = precision - e
         requiredTwos = -e2 - rexp
@@ -159,10 +159,10 @@ function writeexp(buf, pos, v::T,
         end
         roundUp = trailingZeros ? 2 : 1
     end
-    if printedDigits != 0
-        if digits == 0
+    if !iszero(printedDigits)
+        if iszero(digits)
             for _ = 1:maximum
-                buf[pos] = UInt8('0')
+                @inbounds buf[pos] = UInt8('0')
                 pos += 1
             end
         else
@@ -172,64 +172,68 @@ function writeexp(buf, pos, v::T,
         if precision > 1
             pos = append_d_digits(maximum, digits, buf, pos, decchar)
         else
-            buf[pos] = UInt8('0') + digits
+            @inbounds buf[pos] = UInt8('0') + digits
             pos += 1
             if hash
-                buf[pos] = decchar
+                @inbounds buf[pos] = decchar
                 pos += 1
             end
         end
     end
-    if roundUp != 0
+    if !iszero(roundUp)
         roundPos = pos
         while true
             roundPos -= 1
-            if roundPos == (startpos - 1) || buf[roundPos] == UInt8('-') || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
-                buf[roundPos + 1] = UInt8('1')
+            if roundPos == (startpos - 1) || (@inbounds buf[roundPos]) == UInt8('-') || (plus && (@inbounds buf[roundPos]) == UInt8('+')) || (space && (@inbounds buf[roundPos]) == UInt8(' '))
+                @inbounds buf[roundPos + 1] = UInt8('1')
                 e += 1
                 break
             end
-            c = roundPos > 0 ? buf[roundPos] : 0x00
+            c = roundPos > 0 ? (@inbounds buf[roundPos]) : 0x00
             if c == decchar
                 continue
             elseif c == UInt8('9')
-                buf[roundPos] = UInt8('0')
+                @inbounds buf[roundPos] = UInt8('0')
                 roundUp = 1
                 continue
             else
-                if roundUp == 2 && UInt8(c) % 2 == 0
+                if roundUp == 2 && iseven(c)
                     break
                 end
-                buf[roundPos] = c + 1
+                @inbounds buf[roundPos] = c + 1
                 break
             end
         end
     end
     if trimtrailingzeros
-        while buf[pos - 1] == UInt8('0')
+        while @inbounds buf[pos - 1] == UInt8('0')
             pos -= 1
         end
-        if buf[pos - 1] == decchar && !hash
+        if @inbounds buf[pos - 1] == decchar && !hash
             pos -= 1
         end
     end
     buf[pos] = expchar
     pos += 1
     if e < 0
-        buf[pos] = UInt8('-')
+        @inbounds buf[pos] = UInt8('-')
         pos += 1
         e = -e
     else
-        buf[pos] = UInt8('+')
+        @inbounds buf[pos] = UInt8('+')
         pos += 1
     end
     if e >= 100
-        c = e % 10
-        unsafe_copyto!(buf, pos, DIGIT_TABLE, 2 * div(e, 10) + 1, 2)
-        buf[pos + 2] = UInt8('0') + c
+        c = (e % 10) % UInt8
+        @inbounds d100 = DIGIT_TABLE16[div(e, 10) + 1]
+        @inbounds buf[pos] = d100 % UInt8
+        @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8
+        @inbounds buf[pos + 2] = UInt8('0') + c
         pos += 3
     else
-        unsafe_copyto!(buf, pos, DIGIT_TABLE, 2 * e + 1, 2)
+        @inbounds d100 = DIGIT_TABLE16[e + 1]
+        @inbounds buf[pos] = d100 % UInt8
+        @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8
         pos += 2
     end
     return pos

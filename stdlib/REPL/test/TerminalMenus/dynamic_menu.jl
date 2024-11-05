@@ -116,3 +116,36 @@ str = String(take!(io))
 nback, strs = linesplitter(str)
 @test nback == 3
 @test strs == ["^  3", "   4", "   5", " > 6*"]
+
+# Test with page size larger than number of options.
+# END_KEY, PAGE_DOWN, and ARROW_UP (from first element with scroll
+# wrap) used to be problematic. The last two are tested here, whereas
+# the first one is unreachable within the `request` function.
+menu = DynamicMenu(4, 0, -1, 2, TerminalMenus.Config(scroll_wrap = true))
+
+cursor = 1
+state = TerminalMenus.printmenu(io, menu, cursor; init=true)
+str = String(take!(io))
+@test count(isequal('\n'), str) == state
+nback, strs = linesplitter(str)
+@test nback == 0
+@test strs == [" > 1*", "   2"]
+
+cursor = TerminalMenus.page_down!(menu, cursor)
+@test cursor == menu.numopts
+@test menu.pageoffset == 0
+state = TerminalMenus.printmenu(io, menu, cursor; oldstate=state)
+str = String(take!(io))
+nback, strs = linesplitter(str)
+@test nback == 1
+@test strs == ["   1", " > 2*"]
+
+cursor = TerminalMenus.page_up!(menu, cursor)
+cursor = TerminalMenus.move_up!(menu, cursor)
+@test cursor == menu.numopts
+@test menu.pageoffset == 0
+state = TerminalMenus.printmenu(io, menu, cursor; oldstate=state)
+str = String(take!(io))
+nback, strs = linesplitter(str)
+@test nback == 1
+@test strs == ["   1", " > 2*"]

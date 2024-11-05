@@ -25,7 +25,7 @@ There are a few noteworthy high-level features about Julia's strings:
     the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) encoding. (A [`transcode`](@ref) function is
     provided to convert to/from other Unicode encodings.)
   * All string types are subtypes of the abstract type `AbstractString`, and external packages define
-    additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
+    additional `AbstractString` subtypes (e.g. for other encodings). If you define a function expecting
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
@@ -48,7 +48,7 @@ to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
 other subtypes of `AbstractChar`, e.g. to optimize operations for other
 [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
-input and shown:
+input and shown (note that character literals are delimited with single quotes, not double quotes):
 
 ```jldoctest
 julia> c = 'x'
@@ -156,7 +156,7 @@ julia> 'A' + 1
 
 ## String Basics
 
-String literals are delimited by double quotes or triple double quotes:
+String literals are delimited by double quotes or triple double quotes (not single quotes):
 
 ```jldoctest helloworldstring
 julia> str = "Hello, world.\n"
@@ -242,8 +242,9 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
-for example:
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
+More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
+into substrings. For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -253,6 +254,9 @@ julia> substr = SubString(str, 1, 4)
 "long"
 
 julia> typeof(substr)
+SubString{String}
+
+julia> @views typeof(str[1:4]) # @views converts slices to SubStrings
 SubString{String}
 ```
 
@@ -398,7 +402,7 @@ julia> collect(eachindex(s))
 ```
 
 To access the raw code units (bytes for UTF-8) of the encoding, you can use the [`codeunit(s,i)`](@ref)
-function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref).  The [`codeunits(s)`](@ref)
+function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref). The [`codeunits(s)`](@ref)
 function returns an `AbstractVector{UInt8}` wrapper that lets you access these raw codeunits (bytes) as an array.
 
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
@@ -531,7 +535,9 @@ Constructing strings using concatenation can become a bit cumbersome, however. T
 verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
-```jldoctest stringconcat
+```jldoctest
+julia> greet = "Hello"; whom = "world";
+
 julia> "$greet, $whom.\n"
 "Hello, world.\n"
 ```
@@ -687,29 +693,29 @@ You can search for the index of a particular character using the
 [`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('o'), "xylophone")
+julia> findfirst('o', "xylophone")
 4
 
-julia> findlast(isequal('o'), "xylophone")
+julia> findlast('o', "xylophone")
 7
 
-julia> findfirst(isequal('z'), "xylophone")
+julia> findfirst('z', "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
 the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
-julia> findnext(isequal('o'), "xylophone", 1)
+julia> findnext('o', "xylophone", 1)
 4
 
-julia> findnext(isequal('o'), "xylophone", 5)
+julia> findnext('o', "xylophone", 5)
 7
 
-julia> findprev(isequal('o'), "xylophone", 5)
+julia> findprev('o', "xylophone", 5)
 4
 
-julia> findnext(isequal('o'), "xylophone", 8)
+julia> findnext('o', "xylophone", 8)
 ```
 
 You can use the [`occursin`](@ref) function to check if a substring is found within a string:
@@ -766,9 +772,10 @@ are some examples of non-standard string literals. Users and packages may also d
 Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
 
 ## [Regular Expressions](@id man-regex-literals)
+Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose you are trying to extract a single date from a large text file. You don’t know what that date is (that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and search for them.
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
-library (a description of the syntax can be found [here](https://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+Julia uses version 2 of Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html) for more details). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -825,7 +832,7 @@ of the substring that matches, but perhaps we want to capture any non-blank text
 character. We could do the following:
 
 ```jldoctest
-julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
+julia> m = match(r"^\s*(?:#\s*(.*?)\s*$)", "# a comment ")
 RegexMatch("# a comment ", 1="a comment")
 ```
 
@@ -950,11 +957,11 @@ i   Do case-insensitive pattern matching.
     that would cross the Unicode rules/non-Unicode rules boundary
     (ords 255/256) will not succeed.
 
-m   Treat string as multiple lines.  That is, change "^" and "$"
+m   Treat string as multiple lines. That is, change "^" and "$"
     from matching the start or end of the string to matching the
     start or end of any line anywhere within the string.
 
-s   Treat string as single line.  That is, change "." to match any
+s   Treat string as single line. That is, change "." to match any
     character whatsoever, even a newline, which normally it would
     not match.
 
@@ -974,10 +981,10 @@ x   Tells the regular expression parser to ignore most whitespace
 For example, the following regex has all three flags turned on:
 
 ```jldoctest
-julia> r"a+.*b+.*?d$"ism
-r"a+.*b+.*?d$"ims
+julia> r"a+.*b+.*d$"ism
+r"a+.*b+.*d$"ims
 
-julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+julia> match(r"a+.*b+.*d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
 ```
 
@@ -1005,7 +1012,7 @@ ERROR: syntax: invalid escape sequence
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
-The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+The `Regex()` constructor may be used to create a valid regex string programmatically. This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
 
 ```jldoctest
 julia> using Dates
@@ -1033,8 +1040,11 @@ true
 ```
 
 Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
-are interpreted as literal characters (after string interpolation). This escape sequence can
-be useful when interpolating, possibly malicious, user input.
+are interpreted as literal characters. This is convenient for matching characters that
+would otherwise be regex metacharacters. However, caution is needed when using this feature
+together with string interpolation, since the interpolated string might itself contain
+the `\E` sequence, unexpectedly terminating literal matching. User inputs need to be sanitized
+before inclusion in a regex.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
@@ -1088,7 +1098,7 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: setindex! not defined for Base.CodeUnits{UInt8, String}
+ERROR: CanonicalIndexError: setindex! not defined for Base.CodeUnits{UInt8, String}
 [...]
 
 julia> Vector{UInt8}(x)
@@ -1132,9 +1142,9 @@ some confusion regarding the matter.
 
 Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
 Version number literals create [`VersionNumber`](@ref) objects which follow the
-specifications of [semantic versioning](https://semver.org/),
+specifications of [semantic versioning 2.0.0-rc2](https://semver.org/spec/v2.0.0-rc.2.html),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
-build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
+build alphanumeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering
 a version literal, everything except the major version number is optional, therefore e.g.  `v"0.2"`
 is equivalent to `v"0.2.0"` (with empty pre-release/build annotations), `v"2"` is equivalent to
@@ -1193,3 +1203,55 @@ Notice that the first two backslashes appear verbatim in the output, since they 
 precede a quote character.
 However, the next backslash character escapes the backslash that follows it, and the
 last backslash escapes a quote, since these backslashes appear before a quote.
+
+
+## [Annotated Strings](@id man-annotated-strings)
+
+!!! note
+    The API for AnnotatedStrings is considered experimental and is subject to change between
+    Julia versions.
+
+It is sometimes useful to be able to hold metadata relating to regions of a
+string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
+allows for regions of it to be annotated with labelled values (`:label => value`).
+All generic string operations are applied to the underlying string. However,
+when possible, styling information is preserved. This means you can manipulate a
+[`AnnotatedString`](@ref Base.AnnotatedString) —taking substrings, padding them,
+concatenating them with other strings— and the metadata annotations will "come
+along for the ride".
+
+This string type is fundamental to the [StyledStrings stdlib](@ref
+stdlib-styledstrings), which uses `:face`-labelled annotations to hold styling
+information.
+
+When concatenating a [`AnnotatedString`](@ref Base.AnnotatedString), take care to use
+[`annotatedstring`](@ref Base.annotatedstring) instead of [`string`](@ref) if you want
+to keep the string annotations.
+
+```jldoctest
+julia> str = Base.AnnotatedString("hello there",
+               [(1:5, :word, :greeting), (7:11, :label, 1)])
+"hello there"
+
+julia> length(str)
+11
+
+julia> lpad(str, 14)
+"   hello there"
+
+julia> typeof(lpad(str, 7))
+Base.AnnotatedString{String}
+
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face, :magenta)])
+" julia"
+
+julia> Base.annotatedstring(str, str2)
+"hello there julia"
+
+julia> str * str2 == Base.annotatedstring(str, str2) # *-concatenation still works
+true
+```
+
+The annotations of a [`AnnotatedString`](@ref Base.AnnotatedString) can be accessed
+and modified via the [`annotations`](@ref Base.annotations) and
+[`annotate!`](@ref Base.annotate!) functions.

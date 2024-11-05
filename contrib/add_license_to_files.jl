@@ -59,6 +59,7 @@ const skipfiles = [
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
     "../src/crc32c.c",
+    "../src/mach_excUser.c",
 ]
 
 const ext_prefix = Dict([

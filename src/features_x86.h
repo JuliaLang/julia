@@ -45,15 +45,15 @@ JL_FEATURE_DEF(avx512ifma, 32 * 2 + 21, 0)
 // JL_FEATURE_DEF(pcommit, 32 * 2 + 22, 0) // Deprecated
 JL_FEATURE_DEF(clflushopt, 32 * 2 + 23, 0)
 JL_FEATURE_DEF(clwb, 32 * 2 + 24, 0)
-JL_FEATURE_DEF(avx512pf, 32 * 2 + 26, 0)
-JL_FEATURE_DEF(avx512er, 32 * 2 + 27, 0)
+// JL_FEATURE_DEF(avx512pf, 32 * 2 + 26, 0) // Deprecated in LLVM 19
+// JL_FEATURE_DEF(avx512er, 32 * 2 + 27, 0) // Deprecated in LLVM 19
 JL_FEATURE_DEF(avx512cd, 32 * 2 + 28, 0)
 JL_FEATURE_DEF(sha, 32 * 2 + 29, 0)
 JL_FEATURE_DEF(avx512bw, 32 * 2 + 30, 0)
 JL_FEATURE_DEF(avx512vl, 32 * 2 + 31, 0)
 
 // EAX=7,ECX=0: ECX
-JL_FEATURE_DEF(prefetchwt1, 32 * 3 + 0, 0)
+// JL_FEATURE_DEF(prefetchwt1, 32 * 3 + 0, 0) // Deprecated in LLVM 19
 JL_FEATURE_DEF(avx512vbmi, 32 * 3 + 1, 0)
 JL_FEATURE_DEF(pku, 32 * 3 + 4, 0) // ospke
 JL_FEATURE_DEF(waitpkg, 32 * 3 + 5, 0)
@@ -74,11 +74,13 @@ JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 0)
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
+JL_FEATURE_DEF(uintr, 32 * 4 + 5, 140000)
 JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
 JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
+JL_FEATURE_DEF(avx512fp16, 32 * 4 + 23, 140000)
 JL_FEATURE_DEF_NAME(amx_tile, 32 * 4 + 24, 110000, "amx-tile")
 JL_FEATURE_DEF_NAME(amx_int8, 32 * 4 + 25, 110000, "amx-int8")
 
@@ -89,7 +91,7 @@ JL_FEATURE_DEF(lzcnt, 32 * 5 + 5, 0)
 JL_FEATURE_DEF(sse4a, 32 * 5 + 6, 0)
 JL_FEATURE_DEF(prfchw, 32 * 5 + 8, 0)
 JL_FEATURE_DEF(xop, 32 * 5 + 11, 0)
-JL_FEATURE_DEF(lwp, 32 * 5 + 15, 0)
+// JL_FEATURE_DEF(lwp, 32 * 5 + 15, 0) Deprecated
 JL_FEATURE_DEF(fma4, 32 * 5 + 16, 0)
 JL_FEATURE_DEF(tbm, 32 * 5 + 21, 0)
 JL_FEATURE_DEF(mwaitx, 32 * 5 + 29, 0)
@@ -108,6 +110,7 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
+JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 
 // EAX=0x14,ECX=0: EBX

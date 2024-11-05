@@ -156,6 +156,18 @@ If successful, returns a 2-element tuple `(values, pos)`:
     end
 end
 
+@inline function tryparsenext_sign(str::AbstractString, i::Int, len::Int)
+    i > len && return nothing
+    c, ii = iterate(str, i)::Tuple{Char, Int}
+    if c == '+'
+        return 1, ii
+    elseif c == '-'
+        return -1, ii
+    else
+        return nothing
+    end
+end
+
 @inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
     i > len && return nothing
     min_pos = min_width <= 0 ? i : i + min_width - 1
@@ -198,15 +210,24 @@ end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
+    i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
+    coefficient = 1
     local dy
     dm = dd = Int64(1)
     th = tm = ts = tms = Int64(0)
 
+    # Optional sign
+    let val = tryparsenext_sign(s, i, end_pos)
+        if val !== nothing
+            coefficient, i = val
+        end
+    end
+
     let val = tryparsenext_base10(s, i, end_pos, 1)
         val === nothing && @goto error
         dy, i = val
-        i > end_pos && @goto error
+        i > end_pos && @goto done
     end
 
     c, i = iterate(s, i)::Tuple{Char, Int}
@@ -271,7 +292,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     end
 
     @label done
-    return DateTime(dy, dm, dd, th, tm, ts, tms)
+    return DateTime(dy * coefficient, dm, dd, th, tm, ts, tms)
 
     @label error
     throw(ArgumentError("Invalid DateTime string"))
@@ -279,6 +300,7 @@ end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
     values, endpos = val
@@ -287,6 +309,7 @@ end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)
     res === nothing && return nothing
     values, endpos = res

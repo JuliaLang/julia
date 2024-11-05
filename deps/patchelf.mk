@@ -1,4 +1,5 @@
 ## patchelf ##
+include $(SRCDIR)/patchelf.version
 
 $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/NixOS/patchelf/releases/download/$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.bz2
@@ -19,7 +20,7 @@ $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: XC_HOST:=$(BUILD_MACHINE)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)"
+	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)" MAKE=$(MAKE)
 	echo 1 > $@
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
@@ -38,12 +39,12 @@ $(eval $(call staged-install, \
 	MAKE_INSTALL,$$(LIBTOOL_CCLD),,))
 
 clean-patchelf:
-	-rm $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
+	-rm -f $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
 
 distclean-patchelf:
-	-rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
 		$(SRCCACHE)/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 

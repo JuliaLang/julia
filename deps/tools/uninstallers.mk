@@ -17,6 +17,7 @@ else
 uninstall-$1:
 	@echo "skipping uninstall: $1 not installed"
 endif
+.PHONY: uninstall-$1
 endef
 $(foreach dep,$(DEP_LIBS_STAGED_ALL),$(eval $(call define-uninstaller,$(dep))))
 

@@ -1,18 +1,50 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Profiling support, main entry point is the [`@profile`](@ref) macro.
+    Profile
+
+Profiling support.
+
+## CPU profiling
+- `@profile foo()` to profile a specific call.
+- `Profile.print()` to print the report. Paths are clickable links in supported terminals and specialized for JULIA_EDITOR etc.
+- `Profile.clear()` to clear the buffer.
+- Send a SIGUSR1 (on linux) or SIGINFO (on macOS/BSD) signal to the process to automatically trigger a profile and print. i.e. `kill -s SIGUSR1/SIGINFO 1234`, where 1234 is the pid of the julia process. On macOS & BSD platforms `ctrl-t` can be used directly.
+
+## Memory profiling
+- `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
+- `Profile.Allocs.print()` to print the report.
+- `Profile.Allocs.clear()` to clear the buffer.
+
+## Heap profiling
+- `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
+- Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
 """
 module Profile
 
+global print
+export @profile, @profile_walltime
+public clear,
+    print,
+    fetch,
+    retrieve,
+    add_fake_meta,
+    flatten,
+    callers,
+    init,
+    take_heap_snapshot,
+    take_page_profile,
+    clear_malloc_data,
+    Allocs
+
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
+import Base: AnnotatedString
+using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
-
-export @profile
 
 """
     @profile
@@ -23,16 +55,60 @@ appended to an internal buffer of backtraces.
 macro profile(ex)
     return quote
         try
-            status = start_timer()
-            if status < 0
-                error(error_codes[status])
-            end
+            start_timer()
             $(esc(ex))
         finally
             stop_timer()
         end
     end
 end
+
+"""
+    @profile_walltime
+
+`@profile_walltime <expression>` runs your expression while taking periodic backtraces of a sample of all live tasks (both running and not running).
+These are appended to an internal buffer of backtraces.
+
+It can be configured via `Profile.init`, same as the `Profile.@profile`, and that you can't use `@profile` simultaneously with `@profile_walltime`.
+
+As mentioned above, since this tool sample not only running tasks, but also sleeping tasks and tasks performing IO,
+it can be used to diagnose performance issues such as lock contention, IO bottlenecks, and other issues that are not visible in the CPU profile.
+"""
+macro profile_walltime(ex)
+    return quote
+        try
+            start_timer(true)
+            $(esc(ex))
+        finally
+            stop_timer()
+        end
+    end
+end
+
+# An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
+function _peek_report()
+    iob = Base.AnnotatedIOBuffer()
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
+    print(ioc, groupby = [:thread, :task])
+    Base.print(stderr, read(seekstart(iob), AnnotatedString))
+end
+# This is a ref so that it can be overridden by other profile info consumers.
+const peek_report = Ref{Function}(_peek_report)
+
+"""
+    get_peek_duration()
+
+Get the duration in seconds of the profile "peek" that is triggered via `SIGINFO` or `SIGUSR1`, depending on platform.
+"""
+get_peek_duration() = ccall(:jl_get_profile_peek_duration, Float64, ())
+"""
+    set_peek_duration(t::Float64)
+
+Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO` or `SIGUSR1`, depending on platform.
+"""
+set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
+
+
 
 ####
 #### User-level functions
@@ -46,17 +122,17 @@ stored per thread. Each instruction pointer corresponds to a single line of code
 list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
 NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
-
-!!! compat "Julia 1.8"
-    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
-    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    if n_cur == 0 && isnothing(n) && isnothing(delay)
+        # indicates that the buffer hasn't been initialized at all, so set the default
+        default_init()
+        n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-        return round(Int, n_cur / nthreads), delay_cur
+        return n_cur, delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -64,32 +140,43 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n * nthreads
+    buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
-        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
-        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
+        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
-# init with default values
-# Use a max size of 10M profile samples, and fire timer every 1ms
-# (that should typically give around 100 seconds of record)
-if Sys.iswindows() && Sys.WORD_SIZE == 32
-    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
-    # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01, limitwarn = false)
-else
-    __init__() = init(10_000_000, 0.001, limitwarn = false)
+function default_init()
+    # init with default values
+    # Use a max size of 10M profile samples, and fire timer every 1ms
+    # (that should typically give around 100 seconds of record)
+    @static if Sys.iswindows() && Sys.WORD_SIZE == 32
+        # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+        # so we don't want to slow the program down by quite that much
+        n = 1_000_000
+        delay = 0.01
+    else
+        # Keep these values synchronized with trigger_profile_peek
+        n = 10_000_000
+        delay = 0.001
+    end
+    init(n, delay, limitwarn = false)
+end
+
+# Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
+function check_init()
+    buffer_size = @ccall jl_profile_maxlen_data()::Int
+    if buffer_size == 0
+        default_init()
+    end
 end
 
 """
@@ -129,11 +216,13 @@ const META_OFFSET_TASKID = 4
 const META_OFFSET_THREADID = 5
 
 """
-    print([io::IO = stdout,] [data::Vector]; kwargs...)
+    print([io::IO = stdout,] [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used.
+will be used. Paths are clickable links in supported terminals and
+specialized for [`JULIA_EDITOR`](@ref) with line numbers, or just file
+links if no editor is set.
 
 The keyword arguments can be any combination of:
 
@@ -164,13 +253,20 @@ The keyword arguments can be any combination of:
     `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
 
  - `threads::Union{Int,AbstractVector{Int}}` -- Specify which threads to include snapshots from in the report. Note that
-    this does not control which threads samples are collected on.
+    this does not control which threads samples are collected on (which may also have been collected on another machine).
 
  - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
     does not control which tasks samples are collected within.
+
+!!! compat "Julia 1.8"
+    The `groupby`, `threads`, and `tasks` keyword arguments were introduced in Julia 1.8.
+
+!!! note
+    Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report.
+
 """
 function print(io::IO,
-        data::Vector{<:Unsigned} = fetch(include_meta = true),
+        data::Vector{<:Unsigned} = fetch(),
         lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)
         ;
         format = :tree,
@@ -182,23 +278,27 @@ function print(io::IO,
         sortedby::Symbol = :filefuncline,
         groupby::Union{Symbol,AbstractVector{Symbol}} = :none,
         recur::Symbol = :off,
-        threads::Union{Int,AbstractVector{Int}} = 1:Threads.nthreads(),
+        threads::Union{Int,AbstractVector{Int}} = 1:typemax(Int),
         tasks::Union{UInt,AbstractVector{UInt}} = typemin(UInt):typemax(UInt))
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
-    if groupby == :none
-        print(io, data, lidict, pf, format, threads, tasks, false)
+    if groupby === :none
+        print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
             error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end
-        any_nosamples = false
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        any_nosamples = true
+        if format === :tree
+            Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
+            Base.print(io, "=========================================================\n")
+        end
         if groupby == [:task, :thread]
-            for taskid in intersect(get_task_ids(data), tasks)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
                 threadids = intersect(get_thread_ids(data, taskid), threads)
                 if length(threadids) == 0
                     any_nosamples = true
@@ -206,42 +306,48 @@ function print(io::IO,
                     nl = length(threadids) > 1 ? "\n" : ""
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
-                        printstyled(io, " Thread $threadid\n"; bold=true, color=Base.info_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        printstyled(io, " Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
                 end
             end
         elseif groupby == [:thread, :task]
-            for threadid in intersect(get_thread_ids(data), threads)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
                 taskids = intersect(get_task_ids(data, threadid), tasks)
                 if length(taskids) == 0
                     any_nosamples = true
                 else
                     nl = length(taskids) > 1 ? "\n" : ""
-                    printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
+                    printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid)))$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
-                        printstyled(io, " Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
                 end
             end
-        elseif groupby == :task
+        elseif groupby === :task
             threads = 1:typemax(Int)
-            for taskid in intersect(get_task_ids(data), tasks)
-                printstyled(io, "Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
-                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
+                printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
+                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
-        elseif groupby == :thread
+        elseif groupby === :thread
             tasks = 1:typemax(UInt)
-            for threadid in intersect(get_thread_ids(data), threads)
-                printstyled(io, "Thread $threadid\n"; bold=true, color=Base.info_color())
-                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
+                printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
+                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -251,7 +357,19 @@ function print(io::IO,
     return
 end
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+"""
+    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
+
+Prints profiling results to `io`. This variant is used to examine results exported by a
+previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
+a dictionary `lidict` of line information.
+
+See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
+"""
+print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
+    print(stdout, data, lidict; kwargs...)
+
+function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
                 is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
@@ -307,9 +425,10 @@ end
 
 function has_meta(data)
     for i in 6:length(data)
-        data[i] == 0 || continue            # first block end null
-        data[i - 1] == 0 || continue        # second block end null
-        data[i - META_OFFSET_SLEEPSTATE] in 1:2 || continue
+        data[i] == 0 || continue                            # first block end null
+        data[i - 1] == 0 || continue                        # second block end null
+        data[i - META_OFFSET_SLEEPSTATE] in 1:3 || continue # 1 for not sleeping, 2 for sleeping, 3 for task profiler fake state
+                                                            # See definition in `src/julia_internal.h`
         data[i - META_OFFSET_CPUCYCLECLOCK] != 0 || continue
         data[i - META_OFFSET_TASKID] != 0 || continue
         data[i - META_OFFSET_THREADID] != 0 || continue
@@ -317,18 +436,6 @@ function has_meta(data)
     end
     return false
 end
-
-"""
-    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
-
-Prints profiling results to `io`. This variant is used to examine results exported by a
-previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
-a dictionary `lidict` of line information.
-
-See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
-"""
-print(data::Vector{<:Unsigned} = fetch(include_meta = true), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
-    print(stdout, data, lidict; kwargs...)
 
 """
     retrieve(; kwargs...) -> data, lidict
@@ -349,17 +456,33 @@ function getdict(data::Vector{UInt})
 end
 
 function getdict!(dict::LineInfoDict, data::Vector{UInt})
-    for ip in data
-        # Lookup is expensive, so do it only once per ip.
-        haskey(dict, UInt64(ip)) && continue
-        st = lookup(convert(Ptr{Cvoid}, ip))
-        # To correct line numbers for moving code, put it in the form expected by
-        # Base.update_stackframes_callback[]
-        stn = map(x->(x, 1), st)
-        try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
-        dict[UInt64(ip)] = map(first, stn)
+    # we don't want metadata here as we're just looking up ips
+    unique_ips = unique(has_meta(data) ? strip_meta(data) : data)
+    n_unique_ips = length(unique_ips)
+    n_unique_ips == 0 && return dict
+    iplookups = similar(unique_ips, Vector{StackFrame})
+    sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much if possible
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
+        Threads.@spawn begin
+            for i in indexes_part
+                iplookups[i] = _lookup_corrected(unique_ips[i])
+            end
+        end
+    end
+    for i in eachindex(unique_ips)
+        dict[unique_ips[i]] = iplookups[i]
     end
     return dict
+end
+
+function _lookup_corrected(ip::UInt)
+    st = lookup(convert(Ptr{Cvoid}, ip))
+    # To correct line numbers for moving code, put it in the form expected by
+    # Base.update_stackframes_callback[]
+    stn = map(x->(x, 1), st)
+    # Note: Base.update_stackframes_callback[] should be data-race free
+    try Base.invokelatest(Base.update_stackframes_callback[], stn) catch end
+    return map(first, stn)
 end
 
 """
@@ -405,12 +528,23 @@ function flatten(data::Vector, lidict::LineInfoDict)
     return (newdata, newdict)
 end
 
+const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
+
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
-function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
-        path = string(spath)
-        if isabspath(path)
+        path = Base.fixup_stdlib_path(string(spath))
+        path_norm = normpath(path)
+        possible_base_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+        lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
+        if startswith(path_norm, SRC_DIR)
+            remainder = only(split(path_norm, SRC_DIR, keepempty=false))
+            return (isfile(path_norm) ? path_norm : ""), "@juliasrc", remainder
+        elseif startswith(path_norm, lib_dir)
+            remainder = only(split(path_norm, lib_dir, keepempty=false))
+            return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
+        elseif isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
                 # assuming that profile came from the current machine
@@ -426,20 +560,21 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                             pkgid = Base.project_file_name_uuid(project_file, "")
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
-                            path = path[nextind(path, sizeof(root)):end]
-                            return string("@", pkgid.name, path)
+                            _short_path = path[nextind(path, sizeof(root)):end]
+                            return path, string("@", pkgid.name), _short_path
                         end
                     end
                 end
             end
-            return path
-        elseif isfile(joinpath(Sys.BINDIR::String, Base.DATAROOTDIR, "julia", "base", path))
+            return path, "", path
+        elseif isfile(possible_base_path)
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
-            return joinpath("@Base", normpath(path))
+            return possible_base_path, "@Base", normpath(path)
         else
             # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
-            return normpath(path) # drop leading "./"
+            path = normpath(path)
+            return "", "", path # drop leading "./"
         end
     end
 end
@@ -496,7 +631,14 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
-start_timer() = ccall(:jl_profile_start_timer, Cint, ())
+function start_timer(all_tasks::Bool=false)
+    check_init() # if the profile buffer hasn't been initialized, initialize with default size
+    status = ccall(:jl_profile_start_timer, Cint, (Bool,), all_tasks)
+    if status < 0
+        error(error_codes[status])
+    end
+end
+
 
 stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
@@ -520,16 +662,19 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
 """
-function fetch(;include_meta = true)
+function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
+    if maxlen == 0
+        error("The profiling data buffer is not initialized. A profile has not been requested this session.")
+    end
     len = len_data()
-    if is_buffer_full()
+    if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""
@@ -572,10 +717,10 @@ function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     !isempty(data) && has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
-    for i = 1:length(data)
+    for i in eachindex(data)
         val = data[i]
         if iszero(val)
-            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            # META_OFFSET_THREADID, META_OFFSET_TASKID, META_OFFSET_CPUCYCLECLOCK, META_OFFSET_SLEEPSTATE
             push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
         else
             push!(data_with_meta, val)
@@ -595,17 +740,21 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     m = Int[]
     lilist_idx = Dict{T, Int}()
     recursive = Set{T}()
-    first = true
+    leaf = 0
     totalshots = 0
     startframe = length(data)
     skip = false
     nsleeping = 0
+    is_task_profile = false
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
         ip = data[i]
         if is_block_end(data, i)
             # read metadata
-            thread_sleeping = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            thread_sleeping_state = data[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = data[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = data[i - META_OFFSET_TASKID]
             threadid = data[i - META_OFFSET_THREADID]
@@ -613,18 +762,22 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                 skip = true
                 continue
             end
-            if thread_sleeping == 1
+            if thread_sleeping_state == 1
                 nsleeping += 1
             end
             skip = false
             totalshots += 1
             empty!(recursive)
-            first = true
+            if leaf != 0
+                m[leaf] += 1
+            end
+            leaf = 0
             startframe = i
         elseif !skip
             frames = lidict[ip]
             nframes = (frames isa Vector ? length(frames) : 1)
-            for j = 1:nframes
+            # the last lookup is the non-inlined root frame, the first is the inlined leaf frame
+            for j = nframes:-1:1
                 frame = (frames isa Vector ? frames[j] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
@@ -638,51 +791,89 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                     push!(recursive, key)
                     n[idx] += 1
                 end
-                if first
-                    m[idx] += 1
-                    first = false
-                end
+                leaf = idx
             end
         end
     end
     @assert length(lilist) == length(n) == length(m) == length(lilist_idx)
-    return (lilist, n, m, totalshots, nsleeping)
+    return (lilist, n, m, totalshots, nsleeping, is_task_profile)
 end
+
+const FileNameMap = Dict{Symbol,Tuple{String,String,String}}
 
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
-    lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
-    util_perc = (1 - (nsleeping / totalshots)) * 100
-    if isempty(lilist)
-        if is_subsection
-            Base.print(io, "Total snapshots: ")
-            printstyled(io, "$(totalshots)", color=Base.warn_color())
-            Base.println(io, " (", round(Int, util_perc), "% utilization)")
-        else
-            warning_empty()
-        end
-        return true
-    end
+    lilist, n, m, totalshots, nsleeping, is_task_profile = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
         lilist = lilist[keep]
         n = n[keep]
         m = m[keep]
     end
-    filenamemap = Dict{Symbol,String}()
-    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.print(io, "Total snapshots: ", totalshots, " (", round(Int, util_perc), "% utilization")
-    if is_subsection
-        println(io, ")")
+    util_perc = (1 - (nsleeping / totalshots)) * 100
+    filenamemap = FileNameMap()
+    if isempty(lilist)
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(totalshots)", color=Base.warn_color())
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
+        else
+            warning_empty()
+        end
+        return true
+    end
+    is_subsection || print_flat(io, lilist, n, m, cols, filenamemap, fmt)
+    if is_task_profile
+        Base.print(io, "Total snapshots: ", totalshots, "\n")
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+        Base.print(io, "Total snapshots: ", totalshots, ". Utilization: ", round(Int, util_perc), "%")
+    end
+    if is_subsection
+        println(io)
+        print_flat(io, lilist, n, m, cols, filenamemap, fmt)
+    elseif !is_task_profile
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end
 
+# make a terminal-clickable link to the file and linenum.
+# Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
+function editor_link(path::String, linenum::Int)
+    # Note: the editor path can include spaces (if escaped) and flags.
+    editor = nothing
+    for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
+        str = get(ENV, var, nothing)
+        str isa String || continue
+        editor = str
+        break
+    end
+    path_encoded = Base.Filesystem.encode_uri_component(path)
+    if editor !== nothing
+        if editor == "code"
+            return "vscode://file/$path_encoded:$linenum"
+        elseif editor == "subl" || editor == "sublime_text"
+            return "subl://open?url=file://$path_encoded&line=$linenum"
+        elseif editor == "idea" || occursin("idea", editor)
+            return "idea://open?file=$path_encoded&line=$linenum"
+        elseif editor == "pycharm"
+            return "pycharm://open?file=$path_encoded&line=$linenum"
+        elseif editor == "atom"
+            return "atom://core/open/file?filename=$path_encoded&line=$linenum"
+        elseif editor == "emacsclient" || editor == "emacs"
+            return "emacs://open?file=$path_encoded&line=$linenum"
+        elseif editor == "vim" || editor == "nvim"
+            # Note: Vim/Nvim may not support standard URI schemes without specific plugins
+            return "vim://open?file=$path_encoded&line=$linenum"
+        end
+    end
+    # fallback to generic URI, but line numbers are not supported by generic URI
+    return Base.Filesystem.uripath(path)
+end
+
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, filenamemap::Dict{Symbol,String},
+        cols::Int, filenamemap::FileNameMap,
         fmt::ProfileFormat)
     if fmt.sortedby === :count
         p = sortperm(n)
@@ -694,18 +885,18 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
-    filenames = String[short_path(li.file, filenamemap) for li in lilist]
+    pkgnames_filenames = Tuple{String,String,String}[short_path(li.file, filenamemap) for li in lilist]
     funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
     maxline = 1
     maxfile = 6
     maxfunc = 10
-    for i in 1:length(lilist)
+    for i in eachindex(lilist)
         li = lilist[i]
         maxline = max(maxline, li.line)
-        maxfunc = max(maxfunc, length(funcnames[i]))
-        maxfile = max(maxfile, length(filenames[i]))
+        maxfunc = max(maxfunc, textwidth(funcnames[i]))
+        maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i][2:3]) + 1)
     end
     wline = max(5, ndigits(maxline))
     ntext = max(20, cols - wcounts - wself - wline - 3)
@@ -721,7 +912,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " Function")
     println(io, lpad("=====", wcounts, " "), " ", lpad("========", wself, " "), " ",
             rpad("====", wfile, " "), " ", lpad("====", wline, " "), " ========")
-    for i = 1:length(n)
+    for i in eachindex(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
@@ -733,16 +924,29 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "[any unknown stackframes]")
             end
         else
-            file = filenames[i]
+            path, pkgname, file = pkgnames_filenames[i]
             isempty(file) && (file = "[unknown file]")
-            Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
+            pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+            Base.printstyled(io, pkgname, color=pkgcolor)
+            file_trunc = ltruncate(file, max(1, wfile))
+            wpad = wfile - textwidth(pkgname)
+            if !isempty(pkgname) && !startswith(file_trunc, "/")
+                Base.print(io, "/")
+                wpad -= 1
+            end
+            if isempty(path)
+                Base.print(io, rpad(file_trunc, wpad, " "))
+            else
+                link = editor_link(path, li.line)
+                Base.print(io, rpad(styled"{link=$link:$file_trunc}", wpad, " "))
+            end
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
             fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
                 fname = sprint(show_spec_linfo, li)
             end
             isempty(fname) && (fname = "[unknown function]")
-            Base.print(io, ltruncto(fname, wfunc))
+            Base.print(io, rtruncate(fname, wfunc))
         end
         println(io)
     end
@@ -781,22 +985,24 @@ function indent(depth::Int)
     return indent
 end
 
-function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
+# mimics Stacktraces
+const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :gray, "@Core" => :gray)
+
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::FileNameMap, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
     ndigcounts = ndigits(maxes.count)
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    widthfunc = 3*ntext÷5 # min 18
-    strs = Vector{String}(undef, length(frames))
+    strs = Vector{AnnotatedString{String}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
         nindent -= ndigits(nextra) + 2
         showextra = true
     end
-    for i = 1:length(frames)
+    for i in eachindex(frames)
         frame = frames[i]
         li = frame.frame
         stroverhead = lpad(frame.overhead > 0 ? string(frame.overhead) : "", ndigoverhead, " ")
@@ -817,7 +1023,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                filename = short_path(li.file, filenamemap)
+                path, pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -825,16 +1031,26 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         " ",
                         fname)
                 end
-                strs[i] = string(stroverhead, "╎", base, strcount, " ",
-                    rtruncto(filename, widthfile),
-                    ":",
-                    li.line == -1 ? "?" : string(li.line),
-                    "; ",
-                    ltruncto(fname, widthfunc))
+                pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+                remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
+                linenum = li.line == -1 ? "?" : string(li.line)
+                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                rich_file = if isempty(path)
+                    styled_path
+                else
+                    link = editor_link(path, li.line)
+                    styled"{link=$link:$styled_path}"
+                end
+                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "  ", fname)
+                if frame.overhead > 0
+                    strs[i] = styled"{bold:$(strs[i])}"
+                end
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
+        strs[i] = rtruncate(strs[i], cols)
     end
     return strs
 end
@@ -849,12 +1065,16 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     startframe = length(all)
     skip = false
     nsleeping = 0
+    is_task_profile = false
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
-            thread_sleeping = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            thread_sleeping_state = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = all[i - META_OFFSET_TASKID]
             threadid = all[i - META_OFFSET_THREADID]
@@ -863,7 +1083,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                 skip = true
                 continue
             end
-            if thread_sleeping == 1
+            if thread_sleeping_state == 1
                 nsleeping += 1
             end
             skip = false
@@ -894,8 +1114,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             root.count += 1
             startframe = i
         elseif !skip
-            pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
+                pushfirst!(build, parent)
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)
@@ -969,7 +1189,7 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
         nothing
     end
     cleanup!(root)
-    return root, nsleeping
+    return root, nsleeping, is_task_profile
 end
 
 function maxstats(root::StackFrameTree)
@@ -993,11 +1213,11 @@ end
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
-    filenamemap = Dict{Symbol,String}()
-    worklist = [(bt, 0, 0, "")]
+    filenamemap = FileNameMap()
+    worklist = [(bt, 0, 0, AnnotatedString(""))]
     if !is_subsection
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
+        Base.print(io, "=========================================================\n")
     end
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
@@ -1027,7 +1247,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
             count = down.count
             count < fmt.mincount && continue
             count < noisefloor && continue
-            str = strs[i]
+            str = strs[i]::AnnotatedString
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
@@ -1038,27 +1258,32 @@ end
 function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, LineInfoDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     if fmt.combine
-        root, nsleeping = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping, is_task_profile = tree!(StackFrameTree{StackFrame}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     else
-        root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
+        root, nsleeping, is_task_profile = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
     util_perc = (1 - (nsleeping / root.count)) * 100
+    is_subsection || print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
             Base.print(io, "Total snapshots: ")
             printstyled(io, "$(root.count)", color=Base.warn_color())
-            Base.println(io, " (", round(Int, util_perc), "% utilization)")
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
         else
             warning_empty()
         end
         return true
     end
-    print_tree(io, root, cols, fmt, is_subsection)
-    Base.print(io, "Total snapshots: ", root.count, " (", round(Int, util_perc), "% utilization")
-    if is_subsection
-        println(io, ")")
+    if is_task_profile
+        Base.print(io, "Total snapshots: ", root.count, "\n")
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+        Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
+    end
+    if is_subsection
+        Base.println(io)
+        print_tree(io, root, cols, fmt, is_subsection)
+    elseif !is_task_profile
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end
@@ -1087,24 +1312,7 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
     return [(v[i], k[i]) for i in p]
 end
 
-# Utilities
-function rtruncto(str::String, w::Int)
-    if length(str) <= w
-        return str
-    else
-        return string("...", str[prevind(str, end, w-4):end])
-    end
-end
-function ltruncto(str::String, w::Int)
-    if length(str) <= w
-        return str
-    else
-        return string(str[1:nextind(str, 1, w-4)], "...")
-    end
-end
-
-
-truncto(str::Symbol, w::Int) = truncto(string(str), w)
+## Utilities
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
@@ -1138,5 +1346,122 @@ function warning_empty(;summary = false)
         or adjust the delay between samples with `Profile.init()`."""
     end
 end
+
+
+"""
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
+                               redact_data::Bool=true, streaming::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
+                               dir::String=nothing, streaming::Bool=false)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory by default (or tempdir if
+the current directory is unwritable), or in `dir` if given, or the given
+full file path, or IO stream.
+
+If `all_one` is true, then report the size of every object as one so they can be easily
+counted. Otherwise, report the actual size.
+
+If `redact_data` is true (default), then do not emit the contents of any object.
+
+If `streaming` is true, we will stream the snapshot data out into four files, using filepath
+as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
+used for any setting where your memory is constrained. These files can then be reassembled
+by calling Profile.HeapSnapshot.assemble_snapshot(), which can
+be done offline.
+
+NOTE: We strongly recommend setting streaming=true for performance reasons. Reconstructing
+the snapshot from the parts requires holding the entire snapshot in memory, so if the
+snapshot is large, you can run out of memory while processing it. Streaming allows you to
+reconstruct the snapshot offline, after your workload is done running.
+If you do attempt to collect a snapshot with streaming=false (the default, for
+backwards-compatibility) and your process is killed, note that this will always save the
+parts in the same directory as your provided filepath, so you can still reconstruct the
+snapshot after the fact, via `assemble_snapshot()`.
+"""
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; redact_data::Bool=true, streaming::Bool=false)
+    if streaming
+        _stream_heap_snapshot(filepath, all_one, redact_data)
+    else
+        # Support the legacy, non-streaming mode, by first streaming the parts, then
+        # reassembling it after we're done.
+        prefix = filepath
+        _stream_heap_snapshot(prefix, all_one, redact_data)
+        Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
+    end
+    return filepath
+end
+function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
+    # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
+    # then reassembling it after we're done.
+    dir = tempdir()
+    prefix = joinpath(dir, "snapshot")
+    _stream_heap_snapshot(prefix, all_one, redact_data)
+    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+end
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool)
+    # Nodes and edges are binary files
+    open("$prefix.nodes", "w") do nodes
+        open("$prefix.edges", "w") do edges
+            open("$prefix.strings", "w") do strings
+                # The following file is json data
+                open("$prefix.metadata.json", "w") do json
+                    Base.@_lock_ios(nodes,
+                    Base.@_lock_ios(edges,
+                    Base.@_lock_ios(strings,
+                    Base.@_lock_ios(json,
+                        ccall(:jl_gc_take_heap_snapshot,
+                            Cvoid,
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar, Cchar),
+                            nodes.handle, edges.handle, strings.handle, json.handle,
+                            Cchar(all_one), Cchar(redact_data))
+                    )
+                    )
+                    )
+                    )
+                end
+            end
+        end
+    end
+end
+function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing, kwargs...) where {S <: AbstractString}
+    fname = "$(getpid())_$(time_ns()).heapsnapshot"
+    if isnothing(dir)
+        wd = pwd()
+        fpath = joinpath(wd, fname)
+        try
+            touch(fpath)
+            rm(fpath; force=true)
+        catch
+            @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
+            fpath = joinpath(tempdir(), fname)
+        end
+    else
+        fpath = joinpath(expanduser(dir), fname)
+    end
+    return take_heap_snapshot(fpath, all_one; kwargs...)
+end
+
+"""
+    Profile.take_page_profile(io::IOStream)
+    Profile.take_page_profile(filepath::String)
+
+Write a JSON snapshot of the pages from Julia's pool allocator, printing for every pool allocated object, whether it's garbage, or its type.
+"""
+function take_page_profile(io::IOStream)
+    Base.@_lock_ios(io, ccall(:jl_gc_take_page_profile, Cvoid, (Ptr{Cvoid},), io.handle))
+end
+function take_page_profile(filepath::String)
+    open(filepath, "w") do io
+        take_page_profile(io)
+    end
+    return filepath
+end
+
+include("Allocs.jl")
+include("heapsnapshot_reassemble.jl")
+include("precompile.jl")
 
 end # module

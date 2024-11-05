@@ -12,12 +12,39 @@ using Base: n_avail
     end
     @test wait(a) == "success"
     @test fetch(t) == "finished"
+
+    # Test printing
+    @test repr(a) == "Condition()"
+end
+
+@testset "wait first behavior of wait on Condition" begin
+    a = Condition()
+    waiter1 = @async begin
+        wait(a)
+    end
+    waiter2 = @async begin
+        wait(a)
+    end
+    waiter3 = @async begin
+        wait(a; first=true)
+    end
+    waiter4 = @async begin
+        wait(a)
+    end
+    t = @async begin
+        Base.notify(a, "success"; all=false)
+        "finished"
+    end
+    @test fetch(waiter3) == "success"
+    @test fetch(t) == "finished"
 end
 
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
     @test c.sz_max == 0
+    @test isempty(c) == true  # Nothing in it
+    @test isfull(c) == true   # But no more room
 
     c = Channel(1)
     @test eltype(c) == Any
@@ -26,6 +53,11 @@ end
     @test take!(c) == 1
     @test isready(c) == false
     @test eltype(Channel(1.0)) == Any
+
+    c = Channel(1)
+    @test isfull(c) == false
+    put!(c, 1)
+    @test isfull(c) == true
 
     c = Channel{Int}(1)
     @test eltype(c) == Int
@@ -84,6 +116,11 @@ end
     # Test that the task is using the multithreaded scheduler
     @test taskref[].sticky == false
     @test collect(c) == [0]
+end
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no channel_threadpool.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
 end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
@@ -275,21 +312,8 @@ end
         end
     end
 
-    try
-        timedwait(failure_cb(1), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
-
-    try
-        timedwait(failure_cb(2), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(1), 0)
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(2), 0)
 
     # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
     # doesn't exceed a maximum duration but that would require guarantees from the OS.
@@ -301,7 +325,8 @@ end
 end
 
 @testset "timedwait on multiple channels" begin
-    @Experimental.sync begin
+    Experimental.@sync begin
+        sync = Channel(1)
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)
@@ -311,20 +336,17 @@ end
         @test !callback()
         @test timedwait(callback, 0) === :timed_out
 
-        @async begin sleep(0.5); put!(rr1, :ok) end
+        @async begin put!(sync, :ready); sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
-        @async begin sleep(2.0); put!(rr3, :ok) end
+        @async begin @test take!(rr3) == :done end
 
+        @test take!(sync) == :ready
         et = @elapsed timedwait(callback, 1)
 
-        # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-        try
-            @assert (et >= 1.0) && (et <= 1.5)
-            @assert !isready(rr3)
-        catch
-            @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
-        end
+        @test et >= 1.0
+
         @test isready(rr1)
+        put!(rr3, :done)
     end
 end
 
@@ -363,7 +385,7 @@ end
         """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t._state = 66
+    @atomic t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -372,7 +394,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin
@@ -445,8 +467,8 @@ end
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         close(async) # and close
         @test !isopen(async)
-        @test tc[] == 2
-        @test tc[] == 2
+        @test tc[] == 3
+        @test tc[] == 3
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
@@ -467,7 +489,7 @@ end
         close(async)
         @test !isopen(async)
         Base.process_events() # and close
-        @test tc[] == 0
+        @test tc[] == 1
         yield() # consume event & then close
         @test tc[] == 1
         sleep(0.1) # no further events
@@ -481,7 +503,7 @@ end
     c = Channel(1)
     close(c)
     @test !isopen(c)
-    c.excp == nothing # to trigger the branch
+    c.excp === nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 
@@ -547,7 +569,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end
@@ -618,4 +640,12 @@ end
                                 try wait(t2) catch end
         @test n_avail(c) == 0
     end
+end
+
+@testset "Task properties" begin
+    f() = rand(2,2)
+    t = Task(f)
+    message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
+    @test_throws ErrorException(message) t.scope
+    @test t.state == :runnable
 end

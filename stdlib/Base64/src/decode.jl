@@ -150,7 +150,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
             b4 = decode(read(input, UInt8))
         else
             b4 = BASE64_CODE_END
-            break
         end
     end
 
@@ -158,13 +157,13 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         k = 3
-    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b4 = 0x00
         k = 2
-    elseif b1 < 0x40 && b2 < 0x40 && b3 == b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && (b3 == BASE64_CODE_PAD || b3 == BASE64_CODE_END) && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b3 = b4 = 0x00
         k = 1
-    elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
+    elseif b1 == b2 == b3 == b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
     else
         throw(ArgumentError("malformed base64 sequence"))

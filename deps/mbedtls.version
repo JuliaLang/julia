@@ -1,0 +1,7 @@
+# -*- makefile -*-
+
+## jll artifact
+MBEDTLS_JLL_NAME := MbedTLS
+
+## source build
+MBEDTLS_VER := 2.28.6

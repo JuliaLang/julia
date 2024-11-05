@@ -1,6 +1,7 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
 Core.AbstractChar
 Core.Char
 Base.codepoint
@@ -14,6 +15,8 @@ Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.LazyString
+Base.@lazy_str
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
@@ -40,6 +43,9 @@ Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
+Base.ltruncate
+Base.rtruncate
+Base.ctruncate
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findnext(::AbstractChar, ::AbstractString, ::Integer)
@@ -48,7 +54,9 @@ Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair...)
+Base.replace(::IO, s::AbstractString, ::Pair...)
+Base.eachsplit
+Base.eachrsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -70,8 +78,8 @@ Base.chopprefix
 Base.chopsuffix
 Base.chomp
 Base.thisind
-Base.nextind
-Base.prevind
+Base.nextind(::AbstractString, ::Integer, ::Integer)
+Base.prevind(::AbstractString, ::Integer, ::Integer)
 Base.textwidth
 Base.isascii
 Base.iscntrl
@@ -85,5 +93,20 @@ Base.isspace
 Base.isuppercase
 Base.isxdigit
 Base.escape_string
+Base.escape_raw_string
 Base.unescape_string
+```
+
+## `AnnotatedString`s
+
+!!! note
+    The API for AnnotatedStrings is considered experimental and is subject to change between
+    Julia versions.
+
+```@docs
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
+Base.annotations
+Base.annotate!
 ```

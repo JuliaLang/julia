@@ -12,6 +12,14 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
+using .Main.DualNumbers
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
 
 Random.seed!(123)
 
@@ -75,6 +83,21 @@ n = 5 # should be odd
         X = fill(x, 1, 1)
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
+    end
+
+    @testset "det with nonstandard Number type" begin
+        elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
     end
 end
 
@@ -90,12 +113,12 @@ end
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
     α, β = 'f', 'g'
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,['g'])
-    @test_throws DimensionMismatch LinearAlgebra.axpby!(α,x,β,['g'])
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(-1:5),y,Vector(1:7))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(-1:5))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(1:7))
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,Vector(1:3),y,Vector(1:5))
+    @test_throws DimensionMismatch axpy!(α, x, ['g'])
+    @test_throws DimensionMismatch axpby!(α, x, β, ['g'])
+    @test_throws BoundsError axpy!(α, x, Vector(-1:5), y, Vector(1:7))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(-1:5))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(1:7))
+    @test_throws DimensionMismatch axpy!(α, x, Vector(1:3), y, Vector(1:5))
 end
 
 @test !issymmetric(fill(1,5,3))
@@ -108,53 +131,54 @@ end
 
 
 @testset "array and subarray" begin
-    aa = reshape([1.:6;], (2,3))
-    for a in (aa, view(aa, 1:2, 1:2))
-        am, an = size(a)
-        @testset "Scaling with rmul! and lmul" begin
-            @test rmul!(copy(a), 5.) == a*5
-            @test lmul!(5., copy(a)) == a*5
-            b = randn(2048)
-            subB = view(b, :, :)
-            @test rmul!(copy(b), 5.) == b*5
-            @test rmul!(copy(subB), 5.) == subB*5
-            @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
-            @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
-            @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
-        end
+    for aa in (reshape([1.:6;], (2,3)), fill(float.(rand(Int8,2,2)), 2,3))
+        for a in (aa, view(aa, 1:2, 1:2))
+            am, an = size(a)
+            @testset "Scaling with rmul! and lmul" begin
+                @test rmul!(copy(a), 5.) == a*5
+                @test lmul!(5., copy(a)) == a*5
+                b = randn(2048)
+                subB = view(b, :, :)
+                @test rmul!(copy(b), 5.) == b*5
+                @test rmul!(copy(subB), 5.) == subB*5
+                @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
+                @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
+                @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
+                @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+                @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
+            end
 
-        @testset "Scaling with rdiv! and ldiv!" begin
-            @test rdiv!(copy(a), 5.) == a/5
-            @test ldiv!(5., copy(a)) == a/5
-            @test ldiv!(zero(a), 5., copy(a)) == a/5
-        end
+            @testset "Scaling with rdiv! and ldiv!" begin
+                @test rdiv!(copy(a), 5.) == a/5
+                @test ldiv!(5., copy(a)) == a/5
+                @test ldiv!(zero(a), 5., copy(a)) == a/5
+            end
 
-        @testset "Scaling with 3-argument mul!" begin
-            @test mul!(similar(a), 5., a) == a*5
-            @test mul!(similar(a), a, 5.) == a*5
-            @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
-            @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
-        end
+            @testset "Scaling with 3-argument mul!" begin
+                @test mul!(similar(a), 5., a) == a*5
+                @test mul!(similar(a), a, 5.) == a*5
+                @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
+                @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
+                @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+                @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
+            end
 
-        @testset "Scaling with 5-argument mul!" begin
-            @test mul!(copy(a), 5., a, 10, 100) == a*150
-            @test mul!(copy(a), a, 5., 10, 100) == a*150
-            @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
-            @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
-            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
-            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            @testset "Scaling with 5-argument mul!" begin
+                @test mul!(copy(a), 5., a, 10, 100) == a*150
+                @test mul!(copy(a), a, 5., 10, 100) == a*150
+                @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
+                @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
+                @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+                @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            end
         end
     end
 end
@@ -208,6 +232,8 @@ end
     @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
@@ -238,6 +264,24 @@ end
     @test norm(x, 0) == length(x)
     @test norm(x, 1) ≈ 5+sqrt(5)
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
+end
+
+@testset "norm of transpose/adjoint equals norm of parent #32739" begin
+    for t in (transpose, adjoint), elt in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        # Vector/matrix of scalars
+        for sz in ((2,), (2, 3))
+            A = rand(elt, sz...)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Aᵀ))
+        end
+
+        # Vector/matrix of vectors/matrices
+        for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
+            A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Matrix.(Aᵀ)))
+        end
+    end
 end
 
 @testset "rotate! and reflect!" begin
@@ -273,26 +317,51 @@ end
     end
 end
 
-@testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
+@testset "axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
     x = fill([ 9 10; 11 12], 3)
     y = fill([13 14; 15 16], 3)
-    axpy = LinearAlgebra.axpy!(α, x, deepcopy(y))
-    axpby = LinearAlgebra.axpby!(α, x, β, deepcopy(y))
+    axpy = axpy!(α, x, deepcopy(y))
+    axpby = axpby!(α, x, β, deepcopy(y))
     @test axpy == x .* [α] .+ y
     @test axpy != [α] .* x .+ y
     @test axpby == x .* [α] .+ y .* [β]
     @test axpby != [α] .* x .+ [β] .* y
+    axpy = axpy!(zero(α), x, deepcopy(y))
+    axpby = axpby!(zero(α), x, one(β), deepcopy(y))
+    @test axpy == y
+    @test axpy == y
+    @test axpby == y
+    @test axpby == y
 end
 
-@testset "LinearAlgebra.axpy! for x and y of different dimensions" begin
+@testset "axpy! for x and y of different dimensions" begin
     α = 5
     x = 2:5
     y = fill(1, 2, 4)
     rx = [1 4]
     ry = [2 8]
-    @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
+    @test axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
+end
+
+@testset "axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test axpy!(1, b, zeros(T, size(b))) == b
+    end
 end
 
 @testset "norm and normalize!" begin
@@ -318,6 +387,7 @@ end
         [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
         rand(1,2,3),                # higher dims
         rand(1,2,3,4),
+        Dual.(randn(2,3), randn(2,3)),
         OffsetArray([-1,0], (-2,))  # no index 1
     )
         @test normalize(arr) == normalize!(copy(arr))
@@ -327,6 +397,13 @@ end
     end
 
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+end
+
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
 end
 
 @testset "Issue #30466" begin
@@ -390,11 +467,13 @@ Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
+Base.isfinite(a::ModInt{n}) where {n} = isfinite(a.k)
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.conj(a::ModInt{n}) where {n} = a
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
@@ -404,13 +483,22 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
     @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
     @test A*(lu(A, RowMaximum())\b) == b
+
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
 @testset "Issue 18742" begin
@@ -478,10 +566,24 @@ end
 
 @testset "missing values" begin
     @test ismissing(norm(missing))
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    for p in (-Inf, -1, 1, 2, 3, Inf)
+        @test ismissing(norm(x, p))
+        @test ismissing(norm(y, p))
+    end
+    @test_broken ismissing(norm(x, 0))
+end
+
+@testset "avoid stackoverflow of norm on AbstractChar" begin
+    @test_throws ArgumentError norm('a')
+    @test_throws ArgumentError norm(['a', 'b'])
+    @test_throws ArgumentError norm("s")
+    @test_throws ArgumentError norm(["s", "t"])
 end
 
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin
@@ -497,21 +599,28 @@ end
 end
 
 @testset "adjtrans dot" begin
-    for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
-        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
     end
+end
+
+@testset "avoid stackoverflow in dot" begin
+    @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+    @test_throws "cannot evaluate dot recursively" dot('a', 'b':'c')
+    @test_throws "x and y are of different lengths" dot(1, 1:2)
 end
 
 @testset "generalized dot #32739" begin
@@ -545,6 +654,131 @@ end
 @testset "condskeel #34512" begin
     A = rand(3, 3)
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
+@testset "copytrito!" begin
+    n = 10
+    @testset "square" begin
+        for A in (rand(n, n), rand(Int8, n, n)), uplo in ('L', 'U')
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = uplo == 'L' ? tril(AA) : triu(AA)
+                for B in (zeros(n, n), zeros(n+1, n+2))
+                    copytrito!(B, AA, uplo)
+                    @test view(B, 1:n, 1:n) == C
+                end
+            end
+        end
+    end
+    @testset "wide" begin
+        for A in (rand(n, 2n), rand(Int8, n, 2n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = tril(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, 2n), AA, 'L')
+                C = triu(AA)
+                for (M, N) in ((n, 2n), (n+1, 2n), (n, 2n+1), (n+1, 2n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:2n) == view(C, 1:n, 1:2n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n+1, 2n-1), AA, 'U')
+            end
+        end
+    end
+    @testset "tall" begin
+        for A in (rand(2n, n), rand(Int8, 2n, n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = triu(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'U')
+                C = tril(AA)
+                for (M, N) in ((2n, n), (2n, n+1), (2n+1, n), (2n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:2n, 1:n) == view(C, 1:2n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'L')
+            end
+        end
+    end
+    @testset "aliasing" begin
+        M = Matrix(reshape(1:36, 6, 6))
+        A = view(M, 1:5, 1:5)
+        A2 = Matrix(A)
+        B = view(M, 2:6, 2:6)
+        copytrito!(B, A, 'U')
+        @test UpperTriangular(B) == UpperTriangular(A2)
+    end
+end
+
+@testset "immutable arrays" begin
+    A = FillArrays.Fill(big(3), (4, 4))
+    M = Array(A)
+    @test triu(A) == triu(M)
+    @test triu(A, -1) == triu(M, -1)
+    @test tril(A) == tril(M)
+    @test tril(A, 1) == tril(M, 1)
+    @test det(A) == det(M)
+end
+
+@testset "tril/triu" begin
+    @testset "with partly initialized matrices" begin
+        function test_triu(M, k=nothing)
+            M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
+            if isnothing(k)
+                MU = triu(M)
+            else
+                MU = triu(M, k)
+            end
+            @test iszero(MU[2,1])
+            @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
+        end
+        test_triu(Matrix{BigInt}(undef, 2, 3))
+        test_triu(Matrix{BigInt}(undef, 2, 3), 0)
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+
+        function test_tril(M, k=nothing)
+            M[1,1] = M[2,2] = M[2,1] = 3
+            if isnothing(k)
+                ML = tril(M)
+            else
+                ML = tril(M, k)
+            end
+            @test ML[1,2] == ML[1,3] == ML[2,3] == 0
+            @test ML[1,1] == ML[2,2] == ML[2,1] == 3
+        end
+        test_tril(Matrix{BigInt}(undef, 2, 3))
+        test_tril(Matrix{BigInt}(undef, 2, 3), 0)
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+    end
+
+    @testset "block arrays" begin
+        for nrows in 0:3, ncols in 0:3
+            M = [randn(2,2) for _ in 1:nrows, _ in 1:ncols]
+            Mu = triu(M)
+            for col in axes(M,2)
+                rowcutoff = min(col, size(M,1))
+                @test @views Mu[1:rowcutoff, col] == M[1:rowcutoff, col]
+                @test @views Mu[rowcutoff+1:end, col] == zero.(M[rowcutoff+1:end, col])
+            end
+            Ml = tril(M)
+            for col in axes(M,2)
+                @test @views Ml[col:end, col] == M[col:end, col]
+                rowcutoff = min(col-1, size(M,1))
+                @test @views Ml[1:rowcutoff, col] == zero.(M[1:rowcutoff, col])
+            end
+        end
+    end
 end
 
 end # module TestGeneric

@@ -52,6 +52,11 @@ end
     @test "2.305843009213694e40" == Ryu.writeshortest(Core.bitcast(Float64, 0x4850F0CF064DD592))
 end
 
+@testset "pow5 overflow (#47464)" begin
+    @test "4.6458339e+63" == Ryu.writeexp(4.645833859177319e63, 7)
+    @test "4.190673780e+40" == Ryu.writeexp(4.190673779576499e40, 9)
+end
+
 @testset "OutputLength" begin
     @test "1.0" == Ryu.writeshortest(1.0) # already tested in Basic
     @test "1.2" == Ryu.writeshortest(1.2)
@@ -553,6 +558,11 @@ end # Float16
         @test Ryu.writefixed(1.25e+5, 1, false, false, false, UInt8('.'), true) == "125000"
         @test Ryu.writefixed(1.25e+5, 2, false, false, false, UInt8('.'), true) == "125000"
     end
+
+    @test Ryu.writefixed(100.0-eps(100.0), 0, false, false, true, UInt8('.'), false) == "100."
+    @test Ryu.writefixed(-100.0+eps(-100.0), 0, false, false, true, UInt8('.'), false) == "-100."
+    @test Ryu.writefixed(100.0-eps(100.0), 1, false, false, true, UInt8('.'), false) == "100.0"
+    @test Ryu.writefixed(-100.0+eps(-100.0), 1, false, false, true, UInt8('.'), false) == "-100.0"
 end # fixed
 
 @testset "Ryu.writeexp" begin

@@ -34,9 +34,13 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_alloc(jl_gc_cb_notify_external_al
 JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_free_t cb,
         int enable);
 
+// Memory pressure callback
+typedef void (*jl_gc_cb_notify_gc_pressure_t)(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable);
+
 // Types for custom mark and sweep functions.
-typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj);
-typedef void (*jl_sweepfunc_t)(jl_value_t *obj);
+typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj) JL_NOTSAFEPOINT;
+typedef void (*jl_sweepfunc_t)(jl_value_t *obj) JL_NOTSAFEPOINT;
 
 // Function to create a new foreign type with custom
 // mark and sweep functions.
@@ -49,10 +53,17 @@ JL_DLLEXPORT jl_datatype_t *jl_new_foreign_type(
         int haspointers,
         int large);
 
-JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt);
 
-JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void);
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void);
+#define HAVE_JL_REINIT_FOREIGN_TYPE 1
+JL_DLLEXPORT int jl_reinit_foreign_type(
+        jl_datatype_t *dt,
+        jl_markfunc_t markfunc,
+        jl_sweepfunc_t sweepfunc);
+
+JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void) JL_NOTSAFEPOINT;
 
 // Field layout descriptor for custom types that do
 // not fit Julia layout conventions. This is associated with
@@ -69,17 +80,17 @@ JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty);
 // Queue an object or array of objects for scanning by the garbage collector.
 // These functions must only be called from within a root scanner callback
 // or from within a custom mark function.
-JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj);
+JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
-    jl_value_t **objs, size_t nobjs);
+    jl_value_t **objs, size_t nobjs) JL_NOTSAFEPOINT;
 
 // Sweep functions will not automatically be called for objects of
 // foreign types, as that may not always be desired. Only calling
 // jl_gc_schedule_foreign_sweepfunc() on an object of a foreign type
-// will result in the custome sweep function actually being called.
+// will result in the custom sweep function actually being called.
 // This must be done at most once per object and should usually be
 // done right after allocating the object.
-JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t * bj);
+JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *bj);
 
 // The following functions enable support for conservative marking. This
 // functionality allows the user to determine if a machine word can be
@@ -120,7 +131,9 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // external allocations may not all be valid objects and that for those,
 // the user *must* validate that they have a proper type, i.e. that
 // jl_typeof(obj) is an actual type object.
-JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
+//
+// NOTE: Only valid to call from within a GC context.
+JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p) JL_NOTSAFEPOINT;
 
 // Return a non-null pointer to the start of the stack area if the task
 // has an associated stack buffer. In that case, *size will also contain
@@ -137,7 +150,7 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
 // and may not be tight.
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
-                                       char **total_start, char **total_end);
+                                       char **total_start, char **total_end) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

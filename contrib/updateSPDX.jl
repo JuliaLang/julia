@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: MIT
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-#
+
+# SPDX-License-Identifier: MIT
 # Run this script with each new Julia release to update "../julia.spdx.json"
 
 using UUIDs

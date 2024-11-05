@@ -84,6 +84,12 @@ function Base.floor(dt::DateTime, p::TimePeriod)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
 
+function Base.floor(t::Time, p::TimePeriod)
+    value(p) < 1 && throw(DomainError(p))
+    nanoseconds = value(t)
+    return Time(Nanosecond(nanoseconds - mod(nanoseconds, value(Nanosecond(p)))))
+end
+
 """
     floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
 
@@ -94,13 +100,13 @@ For convenience, `precision` may be a type instead of a value: `floor(x, Dates.H
 shortcut for `floor(x, Dates.Hour(1))`.
 
 ```jldoctest
-julia> floor(Dates.Day(16), Dates.Week)
+julia> floor(Day(16), Week)
 2 weeks
 
-julia> floor(Dates.Minute(44), Dates.Minute(15))
+julia> floor(Minute(44), Minute(15))
 30 minutes
 
-julia> floor(Dates.Hour(36), Dates.Day)
+julia> floor(Hour(36), Day)
 1 day
 ```
 
@@ -122,13 +128,13 @@ For convenience, `p` may be a type instead of a value: `floor(dt, Dates.Hour)` i
 for `floor(dt, Dates.Hour(1))`.
 
 ```jldoctest
-julia> floor(Date(1985, 8, 16), Dates.Month)
+julia> floor(Date(1985, 8, 16), Month)
 1985-08-01
 
-julia> floor(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+julia> floor(DateTime(2013, 2, 13, 0, 31, 20), Minute(15))
 2013-02-13T00:30:00
 
-julia> floor(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+julia> floor(DateTime(2016, 8, 6, 12, 0, 0), Day)
 2016-08-06T00:00:00
 ```
 """
@@ -143,13 +149,13 @@ For convenience, `p` may be a type instead of a value: `ceil(dt, Dates.Hour)` is
 for `ceil(dt, Dates.Hour(1))`.
 
 ```jldoctest
-julia> ceil(Date(1985, 8, 16), Dates.Month)
+julia> ceil(Date(1985, 8, 16), Month)
 1985-09-01
 
-julia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+julia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Minute(15))
 2013-02-13T00:45:00
 
-julia> ceil(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+julia> ceil(DateTime(2016, 8, 6, 12, 0, 0), Day)
 2016-08-07T00:00:00
 ```
 """
@@ -168,13 +174,13 @@ For convenience, `precision` may be a type instead of a value: `ceil(x, Dates.Ho
 shortcut for `ceil(x, Dates.Hour(1))`.
 
 ```jldoctest
-julia> ceil(Dates.Day(16), Dates.Week)
+julia> ceil(Day(16), Week)
 3 weeks
 
-julia> ceil(Dates.Minute(44), Dates.Minute(15))
+julia> ceil(Minute(44), Minute(15))
 45 minutes
 
-julia> ceil(Dates.Hour(36), Dates.Day)
+julia> ceil(Hour(36), Day)
 2 days
 ```
 
@@ -218,13 +224,13 @@ For convenience, `p` may be a type instead of a value: `round(dt, Dates.Hour)` i
 for `round(dt, Dates.Hour(1))`.
 
 ```jldoctest
-julia> round(Date(1985, 8, 16), Dates.Month)
+julia> round(Date(1985, 8, 16), Month)
 1985-08-01
 
-julia> round(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+julia> round(DateTime(2013, 2, 13, 0, 31, 20), Minute(15))
 2013-02-13T00:30:00
 
-julia> round(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+julia> round(DateTime(2016, 8, 6, 12, 0, 0), Day)
 2016-08-07T00:00:00
 ```
 
@@ -248,13 +254,13 @@ For convenience, `precision` may be a type instead of a value: `round(x, Dates.H
 shortcut for `round(x, Dates.Hour(1))`.
 
 ```jldoctest
-julia> round(Dates.Day(16), Dates.Week)
+julia> round(Day(16), Week)
 2 weeks
 
-julia> round(Dates.Minute(44), Dates.Minute(15))
+julia> round(Minute(44), Minute(15))
 45 minutes
 
-julia> round(Dates.Hour(36), Dates.Day)
+julia> round(Hour(36), Day)
 2 days
 ```
 

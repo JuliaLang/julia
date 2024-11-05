@@ -13,7 +13,11 @@ typedef struct {
     const char **cmds;
     const char *image_file;
     const char *cpu_target;
-    int32_t nthreads;
+    int8_t nthreadpools;
+    int16_t nthreads;
+    int16_t nmarkthreads;
+    int8_t nsweepthreads;
+    const int16_t *nthreads_per_pool;
     int32_t nprocs;
     const char *machine_file;
     const char *project;
@@ -24,6 +28,7 @@ typedef struct {
     int8_t compile_enabled;
     int8_t code_coverage;
     int8_t malloc_log;
+    const char *tracked_path;
     int8_t opt_level;
     int8_t opt_level_min;
     int8_t debug_level;
@@ -33,12 +38,14 @@ typedef struct {
     int8_t can_inline;
     int8_t polly;
     const char *trace_compile;
+    const char *trace_dispatch;
     int8_t fast_math;
     int8_t worker;
     const char *cookie;
     int8_t handle_signals;
     int8_t use_sysimage_native_code;
     int8_t use_compiled_modules;
+    int8_t use_pkgimages;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
@@ -53,6 +60,10 @@ typedef struct {
     int8_t rr_detach;
     int8_t strip_metadata;
     int8_t strip_ir;
+    int8_t permalloc_pkgimg;
+    uint64_t heap_size_hint;
+    int8_t trace_compile_timing;
+    int8_t trim;
 } jl_options_t;
 
 #endif

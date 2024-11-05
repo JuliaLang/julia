@@ -82,7 +82,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
         return NULL;
     // special case Complex{Float32} as a return type
     if (is_complex64(dt))
-        return T_int64;
+        return llvm::Type::getInt64Ty(ctx);
     return NULL;
 }
 

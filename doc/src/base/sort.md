@@ -1,7 +1,7 @@
 # Sorting and Related Functions
 
-Julia has an extensive, flexible API for sorting and interacting with already-sorted arrays of
-values. By default, Julia picks reasonable algorithms and sorts in standard ascending order:
+Julia has an extensive, flexible API for sorting and interacting with already-sorted arrays
+of values. By default, Julia picks reasonable algorithms and sorts in ascending order:
 
 ```jldoctest
 julia> sort([2,3,1])
@@ -11,7 +11,7 @@ julia> sort([2,3,1])
  3
 ```
 
-You can easily sort in reverse order as well:
+You can sort in reverse order as well:
 
 ```jldoctest
 julia> sort([2,3,1], rev=true)
@@ -21,7 +21,8 @@ julia> sort([2,3,1], rev=true)
  1
 ```
 
-To sort an array in-place, use the "bang" version of the sort function:
+`sort` constructs a sorted copy leaving its input unchanged. Use the "bang" version of
+the sort function to mutate an existing array:
 
 ```jldoctest
 julia> a = [2,3,1];
@@ -35,8 +36,8 @@ julia> a
  3
 ```
 
-Instead of directly sorting an array, you can compute a permutation of the array's indices that
-puts the array into sorted order:
+Instead of directly sorting an array, you can compute a permutation of the array's
+indices that puts the array into sorted order:
 
 ```julia-repl
 julia> v = randn(5)
@@ -64,7 +65,7 @@ julia> v[p]
   0.382396
 ```
 
-Arrays can easily be sorted according to an arbitrary transformation of their values:
+Arrays can be sorted according to an arbitrary transformation of their values:
 
 ```julia-repl
 julia> sort(v, by=abs)
@@ -100,9 +101,12 @@ julia> sort(v, alg=InsertionSort)
   0.382396
 ```
 
-All the sorting and order related functions rely on a "less than" relation defining a total order
-on the values to be manipulated. The `isless` function is invoked by default, but the relation
-can be specified via the `lt` keyword.
+All the sorting and order related functions rely on a "less than" relation defining a
+[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings)
+on the values to be manipulated. The `isless` function is invoked by default, but the
+relation can be specified via the `lt` keyword, a function that takes two array elements
+and returns `true` if and only if the first argument is "less than" the second. See
+[`sort!`](@ref) and [Alternate Orderings](@ref) for more information.
 
 ## Sorting Functions
 
@@ -134,77 +138,47 @@ Base.Sort.partialsortperm!
 
 ## Sorting Algorithms
 
-There are currently four sorting algorithms available in base Julia:
+There are currently four sorting algorithms publicly available in base Julia:
 
   * [`InsertionSort`](@ref)
   * [`QuickSort`](@ref)
   * [`PartialQuickSort(k)`](@ref)
   * [`MergeSort`](@ref)
 
-`InsertionSort` is an O(n^2) stable sorting algorithm. It is efficient for very small `n`, and
-is used internally by `QuickSort`.
+By default, the `sort` family of functions uses stable sorting algorithms that are fast
+on most inputs. The exact algorithm choice is an implementation detail to allow for
+future performance improvements. Currently, a hybrid of `RadixSort`, `ScratchQuickSort`,
+`InsertionSort`, and `CountingSort` is used based on input type, size, and composition.
+Implementation details are subject to change but currently available in the extended help
+of `??Base.DEFAULT_STABLE` and the docstrings of internal sorting algorithms listed there.
 
-`QuickSort` is an O(n log n) sorting algorithm which is in-place, very fast, but not stable –
-i.e. elements which are considered equal will not remain in the same order in which they originally
-appeared in the array to be sorted. `QuickSort` is the default algorithm for numeric values, including
-integers and floats.
-
-`PartialQuickSort(k)` is similar to `QuickSort`, but the output array is only sorted up to index
-`k` if `k` is an integer, or in the range of `k` if `k` is an `OrdinalRange`. For example:
-
+You can explicitly specify your preferred algorithm with the `alg` keyword
+(e.g. `sort!(v, alg=PartialQuickSort(10:20))`) or reconfigure the default sorting algorithm
+for custom types by adding a specialized method to the `Base.Sort.defalg` function.
+For example, [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903)
+defines the following method:
 ```julia
-x = rand(1:500, 100)
-k = 50
-k2 = 50:100
-s = sort(x; alg=QuickSort)
-ps = sort(x; alg=PartialQuickSort(k))
-qs = sort(x; alg=PartialQuickSort(k2))
-map(issorted, (s, ps, qs))             # => (true, false, false)
-map(x->issorted(x[1:k]), (s, ps, qs))  # => (true, true, false)
-map(x->issorted(x[k2]), (s, ps, qs))   # => (true, false, true)
-s[1:k] == ps[1:k]                      # => true
-s[k2] == qs[k2]                        # => true
+Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = InlineStringSort
 ```
 
-`MergeSort` is an O(n log n) stable sorting algorithm but is not in-place – it requires a temporary
-array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
-It is the default algorithm for non-numeric data.
+!!! compat "Julia 1.9"
+    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed to
+    be stable since Julia 1.9. Previous versions had unstable edge cases when
+    sorting numeric arrays.
 
-The default sorting algorithms are chosen on the basis that they are fast and stable, or *appear*
-to be so. For numeric types indeed, `QuickSort` is selected as it is faster and indistinguishable
-in this case from a stable sort (unless the array records its mutations in some way). The stability
-property comes at a non-negligible cost, so if you don't need it, you may want to explicitly specify
-your preferred algorithm, e.g. `sort!(v, alg=QuickSort)`.
+## Alternate Orderings
 
-The mechanism by which Julia picks default sorting algorithms is implemented via the `Base.Sort.defalg`
-function. It allows a particular algorithm to be registered as the default in all sorting functions
-for specific arrays. For example, here are the two default methods from [`sort.jl`](https://github.com/JuliaLang/julia/blob/master/base/sort.jl):
+By default, `sort`, `searchsorted`, and related functions use [`isless`](@ref) to compare
+two elements in order to determine which should come first. The
+[`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining alternate
+orderings on the same set of elements: when calling a sorting function like
+`sort!`, an instance of `Ordering` can be provided with the keyword argument `order`.
 
-```julia
-defalg(v::AbstractArray) = MergeSort
-defalg(v::AbstractArray{<:Number}) = QuickSort
-```
-
-As for numeric arrays, choosing a non-stable default algorithm for array types for which the notion
-of a stable sort is meaningless (i.e. when two values comparing equal can not be distinguished)
-may make sense.
-
-## Alternate orderings
-
-By default, `sort` and related functions use [`isless`](@ref) to compare two
-elements in order to determine which should come first. The
-[`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining
-alternate orderings on the same set of elements. Instances of `Ordering` define
-a [total order](https://en.wikipedia.org/wiki/Total_order) on a set of elements,
-so that for any elements `a`, `b`, `c` the following hold:
-
-* Exactly one of the following is true: `a` is less than `b`, `b` is less than
-  `a`, or `a` and `b` are equal (according to [`isequal`](@ref)).
-* The relation is transitive - if `a` is less than `b` and `b` is less than `c`
-  then `a` is less than `c`.
-
-The [`Base.Order.lt`](@ref) function works as a generalization of `isless` to
-test whether `a` is less than `b` according to a given order.
+Instances of `Ordering` define an order through the [`Base.Order.lt`](@ref)
+function, which works as a generalization of `isless`.
+This function's behavior on custom `Ordering`s must satisfy all the conditions of a
+[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings).
+See [`sort!`](@ref) for details and examples of valid and invalid `lt` functions.
 
 ```@docs
 Base.Order.Ordering

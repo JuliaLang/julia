@@ -93,6 +93,70 @@ function _dropdims(A::AbstractArray, dims::Dims)
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
+
+"""
+    insertdims(A; dims)
+
+Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
+at every dimension in `dims`.
+
+Repeated dimensions are forbidden and the largest entry in `dims` must be
+less than or equal than `ndims(A) + length(dims)`.
+
+The result shares the same underlying data as `A`, such that the
+result is mutable if and only if `A` is mutable, and setting elements of one
+alters the values of the other.
+
+See also: [`dropdims`](@ref), [`reshape`](@ref), [`vec`](@ref).
+# Examples
+```jldoctest
+julia> x = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=3)
+2×3×1 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=(1,2,5)) == reshape(x, 1, 1, 2, 3, 1)
+true
+
+julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+```
+
+!!! compat "Julia 1.12"
+    Requires Julia 1.12 or later.
+"""
+insertdims(A; dims) = _insertdims(A, dims)
+function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}) where {T, N, M}
+    for i in eachindex(dims)
+        1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
+        dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
+        for j = 1:i-1
+            dims[j] == dims[i] && throw(ArgumentError("inserted dims must be unique"))
+        end
+    end
+
+    # acc is a tuple, where the first entry is the final shape
+    # the second entry off acc is a counter for the axes of A
+    inds= Base._foldoneto((acc, i) ->
+                            i ∈ dims
+                                ? ((acc[1]..., Base.OneTo(1)), acc[2])
+                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1),
+                            ((), 1), Val(N+M))
+    new_shape = inds[1]
+    return reshape(A, new_shape)
+end
+_insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
+
+
+
 ## Unary operators ##
 
 """
@@ -119,6 +183,7 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
+conj!(A::AbstractArray) = (foreach(conj!, A); A)
 
 """
     conj(A::AbstractArray)
@@ -264,9 +329,12 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 """
     circshift(A, shifts)
 
-Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
+Circularly shift, i.e. rotate, the data in `A`. The second argument is a tuple or
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
+
+The generated code is most efficient when the shift amounts are known at compile-time, i.e.,
+compile-time constants.
 
 See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
@@ -316,6 +384,18 @@ julia> circshift(a, -1)
  0
  1
  1
+
+julia> x = (1, 2, 3, 4, 5)
+(1, 2, 3, 4, 5)
+
+julia> circshift(x, 4)
+(2, 3, 4, 5, 1)
+
+julia> z = (1, 'a', -7.0, 3)
+(1, 'a', -7.0, 3)
+
+julia> circshift(z, -1)
+('a', -7.0, 3, 1)
 ```
 """
 function circshift(a::AbstractArray, shiftamt)
@@ -353,7 +433,7 @@ julia> repeat([1, 2, 3], 2, 3)
 ```
 """
 function repeat(A::AbstractArray, counts...)
-    return _RepeatInnerOuter.repeat(A, outer=counts)
+    return repeat(A, outer=counts)
 end
 
 """
@@ -516,113 +596,3 @@ function repeat_inner(arr, inner)
 end
 
 end#module
-
-"""
-    eachrow(A::AbstractVecOrMat)
-
-Create a generator that iterates over the first dimension of vector or matrix `A`,
-returning the rows as `AbstractVector` views.
-
-See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
-
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
-
-# Example
-
-```jldoctest
-julia> a = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
-
-julia> first(eachrow(a))
-2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
- 1
- 2
-
-julia> collect(eachrow(a))
-2-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
- [1, 2]
- [3, 4]
-```
-"""
-eachrow(A::AbstractVecOrMat) = (view(A, i, :) for i in axes(A, 1))
-
-
-"""
-    eachcol(A::AbstractVecOrMat)
-
-Create a generator that iterates over the second dimension of matrix `A`, returning the
-columns as `AbstractVector` views.
-
-See also [`eachrow`](@ref) and [`eachslice`](@ref).
-
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
-
-# Example
-
-```jldoctest
-julia> a = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
-
-julia> first(eachcol(a))
-2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
- 1
- 3
-
-julia> collect(eachcol(a))
-2-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
- [1, 3]
- [2, 4]
-```
-"""
-eachcol(A::AbstractVecOrMat) = (view(A, :, i) for i in axes(A, 2))
-
-"""
-    eachslice(A::AbstractArray; dims)
-
-Create a generator that iterates over dimensions `dims` of `A`, returning views that select all
-the data from the other dimensions in `A`.
-
-Only a single dimension in `dims` is currently supported. Equivalent to `(view(A,:,:,...,i,:,:
-...)) for i in axes(A, dims))`, where `i` is in position `dims`.
-
-See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref), and [`selectdim`](@ref).
-
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
-
-# Example
-
-```jldoctest
-julia> M = [1 2 3; 4 5 6; 7 8 9]
-3×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
- 7  8  9
-
-julia> first(eachslice(M, dims=1))
-3-element view(::Matrix{Int64}, 1, :) with eltype Int64:
- 1
- 2
- 3
-
-julia> collect(eachslice(M, dims=2))
-3-element Vector{SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
- [1, 4, 7]
- [2, 5, 8]
- [3, 6, 9]
-```
-"""
-@inline function eachslice(A::AbstractArray; dims)
-    length(dims) == 1 || throw(ArgumentError("only single dimensions are supported"))
-    dim = first(dims)
-    dim <= ndims(A) || throw(DimensionMismatch("A doesn't have $dim dimensions"))
-    inds_before = ntuple(Returns(:), dim-1)
-    inds_after = ntuple(Returns(:), ndims(A)-dim)
-    return (view(A, inds_before..., i, inds_after...) for i in axes(A, dim))
-end

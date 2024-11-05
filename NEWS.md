@@ -1,205 +1,220 @@
-Julia v1.8 Release Notes
+Julia v1.12 Release Notes
 ========================
-
 
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that contains no names (it does not import `Base` or `Core` and does not contain a reference to itself). ([#40110, #42154])
-* `@inline` and `@noinline` annotations can be used within a function body to give an extra
-  hint about the inlining cost to the compiler. ([#41312])
-* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
-  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
-* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
-* New function `eachsplit(str)` for iteratively performing `split(str)`.
-* `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
-* Support for Unicode 14.0.0 ([#43443]).
-* `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
-  no errors were thrown. ([#42211])
-* Mutable struct fields may now be annotated as `const` to prevent changing
-  them after construction, providing for greater clarity and optimization
-  ability of these objects ([#43305]).
+- New option `--trim` for building "trimmed" binaries, where code not provably reachable from entry points
+  is removed. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
+- A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
+  find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
 
 Language changes
 ----------------
 
-* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
-  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
-  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
-* `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
-  i.e. `@time "Evaluating foo" foo()` ([#42431])
-* New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
-* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
-* Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
-  to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
-* `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
-  extend its definition ([#37343]).
+ - When methods are replaced with exactly equivalent ones, the old method is no
+   longer deleted implicitly simultaneously, although the new method does take
+   priority and become more specific than the old method. Thus if the new
+   method is deleted later, the old method will resume operating. This can be
+   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
+   among others), as they do not need to explicitly restore the old method.
+   While inference and compilation still must be repeated with this, it also
+   may pave the way for inference to be able to intelligently re-use the old
+   results, once the new method is deleted. ([#53415])
+
+ - Macro expansion will no longer eagerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
+
+ - Trivial infinite loops (like `while true; end`) are no longer undefined
+   behavior. Infinite loops that actually do things (e.g. have side effects
+   or sleep) were never and are still not undefined behavior. ([#52999])
 
 Compiler/Runtime improvements
 -----------------------------
 
-* Bootstrapping time has been improved by about 25% ([#41794]).
-* The LLVM-based compiler has been separated from the run-time library into a new library,
-  `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
-  In deployments that do not need the compiler (e.g. system images where all needed code
-  is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
-* Conditional type constraint can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
-* Julia-level SROA (Scalar Replacement of Aggregates) has been improved, i.e. allowing elimination of
-  `getfield` call with constant global field ([#42355]), enabling elimination of mutable struct with
-  uninitialized fields ([#43208]), improving performance ([#43232]), handling more nested `getfield`
-  calls ([#43239]).
-* Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
-  matching method ([#43113]).
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
+
+- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
 
 Command-line option changes
 ---------------------------
 
-* New option `--strip-metadata` to remove docstrings, source location information, and local
-  variable names when building a system image ([#42513]).
-* New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
-  code when building a system image. The resulting image will only work if `--compile=all` is
-  used, or if all needed code is precompiled ([#42925]).
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
+* Enabling or disabling color text in Julia can now be controlled with the
+  [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
+  variables. These variables are also honored by Julia's build system ([#53742], [#56346]).
+* `--project=@temp` starts Julia with a temporary environment.
+* New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
+  to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
+* New `--trace-dispatch` option to report methods that are dynamically dispatched ([#55848]).
 
 Multi-threading changes
 -----------------------
 
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
 
 Build system changes
 --------------------
 
+* There are new `Makefile`s to build Julia and LLVM using the Binary Optimization and Layout Tool (BOLT), see  `contrib/bolt` and `contrib/pgo-lto-bolt` ([#54107]).
 
 New library functions
 ---------------------
 
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
-* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
+* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
+* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------
 
-* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
-  contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
-* `@testset foo()` can now be used to create a test set from a given function. The name of the test set
-  is the name of the called function. The called function can contain `@test` and other `@testset`
-  definitions, including to other function calls, while recording all intermediate test results. ([#42518])
-* Keys with value `nothing` are now removed from the environment in `addenv` ([#43271]).
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `escape_string` takes additional keyword arguments `ascii=true` (to escape all
+  non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
+  for u/U escapes, e.g. for C compatibility) [#55099]).
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
+  the uniquing checking ([#53474])
+* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `Lockable` is now exported ([#54595])
+* `Base.require_one_based_indexing` and `Base.has_offset_axes` are now public ([#56196])
+* New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
+* `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
 
 Standard library changes
 ------------------------
 
-* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
-* `precision` and `setprecision` now accept a `base` keyword ([#42428]).
-* `Iterators.reverse` (and hence `last`) now supports `eachline` iterators ([#42225]).
-* The `length` function on certain ranges of certain specific element types no longer checks for integer
-  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
-  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
-  constructing the range. ([#40382])
-* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
-* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
-* `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
-#### InteractiveUtils
-* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+#### StyledStrings
+
+#### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
 #### LinearAlgebra
 
-* The BLAS submodule now supports the level-2 BLAS subroutine `spr!` ([#42830]).
-* `cholesky[!]` now supports `LinearAlgebra.PivotingStrategy` (singleton type) values
-  as its optional `pivot` argument: the default is `cholesky(A, NoPivot())` (vs.
-  `cholesky(A, RowMaximum())`); the former `Val{true/false}`-based calls are deprecated. ([#41640])
-* The standard library `LinearAlgebra.jl` is now completely independent of `SparseArrays.jl`,
-  both in terms of the source code as well as unit testing ([#43127]). As a consequence,
-  sparse arrays are no longer (silently) returned by methods from `LinearAlgebra` applied
-  to `Base` or `LinearAlgebra` objects. Specifically, this results in the following breaking
-  changes:
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+* Added keyword argument `alg` to `eigen`, `eigen!`, `eigvals` and `eigvals!` for self-adjoint
+  matrix types (i.e., the type union `RealHermSymComplexHerm`) that allows one to switch
+  between different eigendecomposition algorithms ([#49355]).
+* Added a generic version of the (unblocked) pivoted Cholesky decomposition
+  (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
+* The number of default BLAS threads now respects process affinity, instead of
+  using total number of logical threads available on the system ([#55574]).
+* A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
+  Custom array types may specialize this function to return an appropriate result ([#55252]).
+* The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
+  This function is now public ([#55537]).
+* The function `haszero(T::Type)` is used to check if a type `T` has a unique zero element defined as `zero(T)`.
+  This is now public.
 
-  * Concatenations involving special "sparse" matrices (`*diagonal`) now return dense matrices;
-    As a consequence, the `D1` and `D2` fields of `SVD` objects, constructed upon `getproperty`
-    calls are now dense matrices.
-  * 3-arg `similar(::SpecialSparseMatrix, ::Type, ::Dims)` returns a dense zero matrix.
-    As a consequence, products of bi-, tri- and symmetric tridiagonal matrices with each
-    other result in dense output. Moreover, constructing 3-arg similar matrices of special
-    "sparse" matrices of (nonstatic) matrices now fails for the lack of `zero(::Type{Matrix{T}})`.
-
-#### Markdown
+#### Logging
 
 #### Printf
-* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Profile
-* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
-  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
-  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
-  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
-  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+
+* `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
+  that is `true` by default. When set, the contents of Julia objects are not emitted
+  in the heap snapshot. This currently only applies to strings. ([#55326])
+* `Profile.print()` now colors Base/Core/Package modules similarly to how they are in stacktraces.
+  Also paths, even if truncated, are now clickable in terminals that support URI links
+  to take you to the specified `JULIA_EDITOR` for the given file & line number. ([#55335])
 
 #### Random
 
 #### REPL
-* `RadioMenu` now supports optional `keybindings` to directly select options ([#41576]).
-* ` ?(x, y` followed by TAB displays all methods that can be called
-  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
-  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
-  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
-  to allow any compatible methods.
 
-* New `err` global variable in `Main` set when an expression throws an exception, akin to `ans`. Typing `err` reprints
-  the exception information.
+- Using the new `usings=true` feature of the `names()` function, REPL completions can now
+  complete names that have been explicitly `using`-ed. ([#54610])
+- REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
+  complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
+- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
+  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
+  in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
+
+#### SuiteSparse
 
 #### SparseArrays
 
-* New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
-  `SparseMatrixCSC` output independent from the types of the input arguments. They make
-  concatenation behavior available, in which the presence of some special "sparse" matrix
-  argument resulted in sparse output by multiple dispatch. This is no longer possible after
-  making `LinearAlgebra.jl` independent from `SparseArrays.jl` ([#43127]).
+#### Test
 
 #### Dates
 
-#### Downloads
-
 #### Statistics
-
-#### Sockets
-
-#### Tar
 
 #### Distributed
 
-#### UUIDs
-
-#### Mmap
+#### Unicode
 
 #### DelimitedFiles
 
-#### Logging
-* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
-  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
+#### InteractiveUtils
 
-#### Unicode
-* Added function `isequal_normalized` to check for Unicode equivalence without
-  explicitly constructing normalized strings ([#42493]).
-* The `Unicode.normalize` function now accepts a `chartransform` keyword that can
-  be used to supply custom character mappings, and a `Unicode.julia_chartransform`
-  function is provided to reproduce the mapping used in identifier normalization
-  by the Julia parser ([#42561]).
-
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
 
 Deprecated or removed
 ---------------------
 
-
 External dependencies
 ---------------------
 
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
 
 Tooling Improvements
----------------------
-* `GC.enable_logging(true)` can be used to log each garbage collection, with the
-  time it took and the amount of memory that was collected ([#43511]).
+--------------------
 
+- A wall-time profiler is now available for users who need a sampling profiler that captures tasks regardless of their scheduling or running state. This type of profiler enables profiling of I/O-heavy tasks and helps detect areas of heavy contention in the system ([#55889]).
 
 <!--- generated by NEWS-update.jl: -->

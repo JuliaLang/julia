@@ -20,22 +20,39 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"
-    const path_directory_re = r"(?:^|/)\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
-    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
+    const path_separator_re = r"/+"sa
+    const path_directory_re = r"(?:^|/)\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"sa
+    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"sa
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
-    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
-    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
+    const path_separator_re = r"[/\\]+"sa
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"sa
+    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
+    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
+
+    const splitdrive_re = let
+        # Slash in either direction.
+        S = raw"[\\/]"
+        # Not a slash in either direction.
+        N = raw"[^\\/]"
+        # Drive letter, e.g. `C:`
+        drive = "$(N)+:"
+        # UNC path, e.g. `\\server\share`
+        unc = "$(S)$(S)$(N)+$(S)$(N)+"
+        # Long drive letter, e.g. `\\?\C:`
+        long_drive = "$(S)$(S)\\?$(S)$(drive)"
+        # Long UNC path, e.g. `\\?\UNC\server\share`
+        long_unc = "$(S)$(S)\\?$(S)UNC$(S)$(N)+$(S)$(N)+"
+        # Need to match the long patterns first so they get priority.
+        Regex("^($long_unc|$long_drive|$unc|$drive|)(.*)\$", "sa")
+    end
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
+        m = match(splitdrive_re, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
@@ -60,6 +77,8 @@ Return the current user's home directory.
     `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
+
+See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
@@ -145,7 +164,7 @@ function _splitdir_nodrive(a::String, b::String)
 end
 
 """
-    dirname(path::AbstractString) -> AbstractString
+    dirname(path::AbstractString) -> String
 
 Get the directory part of a path. Trailing characters ('/' or '\\') in the path are
 counted as part of the path.
@@ -161,10 +180,10 @@ julia> dirname("/home/myuser/")
 
 See also [`basename`](@ref).
 """
- dirname(path::AbstractString) = splitdir(path)[1]
+dirname(path::AbstractString) = splitdir(path)[1]
 
 """
-    basename(path::AbstractString) -> AbstractString
+    basename(path::AbstractString) -> String
 
 Get the file name part of a path.
 
@@ -186,7 +205,7 @@ See also [`dirname`](@ref).
 basename(path::AbstractString) = splitdir(path)[2]
 
 """
-    splitext(path::AbstractString) -> (AbstractString, AbstractString)
+    splitext(path::AbstractString) -> (String, String)
 
 If the last component of a path contains one or more dots, split the path into everything before the
 last dot and everything including and after the dot. Otherwise, return a tuple of the argument
@@ -415,6 +434,16 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
+
+# Examples
+
+If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
+
+    abspath("../../data")
+
+Which gives a path like `"/home/JuliaUser/data/"`.
+
+See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
 function abspath(a::String)::String
     if !isabspath(a)
@@ -516,6 +545,8 @@ end
     expanduser(path::AbstractString) -> AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 
@@ -523,12 +554,14 @@ expanduser(path::AbstractString)
     contractuser(path::AbstractString) -> AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+
+See also: [`expanduser`](@ref).
 """
 contractuser(path::AbstractString)
 
 
 """
-    relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+    relpath(path::AbstractString, startpath::AbstractString = ".") -> String
 
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
@@ -538,8 +571,8 @@ On Windows, case sensitivity is applied to every part of the path except drive l
 `path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
-    isempty(path) && throw(ArgumentError("`path` must be specified"))
-    isempty(startpath) && throw(ArgumentError("`startpath` must be specified"))
+    isempty(path) && throw(ArgumentError("`path` must be non-empty"))
+    isempty(startpath) && throw(ArgumentError("`startpath` must be non-empty"))
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
@@ -580,3 +613,56 @@ relpath(path::AbstractString, startpath::AbstractString) =
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
 end
+
+# RFC3986 Section 2.1
+percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
+# RFC3986 Section 2.3
+encode_uri_component(s) = replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
+
+"""
+    uripath(path::AbstractString)
+
+Encode `path` as a URI as per [RFC8089: The "file" URI
+Scheme](https://www.rfc-editor.org/rfc/rfc8089), [RFC3986: Uniform Resource
+Identifier (URI): Generic Syntax](https://www.rfc-editor.org/rfc/rfc3986), and
+the [Freedesktop File URI spec](https://www.freedesktop.org/wiki/Specifications/file-uri-spec/).
+
+## Examples
+
+```julia-repl
+julia> uripath("/home/user/example file.jl") # On a unix machine
+"file://<hostname>/home/user/example%20file.jl"
+
+juila> uripath("C:\\Users\\user\\example file.jl") # On a windows machine
+"file:///C:/Users/user/example%20file.jl"
+```
+"""
+function uripath end
+
+@static if Sys.iswindows()
+    function uripath(path::String)
+        path = abspath(path)
+        if startswith(path, "\\\\") # UNC path, RFC8089 Appendix E.3
+            unixpath = join(eachsplit(path, path_separator_re, keepempty=false), '/')
+            string("file://", encode_uri_component(unixpath)) # RFC8089 Section 2
+        else
+            drive, localpath = splitdrive(path) # Assuming that non-UNC absolute paths on Windows always have a drive component
+            unixpath = join(eachsplit(localpath, path_separator_re, keepempty=false), '/')
+            encdrive = replace(encode_uri_component(drive), "%3A" => ':', "%7C" => '|') # RFC8089 Appendices D.2, E.2.1, and E.2.2
+            string("file:///", encdrive, '/', encode_uri_component(unixpath)) # RFC8089 Section 2
+        end
+    end
+else
+    function uripath(path::String)
+        localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
+        host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
+            distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
+            "wsl\$/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
+        else
+            gethostname() # Freedesktop File URI Spec, Hostnames section
+        end
+        string("file://", encode_uri_component(host), '/', encode_uri_component(localpath)) # RFC8089 Section 2
+    end
+end
+
+uripath(path::AbstractString) = uripath(String(path))

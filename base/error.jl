@@ -21,11 +21,20 @@
 
 Throw an object as an exception.
 
-See also: [`rethrow`](@ref).
+See also: [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
 ## native julia error handling ##
+
+# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
+# for `error(::Any)` to fail (JuliaLang/julia#54029).
+# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
+# on package side, guaranteeing that return type inference on `error` is successful always.
+function error end
+typeof(error).name.max_methods = UInt8(2)
 
 """
     error(message::AbstractString)
@@ -37,7 +46,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
@@ -62,7 +71,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
 end
@@ -87,7 +96,7 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
             mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else
@@ -162,7 +171,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+    throw(MethodError(Core.kwcall, (kw, args...), tls_world_age()))
 end
 
 ## system error handling ##
@@ -197,15 +206,17 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the preferred syntax for
+writing assertions, which are conditions that are assumed to be true, but that the user
+might decide to check anyways, as an aid to debugging if they fail.
+The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at various optimization levels.
+    An assert might be disabled at some optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords),
-    nor should side effects needed for the function to work correctly
-    be used inside of asserts.
+    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
+    The code must not rely on the side effects of running `cond` for the correct behavior
+    of a function.
 
 # Examples
 ```jldoctest
@@ -221,19 +232,21 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
+        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
+        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = quote
-            msg = $(Expr(:quote,msg))
-            isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
-        end
+        msg = :(Main.Base.inferencebarrier(_assert_tostring)($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
+
+# this may be overridden in contexts where `string(::Expr)` doesn't work
+_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+    (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff
     n::Int
@@ -261,7 +274,7 @@ function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, eb
     state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (Libc.rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 length(ebo::ExponentialBackOff) = ebo.n
@@ -295,7 +308,6 @@ function retry(f;  delays=ExponentialBackOff(), check=nothing)
             try
                 return f(args...; kwargs...)
             catch e
-                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)

@@ -8,7 +8,7 @@
  * based of compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
- *     http://sourceforge.net/p/predef/wiki/Home/
+ *     https://sourceforge.net/p/predef/wiki/Home/
  *
  * Possible values include:
  *      Compiler:
@@ -16,6 +16,7 @@
  *          _COMPILER_GCC_
  *      OS:
  *          _OS_FREEBSD_
+ *          _OS_OPENBSD_
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
@@ -26,6 +27,7 @@
  *          _CPU_X86_64_
  *          _CPU_AARCH64_
  *          _CPU_ARM_
+ *          _CPU_RISCV64_
  *          _CPU_WASM_
  */
 
@@ -37,28 +39,43 @@
 #define _COMPILER_CLANG_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
+#elif defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
 #else
 #error Unsupported compiler
 #endif
 
+
+#define JL_NO_ASAN
+#define JL_NO_MSAN
+#define JL_NO_TSAN
 #if defined(__has_feature) // Clang flavor
 #if __has_feature(address_sanitizer)
 #define _COMPILER_ASAN_ENABLED_
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
 #endif
 #if __has_feature(memory_sanitizer)
 #define _COMPILER_MSAN_ENABLED_
+#undef JL_NO_MSAN
+#define JL_NO_MSAN __attribute__((no_sanitize("memory")))
 #endif
 #if __has_feature(thread_sanitizer)
 #if __clang_major__ < 11
 #error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
 #endif
 #define _COMPILER_TSAN_ENABLED_
+#undef JL_NO_TSAN
+#define JL_NO_TSAN __attribute__((no_sanitize("thread")))
 #endif
 #else // GCC flavor
 #if defined(__SANITIZE_ADDRESS__)
 #define _COMPILER_ASAN_ENABLED_
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
 #endif
 #endif // __has_feature
+#define JL_NO_SANITIZE JL_NO_ASAN JL_NO_MSAN JL_NO_TSAN
 
 /*******************************************************************************
 *                               OS                                             *
@@ -66,6 +83,8 @@
 
 #if defined(__FreeBSD__)
 #define _OS_FREEBSD_
+#elif defined(__OpenBSD__)
+#define _OS_OPENBSD_
 #elif defined(__linux__)
 #define _OS_LINUX_
 #elif defined(_WIN32) || defined(_WIN64)
@@ -88,6 +107,8 @@
 #define _CPU_AARCH64_
 #elif defined(__arm__) || defined(_M_ARM)
 #define _CPU_ARM_
+#elif defined(__riscv) && __riscv_xlen == 64
+#define _CPU_RISCV64_
 #elif defined(__PPC64__)
 #define _CPU_PPC64_
 #elif defined(_ARCH_PPC)

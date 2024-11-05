@@ -2,10 +2,18 @@
 
 # Support for checked integer arithmetic
 
+"""
+    Checked
+
+The Checked module provides arithmetic functions for the built-in signed and unsigned
+Integer types which throw an error when an overflow occurs. They are named like `checked_sub`,
+`checked_div`, etc. In addition, `add_with_overflow`, `sub_with_overflow`, `mul_with_overflow`
+return both the unchecked results and a boolean value denoting the presence of an overflow.
+"""
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
        checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics:
@@ -34,12 +42,12 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
-# intrinsics, and operations for which we have to provide work-arounds.
+# intrinsics, and operations for which we have to provide workarounds.
 
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# work-arounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
+# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
 # and in issue #4905 are more pessimistic. For the time being, we thus retain
 # the ability to handle codegen bugs in LLVM, until the code here has been
 # tested on more systems and architectures. It also seems that things depend on
@@ -115,9 +123,10 @@ function checked_abs end
 
 function checked_abs(x::SignedInt)
     r = ifelse(x<0, -x, x)
-    r<0 && throw(OverflowError(string("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))))
-    r
- end
+    r<0 || return r
+    msg = LazyString("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))
+    throw(OverflowError(msg))
+end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
@@ -151,7 +160,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
-    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
+    throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)
@@ -348,6 +357,19 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_pow(x, y)
+
+Calculates `^(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
+
+checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; mul = checked_mul)
+# For Booleans, the default implementation covers all cases.
+checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
 
 """
     Base.checked_length(r)

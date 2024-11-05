@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
     isinteger(x) -> Bool
@@ -95,12 +95,12 @@ keys(::Number) = OneTo(1)
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
     @inline
-    @boundscheck i == 1 || throw(BoundsError())
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
     @inline
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default
@@ -115,7 +115,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 """
     signbit(x)
 
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
 See also [`sign`](@ref) and [`copysign`](@ref).
 
@@ -168,12 +168,24 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
+This can be faster than `abs(x)^2`, especially for complex
+numbers where `abs(x)` requires a square root via [`hypot`](@ref).
+
+See also [`abs`](@ref), [`conj`](@ref), [`real`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs2(-3)
 9
+
+julia> abs2(3.0 + 4.0im)
+25.0
+
+julia> sum(abs2, [1+2im, 3+4im])  # LinearAlgebra.norm(x)^2
+30
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """
@@ -275,7 +287,12 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
     zero(::Type)
 
-Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+Get the additive identity element for `x`. If the additive identity can be deduced
+from the type alone, then a type may be given as an argument to `zero`.
+
+For example, `zero(Int)` will work because the additive identity is the same for all
+instances of `Int`, but `zero(Vector{Int})` is not defined because vectors of different
+lengths have different additive identities.
 
 See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
@@ -295,15 +312,19 @@ julia> zero(rand(2,2))
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
+zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
-    one(T::type)
+    one(T::Type)
 
 Return a multiplicative identity for `x`: a value such that
-`one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
-take a type `T`, in which case `one` returns a multiplicative
-identity for any `x` of type `T`.
+`one(x)*x == x*one(x) == x`. If the multiplicative identity can
+be deduced from the type alone, then a type may be given as
+an argument to `one` (e.g. `one(Int)` will work because the
+multiplicative identity is the same for all instances of `Int`,
+but `one(Matrix{Int})` is not defined because matrices of
+different shapes have different multiplicative identities.)
 
 If possible, `one(x)` returns a value of the same type as `x`,
 and `one(T)` returns a value of type `T`.  However, this may
@@ -333,6 +354,7 @@ julia> import Dates; one(Dates.Day(1))
 """
 one(::Type{T}) where {T<:Number} = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
+one(::Type{Union{}}, slurp...) = Union{}(1)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -340,9 +362,10 @@ one(x::T) where {T<:Number} = one(T)
     oneunit(x::T)
     oneunit(T::Type)
 
-Returns `T(one(x))`, where `T` is either the type of the argument or
-(if a type is passed) the argument.  This differs from [`one`](@ref) for
-dimensionful quantities: `one` is dimensionless (a multiplicative identity)
+Return `T(one(x))`, where `T` is either the type of the argument, or
+the argument itself in cases where the `oneunit` can be deduced from
+the type alone. This differs from [`one`](@ref) for dimensionful
+quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 
 # Examples
@@ -356,6 +379,7 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
+oneunit(::Type{Union{}}, slurp...) = Union{}(1)
 
 """
     big(T::Type)
@@ -376,3 +400,4 @@ Complex{BigInt}
 ```
 """
 big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
+big(::Type{Union{}}, slurp...) = Union{}(0)

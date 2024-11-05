@@ -1,13 +1,66 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Eigensolvers for symmetric and Hermitian matrices
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
-    Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
+# preserve HermOrSym wrapper
+# Call `copytrito!` instead of `copy_similar` to only copy the matching triangular half
+eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric{<:Complex}, S) = copyto!(similar(parent(A), S), A)
 
-function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+default_eigen_alg(A) = DivideAndConquer()
+
+# Eigensolvers for symmetric and Hermitian matrices
+function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    if alg === DivideAndConquer()
+        Eigen(sorteig!(LAPACK.syevd!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === QRIteration()
+        Eigen(sorteig!(LAPACK.syev!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === RobustRepresentations()
+        Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
+    else
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
+    end
+end
+
+"""
+    eigen(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A)) -> Eigen
+
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
+matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
+
+See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
+a comparison of the accuracy and performance of different algorithms.
+
+The default `alg` used may change in the future.
+
+!!! compat "Julia 1.12"
+    The `alg` keyword argument requires Julia 1.12 or later.
+
+The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
+"""
+function eigen(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    _eigen(A, alg; sortby)
+end
+
+# we dispatch on the eltype in an internal method to avoid ambiguities
+function _eigen(A::RealHermSymComplexHerm, alg::Algorithm; sortby)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), alg; sortby)
+end
+
+function _eigen(A::RealHermSymComplexHerm{Float16}, alg::Algorithm; sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), alg, sortby=sortby)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
@@ -16,7 +69,7 @@ eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange)
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -31,9 +84,8 @@ The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to 
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), irange)
 end
 
 eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
@@ -42,7 +94,7 @@ eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -57,22 +109,45 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), vl, vh)
 end
 
-function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
-    vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    vals::Vector{real(eltype(A))} = if alg === DivideAndConquer()
+        LAPACK.syevd!('N', A.uplo, A.data)
+    elseif alg === QRIteration()
+        LAPACK.syev!('N', A.uplo, A.data)
+    elseif alg === RobustRepresentations()
+        LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+    else
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
+    end
     !isnothing(sortby) && sort!(vals, by=sortby)
     return vals
 end
 
-function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+"""
+    eigvals(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A))) -> values
+
+Return the eigenvalues of `A`.
+
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
+
+See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
+a comparison of the accuracy and performance of different methods.
+
+The default `alg` used may change in the future.
+"""
+function eigvals(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), alg; sortby)
 end
+
 
 """
     eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
@@ -86,7 +161,7 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRang
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
 
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the
+Return the eigenvalues of `A`. It is possible to calculate only a subset of the
 eigenvalues by specifying a [`UnitRange`](@ref) `irange` covering indices of the sorted eigenvalues,
 e.g. the 2nd to 8th eigenvalues.
 
@@ -110,9 +185,8 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), irange)
 end
 
 """
@@ -127,7 +201,7 @@ eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
 
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
+Return the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
 by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eigenvalues.
 
 # Examples
@@ -150,13 +224,17 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), vl, vh)
 end
 
-eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
+eigmax(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, 1:1)[1]
+
+function eigen(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+end
 
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
@@ -167,105 +245,72 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
-    U = cholesky(B).U
-    vals, w = eigen!(UtiAUi!(A, U))
-    vecs = U \ w
+function eigen(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigen!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
+end
+function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    # Cholesky decomposition based eigenvalues and eigenvectors
+    vals, w = eigen!(UtiAUi!(A, C.U))
+    vecs = C.U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-# Perform U' \ A / U in-place.
-UtiAUi!(As::Symmetric, Utr::UpperTriangular) = Symmetric(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
-UtiAUi!(As::Hermitian, Utr::UpperTriangular) = Hermitian(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
-UtiAUi!(As::Symmetric, Udi::Diagonal) = Symmetric(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
-UtiAUi!(As::Hermitian, Udi::Diagonal) = Hermitian(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
-
-# U is upper triangular
-function _UtiAsymUi!(uplo, A, U)
-    n = size(A, 1)
-    μ⁻¹ = 1 / U[1, 1]
-    αμ⁻² = A[1, 1] * μ⁻¹' * μ⁻¹
-
-    # Update (1, 1) element
-    A[1, 1] = αμ⁻²
-    if n > 1
-        Unext = view(U, 2:n, 2:n)
-
-        if uplo === 'U'
-            # Update submatrix
-            for j in 2:n, i in 2:j
-                A[i, j] = (
-                    A[i, j]
-                    - μ⁻¹' * U[1, j] * A[1, i]'
-                    - μ⁻¹ * A[1, j] * U[1, i]'
-                    + αμ⁻² * U[1, j] * U[1, i]'
-                )
-            end
-
-            # Update vector
-            for j in 2:n
-                A[1, j] = A[1, j] * μ⁻¹' - U[1, j] * αμ⁻²
-            end
-            ldiv!(view(A', 2:n, 1), UpperTriangular(Unext)', view(A', 2:n, 1))
-        else
-            # Update submatrix
-            for j in 2:n, i in 2:j
-                A[j, i] = (
-                    A[j, i]
-                    - μ⁻¹ * A[i, 1]' * U[1, j]'
-                    - μ⁻¹' * U[1, i] * A[j, 1]
-                    + αμ⁻² * U[1, i] * U[1, j]'
-                )
-            end
-
-            # Update vector
-            for j in 2:n
-                A[j, 1] = A[j, 1] * μ⁻¹ - U[1, j]' * αμ⁻²
-            end
-            ldiv!(view(A, 2:n, 1), UpperTriangular(Unext)', view(A, 2:n, 1))
-        end
-
-        # Recurse
-        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
-    end
-
-    return A
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
+function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    eigen!(copy(A), copy(B); sortby)
+end
+function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    M, TD, p = getproperties!(B)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permutecols!(A, p)
+    permuterows!(A, p)
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(TD, A)
+    vals, vecs = eigen!(A; sortby)
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
+    ldiv!(M', vecs)
+    invpermuterows!(vecs, p)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-# U is diagonal
-function _UtiAsymUi_diag!(uplo, A, U)
-    n = size(A, 1)
-    μ⁻¹ = 1 / U[1, 1]
-    αμ⁻² = A[1, 1] * μ⁻¹' * μ⁻¹
+# LU based solution for generalized eigenvalues and eigenvectors
+function eigen(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigen!(copy(A), copy(F); sortby)
+end
+function eigen!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    permuterows!(A, F.p)
+    ldiv!(L, A)
+    rdiv!(A, U)
+    vals, vecs = eigen!(A; sortby)
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    U = UpperTriangular{eltype(vecs)}(U)
+    ldiv!(U, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
 
-    # Update (1, 1) element
-    A[1, 1] = αμ⁻²
-    if n > 1
-        Unext = view(U, 2:n, 2:n)
+# Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
+UtiAUi!(A, U) = _UtiAUi!(A, U)
+UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
+UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
+_UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
 
-        if uplo === 'U'
-            # No need to update any submatrix when U is diagonal
-
-            # Update vector
-            for j in 2:n
-                A[1, j] = A[1, j] * μ⁻¹'
-            end
-            ldiv!(view(A', 2:n, 1), Diagonal(Unext)', view(A', 2:n, 1))
-        else
-            # No need to update any submatrix when U is diagonal
-
-            # Update vector
-            for j in 2:n
-                A[j, 1] = A[j, 1] * μ⁻¹
-            end
-            ldiv!(view(A, 2:n, 1), Diagonal(Unext)', view(A, 2:n, 1))
-        end
-
-        # Recurse
-        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
-    end
-
-    return A
+function eigvals(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
@@ -279,3 +324,87 @@ function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,N
     return vals
 end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
+
+function eigvals(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigvals!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigvals!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
+end
+function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    # Cholesky decomposition based eigenvalues
+    return eigvals!(UtiAUi!(A, C.U); sortby)
+end
+
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
+function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    eigvals!(copy(A), copy(B); sortby)
+end
+function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    M, TD, p = getproperties!(B)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permutecols!(A, p)
+    permuterows!(A, p)
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(TD, A)
+    return eigvals!(A; sortby)
+end
+
+# LU based solution for generalized eigenvalues
+function eigvals(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigvals!(copy(A), copy(F); sortby)
+end
+function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(L)*(P*A)*inv(U)
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permuterows!(A, F.p)
+    ldiv!(L, A)
+    rdiv!(A, U)
+    return eigvals!(A; sortby)
+end
+
+eigen(A::Hermitian{<:Complex, <:Tridiagonal}; kwargs...) =
+    _eigenhermtridiag(A; kwargs...)
+# disambiguation
+function eigen(A::Hermitian{Complex{Float16}, <:Tridiagonal}; kwargs...)
+    E = _eigenhermtridiag(A; kwargs...)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{ComplexF16}, E.vectors)
+    return Eigen(values, vectors)
+end
+function _eigenhermtridiag(A::Hermitian{<:Complex,<:Tridiagonal}; kwargs...)
+    (; dl, d, du) = parent(A)
+    N = length(d)
+    if N <= 1
+        eigen(parent(A); kwargs...)
+    else
+        if A.uplo == 'U'
+            E = du'
+            Er = abs.(du)
+        else
+            E = dl
+            Er = abs.(E)
+        end
+        S = Vector{eigtype(eltype(A))}(undef, N)
+        S[1] = 1
+        for i ∈ 1:N-1
+            S[i+1] = iszero(Er[i]) ? oneunit(eltype(S)) : S[i] * sign(E[i])
+        end
+        B = SymTridiagonal(float.(real.(d)), Er)
+        Λ, Φ = eigen(B; kwargs...)
+        return Eigen(Λ, Diagonal(S) * Φ)
+    end
+end
+
+function eigvals(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+    (; dl, d, du) = parent(A)
+    Er = A.uplo == 'U' ? abs.(du) : abs.(dl)
+    eigvals(SymTridiagonal(float.(real.(d)), Er); kwargs...)
+end
