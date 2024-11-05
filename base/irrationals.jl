@@ -291,3 +291,25 @@ end
 
 # inv
 inv(x::AbstractIrrational) = 1/x
+
+# range
+steprangelen_irrational(::Type{T}, ref::T, step::AbstractIrrational, len::Integer, offset::Integer) where {T<:IEEEFloat} = StepRangeLen{T}(Float64(ref), Float64(step), len, offset)
+steprangelen_irrational(::Type{Float64}, ref::T, step::AbstractIrrational, len::Integer, offset::Integer) where {T<:IEEEFloat} = StepRangeLen{T}(TwicePrecision(ref), TwicePrecision(step), len, offset)
+function (:)(a::T, b::AbstractIrrational, c::T) where {T<:Real}
+    elT = promote_type(T, typeof(b))
+    elT(a):b:elT(c)
+end
+function (:)(start::T, step::AbstractIrrational, stop::T) where {T<:AbstractFloat}
+    lf = (stop - start) / step
+    if lf < 0
+        len = 0
+    elseif lf == 0
+        len = 1
+    else
+        len = round(Int, lf) + 1
+        stop′ = start + (len - 1) * step
+        # if we've overshot the end, subtract one:
+        len -= (start < stop < stop′) + (start > stop > stop′)
+    end
+    steprangelen_irrational(T, start, step, len, 1)
+end
