@@ -2275,6 +2275,9 @@ function f_EA_finalizer(N::Int)
         Base.@assume_effects :nothrow @noinline println(devnull, "ptr = ", ptr)
     end
 end
+let src = code_typed1(foreign_alloc, (Type{Float64},Int,))
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+end
 let src = code_typed1(f_EA_finalizer, (Int,))
     @test count(iscall((src, Core.finalizer)), src.code) == 0
 end
