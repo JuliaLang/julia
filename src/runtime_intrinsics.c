@@ -1178,13 +1178,36 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
 {
     jl_value_t *ty = jl_typeof(a);
     jl_value_t *tyb = jl_typeof(b);
+    jl_value_t *et = NULL;
+    jl_value_t *np = NULL;
+    jl_value_t *etb = NULL;
+    jl_value_t *npb = NULL;
     if (tyb != ty) {
         if (!cvtb)
             jl_errorf("%s: types of a and b must match", name);
-        if (!jl_is_primitivetype(tyb))
+        if (jl_is_primitivetype(tyb)) {}
+        else if (is_ntuple_type(tyb) && jl_nparams(tyb) > 0)
+        {
+            etb = jl_tparam0(tyb);
+            npb = jl_nparams(tyb);
+            if (((jl_datatype_t*)etb)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(etb, 0))){}
+            else 
+                jl_errorf("%s: eltype is not a VecElement of a primitive type", name);
+        }
+        else
             jl_errorf("%s: b is not a primitive type", name);
     }
-    if (!jl_is_primitivetype(ty))
+    if (jl_is_primitivetype(ty)) {}
+    else if (is_ntuple_type(ty) && jl_nparams(ty) > 0)
+    {
+        et = jl_tparam0(ty);
+        np = jl_nparams(ty); \
+        if (((jl_datatype_t*)et)->name == jl_vecelement_typename && jl_is_primitivetype(jl_tparam(et, 0))){}
+        else 
+            jl_errorf("%s: eltype is not a VecElement of a primitive type", name);
+        // TODO cvtb
+    }
+    else
         jl_errorf("%s: a is not a primitive type", name);
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);

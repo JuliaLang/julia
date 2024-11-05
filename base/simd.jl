@@ -49,7 +49,7 @@ end
 # TODO: llvm.vp expects a mask of i1
 const Mask{N} = Vec{N, Bool}
 
-function mask_all(::Val{N}, val::Bool) where N
+function Vec{N}(val) where N
     Vec(ntuple(_->VecElement(val),Val(N)))
 end
 
@@ -107,14 +107,41 @@ widen(::Type{Vec{N, Float16}}) where N = Vec{N, Float16}
 widen(::Type{Vec{N, Float32}}) where N = Vec{N, Float32}
 
 ## floating point arithmetic ##
--(x::Vec{N,T}) where {N,T<:IEEEFloat} = neg_float(x.data)
+-(x::Vec{N,T}) where {N,T<:IEEEFloat} = Vec(neg_float(x.data))
 
-+(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = add_float(x.data, y.data)
--(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = sub_float(x.data, y.data)
-*(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = mul_float(x.data, y.data)
-/(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = div_float(x.data, y.data)
++(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = Vec(add_float(x.data, y.data))
+-(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = Vec(sub_float(x.data, y.data))
+*(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = Vec(mul_float(x.data, y.data))
+/(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:IEEEFloat} = Vec(div_float(x.data, y.data))
 
 muladd(x::Vec{N,T}, y::Vec{N,T}, z::Vec{N,T}) where {N, T<:IEEEFloat} =
-    muladd_float(x.data, y.data, z.data)
+    Vec(muladd_float(x.data, y.data, z.data))
+
+## integer arithmetic ##
+import Base: ÷, BitInteger, BitSigned, BitUnsigned
+import Core.Intrinsics: add_int, sub_int, mul_int, sdiv_int, udiv_int, neg_int
+
++(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(add_int(x.data, y.data))
+-(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(sub_int(x.data, y.data))
+*(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(mul_int(x.data, y.data))
+# TODO ought we implement div by zero?
+÷(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitSigned}   = Vec(sdiv_int(x.data, y.data))
+÷(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitUnsigned} = Vec(udiv_int(x.data, y.data))
+
+## logical ops
+import Base: xor, |, &
+import Core.Intrinsics: xor_int, and_int, or_int
+xor(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(xor_int(x.data, y.data))
+(|)(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(and_int(x.data, y.data))
+(&)(x::Vec{N,T}, y::Vec{N,T}) where {N,T<:BitInteger} = Vec(or_int(x.data, y.data))
+
+## integer shifts
+# unsigned shift counts always shift in the same direction
+import Base: >>, <<, >>>
+import Core.Intrinsics: ashr_int, lshr_int, shl_int, lshr_int
+>>(x::Vec{N, <:BitSigned},   y::Vec{N, <:BitUnsigned}) where N = ashr_int(x, y)
+>>(x::Vec{N, <:BitUnsigned}, y::Vec{N, <:BitUnsigned}) where N = lshr_int(x, y)
+<<(x::Vec{N, <:BitInteger},  y::Vec{N, <:BitUnsigned}) where N = shl_int(x, y)
+>>>(x::Vec{N, <:BitInteger}, y::Vec{N, <:BitUnsigned}) where N = lshr_int(x, y)
 
 end # module

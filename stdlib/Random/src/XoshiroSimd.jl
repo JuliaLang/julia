@@ -8,27 +8,21 @@ using Base: BitInteger_types
 using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
 
+using Base.Experimental.SIMD
+
 # Vector-width. Influences random stream.
 xoshiroWidth() = Val(8)
 # Simd threshold. Influences random stream.
 simdThreshold(::Type{T}) where T = 64
 simdThreshold(::Type{Bool}) = 640
 
-@inline _rotl45(x::UInt64) = (x<<45)|(x>>19)
-@inline _shl17(x::UInt64) = x<<17
-@inline _rotl23(x::UInt64) = (x<<23)|(x>>41)
-@inline _plus(x::UInt64,y::UInt64) = x+y
-@inline _xor(x::UInt64,y::UInt64) = xor(x,y)
-@inline _and(x::UInt64, y::UInt64) = x & y
-@inline _or(x::UInt64, y::UInt64) = x | y
-@inline _lshr(x, y::Int32) = _lshr(x, y % Int64)
-@inline _lshr(x::UInt64, y::Int64) = llvmcall("""
-    %res = lshr i64 %0, %1
-    ret i64 %res
-    """,
-    UInt64,
-    Tuple{UInt64, Int64},
-    x, y)
+@inline rotl45(x::UInt64) = (x<<45)|(x>>19)
+@inline shl17(x::UInt64) = x<<17
+@inline rotl23(x::UInt64) = (x<<23)|(x>>41)
+
+@inline rotl45(x::Vec{N, UInt64}) where N = (x << Vec{N}(45%UInt)) | (x >> Vec{N}(19%UInt))
+@inline shl17(x::Vec{N, UInt64}) where N = x<<Vec{N}(17%UInt)
+@inline rotl23(x::Vec{N, UInt64}) where N = (x<<Vec{N}(23%UInt))|(x>>Vec{N}(41%UInt))
 
 # `_bits2float(x::UInt64, T)` takes `x::UInt64` as input, it splits it in `N` parts where
 # `N = sizeof(UInt64) / sizeof(T)` (`N = 1` for `Float64`, `N = 2` for `Float32, etc...), it
@@ -66,51 +60,6 @@ end
 for N in [4,8,16]
     let code, s, fshl = "llvm.fshl.v$(N)i64",
         VT = :(NTuple{$N, VecElement{UInt64}})
-
-        s = ntuple(_->VecElement(UInt64(45)), N)
-        @eval @inline _rotl45(x::$VT) = ccall($fshl, llvmcall, $VT, ($VT, $VT, $VT), x, x, $s)
-
-        s = ntuple(_->VecElement(UInt64(23)), N)
-        @eval @inline _rotl23(x::$VT) = ccall($fshl, llvmcall, $VT, ($VT, $VT, $VT), x, x, $s)
-
-        code = """
-        %lshiftOp = shufflevector <1 x i64> <i64 17>, <1 x i64> undef, <$N x i32> zeroinitializer
-        %res = shl <$N x i64> %0, %lshiftOp
-        ret <$N x i64> %res
-        """
-        @eval @inline _shl17(x::$VT) = llvmcall($code, $VT, Tuple{$VT}, x)
-
-        code = """
-        %res = add <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _plus(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = xor <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _xor(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = and <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _and(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %res = or <$N x i64> %1, %0
-        ret <$N x i64> %res
-        """
-        @eval @inline _or(x::$VT, y::$VT) = llvmcall($code, $VT, Tuple{$VT, $VT}, x, y)
-
-        code = """
-        %tmp = insertelement <1 x i64> undef, i64 %1, i32 0
-        %shift = shufflevector <1 x i64> %tmp, <1 x i64> %tmp, <$N x i32> zeroinitializer
-        %res = lshr <$N x i64> %0, %shift
-        ret <$N x i64> %res
-        """
-        @eval @inline _lshr(x::$VT, y::Int64) = llvmcall($code, $VT, Tuple{$VT, Int64}, x, y)
 
         code = """
         %shiftamt = shufflevector <1 x i64> <i64 11>, <1 x i64> undef, <$N x i32> zeroinitializer
@@ -156,10 +105,10 @@ function forkRand(rng::Union{TaskLocalRNG, Xoshiro}, ::Val{N}) where N
     # 0x5a94851fb48a6e05 == hash(UInt(2))|0x01
     # 0x3688cf5d48899fa7 == hash(UInt(3))|0x01
     # 0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    s0 = ntuple(i->VecElement(0x02011ce34bce797f * rand(rng, UInt64)), Val(N))
-    s1 = ntuple(i->VecElement(0x5a94851fb48a6e05 * rand(rng, UInt64)), Val(N))
-    s2 = ntuple(i->VecElement(0x3688cf5d48899fa7 * rand(rng, UInt64)), Val(N))
-    s3 = ntuple(i->VecElement(0x867b4bb4c42e5661 * rand(rng, UInt64)), Val(N))
+    s0 = Vec(ntuple(i->VecElement(0x02011ce34bce797f * rand(rng, UInt64)), Val(N)))
+    s1 = Vec(ntuple(i->VecElement(0x5a94851fb48a6e05 * rand(rng, UInt64)), Val(N)))
+    s2 = Vec(ntuple(i->VecElement(0x3688cf5d48899fa7 * rand(rng, UInt64)), Val(N)))
+    s3 = Vec(ntuple(i->VecElement(0x867b4bb4c42e5661 * rand(rng, UInt64)), Val(N)))
     (s0, s1, s2, s3)
 end
 
@@ -182,26 +131,26 @@ end
     s0, s1, s2, s3 = getstate(rng)
     i = 0
     while i+8 <= len
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
+        res = rotl23(s0 + s3) + s0
         unsafe_store!(reinterpret(Ptr{UInt64}, dst + i), f(res, T))
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
         i += 8
     end
     if i < len
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
+        res = rotl23(s0 + s3) + s0
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
         ref = Ref(f(res, T))
         # TODO: This may make the random-stream dependent on system endianness
         GC.@preserve ref memcpy(dst+i, Base.unsafe_convert(Ptr{Cvoid}, ref), len-i)
@@ -214,36 +163,36 @@ end
     s0, s1, s2, s3 = getstate(rng)
     i = 0
     while i+8 <= len
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
-        shift = 0
+        res = rotl23(s0 + s3) + s0
+        shift = UInt(0)
         while i+8 <= len && shift < 8
-            resLoc = _and(_lshr(res, shift), 0x0101010101010101)
+            resLoc = (res >> shift) & 0x0101010101010101
             unsafe_store!(reinterpret(Ptr{UInt64}, dst + i), resLoc)
             i += 8
-            shift += 1
+            shift += UInt(1)
         end
 
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
     end
     if i < len
         # we may overgenerate some bytes here, if len mod 64 <= 56 and len mod 8 != 0
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
-        resLoc = _and(res, 0x0101010101010101)
+        res = rotl23(s0 + s3) + s0
+        resLoc = res & 0x0101010101010101
         ref = Ref(resLoc)
         GC.@preserve ref memcpy(dst+i, Base.unsafe_convert(Ptr{Cvoid}, ref), len-i)
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
     end
     setstate!(rng, (s0, s1, s2, s3, nothing))
     nothing
@@ -255,14 +204,14 @@ end
 
     i = 0
     while i + 8*N <= len
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
+        res = rotl23(s0 + s3) + s0
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
         unsafe_store!(reinterpret(Ptr{NTuple{N,VecElement{UInt64}}}, dst + i), f(res, T))
         i += 8*N
     end
@@ -271,20 +220,18 @@ end
 
 @noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{Bool}, ::Val{N}, f) where {N}
     s0, s1, s2, s3 = forkRand(rng, Val(N))
-    msk = ntuple(i->VecElement(0x0101010101010101), Val(N))
     i = 0
     while i + 64*N <= len
-        res = _plus(_rotl23(_plus(s0,s3)),s0)
-        t = _shl17(s1)
-        s2 = _xor(s2, s0)
-        s3 = _xor(s3, s1)
-        s1 = _xor(s1, s2)
-        s0 = _xor(s0, s3)
-        s2 = _xor(s2, t)
-        s3 = _rotl45(s3)
-        for k=0:7
-            tmp = _lshr(res, k)
-            toWrite = _and(tmp, msk)
+        res = rotl23(s0 + s3) +s0
+        t = shl17(s1)
+        s2 = xor(s2, s0)
+        s3 = xor(s3, s1)
+        s1 = xor(s1, s2)
+        s0 = xor(s0, s3)
+        s2 = xor(s2, t)
+        s3 = rotl45(s3)
+        for k=UInt(0):UInt(7)
+            toWrite = (res >> Vec{N}(k)) & Vec{N}(0x0101010101010101)
             unsafe_store!(reinterpret(Ptr{NTuple{N,VecElement{UInt64}}}, dst + i + k*N*8), toWrite)
         end
         i += 64*N
