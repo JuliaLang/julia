@@ -581,6 +581,10 @@ end
     @test searchsortedfirst(o, 1.5) == 0
     @test searchsortedlast(o, 0) == firstindex(o) - 1
     @test searchsortedlast(o, 1.5) == -1
+
+    # Issue #56457
+    o2 = OffsetArray([2,2,3], typemax(Int)-3);
+    @test searchsorted(o2, 2) == firstindex(o2):firstindex(o2)+1
 end
 
 function adaptive_sort_test(v; trusted=InsertionSort, kw...)

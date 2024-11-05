@@ -231,8 +231,8 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
         elseif lt(o, x, v[m])
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = searchsortedfirst(v, x, lo+u, m, o)
+            b = searchsortedlast(v, x, m, hi-u, o)
             return a : b
         end
     end
