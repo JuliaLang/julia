@@ -1659,7 +1659,8 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 [...]
 ```
 """
-@propagate_inbounds function popat!(a::Vector, i::Integer)
+function popat!(a::Vector, i::Integer)
+    @_propagate_inbounds_meta
     x = a[i]
     _deleteat!(a, i, 1)
     x
