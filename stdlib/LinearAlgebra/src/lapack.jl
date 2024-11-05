@@ -1946,6 +1946,67 @@ versions prior to 3.6.0.
 ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 
+for (hseqr, elty) in ((:dhseqr_,:Float64), (:shseqr_,:Float32))
+    @eval begin
+        function hseqr!(job::AbstractChar,  H::AbstractMatrix{$elty})
+            require_one_based_indexing(H)
+            chkstride1(H)
+            n = checksquare(H)
+            ilo, ihi = 1, n
+            compz = 'N' # not computing Schur vectors
+            ldh = max(1, stride(H, 2))
+            Wr = Vector{$elty}(undef, n)
+            Wi = Vector{$elty}(undef, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($hseqr), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}),
+                    job, compz, n, ilo, ihi, H, ldh, Wr, Wi, C_NULL, 1, work, lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    resize!(work, lwork)
+                end
+            end
+            return H, Wr, Wi
+        end
+    end
+end
+
+for (hseqr, elty) in ((:zhseqr_,:ComplexF64), (:chseqr_,:ComplexF32))
+    @eval begin
+        function hseqr!(job::AbstractChar,  H::AbstractMatrix{$elty})
+            require_one_based_indexing(H)
+            chkstride1(H)
+            n = checksquare(H)
+            ilo, ihi = 1, n
+            compz = 'N' # not computing Schur vectors
+            ldh = max(1, stride(H, 2))
+            W = Vector{$elty}(undef, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($hseqr), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}),
+                    job, compz, n, ilo, ihi, H, ldh, W, C_NULL, 1, work, lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    resize!(work, lwork)
+                end
+            end
+            return H, W
+        end
+    end
+end
+
 for (f, elty) in ((:dggsvd3_, :Float64),
                   (:sggsvd3_, :Float32))
     @eval begin
