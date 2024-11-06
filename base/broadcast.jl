@@ -618,7 +618,7 @@ to_index(Is::Tuple) = CartesianIndex(Is)
 @inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
     Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
 
 
