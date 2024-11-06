@@ -721,7 +721,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     else if (cpu_name.find("M2") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
     else if (cpu_name.find("M3") != StringRef ::npos)
-        return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
+        return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2); // m3 doesn't exist in LLVM 16 for 1.11
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
