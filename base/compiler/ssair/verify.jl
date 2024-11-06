@@ -110,7 +110,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         end
         if firstline !== nothing
             file, line = firstline
-            push!(error_args, "\n", "  Code location:   ", file, ":", line)
+            push!(error_args, "\n", "    Code location: ", file, ":", line)
         end
         if mi !== nothing
             push!(error_args, "\n", "  Method instance: ", mi)
