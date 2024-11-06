@@ -8,6 +8,8 @@ using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bc
 using Base: OneTo
 using Test, Random
 
+include("testhelpers/FillArrays.jl")
+
 @test @inferred(_bcs((3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((3,1), (3,5))) == (3,5)
 @test @inferred(_bcs((3,),  (3,5))) == (3,5)
@@ -876,6 +878,10 @@ let
     @test copy(bc) == [v for v in bc] == collect(bc)
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, FillArrays.Fill(2, 3,3)))
+    @test IndexStyle(bc) == IndexLinear()
+    @test eachindex(bc) === LinearIndices((Base.OneTo(3), Base.OneTo(3)))
 end
 
 # issue 43847: collect preserves shape of broadcasted

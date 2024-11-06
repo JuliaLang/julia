@@ -63,4 +63,7 @@ function Base.repeat(A::Fill; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, n
     Fill(getindex_value(A), sz)
 end
 
+# Broadcasting Test
+Base.IndexStyle(::Type{<:Base.Broadcast.Broadcasted{<:Any,<:Any,<:Any,<:Tuple{Fill}}}) = IndexLinear()
+
 end
