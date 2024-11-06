@@ -1003,3 +1003,25 @@ end
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
 @test !f55768(Vector{S} where S)
+
+# test that values get rooted correctly over throw
+for a in ((@noinline Ref{Int}(2)),
+          (@noinline Ref{Int}(3)),
+          5,
+          (@noinline Ref{Int}(4)),
+          6)
+    @test a[] != 0
+    try
+        b = (@noinline Ref{Int}(5),
+             @noinline Ref{Int}(6),
+             @noinline Ref{Int}(7),
+             @noinline Ref{Int}(8),
+             @noinline Ref{Int}(9),
+             @noinline Ref{Int}(10),
+             @noinline Ref{Int}(11))
+        GC.gc(true)
+        GC.@preserve b throw(a)
+    catch ex
+        @test ex === a
+    end
+end
