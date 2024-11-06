@@ -80,7 +80,7 @@ aimg  = randn(n,n)/2
             @test eigvecs(asym_sg, ASG2) == f.vectors
             @test eigvals(f) === f.values
             @test eigvecs(f) === f.vectors
-            @test_throws ErrorException f.Z
+            @test_throws FieldError f.Z
 
             d,v = eigen(asym_sg, ASG2)
             @test d == f.values
@@ -141,7 +141,7 @@ aimg  = randn(n,n)/2
             @test f.values ≈ eigvals(a1_nsg, a2_nsg; sortby = sortfunc)
             @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg, sortby = sortfunc)) atol=50000ε
             @test eigvecs(a1_nsg, a2_nsg; sortby = sortfunc) == f.vectors
-            @test_throws ErrorException f.Z
+            @test_throws FieldError f.Z
 
             g = eigen(a1_nsg, Diagonal(1:n1))
             @test a1_nsg*g.vectors ≈ (Diagonal(1:n1)*g.vectors) * Diagonal(g.values)

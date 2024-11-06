@@ -25,6 +25,11 @@ function include(mod::Module, path::String)
 end
 include(path::String) = include(Base, path)
 
+struct IncludeInto <: Function
+    m::Module
+end
+(this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
+
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
@@ -52,6 +57,9 @@ function setproperty!(x, f::Symbol, v)
     val = v isa ty ? v : convert(ty, v)
     return setfield!(x, f, val)
 end
+
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)
 
@@ -152,7 +160,8 @@ end
 """
     time_ns() -> UInt64
 
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
+between two moments in time.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -169,6 +178,7 @@ include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
+include("runtime_internals.jl")
 include("reflection.jl")
 include("options.jl")
 
@@ -193,7 +203,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
     return Core._hasmethod(tt)
 end
-
 
 # core operations & types
 include("promotion.jl")
@@ -223,7 +232,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked
@@ -264,8 +273,28 @@ function strcat(x::String, y::String)
     end
     return out
 end
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+BUILDROOT::String = ""
+
+baremodule BuildSettings
+end
+
+let i = 1
+    global BUILDROOT
+    while i <= length(Core.ARGS)
+        if Core.ARGS[i] == "--buildsettings"
+            include(BuildSettings, ARGS[i+1])
+            i += 1
+        else
+            BUILDROOT = Core.ARGS[i]
+        end
+        i += 1
+    end
+end
+
+include(strcat(BUILDROOT, "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
 const DL_LOAD_PATH = String[]
@@ -282,7 +311,6 @@ end
 include("hashing.jl")
 include("rounding.jl")
 include("div.jl")
-include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -326,14 +354,14 @@ include("set.jl")
 include("char.jl")
 function array_new_memory(mem::Memory{UInt8}, newlen::Int)
     # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
         # If data is in a String, keep it that way.
         # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
         str = _string_n(newlen)
         return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
-    else
-        # TODO: when implemented, this should use a memory growing call
-        return typeof(mem)(undef, newlen)
     end
 end
 include("strings/basic.jl")
@@ -400,7 +428,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-using .ScopedValues
 
 # metaprogramming
 include("meta.jl")
@@ -510,6 +537,7 @@ include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+include("util.jl")
 
 include("initdefs.jl")
 Filesystem.__postinit__()
@@ -526,7 +554,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
 
@@ -549,6 +576,9 @@ include("precompilation.jl")
 for m in methods(include)
     delete_method(m)
 end
+for m in methods(IncludeInto(Base))
+    delete_method(m)
+end
 
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
@@ -556,12 +586,14 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
@@ -593,6 +625,25 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     nothing
 end
 
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -604,29 +655,17 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
-    empty!(explicit_loaded_modules)
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    for mod in loaded_modules_order
+        push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
+    end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
     # Profiling helper
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        cond = Base.AsyncCondition()
-        Base.uv_unref(cond.handle)
-        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
-        atexit() do
-            # destroy this callback when exiting
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-            # this will prompt any ongoing or pending event to flush also
-            close(cond)
-            # error-propagation is not needed, since the errormonitor will handle printing that better
-            _wait(t)
-        end
-        finalizer(cond) do c
-            # if something goes south, still make sure we aren't keeping a reference in C to this
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        end
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+        start_profile_listener()
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

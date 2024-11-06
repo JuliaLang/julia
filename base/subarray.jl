@@ -348,11 +348,29 @@ FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Var
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
 @inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
 
+"""
+An internal type representing arrays stored contiguously in memory.
+"""
+const DenseArrayType{T,N} = Union{
+    DenseArray{T,N},
+    <:FastContiguousSubArray{T,N,<:DenseArray},
+}
+
+"""
+An internal type representing mutable arrays stored contiguously in memory.
+"""
+const MutableDenseArrayType{T,N} = Union{
+    Array{T, N},
+    Memory{T},
+    FastContiguousSubArray{T,N,<:Array},
+    FastContiguousSubArray{T,N,<:Memory}
+}
+
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
 # so we may just forward the indexing to the parent
 # This may only be done for non-offset ranges, as the result would otherwise have offset axes
-const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
-function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
+const _OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::_OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[_reindexlinear(V, i)]
@@ -419,7 +437,8 @@ substrides(strds::Tuple{}, ::Tuple{}) = ()
 substrides(strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(tail(strds), tail(I))...,)
 substrides(strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(tail(strds), tail(I))...)
 substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(tail(strds), tail(I))...)
-substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
+substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(
+    LazyString("strides is invalid for SubArrays with indices of type ", typeof(I[1]))))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
@@ -431,7 +450,7 @@ compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@inline; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
-compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
+compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 

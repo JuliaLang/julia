@@ -42,7 +42,7 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
-StringVector(n::Integer) = view(StringMemory(n), 1:n)::Vector{UInt8}
+StringVector(n::Integer) = wrap(Array, StringMemory(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -59,6 +59,15 @@ It may take optional keyword arguments:
 
 When `data` is not given, the buffer will be both readable and writable by default.
 
+!!! warning "Passing `data` as scratch space to `IOBuffer` with `write=true` may give unexpected behavior"
+    Once `write` is called on an `IOBuffer`, it is best to consider any
+    previous references to `data` invalidated; in effect `IOBuffer` "owns"
+    this data until a call to `take!`. Any indirect mutations to `data`
+    could lead to undefined behavior by breaking the abstractions expected
+    by `IOBuffer`. If `write=true` the IOBuffer may store data at any
+    offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
+    the IOBuffer might re-allocate the data entirely, which
+    may or may not be visible in any outstanding bindings to `array`.
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -185,11 +194,30 @@ function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     adv = min(avail, nb)
-    GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
+    unsafe_read!(p, from.data, from.ptr, adv)
     from.ptr += adv
     if nb > avail
         throw(EOFError())
     end
+    nothing
+end
+
+function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
+    for i in 1:nbytes
+        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
+    end
+end
+
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
+
+function unsafe_read!(dest::Ptr{UInt8}, src::DenseBytes, so::Integer, nbytes::UInt)
+    GC.@preserve src unsafe_copyto!(dest, pointer(src, so), nbytes)
     nothing
 end
 
@@ -219,7 +247,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbitstype(T) && isa(a,Array)
+    if isa(a, MutableDenseArrayType{UInt8})
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -466,7 +494,7 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.offset+1:nbytes+io.offset)
+            data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
         else
             data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
@@ -475,7 +503,7 @@ function take!(io::IOBuffer)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.ptr:io.ptr+nbytes-1)
+            data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
             data = read!(io, data)
         end
@@ -501,7 +529,11 @@ state.  This should only be used internally for performance-critical
 It might save an allocation compared to `take!` (if the compiler elides the
 Array allocation), as well as omits some checks.
 """
-_unsafe_take!(io::IOBuffer) = view(io.data, io.offset+1:io.size)
+_unsafe_take!(io::IOBuffer) =
+    wrap(Array, io.size == io.offset ?
+        memoryref(Memory{UInt8}()) :
+        memoryref(io.data, io.offset + 1),
+        io.size - io.offset)
 
 function write(to::IO, from::GenericIOBuffer)
     written::Int = bytesavailable(from)
@@ -548,8 +580,8 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)

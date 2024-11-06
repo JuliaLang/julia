@@ -77,6 +77,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         1,    // can_inline
                         JL_OPTIONS_POLLY_ON, // polly
                         NULL, // trace_compile
+                        NULL, // trace_dispatch
                         JL_OPTIONS_FAST_MATH_DEFAULT,
                         0,    // worker
                         NULL, // cookie
@@ -100,6 +101,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // trace_compile_timing
+                        0, // trim
     };
     jl_options_initialized = 1;
 }
@@ -115,7 +118,8 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]                        Set <dir> as the active project/environment.\n"
+    " --project[={<dir>|@temp|@.}]                  Set <dir> as the active project/environment.\n"
+    "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
     "                                               file is found.\n"
@@ -158,7 +162,7 @@ static const char opts[]  =
     "                                               process affinity is not configured, and sets M to 1.\n"
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
-    "                                               N is set to half of the number of compute threads and\n"
+    "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
@@ -249,16 +253,27 @@ static const char opts_hidden[]  =
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
     "                                               functions\n\n"
 
-    // compiler debugging (see the devdocs for tips on using these options)
+    // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --output-unopt-bc <name>                      Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
-    "                                               during execution or save to a path\n"
+    "                                               during execution or save to stderr or a path. Methods that\n"
+    "                                               were recompiled are printed in yellow or with a trailing\n"
+    "                                               comment if color is not supported\n"
+    " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
+    "                                               compile in ms\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
+    " --trim={no*|safe|unsafe|unsafe-warn}\n"
+    "                                               Build a sysimage including only code provably reachable\n"
+    "                                               from methods marked by calling `entrypoint`. In unsafe\n"
+    "                                               mode, the resulting binary might be missing needed code\n"
+    "                                               and can throw errors. With unsafe-warn warnings will be\n"
+    "                                               printed for dynamic call sites that might lead to such\n"
+    "                                               errors. In safe mode compile-time errors are given instead.\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -279,6 +294,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_trace_compile,
+           opt_trace_compile_timing,
+           opt_trace_dispatch,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -304,7 +321,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_trim,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -355,6 +373,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
+        { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
+        { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -367,6 +387,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "trim",  optional_argument, 0, opt_trim },
         { 0, 0, 0, 0 }
     };
 
@@ -793,7 +814,7 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --inline (%s)", optarg);
             }
             break;
-       case opt_polly:
+        case opt_polly:
             if (!strcmp(optarg,"yes"))
                 jl_options.polly = JL_OPTIONS_POLLY_ON;
             else if (!strcmp(optarg,"no"))
@@ -802,9 +823,17 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --polly (%s)", optarg);
             }
             break;
-         case opt_trace_compile:
+        case opt_trace_compile:
             jl_options.trace_compile = strdup(optarg);
             if (!jl_options.trace_compile)
+                jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            break;
+        case opt_trace_compile_timing:
+            jl_options.trace_compile_timing = 1;
+            break;
+         case opt_trace_dispatch:
+            jl_options.trace_dispatch = strdup(optarg);
+            if (!jl_options.trace_dispatch)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
             break;
         case opt_math_mode:
@@ -922,6 +951,18 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_trim:
+            if (optarg == NULL || !strcmp(optarg,"safe"))
+                jl_options.trim = JL_TRIM_SAFE;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trim = JL_TRIM_NO;
+            else if (!strcmp(optarg,"unsafe"))
+                jl_options.trim = JL_TRIM_UNSAFE;
+            else if (!strcmp(optarg,"unsafe-warn"))
+                jl_options.trim = JL_TRIM_UNSAFE_WARN;
+            else
+                jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

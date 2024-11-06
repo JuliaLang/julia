@@ -13,6 +13,10 @@ end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
     @assert ci.owner === cache.owner
+    m = mi.def
+    if isa(m, Method) && m.module != Core
+        ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
+    end
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
@@ -27,6 +31,8 @@ WorldRange(r::UnitRange) = WorldRange(first(r), last(r))
 first(wr::WorldRange) = wr.min_world
 last(wr::WorldRange) = wr.max_world
 in(world::UInt, wr::WorldRange) = wr.min_world <= world <= wr.max_world
+min_world(wr::WorldRange) = first(wr)
+max_world(wr::WorldRange) = last(wr)
 
 function intersect(a::WorldRange, b::WorldRange)
     ret = WorldRange(max(a.min_world, b.min_world), min(a.max_world, b.max_world))

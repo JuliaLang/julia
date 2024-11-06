@@ -66,7 +66,7 @@ function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
+    copyto!(z.d, limbs)
     randbool
 end
 

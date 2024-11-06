@@ -13,15 +13,16 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     function throwbits(S::Type, T::Type, U::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret `$(S)` as `$(T)`, type `$(U)` is not a bits type"))
+        throw(ArgumentError(LazyString("cannot reinterpret `", S, "` as `", T, "`, type `", U, "` is not a bits type")))
     end
     function throwsize0(S::Type, T::Type, msg)
         @noinline
-        throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
+        throw(ArgumentError(LazyString("cannot reinterpret a zero-dimensional `", S, "` array to `", T,
+            "` which is of a ", msg, " size")))
     end
     function throwsingleton(S::Type, T::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` which is a singleton type"))
+        throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T, "` which is a singleton type")))
     end
 
     global reinterpret
@@ -67,14 +68,14 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
             @noinline
-            throw(ArgumentError("""
-                cannot reinterpret an `$(S)` array to `$(T)` whose first dimension has size `$(dim)`.
-                The resulting array would have non-integral first dimension.
-                """))
+            throw(ArgumentError(LazyString(
+                "cannot reinterpret an `", S, "` array to `", T, "` whose first dimension has size `", dim,
+                "`. The resulting array would have a non-integral first dimension.")))
         end
         function throwaxes1(S::Type, T::Type, ax1)
             @noinline
-            throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` when the first axis is $ax1. Try reshaping first."))
+            throw(ArgumentError(LazyString("cannot reinterpret a `", S, "` array to `", T,
+                "` when the first axis is ", ax1, ". Try reshaping first.")))
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
@@ -99,15 +100,19 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     function reinterpret(::typeof(reshape), ::Type{T}, a::A) where {T,S,A<:AbstractArray{S}}
         function throwintmult(S::Type, T::Type)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got $(sizeof(T))) and `sizeof(eltype(a))` (got $(sizeof(S))) be an integer multiple of the other"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, T, a)` requires that one of `sizeof(T)` (got ",
+                sizeof(T), ") and `sizeof(eltype(a))` (got ", sizeof(S), ") be an integer multiple of the other")))
         end
         function throwsize1(a::AbstractArray, T::Type)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $(eltype(a)) requires that `axes(a, 1)` (got $(axes(a, 1))) be equal to 1:$(sizeof(T) ÷ sizeof(eltype(a))) (from the ratio of element sizes)"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, ", T, ", a)` where `eltype(a)` is ", eltype(a),
+                " requires that `axes(a, 1)` (got ", axes(a, 1), ") be equal to 1:",
+                sizeof(T) ÷ sizeof(eltype(a)), " (from the ratio of element sizes)")))
         end
         function throwfromsingleton(S, T)
             @noinline
-            throw(ArgumentError("`reinterpret(reshape, $T, a)` where `eltype(a)` is $S requires that $T be a singleton type, since $S is one"))
+            throw(ArgumentError(LazyString("`reinterpret(reshape, ", T, ", a)` where `eltype(a)` is ", S,
+                " requires that ", T, " be a singleton type, since ", S, " is one")))
         end
         isbitstype(T) || throwbits(S, T, T)
         isbitstype(S) || throwbits(S, T, S)
@@ -368,6 +373,7 @@ has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
+unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if isprimitivetype(T) && isprimitivetype(S)
@@ -851,8 +857,8 @@ end
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||
-        throw(ArgumentError("Packed sizes of types $Out and $In do not match; got $outpackedsize \
-            and $inpackedsize, respectively."))
+        throw(ArgumentError(LazyString("Packed sizes of types ", Out, " and ", In,
+            " do not match; got ", outpackedsize, " and ", inpackedsize, ", respectively.")))
     in = Ref{In}(x)
     out = Ref{Out}()
     if struct_subpadding(Out, In)

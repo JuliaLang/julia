@@ -14,6 +14,7 @@ const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
+const _DOCS_ALIASING_WARNING = ""
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -37,47 +38,12 @@ convert(::Type{T}, x::T) where {T} = x
 # Note that `@assume_effects` is available only after loading namedtuple.jl.
 abstract type MethodTableView end
 abstract type AbstractInterpreter end
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates_globally::Bool
-    terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-    noub::Bool
-    noub_if_noinbounds::Bool
-end
-function EffectsOverride(
-    override::EffectsOverride =
-        EffectsOverride(false, false, false, false, false, false, false, false, false);
-    consistent::Bool = override.consistent,
-    effect_free::Bool = override.effect_free,
-    nothrow::Bool = override.nothrow,
-    terminates_globally::Bool = override.terminates_globally,
-    terminates_locally::Bool = override.terminates_locally,
-    notaskstate::Bool = override.notaskstate,
-    inaccessiblememonly::Bool = override.inaccessiblememonly,
-    noub::Bool = override.noub,
-    noub_if_noinbounds::Bool = override.noub_if_noinbounds)
-    return EffectsOverride(
-        consistent,
-        effect_free,
-        nothrow,
-        terminates_globally,
-        terminates_locally,
-        notaskstate,
-        inaccessiblememonly,
-        noub,
-        noub_if_noinbounds)
-end
-const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
-include("reflection.jl")
+include("runtime_internals.jl")
 include("options.jl")
 
 ntuple(f, ::Val{0}) = ()
@@ -175,6 +141,17 @@ something(x::Any, y...) = x
 ############
 # compiler #
 ############
+
+baremodule BuildSettings
+using Core: ARGS, include
+using Core.Compiler: >, getindex, length
+
+global MAX_METHODS::Int = 3
+
+if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
+    include(BuildSettings, ARGS[3])
+end
+end
 
 if false
     import Base: Base, @show

@@ -18,7 +18,7 @@
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_RISCV64_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
 #  elif defined(_CPU_AARCH64_)
@@ -74,6 +74,16 @@ JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
 
 JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 {
+#ifdef _OS_DARWIN_
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct->ptls) {
+        if (sr == NULL)
+            pthread_setspecific(jl_safe_restore_key, (void*)sr);
+        ct->ptls->safe_restore = sr;
+        if (sr == NULL)
+            return;
+    }
+#endif
     pthread_setspecific(jl_safe_restore_key, (void*)sr);
 }
 #endif
@@ -82,51 +92,17 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
-// lower level API) (Mac, Windows), we use the platform runtime API to create
+// lower level API) (Windows), we use the platform runtime API to create
 // TLS variable directly.
 // This is functionally equivalent to using `__thread` but can be
 // more efficient since we can have better control over the creation and
 // initialization of the TLS buffer.
 //
-// On platforms that use ELF (Linux, FreeBSD), we use a `__thread` variable
+// On platforms that support native TLS (ELF platforms + Macos) we use a `__thread` variable
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
-#if defined(_OS_DARWIN_)
-// Mac doesn't seem to have static TLS model so the runtime TLS getter
-// registration will only add overhead to TLS access. The `__thread` variables
-// are emulated with `pthread_key_t` so it is actually faster to use it directly.
-static pthread_key_t jl_pgcstack_key;
-
-__attribute__((constructor)) void jl_init_tls(void)
-{
-    pthread_key_create(&jl_pgcstack_key, NULL);
-}
-
-JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
-{
-    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
-}
-
-void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
-{
-    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
-}
-
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, pthread_key_t *k)
-{
-    // for codegen
-    *f = pthread_getspecific;
-    *k = jl_pgcstack_key;
-}
-
-
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, pthread_key_t k)
-{
-    jl_safe_printf("ERROR: Attempt to change TLS address.\n");
-}
-
-#elif defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
 
@@ -338,6 +314,18 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
     return -1; // everything else uses threadpool -1 (does not belong to any threadpool)
 }
 
+// get thread local rng
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->rngseed;
+}
+
+// get thread local rng
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
+{
+    jl_current_task->ptls->rngseed = new_seed;
+}
+
 jl_ptls_t jl_init_threadtls(int16_t tid)
 {
 #ifndef _OS_WINDOWS_
@@ -404,6 +392,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     jl_fence();
     uv_mutex_unlock(&tls_lock);
 
+#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
+    // ensures libunwind TLS space for this thread is allocated eagerly
+    // to make unwinding async-signal-safe even when using thread local caches.
+    unw_ensure_tls();
+#endif
+
     return ptls;
 }
 
@@ -432,10 +426,33 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+
+void jl_safepoint_suspend_all_threads(jl_task_t *ct)
+{
+    // TODO: prevent jl_n_threads changing or jl_safepoint_resume_thread calls on another thread
+    //uv_mutex_lock(&tls_lock);
+    //disallow_resume = ct->tid;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_suspend_thread(tid, 1);
+    };
+}
+
+void jl_safepoint_resume_all_threads(jl_task_t *ct)
+{
+    //uv_mutex_lock(&tls_lock);
+    //if (disallow_resume != ct->tid) return;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_resume_thread(tid);
+    };
+}
+
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-
-void jl_free_thread_gc_state(jl_ptls_t ptls);
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
@@ -447,6 +464,30 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
     scheduler_delete_thread(ptls);
+    // need to clear pgcstack and eh, but we can clear everything now too
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_task_frame_noreturn(ct);
+    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
+        // the system will probably free this stack memory soon
+        // so prevent any other thread from accessing it later
+        if (ct != ptls->root_task)
+            jl_task_frame_noreturn(ptls->root_task);
+    }
+    else {
+        // Uh oh. The user cleared the sticky bit so it started running
+        // elsewhere, then called pthread_exit on this thread from another
+        // Task, which will free the stack memory of that root task soon. This
+        // is not recoverable. Though we could just hang here, a fatal message
+        // is likely better.
+        jl_safe_printf("fatal: thread exited from wrong Task.\n");
+        abort();
+    }
+    ptls->previous_exception = NULL;
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    jl_free_thread_gc_state(ptls);
+    // park in safe-region from here on (this may run GC again)
+    (void)jl_gc_safe_enter(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -464,7 +505,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
         }
         if (signal_stack != NULL) {
             if (signal_stack_size)
-                jl_free_stack(signal_stack, signal_stack_size);
+                _jl_free_stack(ptls ,signal_stack, signal_stack_size);
             else
                 free(signal_stack);
         }
@@ -485,21 +526,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
-    // need to clear pgcstack and eh, but we can clear everything now too
-    jl_task_frame_noreturn(jl_atomic_load_relaxed(&ptls->current_task));
-    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
-        // the system will probably free this stack memory soon
-        // so prevent any other thread from accessing it later
-        jl_task_frame_noreturn(ptls->root_task);
-    }
-    else {
-        // Uh oh. The user cleared the sticky bit so it started running
-        // elsewhere, then called pthread_exit on this thread. This is not
-        // recoverable. Though we could just hang here, a fatal message is better.
-        jl_safe_printf("fatal: thread exited from wrong Task.\n");
-        abort();
-    }
-    jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
+    jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();
@@ -512,12 +539,6 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #endif
     free(ptls->bt_data);
     small_arraylist_free(&ptls->locks);
-    ptls->previous_exception = NULL;
-    // allow the page root_task is on to be freed
-    ptls->root_task = NULL;
-    jl_free_thread_gc_state(ptls);
-    // then park in safe-region
-    (void)jl_gc_safe_enter(ptls);
 }
 
 //// debugging hack: if we are exiting too fast for error message printing on threads,
@@ -525,7 +546,6 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 //// the other threads time to fail and emit their failure message
 //__attribute__((destructor)) static void _waitthreaddeath(void) { sleep(1); }
 
-JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
 JL_DLLEXPORT ssize_t jl_tls_offset = -1;
@@ -618,6 +638,8 @@ static void jl_check_tls(void)
     asm("mrs %0, tpidr_el0" : "=r"(tp));
 #elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
     asm("mrc p15, 0, %0, c13, c0, 3" : "=r"(tp));
+#elif defined(_CPU_RISCV64_)
+    asm("mv %0, tp" : "=r"(tp));
 #else
 #  error "Cannot emit thread pointer for this architecture."
 #endif
@@ -735,10 +757,10 @@ void jl_init_threading(void)
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;
-    gc_first_tid = nthreads;
+    gc_first_tid = nthreads + nthreadsi;
 }
 
-static uv_barrier_t thread_init_done;
+uv_barrier_t thread_init_done;
 
 void jl_start_threads(void)
 {
@@ -777,30 +799,20 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     // GC/System threads need to be after the worker threads.
-    int nworker_threads = nthreads - ngcthreads;
+    int nmutator_threads = nthreads - ngcthreads;
 
-    for (i = 1; i < nthreads; ++i) {
+    for (i = 1; i < nmutator_threads; ++i) {
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
-        if (i < nworker_threads) {
-            uv_thread_create(&uvtid, jl_threadfun, t);
-            if (exclusive) {
-                mask[i] = 1;
-                uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-                mask[i] = 0;
-            }
-        }
-        else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
-        }
-        else {
-            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
+        uv_thread_create(&uvtid, jl_threadfun, t);
+        if (exclusive) {
+            mask[i] = 1;
+            uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+            mask[i] = 0;
         }
         uv_thread_detach(&uvtid);
     }
-
-    uv_barrier_wait(&thread_init_done);
 }
 
 _Atomic(unsigned) _threadedregion; // keep track of whether to prioritize IO or threading
@@ -982,6 +994,52 @@ void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
 JL_DLLEXPORT int jl_alignment(size_t sz)
 {
     return jl_gc_alignment(sz);
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
 }
 
 #ifdef __cplusplus

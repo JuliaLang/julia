@@ -54,7 +54,7 @@ function is_expected_union(u::Union)
     return true
 end
 
-function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter, label_dynamic_calls)
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
@@ -74,7 +74,7 @@ function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(retty
     print(io, "Body")
     warntype_type_printer(io; type=rettype, used=true)
     println(io)
-    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls)
     Base.IRShow.show_ir(io, src, irshow_config)
     println(io)
 end
@@ -128,10 +128,10 @@ end
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types which may be problematic for performance to be emphasized
+as to cause non-concrete types which may be problematic for performance to be emphasized
 (if color is available, displayed in red). This serves as a warning of potential type instability.
 
-Not all non-leaf types are particularly problematic for performance, and the performance
+Not all non-concrete types are particularly problematic for performance, and the performance
 characteristics of a particular type is an implementation detail of the compiler.
 `code_warntype` will err on the side of coloring types red if they might be a performance
 concern, so some types may be colored red even if they do not impact performance.
@@ -154,7 +154,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
         isa(f.source, Method) && (nargs = f.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs;
+                                lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
     tt = Base.signature_type(f, tt)
@@ -162,11 +163,16 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     matches === nothing && Base.raise_match_failure(:code_warntype, tt)
     for match in matches.matches
         match = match::Core.MethodMatch
-        (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)
+        src = Core.Compiler.typeinf_code(interp, match, optimize)
         mi = Core.Compiler.specialize_method(match)
         mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
-        print_warntype_codeinfo(io, src, rettype, nargs; lineprinter)
+        if src isa Core.CodeInfo
+            print_warntype_codeinfo(io, src, src.rettype, nargs;
+                                    lineprinter, label_dynamic_calls = optimize)
+        else
+            println(io, "  inference not successful")
+        end
     end
     nothing
 end
@@ -210,7 +216,6 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             Core.Compiler.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
             mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
-            actual = isdispatchtuple(mi.specTypes)
             isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
     end
@@ -224,15 +229,29 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         if syntax !== :att && syntax !== :intel
             throw(ArgumentError("'syntax' must be either :intel or :att"))
         end
-        if dump_module
-            # we want module metadata, so use LLVM to generate assembly output
-            str = _dump_function_native_assembly(mi, world, wrapper, syntax, debuginfo, binary, raw, params)
-        else
-            # if we don't want the module metadata, just disassemble what our JIT has
+        str = ""
+        if !dump_module
+            # if we don't want the module metadata, attempt to disassemble what our JIT has
             str = _dump_function_native_disassembly(mi, world, wrapper, syntax, debuginfo, binary)
         end
+        if isempty(str)
+            # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
+            if !isa(f, Core.OpaqueClosure)
+                src = Core.Compiler.typeinf_code(Core.Compiler.NativeInterpreter(world), mi, true)
+            else
+                src, rt = Base.get_oc_code_rt(f, tt, true)
+            end
+            src isa Core.CodeInfo || error("failed to infer source for $mi")
+            str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
+        end
     else
-        str = _dump_function_llvm(mi, world, wrapper, !raw, dump_module, optimize, debuginfo, params)
+        if !isa(f, Core.OpaqueClosure)
+            src = Core.Compiler.typeinf_code(Core.Compiler.NativeInterpreter(world), mi, true)
+        else
+            src, rt = Base.get_oc_code_rt(f, tt, true)
+        end
+        src isa Core.CodeInfo || error("failed to infer source for $mi")
+        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)
     end
     str = warning * str
     return str
@@ -252,11 +271,11 @@ struct LLVMFDump
     f::Ptr{Cvoid} # opaque
 end
 
-function _dump_function_native_assembly(mi::Core.MethodInstance, world::UInt,
+function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeInfo,
                                         wrapper::Bool, syntax::Symbol, debuginfo::Symbol,
                                         binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump},mi::Any, world::UInt, wrapper::Bool,
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any, wrapper::Bool,
                              true::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
@@ -266,12 +285,12 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, world::UInt,
 end
 
 function _dump_function_llvm(
-        mi::Core.MethodInstance, world::UInt, wrapper::Bool,
+        mi::Core.MethodInstance, src::Core.CodeInfo, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, world::UInt,
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any,
                              wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
@@ -353,7 +372,7 @@ const llvm_types =
 const llvm_cond = r"^(?:[ou]?eq|[ou]?ne|[uso][gl][te]|ord|uno)$" # true|false
 
 function print_llvm_tokens(io, tokens)
-    m = match(r"^((?:[^\s:]+:)?)(\s*)(.*)", tokens)
+    m = match(r"^((?:[^\"\s:]+:|\"[^\"]*\":)?)(\s*)(.*)", tokens)
     if m !== nothing
         label, spaces, tokens = m.captures
         printstyled_ll(io, label, :label, spaces)

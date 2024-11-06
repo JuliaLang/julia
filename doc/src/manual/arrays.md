@@ -430,7 +430,7 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 
 Generators are implemented via inner functions. Just like
 inner functions used elsewhere in the language, variables from the enclosing scope can be
-"captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
+"captured" in the inner function. For example, `sum(p[i] - q[i] for i=1:n)`
 captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
 [performance tips](@ref man-performance-captured).
@@ -714,7 +714,7 @@ julia> A[:, 3:3]
 ### Cartesian indices
 
 The special `CartesianIndex{N}` object represents a scalar index that behaves
-like an `N`-tuple of integers spanning multiple dimensions.  For example:
+like an `N`-tuple of integers spanning multiple dimensions. For example:
 
 ```jldoctest cartesianindex
 julia> A = reshape(1:32, 4, 4, 2);
@@ -1074,7 +1074,7 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation);
-it also handles scalars, tuples and other collections.  By default, only some argument types are
+it also handles scalars, tuples and other collections. By default, only some argument types are
 considered scalars, including (but not limited to) `Number`s, `String`s, `Symbol`s, `Type`s, `Function`s
 and some common singletons like `missing` and `nothing`. All other arguments are
 iterated over or indexed into elementwise.
@@ -1144,7 +1144,7 @@ is created with the [`view`](@ref) function, which is called the same way as
 of [`view`](@ref) looks the same as the result of [`getindex`](@ref), except the
 data is left in place. [`view`](@ref) stores the input index vectors in a
 `SubArray` object, which can later be used to index the original array
-indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
+indirectly. By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 

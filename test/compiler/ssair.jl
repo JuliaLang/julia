@@ -172,7 +172,7 @@ let code = Any[
     ]
     ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
-    @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
+    @test_throws ["IR verification failed.", "Code location: "] Core.Compiler.verify_ir(ir, false)
 end
 
 # Issue #29107
@@ -219,7 +219,7 @@ let code = Any[
     ]
     ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # issue #37919
@@ -491,7 +491,7 @@ let
 
     # this isn't valid code, we just care about looking at a variety of IR nodes
     body = Any[
-        Expr(:enter, 11),
+        EnterNode(11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
         Expr(:leave, Core.SSAValue(1)),
