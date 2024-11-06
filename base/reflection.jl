@@ -1124,30 +1124,6 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
 end
 
 """
-    signature_type(m::Method) -> Type{<:Tuple}
-
-Retrieve the signature type of a `Method`. Returns a `Tuple` type, the first element of which is
-the `typeof` the function for the method. The remaining elements are the types of the arguments.
-
-For methods that are `OpaqueClosure`s or `Builtin`s, `Tuple{}` is returned. However, this
-behavior is not stable because future improvements to the compiler may allow improved reflection for
-these types.
-
-# Examples
-```jldoctest
-julia> f(x::Int, y) = x + y
-
-julia> m = methods(f)[1]
-
-julia> signature_type(m)
-Tuple{typeof(f), Int, Any}
-```
-"""
-function signature_type(m::Method)
-    return m.sig
-end
-
-"""
     code_lowered(f, types; generated=true, debuginfo=:default)
 
 Return an array of the lowered forms (IR) for the methods matching the given generic function
@@ -1222,10 +1198,7 @@ end
 
 # high-level, more convenient method lookup functions
 
-"""
-`MethodList` is a type for reflecting and pretty-printing a subset of methods. It is returned by
-[`methods`](@ref).
-"""
+# type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
     mt::Core.MethodTable
@@ -1243,10 +1216,9 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types], [module]) -> AbstractVector{Method}
+    methods(f, [types], [module])
 
-Return a list of [`Method`](@ref)s for `f`. The returned container type is not specified.
-Use `collect(methods(f))` to construct a `Vector{Method}`.
+Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
@@ -2340,15 +2312,6 @@ end
 function nameof(f::Core.IntrinsicFunction)
     name = ccall(:jl_intrinsic_name, Ptr{UInt8}, (Core.IntrinsicFunction,), f)
     return ccall(:jl_symbol, Ref{Symbol}, (Ptr{UInt8},), name)
-end
-
-"""
-    nameof(f::Method) -> Symbol
-
-Get the name of a `Method` as a symbol.
-"""
-function nameof(m::Method)
-    return m.name
 end
 
 """

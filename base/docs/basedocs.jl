@@ -2586,35 +2586,6 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 """
 setglobalonce!
 
-
-"""
-`Method` represents a method definition of a function. A list of methods for a function
-can be retrieved using [`Base.methods`](@ref).
-
-To access the properties of a `Method`, use the following functions:
-
-```
-julia> m = methods(sum)[1]
-sum(r::StepRangeLen{<:Any, <:Base.TwicePrecision, <:Base.TwicePrecision})
-     @ Base twiceprecision.jl:605
-
-julia> nameof(m)
-:sum
-
-julia> parentmodule(m)
-Base
-
-julia> signature_type(m)
-Tuple{typeof(sum), StepRangeLen{<:Any, <:Base.TwicePrecision, <:Base.TwicePrecision}}
-
-julia> Base.method_argnames(m)
-2-element Vector{Symbol}:
- Symbol("#self#")
- :r
-```
-"""
-Core.Method
-
 """
     typeof(x)
 
