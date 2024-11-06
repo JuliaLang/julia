@@ -684,7 +684,6 @@ end
                 append!(c, c1)
             end
             r = collect(c2)
-            @show b1, b2, r
             @test r == [1, 2, 3, 4, 5]
         end
     end

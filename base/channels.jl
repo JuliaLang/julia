@@ -730,18 +730,11 @@ julia> take!(c, 3, zeros(Int, 3))
 !!! compat "Julia 1.12"
     Requires at least Julia 1.12.
 """
-function take!(c::Channel{T}, n::Integer) where {T}
-    return _take(c, n, Vector{T}(undef, n))
-end
-function take!(c::Channel, n::Integer, buffer::AbstractVector)
-    # buffer is user defined, so make sure it has the correct size
-    if length(buffer) != n
-        resize!(buffer, n)
+function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) where {T}
+    if n < typemax(n)
+        sizehint!(buffer, n)
     end
-    return _take(c, n, buffer)
-end
-
-function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
+    
     buffered = isbuffered(c)
     # short-circuit for small n
     if n == 0
@@ -761,11 +754,10 @@ function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
         end
         return buffer
     end
-    return buffered ? take_buffered(c, buffer) : take_unbuffered(c, buffer)
+    return buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, n, buffer)
 end
 
-function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
-    n = length(buffer)
+function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
     elements_taken = 0 # number of elements taken so far
     idx1 = firstindex(buffer)
     target_buffer_len = min(n, c.sz_max)
@@ -788,6 +780,9 @@ function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
             n_to_take = min(n - elements_taken, length(c.data))
             idx_start = idx1 + elements_taken
             idx_end = idx_start + n_to_take - 1
+            if idx_end > lastindex(buffer)
+                resize!(buffer, idx_end)
+            end
             # since idx_start/end are both created relative to `firstindex(buffer)`, they are safe to use
             # them as indices for the buffer
             @views copy!(buffer[idx_start:idx_end], c.data[1:n_to_take])
@@ -798,7 +793,7 @@ function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
         end
 
         # if we broke early, we need to remove the extra slots from the result
-        if elements_taken < n
+        if elements_taken < length(buffer)
             deleteat!(buffer, firstindex(buffer)+elements_taken:lastindex(buffer))
         end
         return buffer
@@ -807,22 +802,30 @@ function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
     end
 end
 
-function take_unbuffered(c::Channel, buffer::AbstractVector)
-    i = firstindex(buffer)
+function take_unbuffered(c::Channel, n, buffer::AbstractVector)
+    idx1 = firstindex(buffer)
+    last_idx = idx1 - 1
     lock(c)
     try
-        for i in eachindex(buffer)
+        for i in idx1:(idx1+n-1)
             try
-                @inbounds buffer[i] = take_unbuffered(c)
+                if i <= lastindex(buffer)
+                    buffer[i] = take_unbuffered(c)
+                else
+                    push!(buffer, take_unbuffered(c))
+                end
+                last_idx = i
             catch e
                 # when the channel is closed, we return only the elements we were able to take
                 if isa(e, InvalidStateException) && e.state === :closed
-                    deleteat!(buffer, i:lastindex(buffer))
                     break
                 else
                     rethrow()
                 end
             end
+        end
+        if last_idx <= lastindex(buffer)
+            deleteat!(buffer, last_idx+1:lastindex(buffer))
         end
         return buffer
     finally
