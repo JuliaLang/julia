@@ -641,30 +641,36 @@ end
 
 @testset "append!(ch, itr)" begin
     # buffered channel
-    c = Channel(3)
-    @test append!(c, 1:3) === c
-    @test Base.n_avail(c) == 3
-    close(c)
-    @test collect(c) == [1, 2, 3]
-    @test Base.n_avail(c) == 0
-    @test_throws InvalidStateException append!(c, 1:3)
-
-    c = Channel(3) do c
-        append!(c, 1:5)
-    end
-    @test collect(c) == [1, 2, 3, 4, 5]
-    
-    # unbuffered channel
-    c = Channel()
-    @async begin
-        append!(c, 1:3)
+    let c = Channel(3)
+        @test append!(c, 1:3) === c
+        @test Base.n_avail(c) == 3
         close(c)
+        @test collect(c) == [1, 2, 3]
+        @test Base.n_avail(c) == 0
+        @test_throws InvalidStateException append!(c, 1:3)
     end
-    wait(c)
-    @test Base.n_avail(c) == 1
-    @test collect(c) == [1, 2, 3]
-    @test Base.n_avail(c) == 0
-    @test_throws InvalidStateException append!(c, 1:3)
+
+    # append more items than buffer size
+    @test let
+        c = Channel(3) do c
+            append!(c, 1:5)
+        end
+        collect(c) == [1, 2, 3, 4, 5]
+    end
+
+    # unbuffered channel
+    let 
+        c = Channel() do c
+            append!(c, 1:3)
+        end
+        wait(c)
+        @test Base.n_avail(c) == 1
+        @test collect(c) == [1, 2, 3]
+        @test Base.n_avail(c) == 0
+        @test_throws InvalidStateException append!(c, 1:3)
+    end
+
+    # appending channels
     @test let 
         c1 = Channel(3) do c
             append!(c, 1:5)
@@ -674,22 +680,24 @@ end
         end
         collect(c2) == [1, 2, 3, 4, 5]
     end
-    # appending channels
 end
 
 
 @testset "take!(ch, n)" begin
-    c = Channel{Int}(3)
-    append!(c, 1:3)
-    @test take!(c, 3) == [1, 2, 3]
-    @test Base.n_avail(c) == 0
-
-    @async begin
+    # take n items from a buffered channel
+    let c = Channel{Int}(3)
         append!(c, 1:3)
-        close(c)
+        @test take!(c, 3) == [1, 2, 3]
+        @test Base.n_avail(c) == 0
+
+        @async begin
+            append!(c, 1:3)
+            close(c)
+        end
+        # passing in a buffer that needs to be resized
+        buff = Vector{Int}(undef, 7)
+        @test take!(c, 5, buff) == [1, 2, 3]
     end
-    buff = Vector{Int}(undef, 7)
-    @test take!(c, 5, buff) == [1, 2, 3]
 end
 
 @testset "Task properties" begin
