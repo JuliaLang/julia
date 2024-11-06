@@ -549,7 +549,7 @@ function check_broadcast_shape(::Tuple{}, Ashp::Tuple)
     nothing
 end
 function check_broadcast_shape(shp, Ashp::Tuple)
-    _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
+    _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination; got a dimension with lengths $(shp[1]) and $(Ashp[1])"))
     check_broadcast_shape(tail(shp), tail(Ashp))
 end
 @inline check_broadcast_axes(shp, A) = check_broadcast_shape(shp, axes(A))
