@@ -96,6 +96,7 @@ typedef struct {
         _jl_ucontext_t *ctx;
         jl_stack_context_t *copy_ctx;
     };
+    void *activefp;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
@@ -226,6 +227,7 @@ typedef jl_value_t jl_function_t;
 typedef struct _jl_timing_block_t jl_timing_block_t;
 typedef struct _jl_timing_event_t jl_timing_event_t;
 typedef struct _jl_excstack_t jl_excstack_t;
+
 typedef struct _jl_handler_t jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -316,6 +318,18 @@ JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
+STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
+{
+#ifdef __GNUC__
+    return __builtin_frame_address(0);
+#else
+    void *dummy = NULL;
+    // The mask is to suppress the compiler warning about returning
+    // address of local variable
+    return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
+#endif
+}
+
 #ifdef __clang_gcanalyzer__
 // Note that the sigint safepoint can also trigger GC, albeit less likely
 void jl_gc_safepoint_(jl_ptls_t tls);
@@ -343,6 +357,9 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
 {
     assert(old_state != JL_GC_PARALLEL_COLLECTOR_THREAD);
     assert(old_state != JL_GC_CONCURRENT_COLLECTOR_THREAD);
+    if (__builtin_constant_p(state) ? state : // required if !old_state && state, otherwise optional
+        __builtin_constant_p(old_state) ? !old_state : 1)
+        jl_atomic_load_relaxed(&ptls->current_task)->ctx.activefp = (char*)jl_get_frame_addr();
     jl_atomic_store_release(&ptls->gc_state, state);
     if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);

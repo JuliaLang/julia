@@ -3414,6 +3414,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     }
     jl_gc_debug_print();
 
+    ct->ctx.activefp = (char*)jl_get_frame_addr();
     int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.

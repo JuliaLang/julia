@@ -237,15 +237,23 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
     emit_signal_fence(builder);
 }
 
-static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state, bool final)
+static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *task, llvm::MDNode *tbaa, llvm::Value *state, llvm::Value *old_state, bool final)
 {
     using namespace llvm;
+    Value *ptls = get_current_ptls_from_task(builder, task, tbaa);
     Type *T_int8 = state->getType();
     unsigned offset = offsetof(jl_tls_states_t, gc_state);
     Value *gc_state = builder.CreateConstInBoundsGEP1_32(T_int8, ptls, offset, "gc_state");
     if (old_state == nullptr) {
         old_state = builder.CreateLoad(T_int8, gc_state);
         cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);
+    }
+    if (isa<Constant>(state) ? state == builder.getInt8(0) :
+        isa<Constant>(old_state) ? old_state == builder.getInt8(0) : true) {
+        unsigned offset = offsetof(jl_task_t, ctx.activefp);
+        Value *currentfp = builder.CreateConstInBoundsGEP1_32(T_int8, task, offset, "gc_state");
+        Value *fp = builder.CreateIntrinsic(Intrinsic::frameaddress, {builder.getPtrTy()}, {builder.getInt32(0)});
+        builder.CreateAlignedStore(fp, currentfp, Align(sizeof(void*)));
     }
     builder.CreateAlignedStore(state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
     if (auto *C = dyn_cast<ConstantInt>(old_state))
@@ -261,39 +269,38 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
                                           builder.CreateICmpEQ(state, zero8)),
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
-    MDNode *tbaa = get_tbaa_const(builder.getContext());
-    emit_gc_safepoint(builder, T_size, ptls, tbaa, final);
+    emit_gc_safepoint(builder, T_size, ptls, get_tbaa_const(builder.getContext()), final);
     builder.CreateBr(exitBB);
     builder.SetInsertPoint(exitBB);
     return old_state;
 }
 
-static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *task, llvm::MDNode *tbaa, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(0);
-    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, task, tbaa, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *task, llvm::MDNode *tbaa, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(JL_GC_STATE_UNSAFE);
-    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, task, tbaa, state, old_state, final);
 }
 
-static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *task, llvm::MDNode *tbaa, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, task, tbaa, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *task, llvm::MDNode *tbaa, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, task, tbaa, state, old_state, final);
 }
 
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.

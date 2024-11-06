@@ -108,6 +108,17 @@ void jl_mach_gc_end(void)
 // implement jl_set_gc_and_wait from a different thread
 static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 {
+    unsigned int count = MACH_THREAD_STATE_COUNT;
+    host_thread_state_t state;
+    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+    ptls2->current_task->ctx.activefp =
+#ifdef _CPU_X86_64_
+        state->__rsp;
+#elif defined(_CPU_AARCH64_)
+        state->__sp;
+#else
+#error fp not defined for platform
+#endif
     // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
     uv_mutex_lock(&safepoint_lock);
     // Since this gets set to zero only while the safepoint_lock was held this

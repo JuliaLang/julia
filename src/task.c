@@ -356,49 +356,35 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
                                        char **total_start, char **total_end)
 {
-    if (!task->ctx.started) {
-        *total_start = *active_start = 0;
-        *total_end = *active_end = 0;
+    *total_start = *active_start = 0;
+    *total_end = *active_end = 0;
+    if (!task->ctx.started)
         return;
-    }
 
-    jl_ptls_t ptls2 = task->ptls;
-    if (task->ctx.copy_stack && ptls2) {
-        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
-        *total_end = *active_end = (char*)ptls2->stackbase;
-    }
-    else if (task->ctx.stkbuf) {
-        *total_start = *active_start = (char*)task->ctx.stkbuf;
-#ifndef _OS_WINDOWS_
-        jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-        if (ptls0->root_task == task) {
-            // See jl_init_root_task(). The root task of the main thread
-            // has its buffer enlarged by an artificial 3000000 bytes, but
-            // that means that the start of the buffer usually points to
-            // inaccessible memory. We need to correct for this.
-            *active_start += ROOT_TASK_STACK_ADJUSTMENT;
-            *total_start += ROOT_TASK_STACK_ADJUSTMENT;
-        }
-#endif
-
-        *total_end = *active_end = (char*)task->ctx.stkbuf + task->ctx.bufsz;
-#ifdef COPY_STACKS
-        // save_stack stores the stack of an inactive task in stkbuf, and the
-        // actual number of used bytes in copy_stack.
-        if (task->ctx.copy_stack > 1)
+    if (task->ctx.copy_stack) {
+        if (task->ctx.ctx) {
+            // currently paused task
+            // save_stack stores the stack of an inactive task in stkbuf, and the
+            // actual number of used bytes in copy_stack.
+            *active_start = *total_start = (char*)task->ctx.stkbuf;
             *active_end = (char*)task->ctx.stkbuf + task->ctx.copy_stack;
-#endif
+            *total_end = (char*)task->ctx.stkbuf + task->ctx.bufsz;
+        }
+        else if (task->ptls) {
+            jl_ptls_t ptls2 = task->ptls;
+            // currently running copy task
+            *active_start = (char*)task->ctx.activefp;
+            *total_start = (char*)ptls2->stackbase - ptls2->stacksize;
+            *total_end = *active_end = (char*)ptls2->stackbase;
+        }
     }
     else {
-        // no stack allocated yet
-        *total_start = *active_start = 0;
-        *total_end = *active_end = 0;
-        return;
-    }
-
-    if (task == jl_current_task) {
-        // scan up to current `sp` for current thread and task
-        *active_start = (char*)jl_get_frame_addr();
+        if (task->ctx.stkbuf) {
+            // currently running task
+            *active_start = (char*)task->ctx.activefp;
+            *total_start = (char*)task->ctx.stkbuf;
+            *active_end = *total_end = (char*)task->ctx.stkbuf + task->ctx.bufsz;
+        }
     }
 }
 
@@ -506,6 +492,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     }
 
     // set up global state for new task and clear global state for old task
+    lastt->ctx.activefp = (char*)jl_get_frame_addr();
     t->ptls = ptls;
     jl_atomic_store_relaxed(&ptls->current_task, t);
     JL_GC_PROMISE_ROOTED(t);

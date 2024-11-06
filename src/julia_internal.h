@@ -1765,18 +1765,6 @@ JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *fi
 void register_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 void deregister_eh_frames(uint8_t *Addr, size_t Size) JL_NOTSAFEPOINT;
 
-STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
-{
-#ifdef __GNUC__
-    return __builtin_frame_address(0);
-#else
-    void *dummy = NULL;
-    // The mask is to suppress the compiler warning about returning
-    // address of local variable
-    return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
-#endif
-}
-
 // Log `msg` to the current logger by calling CoreLogging.logmsg_shim() on the
 // julia side. If any of module, group, id, file or line are NULL, these will
 // be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
