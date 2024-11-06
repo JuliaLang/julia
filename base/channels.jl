@@ -189,6 +189,7 @@ function check_channel_state(c::Channel)
         throw(closed_exception())
     end
 end
+
 """
     close(c::Channel[, excp::Exception])
 
@@ -495,18 +496,54 @@ function append!(c::Channel, iter::T) where {T}
     return isbuffered(c) ? append_buffered(c, iter) : append_unbuffered(c, iter)
 end
 function append!(c1::Channel, c2::Channel{T}) where {T}
-    buff_len = max(c1.sz_max, c2.sz_max)
-    # when buff_len is less than 2, we get no benefit from grouping the lock
-    if buff_len in (0, 1)
-        return append_unbuffered(c1, c2)
+    # if the source channel has no buffer or only one slot, there is no benefit to grouping the lock
+    if min(c1.sz_max, c2.sz_max) < 2
+        return isbuffered(c1) ? append_buffered(c1, c2) : append_unbuffered(c1, c2)
     end
+    i = 0
+    lock(c2)
+    try
+        while isopen(c2) || isready(c2)
+            # wait for data to become available
+            while isempty(c2.data)
+                try
+                    check_channel_state(c2)
+                    wait(c2.cond_take)
+                catch e
+                    if isa(e, InvalidStateException) && e.state === :closed
+                        break
+                    else
+                        rethrow()
+                    end
+                end
+            end
 
-    take_f = isbuffered(c2) ? take_buffered : take_unbuffered
-    append_f = isbuffered(c1) ? append_buffered : append_unbuffered
-    buff = Vector{T}(undef, buff_len)
-    while isopen(c2) || isready(c2)
-        take_f(c2, buff)
-        append_f(c1, buff)
+            lock(c1)
+            try
+                while length(c1.data) == c1.sz_max
+                    check_channel_state(c1)
+                    wait(c1.cond_put)
+                end
+
+                # append as many as possible to c1
+                n = min(c1.sz_max - length(c1.data), length(c2.data))
+                _increment_n_avail(c1, n)
+                c1_len_og = length(c1.data)
+
+                resize!(c1.data, c1_len_og + n)
+                copyto!(c1.data, c1_len_og + 1, c2.data, 1, n)
+                deleteat!(c2.data, 1:n)
+
+                _increment_n_avail(c2, -n)
+                notify(c1.cond_take, nothing, true, false)
+                foreach(_ -> notify(c2.cond_put, nothing, true, false), 1:n)
+            finally
+                unlock(c1)
+            end
+            
+        end
+    finally
+        unlock(c2)
     end
     return c1
 end
@@ -712,7 +749,7 @@ function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
     elseif n == 1
         try
             x = take!(c)
-            @inbounds buffer[begin] = x
+            buffer[begin] = x
         catch e
             # when provided a batch size, take should not error on a closed channel
             # so we need to return an empty buffer if we fail to get one element.
@@ -753,13 +790,11 @@ function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
             idx_end = idx_start + n_to_take - 1
             # since idx_start/end are both created relative to `firstindex(buffer)`, they are safe to use
             # them as indices for the buffer
-            for (res_i, data_i) in Iterators.zip(idx_start:idx_end, eachindex(c.data))
-                @inbounds buffer[res_i] = c.data[data_i]
-            end
+            @views copy!(buffer[idx_start:idx_end], c.data[1:n_to_take])
             deleteat!(c.data, 1:n_to_take)
-            elements_taken += n_to_take
             _increment_n_avail(c, -n_to_take)
             foreach(_ -> notify(c.cond_put, nothing, true, false), 1:n_to_take)
+            elements_taken += n_to_take
         end
 
         # if we broke early, we need to remove the extra slots from the result

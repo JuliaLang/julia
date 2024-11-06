@@ -675,15 +675,17 @@ end
 
     # appending channels that are buffered and unbuffered
     let
-        buf_lens = (0, 3)
+        buf_lens = (0, 3, 5, 7)
         for (b1,b2) in Iterators.product(buf_lens,buf_lens)
             c1 = Channel(b1) do c
-                append!(c, 1:3)
+                append!(c, 1:5)
             end
             c2 = Channel(b2) do c
                 append!(c, c1)
             end
-            @test collect(c2) == [1, 2, 3]
+            r = collect(c2)
+            @show b1, b2, r
+            @test r == [1, 2, 3, 4, 5]
         end
     end
 end
