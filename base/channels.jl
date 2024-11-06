@@ -752,7 +752,7 @@ function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
             idx_start = idx1 + elements_taken
             idx_end = idx_start + n_to_take - 1
             # since idx_start/end are both created relative to `firstindex(buffer)`, they are safe to use
-            # them as indicies for the buffer
+            # them as indices for the buffer
             for (res_i, data_i) in Iterators.zip(idx_start:idx_end, eachindex(c.data))
                 @inbounds buffer[res_i] = c.data[data_i]
             end
