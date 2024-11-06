@@ -1731,8 +1731,11 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
             if finalizer_useidx isa Int
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
                 estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
+                # disable finalizer inlining when this allocation is aliased to somewhere,
+                # mostly likely to edges of `PhiNode`
+                hasaliases = EscapeAnalysis.getaliases(SSAValue(defidx), estate) !== nothing
                 einfo = estate[SSAValue(defidx)]
-                if EscapeAnalysis.has_no_escape(einfo)
+                if !hasaliases && EscapeAnalysis.has_no_escape(einfo)
                     already = BitSet(use.idx for use in defuse.uses)
                     for idx = einfo.Liveness
                         if idx ∉ already
