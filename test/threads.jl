@@ -288,18 +288,16 @@ close(proc.in)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(100) do _
+        timer = Timer(200) do _
             timeout = true
-            for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
-                for _ in 1:1000
+            for sig in (Base.SIGQUIT, Base.SIGKILL)
+                for _ in 1:3
                     kill(proc, sig)
+                    sleep(1)
                     if done[]
-                        if sig != Base.SIGTERM
-                            @warn "Terminating `$script` required signal $sig"
-                        end
+                        @warn "Terminating `$script` required signal $sig"
                         return
                     end
-                    sleep(0.001)
                 end
             end
         end
@@ -309,16 +307,11 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        if ( !success(proc) ) || ( timeout )
+        if !success(proc) || timeout
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows() || Sys.isapple()
-            # Known failure: https://github.com/JuliaLang/julia/issues/43124
-            @test_skip success(proc)
-        else
-            @test success(proc)
-            @test !timeout
-        end
+        @test success(proc)
+        @test !timeout
     end
 end
 
@@ -353,4 +346,162 @@ end
         wait(t; throw=false)
         @test istaskfailed(t)
     end
+end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
+    end
+end
+
+# Make sure default number of BLAS threads respects CPU affinity: issue #55572.
+@testset "LinearAlgebra number of default threads" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -E 'using LinearAlgebra; BLAS.get_num_threads()'`,
+                     # Remove all variables which could affect the default number of threads
+                     "OPENBLAS_NUM_THREADS"=>nothing,
+                     "GOTO_NUM_THREADS"=>nothing,
+                     "OMP_NUM_THREADS"=>nothing)
+        for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
+            @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
+        end
+    end
+end
+
+let once = OncePerProcess(() -> return [nothing])
+    @test typeof(once) <: OncePerProcess{Vector{Nothing}}
+    x = once()
+    @test x === once()
+    @atomic once.state = 0xff
+    @test_throws ErrorException("invalid state for OncePerProcess") once()
+    @test_throws ErrorException("OncePerProcess initializer failed previously") once()
+    @atomic once.state = 0x01
+    @test x === once()
+end
+let once = OncePerProcess{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("OncePerProcess initializer failed previously") once()
+end
+
+let e = Base.Event(true),
+    started = Channel{Int16}(Inf),
+    finish = Channel{Nothing}(Inf),
+    exiting = Channel{Nothing}(Inf),
+    starttest2 = Event(),
+    once = OncePerThread() do
+        push!(started, threadid())
+        take!(finish)
+        return [nothing]
+    end
+    alls = OncePerThread() do
+        return [nothing]
+    end
+    @test typeof(once) <: OncePerThread{Vector{Nothing}}
+    push!(finish, nothing)
+    @test_throws ArgumentError once[0]
+    x = once()
+    @test_throws ArgumentError once[0]
+    @test x === once() === fetch(@async once()) === once[threadid()]
+    @test take!(started) == threadid()
+    @test isempty(started)
+    tids = zeros(UInt, 50)
+    newthreads = zeros(Int16, length(tids))
+    onces = Vector{Vector{Nothing}}(undef, length(tids))
+    allonces = Vector{Vector{Vector{Nothing}}}(undef, length(tids))
+    # allocate closure memory to last until all threads are started
+    cls = [function cl()
+            GC.gc(false) # stress test the GC-safepoint mechanics of jl_adopt_thread
+            try
+                newthreads[i] = threadid()
+                local y = once()
+                onces[i] = y
+                @test x !== y === once() === once[threadid()]
+                wait(starttest2)
+                allonces[i] = Vector{Nothing}[alls[tid] for tid in newthreads]
+            catch ex
+                close(started, ErrorException("failed"))
+                close(finish, ErrorException("failed"))
+                @lock stderr Base.display_error(current_exceptions())
+            end
+            push!(exiting, nothing)
+            GC.gc(false) # stress test the GC-safepoint mechanics of jl_delete_thread
+            nothing
+        end
+    for i = 1:length(tids)]
+    GC.@preserve cls begin # this memory must survive until each corresponding thread exits (waitallthreads / uv_thread_join)
+        Base.preserve_handle(cls)
+        for i = 1:length(tids)
+            function threadcallclosure(tid::Ref{UInt}, cl::Ref{F}) where {F} # create sparam so we can reference the type of cl in the ccall type
+                threadwork = @cfunction cl -> cl() Cvoid (Ref{F},) # create a cfunction that specializes on cl as an argument and calls it
+                err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, cl::Ref{F})::Cint # call that on a thread
+                err == 0 || Base.uv_error("uv_thread_create", err)
+                nothing
+            end
+            threadcallclosure(Ref(tids, i), Ref(cls, i))
+        end
+        @noinline function waitallthreads(tids, cls)
+            for i = 1:length(tids)
+                tid = Ref(tids, i)
+                tidp = Base.unsafe_convert(Ptr{UInt}, tid)::Ptr{UInt}
+                gc_state = @ccall jl_gc_safe_enter()::Int8
+                GC.@preserve tid err = @ccall uv_thread_join(tidp::Ptr{UInt})::Cint
+                @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+                err == 0 || Base.uv_error("uv_thread_join", err)
+            end
+            Base.unpreserve_handle(cls)
+        end
+        try
+            # let them finish in batches of 10
+            for i = 1:length(tids) ÷ 10
+                for i = 1:10
+                    newid = take!(started)
+                    @test newid != threadid()
+                end
+                for i = 1:10
+                    push!(finish, nothing)
+                end
+            end
+            @test isempty(started)
+            # now run the second part of the test where they all try to access the other threads elements
+            notify(starttest2)
+        finally
+            for _ = 1:length(tids)
+                # run IO loop until all threads are close to exiting
+                take!(exiting)
+            end
+            waitallthreads(tids, cls)
+        end
+    end
+    @test isempty(started)
+    @test isempty(finish)
+    @test length(IdSet{eltype(onces)}(onces)) == length(onces) # make sure every object is unique
+    allexpected = Vector{Nothing}[alls[tid] for tid in newthreads]
+    @test length(IdSet{eltype(allexpected)}(allexpected)) == length(allexpected) # make sure every object is unique
+    @test all(i -> allonces[i] !== allexpected && all(j -> allonces[i][j] === allexpected[j], eachindex(allexpected)), eachindex(allonces)) # make sure every thread saw the same elements
+    @test_throws ArgumentError once[Threads.maxthreadid() + 1]
+    @test_throws ArgumentError once[-1]
+
+end
+let once = OncePerThread{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("OncePerThread initializer failed previously") once()
+end
+
+let once = OncePerTask(() -> return [nothing])
+    @test typeof(once) <: OncePerTask{Vector{Nothing}}
+    x = once()
+    @test x === once() !== fetch(@async once())
+    delete!(task_local_storage(), once)
+    @test x !== once() === once()
+end
+let once = OncePerTask{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("expected") once()
 end

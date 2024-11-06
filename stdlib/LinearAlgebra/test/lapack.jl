@@ -805,8 +805,26 @@ end
             B = zeros(elty, n, n)
             LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
             C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
-            @test B ≈ C
+            @test B == C
+            B = zeros(elty, n+1, n+1)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
+            C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
+            @test view(B, 1:n, 1:n) == C
         end
+        A = rand(elty, n, n+1)
+        B = zeros(elty, n, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'L')
+        @test B == view(tril(A), 1:n, 1:n)
+        B = zeros(elty, n, n+1)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'U')
+        @test B == triu(A)
+        A = rand(elty, n+1, n)
+        B = zeros(elty, n, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'U')
+        @test B == view(triu(A), 1:n, 1:n)
+        B = zeros(elty, n+1, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'L')
+        @test B == tril(A)
     end
 end
 
@@ -869,6 +887,16 @@ end
     LAPACK.hetrd!('U', A)
     LAPACK.hetrd!('U', B)
     @test UpperTriangular(A) == UpperTriangular(B)
+end
+
+@testset "inference in syev!/syevd!" begin
+    for T in (Float32, Float64), CT in (T, Complex{T})
+        A = rand(CT, 4,4)
+        @inferred (A -> LAPACK.syev!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syev!('V', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('V', 'U', A))(A)
+    end
 end
 
 end # module TestLAPACK

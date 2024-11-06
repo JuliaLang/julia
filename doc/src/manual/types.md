@@ -1102,7 +1102,7 @@ Array{Vector{T}, 1} where T
 Type `T1` defines a 1-dimensional array of 1-dimensional arrays; each
 of the inner arrays consists of objects of the same type, but this type may vary from one inner array to the next.
 On the other hand, type `T2` defines a 1-dimensional array of 1-dimensional arrays all of whose inner arrays must have the
-same type.  Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
+same type. Note that `T2` is an abstract type, e.g., `Array{Array{Int,1},1} <: T2`, whereas `T1` is a concrete type. As a consequence, `T1` can be constructed with a zero-argument constructor `a=T1()` but `T2` cannot.
 
 There is a convenient syntax for naming such types, similar to the short form of function
 definition syntax:
@@ -1424,8 +1424,8 @@ Closest candidates are:
 
 ## [Custom pretty-printing](@id man-custom-pretty-printing)
 
-Often, one wants to customize how instances of a type are displayed.  This is accomplished by
-overloading the [`show`](@ref) function.  For example, suppose we define a type to represent
+Often, one wants to customize how instances of a type are displayed. This is accomplished by
+overloading the [`show`](@ref) function. For example, suppose we define a type to represent
 complex numbers in polar form:
 
 ```jldoctest polartype
@@ -1480,13 +1480,13 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
  4.0 * exp(5.3im)
 ```
 
-where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
-which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
+where the single-line `show(io, z)` form is still used for an array of `Polar` values. Technically,
+the REPL calls `display(z)` to display the result `z` of executing a line, which defaults to `show(io, MIME("text/plain"), z)` (where `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref)),
+which in turn defaults to `show(io, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref Multimedia-I/O)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
-(HTML, images, etcetera) of objects in environments that support this (e.g. IJulia).   For example,
+(HTML, images, etcetera) of objects in environments that support this (e.g. IJulia). For example,
 we can define formatted HTML display of `Polar` objects, with superscripts and italics, via:
 
 ```jldoctest polartype
@@ -1508,9 +1508,9 @@ julia> show(stdout, "text/html", Polar(3.0,4.0))
 ```
 
 As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
-the shown object.  When this `show` method contains infix operators, such as the multiplication
+the shown object. When this `show` method contains infix operators, such as the multiplication
 operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
-printed as part of another object.  To see this, consider the expression object (see [Program
+printed as part of another object. To see this, consider the expression object (see [Program
 representation](@ref)) which takes the square of a specific instance of our `Polar` type:
 
 ```jldoctest polartype
@@ -1524,7 +1524,7 @@ julia> print(:($a^2))
 
 Because the operator `^` has higher precedence than `*` (see [Operator Precedence and Associativity](@ref)), this
 output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
-exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
+exp(4.0im)) ^ 2`. To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
 z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
 printing:
 
@@ -1544,7 +1544,7 @@ julia> :($a^2)
 ```
 
 The method defined above adds parentheses around the call to `show` when the precedence of the
-calling operator is higher than or equal to the precedence of multiplication.  This check allows
+calling operator is higher than or equal to the precedence of multiplication. This check allows
 expressions which parse correctly without the parentheses (such as `:($a + 2)` and `:($a == 2)`) to
 omit them when printing:
 
@@ -1587,11 +1587,24 @@ julia> [Polar(3, 4.0) Polar(4.0,5.3)]
 See the [`IOContext`](@ref) documentation for a list of common properties which can be used
 to adjust printing.
 
+### Output-function summary
+
+Here is a brief summary of the different output functions in Julia and how they are related.
+Most new types should only need to define `show` methods, if anything.
+
+* [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. (This might even be a graphical display in something like a Jupyter or Pluto notebook.) By default (e.g. in scripts or in the text REPL), it calls `show(io, "text/plain", x)`, or equivalently `show(io, MIME"text/plain"(), x)`, for an appropriate `io` stream. (In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).) The REPL uses `display` to output the result of an evaluated expression.
+* The 3-argument [`show(io, ::MIME"text/plain", x)`](@ref) method performs verbose pretty-printing of `x`. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`. It is called by the 2-argument `repr("text/plain", x)`. Other 3-argument `show` methods can be defined for additional MIME types as discussed above, to enable richer display of `x` in some interactive environments.
+* The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is called by the 1-argument [`repr(x)`](@ref), and is typically the format you might employ to input `x` into Julia. The 1-argument `show(x)` calls `show(stdout, x)`.
+* [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks. The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).
+* [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
+
+It is also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper. For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`. And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
 on parametric types, and Julia allows you to include "plain bits" values (Types, Symbols, Integers,
-floating-point numbers, tuples, etc.) as type parameters.  A common example is the dimensionality
+floating-point numbers, tuples, etc.) as type parameters. A common example is the dimensionality
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
@@ -1609,7 +1622,7 @@ julia> Val(x) = Val{x}()
 Val
 ```
 
-There is no more to the implementation of `Val` than this.  Some functions in Julia's standard
+There is no more to the implementation of `Val` than this. Some functions in Julia's standard
 library accept `Val` instances as arguments, and you can also use it to write your own functions.
  For example:
 
@@ -1632,7 +1645,7 @@ a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
- In particular, you would never want to write actual code as illustrated above.  For more information
+ In particular, you would never want to write actual code as illustrated above. For more information
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `max_union_splitting` configuration, which currently defaults to 4.

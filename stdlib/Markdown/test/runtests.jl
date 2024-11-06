@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Markdown, StyledStrings
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
 # Basics
@@ -1300,4 +1300,15 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Markdown))
+end
+
+@testset "Non-Markdown" begin
+    # https://github.com/JuliaLang/julia/issues/37765
+    @test isa(insert_hlines(Text("foo")), Text)
+    # https://github.com/JuliaLang/julia/issues/37757
+    @test insert_hlines(nothing) === nothing
+end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end

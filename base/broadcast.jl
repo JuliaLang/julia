@@ -226,12 +226,12 @@ end
 ## Allocating the output container
 Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
     similar(BitArray, dims)
 # In cases of conflict we fall back on Array
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
 
@@ -751,6 +751,7 @@ The resulting container type is established by the following rules:
  - All other combinations of arguments default to returning an `Array`, but
    custom container types can define their own implementation and promotion-like
    rules to customize the result when they appear as arguments.
+ - The element type is determined in the same manner as in [`collect`](@ref).
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a

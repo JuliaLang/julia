@@ -37,7 +37,7 @@ deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not
 
 function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
     stackdict[x] = y
@@ -46,7 +46,7 @@ end
 
 function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = GC.@preserve x unsafe_string(pointer(x), sizeof(x))
     stackdict[x] = y
@@ -58,7 +58,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     nf = nfields(x)
     if ismutable(x)
         if haskey(stackdict, x)
-            return stackdict[x]
+            return stackdict[x]::typeof(x)
         end
         y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
@@ -105,16 +105,16 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     dest = typeof(x)(undef, length(x))
     stackdict[x] = dest
-    xr = Core.memoryref(x)
-    dr = Core.memoryref(dest)
+    xr = memoryref(x)
+    dr = memoryref(dest)
     for i = 1:length(x)
-        xi = Core.memoryref(xr, i, false)
+        xi = Core.memoryrefnew(xr, i, false)
         if Core.memoryref_isassigned(xi, :not_atomic, false)
             xi = Core.memoryrefget(xi, :not_atomic, false)
             if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
-            di = Core.memoryref(dr, i, false)
+            di = Core.memoryrefnew(dr, i, false)
             Core.memoryrefset!(di, xi, :not_atomic, false)
         end
     end
@@ -131,9 +131,9 @@ function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
         return stackdict[x]::typeof(x)
     end
     mem = getfield(x, :mem)
-    dest = GenericMemoryRef(deepcopy_internal(mem, stackdict)::typeof(mem))
+    dest = memoryref(deepcopy_internal(mem, stackdict)::typeof(mem))
     i = memoryrefoffset(x)
-    i == 1 || (dest = Core.memoryref(dest, i, true))
+    i == 1 || (dest = Core.memoryrefnew(dest, i, true))
     return dest
 end
 

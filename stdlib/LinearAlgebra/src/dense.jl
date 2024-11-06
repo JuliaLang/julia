@@ -18,14 +18,14 @@ function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
-        _isone_triacheck(A, m)
+        _isone_triacheck(A)
     else
-        _isone_cachefriendly(A, m)
+        _isone_cachefriendly(A)
     end
 end
 
-@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in i:m
+@inline function _isone_triacheck(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -36,8 +36,8 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in 1:m
+@inline function _isone_cachefriendly(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -108,9 +108,22 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 # Conservative assessment of types that have zero(T) defined for themselves
+"""
+    haszero(T::Type)
+
+Return whether a type `T` has a unique zero element defined using `zero(T)`.
+If a type `M` specializes `zero(M)`, it may also choose to set `haszero(M)` to `true`.
+By default, `haszero` is assumed to be `false`, in which case the zero elements
+are deduced from values rather than the type.
+
+!!! note
+    `haszero` is a conservative check that is used to dispatch to
+    optimized paths. Extending it is optional, but encouraged.
+"""
 haszero(::Type) = false
 haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
-@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+haszero(::Type{Union{Missing,T}}) where {T<:Number} = haszero(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, inds...) where {T} = haszero(T) ? zero(T) : zero(M[inds...])
 
 """
     triu!(M, k::Integer)
@@ -197,7 +210,7 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
-    for j in 1:n
+    for j in axes(A,2)
         for i in max(1,j-u):min(m,j-l)
             @inbounds A[i, j] = xT
         end
@@ -370,13 +383,10 @@ julia> diagm([1,2,3])
 diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
-function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    @inbounds @simd for i in 1:n
-        t += A[i,i]
-    end
-    t
+function tr(A::StridedMatrix{T}) where T
+    checksquare(A)
+    isempty(A) && return zero(T)
+    reduce(+, (A[i] for i in diagind(A, IndexStyle(A))))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
@@ -555,7 +565,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
         retmat = copymutable_oftype(A, TT)
-        for i in 1:n
+        for i in axes(retmat,1)
             retmat[i, i] = retmat[i, i] ^ p
         end
         return retmat
@@ -565,9 +575,6 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
 
     # If possible, use diagonalization
-    if issymmetric(A)
-        return (Symmetric(A)^p)
-    end
     if ishermitian(A)
         return (Hermitian(A)^p)
     end
@@ -797,10 +804,10 @@ end
 
 ## Swap rows i and j and columns i and j in X
 function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
-    for k = 1:size(X,1)
+    for k = axes(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
-    for k = 1:size(X,2)
+    for k = axes(X,2)
         X[i,k], X[j,k] = X[j,k], X[i,k]
     end
 end
@@ -1387,15 +1394,14 @@ end
     factorize(A)
 
 Compute a convenient factorization of `A`, based upon the type of the input matrix.
-`factorize` checks `A` to see if it is symmetric/triangular/etc. if `A` is passed
-as a generic matrix. `factorize` checks every element of `A` to verify/rule out
-each property. It will short-circuit as soon as it can rule out symmetry/triangular
-structure. The return value can be reused for efficient solving of multiple
-systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
+If `A` is passed as a generic matrix, `factorize` checks to see if it is
+symmetric/triangular/etc. To this end, `factorize` may check every element of `A` to
+verify/rule out each property. It will short-circuit as soon as it can rule out
+symmetry/triangular structure. The return value can be reused for efficient solving
+of multiple systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholesky`](@ref))  |
 | Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bunchkaufman`](@ref)) |
 | Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
@@ -1405,9 +1411,6 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Symmetric real tridiagonal | LDLt (see [`ldlt`](@ref))      |
 | General square             | LU (see [`lu`](@ref))            |
 | General non-square         | QR (see [`qr`](@ref))            |
-
-If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
-will return a Cholesky factorization.
 
 # Examples
 ```jldoctest
@@ -1427,8 +1430,9 @@ julia> factorize(A) # factorize will check to see that A is already factorized
   ⋅    ⋅    ⋅   1.0  1.0
   ⋅    ⋅    ⋅    ⋅   1.0
 ```
-This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
-(e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
+
+This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra
+functions (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
 function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
@@ -1490,12 +1494,7 @@ function factorize(A::AbstractMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A; check = false)
-            if cf.info == 0
-                return cf
-            else
-                return factorize(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))

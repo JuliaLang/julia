@@ -31,8 +31,8 @@ a global variable by the same name is allowed or not.
     ```julia
     # Print the numbers 1 through 5
     i = 0
-    while i < 5  # ERROR: UndefVarError: `i` not defined
-        i += 1
+    while i < 5
+        i += 1     # ERROR: UndefVarError: `i` not defined
         println(i)
     end
     ```
@@ -43,8 +43,8 @@ a global variable by the same name is allowed or not.
     ```julia
     # Print the numbers 1 through 5
     let i = 0
-        while i < 5  # Now `i` is defined in the inner scope of the while loop
-            i += 1
+        while i < 5
+            i += 1     # Now outer `i` is defined in the inner scope of the while loop
             println(i)
         end
     end
@@ -743,7 +743,7 @@ ERROR: invalid redefinition of constant x
 julia> const y = 1.0
 1.0
 
-julia> y = 2.0
+julia> const y = 2.0
 WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
 2.0
 ```
@@ -755,34 +755,13 @@ julia> const z = 100
 julia> z = 100
 100
 ```
-The last rule applies to immutable objects even if the variable binding would change, e.g.:
-```julia-repl
-julia> const s1 = "1"
-"1"
-
-julia> s2 = "1"
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x00000000132c9638
- Ptr{UInt8} @0x0000000013dd3d18
-
-julia> s1 = s2
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x0000000013dd3d18
- Ptr{UInt8} @0x0000000013dd3d18
-```
-However, for mutable objects the warning is printed as expected:
+* if an assignment would change the mutable object to which the variable points (regardless of whether those two objects are deeply equal), a warning is printed:
 ```jldoctest
 julia> const a = [1]
 1-element Vector{Int64}:
  1
 
-julia> a = [1]
+julia> const a = [1]
 WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
 1-element Vector{Int64}:
  1
@@ -803,7 +782,7 @@ f (generic function with 1 method)
 julia> f()
 1
 
-julia> x = 2
+julia> const x = 2
 WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
 2
 

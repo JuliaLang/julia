@@ -576,7 +576,6 @@ let # lifting `isa` through Core.ifelse
     @test count(iscall((src, isa)), src.code) == 0
 end
 
-
 let # lifting `isdefined` through PhiNode
     src = code_typed1((Bool,Some{Int},)) do c, x
         y = c ? x : nothing
@@ -1035,8 +1034,7 @@ exc39508 = ErrorException("expected")
 end
 @test test39508() === exc39508
 
-let
-    # `typeassert` elimination after SROA
+let # `typeassert` elimination after SROA
     # NOTE we can remove this optimization once inference is able to reason about memory-effects
     src = @eval Module() begin
         mutable struct Foo; x; end
@@ -1051,8 +1049,7 @@ let
     @test count(iscall((src, typeassert)), src.code) == 0
 end
 
-let
-    # Test for https://github.com/JuliaLang/julia/issues/43402
+let # Test for https://github.com/JuliaLang/julia/issues/43402
     # Ensure that structs required not used outside of the ccall,
     # still get listed in the ccall_preserves
 
@@ -1948,4 +1945,54 @@ let code = Any[
     # Make sure we didn't accidentally schedule the unreachable block as
     # fallthrough
     @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
+end
+
+# https://github.com/JuliaLang/julia/issues/54596
+# finalized object's uses have no postdominator
+let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), code = Any[
+   # Basic Block 1
+   Expr(:new, Base.RefValue{Nothing}, nothing)
+   Expr(:call, Core.finalizer, f, SSAValue(1), true, mi)
+   GotoIfNot(false, 6)
+   # Basic Block 2
+   Expr(:call, Base.getfield, SSAValue(1), :x)
+   ReturnNode(SSAValue(4))
+   # Basic Block 3
+   Expr(:call, Base.getfield, SSAValue(1), :x)
+   ReturnNode(SSAValue(6))
+]
+   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any])
+   inlining = Core.Compiler.InliningState(Core.Compiler.NativeInterpreter())
+   Core.Compiler.verify_ir(ir)
+   ir = Core.Compiler.sroa_pass!(ir, inlining)
+   Core.Compiler.verify_ir(ir)
+end
+
+let code = Any[
+        # block 1
+        GotoNode(4), # skip
+        # block 2
+        Expr(:leave, SSAValue(1)), # not domsorted - make sure we move it correctly
+        # block 3
+        ReturnNode(2),
+        # block 4
+        EnterNode(7),
+        # block 5
+        GotoIfNot(Argument(1), 2),
+        # block 6
+        Expr(:leave, SSAValue(1)),
+        # block 7
+        ReturnNode(1),
+        # block 8
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}])
+    @test length(ir.cfg.blocks) == 8
+    Core.Compiler.verify_ir(ir)
+
+    # The IR should remain valid after domsorting
+    # (esp. including the insertion of new BasicBlocks for any fix-ups)
+    domtree = Core.Compiler.construct_domtree(ir)
+    ir = Core.Compiler.domsort_ssa!(ir, domtree)
+    Core.Compiler.verify_ir(ir)
 end

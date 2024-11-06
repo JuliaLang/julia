@@ -169,12 +169,15 @@ export
 public AbstractTriangular,
         Givens,
         checksquare,
+        haszero,
         hermitian,
         hermitian_type,
         isbanded,
         peakflops,
         symmetric,
-        symmetric_type
+        symmetric_type,
+        zeroslike,
+        matprod_dest
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -198,9 +201,11 @@ abstract type PivotingStrategy end
 """
     NoPivot
 
-Pivoting is not performed. Matrix factorizations such as the LU factorization
-may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
-This pivot strategy is mainly useful for pedagogical purposes.
+Pivoting is not performed. This is the default strategy for [`cholesky`](@ref) and
+[`qr`](@ref) factorizations. Note, however, that other matrix factorizations such as the LU
+factorization may fail without pivoting, and may also be numerically unstable for
+floating-point matrices in the face of roundoff error. In such cases, this pivot strategy
+is mainly useful for pedagogical purposes.
 """
 struct NoPivot <: PivotingStrategy end
 
@@ -209,10 +214,11 @@ struct NoPivot <: PivotingStrategy end
 
 First non-zero element in the remaining rows is chosen as the pivot element.
 
-Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
-is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
-algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
-`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable
+— this strategy is mainly useful for comparison to hand calculations (which typically use
+this strategy) or for other algebraic types (e.g. rational numbers) not susceptible to
+roundoff errors. Otherwise, the default `RowMaximum` pivoting strategy should be generally
+preferred in Gaussian elimination.
 
 Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
 method.
@@ -222,20 +228,28 @@ struct RowNonZero <: PivotingStrategy end
 """
     RowMaximum
 
-The maximum-magnitude element in the remaining rows is chosen as the pivot element.
-This is the default strategy for LU factorization of floating-point matrices, and is sometimes
-referred to as the "partial pivoting" algorithm.
+A row (and potentially also column) pivot is chosen based on a maximum property.
+This is the default strategy for LU factorization and for pivoted Cholesky factorization
+(though [`NoPivot`] is the default for [`cholesky`](@ref)).
 
-Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
-whose result type must admit a [`<`](@ref) method.
+In the LU case, the maximum-magnitude element within the current column in the remaining
+rows is chosen as the pivot element. This is sometimes referred to as the "partial
+pivoting" algorithm. In this case, the [element type](@ref eltype) of the matrix must admit
+an [`abs`](@ref) method, whose result type must admit a [`<`](@ref) method.
+
+In the Cholesky case, the maximal element among the remaining diagonal elements is
+chosen as the pivot element. This is sometimes referred to as the "diagonal pivoting"
+algorithm, and leads to _complete pivoting_ (i.e., of both rows and columns by the same
+permutation). In this case, the (real part of the) [element type](@ref eltype) of the
+matrix must admit a [`<`](@ref) method.
 """
 struct RowMaximum <: PivotingStrategy end
 
 """
     ColumnNorm
 
-The column with the maximum norm is used for subsequent computation.  This
-is used for pivoted QR factorization.
+The column with the maximum norm is used for subsequent computation. This is used for
+pivoted QR factorization.
 
 Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
 [`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
@@ -383,17 +397,8 @@ julia> Y = zero(X);
 
 julia> ldiv!(Y, qr(A), X);
 
-julia> Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> Y ≈ A\\X
+true
 ```
 """
 ldiv!(Y, A, B)
@@ -424,17 +429,8 @@ julia> Y = copy(X);
 
 julia> ldiv!(qr(A), X);
 
-julia> X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> X ≈ A\\Y
+true
 ```
 """
 ldiv!(A, B)
@@ -499,6 +495,33 @@ See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
 
+"""
+    BandIndex(band, index)
+
+Represent a Cartesian index as a linear index along a band.
+This type is primarily meant to index into a specific band without branches,
+so, for best performance, `band` should be a compile-time constant.
+"""
+struct BandIndex
+    band :: Int
+    index :: Int
+end
+function _cartinds(b::BandIndex)
+    (; band, index) = b
+    bandg0 = max(band,0)
+    row = index - band + bandg0
+    col = index + bandg0
+    CartesianIndex(row, col)
+end
+function Base.to_indices(A, inds, t::Tuple{BandIndex, Vararg{Any}})
+    to_indices(A, inds, (_cartinds(first(t)), Base.tail(t)...))
+end
+function Base.checkbounds(::Type{Bool}, A::AbstractMatrix, b::BandIndex)
+    checkbounds(Bool, A, _cartinds(b))
+end
+function Base.checkbounds(A::Broadcasted, b::BandIndex)
+    checkbounds(A, _cartinds(b))
+end
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -576,6 +599,10 @@ wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
 wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
 wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
+wrapper_char_NTC(A::AbstractArray) = uppercase(wrapper_char(A)) == 'N'
+wrapper_char_NTC(A::Union{StridedArray, Adjoint, Transpose}) = true
+wrapper_char_NTC(A::Union{Symmetric, Hermitian}) = false
+
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
@@ -613,10 +640,6 @@ _evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
-# convert to Vector, if necessary
-_makevector(x::Vector) = x
-_makevector(x::AbstractVector) = Vector(x)
-
 # append a zero element / drop the last element
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
@@ -627,32 +650,23 @@ matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
 # diagonal is special, as it does not change the structure of the other matrix
 # we call similar without a size to preserve the type of the matrix wherever possible
-matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
-matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
-matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+# reroute through _matprod_dest_diag to allow speicalizing on the type of the StructuredMatrix
+# without defining methods for both the orderings
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
+_matprod_dest_diag(A, TS) = similar(A, TS)
+_matprod_dest_diag(A::UnitUpperTriangular, TS) = UpperTriangular(similar(parent(A), TS))
+_matprod_dest_diag(A::UnitLowerTriangular, TS) = LowerTriangular(similar(parent(A), TS))
+function _matprod_dest_diag(A::SymTridiagonal, TS)
+    n = size(A, 1)
+    ev = similar(A, TS, max(0, n-1))
+    dv = similar(A, TS, n)
+    Tridiagonal(ev, dv, similar(ev))
+end
 
 # Special handling for adj/trans vec
 matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
-
-# TODO: remove once not used anymore in SparseArrays.jl
-# some trait like this would be cool
-# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
-# but we are actually asking for oneunit(T), that is, however, defined for generic T as
-# `T(one(T))`, so the question is equivalent for whether one(T) is defined
-onedefined(::Type) = false
-onedefined(::Type{<:Number}) = true
-
-# initialize return array for op(A, B)
-_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(matprod(oneunit(TA), oneunit(TB))) :
-        promote_op(matprod, TA, TB)
-_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(op(oneunit(TA), oneunit(TB))) :
-        promote_op(op, TA, TB)
-_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
-    similar(C, _init_eltype(op, TA, TB), size(C))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
@@ -743,7 +757,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     end
 
     if parallel
-        let Distributed = Base.require_stdlib(Base.PkgId(
+        let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             nworkers = @invokelatest Distributed.nworkers()
             results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
@@ -818,9 +832,9 @@ function __init__()
     # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
     if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
         @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint)))
         else
-            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+            BLAS.set_num_threads(max(1, @ccall(jl_effective_threads()::Cint) ÷ 2))
         end
     end
 end
