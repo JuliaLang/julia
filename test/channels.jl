@@ -673,15 +673,18 @@ end
         @test_throws InvalidStateException append!(c, 1:3)
     end
 
-    # appending channels
-    @test let
-        c1 = Channel(3) do c
-            append!(c, 1:5)
+    # appending channels that are buffered and unbuffered
+    let
+        buf_lens = (0, 3)
+        for (b1,b2) in Iterators.product(buf_lens,buf_lens)
+            c1 = Channel(b1) do c
+                append!(c, 1:3)
+            end
+            c2 = Channel(b2) do c
+                append!(c, c1)
+            end
+            @test collect(c2) == [1, 2, 3]
         end
-        c2 = Channel(3) do c
-            append!(c, c1)
-        end
-        collect(c2) == [1, 2, 3, 4, 5]
     end
 end
 

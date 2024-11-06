@@ -496,14 +496,17 @@ function append!(c::Channel, iter::T) where {T}
 end
 function append!(c1::Channel, c2::Channel{T}) where {T}
     buff_len = max(c1.sz_max, c2.sz_max)
-    if buff_len == 0
+    # when buff_len is less than 2, we get no benefit from grouping the lock
+    if buff_len in (0, 1)
         return append_unbuffered(c1, c2)
     end
 
+    take_f = isbuffered(c2) ? take_buffered : take_unbuffered
+    append_f = isbuffered(c1) ? append_buffered : append_unbuffered
     buff = Vector{T}(undef, buff_len)
     while isopen(c2) || isready(c2)
-        take!(c2, buff_len, buff)
-        append_buffered(c1, buff)
+        take_f(c2, buff)
+        append_f(c1, buff)
     end
     return c1
 end
@@ -721,10 +724,11 @@ function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
         end
         return buffer
     end
-    return buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, buffer)
+    return buffered ? take_buffered(c, buffer) : take_unbuffered(c, buffer)
 end
 
-function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
+function take_buffered(c::Channel{T}, buffer::AbstractVector) where {T}
+    n = length(buffer)
     elements_taken = 0 # number of elements taken so far
     idx1 = firstindex(buffer)
     target_buffer_len = min(n, c.sz_max)
