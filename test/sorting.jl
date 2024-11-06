@@ -598,9 +598,9 @@ end
     Base.size(s::IdentityVector) = length.(axes(s))
 
     o3 = IdentityVector(typemin(Int), typemin(Int)+5)
-    @test searchsortedfirst(o3, typemin(Int)+2) == typemin(Int)+2
-    @test searchsortedlast(o3, typemin(Int)+2) == typemin(Int)+2
-    @test searchsorted(o3, typemin(Int)+2) == typemin(Int)+2:typemin(Int)+2
+    @test searchsortedfirst(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsortedlast(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsorted(o3, typemin(Int)+2) === typemin(Int)+2:typemin(Int)+2
 end
 
 function adaptive_sort_test(v; trusted=InsertionSort, kw...)
