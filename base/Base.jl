@@ -354,14 +354,14 @@ include("set.jl")
 include("char.jl")
 function array_new_memory(mem::Memory{UInt8}, newlen::Int)
     # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
         # If data is in a String, keep it that way.
         # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
         str = _string_n(newlen)
         return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
-    else
-        # TODO: when implemented, this should use a memory growing call
-        return typeof(mem)(undef, newlen)
     end
 end
 include("strings/basic.jl")

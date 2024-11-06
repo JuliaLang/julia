@@ -15,7 +15,7 @@ yielded by expanding the generators.
 
 The keyword `debuginfo` controls the amount of code metadata present in the output.
 
-Note that an error will be thrown if `types` are not leaf types when `generated` is
+Note that an error will be thrown if `types` are not concrete types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
 """
 function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
@@ -37,7 +37,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
-                      "not leaf types, but the `generated` argument is `true`.")
+                      "not concrete types, but the `generated` argument is `true`.")
             end
         else
             code = uncompressed_ir(m.def::Method)

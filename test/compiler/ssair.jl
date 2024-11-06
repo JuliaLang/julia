@@ -172,7 +172,7 @@ let code = Any[
     ]
     ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
-    @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
+    @test_throws ["IR verification failed.", "Code location: "] Core.Compiler.verify_ir(ir, false)
 end
 
 # Issue #29107

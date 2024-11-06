@@ -276,6 +276,25 @@ void jl_safepoint_wait_thread_resume(void)
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
 }
+// This takes the sleep lock and puts the thread in GC_SAFE
+int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
+{
+    int8_t gc_state = jl_gc_safe_enter(ptls);
+    uv_mutex_lock(&ptls->sleep_lock);
+    if (jl_atomic_load_relaxed(&ptls->suspend_count)) {
+        // This dance with the locks is because we are not allowed to hold both these locks at the same time
+        // This avoids a situation where  jl_safepoint_suspend_thread loads our GC state and sees GC_UNSAFE
+        // But we are in the process of becoming GC_SAFE, and also trigger the old safepoint, this causes us
+        // to go sleep in scheduler and the suspender thread to go to sleep in safepoint_cond_begin meaning we hang
+        // To avoid this we do the broadcast below to force it to observe the new gc_state
+        uv_mutex_unlock(&ptls->sleep_lock);
+        uv_mutex_lock(&safepoint_lock);
+        uv_cond_broadcast(&safepoint_cond_begin);
+        uv_mutex_unlock(&safepoint_lock);
+        uv_mutex_lock(&ptls->sleep_lock);
+    }
+    return gc_state;
+}
 
 // n.b. suspended threads may still run in the GC or GC safe regions
 // but shouldn't be observable, depending on which enum the user picks (only 1 and 2 are typically recommended here)
