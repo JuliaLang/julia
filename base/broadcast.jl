@@ -250,9 +250,10 @@ BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
 argtype(::Type{BC}) where {BC<:Broadcasted} = fieldtype(BC, :args)
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
-@inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
-_eachindex(t::Tuple{Any}) = t[1]
-_eachindex(t::Tuple) = CartesianIndices(t)
+@inline Base.eachindex(bc::Broadcasted) = _eachindex(IndexStyle(bc), axes(bc))
+_eachindex(::IndexCartesian, t::Tuple) = CartesianIndices(t)
+_eachindex(::IndexLinear, t::Tuple) = LinearIndices(t)
+_eachindex(::IndexLinear, t::Tuple{Any}) = t[1]
 
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
 Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
