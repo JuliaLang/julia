@@ -2180,6 +2180,208 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
+# Rename SSA values in stmt to equivalent SSA values using ssa_to_ssa map.
+function perform_symbolic_evaluation!(key, stmt::Expr, ssa_to_ssa, _...)
+    # taken from renumber_ir_elements!
+    if stmt.head !== :enter && !is_meta_expr_head(stmt.head)
+        resize!(key, length(stmt.args)+1)
+        key[1] = stmt.head
+        for (i, arg) in enumerate(stmt.args)
+            key[i+1] = isa(arg, SSAValue) ? ssa_to_ssa[arg.id] : arg
+        end
+        return svec(key...)
+    else
+        return nothing
+    end
+end
+function perform_symbolic_evaluation!(key, stmt::PhiNode, ssa_to_ssa, blockidx, lazydomtree, ir)
+    isempty(stmt.values) && return nothing
+
+    for i in eachindex(stmt.values)
+        !isassigned(stmt.values, i) && return nothing
+    end
+
+    no_of_edges = length(stmt.edges)
+
+    resize!(key, 1)
+    key[1] = blockidx
+
+    firstval = nothing
+    allthesame = true # If all values into the phi node are the same SSAValue
+    has_backedge = false
+
+    ordered_indices = collect(1:no_of_edges)
+    sort!(ordered_indices; by=i->stmt.edges[i])
+
+    for ordered_i in ordered_indices
+        edge = stmt.edges[ordered_i]
+        val = stmt.values[ordered_i]
+
+        # Optimistically assume edges are unreachable and remove them
+        if val isa SSAValue && ssa_to_ssa[val.id] == SSAValue(0)
+            continue
+        end
+
+        has_backedge |= blockidx <= edge
+        push!(key, edge)
+
+        if val isa SSAValue
+            equivalent_ssa = ssa_to_ssa[val.id]
+            push!(key, equivalent_ssa)
+            if firstval === nothing
+                firstval = equivalent_ssa
+            end
+            allthesame &= equivalent_ssa === firstval
+        else
+            push!(key, val)
+            allthesame = false
+        end
+    end
+    if allthesame
+        if firstval === nothing
+            return svec()
+        end
+        # If we allow firstval to not be a SSAValue, we can return it now if it isn't a SSAValue
+
+        # Copy of https://github.com/llvm/llvm-project/blob/3a2f7d8a9f84db380af5122418098cb28a57443f/llvm/lib/Transforms/Scalar/NewGVN.cpp#L1796-L1804
+        has_undef = length(ir.cfg.blocks[blockidx].preds) != no_of_edges # undef in llvm sense
+
+        # TODO: Calculate cycle_freeness.
+        cycle_free = !has_backedge # Assume a backedge means there is a cycle. This is a conservative assumption.
+
+        if !(has_undef && has_backedge && !cycle_free) && dominates(get!(lazydomtree), block_for_inst(ir, firstval.id), blockidx)
+            return firstval
+        end
+    end
+    # returns (sorted edges, ssa_to_ssa[ssa values of sorted edges], block index)
+    # faster to splat a single vector into a svec than multiple,
+    # which is why the code above is so complex
+    return svec(key...)
+end
+
+struct CongruenceClassElement
+    ssa::Int
+    blockidx::Int
+end
+
+"""
+    gvn!(ir::IRCode) -> newir::IRCode
+
+Global Value Numbering (GVN) pass.
+
+This is based on the NewGVN pass in LLVM.
+
+GVN partitions all the statements in the IR into congruence classes. All elements in a congruence class are guaranteed to be the same.
+
+It implements the RPO value numbering algorithm based on the paper "SCC based value numbering" by L. Taylor Simpson.
+The elimination step is based on the implementation in LLVM's NewGVN pass.
+"""
+function gvn!(ir::IRCode)
+    ssa_to_ssa = Memory{SSAValue}(undef, length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    for i in eachindex(ssa_to_ssa)
+        ssa_to_ssa[i] = SSAValue(0)
+    end
+
+    # Value type of val_to_ssa is a SSAValue in order to reuse cache
+    # from it being boxed in a svec in `perform_symbolic_evaluation`
+    val_to_ssa = IdDict{SimpleVector, SSAValue}() # Map from value of an expression to ssa with equivalent value
+    sizehint!(val_to_ssa, length(ir.stmts))
+
+    lazydomtree = LazyDomtree(ir)
+    key = Vector{Any}(undef, 10)
+
+    changed = true
+    while changed
+        changed = false
+
+        # Reverse Post Order traversal of dominator tree as this is an IR invariant
+        for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
+            inst = ir[SSAValue(i)]
+            stmt = inst[:stmt]
+
+            if !(stmt isa Expr) & !(stmt isa PhiNode)
+                ssa_to_ssa[i] = SSAValue(i)
+                continue
+            end
+
+            # nothrow is necessary to be able to eliminate instructions without affecting semantics
+            total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+            if !(inst[:flag] & total_flags == total_flags)
+                ssa_to_ssa[i] = SSAValue(i)
+                continue
+            end
+
+            value = perform_symbolic_evaluation!(key, stmt, ssa_to_ssa, blockidx, lazydomtree, ir)
+
+            if value === nothing
+                ssa_to_ssa[i] = SSAValue(i)
+                continue
+            end
+
+            equivalent_ssa = if value isa SSAValue
+                value
+            else
+                get!(val_to_ssa, value, SSAValue(i))
+            end
+
+            if ssa_to_ssa[i] != equivalent_ssa
+                ssa_to_ssa[i] = equivalent_ssa
+                changed = true
+            end
+        end
+
+        empty!(val_to_ssa)
+        sizehint!(val_to_ssa, length(ir.stmts))
+    end
+
+    # Find Congruence Classes
+    congruence_classes = nothing # could steal memory backing val_to_ssa instead of delaying allocation
+    for (blockidx, block) in enumerate(ir.cfg.blocks), i in block.stmts
+        if ssa_to_ssa[i] != SSAValue(0) && ssa_to_ssa[i] != SSAValue(i)
+            if congruence_classes === nothing
+                congruence_classes = IdDict{SSAValue, Vector{CongruenceClassElement}}()
+            end
+            if !haskey(congruence_classes, ssa_to_ssa[i])
+                congruence_classes[ssa_to_ssa[i]] = [CongruenceClassElement(ssa_to_ssa[i].id, block_for_inst(ir, ssa_to_ssa[i].id))]
+            end
+            push!(congruence_classes[ssa_to_ssa[i]], CongruenceClassElement(i, blockidx))
+        end
+    end
+
+    if congruence_classes === nothing
+        return ir
+    end
+
+    for (ssa_leader, class) in congruence_classes, element in class
+        @assert ssa_leader.id < 10000000000
+        @assert element.ssa < 10000000000
+        @assert element.blockidx < 10000000000
+    end
+
+    domtree = get!(lazydomtree)
+    dfscached_domtree = construct_dfscached_domtree(domtree)
+
+    # Eliminate Common Subexpressions
+    # https://github.com/llvm/llvm-project/blob/232f0c9a9aa14802139126e97fcd0b5874b2f150/llvm/lib/Transforms/Scalar/NewGVN.cpp#L3979-L4040
+    elimination_stack = CongruenceClassElement[]
+    for class in values(congruence_classes)
+        sort!(class; by=x->(dfscached_domtree.dfsnumbers[x.blockidx].in, dfscached_domtree.dfsnumbers[x.blockidx].out, x.ssa))
+        resize!(elimination_stack, 0)
+        for (; ssa, blockidx) in class
+            while !isempty(elimination_stack) && !dominates(dfscached_domtree, last(elimination_stack).blockidx, blockidx)
+                pop!(elimination_stack)
+            end
+            if isempty(elimination_stack)
+                push!(elimination_stack, CongruenceClassElement(ssa, blockidx))
+            elseif last(elimination_stack).ssa < ssa
+                ir.stmts.stmt[ssa] = SSAValue(last(elimination_stack).ssa)
+            end
+        end
+    end
+
+    return ir
+end
+
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
     isempty(bb.stmts) && return true
     if length(bb.stmts) == 1
