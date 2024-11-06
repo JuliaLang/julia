@@ -606,10 +606,21 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
+Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
     I = to_index(Base.IteratorsMD.flatten(Is))
+    _getindex(IndexStyle(bc), bc, I)
+end
+@inline function _getindex(::IndexStyle, bc, I)
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
+end
+Base.@propagate_inbounds function _getindex(s::IndexCartesian, bc, I::Integer)
+    C = CartesianIndices(axes(bc))
+    _getindex(s, bc, C[I])
+end
+Base.@propagate_inbounds function _getindex(s::IndexLinear, bc, I::CartesianIndex)
+    L = LinearIndices(axes(bc))
+    _getindex(s, bc, L[I])
 end
 to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]

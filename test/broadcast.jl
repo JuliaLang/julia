@@ -890,6 +890,12 @@ let
     bc = Broadcast.instantiate(Broadcast.broadcasted(+, MyFill(2, (3,3))))
     @test IndexStyle(bc) == IndexLinear()
     @test eachindex(bc) === Base.OneTo(9)
+    @test bc[2] == bc[CartesianIndex(2,1)]
+
+    bc = Broadcast.broadcasted(+, collect(reshape(1:9, 3, 3)), 1:3)
+    for (Ilin, Icart) in zip(eachindex(IndexLinear(), bc), eachindex(IndexCartesian(), bc))
+        @test bc[Ilin] == bc[Icart]
+    end
 end
 
 # issue 43847: collect preserves shape of broadcasted
