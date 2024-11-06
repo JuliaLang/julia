@@ -757,7 +757,7 @@ function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where 
             _increment_n_avail(c, -n_to_take)
             foreach(_ -> notify(c.cond_put, nothing, true, false), 1:n_to_take)
         end
-        
+
         # if we broke early, we need to remove the extra slots from the result
         if elements_taken < n
             deleteat!(buffer, firstindex(buffer)+elements_taken:lastindex(buffer))
