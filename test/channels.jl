@@ -708,6 +708,12 @@ end
         buff = Vector{Int}(undef, 7)
         @test take!(c, 5, buff) == [1, 2, 3]
     end
+    let 
+        c = Channel() do c
+            append!(c, 1:3)
+        end
+        @test take!(c, typemax(Int)) == [1, 2, 3]
+    end
 end
 
 @testset "Task properties" begin
