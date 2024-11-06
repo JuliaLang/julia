@@ -18,7 +18,12 @@ using Test
     @test -1//0 == -1//0
     @test -7//0 == -1//0
     @test  (-1//2) // (-2//5) == 5//4
-
+    @testset "Complex//Number Overflow" begin
+        for y ∈ (1 // 0, -1 // 0)
+            @test (7 // complex(y)) == (7 // y)
+        end
+        @test Int8(8) // Int8(100)im == 0//1 - 2//25*im
+    end
     @test_throws OverflowError -(0x01//0x0f)
     @test_throws OverflowError -(typemin(Int)//1)
     @test_throws OverflowError (typemax(Int)//3) + 1

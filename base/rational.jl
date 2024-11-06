@@ -98,9 +98,26 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
-
-
+function //(x::Number, y::Complex)
+    if((x//abs2(y))==0//1 || (x//abs2(y))==1//0)
+        return (x//abs2(y))
+    end
+    return (x//abs2(y))*conj(y)
+end
+function //(x::Number, y::Complex{<:Integer})
+    if isinf(real(y)) || isinf(imag(y))
+        return 0//1
+    end
+    real_y = real(y)
+    imag_y = imag(y)
+    denom = Int32(abs(real_y))^2 + Int32(abs(imag_y))^2
+    if denom == 0//1
+        return 1//0
+    end
+    real_part = x * real_y // denom
+    imag_part = -x * imag_y // denom
+    return real_part + imag_part * im
+end
 //(X::AbstractArray, y::Number) = X .// y
 
 function show(io::IO, x::Rational)
