@@ -224,7 +224,7 @@ isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 Empty a Channel `c` by calling `empty!` on the internal buffer.
 Return the empty channel.
 """
-function empty!(c::Channel)
+function Base.empty!(c::Channel)
     @lock c begin
         ndrop = length(c.data)
         empty!(c.data)
