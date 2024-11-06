@@ -253,7 +253,7 @@ argtype(bc::Broadcasted) = argtype(typeof(bc))
 @inline Base.eachindex(bc::Broadcasted) = eachindex(IndexStyle(bc), bc)
 @inline Base.eachindex(s::IndexStyle, bc::Broadcasted) = _eachindex(s, axes(bc))
 _eachindex(::IndexCartesian, t::Tuple) = CartesianIndices(t)
-_eachindex(::IndexLinear, t::Tuple) = LinearIndices(t)
+_eachindex(s::IndexLinear, t::Tuple) = eachindex(s, LinearIndices(t))
 _eachindex(::IndexLinear, t::Tuple{Any}) = t[1]
 
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
@@ -615,8 +615,11 @@ to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+
+@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
+    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
 
 
 """
