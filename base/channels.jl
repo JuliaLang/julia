@@ -468,10 +468,11 @@ function append!(c1::Channel, c2::Channel{T}) where {T}
     return c1
 end
 
-function append_unbuffered(c1::Channel, iter)
+function append_unbuffered(c::Channel, iter)
     for v in iter
-        put!(c1, v)
+        put!(c, v)
     end
+    return c
 end
 
 function append_buffered(c::Channel{T}, iter::I) where {T,I}
@@ -562,7 +563,7 @@ function fetch_buffered(c::Channel)
         unlock(c)
     end
 end
-fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
+fetch_unbuffered(::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
 
 """
@@ -640,7 +641,10 @@ julia> c = Channel(3);
 julia> append!(c, 1:3);
 
 julia> take!(c, 3, zeros(Int, 3))
-[1,2,3]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
 ```
 
 !!! compat "Julia 1.12"
@@ -649,7 +653,7 @@ julia> take!(c, 3, zeros(Int, 3))
 function take!(c::Channel{T}, n::Integer) where {T}
     return _take(c, n, Vector{T}(undef, n))
 end
-function take!(c::Channel{T}, n::Integer, buffer::AbstractVector{T2}) where {T2,T<:T2}
+function take!(c::Channel, n::Integer, buffer::AbstractVector)
     # buffer is user defined, so make sure it has the correct size
     if length(buffer) != n
         resize!(buffer, n)
@@ -667,18 +671,17 @@ function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
             x = take!(c)
             @inbounds buffer[begin] = x
         catch e
-            # when provided a batch size, take should not error on a closed column
+            # when provided a batch size, take should not error on a closed channel
             # so we need to return an empty buffer if we fail to get one element.
             if e isa InvalidStateException && e.state === :closed
                 empty!(buffer)
-                return buffer
             else
                 rethrow()
             end
         end
         return buffer
     end
-    buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, buffer)
+    return buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, buffer)
 end
 
 function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
@@ -704,6 +707,8 @@ function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where 
             n_to_take = min(n - elements_taken, length(c.data))
             idx_start = idx1 + elements_taken
             idx_end = idx_start + n_to_take - 1
+            # since idx_start/end are both created relative to `firstindex(buffer)`, they are safe to use
+            # them as indicies for the buffer
             for (res_i, data_i) in Iterators.zip(idx_start:idx_end, eachindex(c.data))
                 @inbounds buffer[res_i] = c.data[data_i]
             end
@@ -712,15 +717,15 @@ function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where 
             _increment_n_avail(c, -n_to_take)
             foreach(_ -> notify(c.cond_put, nothing, true, false), 1:n_to_take)
         end
+        
+        # if we broke early, we need to remove the extra slots from the result
+        if elements_taken < n
+            deleteat!(buffer, firstindex(buffer)+elements_taken:lastindex(buffer))
+        end
+        return buffer
     finally
         unlock(c)
     end
-
-    # if we broke early, we need to remove the extra slots from the result
-    if elements_taken < n
-        deleteat!(buffer, elements_taken+1:n)
-    end
-    return buffer
 end
 
 function take_unbuffered(c::Channel, buffer::AbstractVector)
@@ -731,6 +736,7 @@ function take_unbuffered(c::Channel, buffer::AbstractVector)
             try
                 @inbounds buffer[i] = take_unbuffered(c)
             catch e
+                # when the channel is closed, we return only the elements we were able to take
                 if isa(e, InvalidStateException) && e.state === :closed
                     deleteat!(buffer, i:lastindex(buffer))
                     break
@@ -739,10 +745,10 @@ function take_unbuffered(c::Channel, buffer::AbstractVector)
                 end
             end
         end
+        return buffer
     finally
         unlock(c)
     end
-    buffer
 end
 
 """

@@ -687,7 +687,10 @@ end
     # take n items from a buffered channel
     let c = Channel{Int}(3)
         append!(c, 1:3)
-        @test take!(c, 3) == [1, 2, 3]
+        @test take!(c, 0) == []
+        @test take!(c, 1) == [1]
+        @test Base.n_avail(c) == 2
+        @test take!(c, 2) == [2, 3]
         @test Base.n_avail(c) == 0
 
         @async begin
