@@ -143,13 +143,6 @@ macro task(ex)
     :(Task($thunk))
 end
 
-"""
-    current_task()
-
-Get the currently running [`Task`](@ref).
-"""
-current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
-
 # task states
 
 const task_state_runnable = UInt8(0)

@@ -646,14 +646,9 @@ void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, 
         return;
     assert(!buff->isArrayAllocation());
     Type *T = buff->getAllocatedType();
-    Value *Init = UndefValue::get(T);
-    if ((allockind & AllocFnKind::Zeroed) != AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // zero, as described
-    else if (allockind == AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // assume zeroed since we didn't find the attribute
-    else
-        Init = prolog_builder.CreateFreeze(UndefValue::get(T)); // assume freeze, since LLVM does not natively support this case
-    prolog_builder.CreateStore(Init, buff);
+    const DataLayout &DL = F.getParent()->getDataLayout();
+    prolog_builder.CreateMemSet(buff, ConstantInt::get(Type::getInt8Ty(prolog_builder.getContext()), 0), DL.getTypeAllocSize(T), buff->getAlign());
+
 }
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache

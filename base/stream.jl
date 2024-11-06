@@ -941,6 +941,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
+        initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
         newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
@@ -951,7 +952,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -1026,7 +1028,7 @@ function readavailable(this::LibuvStream)
     return bytes
 end
 
-function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
+function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     iolock_begin()
     buf = x.buffer
     @assert buf.seekable == false
@@ -1056,9 +1058,9 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
             end
         end
     end
-    bytes = readuntil(buf, c, keep=keep)
+    copyuntil(out, buf, c; keep)
     iolock_end()
-    return bytes
+    return out
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))

@@ -88,8 +88,8 @@ module MiniCassette
         src = retrieve_code_info(mi, world)
         @assert isa(src, CodeInfo)
         src = copy(src)
-        @assert src.edges === nothing
-        src.edges = MethodInstance[mi]
+        @assert src.edges === Core.svec()
+        src.edges = Any[mi]
         transform!(mi, src, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
         # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])

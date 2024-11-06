@@ -2464,8 +2464,10 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
         return y;
     if (y == (jl_value_t*)jl_any_type && !jl_is_typevar(x))
         return x;
-    // band-aid for #46736
-    if (obviously_egal(x, y))
+    // band-aid for #46736 #56040
+    if (obviously_in_union(x, y))
+        return y;
+    if (obviously_in_union(y, x))
         return x;
 
     jl_varbinding_t *vars = NULL;
@@ -2495,6 +2497,9 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
+    // band-aid for #56040
+    if (!jl_is_uniontype(x) && obviously_in_union((jl_value_t *)u, x))
+        return x;
     int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
     if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;

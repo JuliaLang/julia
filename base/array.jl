@@ -355,6 +355,17 @@ copy
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
+# a mutating version of copyto! that results in dst aliasing src afterwards
+function _take!(dst::Array{T,N}, src::Array{T,N}) where {T,N}
+    if getfield(dst, :ref) !== getfield(src, :ref)
+        setfield!(dst, :ref, getfield(src, :ref))
+    end
+    if getfield(dst, :size) !== getfield(src, :size)
+        setfield!(dst, :size, getfield(src, :size))
+    end
+    return dst
+end
+
 ## Constructors ##
 
 similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
@@ -999,11 +1010,11 @@ function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i1, i2, I...)
 end
-function _setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+function _setindex!(A::Array{T}, x::T, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x, :not_atomic, false)
     return A
 end
 
@@ -3130,10 +3141,6 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
     @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = memoryref(mem)
-    end
     return ref
 end
 

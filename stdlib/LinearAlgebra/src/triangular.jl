@@ -142,6 +142,7 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -159,7 +160,7 @@ function imag(A::UnitLowerTriangular)
     L = LowerTriangular(A.data)
     Lim = similar(L) # must be mutable to set diagonals to zero
     Lim .= imag.(L)
-    for i in 1:size(Lim,1)
+    for i in axes(Lim,1)
         Lim[i,i] = zero(Lim[i,i])
     end
     return Lim
@@ -168,7 +169,7 @@ function imag(A::UnitUpperTriangular)
     U = UpperTriangular(A.data)
     Uim = similar(U) # must be mutable to set diagonals to zero
     Uim .= imag.(U)
-    for i in 1:size(Uim,1)
+    for i in axes(Uim,1)
         Uim[i,i] = zero(Uim[i,i])
     end
     return Uim
@@ -181,6 +182,16 @@ copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(si
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
+function full(A::Union{UpperTriangular,LowerTriangular})
+    return _triangularize(A)(parent(A))
+end
+function full(A::UnitUpperOrUnitLowerTriangular)
+    isupper = A isa UnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
+    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    return Ap
+end
+
 function full!(A::LowerTriangular)
     B = A.data
     tril!(B)
@@ -189,7 +200,7 @@ end
 function full!(A::UnitLowerTriangular)
     B = A.data
     tril!(B)
-    for i = 1:size(A,1)
+    for i in axes(A,1)
         B[i,i] = oneunit(eltype(B))
     end
     B
@@ -202,7 +213,7 @@ end
 function full!(A::UnitUpperTriangular)
     B = A.data
     triu!(B)
-    for i = 1:size(A,1)
+    for i in axes(A,1)
         B[i,i] = oneunit(eltype(B))
     end
     B
@@ -222,7 +233,7 @@ Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
     _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
-    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : diagzero(A,i,j)
 
 _shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
 _shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
@@ -234,7 +245,7 @@ Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitL
     _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
-    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
+    _shouldforwardindex(A, b) ? A.data[b] : diagzero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
@@ -339,9 +350,8 @@ Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
 end
 @inline function _istril(A::LowerTriangular, k)
     P = parent(A)
-    m = size(A, 1)
-    for j in max(1, k + 2):m
-        all(iszero, view(P, j:min(j - k - 1, m), j)) || return false
+    for j in max(firstindex(P,2), k + 2):lastindex(P,2)
+        all(iszero, @view(P[j:min(j - k - 1, end), j])) || return false
     end
     return true
 end
@@ -352,8 +362,8 @@ end
 @inline function _istriu(A::UpperTriangular, k)
     P = parent(A)
     m = size(A, 1)
-    for j in 1:min(m, m + k - 1)
-        all(iszero, view(P, max(1, j - k + 1):j, j)) || return false
+    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
+        all(iszero, @view(P[max(begin, j - k + 1):j, j])) || return false
     end
     return true
 end
@@ -363,12 +373,11 @@ istriu(A::Adjoint, k::Integer=0) = istril(A.parent, -k)
 istriu(A::Transpose, k::Integer=0) = istril(A.parent, -k)
 
 function tril!(A::UpperTriangular{T}, k::Integer=0) where {T}
-    n = size(A,1)
     if k < 0
         fill!(A.data, zero(T))
         return A
     elseif k == 0
-        for j in 1:n, i in 1:j-1
+        for j in axes(A.data,2), i in intersect(axes(A.data,1), 1:j-1)
             A.data[i,j] = zero(T)
         end
         return A
@@ -377,9 +386,8 @@ function tril!(A::UpperTriangular{T}, k::Integer=0) where {T}
     end
 end
 function triu!(A::UpperTriangular, k::Integer=0)
-    n = size(A,1)
     if k > 0
-        for j in 1:n, i in max(1,j-k+1):j
+        for j in axes(A.data,2), i in intersect(axes(A.data,1), range(stop=j, length=k))
             A.data[i,j] = zero(eltype(A))
         end
     end
@@ -387,7 +395,6 @@ function triu!(A::UpperTriangular, k::Integer=0)
 end
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
-    n = size(A,1)
     if k < 0
         fill!(A.data, zero(T))
         return UpperTriangular(A.data)
@@ -406,19 +413,18 @@ function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
 end
 
 function triu!(A::UnitUpperTriangular, k::Integer=0)
-    for i in diagind(A)
+    for i in diagind(A.data)
         A.data[i] = oneunit(eltype(A))
     end
     return triu!(UpperTriangular(A.data), k)
 end
 
 function triu!(A::LowerTriangular{T}, k::Integer=0) where {T}
-    n = size(A,1)
     if k > 0
         fill!(A.data, zero(T))
         return A
     elseif k == 0
-        for j in 1:n, i in j+1:n
+        for j in axes(A.data,2), i in j+1:lastindex(A.data,1)
             A.data[i,j] = zero(T)
         end
         return A
@@ -428,9 +434,8 @@ function triu!(A::LowerTriangular{T}, k::Integer=0) where {T}
 end
 
 function tril!(A::LowerTriangular, k::Integer=0)
-    n = size(A,1)
     if k < 0
-        for j in 1:n, i in j:min(j-k-1,n)
+        for j in axes(A.data,2), i in intersect(range(j, length=-k), axes(A.data,1))
             A.data[i, j] = zero(eltype(A))
         end
     end
@@ -438,7 +443,6 @@ function tril!(A::LowerTriangular, k::Integer=0)
 end
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
-    n = size(A,1)
     if k > 0
         fill!(A.data, zero(T))
         return LowerTriangular(A.data)
@@ -457,7 +461,7 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
 end
 
 function tril!(A::UnitLowerTriangular, k::Integer=0)
-    for i in diagind(A)
+    for i in diagind(A.data)
         A.data[i] = oneunit(eltype(A))
     end
     return tril!(LowerTriangular(A.data), k)
@@ -491,7 +495,7 @@ function -(A::UnitLowerTriangular)
     Adata = A.data
     Anew = similar(Adata) # must be mutable, even if Adata is not
     @. Anew = -Adata
-    for i = 1:size(A, 1)
+    for i in axes(A, 1)
         Anew[i, i] = -A[i, i]
     end
     LowerTriangular(Anew)
@@ -500,7 +504,7 @@ function -(A::UnitUpperTriangular)
     Adata = A.data
     Anew = similar(Adata) # must be mutable, even if Adata is not
     @. Anew = -Adata
-    for i = 1:size(A, 1)
+    for i in axes(A, 1)
         Anew[i, i] = -A[i, i]
     end
     UpperTriangular(Anew)
@@ -544,33 +548,37 @@ for (T, UT) in ((:UpperTriangular, :UnitUpperTriangular), (:LowerTriangular, :Un
 end
 @inline function _copyto!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
-    n = size(B,1)
     B2 = Base.unalias(A, B)
-    for j = 1:n
-        for i = 1:j-1
-            @inbounds parent(A)[i,j] = parent(B2)[i,j]
+    Ap = parent(A)
+    B2p = parent(B2)
+    for j in axes(B2,2)
+        for i in firstindex(Ap,1):j-1
+            @inbounds Ap[i,j] = B2p[i,j]
         end
         if A isa UpperTriangular # copy diagonal
-            @inbounds parent(A)[j,j] = B2[j,j]
+            @inbounds Ap[j,j] = B2[j,j]
         end
     end
     return A
 end
 @inline function _copyto!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
-    n = size(B,1)
     B2 = Base.unalias(A, B)
-    for j = 1:n
+    Ap = parent(A)
+    B2p = parent(B2)
+    for j in axes(B2,2)
         if A isa LowerTriangular # copy diagonal
-            @inbounds parent(A)[j,j] = B2[j,j]
+            @inbounds Ap[j,j] = B2[j,j]
         end
-        for i = j+1:n
-            @inbounds parent(A)[i,j] = parent(B2)[i,j]
+        for i in j+1:lastindex(Ap,1)
+            @inbounds Ap[i,j] = B2p[i,j]
         end
     end
     return A
 end
 
+_triangularize(::UpperOrUnitUpperTriangular) = triu
+_triangularize(::LowerOrUnitLowerTriangular) = tril
 _triangularize!(::UpperOrUnitUpperTriangular) = triu!
 _triangularize!(::LowerOrUnitLowerTriangular) = tril!
 
@@ -598,10 +606,10 @@ end
     @boundscheck checkbounds(dest, axes(U)...)
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)
-        for row in 1:col-isunit
+        for row in firstindex(dest,1):col-isunit
             @inbounds dest[row,col] = U.data[row,col]
         end
-        for row in col+!isunit:size(U,1)
+        for row in col+!isunit:lastindex(dest,1)
             @inbounds dest[row,col] = U[row,col]
         end
     end
@@ -611,10 +619,10 @@ end
     @boundscheck checkbounds(dest, axes(L)...)
     isunit = L isa UnitLowerTriangular
     for col in axes(dest,2)
-        for row in 1:col-!isunit
+        for row in firstindex(dest,1):col-!isunit
             @inbounds dest[row,col] = L[row,col]
         end
-        for row in col+isunit:size(L,1)
+        for row in col+isunit:lastindex(dest,1)
             @inbounds dest[row,col] = L.data[row,col]
         end
     end
@@ -633,84 +641,84 @@ function checksize1(A, B)
 end
 
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
-        for i = 1:j
+    for j in axes(B.data,2)
+        for i in firstindex(B.data,1):j
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
-        for i = 1:j
+    for j in axes(B.data,2)
+        for i in firstindex(B.data,1):j
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
+    for j in axes(B.data,2)
         @inbounds _modify!(_add, c, A, (j,j))
-        for i = 1:(j - 1)
+        for i in firstindex(B.data,1):(j - 1)
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
+    for j in axes(B.data,2)
         @inbounds _modify!(_add, c, A, (j,j))
-        for i = 1:(j - 1)
+        for i in firstindex(B.data,1):(j - 1)
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
-        for i = j:n
+    for j in axes(B.data,2)
+        for i in j:lastindex(B.data,1)
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
-        for i = j:n
+    for j in axes(B.data,2)
+        for i in j:lastindex(B.data,1)
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
+    for j in axes(B.data,2)
         @inbounds _modify!(_add, c, A, (j,j))
-        for i = (j + 1):n
+        for i in (j + 1):lastindex(B.data,1)
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
-    n = checksize1(A, B)
+    checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
-    for j = 1:n
+    for j in axes(B.data,2)
         @inbounds _modify!(_add, c, A, (j,j))
-        for i = (j + 1):n
+        for i in (j + 1):lastindex(B.data,1)
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
@@ -718,36 +726,36 @@ function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriang
 end
 
 function _trirdiv!(A::UpperTriangular, B::UpperOrUnitUpperTriangular, c::Number)
-    n = checksize1(A, B)
-    for j in 1:n
-        for i in 1:j
+    checksize1(A, B)
+    for j in axes(B,2)
+        for i in firstindex(B,1):j
             @inbounds A[i, j] = B[i, j] / c
         end
     end
     return A
 end
 function _trirdiv!(A::LowerTriangular, B::LowerOrUnitLowerTriangular, c::Number)
-    n = checksize1(A, B)
-    for j in 1:n
-        for i in j:n
+    checksize1(A, B)
+    for j in axes(B,2)
+        for i in j:lastindex(B,1)
             @inbounds A[i, j] = B[i, j] / c
         end
     end
     return A
 end
 function _trildiv!(A::UpperTriangular, c::Number, B::UpperOrUnitUpperTriangular)
-    n = checksize1(A, B)
-    for j in 1:n
-        for i in 1:j
+    checksize1(A, B)
+    for j in axes(B,2)
+        for i in firstindex(B,1):j
             @inbounds A[i, j] = c \ B[i, j]
         end
     end
     return A
 end
 function _trildiv!(A::LowerTriangular, c::Number, B::LowerOrUnitLowerTriangular)
-    n = checksize1(A, B)
-    for j in 1:n
-        for i in j:n
+    checksize1(A, B)
+    for j in axes(B,2)
+        for i in j:lastindex(B,1)
             @inbounds A[i, j] = c \ B[i, j]
         end
     end
@@ -766,7 +774,7 @@ function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     end
     x₁ = x[1]
     r = dot(x₁, A[1,1], y[1])
-    @inbounds for j in 2:m
+    @inbounds for j in axes(A, 2)[2:end]
         yj = y[j]
         if !iszero(yj)
             temp = adjoint(A[1,j]) * x₁
@@ -787,7 +795,7 @@ function dot(x::AbstractVector, A::UnitUpperTriangular, y::AbstractVector)
     end
     x₁ = first(x)
     r = dot(x₁, y[1])
-    @inbounds for j in 2:m
+    @inbounds for j in axes(A, 2)[2:end]
         yj = y[j]
         if !iszero(yj)
             temp = adjoint(A[1,j]) * x₁
@@ -808,11 +816,11 @@ function dot(x::AbstractVector, A::LowerTriangular, y::AbstractVector)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
     r = zero(typeof(dot(first(x), first(A), first(y))))
-    @inbounds for j in 1:m
+    @inbounds for j in axes(A, 2)
         yj = y[j]
         if !iszero(yj)
             temp = adjoint(A[j,j]) * x[j]
-            @simd for i in j+1:m
+            @simd for i in j+1:lastindex(A,1)
                 temp += adjoint(A[i,j]) * x[i]
             end
             r += dot(temp, yj)
@@ -828,11 +836,11 @@ function dot(x::AbstractVector, A::UnitLowerTriangular, y::AbstractVector)
         return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     end
     r = zero(typeof(dot(first(x), first(y))))
-    @inbounds for j in 1:m
+    @inbounds for j in axes(A, 2)
         yj = y[j]
         if !iszero(yj)
             temp = x[j]
-            @simd for i in j+1:m
+            @simd for i in j+1:lastindex(A,1)
                 temp += adjoint(A[i,j]) * x[i]
             end
             r += dot(temp, yj)
@@ -880,7 +888,8 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
++(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
 function -(A::UpperTriangular, B::UpperTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
@@ -914,7 +923,8 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
     LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 end
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
+-(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) - copyto!(similar(parent(B), size(B)), B)
 
 function kron(A::UpperTriangular{T,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{S,<:StridedMaybeAdjOrTransMat}) where {T,S}
     C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
@@ -937,25 +947,24 @@ function kron!(C::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}, A::LowerTr
 end
 
 function _triukron!(C, A, B)
-    n_A = size(A, 1)
     n_B = size(B, 1)
-    @inbounds for j = 1:n_A
+    @inbounds for j in axes(A,2)
         jnB = (j - 1) * n_B
-        for i = 1:(j-1)
+        for i in firstindex(A,1):(j-1)
             Aij = A[i, j]
             inB = (i - 1) * n_B
-            for l = 1:n_B
-                for k = 1:l
+            for l in axes(B,2)
+                for k in firstindex(B,1):l
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
-                for k = 1:(l-1)
+                for k in firstindex(B,1):(l-1)
                     C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
         Ajj = A[j, j]
-        for l = 1:n_B
-            for k = 1:l
+        for l in axes(B,2)
+            for k in firstindex(B,1):l
                 C[jnB+k, jnB+l] = Ajj * B[k, l]
             end
         end
@@ -965,22 +974,22 @@ end
 function _trilkron!(C, A, B)
     n_A = size(A, 1)
     n_B = size(B, 1)
-    @inbounds for j = 1:n_A
+    @inbounds for j in axes(A,2)
         jnB = (j - 1) * n_B
         Ajj = A[j, j]
-        for l = 1:n_B
-            for k = l:n_B
+        for l in axes(B,2)
+            for k in l:lastindex(B,1)
                 C[jnB+k, jnB+l] = Ajj * B[k, l]
             end
         end
-        for i = (j+1):n_A
+        for i in (j+1):n_A
             Aij = A[i, j]
             inB = (i - 1) * n_B
-            for l = 1:n_B
-                for k = l:n_B
+            for l in axes(B,2)
+                for k in l:lastindex(B,1)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
-                for k = (l+1):n_B
+                for k in (l+1):lastindex(B,1)
                     C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
@@ -1033,25 +1042,26 @@ _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
 
 function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
     if istriu(A)
-        _trimul!(B, UpperTriangular(A), B)
+        _trimul!(B, uppertriangular(A), B)
     else
-        _trimul!(B, LowerTriangular(A), B)
+        _trimul!(B, lowertriangular(A), B)
     end
 end
 function rmul!(A::AbstractMatrix, B::AbstractTriangular)
     if istriu(B)
-        _trimul!(A, A, UpperTriangular(B))
+        _trimul!(A, A, uppertriangular(B))
     else
-        _trimul!(A, A, LowerTriangular(B))
+        _trimul!(A, A, lowertriangular(B))
     end
 end
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
+        check_A_mul_B!_sizes(size(C), size(A), size(B))
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return @stable_muladdmul generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
+            return _generic_matvecmul!(C, 'N', A, B, alpha, beta)
         end
     end
 end
@@ -1060,6 +1070,7 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
                     (:AbstractTriangular, :AbstractTriangular)
                 )
     @eval @inline function _mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
+        check_A_mul_B!_sizes(size(C), size(A), size(B))
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
@@ -1082,16 +1093,16 @@ _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
 
 function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
     if istriu(A)
-        _ldiv!(B, UpperTriangular(A), B)
+        _ldiv!(B, uppertriangular(A), B)
     else
-        _ldiv!(B, LowerTriangular(A), B)
+        _ldiv!(B, lowertriangular(A), B)
     end
 end
 function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
     if istriu(B)
-        _rdiv!(A, A, UpperTriangular(B))
+        _rdiv!(A, A, uppertriangular(B))
     else
-        _rdiv!(A, A, LowerTriangular(B))
+        _rdiv!(A, A, lowertriangular(B))
     end
 end
 
@@ -1183,7 +1194,7 @@ function eigvecs(A::UpperTriangular{<:BlasFloat,<:StridedMatrix})
     LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
 end
 function eigvecs(A::UnitUpperTriangular{<:BlasFloat,<:StridedMatrix})
-    for i = 1:size(A, 1)
+    for i in axes(A, 1)
         A.data[i,i] = 1
     end
     LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
@@ -1192,7 +1203,7 @@ function eigvecs(A::LowerTriangular{<:BlasFloat,<:StridedMatrix})
     LAPACK.trevc!('L', 'A', BlasInt[], copy(tril!(A.data)'))
 end
 function eigvecs(A::UnitLowerTriangular{<:BlasFloat,<:StridedMatrix})
-    for i = 1:size(A, 1)
+    for i in axes(A, 1)
         A.data[i,i] = 1
     end
     LAPACK.trevc!('L', 'A', BlasInt[], copy(tril!(A.data)'))
@@ -1215,7 +1226,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 
         function (*)(A::$unitt, x::Number)
             B = $t(A.data)*x
-            for i = 1:size(A, 1)
+            for i in axes(A, 1)
                 B.data[i,i] = x
             end
             return B
@@ -1230,7 +1241,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 
         function (*)(x::Number, A::$unitt)
             B = x*$t(A.data)
-            for i = 1:size(A, 1)
+            for i in axes(A, 1)
                 B.data[i,i] = x
             end
             return B
@@ -1246,7 +1257,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         function (/)(A::$unitt, x::Number)
             B = $t(A.data)/x
             invx = inv(x)
-            for i = 1:size(A, 1)
+            for i in axes(A, 1)
                 B.data[i,i] = invx
             end
             return B
@@ -1262,7 +1273,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         function (\)(x::Number, A::$unitt)
             B = x\$t(A.data)
             invx = inv(x)
-            for i = 1:size(A, 1)
+            for i in axes(A, 1)
                 B.data[i,i] = invx
             end
             return B
@@ -1273,33 +1284,25 @@ end
 ## Generic triangular multiplication
 function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
-    m, n = size(B, 1), size(B, 2)
-    N = size(A, 1)
-    if m != N
-        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != N || nc != n
-        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($N,$n)"))
-    end
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     oA = oneunit(eltype(A))
     unit = isunitc == 'U'
     @inbounds if uploc == 'U'
         if tfun === identity
-            for j in 1:n
-                for i in 1:m
+            for j in axes(B,2)
+                for i in axes(B,1)
                     Cij = (unit ? oA : A[i,i]) * B[i,j]
-                    for k in i + 1:m
+                    for k in i + 1:lastindex(B,1)
                         Cij += A[i,k] * B[k,j]
                     end
                     C[i,j] = Cij
                 end
             end
         else # tfun in (transpose, adjoint)
-            for j in 1:n
-                for i in m:-1:1
+            for j in axes(B,2)
+                for i in reverse(axes(B,1))
                     Cij = (unit ? oA : tfun(A[i,i])) * B[i,j]
-                    for k in 1:i - 1
+                    for k in firstindex(B,1):i - 1
                         Cij += tfun(A[k,i]) * B[k,j]
                     end
                     C[i,j] = Cij
@@ -1308,20 +1311,20 @@ function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
         end
     else # uploc == 'L'
         if tfun === identity
-            for j in 1:n
-                for i in m:-1:1
+            for j in axes(B,2)
+                for i in reverse(axes(B,1))
                     Cij = (unit ? oA : A[i,i]) * B[i,j]
-                    for k in 1:i - 1
+                    for k in firstindex(B,1):i - 1
                         Cij += A[i,k] * B[k,j]
                     end
                     C[i,j] = Cij
                 end
             end
         else # tfun in (transpose, adjoint)
-            for j in 1:n
-                for i in 1:m
+            for j in axes(B,2)
+                for i in axes(B,1)
                     Cij = (unit ? oA : tfun(A[i,i])) * B[i,j]
-                    for k in i + 1:m
+                    for k in i + 1:lastindex(B,1)
                         Cij += tfun(A[k,i]) * B[k,j]
                     end
                     C[i,j] = Cij
@@ -1333,34 +1336,26 @@ function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
 end
 # conjugate cases
 function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA::AdjOrTrans, B::AbstractVecOrMat)
+    require_one_based_indexing(C, xA, B)
+    check_A_mul_B!_sizes(size(C), size(xA), size(B))
     A = parent(xA)
-    require_one_based_indexing(C, A, B)
-    m, n = size(B, 1), size(B, 2)
-    N = size(A, 1)
-    if m != N
-        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != N || nc != n
-        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($N,$n)"))
-    end
     oA = oneunit(eltype(A))
     unit = isunitc == 'U'
     @inbounds if uploc == 'U'
-        for j in 1:n
-            for i in 1:m
+        for j in axes(B,2)
+            for i in axes(B,1)
                 Cij = (unit ? oA : conj(A[i,i])) * B[i,j]
-                for k in i + 1:m
+                for k in i + 1:lastindex(B,1)
                     Cij += conj(A[i,k]) * B[k,j]
                 end
                 C[i,j] = Cij
             end
         end
     else # uploc == 'L'
-        for j in 1:n
-            for i in m:-1:1
+        for j in axes(B,2)
+            for i in reverse(axes(B,1))
                 Cij = (unit ? oA : conj(A[i,i])) * B[i,j]
-                for k in 1:i - 1
+                for k in firstindex(B,1):i - 1
                     Cij += conj(A[i,k]) * B[k,j]
                 end
                 C[i,j] = Cij
@@ -1372,33 +1367,25 @@ end
 
 function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(C, A, B)
-    m, n = size(A, 1), size(A, 2)
-    N = size(B, 1)
-    if n != N
-        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $N"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != m || nc != N
-        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($m,$N)"))
-    end
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
     @inbounds if uploc == 'U'
         if tfun === identity
-            for i in 1:m
-                for j in n:-1:1
+            for i in axes(A,1)
+                for j in reverse(axes(A,2))
                     Cij = A[i,j] * (unit ? oB : B[j,j])
-                    for k in 1:j - 1
+                    for k in firstindex(A,2):j - 1
                         Cij += A[i,k] * B[k,j]
                     end
                     C[i,j] = Cij
                 end
             end
         else # tfun in (transpose, adjoint)
-            for i in 1:m
-                for j in 1:n
+            for i in axes(A,1)
+                for j in axes(A,2)
                     Cij = A[i,j] * (unit ? oB : tfun(B[j,j]))
-                    for k in j + 1:n
+                    for k in j + 1:lastindex(A,2)
                         Cij += A[i,k] * tfun(B[j,k])
                     end
                     C[i,j] = Cij
@@ -1407,20 +1394,20 @@ function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
         end
     else # uploc == 'L'
         if tfun === identity
-            for i in 1:m
-                for j in 1:n
+            for i in axes(A,1)
+                for j in axes(A,2)
                     Cij = A[i,j] * (unit ? oB : B[j,j])
-                    for k in j + 1:n
+                    for k in j + 1:lastindex(A,2)
                         Cij += A[i,k] * B[k,j]
                     end
                     C[i,j] = Cij
                 end
             end
         else # tfun in (transpose, adjoint)
-            for i in 1:m
-                for j in n:-1:1
+            for i in axes(A,1)
+                for j in reverse(axes(A,2))
                     Cij = A[i,j] * (unit ? oB : tfun(B[j,j]))
-                    for k in 1:j - 1
+                    for k in firstindex(A,2):j - 1
                         Cij += A[i,k] * tfun(B[j,k])
                     end
                     C[i,j] = Cij
@@ -1432,34 +1419,26 @@ function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
 end
 # conjugate cases
 function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, ::Function, A::AbstractMatrix, xB::AdjOrTrans)
+    require_one_based_indexing(C, A, xB)
+    check_A_mul_B!_sizes(size(C), size(A), size(xB))
     B = parent(xB)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A, 1), size(A, 2)
-    N = size(B, 1)
-    if n != N
-        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $N"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != m || nc != N
-        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($m,$N)"))
-    end
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
     @inbounds if uploc == 'U'
-        for i in 1:m
-            for j in n:-1:1
+        for i in axes(A,1)
+            for j in reverse(axes(A,2))
                 Cij = A[i,j] * (unit ? oB : conj(B[j,j]))
-                for k in 1:j - 1
+                for k in firstindex(A,2):j - 1
                     Cij += A[i,k] * conj(B[k,j])
                 end
                 C[i,j] = Cij
             end
         end
     else # uploc == 'L'
-        for i in 1:m
-            for j in 1:n
+        for i in axes(A,1)
+            for j in axes(A,2)
                 Cij = A[i,j] * (unit ? oB : conj(B[j,j]))
-                for k in j + 1:n
+                for k in j + 1:lastindex(A,2)
                     Cij += A[i,k] * conj(B[k,j])
                 end
                 C[i,j] = Cij
@@ -1483,7 +1462,7 @@ end
 function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     mA, nA = size(A)
-    m, n = size(B, 1), size(B,2)
+    m = size(B, 1)
     if nA != m
         throw(DimensionMismatch(lazy"second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
     end
@@ -1495,30 +1474,30 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
     @inbounds if uploc == 'U'
         if isunitc == 'N'
             if tfun === identity
-                for k in 1:n
+                for k in axes(B,2)
                     amm = A[m,m]
                     iszero(amm) && throw(SingularException(m))
                     Cm = C[m,k] = amm \ B[m,k]
                     # fill C-column
-                    for i in m-1:-1:1
+                    for i in reverse(axes(B,1))[2:end]
                         C[i,k] = oA \ B[i,k] - _ustrip(A[i,m]) * Cm
                     end
-                    for j in m-1:-1:1
+                    for j in reverse(axes(B,1))[2:end]
                         ajj = A[j,j]
                         iszero(ajj) && throw(SingularException(j))
                         Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
-                        for i in j-1:-1:1
+                        for i in j-1:-1:firstindex(B,1)
                             C[i,k] -= _ustrip(A[i,j]) * Cj
                         end
                     end
                 end
             else # tfun in (adjoint, transpose)
-                for k in 1:n
-                    for j in 1:m
+                for k in axes(B,2)
+                    for j in axes(B,1)
                         ajj = A[j,j]
                         iszero(ajj) && throw(SingularException(j))
                         Bj = B[j,k]
-                        for i in 1:j-1
+                        for i in firstindex(A,1):j-1
                             Bj -= tfun(A[i,j]) * C[i,k]
                         end
                         C[j,k] = tfun(ajj) \ Bj
@@ -1527,24 +1506,24 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
             end
         else # isunitc == 'U'
             if tfun === identity
-                for k in 1:n
+                for k in axes(B,2)
                     Cm = C[m,k] = oA \ B[m,k]
                     # fill C-column
-                    for i in m-1:-1:1
+                    for i in reverse(axes(B,1))[2:end]
                         C[i,k] = oA \ B[i,k] - _ustrip(A[i,m]) * Cm
                     end
-                    for j in m-1:-1:1
+                    for j in reverse(axes(B,1))[2:end]
                         Cj = C[j,k]
-                        for i in 1:j-1
+                        for i in firstindex(A,1):j-1
                             C[i,k] -= _ustrip(A[i,j]) * Cj
                         end
                     end
                 end
             else # tfun in (adjoint, transpose)
-                for k in 1:n
-                    for j in 1:m
+                for k in axes(B,2)
+                    for j in axes(B,1)
                         Bj = B[j,k]
-                        for i in 1:j-1
+                        for i in firstindex(A,1):j-1
                             Bj -= tfun(A[i,j]) * C[i,k]
                         end
                         C[j,k] = oA \ Bj
@@ -1555,30 +1534,30 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
     else # uploc == 'L'
         if isunitc == 'N'
             if tfun === identity
-                for k in 1:n
+                for k in axes(B,2)
                     a11 = A[1,1]
                     iszero(a11) && throw(SingularException(1))
                     C1 = C[1,k] = a11 \ B[1,k]
                     # fill C-column
-                    for i in 2:m
+                    for i in axes(B,1)[2:end]
                         C[i,k] = oA \ B[i,k] - _ustrip(A[i,1]) * C1
                     end
-                    for j in 2:m
+                    for j in axes(B,1)[2:end]
                         ajj = A[j,j]
                         iszero(ajj) && throw(SingularException(j))
                         Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
-                        for i in j+1:m
+                        for i in j+1:lastindex(A,1)
                             C[i,k] -= _ustrip(A[i,j]) * Cj
                         end
                     end
                 end
             else # tfun in (adjoint, transpose)
-                for k in 1:n
-                    for j in m:-1:1
+                for k in axes(B,2)
+                    for j in reverse(axes(B,1))
                         ajj = A[j,j]
                         iszero(ajj) && throw(SingularException(j))
                         Bj = B[j,k]
-                        for i in j+1:m
+                        for i in j+1:lastindex(A,1)
                             Bj -= tfun(A[i,j]) * C[i,k]
                         end
                         C[j,k] = tfun(ajj) \ Bj
@@ -1587,24 +1566,24 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
             end
         else # isunitc == 'U'
             if tfun === identity
-                for k in 1:n
+                for k in axes(B,2)
                     C1 = C[1,k] = oA \ B[1,k]
                     # fill C-column
-                    for i in 2:m
+                    for i in axes(B,1)[2:end]
                         C[i,k] = oA \ B[i,k] - _ustrip(A[i,1]) * C1
                     end
-                    for j in 2:m
+                    for j in axes(B,1)[2:end]
                         Cj = C[j,k]
-                        for i in j+1:m
+                        for i in j+1:lastindex(A,1)
                             C[i,k] -= _ustrip(A[i,j]) * Cj
                         end
                     end
                 end
             else # tfun in (adjoint, transpose)
-                for k in 1:n
-                    for j in m:-1:1
+                for k in axes(B,2)
+                    for j in reverse(axes(B,1))
                         Bj = B[j,k]
-                        for i in j+1:m
+                        for i in j+1:lastindex(A,1)
                             Bj -= tfun(A[i,j]) * C[i,k]
                         end
                         C[j,k] = oA \ Bj
@@ -1620,7 +1599,7 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
     A = parent(xA)
     require_one_based_indexing(C, A, B)
     mA, nA = size(A)
-    m, n = size(B, 1), size(B,2)
+    m = size(B, 1)
     if nA != m
         throw(DimensionMismatch(lazy"second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
     end
@@ -1631,33 +1610,33 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
     oA = oneunit(eltype(A))
     @inbounds if uploc == 'U'
         if isunitc == 'N'
-            for k in 1:n
+            for k in axes(B,2)
                 amm = conj(A[m,m])
                 iszero(amm) && throw(SingularException(m))
                 Cm = C[m,k] = amm \ B[m,k]
                 # fill C-column
-                for i in m-1:-1:1
+                for i in reverse(axes(B,1))[2:end]
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,m])) * Cm
                 end
-                for j in m-1:-1:1
+                for j in reverse(axes(B,1))[2:end]
                     ajj = conj(A[j,j])
                     iszero(ajj) && throw(SingularException(j))
                     Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
-                    for i in j-1:-1:1
+                    for i in j-1:-1:firstindex(A,1)
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj
                     end
                 end
             end
         else # isunitc == 'U'
-            for k in 1:n
+            for k in axes(B,2)
                 Cm = C[m,k] = oA \ B[m,k]
                 # fill C-column
-                for i in m-1:-1:1
+                for i in reverse(axes(B,1))[2:end]
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,m])) * Cm
                 end
-                for j in m-1:-1:1
+                for j in reverse(axes(B,1))[2:end]
                     Cj = C[j,k]
-                    for i in 1:j-1
+                    for i in firstindex(A,1):j-1
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj
                     end
                 end
@@ -1665,33 +1644,33 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
         end
     else # uploc == 'L'
         if isunitc == 'N'
-            for k in 1:n
+            for k in axes(B,2)
                 a11 = conj(A[1,1])
                 iszero(a11) && throw(SingularException(1))
                 C1 = C[1,k] = a11 \ B[1,k]
                 # fill C-column
-                for i in 2:m
+                for i in axes(B,1)[2:end]
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
                 end
-                for j in 2:m
+                for j in axes(A,2)[2:end]
                     ajj = conj(A[j,j])
                     iszero(ajj) && throw(SingularException(j))
                     Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
-                    for i in j+1:m
+                    for i in j+1:lastindex(A,1)
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj
                     end
                 end
             end
         else # isunitc == 'U'
-            for k in 1:n
+            for k in axes(B,2)
                 C1 = C[1,k] = oA \ B[1,k]
                 # fill C-column
-                for i in 2:m
+                for i in axes(B,1)[2:end]
                     C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
                 end
-                for j in 1:m
+                for j in axes(A,2)
                     Cj = C[j,k]
-                    for i in j+1:m
+                    for i in j+1:lastindex(A,1)
                         C[i,k] -= _ustrip(conj(A[i,j])) * Cj
                     end
                 end
@@ -1703,7 +1682,7 @@ end
 
 function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    n = size(A,2)
     if size(B, 1) != n
         throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
@@ -1714,10 +1693,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
     unit = isunitc == 'U'
     @inbounds if uploc == 'U'
         if tfun === identity
-            for i in 1:m
-                for j in 1:n
+            for i in axes(A,1)
+                for j in axes(A,2)
                     Aij = A[i,j]
-                    for k in 1:j - 1
+                    for k in firstindex(B,1):j - 1
                         Aij -= C[i,k]*B[k,j]
                     end
                     unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1725,10 +1704,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
                 end
             end
         else # tfun in (adjoint, transpose)
-            for i in 1:m
-                for j in n:-1:1
+            for i in axes(A,1)
+                for j in reverse(axes(A,2))
                     Aij = A[i,j]
-                    for k in j + 1:n
+                    for k in j + 1:lastindex(B,2)
                         Aij -= C[i,k]*tfun(B[j,k])
                     end
                     unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1738,10 +1717,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
         end
     else # uploc == 'L'
         if tfun === identity
-            for i in 1:m
-                for j in n:-1:1
+            for i in axes(A,1)
+                for j in reverse(axes(A,2))
                     Aij = A[i,j]
-                    for k in j + 1:n
+                    for k in j + 1:lastindex(B,1)
                         Aij -= C[i,k]*B[k,j]
                     end
                     unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1749,10 +1728,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
                 end
             end
         else # tfun in (adjoint, transpose)
-            for i in 1:m
-                for j in 1:n
+            for i in axes(A,1)
+                for j in axes(A,2)
                     Aij = A[i,j]
-                    for k in 1:j - 1
+                    for k in firstindex(B,2):j - 1
                         Aij -= C[i,k]*tfun(B[j,k])
                     end
                     unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1766,7 +1745,7 @@ end
 function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, ::Function, A::AbstractMatrix, xB::AdjOrTrans)
     B = parent(xB)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    n = size(A,2)
     if size(B, 1) != n
         throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
@@ -1776,10 +1755,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, ::Function, A::Ab
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
     if uploc == 'U'
-        @inbounds for i in 1:m
-            for j in 1:n
+        @inbounds for i in axes(A,1)
+            for j in axes(A,2)
                 Aij = A[i,j]
-                for k in 1:j - 1
+                for k in firstindex(B,1):j - 1
                     Aij -= C[i,k]*conj(B[k,j])
                 end
                 unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1787,10 +1766,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, ::Function, A::Ab
             end
         end
     else # uploc == 'L'
-        @inbounds for i in 1:m
-            for j in n:-1:1
+        @inbounds for i in axes(A,1)
+            for j in reverse(axes(A,2))
                 Aij = A[i,j]
-                for k in j + 1:n
+                for k in j + 1:lastindex(B,1)
                     Aij -= C[i,k]*conj(B[k,j])
                 end
                 unit || (iszero(B[j,j]) && throw(SingularException(j)))
@@ -1900,14 +1879,14 @@ function powm!(A0::UpperTriangular, p::Real)
     rmul!(A0, 1/normA0)
 
     theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
-    n = checksquare(A0)
+    checksquare(A0)
 
     A, m, s = invsquaring(A0, theta)
     A = I - A
 
     # Compute accurate diagonal of I - T
     sqrt_diag!(A0, A, s)
-    for i = 1:n
+    for i in axes(A,1)
         A[i, i] = -A[i, i]
     end
     # Compute the Padé approximant
@@ -1915,10 +1894,10 @@ function powm!(A0::UpperTriangular, p::Real)
     triu!(A)
     S = c * A
     Stmp = similar(S)
-    for j = m-1:-1:1
+    for j in m-1:-1:1
         j4 = 4 * j
         c = (-p - j) / (j4 + 2)
-        for i = 1:n
+        for i in axes(S,1)
             @inbounds S[i, i] = S[i, i] + 1
         end
         copyto!(Stmp, S)
@@ -1926,20 +1905,20 @@ function powm!(A0::UpperTriangular, p::Real)
         ldiv!(Stmp, S)
 
         c = (p - j) / (j4 - 2)
-        for i = 1:n
+        for i in axes(S,1)
             @inbounds S[i, i] = S[i, i] + 1
         end
         copyto!(Stmp, S)
         mul!(S, A, c)
         ldiv!(Stmp, S)
     end
-    for i = 1:n
+    for i in axes(S,1)
         S[i, i] = S[i, i] + 1
     end
     copyto!(Stmp, S)
     mul!(S, A, -p)
     ldiv!(Stmp, S)
-    for i = 1:n
+    for i in axes(S,1)
         @inbounds S[i, i] = S[i, i] + 1
     end
 
@@ -1971,7 +1950,7 @@ log(A::UnitLowerTriangular) = copy(transpose(log(copy(transpose(A)))))
 
 function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     # allocate real A if log(A) will be real and complex A otherwise
-    n = checksquare(A0)
+    checksquare(A0)
     if isreal(A0) && (!istriu(A0) || !any(x -> real(x) < zero(real(T)), diag(A0)))
         A = T <: Complex ? real(A0) : copy(A0)
     else
@@ -1979,7 +1958,7 @@ function log_quasitriu(A0::AbstractMatrix{T}) where T<:BlasFloat
     end
     if A0 isa UnitUpperTriangular
         A = UpperTriangular(parent(A))
-        @inbounds for i in 1:n
+        @inbounds for i in axes(A,1)
             A[i,i] = 1
         end
     end
@@ -2008,13 +1987,13 @@ function _log_quasitriu!(A0, A)
 
     # Get the Gauss-Legendre quadrature points and weights
     R = zeros(Float64, m, m)
-    for i = 1:m - 1
+    for i in 1:m - 1
         R[i,i+1] = i / sqrt((2 * i)^2 - 1)
         R[i+1,i] = R[i,i+1]
     end
     x,V = eigen(R)
     w = Vector{Float64}(undef, m)
-    for i = 1:m
+    for i in 1:m
         x[i] = (x[i] + 1) / 2
         w[i] = V[1,i]^2
     end
@@ -2024,9 +2003,9 @@ function _log_quasitriu!(A0, A)
     n = size(A, 1)
     Y = zeros(t, n, n)
     B = similar(A)
-    for k = 1:m
+    for k in 1:m
         B .= t(x[k]) .* A
-        @inbounds for i in 1:n
+        @inbounds for i in axes(B,1)
             B[i,i] += 1
         end
         Y .+= t(w[k]) .* rdiv_quasitriu!(A, B)
@@ -2057,7 +2036,6 @@ function _find_params_log_quasitriu!(A)
          2.060962623452836e-001,
          2.879093714241194e-001]
     tmax = size(theta, 1)
-    n = size(A, 1)
     p = 0
     m = 0
 
@@ -2074,7 +2052,7 @@ function _find_params_log_quasitriu!(A)
     s0 = s
 
     # Compute repeated roots
-    for k = 1:min(s, maxsqrt)
+    for k in 1:min(s, maxsqrt)
         _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
     end
 
@@ -2135,7 +2113,7 @@ function _find_params_log_quasitriu!(A)
         end
         _sqrt_quasitriu!(A isa UpperTriangular ? parent(A) : A, A)
         copyto!(AmI, A)
-        for i in 1:n
+        for i in axes(AmI,1)
             @inbounds AmI[i,i] -= 1
         end
         mul!(AmI2, AmI, AmI)
@@ -2148,9 +2126,8 @@ end
 
 # Compute accurate diagonal of A = A0^s - I
 function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
-    n = checksquare(A0)
-    T = eltype(A)
-    @inbounds for i = 1:n
+    checksquare(A0)
+    @inbounds for i in axes(A0,1)
         a = complex(A0[i,i])
         A[i,i] = _sqrt_pow(a, s)
     end
@@ -2191,7 +2168,7 @@ function _sqrt_pow(a::Number, s)
     z0 = a - 1
     a = sqrt(a)
     r = 1 + a
-    for j = 1:s0-1
+    for j in 1:s0-1
         a = sqrt(a)
         r = r * (1 + a)
     end
@@ -2203,6 +2180,11 @@ end
 # SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
 # Algorithm 5.1
 Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    if iszero(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+        return A
+    end
     _sqrt_real_2x2!(A, A0)
     if isone(s)
         A[1,1] -= 1
@@ -2355,7 +2337,7 @@ function invsquaring(A0::UpperTriangular, theta)
     # assumes theta is in ascending order
     maxsqrt = 100
     tmax = size(theta, 1)
-    n = checksquare(A0)
+    checksquare(A0)
     A = complex(copy(A0))
     p = 0
     m = 0
@@ -2370,7 +2352,7 @@ function invsquaring(A0::UpperTriangular, theta)
         s = s + 1
     end
     s0 = s
-    for k = 1:min(s, maxsqrt)
+    for k in 1:min(s, maxsqrt)
         A = sqrt(A)
     end
 
@@ -2444,8 +2426,8 @@ end
 
 # Compute accurate diagonal and superdiagonal of A = A0^p
 function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
-    n = checksquare(A0)
-    @inbounds for k = 1:n-1
+    checksquare(A0)
+    @inbounds for k in axes(A0,1)[1:end-1]
         Ak = complex(A0[k,k])
         Akp1 = complex(A0[k+1,k+1])
 
@@ -2480,10 +2462,10 @@ unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
 
 # compute A / B for upper quasi-triangular B, possibly overwriting B
 function rdiv_quasitriu!(A, B)
-    n = checksquare(A)
+    checksquare(A)
     AG = copy(A)
     # use Givens rotations to annihilate 2x2 blocks
-    @inbounds for k in 1:(n-1)
+    @inbounds for k in axes(B,2)[1:end-1]
         s = B[k+1,k]
         iszero(s) && continue  # 1x1 block
         G = first(givens(B[k+1,k+1], s, k, k+1))
@@ -2498,15 +2480,14 @@ end
 sqrt(A::UpperTriangular) = sqrt_quasitriu(A)
 function sqrt(A::UnitUpperTriangular{T}) where T
     B = A.data
-    n = checksquare(B)
     t = typeof(sqrt(zero(T)))
-    R = Matrix{t}(I, n, n)
+    R = Matrix{t}(I, size(A))
     tt = typeof(oneunit(t)*oneunit(t))
     half = inv(R[1,1]+R[1,1]) # for general, algebraic cases. PR#20214
-    @inbounds for j = 1:n
-        for i = j-1:-1:1
+    @inbounds for j in axes(B,2)
+        for i in j-1:-1:firstindex(B)
             r::tt = B[i,j]
-            @simd for k = i+1:j-1
+            @simd for k in i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
             iszero(r) || (R[i,j] = half*r)
@@ -2528,7 +2509,7 @@ function sqrt_quasitriu(A0; blockwidth = eltype(A0) <: Complex ? 512 : 256)
     if isreal(A0)
         is_sqrt_real = true
         if istriu(A0)
-            for i in 1:n
+            for i in axes(A0,1)
                 Aii = real(A0[i,i])
                 if Aii < zero(Aii)
                     is_sqrt_real = false
@@ -2537,15 +2518,15 @@ function sqrt_quasitriu(A0; blockwidth = eltype(A0) <: Complex ? 512 : 256)
             end
         end
         if is_sqrt_real
-            R = zeros(Tr, n, n)
+            R = zeros(Tr, size(A0))
             A = real(A0)
         else
-            R = zeros(Tc, n, n)
+            R = zeros(Tc, size(A0))
             A = A0
         end
     else
         A = A0
-        R = zeros(Tc, n, n)
+        R = zeros(Tc, size(A0))
     end
     _sqrt_quasitriu!(R, A; blockwidth=blockwidth, n=n)
     Rc = eltype(A0) <: Real ? R : complex(R)
@@ -2845,7 +2826,7 @@ det(A::LowerTriangular) = prod(diag(A.data))
 function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
     sgn = one(T)
     abs_det = zero(real(T))
-    @inbounds for i in 1:size(A,1)
+    @inbounds for i in axes(A.data,1)
         diag_i = A.data[i,i]
         sgn *= sign(diag_i)
         abs_det += log(abs(diag_i))
@@ -2935,8 +2916,8 @@ end
     M_L₁ = zeros(T,4,4)
     M_Bᵢⱼ⁽⁰⁾ = zeros(T,2,2)
     M_Bᵢⱼ⁽¹⁾ = zeros(T,2,2)
-    for k = 1:n-1
-        for i = 1:n-k
+    for k in axes(A,2)[1:end-1]
+        for i in axes(A,2)[1:end-k]
             if sizes[i] == 0 || sizes[i+k] == 0 continue end
             k₁, k₂ = i+1+(sizes[i+1]==0), i+k-1
             i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
@@ -2962,7 +2943,11 @@ end
         end
     end
     # Make quasi triangular
-    for j=1:n for i=j+1+(sizes[j]==2):n A[i,j] = 0 end end
+    for j in axes(A,2)
+        for i=j+1+(sizes[j]==2):lastindex(A,1)
+            A[i,j] = 0
+        end
+    end
     return A
 end
 
