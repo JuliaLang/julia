@@ -420,19 +420,40 @@ end
 Append all items in `iter` to the channel `c`. If the channel is buffered, this operation requires
 fewer `lock` operations than individual `put!`s. Blocks if the channel is full.
 
-!!! compat "Julia 1.12"
-"""
-function append!(c::Channel{T}, vec::AbstractArray) where {T}
-    # shortcircuit for small vecs
-    if length(vec) == 0
-        return c
-    elseif length(vec) == 1
-        put!(c, @inbounds vec[begin])
-        return c
-    end
-    isbuffered(c) ? append_buffered(c, vec) : append_unbuffered(c, vec)
-end
+# Examples
 
+```jldoctest
+julia> c = Channel(3);
+
+julia> append!(c, 1:3);
+
+julia> take!(c)
+1
+
+julia> take!(c)
+2
+
+julia> take!(c)
+3
+```
+
+!!! compat "Julia 1.12"
+    Requires at least Julia 1.12.
+"""
+function append!(c::Channel, iter::T) where {T}
+    if hasmethod(length, Tuple{T})
+        len = length(iter)
+        # shortcircuit for small short objects
+        if len == 0
+            return c
+        elseif len == 1
+            put!(c, @inbounds vec[begin])
+            return c
+        end
+    end
+    
+    return isbuffered(c) ? append_buffered(c, iter) : append_unbuffered(c, iter)
+end
 function append!(c1::Channel, c2::Channel{T}) where {T}
     buff_len = max(c1.sz_max, c2.sz_max)
     if buff_len == 0
@@ -453,40 +474,49 @@ function append_unbuffered(c1::Channel, iter)
     end
 end
 
-function append_buffered(c::Channel{T}, vec::AbstractArray) where {T}
-    current_idx = firstindex(vec)
-    final_idx = lastindex(vec)
-    final_idx_plus_one = final_idx + 1
+function append_buffered(c::Channel{T}, iter::I) where {T,I}
+    converted_items = Iterators.Stateful(Iterators.map(x -> convert(T, x), iter))
 
-    elements_to_add = length(vec)
-    # Increment channel n_avail eagerly (before push!) to count data in the
-    # buffer as well as offers from tasks which are blocked in wait().
-    _increment_n_avail(c, elements_to_add)
-    while current_idx <= final_idx
+    has_length = hasmethod(length, Tuple{I})
+    elements_to_add = if has_length
+        # when we know the length, we can eagerly increment for all items
+        l = length(iter)
+        _increment_n_avail(c, l)
+        l
+    else 
+        0
+    end
+
+    while !isempty(converted_items)
         lock(c)
         try
             while length(c.data) == c.sz_max
                 check_channel_state(c)
                 wait(c.cond_put)
             end
+
             # Grab a chunk of items that will fit in the channel's buffer
             available_space = c.sz_max - length(c.data)
-            next_idx = min(final_idx_plus_one, current_idx + available_space)
-            chunk = Iterators.map(x -> convert(T, x), view(vec, current_idx:(next_idx-1)))
+            chunk = Iterators.take(converted_items, available_space)
+            
+            # for iterators without length, we increment the available items for this chunk only
+            if !has_length
+                elements_to_add = available_space
+                _increment_n_avail(c, available_space)
+            end
 
             check_channel_state(c)
             append!(c.data, chunk)
-            # We successfully added chunk, so decrement our elements to add in case of
-            # errors
-            elements_to_add -= next_idx - current_idx
+
+            # We successfully added chunk, so we can remove the elements from the count
+            elements_to_add -= available_space
+
             # notify all, since some of the waiters may be on a "fetch" call.
             notify(c.cond_take, nothing, true, false)
-            next_idx > final_idx && break
-            current_idx = next_idx
         catch
             # Decrement the available items if this task had an exception before pushing the
             # item to the buffer (e.g., during `wait(c.cond_put)`):
-            _increment_n_avail(c, -elements_to_add)
+            elements_to_add > 0 && _increment_n_avail(c, -elements_to_add)
             rethrow()
         finally
             unlock(c)
@@ -494,7 +524,6 @@ function append_buffered(c::Channel{T}, vec::AbstractArray) where {T}
     end
     return c
 end
-
 
 """
     fetch(c::Channel)
@@ -596,17 +625,31 @@ function take_unbuffered(c::Channel{T}) where T
 end
 
 """
-    take!(c::Channel, n::Integer[, buffer])
+    take!(c::Channel, n::Integer[, buffer::AbstractVector])
 
 Take at most `n` items from the [`Channel`](@ref) `c` and return them in a `Vector`.
 If `buffer` is provided, it will be used to store the result. If the channel closes before
 `n` items are taken, the result will contain only the items that were available. For
 buffered channels, this operation requires fewer `lock` operations than individual `take!(c)`s.
+
+# Examples
+
+```jldoctest
+julia> c = Channel(3);
+
+julia> append!(c, 1:3);
+
+julia> take!(c, 3, zeros(Int, 3))
+[1,2,3]
+```
+
+!!! compat "Julia 1.12"
+    Requires at least Julia 1.12.
 """
 function take!(c::Channel{T}, n::Integer) where {T}
     return _take(c, n, Vector{T}(undef, n))
 end
-function take!(c::Channel, n::Integer, buffer)
+function take!(c::Channel{T}, n::Integer, buffer::AbstractVector{T2}) where {T2,T<:T2}
     # buffer is user defined, so make sure it has the correct size
     if length(buffer) != n
         resize!(buffer, n)
@@ -614,7 +657,7 @@ function take!(c::Channel, n::Integer, buffer)
     return _take(c, n, buffer)
 end
 
-function _take(c::Channel{T}, n::Integer, buffer) where {T}
+function _take(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
     buffered = isbuffered(c)
     # short-circuit for small n
     if n == 0
@@ -635,12 +678,12 @@ function _take(c::Channel{T}, n::Integer, buffer) where {T}
         end
         return buffer
     end
-    buffered ? take_buffered(c, buffer, n) : take_unbuffered(c, buffer)
+    buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, buffer)
 end
 
-function take_buffered(c::Channel{T}, res::AbstractArray{T2}, n::Integer) where {T2,T<:T2}
+function take_buffered(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
     elements_taken = 0 # number of elements taken so far
-    idx1 = firstindex(res)
+    idx1 = firstindex(buffer)
     target_buffer_len = min(n, c.sz_max)
     lock(c)
     try
@@ -662,7 +705,7 @@ function take_buffered(c::Channel{T}, res::AbstractArray{T2}, n::Integer) where 
             idx_start = idx1 + elements_taken
             idx_end = idx_start + n_to_take - 1
             for (res_i, data_i) in Iterators.zip(idx_start:idx_end, eachindex(c.data))
-                @inbounds res[res_i] = c.data[data_i]
+                @inbounds buffer[res_i] = c.data[data_i]
             end
             deleteat!(c.data, 1:n_to_take)
             elements_taken += n_to_take
@@ -675,21 +718,21 @@ function take_buffered(c::Channel{T}, res::AbstractArray{T2}, n::Integer) where 
 
     # if we broke early, we need to remove the extra slots from the result
     if elements_taken < n
-        deleteat!(res, elements_taken+1:n)
+        deleteat!(buffer, elements_taken+1:n)
     end
-    return res
+    return buffer
 end
 
-function take_unbuffered(c::Channel{T}, res::AbstractArray) where {T}
-    i = firstindex(res)
+function take_unbuffered(c::Channel, buffer::AbstractVector)
+    i = firstindex(buffer)
     lock(c)
     try
-        for i in eachindex(res)
+        for i in eachindex(buffer)
             try
-                @inbounds res[i] = take_unbuffered(c)
+                @inbounds buffer[i] = take_unbuffered(c)
             catch e
                 if isa(e, InvalidStateException) && e.state === :closed
-                    deleteat!(res, i:lastindex(res))
+                    deleteat!(buffer, i:lastindex(buffer))
                     break
                 else
                     rethrow()
@@ -699,7 +742,7 @@ function take_unbuffered(c::Channel{T}, res::AbstractArray) where {T}
     finally
         unlock(c)
     end
-    res
+    buffer
 end
 
 """
