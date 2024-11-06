@@ -451,7 +451,7 @@ function append!(c::Channel, iter::T) where {T}
             return c
         end
     end
-    
+
     return isbuffered(c) ? append_buffered(c, iter) : append_unbuffered(c, iter)
 end
 function append!(c1::Channel, c2::Channel{T}) where {T}
@@ -483,7 +483,7 @@ function append_buffered(c::Channel{T}, iter::I) where {T,I}
         l = length(iter)
         _increment_n_avail(c, l)
         l
-    else 
+    else
         0
     end
 
@@ -498,7 +498,7 @@ function append_buffered(c::Channel{T}, iter::I) where {T,I}
             # Grab a chunk of items that will fit in the channel's buffer
             available_space = c.sz_max - length(c.data)
             chunk = Iterators.take(converted_items, available_space)
-            
+
             # for iterators without length, we increment the available items for this chunk only
             if !has_length
                 elements_to_add = available_space

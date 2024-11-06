@@ -659,7 +659,7 @@ end
     end
 
     # unbuffered channel
-    let 
+    let
         c = Channel() do c
             append!(c, 1:3)
         end
@@ -671,7 +671,7 @@ end
     end
 
     # appending channels
-    @test let 
+    @test let
         c1 = Channel(3) do c
             append!(c, 1:5)
         end
