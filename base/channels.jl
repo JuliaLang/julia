@@ -540,7 +540,6 @@ function append!(c1::Channel, c2::Channel{T}) where {T}
             finally
                 unlock(c1)
             end
-            
         end
     finally
         unlock(c2)
@@ -734,7 +733,7 @@ function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) 
     if n < typemax(n)
         sizehint!(buffer, n)
     end
-    
+
     buffered = isbuffered(c)
     # short-circuit for small n
     if n == 0

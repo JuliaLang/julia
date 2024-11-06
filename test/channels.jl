@@ -708,7 +708,7 @@ end
         buff = Vector{Int}(undef, 7)
         @test take!(c, 5, buff) == [1, 2, 3]
     end
-    let 
+    let
         c = Channel() do c
             append!(c, 1:3)
         end
