@@ -26,6 +26,7 @@ DECLARE_BUILTIN(_apply_pure);
 DECLARE_BUILTIN(_call_in_world);
 DECLARE_BUILTIN(_call_in_world_total);
 DECLARE_BUILTIN(_call_latest);
+DECLARE_BUILTIN(_cancel_finalizer);
 DECLARE_BUILTIN(_compute_sparams);
 DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(_svec_ref);

@@ -515,7 +515,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_swapglobal, &jl_f_modifyglobal, &jl_f_replaceglobal, &jl_f_setglobalonce,
-    &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
+    &jl_f_finalizer, &jl_f__cancel_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
     &jl_f_current_scope,
     NULL };
 

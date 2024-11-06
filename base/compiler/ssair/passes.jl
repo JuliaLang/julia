@@ -1594,11 +1594,11 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         inlining::InliningState, lazydomtree::LazyDomtree,
         lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
     # For now, require that:
-    # 1. The allocation dominates the finalizer registration
+    # 1. The allocation dominates the finalizer registration.
     # 2. The insertion block for the finalizer is the post-dominator of all
     #    uses (including the finalizer registration).
     # 3. The path from the finalizer registration to the finalizer inlining
-    #    location is nothrow
+    #    location is nothrow, otherwise we need to insert `Core._cancel_finalizer` too.
     #
     # TODO: We could relax the check 2, by inlining the finalizer multiple times.
 
@@ -1631,19 +1631,16 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     foreach(note_defuse!, defuse.defs)
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
+    # Figure out the exact statement where we're going to inline the finalizer.
+    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
+
+    current_task_ssa = nothing
     if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = reachable_blocks(ir.cfg, finalizer_bb, insert_bb)
 
         # Check #3
-        function check_range_nothrow(s::Int, e::Int)
-            return all(s:e) do sidx::Int
-                sidx == finalizer_idx && return true
-                sidx == alloc_idx && return true
-                return is_nothrow(ir, SSAValue(sidx))
-            end
-        end
         for bb in blocks
             range = ir.cfg.blocks[bb].stmts
             s, e = first(range), last(range)
@@ -1654,18 +1651,40 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
             if bb == finalizer_bb
                 s = finalizer_idx
             end
-            check_range_nothrow(s, e) || return nothing
+            all(s:e) do sidx::Int
+                sidx == finalizer_idx && return true
+                sidx == alloc_idx && return true
+                return is_nothrow(ir, SSAValue(sidx))
+            end && continue
+
+            # An exception may be thrown between the finalizer registration and the point
+            # where the object’s lifetime ends (`insert_idx`): In such cases, we can’t
+            # remove the finalizer registration, but we can still inline the finalizer
+            # with inserting `Core._cancel_finalizer` at the end.
+            # Here, prepare a reference to the current task object that should be passed to
+            # `Core._cancel_finalizer` and insert it into `Core.finalizer` so that the
+            # finalizer is added to the ptls of the current task.
+            current_task_stmt = Expr(:foreigncall, QuoteNode(:jl_get_current_task),
+                Core.Ref{Core.Task}, Core.svec(), 0, QuoteNode(:ccall))
+            newinst = NewInstruction(current_task_stmt, Core.Task)
+            current_task_ssa = insert_node!(ir, finalizer_idx, newinst)
+            push!(finalizer_stmt.args, current_task_ssa)
+            break
         end
     end
 
-    # Ok, legality check complete. Figure out the exact statement where we're
-    # going to inline the finalizer.
     loc = insert_idx === nothing ? first(ir.cfg.blocks[insert_bb].stmts) : insert_idx::Int
     attach_after = insert_idx !== nothing
-
-    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
-    argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
     flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    alloc_obj = finalizer_stmt.args[3]
+    cancellation_required = current_task_ssa !== nothing
+    if cancellation_required
+        lookup_idx_ssa = SSAValue(finalizer_idx)
+        finalize_call = Expr(:call, GlobalRef(Core, :_cancel_finalizer), alloc_obj, current_task_ssa, lookup_idx_ssa)
+        newinst = add_flag(NewInstruction(finalize_call, Nothing), flag)
+        insert_node!(ir, loc, newinst, attach_after)
+    end
+    argexprs = Any[finalizer_stmt.args[2], alloc_obj]
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
@@ -1683,8 +1702,10 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
         insert_node!(ir, loc, newinst, attach_after)
     end
-    # Erase the call to `finalizer`
-    ir[SSAValue(finalizer_idx)][:stmt] = nothing
+    if !cancellation_required
+        # Erase the call to `finalizer`
+        ir[SSAValue(finalizer_idx)][:stmt] = nothing
+    end
     return nothing
 end
 
@@ -1700,10 +1721,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 finalizer_useidx = useidx
             end
         end
-        if finalizer_useidx === nothing || inlining === nothing
-            return true
-        end
-        return finalizer_useidx
+        return something(finalizer_useidx, true)
     end
     for (defidx, (intermediaries, defuse)) in defuses
         # Find the type for this allocation
@@ -1728,11 +1746,11 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         all_eliminated = all_forwarded = true
         if nleaves ≠ nuses_total
             finalizer_useidx = find_finalizer_useidx(defuse)
-            if finalizer_useidx isa Int
+            if finalizer_useidx isa Int && inlining !== nothing
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
                 estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
                 einfo = estate[SSAValue(defidx)]
-                if EscapeAnalysis.has_no_escape(einfo)
+                if EscapeAnalysis.has_no_escape(EscapeAnalysis.ignore_thrownescapes(einfo))
                     already = BitSet(use.idx for use in defuse.uses)
                     for idx = einfo.Liveness
                         if idx ∉ already
@@ -1740,16 +1758,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                         end
                     end
                     finalizer_idx = defuse.uses[finalizer_useidx].idx
-                    try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining::InliningState,
+                    try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining,
                         lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
                 end
             end
             continue
         else
             finalizer_useidx = find_finalizer_useidx(defuse)
-            if finalizer_useidx isa Int
+            if finalizer_useidx isa Int && inlining !== nothing
                 finalizer_idx = defuse.uses[finalizer_useidx].idx
-                try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining::InliningState,
+                try_resolve_finalizer!(ir, defidx, finalizer_idx, defuse, inlining,
                     lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
                 deleteat!(defuse.uses, finalizer_useidx)
                 all_eliminated = all_forwarded = false # can't eliminate `setfield!` calls safely

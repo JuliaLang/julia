@@ -747,7 +747,13 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
     end
 end
 add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
-add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
+add_tfunc(Core.finalizer, 2, 5, @nospecs((𝕃::AbstractLattice, args...)->Int), 5)
+@nospecs function _cancel_finalizer_tfunc(𝕃::AbstractLattice, o, ct, lookup_idx)
+    hasintersect(widenconst(ct), Task) || return Bottom
+    hasintersect(widenconst(lookup_idx), Int) || return Bottom
+    return Nothing
+end
+add_tfunc(Core._cancel_finalizer, 3, 3, _cancel_finalizer_tfunc, 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
     return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
@@ -2283,9 +2289,12 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === donotdelete
         return true
     elseif f === Core.finalizer
-        2 <= na <= 4 || return false
-        # Core.finalizer does no error checking - that's done in Base.finalizer
+        2 <= na <= 5 || return false
+        # `Core.finalizer` does no error checking - that's done in Base.finalizer
         return true
+    elseif f === Core._cancel_finalizer
+        na == 3 || return false
+        return argtypes[2] ⊑ Task && argtypes[3] ⊑ Int
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)

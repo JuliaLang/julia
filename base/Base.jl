@@ -276,8 +276,7 @@ end
 
 BUILDROOT::String = ""
 
-baremodule BuildSettings
-end
+baremodule BuildSettings end
 
 let i = 1
     global BUILDROOT
