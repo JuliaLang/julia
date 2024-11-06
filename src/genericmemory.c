@@ -197,7 +197,7 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
         jl_genericmemory_data_owner_field(m) = NULL;
-        if (how == 3 && jl_is_string(o) &&
+        if (how == 3 && // implies jl_is_string(o)
              ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
             if (jl_string_data(o)[len] != '\0')
                 jl_string_data(o)[len] = '\0';
@@ -219,39 +219,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_memory_any(size_t n)
 {
     return jl_alloc_genericmemory(jl_memory_any_type, n);
-}
-
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_slice(jl_genericmemory_t *mem, void *data, size_t len)
-{
-    // Given a GenericMemoryRef represented as `jl_genericmemory_ref ref = {data, mem}`,
-    // return a new GenericMemory that only accesses the slice from the given GenericMemoryRef to
-    // the given length if this is possible to return. This allows us to make
-    // `length(Array)==length(Array.ref.mem)`, for simplification of this.
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typetagof(mem);
-    const jl_datatype_layout_t *layout = dt->layout;
-    // repeated checks here ensure the values cannot overflow, since we know mem->length is a reasonable value
-    if (len > mem->length)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-    if (layout->flags.arrayelem_isunion) {
-        if (!((size_t)data == 0 && mem->length == len))
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // only exact slices are supported
-        data = mem->ptr;
-    }
-    else if (layout->size == 0) {
-        if ((size_t)data > mem->length || (size_t)data + len > mem->length)
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-        data = mem->ptr;
-    }
-    else {
-        if (data < mem->ptr || (char*)data > (char*)mem->ptr + mem->length * layout->size || (char*)data + len * layout->size > (char*)mem->ptr + mem->length * layout->size)
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-    }
-    jl_task_t *ct = jl_current_task;
-    jl_genericmemory_t *newmem = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, sizeof(jl_genericmemory_t) + sizeof(void*), dt);
-    newmem->length = len;
-    newmem->ptr = data;
-    jl_genericmemory_data_owner_field(newmem) = jl_genericmemory_owner(mem);
-    return newmem;
 }
 
 JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destdata,
