@@ -212,7 +212,8 @@ function _positive_int(x::T, purpose::String) where {T<:Union{AbstractFloat, Int
         end
         x = try
             convert(Int, x)
-        catch
+        catch e
+            !(e isa InexactError) && rethrow()
             -1
         end
     end
