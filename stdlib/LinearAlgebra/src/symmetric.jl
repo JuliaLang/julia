@@ -969,7 +969,8 @@ for (hermtype, wrapper) in [(:Symmetric, :Symmetric), (:SymTridiagonal, :Symmetr
         function sincos(A::$hermtype{<:Real})
             n = checksquare(A)
             F = eigen(A)
-            S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+            T = float(eltype(F.values))
+            S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
             for i in 1:n
                 S.diag[i], C.diag[i] = sincos(F.values[i])
             end
@@ -980,7 +981,8 @@ end
 function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
     F = eigen(A)
-    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+    T = float(eltype(F.values))
+    S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
     for i in 1:n
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
