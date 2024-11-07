@@ -65,6 +65,9 @@ end
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    for pad in (rpad, lpad), p in ('\0', "\0", "\0\0", "\u302")
+        @test_throws ArgumentError pad("foo", 10, p)
+    end
 end
 
 @testset "string truncation (ltruncate, rtruncate, ctruncate)" begin
