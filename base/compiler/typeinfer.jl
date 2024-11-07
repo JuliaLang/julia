@@ -25,7 +25,7 @@ end
 function _typeinf_identifier(frame::Core.Compiler.InferenceState)
     mi_info = InferenceFrameInfo(
         frame.linfo,
-        frame.world,
+        frame_world(sv),
         copy(frame.sptypes),
         copy(frame.slottypes),
         length(frame.result.argtypes),
@@ -173,7 +173,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
         # that are simply the intersection of each partial computation, without having
         # dependencies on each other (unlike rt and exct)
-        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
+        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.world.valid_worlds)
         cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
     for frameid = cycleid:length(frames)
@@ -197,7 +197,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
 end
 
 function adjust_cycle_frame!(sv::InferenceState, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
-    sv.valid_worlds = cycle_valid_worlds
+    update_valid_age!(sv, cycle_valid_worlds)
     sv.ipo_effects = cycle_valid_effects
     # traverse the callees of this cycle that are tracked within `sv.cycle_backedges`
     # and adjust their statements so that they are consistent with the new `cycle_valid_effects`
@@ -403,13 +403,13 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         end
     end
     result = me.result
-    result.valid_worlds = me.valid_worlds
+    result.valid_worlds = me.world.valid_worlds
     result.result = bestguess
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
-    me.src.min_world = first(me.valid_worlds)
-    me.src.max_world = last(me.valid_worlds)
+    me.src.min_world = first(me.world.valid_worlds)
+    me.src.max_world = last(me.world.valid_worlds)
     istoplevel = !(me.linfo.def isa Method)
     istoplevel || compute_edges!(me) # don't add backedges to toplevel method instance
 
@@ -637,7 +637,7 @@ function merge_call_chain!(::AbstractInterpreter, parent::InferenceState, child:
 end
 
 function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
-    update_valid_age!(caller, frame.valid_worlds)
+    update_valid_age!(caller, frame.world.valid_worlds)
     backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     return frame
@@ -730,7 +730,7 @@ end
 function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState)
     mi = sv.linfo
     owner = cache_owner(interp)
-    min_world, max_world = first(sv.valid_worlds), last(sv.valid_worlds)
+    min_world, max_world = first(sv.world.valid_worlds), last(sv.world.valid_worlds)
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
@@ -816,7 +816,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # while splitting off the rest of the work for this caller into a separate workq thunk
         let mresult = Future{MethodCallResult}()
             push!(caller.tasks, function get_infer_result(interp, caller)
-                update_valid_age!(caller, frame.valid_worlds)
+                update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
                 local edge = isinferred ? edge_ci : nothing
                 local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
@@ -842,7 +842,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
-    update_valid_age!(caller, frame.valid_worlds)
+    update_valid_age!(caller, frame.world.valid_worlds)
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)

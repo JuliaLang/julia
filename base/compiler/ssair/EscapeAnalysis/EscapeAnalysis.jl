@@ -26,7 +26,7 @@ using ._TOP_MOD:     # Base definitions
 using Core.Compiler: # Core.Compiler specific definitions
     AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
-    is_meta_expr_head, is_mutation_free_argtype, isexpr, println, setfield!_nothrow,
+    is_meta_expr_head, is_identity_free_argtype, isexpr, println, setfield!_nothrow,
     singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
@@ -861,7 +861,7 @@ function add_escape_change!(astate::AnalysisState, @nospecialize(x), xinfo::Esca
     xinfo === ⊥ && return nothing # performance optimization
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if force || !is_mutation_free_argtype(argextype(x, astate.ir))
+        if force || !is_identity_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, EscapeChange(xidx, xinfo))
         end
     end
@@ -871,7 +871,7 @@ end
 function add_liveness_change!(astate::AnalysisState, @nospecialize(x), livepc::Int)
     xidx = iridx(x, astate.estate)
     if xidx !== nothing
-        if !is_mutation_free_argtype(argextype(x, astate.ir))
+        if !is_identity_free_argtype(argextype(x, astate.ir))
             push!(astate.changes, LivenessChange(xidx, livepc))
         end
     end
@@ -1077,7 +1077,10 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # to consider the possibility of aliasing between them and the return value.
             for argidx = first_idx:last_idx
                 arg = args[argidx]
-                if !is_mutation_free_argtype(argextype(arg, astate.ir))
+                if arg isa GlobalRef
+                    continue # :effect_free guarantees that nothings escapes to the global scope
+                end
+                if !is_identity_free_argtype(argextype(arg, astate.ir))
                     add_alias_change!(astate, ret, arg)
                 end
             end

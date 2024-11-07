@@ -615,8 +615,8 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
+size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
-void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
@@ -1129,7 +1129,7 @@ void jl_safepoint_end_gc(void);
 // The caller should set it **BEFORE** calling this function.
 void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
-
+int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
 // If the safepoint is enabled to deliver sigint, disable it

@@ -9,7 +9,7 @@ Profiling support.
 - `@profile foo()` to profile a specific call.
 - `Profile.print()` to print the report. Paths are clickable links in supported terminals and specialized for JULIA_EDITOR etc.
 - `Profile.clear()` to clear the buffer.
-- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+- Send a SIGUSR1 (on linux) or SIGINFO (on macOS/BSD) signal to the process to automatically trigger a profile and print. i.e. `kill -s SIGUSR1/SIGINFO 1234`, where 1234 is the pid of the julia process. On macOS & BSD platforms `ctrl-t` can be used directly.
 
 ## Memory profiling
 - `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
