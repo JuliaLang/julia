@@ -1167,7 +1167,7 @@ end
     @test a*H == H
 end
 
-@testset "trigonometric funtions for Integer matrices" begin
+@testset "trigonometric functions for Integer matrices" begin
     A = diagm(0=>1:4, 1=>1:3, -1=>1:3)
     for B in (Symmetric(A), Symmetric(complex.(A)))
         SC = @inferred(sincos(B))
