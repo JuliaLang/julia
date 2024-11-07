@@ -116,7 +116,8 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         end
         inferred_result = nothing
         relocatability = 0x1
-        const_flag = is_result_constabi_eligible(result)
+        for_opaque_closure = isa(result.linfo.def, Method) && result.linfo.def.is_for_opaque_closure
+        const_flag = is_result_constabi_eligible(result) && !for_opaque_closure
         if !can_discard_trees || (is_cached(caller) && !const_flag)
             inferred_result = transform_result_for_cache(interp, result)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
@@ -224,7 +225,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     isa(def, Method) || return ci # don't compress toplevel code
     cache_the_tree = true
     if can_discard_trees
-        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def)
+        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def) || def.is_for_opaque_closure
     end
     if cache_the_tree
         if may_compress(interp)
