@@ -1004,9 +1004,9 @@ precompile_test_harness("code caching") do dir
     MA = getfield(@__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
     @eval using $StaleC
-    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    invalidations = Base.StaticData.debug_method_invalidation(true)
     @eval using $StaleB
-    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    Base.StaticData.debug_method_invalidation(false)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -1820,12 +1820,14 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
+            ocachefile, depmods, #=completeinfo=#true, "PCI", false)
     else
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
+            cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
+    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
     m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
     @test new_ext_cis === nothing || any(new_ext_cis) do ci
