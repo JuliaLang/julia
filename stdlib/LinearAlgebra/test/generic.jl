@@ -3,6 +3,8 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
+using Test: GenericArray
+using LinearAlgebra: isbanded
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -511,18 +513,26 @@ end
 end
 
 @testset "generic functions for checking whether matrices have banded structure" begin
-    using LinearAlgebra: isbanded
     pentadiag = [1 2 3; 4 5 6; 7 8 9]
     tridiag   = [1 2 0; 4 5 6; 0 8 9]
+    tridiagG  = GenericArray([1 2 0; 4 5 6; 0 8 9])
+    Tridiag   = Tridiagonal(tridiag)
     ubidiag   = [1 2 0; 0 5 6; 0 0 9]
+    ubidiagG  = GenericArray([1 2 0; 0 5 6; 0 0 9])
+    uBidiag   = Bidiagonal(ubidiag, :U)
     lbidiag   = [1 0 0; 4 5 0; 0 8 9]
+    lbidiagG  = GenericArray([1 0 0; 4 5 0; 0 8 9])
+    lBidiag   = Bidiagonal(lbidiag, :L)
     adiag     = [1 0 0; 0 5 0; 0 0 9]
+    adiagG    = GenericArray([1 0 0; 0 5 0; 0 0 9])
+    aDiag     = Diagonal(adiag)
     @testset "istriu" begin
         @test !istriu(pentadiag)
         @test istriu(pentadiag, -2)
         @test !istriu(tridiag)
         @test istriu(tridiag, -1)
         @test istriu(ubidiag)
+        @test istriu(ubidiag) == istriu(ubidiagG) == istriu(uBidiag)
         @test !istriu(ubidiag, 1)
         @test !istriu(lbidiag)
         @test istriu(lbidiag, -1)
@@ -544,23 +554,45 @@ end
         @test !isbanded(pentadiag, -1, 2)
         @test !isbanded(pentadiag, -2, 1)
         @test isbanded(tridiag, -1, 1)
+        @test isbanded(tridiag, -1, 1) == isbanded(tridiagG, -1, 1) == isbanded(Tridiag, -1, 1)
         @test !isbanded(tridiag, 0, 1)
+        @test isbanded(tridiag, 0, 1) == isbanded(tridiagG, 0, 1) == isbanded(Tridiag, 0, 1)
         @test !isbanded(tridiag, -1, 0)
+        @test isbanded(tridiag, -1, 0) == isbanded(tridiagG, -1, 0) == isbanded(Tridiag, -1, 0)
         @test isbanded(ubidiag, 0, 1)
+        @test isbanded(ubidiag, 0, 1) == isbanded(ubidiagG, 0, 1) == isbanded(uBidiag, 0, 1)
         @test !isbanded(ubidiag, 1, 1)
+        @test isbanded(ubidiag, 1, 1) == isbanded(ubidiagG, 1, 1) == isbanded(uBidiag, 1, 1)
         @test !isbanded(ubidiag, 0, 0)
+        @test isbanded(ubidiag, 0, 0) == isbanded(ubidiagG, 0, 0) == isbanded(uBidiag, 0, 0)
         @test isbanded(lbidiag, -1, 0)
+        @test isbanded(lbidiag, -1, 0) == isbanded(lbidiagG, -1, 0) == isbanded(lBidiag, -1, 0)
         @test !isbanded(lbidiag, 0, 0)
+        @test isbanded(lbidiag, 0, 0) == isbanded(lbidiagG, 0, 0) == isbanded(lBidiag, 0, 0)
         @test !isbanded(lbidiag, -1, -1)
+        @test isbanded(lbidiag, -1, -1) == isbanded(lbidiagG, -1, -1) == isbanded(lBidiag, -1, -1)
         @test isbanded(adiag, 0, 0)
+        @test isbanded(adiag, 0, 0) == isbanded(adiagG, 0, 0) == isbanded(aDiag, 0, 0)
         @test !isbanded(adiag, -1, -1)
+        @test isbanded(adiag, -1, -1) == isbanded(adiagG, -1, -1) == isbanded(aDiag, -1, -1)
         @test !isbanded(adiag, 1, 1)
+        @test isbanded(adiag, 1, 1) == isbanded(adiagG, 1, 1) == isbanded(aDiag, 1, 1)
     end
     @testset "isdiag" begin
         @test !isdiag(tridiag)
         @test !isdiag(ubidiag)
         @test !isdiag(lbidiag)
         @test isdiag(adiag)
+    end
+end
+
+@testset "isbanded with rectangular matrices" begin
+    for A in (zeros(2,5), zeros(5,2))
+        A[diagind(A)] .= 1
+        G = GenericArray(A)
+        for (kl,ku) in Iterators.product(-6:6, -6:6)
+            @test isbanded(A, kl, ku) == isbanded(G, kl, ku)
+        end
     end
 end
 

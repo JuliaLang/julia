@@ -1474,7 +1474,23 @@ julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
-isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
+function isbanded(A::AbstractMatrix, kl::Integer, ku::Integer)
+    kl <= ku || return false
+    _isbanded(A, kl, ku)
+end
+_isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
+# Performance optimization for StridedMatrix by better utilizing cache locality
+# The istriu and istril loops are merged
+function _isbanded(A::StridedMatrix, kl::Integer, ku::Integer)
+    Base.require_one_based_indexing(A)
+    for col in axes(A,2)
+        toprows = @view A[begin:min(col-ku-1, end), col]
+        mapreduce(iszero, &, toprows, init=true) || return false
+        bottomrows = @view A[max(begin, col-kl+1):end, col]
+        mapreduce(iszero, &, bottomrows, init=true) || return false
+    end
+    return true
+end
 
 """
     isdiag(A) -> Bool
