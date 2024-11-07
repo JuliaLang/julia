@@ -204,7 +204,6 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     return Core._hasmethod(tt)
 end
 
-
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
@@ -355,14 +354,14 @@ include("set.jl")
 include("char.jl")
 function array_new_memory(mem::Memory{UInt8}, newlen::Int)
     # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
         # If data is in a String, keep it that way.
         # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
         str = _string_n(newlen)
         return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
-    else
-        # TODO: when implemented, this should use a memory growing call
-        return typeof(mem)(undef, newlen)
     end
 end
 include("strings/basic.jl")
@@ -657,8 +656,8 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
-    for (mod, key) in module_keys
-        push!(get!(Vector{Module}, loaded_precompiles, key), mod)
+    for mod in loaded_modules_order
+        push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
     end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])

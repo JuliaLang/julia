@@ -141,8 +141,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]
-    return InliningState(edges, sv.world, interp)
+    return InliningState(sv.edges, frame_world(sv), interp)
 end
 function InliningState(interp::AbstractInterpreter)
     return InliningState(Any[], get_inference_world(interp), interp)
@@ -225,6 +224,7 @@ include("compiler/ssair/irinterp.jl")
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
+    src.edges = opt.inlining.edges
     opt.ir = nothing
     maybe_validate_code(linfo, src, "optimized")
     return src
@@ -307,8 +307,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = consistent = isdefinedconst_globalref(stmt)
-        return (consistent, nothrow, nothrow)
+        # Modeled more precisely in abstract_eval_globalref. In general, if a
+        # GlobalRef was moved to statement position, it is probably not `const`,
+        # so we can't say much about it anyway.
+        return (false, false, false)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
@@ -444,7 +446,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_globalref_type(x)
+        return abstract_eval_globalref_type(x, src)
     elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
@@ -1031,7 +1033,7 @@ function run_passes_ipo_safe(
     end
     if is_asserts()
         @timeit "verify 3" begin
-            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
@@ -1277,7 +1279,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, WorldRange(ci.min_world, ci.max_world))
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

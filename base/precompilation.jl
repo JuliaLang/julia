@@ -415,6 +415,8 @@ function _precompilepkgs(pkgs::Vector{String},
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
     stale_cache = Dict{StaleCacheKey, Bool}()
+    cachepath_cache = Dict{PkgId, Vector{String}}()
+
     exts = Dict{PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
     depsmap = Dict{PkgId, Vector{PkgId}}()
@@ -434,6 +436,7 @@ function _precompilepkgs(pkgs::Vector{String},
         return name
     end
 
+    triggers = Dict{Base.PkgId,Vector{Base.PkgId}}()
     for (dep, deps) in env.deps
         pkg = Base.PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
@@ -442,25 +445,22 @@ function _precompilepkgs(pkgs::Vector{String},
         # add any extensions
         pkg_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
         for (ext_name, extdep_uuids) in env.extensions[dep]
-            ext_deps = Base.PkgId[]
-            push!(ext_deps, pkg) # depends on parent package
+            ext_uuid = Base.uuid5(pkg.uuid, ext_name)
+            ext = Base.PkgId(ext_uuid, ext_name)
+            triggers[ext] = Base.PkgId[pkg] # depends on parent package
             all_extdeps_available = true
             for extdep_uuid in extdep_uuids
                 extdep_name = env.names[extdep_uuid]
                 if extdep_uuid in keys(env.deps)
-                    push!(ext_deps, Base.PkgId(extdep_uuid, extdep_name))
+                    push!(triggers[ext], Base.PkgId(extdep_uuid, extdep_name))
                 else
                     all_extdeps_available = false
                     break
                 end
             end
             all_extdeps_available || continue
-            ext_uuid = Base.uuid5(pkg.uuid, ext_name)
-            ext = Base.PkgId(ext_uuid, ext_name)
-            filter!(!Base.in_sysimage, ext_deps)
-            depsmap[ext] = ext_deps
             exts[ext] = pkg.name
-            pkg_exts[ext] = ext_deps
+            pkg_exts[ext] = depsmap[ext] = filter(!Base.in_sysimage, triggers[ext])
         end
         if !isempty(pkg_exts)
             pkg_exts_map[pkg] = collect(keys(pkg_exts))
@@ -476,6 +476,16 @@ function _precompilepkgs(pkgs::Vector{String},
     append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
 
     @debug "precompile: deps collected"
+
+    # An extension effectively depends on another extension if it has a strict superset of its triggers
+    for ext_a in keys(exts)
+        for ext_b in keys(exts)
+            if triggers[ext_a] ⊋ triggers[ext_b]
+                push!(depsmap[ext_a], ext_b)
+            end
+        end
+    end
+
     # this loop must be run after the full depsmap has been populated
     for (pkg, pkg_exts) in pkg_exts_map
         # find any packages that depend on the extension(s)'s deps and replace those deps in their deps list with the extension(s),
@@ -641,7 +651,7 @@ function _precompilepkgs(pkgs::Vector{String},
             return false
         end
     end
-    std_outputs = Dict{PkgConfig,String}()
+    std_outputs = Dict{PkgConfig,IOBuffer}()
     taskwaiting = Set{PkgConfig}()
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = nothing
@@ -663,7 +673,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         print(io, ansi_cleartoendofline, str)
                     end
                 end
-                std_outputs[pkg_config] = string(get(std_outputs, pkg_config, ""), str)
+                write(get!(IOBuffer, std_outputs, pkg_config), str)
                 if !in(pkg_config, taskwaiting) && occursin("waiting for IO to finish", str)
                     !fancyprint && lock(print_lock) do
                         println(io, pkg.name, color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
@@ -785,7 +795,7 @@ function _precompilepkgs(pkgs::Vector{String},
     ## precompilation loop
 
     for (pkg, deps) in depsmap
-        cachepaths = Base.find_all_in_cache_path(pkg)
+        cachepaths = get!(() -> Base.find_all_in_cache_path(pkg), cachepath_cache, pkg)
         sourcepath = Base.locate_package(pkg)
         single_requested_pkg = length(requested_pkgs) == 1 && only(requested_pkgs) == pkg.name
         for config in configs
@@ -808,7 +818,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         wait(was_processed[(dep,config)])
                     end
                     circular = pkg in circular_deps
-                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepaths, sourcepath, flags=cacheflags)
+                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
                         is_direct_dep = pkg in direct_deps
@@ -837,7 +847,12 @@ function _precompilepkgs(pkgs::Vector{String},
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags, isext = haskey(exts, pkg))
+                                    keep_loaded_modules = false
+                                    # for extensions, any extension in our direct dependencies is one we have a right to load
+                                    # for packages, we may load any extension (all possible triggers are accounted for above)
+                                    loadable_exts = haskey(exts, pkg) ? filter((dep)->haskey(exts, dep), depsmap[pkg]) : nothing
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, keep_loaded_modules;
+                                                      flags, cacheflags, loadable_exts)
                                 end
                             end
                             if ret isa Base.PrecompilableError
@@ -857,8 +872,9 @@ function _precompilepkgs(pkgs::Vector{String},
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg_config, ""))) : ""
+                                errmsg = String(take!(get(IOBuffer, std_outputs, pkg_config)))
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
+                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
                                 !fancyprint && lock(print_lock) do
                                     println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
                                 end
@@ -936,20 +952,22 @@ function _precompilepkgs(pkgs::Vector{String},
             end
             # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
             # interrupting a hanging precompile job with stderr output. julia#48371
-            filter!(kv -> !isempty(strip(last(kv))), std_outputs) # remove empty output
-            if !isempty(std_outputs)
-                plural1 = length(std_outputs) == 1 ? "y" : "ies"
-                plural2 = length(std_outputs) == 1 ? "" : "s"
-                print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
-                for (pkg_config, err) in std_outputs
-                    pkg, config = pkg_config
-                    err = if pkg == pkg_liveprinted
-                        "[Output was shown above]"
-                    else
-                        join(split(strip(err), "\n"), color_string("\n│  ", Base.warn_color()))
+            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
+                filter!(kv -> !isempty(last(kv)), std_outputs)
+                if !isempty(std_outputs)
+                    plural1 = length(std_outputs) == 1 ? "y" : "ies"
+                    plural2 = length(std_outputs) == 1 ? "" : "s"
+                    print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
+                    for (pkg_config, err) in std_outputs
+                        pkg, config = pkg_config
+                        err = if pkg == pkg_liveprinted
+                            "[Output was shown above]"
+                        else
+                            join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
+                        end
+                        name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
+                        print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
                     end
-                    name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
-                    print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
                 end
             end
         end
@@ -959,20 +977,26 @@ function _precompilepkgs(pkgs::Vector{String},
             end
         end
         quick_exit && return
-        err_str = ""
+        err_str = IOBuffer()
         n_direct_errs = 0
         for (pkg_config, err) in failed_deps
             dep, config = pkg_config
             if strict || (dep in direct_deps)
-                config_str = isempty(config[1]) ? "" : "$(join(config[1], " ")) "
-                err_str = string(err_str, "\n$(dep.name) $config_str\n\n$err", (n_direct_errs > 0 ? "\n" : ""))
+                print(err_str, "\n", dep.name, " ")
+                for cfg in config[1]
+                    print(err_str, cfg, " ")
+                end
+                print(err_str, "\n\n", err)
+                n_direct_errs > 0 && write(err_str, "\n")
                 n_direct_errs += 1
             end
         end
-        if err_str != ""
+        if position(err_str) > 0
+            skip(err_str, -1)
+            truncate(err_str, position(err_str))
             pluralde = n_direct_errs == 1 ? "y" : "ies"
             direct = strict ? "" : "direct "
-            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(err_str[1:end-1])"
+            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
             if internal_call # aka. auto-precompilation
                 if isinteractive() && !get(ENV, "CI", false)
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"

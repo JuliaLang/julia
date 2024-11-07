@@ -2,7 +2,8 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
+using Base: typesof, insert!, replace_ref_begin_end!,
+    infer_return_type, infer_exception_type, infer_effects, code_ircode
 
 # defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
 # via. `Base.@time_imports` etc.
@@ -225,27 +226,20 @@ macro which(ex0::Symbol)
     return :(which($__module__, $ex0))
 end
 
-for fname in [:code_warntype, :code_llvm, :code_native, :infer_effects]
-    @eval begin
-        macro ($fname)(ex0...)
-            gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
+for fname in [:code_warntype, :code_llvm, :code_native,
+              :infer_return_type, :infer_effects, :infer_exception_type]
+    @eval macro ($fname)(ex0...)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+    end
+end
+
+for fname in [:code_typed, :code_lowered, :code_ircode]
+    @eval macro ($fname)(ex0...)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        quote
+            local results = $thecall
+            length(results) == 1 ? results[1] : results
         end
-    end
-end
-
-macro code_typed(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
-    end
-end
-
-macro code_lowered(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
     end
 end
 

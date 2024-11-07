@@ -28,6 +28,11 @@ end
     @test occursin("Couldn't find 'mutable s'", str)
 end
 
+@testset "non-loaded packages in doc search" begin
+    str = get_help_io("Profile")
+    @test occursin("Couldn't find Profile, but a loadable package with that name exists.", str)
+end
+
 @testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin
     checks = ["var", "raw", "r"]
     symbols = "@" .* checks .* "_str"

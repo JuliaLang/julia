@@ -1184,9 +1184,6 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
     @test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
     @test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
-    @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
-    @test isdefined_tfunc(Const(Base), Symbol) == Bool
-    @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
     @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
@@ -6078,3 +6075,15 @@ let src = code_typed((Union{Nothing,AtomicModifySafety},)) do x
     end |> only |> first
     @test any(@nospecialize(x)->Meta.isexpr(x, :invoke_modify), src.code)
 end
+
+function issue56387(nt::NamedTuple, field::Symbol=:a)
+    NT = typeof(nt)
+    names = fieldnames(NT)
+    types = fieldtypes(NT)
+    index = findfirst(==(field), names)
+    if index === nothing
+        throw(ArgumentError("Field $field not found"))
+    end
+    types[index]
+end
+@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}

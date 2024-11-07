@@ -474,9 +474,9 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
         elseif isa(leaf, QuoteNode)
             leaf = leaf.value
         elseif isa(leaf, GlobalRef)
-            mod, name = leaf.mod, leaf.name
-            if isdefined(mod, name) && isconst(mod, name)
-                leaf = getglobal(mod, name)
+            typ = argextype(leaf, compact)
+            if isa(typ, Const)
+                leaf = typ.val
             else
                 return nothing
             end
@@ -1529,7 +1529,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     if code isa CodeInstance
         if use_const_api(code)
             # No code in the function - Nothing to do
-            add_inlining_backedge!(et, mi)
+            add_inlining_edge!(et, code)
             return true
         end
         src = @atomic :monotonic code.inferred
@@ -1544,7 +1544,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     length(src.cfg.blocks) == 1 || return false
 
     # Ok, we're committed to inlining the finalizer
-    add_inlining_backedge!(et, mi)
+    add_inlining_edge!(et, code)
 
     # TODO: Should there be a special line number node for inlined finalizers?
     inline_at = ir[SSAValue(idx)][:line]
@@ -1731,8 +1731,11 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
             if finalizer_useidx isa Int
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
                 estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
+                # disable finalizer inlining when this allocation is aliased to somewhere,
+                # mostly likely to edges of `PhiNode`
+                hasaliases = EscapeAnalysis.getaliases(SSAValue(defidx), estate) !== nothing
                 einfo = estate[SSAValue(defidx)]
-                if EscapeAnalysis.has_no_escape(einfo)
+                if !hasaliases && EscapeAnalysis.has_no_escape(einfo)
                     already = BitSet(use.idx for use in defuse.uses)
                     for idx = einfo.Liveness
                         if idx ∉ already
@@ -2114,18 +2117,19 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         unionphi = unionphis[i]
         phi = unionphi[1]
         t = unionphi[2]
+        inst = compact.result[phi]
         if t === Union{}
-            stmt = compact[SSAValue(phi)][:stmt]::PhiNode
+            stmt = inst[:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
             made_changes = true
             continue
         elseif t === Any
             continue
-        elseif ⊑(𝕃ₒ, compact.result[phi][:type], t)
-            continue
         end
+        ⊏ = strictpartialorder(𝕃ₒ)
+        t ⊏ inst[:type] || continue
         to_drop = Int[]
-        stmt = compact[SSAValue(phi)][:stmt]
+        stmt = inst[:stmt]
         stmt === nothing && continue
         stmt = stmt::PhiNode
         for i = 1:length(stmt.values)
@@ -2137,7 +2141,8 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 push!(to_drop, i)
             end
         end
-        compact.result[phi][:type] = t
+        inst[:type] = t
+        add_flag!(inst, IR_FLAG_REFINED) # t ⊏ inst[:type]
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
         made_changes = true
     end

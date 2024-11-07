@@ -895,6 +895,7 @@ LinearAlgebra.LAPACK.hseqr!
 
 ```@docs
 LinearAlgebra.matprod_dest
+LinearAlgebra.haszero
 ```
 
 ```@meta

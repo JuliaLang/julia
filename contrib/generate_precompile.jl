@@ -35,8 +35,8 @@ precompile(Base.unsafe_string, (Ptr{UInt8},))
 precompile(Base.unsafe_string, (Ptr{Int8},))
 
 # loading.jl
-precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
-precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.__require, (Module, Symbol))
+precompile(Base.__require, (Base.PkgId,))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
