@@ -99,7 +99,7 @@ end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 function //(x::Number, y::Complex)
-    if((x//abs2(y))==0//1 || (x//abs2(y))==1//0)
+    if(iszero((x//abs2(y))) || isinf((x//abs2(y))==1//0))
         return (x//abs2(y))
     end
     return (x//abs2(y))*conj(y)
@@ -114,17 +114,16 @@ function //(x::Number, y::Complex{<:Integer})
     if(m==0)
         return 1//0
     end
-    scaled_a = real_y / m
-    scaled_b = imag_y / m
-    denom = Rational(m * (scaled_a^2 + scaled_b^2)^0.5)
-    if denom == 0//1
+    scaled_a = real_y // m
+    scaled_b = imag_y // m
+    denom =  (scaled_a^2 + scaled_b^2)
+    if iszero(denom)
         return 1//0
     end
-    real_part = x * real_y // denom
-    real_part = real_part // denom
-    imag_part = -x * imag_y // denom
-    imag_part = imag_part // denom
-    return real_part + imag_part * im
+    real_part = (x * (((real_y//denom)//m)//m))
+    imag_part = (-x * (((imag_y// denom)//m)//m))
+    ans = (real_part + imag_part * im)
+    return ans
 end
 //(X::AbstractArray, y::Number) = X .// y
 
