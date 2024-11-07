@@ -1129,7 +1129,7 @@ void jl_safepoint_end_gc(void);
 // The caller should set it **BEFORE** calling this function.
 void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
-
+int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
 // If the safepoint is enabled to deliver sigint, disable it

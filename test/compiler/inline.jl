@@ -2275,12 +2275,32 @@ function f_EA_finalizer(N::Int)
         Base.@assume_effects :nothrow @noinline println(devnull, "ptr = ", ptr)
     end
 end
+let src = code_typed1(foreign_alloc, (Type{Float64},Int,))
+    @test count(iscall((src, Core.finalizer)), src.code) == 1
+end
 let src = code_typed1(f_EA_finalizer, (Int,))
     @test count(iscall((src, Core.finalizer)), src.code) == 0
 end
 let;Base.Experimental.@force_compile
     f_EA_finalizer(42000)
     @test foreign_buffer_checker.finalized
+end
+
+# JuliaLang/julia#56422:
+# EA-based finalizer inlining should not result in an invalid IR in the existence of `PhiNode`s
+function issue56422(cnd::Bool, N::Int)
+    if cnd
+        workspace = foreign_alloc(Float64, N)
+    else
+        workspace = foreign_alloc(Float64, N+1)
+    end
+    GC.@preserve workspace begin
+        (;ptr) = workspace
+        Base.@assume_effects :nothrow @noinline println(devnull, "ptr = ", ptr)
+    end
+end
+let src = code_typed1(issue56422, (Bool,Int,))
+    @test_broken count(iscall((src, Core.finalizer)), src.code) == 0
 end
 
 # Test that inlining doesn't unnecessarily move things to statement position

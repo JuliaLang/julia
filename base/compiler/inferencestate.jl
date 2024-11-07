@@ -227,10 +227,24 @@ struct HandlerInfo
     handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
+struct WorldWithRange
+    this::UInt
+    valid_worlds::WorldRange
+    function WorldWithRange(world::UInt, valid_worlds::WorldRange)
+        if !(world in valid_worlds)
+            error("invalid age range update")
+        end
+        return new(world, valid_worlds)
+    end
+end
+
+intersect(world::WorldWithRange, valid_worlds::WorldRange) =
+    WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
-    world::UInt
+    world::WorldWithRange
     mod::Module
     sptypes::Vector{VarState}
     slottypes::Vector{Any}
@@ -265,7 +279,6 @@ mutable struct InferenceState
     #= results =#
     result::InferenceResult # remember where to put the result
     unreachable::BitSet # statements that were found to be statically unreachable
-    valid_worlds::WorldRange
     bestguess #::Type
     exc_bestguess
     ipo_effects::Effects
@@ -353,10 +366,10 @@ mutable struct InferenceState
         parentid = frameid = cycleid = 0
 
         this = new(
-            mi, world, mod, sptypes, slottypes, src, cfg, spec_info,
+            mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
-            result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
+            result, unreachable, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
 
@@ -372,7 +385,7 @@ mutable struct InferenceState
         # Apply generated function restrictions
         if src.min_world != 1 || src.max_world != typemax(UInt)
             # From generated functions
-            this.valid_worlds = WorldRange(src.min_world, src.max_world)
+            update_valid_age!(this, WorldRange(src.min_world, src.max_world))
         end
 
         return this
@@ -772,14 +785,13 @@ mutable struct IRInterpretationState
     const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
-    const world::UInt
+    world::WorldWithRange
     curridx::Int
     const argtypes_refined::Vector{Bool}
     const sptypes::Vector{VarState}
     const tpdum::TwoPhaseDefUseMap
     const ssa_refined::BitSet
     const lazyreachability::LazyCFGReachability
-    valid_worlds::WorldRange
     const tasks::Vector{WorkThunk}
     const edges::Vector{Any}
     callstack #::Vector{AbsIntState}
@@ -809,8 +821,8 @@ mutable struct IRInterpretationState
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(spec_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, valid_worlds, tasks, edges, callstack, 0, 0)
+        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds), curridx, argtypes_refined, ir.sptypes, tpdum,
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
     end
 end
 
@@ -910,8 +922,8 @@ spec_info(sv::IRInterpretationState) = sv.spec_info
 propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
 method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
 
-frame_world(sv::InferenceState) = sv.world
-frame_world(sv::IRInterpretationState) = sv.world
+frame_world(sv::InferenceState) = sv.world.this
+frame_world(sv::IRInterpretationState) = sv.world.this
 
 function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     if is_effect_overridden(frame_instance(sv), effect)
@@ -933,9 +945,8 @@ has_conditional(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
 function update_valid_age!(sv::AbsIntState, valid_worlds::WorldRange)
-    valid_worlds = sv.valid_worlds = intersect(valid_worlds, sv.valid_worlds)
-    @assert sv.world in valid_worlds "invalid age range update"
-    return valid_worlds
+    sv.world = intersect(sv.world, valid_worlds)
+    return sv.world.valid_worlds
 end
 
 """
@@ -1131,6 +1142,7 @@ function Future{T}(f, prev::Future{S}, interp::AbstractInterpreter, sv::AbsIntSt
     else
         @assert Core._hasmethod(Tuple{Core.Typeof(f), S, typeof(interp), typeof(sv)})
         result = Future{T}()
+        @assert !isa(sv, InferenceState) || interp === sv.interp
         push!(sv.tasks, function (interp, sv)
             result[] = f(later[], interp, sv) # capture just later, instead of all of prev
             return true

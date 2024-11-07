@@ -1435,18 +1435,6 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
                 AttributeSet::get(C, RetAttrs),
                 None); },
 };
-static const auto jlarray_data_owner_func = new JuliaFunction<>{
-    XSTR(jl_array_data_owner),
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue,
-            {T_prjlvalue}, false);
-    },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind}),
-            Attributes(C, {Attribute::NonNull}),
-            None); },
-};
 #define BOX_FUNC(ct,at,attrs,nbytes)                                                    \
 static const auto box_##ct##_func = new JuliaFunction<>{                           \
     XSTR(jl_box_##ct),                                                           \
@@ -4341,8 +4329,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         Value *data_owner = NULL; // owner object against which the write barrier must check
         if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
-            Value *V = emit_memoryref_FCA(ctx, ref, layout);
-            data_owner = emit_genericmemoryowner(ctx, CreateSimplifiedExtractValue(ctx, V, 1));
+            data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
         *ret = typed_store(ctx,
                     ptr,
@@ -10166,7 +10153,8 @@ jl_llvm_functions_t jl_emit_codeinst(
                         !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file
                 // Never end up in a situation where the codeinst has no invoke, but also no source, so we never fall
                 // through the cracks of SOURCE_MODE_ABI.
-                jl_atomic_store_release(&codeinst->invoke, jl_fptr_wait_for_compiled_addr);
+                jl_callptr_t expected = NULL;
+                jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected, jl_fptr_wait_for_compiled_addr);
                 jl_atomic_store_release(&codeinst->inferred, jl_nothing);
             }
         }
