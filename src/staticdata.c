@@ -932,7 +932,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
         if (jl_genericmemory_how(m) == 3) {
-            jl_queue_for_serialization_(s, jl_genericmemory_data_owner_field(v), 1, immediate);
+            assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
         }
         else if (layout->flags.arrayelem_isboxed) {
             size_t i, l = m->length;
@@ -1472,17 +1472,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_genericmemory_t *m = (jl_genericmemory_t*)v;
             const jl_datatype_layout_t *layout = t->layout;
             size_t len = m->length;
-            if (jl_genericmemory_how(m) == 3 && jl_is_genericmemory(jl_genericmemory_data_owner_field(m))) {
-                jl_genericmemory_t *owner = (jl_genericmemory_t*)jl_genericmemory_data_owner_field(m);
-                size_t data = ((char*)m->ptr - (char*)owner->ptr); // relocation offset (bytes)
-                write_uint(f, len);
-                write_uint(f, data);
-                write_pointerfield(s, (jl_value_t*)owner);
-                // similar to record_memoryref, but the field is always an (offset) pointer
-                arraylist_push(&s->memowner_list, (void*)(reloc_offset + offsetof(jl_genericmemory_t, ptr))); // relocation location
-                arraylist_push(&s->memowner_list, NULL); // relocation target (ignored)
-            }
-            // else if (jl_genericmemory_how(m) == 3) {
+            // if (jl_genericmemory_how(m) == 3) {
             //     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
             //     write_uint(f, len);
             //     write_pointerfield(s, owner);
@@ -1491,7 +1481,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             //     assert(new_mem->ptr == NULL);
             //     new_mem->ptr = (void*)((char*)m->ptr - (char*)owner); // relocation offset
             // }
-            else {
+            // else
+            {
                 size_t datasize = len * layout->size;
                 size_t tot = datasize;
                 int isbitsunion = layout->flags.arrayelem_isunion;
@@ -1538,10 +1529,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                             ios_write(s->const_data, (char*)m->ptr, tot);
                         }
                     }
-                    if (len == 0) // TODO: should we have a zero-page, instead of writing each type's fragment separately?
+                    if (len == 0) { // TODO: should we have a zero-page, instead of writing each type's fragment separately?
                         write_padding(s->const_data, layout->size ? layout->size : isbitsunion);
-                    else if (jl_genericmemory_how(m) == 3 && jl_is_string(jl_genericmemory_data_owner_field(m)))
+                    }
+                    else if (jl_genericmemory_how(m) == 3) {
+                        assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
                         write_padding(s->const_data, 1);
+                    }
                 }
                 else {
                     // Pointer eltypes are encoded in the mutable data section
@@ -4040,12 +4034,13 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
               // allocate a world for the new methods, and insert them there, invalidating content as needed
             size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
             jl_activate_methods(extext_methods, internal_methods, world);
+              // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
               // allow users to start running in this updated world
             jl_atomic_store_release(&jl_world_counter, world);
-              // but one of those immediate users is going to be our cache updates
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
               // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
+              // but one of those immediate users is going to be our cache insertions
+            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis); // restore existing caches (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);
             arraylist_free(&ccallable_list);

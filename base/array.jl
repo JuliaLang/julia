@@ -3141,10 +3141,6 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
     @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = memoryref(mem)
-    end
     return ref
 end
 
