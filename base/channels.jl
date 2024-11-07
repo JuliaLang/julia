@@ -581,8 +581,11 @@ function append_buffered(c::Channel{T}, iter::I) where {T,I}
 
             # for iterators without length, we increment the available items for this chunk only
             if !has_length
-                elements_to_add = available_space
-                _increment_n_avail(c, available_space)
+                chunk = Iterators.map(chunk) do x
+                    elements_to_add += 1
+                    _increment_n_avail(c, 1)
+                    x
+                end
             end
 
             check_channel_state(c)
