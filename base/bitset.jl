@@ -263,7 +263,7 @@ push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
         delete!(s, n)
         n
     else
-        throw(KeyError(n))
+        throw(KeyError(s, n))
     end
 end
 

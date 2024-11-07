@@ -474,7 +474,7 @@ end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
+    return index < 0 ? throw(KeyError(h, key)) : @assume_effects :noub @inbounds h.vals[index]::V
 end
 
 """
@@ -580,7 +580,7 @@ end
 
 function pop!(h::Dict, key)
     index = ht_keyindex(h, key)
-    return index > 0 ? _pop!(h, index) : throw(KeyError(key))
+    return index > 0 ? _pop!(h, index) : throw(KeyError(h, key))
 end
 
 """
@@ -822,7 +822,7 @@ function getindex(dict::ImmutableDict, key)
         isequal(dict.key, key) && return dict.value
         dict = dict.parent
     end
-    throw(KeyError(key))
+    throw(KeyError(dict, key))
 end
 function get(dict::ImmutableDict, key, default)
     while isdefined(dict, :parent)
@@ -982,7 +982,7 @@ end
 
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
-    found === nothing && throw(KeyError(key))
+    found === nothing && throw(KeyError(dict, key))
     return only(found)
 end
 

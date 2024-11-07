@@ -69,7 +69,7 @@ end
 
 function getindex(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
     r = get(wvc, mi, nothing)
-    r === nothing && throw(KeyError(mi))
+    r === nothing && throw(KeyError(wvc, mi))
     return r::CodeInstance
 end
 

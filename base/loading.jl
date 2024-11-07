@@ -2549,7 +2549,7 @@ end
 root_module(key::PkgId) = @lock require_lock loaded_modules[key]
 function root_module(where::Module, name::Symbol)
     key = identify_package(where, String(name))
-    key isa PkgId || throw(KeyError(name))
+    key isa PkgId || throw(KeyError(where, name))
     return root_module(key)
 end
 root_module_exists(key::PkgId) = @lock require_lock haskey(loaded_modules, key)

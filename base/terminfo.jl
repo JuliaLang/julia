@@ -226,7 +226,7 @@ function getindex(ti::TermInfo, key::Symbol)
     haskey(ti.numbers, key) && return ti.numbers[key]
     haskey(ti.strings, key) && return ti.strings[key]
     haskey(ti.aliases, key) && return getindex(ti, ti.aliases[key])
-    throw(KeyError(key))
+    throw(KeyError(ti, key))
 end
 
 keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings) ∪ keys(ti.aliases)
