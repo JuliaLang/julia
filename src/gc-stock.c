@@ -3618,6 +3618,13 @@ void jl_gc_init(void)
     uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
     uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
     uint64_t hint = jl_options.heap_size_hint;
+
+    // check if heap size specified on command line
+    if (jl_options.heap_size_hint == 0) {
+        char *cp = getenv(HEAP_SIZE_HINT);
+        if (cp)
+            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+    }
 #ifdef _P64
     total_mem = uv_get_total_memory();
     if (hint == 0) {
