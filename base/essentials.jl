@@ -1250,6 +1250,53 @@ function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
 
+"""
+    @world(sym, world)
+
+Resolve the binding `sym` in world `world`. See [`invoke_in_world`](@ref) for running
+arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the macro
+will error unless the binding is valid and has the same value across the entire world
+range.
+
+The `@world` macro is primarily used in the printing of bindings that are no longer
+available in the current world.
+
+## Example
+```
+julia> struct Foo; a::Int; end
+Foo
+
+julia> fold = Foo(1)
+
+julia> Int(Base.get_world_counter())
+26866
+
+julia> struct Foo; a::Int; b::Int end
+Foo
+
+julia> fold
+@world(Foo, 26866)(1)
+```
+
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+"""
+macro world(sym, world)
+    if isa(sym, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
+    elseif isa(sym, GlobalRef)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    elseif isa(sym, Expr) && sym.head === :(.) &&
+            length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
+    else
+        error("`@world` requires a symbol or GlobalRef")
+    end
+end
+
+_resolve_in_world(world::Integer, gr::GlobalRef) =
+    invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
+
 # Special constprop heuristics for various binary opes
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

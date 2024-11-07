@@ -662,7 +662,7 @@ static void jl_emit_codeinst_to_jit(
     int waiting = jl_analyze_workqueue(codeinst, params);
     if (waiting) {
         auto release = std::move(params.tsctx_lock); // unlock again before moving from it
-        incompletemodules.insert(std::pair(codeinst, std::tuple(std::move(params), waiting)));
+        incompletemodules.insert(std::pair(codeinst, std::make_tuple(std::move(params), waiting)));
     }
     else {
         finish_params(result_m.getModuleUnlocked(), params);

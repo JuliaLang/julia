@@ -84,17 +84,16 @@ function _unsetindex!(A::MemoryRef{T}) where T
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
     elsz = datatype_layoutsize(MemT)
-    isboxed = 1; isunion = 2
+    isbits = 0; isboxed = 1; isunion = 2
+    arrayelem == isbits && datatype_pointerfree(T::DataType) && return A
     t = @_gc_preserve_begin mem
     p = Ptr{Ptr{Cvoid}}(@inbounds pointer(A))
     if arrayelem == isboxed
         Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
     elseif arrayelem != isunion
-        if !datatype_pointerfree(T::DataType)
-            for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
-                # XXX: this violates memory ordering, since it writes more than one C_NULL to each
-                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
-            end
+        for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
+            # XXX: this violates memory ordering, since it writes more than one C_NULL to each
+            Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
         end
     end
     @_gc_preserve_end t
@@ -118,7 +117,17 @@ function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
     n == 0 && return dest
     @boundscheck memoryref(dest, n), memoryref(src, n)
-    ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    if isbitstype(T)
+        tdest = @_gc_preserve_begin dest
+        tsrc = @_gc_preserve_begin src
+        pdest = unsafe_convert(Ptr{Cvoid}, dest)
+        psrc = unsafe_convert(Ptr{Cvoid}, src)
+        memmove(pdest, psrc, aligned_sizeof(T) * n)
+        @_gc_preserve_end tdest
+        @_gc_preserve_end tsrc
+    else
+        ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    end
     return dest
 end
 

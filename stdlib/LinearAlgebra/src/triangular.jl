@@ -233,7 +233,7 @@ Base.isstored(A::UpperOrLowerTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::Union{UnitLowerTriangular{T}, UnitUpperTriangular{T}}, i::Int, j::Int) where {T} =
     _shouldforwardindex(A, i, j) ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::Union{LowerTriangular, UpperTriangular}, i::Int, j::Int) =
-    _shouldforwardindex(A, i, j) ? A.data[i,j] : _zero(A.data,j,i)
+    _shouldforwardindex(A, i, j) ? A.data[i,j] : diagzero(A,i,j)
 
 _shouldforwardindex(U::UpperTriangular, b::BandIndex) = b.band >= 0
 _shouldforwardindex(U::LowerTriangular, b::BandIndex) = b.band <= 0
@@ -245,7 +245,7 @@ Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{UnitL
     _shouldforwardindex(A, b) ? A.data[b] : ifelse(b.band == 0, oneunit(T), zero(T))
 end
 Base.@constprop :aggressive @propagate_inbounds function getindex(A::Union{LowerTriangular, UpperTriangular}, b::BandIndex)
-    _shouldforwardindex(A, b) ? A.data[b] : _zero(A.data, b)
+    _shouldforwardindex(A, b) ? A.data[b] : diagzero(A.data, b)
 end
 
 _zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
@@ -1048,16 +1048,16 @@ _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
 
 function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
     if istriu(A)
-        _trimul!(B, UpperTriangular(A), B)
+        _trimul!(B, uppertriangular(A), B)
     else
-        _trimul!(B, LowerTriangular(A), B)
+        _trimul!(B, lowertriangular(A), B)
     end
 end
 function rmul!(A::AbstractMatrix, B::AbstractTriangular)
     if istriu(B)
-        _trimul!(A, A, UpperTriangular(B))
+        _trimul!(A, A, uppertriangular(B))
     else
-        _trimul!(A, A, LowerTriangular(B))
+        _trimul!(A, A, lowertriangular(B))
     end
 end
 
@@ -1066,7 +1066,7 @@ for TC in (:AbstractVector, :AbstractMatrix)
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return @stable_muladdmul generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
+            return _generic_matvecmul!(C, 'N', A, B, alpha, beta)
         end
     end
 end
@@ -1097,16 +1097,16 @@ _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
 
 function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
     if istriu(A)
-        _ldiv!(B, UpperTriangular(A), B)
+        _ldiv!(B, uppertriangular(A), B)
     else
-        _ldiv!(B, LowerTriangular(A), B)
+        _ldiv!(B, lowertriangular(A), B)
     end
 end
 function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
     if istriu(B)
-        _rdiv!(A, A, UpperTriangular(B))
+        _rdiv!(A, A, uppertriangular(B))
     else
-        _rdiv!(A, A, LowerTriangular(B))
+        _rdiv!(A, A, lowertriangular(B))
     end
 end
 
@@ -2218,6 +2218,11 @@ end
 # SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
 # Algorithm 5.1
 Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    if iszero(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+        return A
+    end
     _sqrt_real_2x2!(A, A0)
     if isone(s)
         A[1,1] -= 1
