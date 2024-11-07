@@ -8,8 +8,6 @@
 using Test
 using Logging
 
-using Base: remove_linenums!
-
 module DeprecationTests # to test @deprecate
     f() = true
 

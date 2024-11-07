@@ -243,11 +243,10 @@ julia> x + 1 == typemin(Int64)
 true
 ```
 
-Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
-This reflects the characteristics of the underlying arithmetic of integers as implemented on modern
-computers. In applications where overflow is possible, explicit checking for wraparound produced
-by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
-is recommended instead.
+Arithmetic operations with Julia's integer types inherently perform [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic),
+mirroring the characteristics of integer arithmetic on modern computer hardware. In scenarios where overflow is a possibility,
+it is crucial to explicitly check for wraparound effects that can result from such overflows.
+The [`Base.Checked`](@ref) module provides a suite of arithmetic operations equipped with overflow checks, which trigger errors if an overflow occurs. For use cases where overflow cannot be tolerated under any circumstances, utilizing the [`BigInt`](@ref) type, as detailed in [Arbitrary Precision Arithmetic](@ref), is advisable.
 
 An example of overflow behavior and how to potentially resolve it is as follows:
 
@@ -632,7 +631,7 @@ BigInt
 
 The default precision (in number of bits of the significand) and rounding mode of [`BigFloat`](@ref)
 operations can be changed globally by calling [`setprecision`](@ref) and [`setrounding`](@ref),
-and all further calculations will take these changes in account.  Alternatively, the precision
+and all further calculations will take these changes in account. Alternatively, the precision
 or the rounding can be changed only within the execution of a particular block of code by using
 the same functions with a `do` block:
 
@@ -652,6 +651,13 @@ julia> setprecision(40) do
        end
 1.1000000000004
 ```
+
+!!! warning
+    The relation between [`setprecision`](@ref) or [`setrounding`](@ref) and
+    [`@big_str`](@ref), the macro used for `big` string literals (such as
+    `big"0.3"`), might not be intuitive, as a consequence of the fact that
+    `@big_str` is a macro. See the [`@big_str`](@ref) documentation for
+    details.
 
 ## [Numeric Literal Coefficients](@id man-numeric-literal-coefficients)
 
@@ -693,7 +699,7 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 !!! note
     The precedence of numeric literal coefficients used for implicit
     multiplication is higher than other binary operators such as multiplication
-    (`*`), and division (`/`, `\`, and `//`).  This means, for example, that
+    (`*`), and division (`/`, `\`, and `//`). This means, for example, that
     `1 / 2im` equals `-0.5im` and `6 // 2(2 + 1)` equals `1 // 1`.
 
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication

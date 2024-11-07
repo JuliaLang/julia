@@ -6,7 +6,6 @@
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/Debug.h>
 
 #include "julia.h"
@@ -36,39 +35,10 @@ static bool removeNI(Module &M) JL_NOTSAFEPOINT
 }
 }
 
-PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses RemoveNIPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (removeNI(M)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-namespace {
-struct RemoveNILegacy : public ModulePass {
-    static char ID;
-    RemoveNILegacy() : ModulePass(ID) {};
-
-    bool runOnModule(Module &M)
-    {
-        return removeNI(M);
-    }
-};
-
-char RemoveNILegacy::ID = 0;
-static RegisterPass<RemoveNILegacy>
-        Y("RemoveNI",
-          "Remove non-integral address space.",
-          false,
-          false);
-}
-
-Pass *createRemoveNIPass()
-{
-    return new RemoveNILegacy();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createRemoveNIPass());
 }

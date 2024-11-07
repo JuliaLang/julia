@@ -112,8 +112,8 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    h = x * y
-    ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
+    (h, l) = Math.two_mul(x, y)
+    ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
 mul12(x, y) = mul12(promote(x, y)...)
@@ -200,14 +200,12 @@ end
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
+TwicePrecision{T}(x::TwicePrecision{T}) where {T} = x
+
 function TwicePrecision{T}(x) where {T}
-    xT = convert(T, x)
+    xT = T(x)
     Δx = x - xT
     TwicePrecision{T}(xT, T(Δx))
-end
-
-function TwicePrecision{T}(x::TwicePrecision) where {T}
-    TwicePrecision{T}(x.hi, x.lo)
 end
 
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
@@ -264,8 +262,7 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
-(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
-TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+(::Type{T})(x::TwicePrecision) where {T<:Number} = (T(x.hi) + T(x.lo))::T
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
@@ -281,6 +278,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
+zero(x::TwicePrecision) = zero(typeof(x))
 function zero(::Type{TwicePrecision{T}}) where {T}
     z = zero(T)
     TwicePrecision{T}(z, z)
@@ -479,9 +477,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
@@ -489,7 +485,7 @@ end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     x_hi, x_lo = add12(x_hi, x_lo + (shift_lo + r.ref.lo))
@@ -790,3 +786,19 @@ _tp_prod(t::TwicePrecision) = t
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
+
+# These functions exist for use in LogRange:
+
+_exp_allowing_twice64(x::Number) = exp(x)
+_exp_allowing_twice64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))
+
+# No error on negative x, and for NaN/Inf this returns junk:
+function _log_twice64_unchecked(x::Float64)
+    xu = reinterpret(UInt64, x)
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
+    end
+    TwicePrecision(Math._log_ext(xu)...)
+end

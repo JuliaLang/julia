@@ -183,16 +183,16 @@ end
 
 function run!(helper::GitCredentialHelper, operation::AbstractString, cred::GitCredential)
     cmd = `$(helper.cmd) $operation`
-    p = open(cmd, "r+")
+    open(cmd, "r+") do p
+        # Provide the helper with the credential information we know
+        write(p, cred)
+        write(p, "\n")
+        t = @async close(p.in)
 
-    # Provide the helper with the credential information we know
-    write(p, cred)
-    write(p, "\n")
-    t = @async close(p.in)
-
-    # Process the response from the helper
-    Base.read!(p, cred)
-    wait(p)
+        # Process the response from the helper
+        Base.read!(p, cred)
+        wait(t)
+    end
 
     return cred
 end

@@ -10,6 +10,7 @@ Base.Threads.nthreads
 Base.Threads.threadpool
 Base.Threads.nthreadpools
 Base.Threads.threadpoolsize
+Base.Threads.ngcthreads
 ```
 
 See also [Multi-Threading](@ref man-multithreading).
@@ -17,22 +18,20 @@ See also [Multi-Threading](@ref man-multithreading).
 ## Atomic operations
 
 ```@docs
+atomic
+```
+
+```@docs
 Base.@atomic
 Base.@atomicswap
 Base.@atomicreplace
+Base.@atomiconce
+Base.AtomicMemory
 ```
 
-!!! note
-
-    The following APIs are fairly primitive, and will likely be exposed through an `unsafe_*`-like wrapper.
-
-```
-Core.Intrinsics.atomic_pointerref(pointer::Ptr{T}, order::Symbol) --> T
-Core.Intrinsics.atomic_pointerset(pointer::Ptr{T}, new::T, order::Symbol) --> pointer
-Core.Intrinsics.atomic_pointerswap(pointer::Ptr{T}, new::T, order::Symbol) --> old
-Core.Intrinsics.atomic_pointermodify(pointer::Ptr{T}, function::(old::T,arg::S)->T, arg::S, order::Symbol) --> old
-Core.Intrinsics.atomic_pointerreplace(pointer::Ptr{T}, expected::Any, new::T, success_order::Symbol, failure_order::Symbol) --> (old, cmp)
-```
+There are also optional memory ordering parameters for the `unsafe` set of functions, that
+select the C/C++-compatible versions of these atomic operations, if that parameter is specified to
+[`unsafe_load`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref), [`unsafe_replace!`](@ref), and [`unsafe_modify!`](@ref).
 
 !!! warning
 

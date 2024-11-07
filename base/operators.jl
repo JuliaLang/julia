@@ -3,10 +3,25 @@
 ## types ##
 
 """
-    <:(T1, T2)
+    <:(T1, T2)::Bool
 
-Subtype operator: returns `true` if and only if all values of type `T1` are
-also of type `T2`.
+Subtyping relation, defined between two types. In Julia, a type `S` is said to be a
+*subtype* of a type `T` if and only if we have `S <: T`.
+
+For any type `L` and any type `R`, `L <: R` implies that any value `v` of type `L`
+is also of type `R`. I.e., `(L <: R) && (v isa L)` implies `v isa R`.
+
+The subtyping relation is a *partial order*. I.e., `<:` is:
+
+* *reflexive*: for any type `T`, `T <: T` holds
+
+* *antisymmetric*: for any type `A` and any type `B`, `(A <: B) && (B <: A)`
+  implies `A == B`
+
+* *transitive*: for any type `A`, any type `B` and any type `C`;
+  `(A <: B) && (B <: C)` implies `A <: C`
+
+See also info on [Types](@ref man-types), [`Union{}`](@ref), [`Any`](@ref), [`isa`](@ref).
 
 # Examples
 ```jldoctest
@@ -16,28 +31,56 @@ true
 julia> Vector{Int} <: AbstractArray
 true
 
-julia> Matrix{Float64} <: Matrix{AbstractFloat}
+julia> Matrix{Float64} <: Matrix{AbstractFloat}  # `Matrix` is invariant
 false
+
+julia> Tuple{Float64} <: Tuple{AbstractFloat}    # `Tuple` is covariant
+true
+
+julia> Union{} <: Int  # The bottom type, `Union{}`, subtypes each type.
+true
+
+julia> Union{} <: Float32 <: AbstractFloat <: Real <: Number <: Any  # Operator chaining
+true
 ```
+
+The `<:` keyword also has several syntactic uses which represent the same subtyping relation,
+but which do not execute the operator or return a Bool:
+
+* To specify the lower bound and the upper bound on a parameter of a
+  [`UnionAll`](@ref) type in a [`where`](@ref) statement.
+
+* To specify the lower bound and the upper bound on a (static) parameter of a
+  method, see [Parametric Methods](@ref).
+
+* To define a subtyping relation while declaring a new type, see [`struct`](@ref)
+  and [`abstract type`](@ref).
 """
 (<:)
+
+import Core: >:
 
 """
     >:(T1, T2)
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+>:
 
 """
-    supertype(T::DataType)
+    supertype(T::Union{DataType, UnionAll})
 
-Return the supertype of DataType `T`.
+Return the direct supertype of type `T`.
+`T` can be a [`DataType`](@ref) or a [`UnionAll`](@ref) type. Does not support
+type [`Union`](@ref)s. Also see info on [Types](@ref man-types).
 
 # Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
+
+julia> supertype(Vector)
+DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
@@ -52,8 +95,9 @@ Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
-For collections, `==` is generally called recursively on all contents,
-though other properties (like the shape for arrays) may also be taken into account.
+Collections of the same type generally compare their key sets, and if those are `==`, then compare the values
+for each of those keys, returning true if all such pairs are `==`.
+Other properties are typically not taken into account (such as the exact type).
 
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
@@ -61,17 +105,18 @@ This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` a
 The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
-For collections, `missing` is returned if at least one of the operands contains
-a `missing` value and all non-missing values are equal.
+Collections generally implement three-valued logic akin to [`all`](@ref), returning
+missing if any operands contain missing values and all other pairs are equal.
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
 
-[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
-[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
-should therefore also implement [`hash`](@ref).
+Equality and hashing are intimately related; two values that are considered [`isequal`](@ref) **must**
+have the same [`hash`](@ref) and by default `isequal` falls back to `==`. If a type customizes the behavior of `==` and/or [`isequal`](@ref),
+then [`hash`](@ref) must be similarly implemented to ensure `isequal` and `hash` agree. `Set`s, `Dict`s, and many other internal
+implementations assume that this invariant holds.
 
 If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
 also implement [`<`](@ref) to ensure consistency of comparisons.
@@ -79,7 +124,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -143,7 +188,7 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a fixed total order (defined together with
-[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
+[`isequal`](@ref)). `isless` is not defined for pairs `(x, y)` of all types. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -154,13 +199,13 @@ Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
-This is the default comparison used by [`sort`](@ref).
+This is the default comparison used by [`sort!`](@ref).
 
 # Implementation
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-See the documentation on [Alternate orderings](@ref) for how to define alternate
+See the documentation on [Alternate Orderings](@ref) for how to define alternate
 ordering methods that can be used in sorting and related functions.
 
 # Examples
@@ -303,6 +348,7 @@ true
 ===
 const ≡ = ===
 
+import Core: !==
 """
     !==(x, y)
     ≢(x,y)
@@ -320,7 +366,8 @@ julia> a ≢ a
 false
 ```
 """
-!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!==
+
 const ≢ = !==
 
 """
@@ -334,6 +381,8 @@ a partial order.
 New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
+
+See also [`isunordered`](@ref).
 
 # Examples
 ```jldoctest
@@ -462,13 +511,17 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
-to take the maximum element from a collection.
+Return the maximum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`maximum`](@ref) function to take the maximum element from a collection.
 
 # Examples
 ```jldoctest
 julia> max(2, 5, 1)
 5
+
+julia> max(5, missing, 6)
+missing
 ```
 """
 max(x, y) = ifelse(isless(y, x), x, y)
@@ -476,13 +529,17 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
-to take the minimum element from a collection.
+Return the minimum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`minimum`](@ref) function to take the minimum element from a collection.
 
 # Examples
 ```jldoctest
 julia> min(2, 5, 1)
 1
+
+julia> min(4, missing, 6)
+missing
 ```
 """
 min(x,y) = ifelse(isless(y, x), y, x)
@@ -888,6 +945,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 
@@ -1096,40 +1154,55 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
-    Fix1(f, x)
+    Fix{N}(f, x)
 
-A type representing a partially-applied version of the two-argument function
-`f`, with the first argument fixed to the value "x". In other words,
-`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+A type representing a partially-applied version of a function `f`, with the argument
+`x` fixed at position `N::Int`. In other words, `Fix{3}(f, x)` behaves similarly to
+`(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
-See also [`Fix2`](@ref Base.Fix2).
+!!! compat "Julia 1.12"
+    This general functionality requires at least Julia 1.12, while `Fix1` and `Fix2`
+    are available earlier.
+
+!!! note
+    When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
+    available arguments, rather than an absolute ordering on the target function. For example,
+    `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
+    fixes the first and third arg.
 """
-struct Fix1{F,T} <: Function
+struct Fix{N,F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+    function Fix{N}(f::F, x) where {N,F}
+        if !(N isa Int)
+            throw(ArgumentError(LazyString("expected type parameter in `Fix` to be `Int`, but got `", N, "::", typeof(N), "`")))
+        elseif N < 1
+            throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
+        end
+        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+    end
 end
 
-(f::Fix1)(y) = f.f(f.x, y)
-
-"""
-    Fix2(f, x)
-
-A type representing a partially-applied version of the two-argument function
-`f`, with the second argument fixed to the value "x". In other words,
-`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
-"""
-struct Fix2{F,T} <: Function
-    f::F
-    x::T
-
-    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
+    M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
+    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
 end
 
-(f::Fix2)(y) = f.f(y, f.x)
+# Special cases for improved constant propagation
+(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
+(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
+"""
+Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
+"""
+const Fix1{F,T} = Fix{1,F,T}
+
+"""
+Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).
+"""
+const Fix2{F,T} = Fix{2,F,T}
+
 
 """
     isequal(x)
@@ -1230,7 +1303,7 @@ it into the original function. This is useful as an adaptor to pass a
 multi-argument function in a context that expects a single argument, but passes
 a tuple as that single argument.
 
-# Example usage:
+# Examples
 ```jldoctest
 julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
@@ -1266,8 +1339,7 @@ struct Splat{F} <: Function
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
-show(io::IO, s::Splat) = print(io, s)
+show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
 ## in and related operators
 
@@ -1284,7 +1356,7 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
+function in(x, itr::Any)
     anymissing = false
     for y in itr
         v = (y == x)
@@ -1296,6 +1368,30 @@ function in(x, itr)
     end
     return anymissing ? missing : false
 end
+
+# Specialized variant of in for Tuple, which can generate typed comparisons for each element
+# of the tuple, skipping values that are statically known to be != at compile time.
+in(x, itr::Tuple) = _in_tuple(x, itr, false)
+# This recursive function will be unrolled at compiletime, and will not generate separate
+# llvm-compiled specializations for each step of the recursion.
+function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+    @inline
+    # Base case
+    if isempty(itr)
+        return anymissing ? missing : false
+    end
+    # Recursive case
+    v = (itr[1] == x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _in_tuple(x, tail(itr), anymissing)
+end
+
+# fallback to the loop implementation after some number of arguments to avoid inference blowup
+in(x, itr::Any32) = invoke(in, Tuple{Any,Any}, x, itr)
 
 const ∈ = in
 ∉(x, itr) = !∈(x, itr)
@@ -1329,11 +1425,15 @@ a function equivalent to `y -> item in y`.
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
+Can equivalently be used with infix syntax:
+
+    item in collection
+    item ∈ collection
+
 Return a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
 contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
-
 Some collections follow a slightly different definition. For example,
 [`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
 [`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
@@ -1344,14 +1444,14 @@ or `k in keys(dict)`. For the collections mentioned above,
 the result is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
-`item` and `collection` are broadcasted over, which is often not what is intended.
+`items` and `collection` are broadcasted over, which is often not what is intended.
 For example, if both arguments are vectors (and the dimensions match), the result is
 a vector indicating whether each value in collection `items` is `in` the value at the
 corresponding position in `collection`. To get a vector indicating whether each value
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref).
+See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1389,8 +1489,6 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
-
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 
@@ -1400,7 +1498,7 @@ in
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
-When broadcasting with `items .∉ collection`, both `item` and `collection` are
+When broadcasting with `items .∉ collection`, both `items` and `collection` are
 broadcasted over, which is often not what is intended. For example, if both arguments
 are vectors (and the dimensions match), the result is a vector indicating whether
 each value in collection `items` is not in the value at the corresponding position

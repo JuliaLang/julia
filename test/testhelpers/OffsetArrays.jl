@@ -142,7 +142,7 @@ end
 @inline function Base.getindex(r::IdOffsetRange, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     @boundscheck checkbounds(r, i)
-    @inbounds eltype(r)(r.parent[i - r.offset] + r.offset)
+    @inbounds eltype(r)(r.parent[oftype(r.offset, i) - r.offset] + r.offset)
 end
 
 # Logical indexing following https://github.com/JuliaLang/julia/pull/31829
@@ -197,6 +197,7 @@ Base.show(io::IO, r::IdOffsetRange) = print(io, IdOffsetRange, "(values=",first(
 
 # Optimizations
 @inline Base.checkindex(::Type{Bool}, inds::IdOffsetRange, i::Real) = Base.checkindex(Bool, inds.parent, i - inds.offset)
+Base._firstslice(r::IdOffsetRange) = IdOffsetRange(Base._firstslice(r.parent), r.offset)
 
 ########################################################################################################
 # origin.jl
@@ -559,7 +560,6 @@ Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetVector, ::Colon) = A
 Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
-Base.reshape(A::OffsetArray, ::Colon) = reshape(A, (Colon(),))
 Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(A, inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = _reshape_nov(A, inds)
 # The following two additional methods for Colon are added to resolve method ambiguities to
@@ -592,7 +592,7 @@ Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 #   Δi = i - first(r)
 #   i′ = first(r.parent) + Δi
 # and one obtains the result below.
-parentindex(r::IdOffsetRange, i) = i - r.offset
+parentindex(r::IdOffsetRange, i) = oftype(r.offset, i) - r.offset
 
 @propagate_inbounds Base.getindex(A::OffsetArray{<:Any,0})  = A.parent[]
 
@@ -641,7 +641,7 @@ Base.copy(A::OffsetArray) = parent_call(copy, A)
 
 Base.strides(A::OffsetArray) = strides(parent(A))
 Base.elsize(::Type{OffsetArray{T,N,A}}) where {T,N,A} = Base.elsize(A)
-@inline Base.unsafe_convert(::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.cconvert(::Type{Ptr{T}}, A::OffsetArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # For fast broadcasting: ref https://discourse.julialang.org/t/why-is-there-a-performance-hit-on-broadcasting-with-offsetarrays/32194
 Base.dataids(A::OffsetArray) = Base.dataids(parent(A))
@@ -820,17 +820,6 @@ end
 centered(A::AbstractArray, cp::Dims=center(A)) = OffsetArray(A, .-cp)
 
 centered(A::AbstractArray, i::CartesianIndex) = centered(A, Tuple(i))
-
-# we may pass the searchsorted* functions to the parent, and wrap the offset
-for f in [:searchsortedfirst, :searchsortedlast, :searchsorted]
-    _safe_f = Symbol("_safe_" * String(f))
-    @eval function $_safe_f(v::OffsetArray, x, ilo, ihi, o::Base.Ordering)
-        offset = firstindex(v) - firstindex(parent(v))
-        $f(parent(v), x, ilo - offset, ihi - offset, o) .+ offset
-    end
-    @eval Base.$f(v::OffsetVector, x, ilo::T, ihi::T, o::Base.Ordering) where T<:Integer =
-        $_safe_f(v, x, ilo, ihi, o)
-end
 
 ##
 # Deprecations

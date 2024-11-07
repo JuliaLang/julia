@@ -44,7 +44,12 @@ end
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
-
+        @testset "equality" begin
+            @test isequal(T(0.0)*im, T(0.0))
+            @test !isequal(T(0.0)*im, T(-0.0))
+            @test isequal(Complex(T(-0.0), T(0.0)), T(-0.0))
+            @test !isequal(T(-0.0)*im, T(-0.0))
+        end
         @testset "add and subtract" begin
             @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
             @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
@@ -378,6 +383,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
     @test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+    @test isequal(log1p(complex(1e-200, 5e-175)), complex(1e-200, 5e-175))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
         @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
@@ -1208,4 +1214,10 @@ end
     @test iseven(6+0im) && !isodd(6+0im)
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
+end
+
+@testset "issue #55266" begin
+    for T in (Float16, Float32, Float64)
+        @test isapprox(atanh(1+im*floatmin(T)), Complex{T}(atanh(1+im*big(floatmin(T)))))
+    end
 end

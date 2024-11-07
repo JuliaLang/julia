@@ -3,6 +3,9 @@ BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
+
 TAGGED_RELEASE_BANNER := ""
 
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
@@ -57,6 +60,7 @@ else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
+	@echo "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 ifeq ($(OS),WINNT)
@@ -199,19 +203,25 @@ endif
 $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
-	ln -svf "$(7Z_PATH)" "$@"
+	ln -sf "$(7Z_PATH)" "$@"
 
-symlink_lld: $(build_bindir)/lld$(EXE)
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
 LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
 endif
 
-$(build_bindir)/lld$(EXE):
+$(build_depsbindir)/lld$(EXE):
 	[ -e "$(LLD_PATH)" ] && \
 	rm -f "$@" && \
-	ln -svf "$(LLD_PATH)" "$@"
+	ln -sf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -sf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -239,12 +249,12 @@ endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
-$(eval $(call symlink_system_library,CSL,libquadmath,0))
 $(eval $(call symlink_system_library,CSL,libstdc++,6))
-# We allow libssp, libatomic and libgomp to fail as they are not available on all systems
+# We allow libssp, libatomic, libgomp and libquadmath to fail as they are not available on all systems
 $(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libquadmath,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
 $(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))

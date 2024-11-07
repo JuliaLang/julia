@@ -80,7 +80,7 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if m.sig !== Tuple # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -194,10 +194,11 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
-    s = String(sym)
-    if s === :var"..."
+    if sym === :var"..."
         return "..."
-    elseif endswith(s, "...")
+    end
+    s = String(sym)
+    if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
     else
         return sprint(show_sym, sym)
@@ -285,6 +286,29 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     !iszero(n) && print(io, ":")
 end
 
+# Determine the `modulecolor` value to pass to `show_method`
+function _modulecolor(method::Method)
+    mmt = get_methodtable(method)
+    if mmt === nothing || mmt.module === parentmodule(method)
+        return nothing
+    end
+    # `mmt` is only particularly relevant for external method tables. Since the primary
+    # method table is shared, we now need to distinguish "primary" methods by trying to
+    # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
+    # would derive this same information (for the name).
+    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
+    # `ft` should be the type associated with the first argument in the method signature.
+    # If it's `Type`, try to unwrap it again.
+    if isType(ft)
+        ft = argument_datatype(ft.parameters[1])
+    end
+    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
+        return nothing
+    end
+    m = parentmodule_before_main(method)
+    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+end
+
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
     name = mt.name
@@ -299,12 +323,6 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
-    modul = if mt === _TYPE_NAME.mt && length(ms) > 0 # type constructor
-            which(ms.ms[1].module, ms.ms[1].name)
-        else
-            mt.module
-        end
-
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms
@@ -314,13 +332,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
             print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            modulecolor = if parentmodule(meth) == modul
-                nothing
-            else
-                m = parentmodule_before_main(meth)
-                get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-            end
-            show_method(io, meth; modulecolor)
+            show_method(io, meth; modulecolor=_modulecolor(meth))
 
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
@@ -366,7 +378,6 @@ function url(m::Method)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
-    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -374,8 +385,10 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    elseif root_module_exists(libgit2_id)
-        LibGit2 = root_module(libgit2_id)
+    end
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
+    LibGit2 = maybe_root_module(libgit2_id)
+    if LibGit2 isa Module
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -392,11 +405,10 @@ function url(m::Method)
                 end
             end
         catch
-            return fileurl(file)
+            # oops, this was a bad idea
         end
-    else
-        return fileurl(file)
     end
+    return fileurl(file)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)

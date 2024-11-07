@@ -18,9 +18,16 @@ This escape analysis aims to:
 ## Try it out!
 
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
-define the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
+defines the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
-include(normpath(Sys.BINDIR, "..", "share", "julia", "test", "compiler", "EscapeAnalysis", "EAUtils.jl")); using .EAUtils
+let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
+    # load `EscapeAnalysis` module to define the core analysis code
+    include(normpath(JULIA_DIR, "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
+    using .EscapeAnalysis
+    # load `EAUtils` module to define the utilities
+    include(normpath(JULIA_DIR, "test", "compiler", "EscapeAnalysis", "EAUtils.jl"))
+    using .EAUtils
+end
 
 mutable struct SafeRef{T}
     x::T
@@ -47,7 +54,7 @@ result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
 end
 ```
 
-The symbols in the side of each call argument and SSA statements represents the following meaning:
+The symbols on the side of each call argument and SSA statements represent the following meaning:
 - `◌` (plain): this value is not analyzed because escape information of it won't be used anyway (when the object is `isbitstype` for example)
 - `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
 - `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
@@ -358,14 +365,10 @@ non-inlined callees that has been derived by previous `IPO EA`.
 More interestingly, it is also valid to use `IPO EA` escape information for type inference,
 e.g., inference accuracy can be improved by forming `Const`/`PartialStruct`/`MustAlias` of mutable object.
 
-Since the computational cost of `analyze_escapes` is not that cheap,
-both `IPO EA` and `Local EA` are better to run only when there is any profitability.
-Currently `EscapeAnalysis` provides the `is_ipo_profitable` heuristic to check a profitability of `IPO EA`.
 ```@docs
 Core.Compiler.EscapeAnalysis.analyze_escapes
 Core.Compiler.EscapeAnalysis.EscapeState
 Core.Compiler.EscapeAnalysis.EscapeInfo
-Core.Compiler.EscapeAnalysis.is_ipo_profitable
 ```
 
 --------------------------------------------------------------------------------------------

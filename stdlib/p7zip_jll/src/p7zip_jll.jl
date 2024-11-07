@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/p7zip_jll.jl
 baremodule p7zip_jll
 using Base
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,8 +12,8 @@ export p7zip
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-p7zip_path = ""
+artifact_dir::String = ""
+p7zip_path::String = ""
 if Sys.iswindows()
     const p7zip_exe = "7z.exe"
 else

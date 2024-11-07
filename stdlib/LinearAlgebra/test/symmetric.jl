@@ -4,6 +4,14 @@ module TestSymmetric
 
 using Test, LinearAlgebra, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
@@ -63,6 +71,9 @@ end
 
                 @test_throws ArgumentError Symmetric(asym, :R)
                 @test_throws ArgumentError Hermitian(asym, :R)
+
+                @test_throws MethodError Symmetric{eltya,typeof(asym)}(asym, :L)
+                @test_throws MethodError Hermitian{eltya,typeof(aherm)}(aherm, :L)
 
                 # mixed cases with Hermitian/Symmetric
                 if eltya <: Real
@@ -212,8 +223,8 @@ end
 
         @testset "linalg unary ops" begin
             @testset "tr" begin
-                @test tr(asym) == tr(Symmetric(asym))
-                @test tr(aherm) == tr(Hermitian(aherm))
+                @test tr(asym) ≈ tr(Symmetric(asym))
+                @test tr(aherm) ≈ tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin
@@ -253,8 +264,11 @@ end
                     @testset "inverse edge case with complex Hermitian" begin
                         # Hermitian matrix, where inv(lu(A)) generates non-real diagonal elements
                         for T in (ComplexF32, ComplexF64)
-                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-                            H = Hermitian(A)
+                            # data should have nonvanishing imaginary parts on the diagonal
+                            M = T[0.279982+0.988074im  0.770011+0.870555im
+                                    0.138001+0.889728im  0.177242+0.701413im]
+                            H = Hermitian(M)
+                            A = Matrix(H)
                             @test inv(H) ≈ inv(A)
                             @test ishermitian(Matrix(inv(H)))
                         end
@@ -456,6 +470,141 @@ end
                 @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
             end
         end
+
+        @testset "kronecker product of symmetric and Hermitian matrices" begin
+            for mtype in (Symmetric, Hermitian)
+                symau = mtype(a, :U)
+                symal = mtype(a, :L)
+                msymau = Matrix(symau)
+                msymal = Matrix(symal)
+                for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                    creal = randn(n, n)/2
+                    cimag = randn(n, n)/2
+                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    symcu = mtype(c, :U)
+                    symcl = mtype(c, :L)
+                    msymcu = Matrix(symcu)
+                    msymcl = Matrix(symcl)
+                    @test kron(symau, symcu) ≈ kron(msymau, msymcu)
+                    @test kron(symau, symcl) ≈ kron(msymau, msymcl)
+                    @test kron(symal, symcu) ≈ kron(msymal, msymcu)
+                    @test kron(symal, symcl) ≈ kron(msymal, msymcl)
+                end
+            end
+        end
+    end
+end
+
+@testset "non-isbits algebra" begin
+    for ST in (Symmetric, Hermitian), uplo in (:L, :U)
+        M = Matrix{Complex{BigFloat}}(undef,2,2)
+        M[1,1] = rand()
+        M[2,2] = rand()
+        M[1+(uplo==:L), 1+(uplo==:U)] = rand(ComplexF64)
+        S = ST(M, uplo)
+        MS = Matrix(S)
+        @test real(S) == real(MS)
+        @test imag(S) == imag(MS)
+        @test conj(S) == conj(MS)
+        @test conj!(copy(S)) == conj(MS)
+        @test -S == -MS
+        @test S + S == MS + MS
+        @test S - S == MS - MS
+        @test S*2 == 2*S == 2*MS
+        @test S/2 == MS/2
+        @test kron(S,S) == kron(MS,MS)
+    end
+    @testset "mixed uplo" begin
+        Mu = Matrix{Complex{BigFloat}}(undef,2,2)
+        Mu[1,1] = Mu[2,2] = 3
+        Mu[1,2] = 2 + 3im
+        Ml = Matrix{Complex{BigFloat}}(undef,2,2)
+        Ml[1,1] = Ml[2,2] = 4
+        Ml[2,1] = 4 + 5im
+        for ST in (Symmetric, Hermitian)
+            Su = ST(Mu, :U)
+            MSu = Matrix(Su)
+            Sl = ST(Ml, :L)
+            MSl = Matrix(Sl)
+            @test Su + Sl == Sl + Su == MSu + MSl
+            @test Su - Sl == -(Sl - Su) == MSu - MSl
+            @test kron(Su,Sl) == kron(MSu,MSl)
+            @test kron(Sl,Su) == kron(MSl,MSu)
+        end
+    end
+    @testset "non-strided" begin
+        @testset "diagonal" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                m = ST1(Matrix{BigFloat}(undef,2,2), uplo1)
+                m.data[1,1] = 1
+                m.data[2,2] = 3
+                m.data[1+(uplo1==:L), 1+(uplo1==:U)] = 2
+                A = Array(m)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    id = ST2(I(2), uplo2)
+                    @test m + id == id + m == A + id
+                end
+            end
+        end
+        @testset "unit triangular" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                H1 = ST1(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo1)
+                M1 = Matrix(H1)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    H2 = ST2(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo2)
+                    @test H1 + H2 == M1 + Matrix(H2)
+                end
+            end
+        end
+    end
+end
+
+@testset "Reverse operation on Symmetric" begin
+    for uplo in (:U, :L)
+        A = Symmetric(randn(5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Symmetric == reverse(Matrix(A))
+    end
+end
+
+@testset "Reverse operation on Hermitian" begin
+    for uplo in (:U, :L)
+        A = Hermitian(randn(ComplexF64, 5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Hermitian == reverse(Matrix(A))
+    end
+end
+
+
+# bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
+# or any number type where conj(a)*conj(b) ≠ conj(a*b):
+@testset "dot Hermitian quaternion #52318" begin
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + t' for i in 1:2]
+    @test A == Hermitian(A) && B == Hermitian(B)
+    @test dot(A, B) ≈ dot(Hermitian(A), Hermitian(B))
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
+    @test A == Symmetric(A) && B == Symmetric(B)
+    @test dot(A, B) ≈ dot(Symmetric(A), Symmetric(B))
+end
+
+# let's make sure the analogous bug will not show up with kronecker products
+@testset "kron Hermitian quaternion #52318" begin
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + t' for i in 1:2]
+    @test A == Hermitian(A) && B == Hermitian(B)
+    @test kron(A, B) ≈ kron(Hermitian(A), Hermitian(B))
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
+    @test A == Symmetric(A) && B == Symmetric(B)
+    @test kron(A, B) ≈ kron(Symmetric(A), Symmetric(B))
+end
+
+@testset "kron with symmetric/hermitian matrices of matrices" begin
+    M = fill(ones(2,2), 2, 2)
+    for W in (Symmetric, Hermitian)
+        for (t1, t2) in ((W(M, :U), W(M, :U)), (W(M, :U), W(M, :L)), (W(M, :L), W(M, :L)))
+            @test kron(t1, t2) ≈ kron(Matrix(t1), Matrix(t2))
+        end
     end
 end
 
@@ -568,6 +717,21 @@ end
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
         @test norm(inv(Symmetric(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
         @test norm(inv(Hermitian(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
+    end
+end
+
+@testset "eigendecomposition Algorithms" begin
+    using LinearAlgebra: DivideAndConquer, QRIteration, RobustRepresentations
+    for T in (Float64, ComplexF64, Float32, ComplexF32)
+        n = 4
+        A = T <: Real ? Symmetric(randn(T, n, n)) : Hermitian(randn(T, n, n))
+        d, v = eigen(A)
+        for alg in (DivideAndConquer(), QRIteration(), RobustRepresentations())
+            @test (@inferred eigvals(A, alg)) ≈ d
+            d2, v2 = @inferred eigen(A, alg)
+            @test d2 ≈ d
+            @test A * v2 ≈ v2 * Diagonal(d2)
+        end
     end
 end
 
@@ -708,9 +872,9 @@ end
 end
 
 @testset "symmetric()/hermitian() for Numbers" begin
-    @test LinearAlgebra.symmetric(1, :U) == 1
+    @test LinearAlgebra.symmetric(1) == LinearAlgebra.symmetric(1, :U) == 1
     @test LinearAlgebra.symmetric_type(Int) == Int
-    @test LinearAlgebra.hermitian(1, :U) == 1
+    @test LinearAlgebra.hermitian(1) == LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
 end
 
@@ -822,6 +986,185 @@ end
         @test Aherm isa Hermitian
         @test Aherm.uplo == LinearAlgebra.char_uplo(uplo)
     end
+end
+
+@testset "Structured display" begin
+    @testset "Diagonal" begin
+        d = 10:13
+        D = Diagonal(d)
+        for uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+
+        d = (10:13) .+ 2im
+        D = Diagonal(d)
+        DR = Diagonal(complex.(real.(d)))
+        for uplo in (:L, :U)
+            H = Hermitian(D, uplo)
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, DR)
+
+            S = Symmetric(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+    end
+    @testset "Bidiagonal" begin
+        dv, ev = 1:4, 1:3
+        ST = SymTridiagonal(dv, ev)
+        D = Diagonal(dv)
+        for B_uplo in (:L, :U)
+            B = Bidiagonal(dv, ev, B_uplo)
+            for Sym_uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+                SB = SymHerm(B, Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? ST : D)
+                @test sprint(Base.print_matrix, SB) == teststr
+                SB = SymHerm(Transpose(B), Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? D : ST)
+                @test sprint(Base.print_matrix, SB) == teststr
+            end
+        end
+    end
+    @testset "Tridiagonal" begin
+        superd, d, subd = 3:5, 10:13, 1:3
+        for uplo in (:U, :L), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+        end
+
+        superd, d, subd = collect((3:5)*im), collect(Complex{Int}, 10:13), collect((1:3)*im)
+        for uplo in (:U, :L)
+            S = Symmetric(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+
+            H = Hermitian(Tridiagonal(subd, d, superd), uplo)
+            T = Tridiagonal(uplo == :L ? subd : conj(superd), d, uplo == :U ? superd : conj(subd))
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, T)
+        end
+    end
+end
+
+@testset "symmetric/hermitian for matrices" begin
+    A = [1 2; 3 4]
+    @test LinearAlgebra.symmetric(A) === Symmetric(A)
+    @test LinearAlgebra.symmetric(A, :L) === Symmetric(A, :L)
+    @test LinearAlgebra.hermitian(A) === Hermitian(A)
+    @test LinearAlgebra.hermitian(A, :L) === Hermitian(A, :L)
+end
+
+@testset "custom axes" begin
+    SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    for T in (Symmetric, Hermitian)
+        S = T(SZA)
+        r = SizedArrays.SOneTo(2)
+        @test axes(S) === (r,r)
+    end
+end
+
+@testset "Matrix elements" begin
+    M = [UpperTriangular([1 2; 3 4]) for i in 1:2, j in 1:2]
+    for T in (Symmetric, Hermitian)
+        H = T(M)
+        A = Array(H)
+        @test A isa Matrix
+        @test A == H
+        A = Array{Matrix{Int}}(H)
+        @test A isa Matrix{Matrix{Int}}
+        @test A == H
+    end
+end
+
+@testset "conj for immutable" begin
+    S = Symmetric(reshape((1:16)*im, 4, 4))
+    @test conj(S) == conj(Array(S))
+    H = Hermitian(reshape((1:16)*im, 4, 4))
+    @test conj(H) == conj(Array(H))
+end
+
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    @testset for T in (Symmetric, Hermitian), uploA in (:U, :L), uploB in (:U, :L)
+        A = T(view(M, 1:5, 1:5), uploA)
+        A2 = copy(A)
+        B = T(view(M, 2:6, 2:6), uploB)
+        @test copyto!(B, A) == A2
+
+        A = view(M, 2:4, 2:4)
+        B = T(view(M, 1:3, 1:3), uploB)
+        B2 = copy(B)
+        @test copyto!(A, B) == B2
+    end
+end
+
+@testset "copyto with incompatible sizes" begin
+    A = zeros(3,3); B = zeros(2,2)
+    @testset "copyto with incompatible sizes" begin
+        for T in (Symmetric, Hermitian)
+            @test_throws BoundsError copyto!(T(B), T(A))
+            @test_throws "Cannot set a non-diagonal index" copyto!(T(A), T(B))
+        end
+    end
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for ST in (Symmetric, Hermitian)
+        S = ST(M)
+        @test_throws "invalid index" S[true, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
+@testset "tr for block matrices" begin
+    m = [1 2; 3 4]
+    for b in (m, m * (1 + im))
+        M = fill(b, 3, 3)
+        for ST in (Symmetric, Hermitian)
+            S = ST(M)
+            @test tr(S) == sum(diag(S))
+        end
+    end
+end
+
+@testset "setindex! returns the destination" begin
+    M = rand(2,2)
+    for T in (Symmetric, Hermitian)
+        S = T(M)
+        @test setindex!(S, 0, 2, 2) === S
+    end
+end
+
+@testset "partly iniitalized matrices" begin
+    a = Matrix{BigFloat}(undef, 2,2)
+    a[1] = 1; a[3] = 1; a[4] = 1
+    h = Hermitian(a)
+    s = Symmetric(a)
+    d = Diagonal([1,1])
+    symT = SymTridiagonal([1 1;1 1])
+    @test h+d == Array(h) + Array(d)
+    @test h+symT == Array(h) + Array(symT)
+    @test s+d == Array(s) + Array(d)
+    @test s+symT == Array(s) + Array(symT)
+    @test h-d == Array(h) - Array(d)
+    @test h-symT == Array(h) - Array(symT)
+    @test s-d == Array(s) - Array(d)
+    @test s-symT == Array(s) - Array(symT)
+    @test d+h == Array(d) + Array(h)
+    @test symT+h == Array(symT) + Array(h)
+    @test d+s == Array(d) + Array(s)
+    @test symT+s == Array(symT) + Array(s)
+    @test d-h == Array(d) - Array(h)
+    @test symT-h == Array(symT) - Array(h)
+    @test d-s == Array(d) - Array(s)
+    @test symT-s == Array(symT) - Array(s)
+end
+
+@testset "issue #56283" begin
+    a = 1.0
+    D = Diagonal(randn(10))
+    H = Hermitian(D*D')
+    @test a*H == H
 end
 
 end # module TestSymmetric

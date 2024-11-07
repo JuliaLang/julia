@@ -10,4 +10,5 @@ static const uint32_t charmap[][2] = {
     { 0x00B7, 0x22C5 }, // middot char -> dot operator (#25098)
     { 0x0387, 0x22C5 }, // Greek interpunct -> dot operator (#25098)
     { 0x2212, 0x002D }, // minus -> hyphen-minus (#26193)
+    { 0x210F, 0x0127 }, // hbar -> small letter h with stroke (#48870)
 };

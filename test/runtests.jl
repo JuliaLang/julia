@@ -9,6 +9,9 @@ using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
+include("buildkitetestjson.jl")
+
+using .BuildkiteTestJSON
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -71,10 +74,12 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
+move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
@@ -82,12 +87,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+for prependme in ["LinearAlgebra", "Pkg"]
+    prependme_test_ids = findall(x->occursin(prependme, x), tests)
+    prependme_tests = tests[prependme_test_ids]
+    deleteat!(tests, prependme_test_ids)
+    prepend!(tests, prependme_tests)
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -122,6 +129,7 @@ cd(@__DIR__) do
 
     println("""
         Running parallel tests with:
+          getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads() = $(Threads.threadpoolsize())
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
@@ -419,14 +427,20 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+
+    if Base.get_bool_env("CI", false)
+        @info "Writing test result data to $(@__DIR__)"
+        write_testset_json_files(@__DIR__, o_ts)
+    end
+
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
-        println("    \033[32;1mSUCCESS\033[0m")
+        printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
-        println("    \033[31;1mFAILURE\033[0m\n")
+        printstyled("    FAILURE\n\n"; bold=true, color=:red)
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
         println("The global RNG seed was 0x$(string(seed, base = 16)).\n")

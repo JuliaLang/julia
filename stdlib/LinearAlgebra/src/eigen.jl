@@ -173,7 +173,8 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
+    E = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    eval, evec = E[2], E[4]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
 
@@ -182,7 +183,9 @@ end
 
 Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
-matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+matrix `F.vectors`. This corresponds to solving an eigenvalue problem of the form
+`Ax =  λx`, where `A` is a matrix, `x` is an eigenvector, and `λ` is an eigenvalue.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
@@ -233,22 +236,23 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    ishermitian(A) && return eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    AA = eigencopy_oftype(A, eigtype(T))
-    return eigen!(AA; permute, scale, sortby)
+    _eigen(A; permute, scale, sortby)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    E = if ishermitian(A)
-        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    else
-        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
-    end
+    E = _eigen(A; permute, scale, sortby)
     values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
     vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
     return Eigen(values, vectors)
 end
+function _eigen(A::AbstractMatrix{T}; permute=true, scale=true, sortby=eigsortby) where {T}
+    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    else
+        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
+    end
+end
+
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
@@ -342,7 +346,7 @@ eigvals(A::AbstractMatrix{T}; kws...) where T =
 """
 For a scalar input, `eigvals` will return a scalar.
 
-# Example
+# Examples
 ```jldoctest
 julia> eigvals(-2)
 -2
@@ -480,6 +484,8 @@ end
 Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
+This corresponds to solving a generalized eigenvalue problem of the form
+`Ax =  λBx`, where `A, B` are matrices, `x` is an eigenvector, and `λ` is an eigenvalue.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -520,7 +526,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    eigen!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
@@ -615,7 +621,7 @@ julia> eigvals(A,B)
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    return eigvals!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 
 """
@@ -652,14 +658,19 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.vectors)
 end
 
-function Base.hash(F::Eigen, h::UInt)
-    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
-end
-function Base.:(==)(A::Eigen, B::Eigen)
-    return A.values == B.values && A.vectors == B.vectors
-end
-function Base.isequal(A::Eigen, B::Eigen)
-    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+_equalcheck(f, Avalues, Avectors, Bvalues, Bvectors) = f(Avalues, Bvalues) && f(Avectors, Bvectors)
+for T in (Eigen, GeneralizedEigen)
+    @eval begin
+        function Base.hash(F::$T, h::UInt)
+            return hash(F.values, hash(F.vectors, hash($T, h)))
+        end
+        function Base.:(==)(A::$T, B::$T)
+            return _equalcheck(==, A..., B...)
+        end
+        function Base.isequal(A::$T, B::$T)
+            return _equalcheck(isequal, A..., B...)
+        end
+    end
 end
 
 # Conversion methods

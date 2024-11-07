@@ -209,10 +209,12 @@ end
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+
+    @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 
-@testset "element type" begin
+@testset "elelement/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -227,6 +229,11 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    @test valtype((1,2,3)) === eltype((1,2,3))
+    @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
+    @test keytype((1,2,3)) === Int
+    @test keytype(Tuple{Int, Missing}) === Int
 end
 
 @testset "map with Nothing and Missing" begin
@@ -265,8 +272,10 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
-        @test_throws BoundsError map(foo, (), (1,))
-        @test_throws BoundsError map(foo, (1,), ())
+        @test map(foo, longtuple, vlongtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, (), (1,)) === ()
+        @test map(foo, (1,), ()) === ()
     end
 
     @testset "n arguments" begin
@@ -276,8 +285,11 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
         @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
-        @test_throws BoundsError map(foo, (), (1,), (1,))
-        @test_throws BoundsError map(foo, (1,), (1,), ())
+        @test map(foo, vlongtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, vlongtuple) === ntuple(i->3i,20)
+        @test map(foo, (), (1,), (1,)) === ()
+        @test map(foo, (1,), (1,), ()) === ()
     end
 end
 
@@ -520,6 +532,13 @@ end
     for n = 0:15
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
+
+    @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
 end
 
 struct A_15703{N}
@@ -642,6 +661,8 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    @test Base.return_types(Base.setindex, Tuple{Tuple,Nothing,Int}) == [Tuple]
 end
 
 @testset "inferable range indexing with constant values" begin
@@ -758,6 +779,12 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
 
+# issue #50562
+f50562(r) = in(:i_backward, r[])
+r50562 = Ref((:b_back, :foofakgka, :i_backw))
+f50562(r50562)
+@test @allocated(f50562(r50562)) == 0
+
 # issue #47326
 function fun1_47326(args...)
     head..., tail = args
@@ -783,3 +810,43 @@ namedtup = (;a=1, b=2, c=3)
 # Make sure that tuple iteration is foldable
 @test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
 @test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
+
+# some basic equivalence handling tests for Union{} appearing in Tuple Vararg parameters
+@test Tuple{} <: Tuple{Vararg{Union{}}}
+@test Tuple{Int} <: Tuple{Int, Vararg{Union{}}}
+@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Int, Vararg{Union{},1}}
+@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
+@test Tuple{} <: Tuple{Vararg{Union{},N}} where N
+@test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+
+@test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
+@test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
+@test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
+@test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
+
+@testset "from Pair, issue #52636" begin
+    pair = (1 => "2")
+    @test (1, "2") == @inferred Tuple(pair)
+    @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
+@testset "circshift" begin
+    t1 = (1, 2, 3, 4, 5)
+    t2 = (1, 'a', -7.0, 3)
+    t3 = ('a', 'b', 'c', 'd')
+    @test @inferred(Base.circshift(t1, 2)) == (4, 5, 1, 2, 3)
+    # The return type of mixed tuples with runtime shift cannot be inferred.
+    @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
+    @test_throws MethodError circshift(t1, 'a')
+    @test Base.infer_return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Base.infer_return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    for len ∈ 0:5
+        v = 1:len
+        t = Tuple(v)
+        for shift ∈ -6:6
+            @test circshift(v, shift) == collect(circshift(t, shift))
+        end
+    end
+end

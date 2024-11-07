@@ -8,6 +8,9 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 # for tuple tests below
 ≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
 
@@ -97,10 +100,10 @@ let n = 10
             @testset "Multiplication/division" begin
                 for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
                             UpperTriangular(A), UnitUpperTriangular(A))
-                    @test (H*x)::UpperHessenberg == Array(H)*x
-                    @test (x*H)::UpperHessenberg == x*Array(H)
-                    @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                    @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test (H*x)::UpperHessenberg ≈ Array(H)*x
+                    @test (x*H)::UpperHessenberg ≈ x*Array(H)
+                    @test H/x ≈ Array(H)/x# broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test x\H ≈ x\Array(H)# broken = eltype(H) <: Furlong && x isa UpperTriangular
                     @test H/x isa UpperHessenberg
                     @test x\H isa UpperHessenberg
                 end
@@ -113,13 +116,12 @@ let n = 10
             H = UpperHessenberg(Furlong.(Areal))
             for A in (A, Furlong.(A))
                 @testset "Multiplication/division Furlong" begin
-                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U))
-                        @test (H*x)::UpperHessenberg == Array(H)*x
-                        @test (x*H)::UpperHessenberg == x*Array(H)
-                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test H/x isa UpperHessenberg
-                        @test x\H isa UpperHessenberg
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                                UpperTriangular(A), UnitUpperTriangular(A))
+                        @test map(x -> x.val, (H*x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)*x)
+                        @test map(x -> x.val, (x*H)::UpperHessenberg) ≈ map(x -> x.val, x*Array(H))
+                        @test map(x -> x.val, (H/x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)/x)
+                        @test map(x -> x.val, (x\H)::UpperHessenberg) ≈ map(x -> x.val, x\Array(H))
                     end
                     x = Bidiagonal(d, dl, :L)
                     @test H*x == Array(H)*x
@@ -146,7 +148,7 @@ let n = 10
         @test size(H.Q, 2) == size(A, 2)
         @test size(H.Q) == size(A)
         @test size(H) == size(A)
-        @test_throws ErrorException H.Z
+        @test_throws FieldError H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
         @test (H.Q' * A) * H.Q ≈ H.H
@@ -159,7 +161,7 @@ let n = 10
         hessstring = sprint((t, s) -> show(t, "text/plain", s), H)
         qstring = sprint((t, s) -> show(t, "text/plain", s), H.Q)
         hstring = sprint((t, s) -> show(t, "text/plain", s), H.H)
-        @test hessstring == "$(summary(H))\nQ factor:\n$qstring\nH factor:\n$hstring"
+        @test hessstring == "$(summary(H))\nQ factor: $qstring\nH factor:\n$hstring"
 
         #iterate
         q,h = H
@@ -179,8 +181,10 @@ let n = 10
         @test H \ B ≈ A \ B ≈ H \ complex(B)
         @test (H - I) \ B ≈ (A - I) \ B
         @test (H - (3+4im)I) \ B ≈ (A - (3+4im)I) \ B
-        @test b' / H ≈ b' / A ≈ complex.(b') / H
+        @test b' / H ≈ b' / A ≈ complex(b') / H
+        @test transpose(b) / H ≈ transpose(b) / A ≈ transpose(complex(b)) / H
         @test B' / H ≈ B' / A ≈ complex(B') / H
+        @test b' / H' ≈ complex(b)' / H'
         @test B' / (H - I) ≈ B' / (A - I)
         @test B' / (H - (3+4im)I) ≈ B' / (A - (3+4im)I)
         @test (H - (3+4im)I)' \ B ≈ (A - (3+4im)I)' \ B
@@ -196,6 +200,13 @@ let n = 10
         c = b .+ 1
         @test dot(b, h, c) ≈ dot(h'b, c) ≈ dot(b, HM, c) ≈ dot(HM'b, c)
     end
+end
+
+@testset "Reverse operation on UpperHessenberg" begin
+    A = UpperHessenberg(randn(5, 5))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
 end
 
 @testset "hessenberg(::AbstractMatrix)" begin
@@ -237,6 +248,35 @@ using .Main.ImmutableArrays
 
     @test convert(AbstractArray{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
     @test convert(AbstractMatrix{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
+end
+
+@testset "custom axes" begin
+    SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    S = UpperHessenberg(SZA)
+    r = SizedArrays.SOneTo(2)
+    @test axes(S) === (r,r)
+end
+
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    A = UpperHessenberg(view(M, 1:5, 1:5))
+    A2 = copy(A)
+    B = UpperHessenberg(view(M, 2:6, 2:6))
+    @test copyto!(B, A) == A2
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:9, 3, 3)
+    S = UpperHessenberg(M)
+    @test_throws "invalid index" S[3, true]
+    @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+end
+
+@testset "complex Symmetric" begin
+    D = diagm(0=>ComplexF64[1,2])
+    S = Symmetric(D)
+    H = hessenberg(S)
+    @test H.H == D
 end
 
 end # module TestHessenberg

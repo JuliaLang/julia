@@ -149,8 +149,9 @@ and `V` is ``N \\times N``, while in the thin factorization `U` is ``M
 \\times K`` and `V` is ``N \\times K``, where ``K = \\min(M,N)`` is the
 number of singular values.
 
-If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
-Another (typically slower but more accurate) option is `alg = QRIteration()`.
+`alg` specifies which algorithm and LAPACK method to use for SVD:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.gesdd!`.
+- `alg = QRIteration()`: Calls `LAPACK.gesvd!` (typically slower but more accurate) .
 
 !!! compat "Julia 1.3"
     The `alg` keyword argument requires Julia 1.3 or later.
@@ -213,7 +214,6 @@ Base.propertynames(F::SVD, private::Bool=false) =
 
 Return the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref) and [`svd`](@ref).
-```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
 svdvals!(A::StridedVector{T}) where {T<:BlasFloat} = svdvals!(reshape(A, (length(A), 1)))
@@ -303,8 +303,8 @@ Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, a
 
 The entries of `F.D1` and `F.D2` are related, as explained in the LAPACK
 documentation for the
-[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
-[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
+[generalized SVD](https://www.netlib.org/lapack/lug/node36.html) and the
+[xGGSVD3](https://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
 routine which is called underneath (in LAPACK 3.6.0 and newer).
 
 # Examples

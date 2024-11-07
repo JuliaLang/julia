@@ -84,7 +84,6 @@ end # module ReflectionTest
 @test isconcretetype(DataType)
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
-@test isconcretetype(Tuple{Union{}})
 @test !isconcretetype(Complex)
 @test !isconcretetype(Complex.body)
 @test !isconcretetype(AbstractArray{Int,1})
@@ -126,11 +125,18 @@ not_const = 1
 # For curmod_*
 include("testenv.jl")
 
+module TestMod36529
+    x36529 = 0
+    y36529 = 1
+    export y36529
+end
+
 module TestMod7648
 using Test
 import Base.convert
 import ..curmod_name, ..curmod
-export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
+using ..TestMod36529: x36529   # doesn't import TestMod36529 or y36529, even though it's exported
+export a9475, c7648, f9475, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
 d7648 = 9
@@ -143,10 +149,11 @@ module TestModSub9475
     using Test
     using ..TestMod7648
     import ..curmod_name
-    export a9475, foo9475
+    export a9475, f9475, f54609
     a9475 = 5
     b9475 = 7
-    foo9475(x) = x
+    f9475(x) = x
+    f54609(x) = x
     let
         @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
@@ -170,16 +177,102 @@ let
     @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
     @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
-    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
-    @test Set(names(TestMod7648, all = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
-                                                :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
-    @test Set(names(TestMod7648, all = true, imported = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
-                                                      :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                      :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
-                                                      :convert, :curmod_name, :curmod])
+    defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
+    allset = defaultset ∪ Set(Symbol[
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
+        :TestModSub9475, :d7648, :eval, :f7648, :include])
+    imported = Set(Symbol[:convert, :curmod_name, :curmod])
+    usings_from_Test = Set(Symbol[
+        Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"), Symbol("@test_deprecated"),
+        Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
+        Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
+        :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
+        :detect_ambiguities, :detect_unbound_args])
+    usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
+    usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
+    @test Set(names(TestMod7648)) == defaultset
+    @test Set(names(TestMod7648, all=true)) == allset
+    @test Set(names(TestMod7648, all=true, imported=true)) == allset ∪ imported
+    @test Set(names(TestMod7648, usings=true)) == defaultset ∪ usings
+    @test Set(names(TestMod7648, all=true, usings=true)) == allset ∪ usings
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
+end
+
+# tests for `names(...; usings=true)`
+
+baremodule Test54609Simple
+module Inner
+export exported
+global exported::Int = 1
+global unexported::Int = 0
+end
+using Base: @assume_effects
+using .Inner
+end
+let usings = names(Test54609Simple; usings=true)
+    @test Symbol("@assume_effects") ∈ usings
+    @test :Base ∉ usings
+    @test :exported ∈ usings
+    @test :unexported ∉ usings
+end # baremodule Test54609Simple
+
+baremodule _Test54609Complex
+export exported_new
+using Base: @deprecate_binding
+global exported_new = nothing
+@deprecate_binding exported_old exported_new
+end # baremodule _Test54609Complex
+baremodule Test54609Complex
+using .._Test54609Complex
+end # baremodule Test54609Complex
+let usings = names(Test54609Complex; usings=true)
+    @test :exported_new ∈ usings
+    @test :exported_old ∉ usings
+    @test :_Test54609Complex ∈ usings # should include the `using`ed module itself
+    usings_all = names(Test54609Complex; usings=true, all=true)
+    @test :exported_new ∈ usings_all
+    @test :exported_old ∈ usings_all # deprecated names should be included with `all=true`
+end
+
+module TestMod54609
+module M1
+    const m1_x = 1
+    export m1_x
+end
+module M2
+    const m2_x = 1
+    export m2_x
+end
+module A
+    module B
+        f(x) = 1
+        secret = 1
+        module Inner2 end
+    end
+    module C
+        x = 1
+        y = 2
+        export y
+    end
+    using .B: f
+    using .C
+    using ..M1
+    import ..M2
+end
+end # module TestMod54609
+let defaultset = Set((:A,))
+    imported = Set((:M2,))
+    usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
+    usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
+    allset = Set((:A, :B, :C, :eval, :include))
+    @test Set(names(TestMod54609.A)) == defaultset
+    @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
+    @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings
+    @test Set(names(TestMod54609.A, all=true)) == allset
+    @test Set(names(TestMod54609.A, all=true, usings=true)) == allset ∪ usings
+    @test Set(names(TestMod54609.A, imported=true, usings=true)) == defaultset ∪ imported ∪ usings
+    @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
 
 let
@@ -190,10 +283,10 @@ let
     @test parentmodule(foo7648, (Any,)) == TestMod7648
     @test parentmodule(foo7648) == TestMod7648
     @test parentmodule(foo7648_nomethods) == TestMod7648
-    @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
-    @test parentmodule(foo9475) == TestMod7648.TestModSub9475
+    @test parentmodule(f9475, (Any,)) == TestMod7648.TestModSub9475
+    @test parentmodule(f9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
-    @test parentmodule(first(methods(foo9475))) == TestMod7648.TestModSub9475
+    @test parentmodule(first(methods(f9475))) == TestMod7648.TestModSub9475
     @test parentmodule(first(methods(foo7648))) == TestMod7648
     @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
@@ -212,15 +305,21 @@ include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
+public this_is_public
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(Main, :this_is_not_defined)
 @test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(Main, :this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
+@test !isexported(@__MODULE__, :this_is_public)
 const a_value = 1
 @test which(@__MODULE__, :a_value) === @__MODULE__
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
 @test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
+@test !Base.ispublic(@__MODULE__, :a_value)
+@test Base.ispublic(@__MODULE__, :this_is_not_defined)
+@test Base.ispublic(@__MODULE__, :this_is_public)
+@test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
 # PR 13825
@@ -469,7 +568,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 205
+@test length(methods(fLargeTable)) == 206
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -548,7 +647,7 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -587,7 +686,7 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+    @test_throws(Core.TypeNameError(Union{Int, Float64}),
                  Base.typename(Union{Int, Float64}))
 end
 
@@ -609,11 +708,16 @@ end
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
-@test_throws ErrorException sizeof(AbstractArray)
+@test sizeof(MemoryRef{Int}) == 2 * sizeof(Int)
+@test sizeof(GenericMemoryRef{:atomic,Int,Core.CPU}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,0}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,1}) == 3 * sizeof(Int)
+@test sizeof(Array{Int,2}) == 4 * sizeof(Int)
+@test sizeof(Array{Int,20}) == 22 * sizeof(Int)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
 @test_throws ErrorException sizeof(String)
-@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Memory{false,Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
 @test_throws ErrorException sizeof(Union{})
@@ -910,16 +1014,15 @@ _test_at_locals2(1,1,0.5f0)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
-                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
-                   #=binary=#false,
-                   params)
+                   #=binary=#false)
 end
 
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
 @test nameof(Core.Intrinsics.mul_int) === :mul_int
-@test nameof(Core.Intrinsics.arraylen) === :arraylen
+@test nameof(Core.Intrinsics.cglobal) === :cglobal
 
 module TestMod33403
 f(x) = 1
@@ -995,9 +1098,18 @@ end
     @test Base.default_tt(m.f4) == Tuple
 end
 
+@testset "lookup mi" begin
+    @test 1+1 == 2
+    mi1 = Base.method_instance(+, (Int, Int))
+    @test mi1.def.name == :+
+    # Note `jl_method_lookup` doesn't returns CNull if not found
+    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi2
+end
+
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -1011,7 +1123,22 @@ ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
 
-@testset "infer_effects" begin
+@testset "Base.infer_return_type[s]" begin
+    # generic function case
+    @test only(Base.return_types(issue41694, (Int,))) == Base.infer_return_type(issue41694, (Int,)) == Int
+    # case when it's not fully covered
+    @test only(Base.return_types(issue41694, (Integer,))) == Base.infer_return_type(issue41694, (Integer,)) == Int
+    # MethodError case
+    @test isempty(Base.return_types(issue41694, (Float64,)))
+    @test Base.infer_return_type(issue41694, (Float64,)) == Union{}
+    # builtin case
+    @test only(Base.return_types(typeof, (Any,))) == Base.infer_return_type(typeof, (Any,)) == DataType
+    @test only(Base.return_types(===, (Any,Any))) == Base.infer_return_type(===, (Any,Any)) == Bool
+    @test only(Base.return_types(setfield!, ())) == Base.infer_return_type(setfield!, ()) == Union{}
+    @test only(Base.return_types(Core.Intrinsics.mul_int, ())) == Base.infer_return_type(Core.Intrinsics.mul_int, ()) == Union{}
+end
+
+@testset "Base.infer_effects" begin
     # generic functions
     @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
     @test Base.infer_effects((Int,)) do x
@@ -1035,7 +1162,139 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
-    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+end
+
+@testset "Base.infer_exception_type[s]" begin
+    # generic functions
+    @test Base.infer_exception_type(issue41694, (Int,)) == only(Base.infer_exception_types(issue41694, (Int,))) == ErrorException
+    @test Base.infer_exception_type((Int,)) do x
+        issue41694(x)
+    end == Base.infer_exception_types((Int,)) do x
+        issue41694(x)
+    end |> only == ErrorException
+    @test Base.infer_exception_type(issue41694) == only(Base.infer_exception_types(issue41694)) == ErrorException # use `default_tt`
+    let excts = Base.infer_exception_types(maybe_effectful, (Any,))
+        @test any(==(Any), excts)
+        @test any(==(Union{}), excts)
+    end
+    @test Base.infer_exception_type(maybe_effectful, (Any,)) == Any
+    # `infer_exception_type` should account for MethodError
+    @test Base.infer_exception_type(issue41694, (Float64,)) == MethodError # definitive dispatch error
+    @test Base.infer_exception_type(issue41694, (Integer,)) == Union{MethodError,ErrorException} # possible dispatch error
+    @test Base.infer_exception_type(f_no_methods) == MethodError # no possible matching methods
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Int)) == MethodError # ambiguity error
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Any)) == MethodError # ambiguity error
+    # builtins
+    @test Base.infer_exception_type(typeof, (Any,)) === only(Base.infer_exception_types(typeof, (Any,))) === Union{}
+    @test Base.infer_exception_type(===, (Any,Any)) === only(Base.infer_exception_types(===, (Any,Any))) === Union{}
+    @test (Base.infer_exception_type(setfield!, ()); Base.infer_exception_types(setfield!, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+    @test (Base.infer_exception_type(Core.Intrinsics.mul_int, ()); Base.infer_exception_types(Core.Intrinsics.mul_int, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+@test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.DefaultArrayStyle{1}, Any, Vararg})) >=
+      10
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test !Base.ismutationfree(Vector{Any})
+@test !Base.ismutationfree(Vector{Symbol})
+@test !Base.ismutationfree(Vector{UInt8})
+@test !Base.ismutationfree(Vector{Int32})
+@test !Base.ismutationfree(Vector{UInt64})
+
+@test Base.ismutationfree(Type{Union{}})
+
+module TestNames
+
+public publicized
+export exported
+
+publicized() = 1
+exported() = 1
+private() = 1
+
+end
+
+@test names(TestNames) == [:TestNames, :exported, :publicized]
+
+# reflections for generated function with abstract input types
+
+# :generated_only function should return failed results if given abstract input types
+@generated function generated_only_simple(x)
+    if x <: Integer
+        return :(x ^ 2)
+    else
+        return :(x)
+    end
+end
+@test only(Base.return_types(generated_only_simple, (Real,))) ==
+      Base.infer_return_type(generated_only_simple, (Real,)) ==
+      Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
+let (src, rt) = only(code_typed(generated_only_simple, (Real,)))
+    @test src isa Method
+    @test rt == Any
+end
+
+# optionally generated function should return fallback results if given abstract input types
+function sub2ind_gen_impl(dims::Type{NTuple{N,Int}}, I...) where N
+    ex = :(I[$N] - 1)
+    for i = (N - 1):-1:1
+        ex = :(I[$i] - 1 + dims[$i] * $ex)
+    end
+    return :($ex + 1)
+end;
+function sub2ind_gen_fallback(dims::NTuple{N,Int}, I) where N
+    ind = I[N] - 1
+    for i = (N - 1):-1:1
+        ind = I[i] - 1 + dims[i]*ind
+    end
+    return ind + 1
+end;
+function sub2ind_gen(dims::NTuple{N,Int}, I::Integer...) where N
+    length(I) == N || error("partial indexing is unsupported")
+    if @generated
+        return sub2ind_gen_impl(dims, I...)
+    else
+        return sub2ind_gen_fallback(dims, I)
+    end
+end;
+@test only(Base.return_types(sub2ind_gen, (NTuple,Int,Int,))) == Int
+let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
+    @test src isa CodeInfo
+    @test rt == Int
+    @test any(iscall((src,sub2ind_gen_fallback)), src.code)
+    @test any(iscall((src,error)), src.code)
+end
+
+# marking a symbol as public should not "unexport" it
+# https://github.com/JuliaLang/julia/issues/52812
+module Mod52812
+using Test
+export a, b
+@test_throws ErrorException eval(Expr(:public, :a))
+public c
+@test_throws ErrorException eval(Expr(:export, :c))
+export b
+public c
+end
+
+@test Base.isexported(Mod52812, :a)
+@test Base.isexported(Mod52812, :b)
+@test Base.ispublic(Mod52812, :a)
+@test Base.ispublic(Mod52812, :b)
+@test Base.ispublic(Mod52812, :c) && !Base.isexported(Mod52812, :c)
+
+@test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
+@test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
+
+@test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187

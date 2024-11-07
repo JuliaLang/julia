@@ -49,6 +49,72 @@ end
     end
 end
 
+"""
+    @stable_muladdmul
+
+Replaces a function call, that has a `MulAddMul(alpha, beta)` constructor as an
+argument, with a branch over possible values of `isone(alpha)` and `iszero(beta)`
+and constructs `MulAddMul{isone(alpha), iszero(beta)}` explicitly in each branch.
+For example, 'f(x, y, MulAddMul(alpha, beta))` is transformed into
+```
+if isone(alpha)
+    if iszero(beta)
+        f(x, y, MulAddMul{true, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{true, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
+else
+    if iszero(beta)
+        f(x, y, MulAddMul{false, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{false, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
+end
+```
+This avoids the type instability of the `MulAddMul(alpha, beta)` constructor,
+which causes runtime dispatch in case alpha and zero are not constants.
+"""
+macro stable_muladdmul(expr)
+    expr.head == :call || throw(ArgumentError("Can only handle function calls."))
+    for (i, e) in enumerate(expr.args)
+        e isa Expr || continue
+        if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
+            local asym = e.args[2]
+            local bsym = e.args[3]
+
+            local e_sub11 = copy(expr)
+            e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub10 = copy(expr)
+            e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub01 = copy(expr)
+            e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub00 = copy(expr)
+            e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_out = quote
+                if isone($asym)
+                    if iszero($bsym)
+                        $e_sub11
+                    else
+                        $e_sub10
+                    end
+                else
+                    if iszero($bsym)
+                        $e_sub01
+                    else
+                        $e_sub00
+                    end
+                end
+            end
+            return esc(e_out)
+        end
+    end
+    throw(ArgumentError("No valid MulAddMul expression found."))
+end
+
 MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
@@ -108,40 +174,75 @@ end
 end
 
 
-function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
+function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, X[IX] * s, C, IC)
+        @inbounds @stable_muladdmul _modify!(MulAddMul(alpha,beta), X[IX] * s, C, IC)
     end
     C
 end
 
-function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
+function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not
-match the length of the second, $(length(X))."))
+        throw(DimensionMismatch(LazyString(lazy"first array has length $(length(C)) which does not",
+            lazy"match the length of the second, $(length(X)).")))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
-        @inbounds _modify!(_add, s * X[IX], C, IC)
+        @inbounds @stable_muladdmul _modify!(MulAddMul(alpha,beta), s * X[IX], C, IC)
     end
     C
 end
 
-@inline function mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    _lscale_add!(C, s, X, alpha, beta)
+
+_lscale_add!(C::StridedArray, s::Number, X::StridedArray, alpha::Number, beta::Number) =
+    generic_mul!(C, s, X, alpha, beta)
+@inline function _lscale_add!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if axes(C) == axes(X)
-        C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
+        if isone(alpha)
+            if iszero(beta)
+                @. C = s * X
+            else
+                @. C = s * X + C * beta
+            end
+        else
+            if iszero(beta)
+                @. C = s * X * alpha
+            else
+                @. C = s * X * alpha + C * beta
+            end
+        end
     else
-        generic_mul!(C, s, X, MulAddMul(alpha, beta))
+        generic_mul!(C, s, X, alpha, beta)
     end
     return C
 end
-@inline function mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    _rscale_add!(C, X, s, alpha, beta)
+
+_rscale_add!(C::StridedArray, X::StridedArray, s::Number, alpha::Number, beta::Number) =
+    generic_mul!(C, X, s, alpha, beta)
+@inline function _rscale_add!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if axes(C) == axes(X)
-        C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
+        if isone(alpha)
+            if iszero(beta)
+                @. C = X * s
+            else
+                @. C = X * s + C * beta
+            end
+        else
+            s_alpha = s * alpha
+            if iszero(beta)
+                @. C = X * s_alpha
+            else
+                @. C = X * s_alpha + C * beta
+            end
+        end
     else
-        generic_mul!(C, X, s, MulAddMul(alpha, beta))
+        generic_mul!(C, X, s, alpha, beta)
     end
     return C
 end
@@ -317,55 +418,7 @@ function cross(a::AbstractVector, b::AbstractVector)
 end
 
 """
-    triu(M)
-
-Upper triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> triu(a)
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 0.0  1.0  1.0  1.0
- 0.0  0.0  1.0  1.0
- 0.0  0.0  0.0  1.0
-```
-"""
-triu(M::AbstractMatrix) = triu!(copy(M))
-
-"""
-    tril(M)
-
-Lower triangle of a matrix.
-
-# Examples
-```jldoctest
-julia> a = fill(1.0, (4,4))
-4×4 Matrix{Float64}:
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
- 1.0  1.0  1.0  1.0
-
-julia> tril(a)
-4×4 Matrix{Float64}:
- 1.0  0.0  0.0  0.0
- 1.0  1.0  0.0  0.0
- 1.0  1.0  1.0  0.0
- 1.0  1.0  1.0  1.0
-```
-"""
-tril(M::AbstractMatrix) = tril!(copy(M))
-
-"""
-    triu(M, k::Integer)
+    triu(M, k::Integer = 0)
 
 Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
@@ -393,10 +446,22 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
+function triu(M::AbstractMatrix, k::Integer = 0)
+    d = similar(M)
+    A = triu!(d,k)
+    if iszero(k)
+        copytrito!(A, M, 'U')
+    else
+        for col in axes(A,2)
+            rows = firstindex(A,1):min(col-k, lastindex(A,1))
+            A[rows, col] = @view M[rows, col]
+        end
+    end
+    return A
+end
 
 """
-    tril(M, k::Integer)
+    tril(M, k::Integer = 0)
 
 Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
@@ -424,7 +489,19 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
+function tril(M::AbstractMatrix,k::Integer=0)
+    d = similar(M)
+    A = tril!(d,k)
+    if iszero(k)
+        copytrito!(A, M, 'L')
+    else
+        for col in axes(A,2)
+            rows = max(firstindex(A,1),col-k):lastindex(A,1)
+            A[rows, col] = @view M[rows, col]
+        end
+    end
+    return A
+end
 
 """
     triu!(M)
@@ -592,8 +669,9 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real)
     isempty(itr) && return float(norm(zero(eltype(itr))))
+    norm_recursive_check(itr)
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -607,6 +685,18 @@ function norm(itr, p::Real=2)
     else
         normp(itr, p)
     end
+end
+# Split into a separate method to reduce latency in norm(x) calls (#56330)
+function norm(itr)
+    isempty(itr) && return float(norm(zero(eltype(itr))))
+    norm_recursive_check(itr)
+    norm2(itr)
+end
+function norm_recursive_check(itr)
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
+    return nothing
 end
 
 """
@@ -654,18 +744,15 @@ norm(::Missing, p::Real=2) = missing
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    @inbounds begin
-        for j = 1:n
-            nrmj::Tsum = 0
-            for i = 1:m
-                nrmj += norm(A[i,j])
-            end
-            nrm = max(nrm,nrmj)
+    for j in axes(A,2)
+        nrmj::Tsum = 0
+        for i in axes(A,1)
+            nrmj += norm(@inbounds A[i,j])
         end
+        nrm = max(nrm,nrmj)
     end
     return convert(Tnorm, nrm)
 end
@@ -681,18 +768,15 @@ end
 
 function opnormInf(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
-    m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
-    @inbounds begin
-        for i = 1:m
-            nrmi::Tsum = 0
-            for j = 1:n
-                nrmi += norm(A[i,j])
-            end
-            nrm = max(nrm,nrmi)
+    for i in axes(A,1)
+        nrmi::Tsum = 0
+        for j in axes(A,2)
+            nrmi += norm(@inbounds A[i,j])
         end
+        nrm = max(nrm,nrmi)
     end
     return convert(Tnorm, nrm)
 end
@@ -734,7 +818,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -742,9 +826,10 @@ function opnorm(A::AbstractMatrix, p::Real=2)
     elseif p == Inf
         return opnormInf(A)
     else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+        throw(ArgumentError(lazy"invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
+opnorm(A::AbstractMatrix) = opnorm2(A)
 
 """
     opnorm(x::Number, p::Real=2)
@@ -755,8 +840,8 @@ This is equivalent to [`norm`](@ref).
 @inline opnorm(x::Number, p::Real=2) = norm(x, p)
 
 """
-    opnorm(A::Adjoint{<:Any,<:AbstracVector}, q::Real=2)
-    opnorm(A::Transpose{<:Any,<:AbstracVector}, q::Real=2)
+    opnorm(A::Adjoint{<:Any,<:AbstractVector}, q::Real=2)
+    opnorm(A::Transpose{<:Any,<:AbstractVector}, q::Real=2)
 
 For Adjoint/Transpose-wrapped vectors, return the operator ``q``-norm of `A`, which is
 equivalent to the `p`-norm with value `p = q/(q-1)`. They coincide at `p = q = 2`.
@@ -858,6 +943,8 @@ function dot(x, y) # arbitrary iterables
     end
     (vx, xs) = ix
     (vy, ys) = iy
+    typeof(vx) == typeof(x) && typeof(vy) == typeof(y) && throw(ArgumentError(
+            "cannot evaluate dot recursively if the type of an element is identical to that of the container"))
     s = dot(vx, vy)
     while true
         ix = iterate(x, xs)
@@ -878,14 +965,14 @@ dot(x::Number, y::Number) = conj(x) * y
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+        throw(DimensionMismatch(lazy"first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
     s = zero(dot(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
-        @inbounds s += dot(x[Ix], y[Iy])
+        s += dot(@inbounds(x[Ix]), @inbounds(y[Iy]))
     end
     s
 end
@@ -926,11 +1013,11 @@ function dot(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     s = zero(T)
     i₁ = first(eachindex(x))
     x₁ = first(x)
-    @inbounds for j in eachindex(y)
-        yj = y[j]
+    for j in eachindex(y)
+        yj = @inbounds y[j]
         if !iszero(yj)
-            temp = zero(adjoint(A[i₁,j]) * x₁)
-            @simd for i in eachindex(x)
+            temp = zero(adjoint(@inbounds A[i₁,j]) * x₁)
+            @inbounds @simd for i in eachindex(x)
                 temp += adjoint(A[i,j]) * x[i]
             end
             s += dot(temp, yj)
@@ -1010,7 +1097,7 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A)
     checksquare(A)
     sum(diag(A))
 end
@@ -1155,6 +1242,9 @@ function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
+# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
+# /(x::Number,A::StridedMatrix) = x*inv(A)
+/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -1281,16 +1371,17 @@ false
 julia> istriu(a, -1)
 true
 
-julia> b = [1 im; 0 -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+1im
- 0+0im  -1+0im
+julia> c = [1 1 1; 1 1 1; 0 1 1]
+3×3 Matrix{Int64}:
+ 1  1  1
+ 1  1  1
+ 0  1  1
 
-julia> istriu(b)
-true
-
-julia> istriu(b, 1)
+julia> istriu(c)
 false
+
+julia> istriu(c, -1)
+true
 ```
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
@@ -1325,16 +1416,17 @@ false
 julia> istril(a, 1)
 true
 
-julia> b = [1 0; -im -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+0im
- 0-1im  -1+0im
+julia> c = [1 1 0; 1 1 1; 1 1 1]
+3×3 Matrix{Int64}:
+ 1  1  0
+ 1  1  1
+ 1  1  1
 
-julia> istril(b)
-true
-
-julia> istril(b, -1)
+julia> istril(c)
 false
+
+julia> istril(c, 1)
+true
 ```
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
@@ -1451,7 +1543,7 @@ julia> axpy!(2, x, y)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $n, but y has length $(length(y))"))
     end
     iszero(α) && return y
     for (IY, IX) in zip(eachindex(y), eachindex(x))
@@ -1462,7 +1554,7 @@ end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if length(rx) != length(ry)
-        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
+        throw(DimensionMismatch(lazy"rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
@@ -1496,7 +1588,7 @@ julia> axpby!(2, x, 2, y)
 """
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     iszero(α) && isone(β) && return y
     for (IX, IY) in zip(eachindex(x), eachindex(y))
@@ -1536,12 +1628,14 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    @inbounds for i = 1:n
-        xi, yi = x[i], y[i]
-        x[i] =       c *xi + s*yi
-        y[i] = -conj(s)*xi + c*yi
+    for i in eachindex(x,y)
+        @inbounds begin
+            xi, yi = x[i], y[i]
+            x[i] =       c *xi + s*yi
+            y[i] = -conj(s)*xi + c*yi
+        end
     end
     return x, y
 end
@@ -1559,12 +1653,14 @@ function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    @inbounds for i = 1:n
-        xi, yi = x[i], y[i]
-        x[i] =      c *xi + s*yi
-        y[i] = conj(s)*xi - c*yi
+    for i in eachindex(x,y)
+        @inbounds begin
+            xi, yi = x[i], y[i]
+            x[i] =      c *xi + s*yi
+            y[i] = conj(s)*xi - c*yi
+        end
     end
     return x, y
 end
@@ -1575,34 +1671,36 @@ end
     require_one_based_indexing(x)
     n = length(x)
     n == 0 && return zero(eltype(x))
-    @inbounds begin
-        ξ1 = x[1]
-        normu = norm(x)
-        if iszero(normu)
-            return zero(ξ1/normu)
-        end
-        ν = T(copysign(normu, real(ξ1)))
-        ξ1 += ν
-        x[1] = -ν
-        for i = 2:n
-            x[i] /= ξ1
-        end
+    ξ1 = @inbounds x[1]
+    normu = norm(x)
+    if iszero(normu)
+        return zero(ξ1/normu)
+    end
+    ν = T(copysign(normu, real(ξ1)))
+    ξ1 += ν
+    @inbounds x[1] = -ν
+    for i in 2:n
+        @inbounds x[i] /= ξ1
     end
     ξ1/ν
 end
 
-# apply reflector from left
+"""
+    reflectorApply!(x, τ, A)
+
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - conj(τ)*[1; x[2:end]]*[1; x[2:end]]')*A`.
+"""
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
-    require_one_based_indexing(x)
+    require_one_based_indexing(x, A)
     m, n = size(A, 1), size(A, 2)
     if length(x) != m
-        throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
+        throw(DimensionMismatch(lazy"reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
     m == 0 && return A
-    @inbounds for j = 1:n
-        Aj, xj = view(A, 2:m, j), view(x, 2:m)
-        vAj = conj(τ)*(A[1, j] + dot(xj, Aj))
-        A[1, j] -= vAj
+    for j in axes(A,2)
+        Aj, xj = @inbounds view(A, 2:m, j), view(x, 2:m)
+        vAj = conj(τ)*(@inbounds(A[1, j]) + dot(xj, Aj))
+        @inbounds A[1, j] -= vAj
         axpy!(-vAj, xj, Aj)
     end
     return A
@@ -1624,6 +1722,15 @@ julia> M = [1 0; 2 2]
 
 julia> det(M)
 2.0
+```
+Note that, in general, `det` computes a floating-point approximation of the
+determinant, even for integer matrices, typically via Gaussian elimination.
+Julia includes an exact algorithm for integer determinants (the Bareiss algorithm),
+but only uses it by default for `BigInt` matrices (since determinants quickly
+overflow any fixed integer precision):
+```jldoctest
+julia> det(BigInt[1 0; 2 2]) # exact integer determinant
+2
 ```
 """
 function det(A::AbstractMatrix{T}) where {T}
@@ -1669,15 +1776,19 @@ julia> logabsdet(B)
 (0.6931471805599453, 1.0)
 ```
 """
-logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
-
+function logabsdet(A::AbstractMatrix)
+    if istriu(A) || istril(A)
+        return logabsdet(UpperTriangular(A))
+    end
+    return logabsdet(lu(A, check=false))
+end
 logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
-increased accuracy and/or speed.
+Logarithm of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and avoids overflow/underflow.
 
 # Examples
 ```jldoctest
@@ -1724,9 +1835,10 @@ julia> LinearAlgebra.det_bareiss!(M)
 ```
 """
 function det_bareiss!(M)
+    Base.require_one_based_indexing(M)
     n = checksquare(M)
     sign, prev = Int8(1), one(eltype(M))
-    for i in 1:n-1
+    for i in axes(M,2)[begin:end-1]
         if iszero(M[i,i]) # swap with another col to make nonzero
             swapto = findfirst(!iszero, @view M[i,i+1:end])
             isnothing(swapto) && return zero(prev)
@@ -1747,7 +1859,7 @@ Calculates the determinant of a matrix using the
 [Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
 Also refer to [`det_bareiss!`](@ref).
 """
-det_bareiss(M) = det_bareiss!(copy(M))
+det_bareiss(M) = det_bareiss!(copymutable(M))
 
 
 
@@ -1804,21 +1916,18 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::Real)
+@inline function __normalize!(a::AbstractArray, nrm)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
-
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(a, invnrm)
-
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(a, εδ)
         rmul!(a, inv(nrm*εδ))
     end
-
-    a
+    return a
 end
 
 """
@@ -1887,3 +1996,50 @@ end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    copytrito!(B, A, uplo) -> B
+
+Copies a triangular part of a matrix `A` to another matrix `B`.
+`uplo` specifies the part of the matrix `A` to be copied to `B`.
+Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'`
+for the upper triangular part.
+
+!!! compat "Julia 1.11"
+    `copytrito!` requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> A = [1 2 ; 3 4];
+
+julia> B = [0 0 ; 0 0];
+
+julia> copytrito!(B, A, 'L')
+2×2 Matrix{Int64}:
+ 1  0
+ 3  4
+```
+"""
+function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
+    require_one_based_indexing(A, B)
+    BLAS.chkuplo(uplo)
+    m,n = size(A)
+    m1,n1 = size(B)
+    A = Base.unalias(B, A)
+    if uplo == 'U'
+        LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
+        for j in axes(A,2), i in axes(A,1)[begin : min(j,end)]
+            @inbounds B[i,j] = A[i,j]
+        end
+    else # uplo == 'L'
+        LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
+        for j in axes(A,2), i in axes(A,1)[j:end]
+            @inbounds B[i,j] = A[i,j]
+        end
+    end
+    return B
+end
+# Forward LAPACK-compatible strided matrices to lacpy
+function copytrito!(B::StridedMatrixStride1{T}, A::StridedMatrixStride1{T}, uplo::AbstractChar) where {T<:BlasFloat}
+    LAPACK.lacpy!(B, A, uplo)
+end

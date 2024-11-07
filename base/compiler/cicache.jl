@@ -7,14 +7,19 @@ Internally, each `MethodInstance` keep a unique global cache of code instances
 that have been created for the given method instance, stratified by world age
 ranges. This struct abstracts over access to this cache.
 """
-struct InternalCodeCache end
+struct InternalCodeCache
+    owner::Any # `jl_egal` is used for comparison
+end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
+    @assert ci.owner === cache.owner
+    m = mi.def
+    if isa(m, Method) && m.module != Core
+        ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
+    end
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
-
-const GLOBAL_CI_CACHE = InternalCodeCache()
 
 struct WorldRange
     min_world::UInt
@@ -26,6 +31,8 @@ WorldRange(r::UnitRange) = WorldRange(first(r), last(r))
 first(wr::WorldRange) = wr.min_world
 last(wr::WorldRange) = wr.max_world
 in(world::UInt, wr::WorldRange) = wr.min_world <= world <= wr.max_world
+min_world(wr::WorldRange) = first(wr)
+max_world(wr::WorldRange) = last(wr)
 
 function intersect(a::WorldRange, b::WorldRange)
     ret = WorldRange(max(a.min_world, b.min_world), min(a.max_world, b.max_world))
@@ -49,11 +56,11 @@ WorldView(wvc::WorldView, wr::WorldRange) = WorldView(wvc.cache, wr)
 WorldView(wvc::WorldView, args...) = WorldView(wvc.cache, args...)
 
 function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
-    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
+    return ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
 end
 
 function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
-    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds))
+    r = ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds))
     if r === nothing
         return default
     end
@@ -69,4 +76,10 @@ end
 function setindex!(wvc::WorldView{InternalCodeCache}, ci::CodeInstance, mi::MethodInstance)
     setindex!(wvc.cache, ci, mi)
     return wvc
+end
+
+function code_cache(interp::AbstractInterpreter)
+    cache = InternalCodeCache(cache_owner(interp))
+    worlds = WorldRange(get_inference_world(interp))
+    return WorldView(cache, worlds)
 end

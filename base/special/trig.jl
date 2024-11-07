@@ -34,7 +34,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
         end
         return sin_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         sin_domain_error(x)
     end
@@ -103,7 +103,7 @@ function cos(x::T) where T<:Union{Float32, Float64}
         end
         return cos_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         cos_domain_error(x)
     else
@@ -165,10 +165,12 @@ end
 @noinline sincos_domain_error(x) = throw(DomainError(x, "sincos(x) is only defined for finite x."))
 
 """
-    sincos(x)
+    sincos(x::T) where T -> Tuple{float(T),float(T)}
 
 Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
 a tuple `(sine, cosine)`.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` if `isnan(x)`.
 
 See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 """
@@ -179,7 +181,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         end
         return sincos_kernel(x)
     elseif isnan(x)
-        return T(NaN), T(NaN)
+        return x, x
     elseif isinf(x)
         sincos_domain_error(x)
     end
@@ -221,7 +223,7 @@ function tan(x::T) where T<:Union{Float32, Float64}
         end
         return tan_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         tan_domain_error(x)
     end
@@ -582,8 +584,8 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
-    if isnan(x) || isnan(y) # S1 or S2
-        return T(NaN)
+    if isnan(x) | isnan(y) # S1 or S2
+        return isnan(x) ? x : y
     end
 
     if x == T(1.0) # then y/x = y and x > 0, see M2
@@ -783,22 +785,22 @@ end
 end
 
 """
-    sinpi(x)
+    sinpi(x::T) where T -> float(T)
 
 Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
 
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
+
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sinpi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`x` cannot be infinite."))
+        throw(DomainError(x, "`sinpi(x)` is only defined for finite `x`."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -816,20 +818,22 @@ function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
     return ifelse(signbit(_x), -res, res)
 end
 """
-    cospi(x)
+    cospi(x::T) where T -> float(T)
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
+
+See also: [`cispi`](@ref), [`sincosd`](@ref), [`cospi`](@ref).
 """
-function cospi(x::T) where T<:Union{IEEEFloat, Rational}
+function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`x` cannot be infinite."))
+        throw(DomainError(x, "`cospi(x)` is only defined for finite `x`."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return one(T)
-    end
+    x >= maxintfloat(T) && return one(T)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -846,26 +850,26 @@ function cospi(x::T) where T<:Union{IEEEFloat, Rational}
     end
 end
 """
-    sincospi(x)
+    sincospi(x::T) where T -> Tuple{float(T),float(T)}
 
 Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
 where `x` is in radians), returning a tuple `(sine, cosine)`.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
+function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
-        throw(DomainError(x, "`x` cannot be infinite."))
+        throw(DomainError(x, "`sincospi(x)` is only defined for finite `x`."))
     end
     # For large x, answers are all 1 or zero.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
-    end
+    x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -886,29 +890,28 @@ function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
 end
 
 """
-    tanpi(x)
+    tanpi(x::T) where T -> float(T)
 
 Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large `x`.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 !!! compat "Julia 1.10"
     This function requires at least Julia 1.10.
 
 See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-
-function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
+function tanpi(_x::T) where T<:IEEEFloat
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
     x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError(x, "`x` cannot be infinite."))
+        throw(DomainError(x, "`tanpi(x)` is only defined for finite `x`."))
     end
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
-    if T <: AbstractFloat
-        x >= maxintfloat(T) && return copysign(zero(T), _x)
-    end
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
@@ -933,10 +936,10 @@ cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 tanpi(x::Integer) = x >= 0 ? (isodd(x) ? -zero(float(x)) : zero(float(x))) :
                              (isodd(x) ? zero(float(x)) : -zero(float(x)))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
-sinpi(x::Real) = sin(pi*x)
-cospi(x::Real) = cos(pi*x)
-sincospi(x::Real) = sincos(pi*x)
-tanpi(x::Real) = tan(pi*x)
+sinpi(x::AbstractFloat) = sin(pi*x)
+cospi(x::AbstractFloat) = cos(pi*x)
+sincospi(x::AbstractFloat) = sincos(pi*x)
+tanpi(x::AbstractFloat) = tan(pi*x)
 tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
 
 function sinpi(z::Complex{T}) where T
@@ -1072,9 +1075,11 @@ isinf_real(x::Complex) = isinf(real(x)) && isfinite(imag(x))
 isinf_real(x::Number) = false
 
 """
-    sinc(x)
+    sinc(x::T) where {T <: Number} -> float(T)
 
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+Compute normalized sinc function ``\\operatorname{sinc}(x) = \\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+
+Return a `T(NaN)` if `isnan(x)`.
 
 See also [`cosc`](@ref), its derivative.
 """
@@ -1089,10 +1094,14 @@ _sinc(x::Float16) = Float16(_sinc(Float32(x)))
 _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
 """
-    cosc(x)
+    cosc(x::T) where {T <: Number} -> float(T)
 
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
+
+Return a `T(NaN)` if `isnan(x)`.
+
+See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
 function _cosc(x::Number)
@@ -1136,19 +1145,25 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
     dname = string(finvd)
     @eval begin
         @doc """
-            $($name)(x)
+            $($name)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in radians.
+
+        Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
         """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
-            $($hname)(x)
+            $($hname)(x::T) where {T <: Number} -> float(T)
 
         Compute the hyperbolic $($fn) of `x`.
+
+        Return a `T(NaN)` if `isnan(x)`.
         """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
-            $($dname)(x)
+            $($dname)(x::T) where {T <: Number} -> float(T)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
+
+        Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
         """ ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
@@ -1160,11 +1175,15 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     hname = string(hfa)
     @eval begin
         @doc """
-            $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::Number) = ($tfainv)(inv(y))
+            $($tname)(x::T) where {T <: Number} -> float(T)
+
+        Compute the inverse $($fn) of `x`, where the output is in radians.
+        """ ($tfa)(y::Number) = ($tfainv)(inv(y))
         @doc """
-            $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::Number) = ($hfainv)(inv(y))
+            $($hname)(x::T) where {T <: Number} -> float(T)
+
+        Compute the inverse hyperbolic $($fn) of `x`.
+        """ ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
 
@@ -1189,9 +1208,9 @@ deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
+        return throw(DomainError(x, "`sind(x)` is only defined for finite `x`."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = copysign(float(rem(x,360)),x)
@@ -1220,9 +1239,9 @@ end
 
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
+        return throw(DomainError(x, "`cosd(x)` is only defined for finite `x`."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = abs(float(rem(x,360)))
@@ -1247,9 +1266,12 @@ end
 tand(x::Real) = sind(x) / cosd(x)
 
 """
-    sincosd(x)
+    sincosd(x::T) where T -> Tuple{float(T),float(T)}
 
-Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
+Simultaneously compute the sine and cosine of `x`, where `x` is in degrees, returning
+a tuple `(sine, cosine)`.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
@@ -1265,10 +1287,12 @@ for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan
         name = string(fd)
         @eval begin
             @doc """
-                $($name)(x)
+                $($name)(x::T) where T -> float(T)
 
             Compute $($fn) of `x`, where `x` is in $($un).
             If `x` is a matrix, `x` needs to be a square matrix.
+
+            Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
             !!! compat "Julia 1.7"
                 Matrix arguments require Julia 1.7 or later.
@@ -1297,10 +1321,14 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
 end
 
 """
-    atand(y)
-    atand(y,x)
+    atand(y::T) where T -> float(T)
+    atand(y::T, x::S) where {T,S} -> promote_type(T,S)
+    atand(y::AbstractMatrix{T}) where T -> AbstractMatrix{Complex{float(T)}}
 
 Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
+
+Return a `NaN` if `isnan(y)` or `isnan(x)`. The returned `NaN` is either a `T` in the single
+argument version, or a `promote_type(T,S)` in the two argument version.
 
 !!! compat "Julia 1.7"
     The one-argument method supports square matrix arguments as of Julia 1.7.
