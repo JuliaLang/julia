@@ -190,6 +190,21 @@ function check_channel_state(c::Channel)
     end
 end
 
+# This function will run `f` and return `true` if it throws an `InvalidStateException` because
+# a channel is closed, and `false` otherwise.
+function do_is_closed(f)
+    try
+        f()
+        return false
+    catch e
+        if isa(e, InvalidStateException) && e.state === :closed
+            return true
+        else
+            rethrow()
+        end
+    end
+end
+
 """
     close(c::Channel[, excp::Exception])
 
@@ -459,7 +474,9 @@ end
     append!(c::Channel, iter)
 
 Append all items in `iter` to the channel `c`. If the channel is buffered, this operation requires
-fewer `lock` operations than individual `put!`s. Blocks if the channel is full.
+fewer `lock` operations than individual `put!`s. If the length of the iterator
+is greater than the available buffer space, the operation will block until enough elements
+are taken from the channel to make space for the new elements.
 
 # Examples
 
@@ -482,7 +499,7 @@ julia> take!(c)
     Requires at least Julia 1.12.
 """
 function append!(c::Channel, iter::T) where {T}
-    if hasmethod(length, Tuple{T})
+    if IteratorSize(iter) isa Union{HasLength, HasShape}
         len = length(iter)
         # shortcircuit for small short objects
         if len == 0
@@ -496,7 +513,7 @@ function append!(c::Channel, iter::T) where {T}
     return isbuffered(c) ? append_buffered(c, iter) : append_unbuffered(c, iter)
 end
 function append!(c1::Channel, c2::Channel{T}) where {T}
-    # if the source channel has no buffer or only one slot, there is no benefit to grouping the lock
+    # if either channel has a buffer size of 0 or 1, fallback to a naive `put!` loop
     if min(c1.sz_max, c2.sz_max) < 2
         return isbuffered(c1) ? append_buffered(c1, c2) : append_unbuffered(c1, c2)
     end
@@ -506,15 +523,9 @@ function append!(c1::Channel, c2::Channel{T}) where {T}
         while isopen(c2) || isready(c2)
             # wait for data to become available
             while isempty(c2.data)
-                try
+                do_is_closed() do
                     check_channel_state(c2)
                     wait(c2.cond_take)
-                catch e
-                    if isa(e, InvalidStateException) && e.state === :closed
-                        break
-                    else
-                        rethrow()
-                    end
                 end
             end
 
@@ -557,7 +568,7 @@ end
 function append_buffered(c::Channel{T}, iter::I) where {T,I}
     converted_items = Iterators.Stateful(Iterators.map(x -> convert(T, x), iter))
 
-    has_length = hasmethod(length, Tuple{I})
+    has_length = IteratorSize(iter) isa HasLength
     elements_to_add = if has_length
         # when we know the length, we can eagerly increment for all items
         l = length(iter)
@@ -579,7 +590,7 @@ function append_buffered(c::Channel{T}, iter::I) where {T,I}
             available_space = c.sz_max - length(c.data)
             chunk = Iterators.take(converted_items, available_space)
 
-            # for iterators without length, we increment the available items for this chunk only
+            # for iterators without length, we increment the available items one item at a time
             if !has_length
                 chunk = Iterators.map(chunk) do x
                     elements_to_add += 1
@@ -743,51 +754,59 @@ function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) 
     if n == 0
         return buffer
     elseif n == 1
-        try
-            x = take!(c)
-            buffer[begin] = x
-        catch e
-            # when provided a batch size, take should not error on a closed channel
-            # so we need to return an empty buffer if we fail to get one element.
-            if e isa InvalidStateException && e.state === :closed
-                empty!(buffer)
-            else
-                rethrow()
-            end
+        is_closed = do_is_closed() do
+            buffer[begin] = take!(c)
         end
+        # if we caught a closed error when trying to get the element, we need to clear the
+        # buffer before returning
+        is_closed && empty!(buffer)
         return buffer
     end
     return buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, n, buffer)
+end
+
+# As we take elements from the channel, we may need to resize the buffer to accommodate them
+# for small n, we resize once at the beginning. But for larger n, we resize the buffer as needed.
+# We resize exponentially larger each time until we reach 2^16, at which point we resize by 2^16.
+function _resize_buffer(buffer, n, resize_count, n_to_take=1)
+    len = length(buffer)
+    needed_space = max(
+        n_to_take,
+        2^resize_count
+    )
+    resize!(buffer, min(len + needed_space, n))
+    resize_count >= 16 && return resize_count
+    return resize_count + 1
+end
+
+function _rm_unused_slots(buffer, last_idx)
+    if last_idx <= lastindex(buffer)
+        deleteat!(buffer, last_idx+1:lastindex(buffer))
+    end
 end
 
 function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
     elements_taken = 0 # number of elements taken so far
     idx1 = firstindex(buffer)
     target_buffer_len = min(n, c.sz_max)
+    resize_count = 1
+
     lock(c)
     try
         while elements_taken < n && (isopen(c) || isready(c))
             # wait until the channel has at least min_n elements or is full
             while length(c.data) < target_buffer_len && isopen(c)
-                try
-                    wait(c.cond_take)
-                catch e
-                    if e isa InvalidStateException && e.state === :closed
-                        break
-                    else
-                        rethrow()
-                    end
-                end
+                do_is_closed(() -> wait(c.cond_take)) && break
             end
             # take as many elements as possible from the buffer
             n_to_take = min(n - elements_taken, length(c.data))
             idx_start = idx1 + elements_taken
             idx_end = idx_start + n_to_take - 1
             if idx_end > lastindex(buffer)
-                resize!(buffer, idx_end)
+                resize_count = _resize_buffer(buffer, n, resize_count, n_to_take)
             end
             # since idx_start/end are both created relative to `firstindex(buffer)`, they are safe to use
-            # them as indices for the buffer
+            # as indices for the buffer
             @views copy!(buffer[idx_start:idx_end], c.data[1:n_to_take])
             deleteat!(c.data, 1:n_to_take)
             _increment_n_avail(c, -n_to_take)
@@ -795,10 +814,7 @@ function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
             elements_taken += n_to_take
         end
 
-        # if we broke early, we need to remove the extra slots from the result
-        if elements_taken < length(buffer)
-            deleteat!(buffer, firstindex(buffer)+elements_taken:lastindex(buffer))
-        end
+        _rm_unused_slots(buffer, firstindex(buffer)+elements_taken-1)
         return buffer
     finally
         unlock(c)
@@ -808,33 +824,27 @@ end
 function take_unbuffered(c::Channel, n, buffer::AbstractVector)
     idx1 = firstindex(buffer)
     last_idx = idx1 - 1
+    resize_count = 1
     lock(c)
     try
         for i in idx1:(idx1+n-1)
-            try
-                if i <= lastindex(buffer)
-                    buffer[i] = take_unbuffered(c)
-                else
-                    push!(buffer, take_unbuffered(c))
-                end
-                last_idx = i
-            catch e
-                # when the channel is closed, we return only the elements we were able to take
-                if isa(e, InvalidStateException) && e.state === :closed
-                    break
-                else
-                    rethrow()
-                end
+            if i > lastindex(buffer)
+                resize_count = _resize_buffer(buffer, n, resize_count)
             end
+            do_is_closed() do
+                buffer[i] = take_unbuffered(c)
+            end && break
+            last_idx = i
         end
-        if last_idx <= lastindex(buffer)
-            deleteat!(buffer, last_idx+1:lastindex(buffer))
-        end
+
+        _rm_unused_slots(buffer, last_idx)
         return buffer
     finally
         unlock(c)
     end
 end
+
+collect(c::Channel) = take!(c, typemax(UInt))
 
 """
     isready(c::Channel)
