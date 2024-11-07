@@ -730,7 +730,7 @@ julia> take!(c, 3, zeros(Int, 3))
     Requires at least Julia 1.12.
 """
 function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) where {T}
-    # for small-ish n, we can avoid resizing the buffer as we push elements 
+    # for small-ish n, we can avoid resizing the buffer as we push elements
     if n < 2^16
         resize!(buffer, n)
     end
