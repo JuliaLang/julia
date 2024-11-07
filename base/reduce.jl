@@ -48,10 +48,8 @@ function _foldl_impl(op::OP, init, itr) where {OP}
     y = iterate(itr)
     y === nothing && return init
     v = op(init, y[1])
-    while true
-        y = iterate(itr, y[2])
-        y === nothing && break
-        v = op(v, y[1])
+    for y in Iterators.rest(itr, y[2])
+        v = op(v, y)
     end
     return v
 end
