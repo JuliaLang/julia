@@ -236,7 +236,18 @@ Here is the standard procedure:
    themselves.
 
 2. Start a Julia REPL session. Then issue the following commands:
-
+> **Note:**
+> You can install Revise by using Julia’s Pkg REPL mode (enter it by pressing `]` at the beginning of the command prompt):
+> 
+> ```julia
+> (v1.0) pkg> add Revise
+> ```
+> 
+> Alternatively, run the following command:
+> 
+> ```julia
+> using Pkg; Pkg.add("Revise")
+> ```
 ```julia
 using Revise    # if you aren't launching it in your `.julia/config/startup.jl`
 Revise.track(Base)
