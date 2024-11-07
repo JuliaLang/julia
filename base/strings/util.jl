@@ -479,7 +479,7 @@ function lpad(
     l = Int(textwidth(p))::Int
     if l == 0
         throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
-            "; maybe you want pad^max(0, ncodeunits(str) - npad) * str to pad by codeunits" *
+            "; maybe you want pad^max(0, npad - ncodeunits(str)) * str to pad by codeunits" *
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
@@ -516,7 +516,7 @@ function rpad(
     l = Int(textwidth(p))::Int
     if l == 0
         throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
-            "; maybe you want str * pad^max(0, ncodeunits(str) - npad) to pad by codeunits" *
+            "; maybe you want str * pad^max(0, npad - ncodeunits(str)) to pad by codeunits" *
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
