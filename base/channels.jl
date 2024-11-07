@@ -207,7 +207,7 @@ end
 
 function _positive_int(x::T, purpose::String) where {T<:Union{AbstractFloat, Integer}}
     if T <: AbstractFloat
-        if x == Inf 
+        if x == Inf
             return typemax(Int)
         end
         x = try
