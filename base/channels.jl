@@ -190,9 +190,9 @@ function check_channel_state(c::Channel)
     end
 end
 
-# This function will run `f` and return `true` if it throws an `InvalidStateException` because
+# This function will run `f()` and return `true` if it throws an `InvalidStateException` because
 # a channel is closed, and `false` otherwise.
-function do_is_closed(f)
+function _do_is_closed(f)
     try
         f()
         return false
@@ -501,7 +501,7 @@ julia> take!(c)
 function append!(c::Channel, iter::T) where {T}
     if IteratorSize(iter) isa Union{HasLength, HasShape}
         len = length(iter)
-        # shortcircuit for small short objects
+        # short circuit for small iters
         if len == 0
             return c
         elseif len == 1
@@ -512,50 +512,50 @@ function append!(c::Channel, iter::T) where {T}
 
     return isbuffered(c) ? append_buffered(c, iter) : append_unbuffered(c, iter)
 end
-function append!(c1::Channel, c2::Channel{T}) where {T}
+function append!(c_dst::Channel, c_src::Channel{T}) where {T}
     # if either channel has a buffer size of 0 or 1, fallback to a naive `put!` loop
-    if min(c1.sz_max, c2.sz_max) < 2
-        return isbuffered(c1) ? append_buffered(c1, c2) : append_unbuffered(c1, c2)
+    if min(c_dst.sz_max, c_src.sz_max) < 2
+        return isbuffered(c_dst) ? append_buffered(c_dst, c_src) : append_unbuffered(c_dst, c_src)
     end
     i = 0
-    lock(c2)
+    lock(c_src)
     try
-        while isopen(c2) || isready(c2)
+        while isopen(c_src) || isready(c_src)
             # wait for data to become available
-            while isempty(c2.data)
-                do_is_closed() do
-                    check_channel_state(c2)
-                    wait(c2.cond_take)
+            while isempty(c_src.data)
+                _do_is_closed() do
+                    check_channel_state(c_src)
+                    wait(c_src.cond_take)
                 end
             end
 
-            lock(c1)
+            lock(c_dst)
             try
-                while length(c1.data) == c1.sz_max
-                    check_channel_state(c1)
-                    wait(c1.cond_put)
+                while length(c_dst.data) == c_dst.sz_max
+                    check_channel_state(c_dst)
+                    wait(c_dst.cond_put)
                 end
 
                 # append as many as possible to c1
-                n = min(c1.sz_max - length(c1.data), length(c2.data))
-                _increment_n_avail(c1, n)
-                c1_len_og = length(c1.data)
+                n = min(c_dst.sz_max - length(c_dst.data), length(c_src.data))
+                _increment_n_avail(c_dst, n)
+                c1_len_og = length(c_dst.data)
 
-                resize!(c1.data, c1_len_og + n)
-                copyto!(c1.data, c1_len_og + 1, c2.data, 1, n)
-                deleteat!(c2.data, 1:n)
+                resize!(c_dst.data, c1_len_og + n)
+                copyto!(c_dst.data, c1_len_og + 1, c_src.data, 1, n)
+                deleteat!(c_src.data, 1:n)
 
-                _increment_n_avail(c2, -n)
-                notify(c1.cond_take, nothing, true, false)
-                foreach(_ -> notify(c2.cond_put, nothing, true, false), 1:n)
+                _increment_n_avail(c_src, -n)
+                notify(c_dst.cond_take, nothing, true, false)
+                foreach(_ -> notify(c_src.cond_put, nothing, true, false), 1:n)
             finally
-                unlock(c1)
+                unlock(c_dst)
             end
         end
     finally
-        unlock(c2)
+        unlock(c_src)
     end
-    return c1
+    return c_dst
 end
 
 function append_unbuffered(c::Channel, iter)
@@ -750,14 +750,14 @@ function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) 
     end
 
     buffered = isbuffered(c)
-    # short-circuit for small n
+    # short circuit for small n
     if n == 0
         return buffer
     elseif n == 1
-        is_closed = do_is_closed() do
+        is_closed = _do_is_closed() do
             buffer[begin] = take!(c)
         end
-        # if we caught a closed error when trying to get the element, we need to clear the
+        # if we caught a :closed error when trying to get the element, we need to clear the
         # buffer before returning
         is_closed && empty!(buffer)
         return buffer
@@ -765,10 +765,10 @@ function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) 
     return buffered ? take_buffered(c, n, buffer) : take_unbuffered(c, n, buffer)
 end
 
-# As we take elements from the channel, we may need to resize the buffer to accommodate them
-# for small n, we resize once at the beginning. But for larger n, we resize the buffer as needed.
-# We resize exponentially larger each time until we reach 2^16, at which point we resize by 2^16.
 function _resize_buffer(buffer, n, resize_count, n_to_take=1)
+    # As we take elements from the channel, we may need to resize the buffer to accommodate them
+    # for small n, we resize once at the beginning. But for larger n, we resize the buffer as needed.
+    # We resize exponentially larger each time until we reach 2^16, at which point we resize by 2^16.
     len = length(buffer)
     needed_space = max(
         n_to_take,
@@ -796,7 +796,7 @@ function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
         while elements_taken < n && (isopen(c) || isready(c))
             # wait until the channel has at least min_n elements or is full
             while length(c.data) < target_buffer_len && isopen(c)
-                do_is_closed(() -> wait(c.cond_take)) && break
+                _do_is_closed(() -> wait(c.cond_take)) && break
             end
             # take as many elements as possible from the buffer
             n_to_take = min(n - elements_taken, length(c.data))
@@ -831,7 +831,7 @@ function take_unbuffered(c::Channel, n, buffer::AbstractVector)
             if i > lastindex(buffer)
                 resize_count = _resize_buffer(buffer, n, resize_count)
             end
-            do_is_closed() do
+            _do_is_closed() do
                 buffer[i] = take_unbuffered(c)
             end && break
             last_idx = i
