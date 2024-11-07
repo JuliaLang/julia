@@ -607,6 +607,7 @@ end
                        -0.4579038628067864 1.7361475641080275 6.478801851038108])
         A3 = convert(Matrix{elty}, [0.25 0.25; 0 0])
         A4 = convert(Matrix{elty}, [0 0.02; 0 0])
+        A5 = convert(Matrix{elty}, [2.0 0; 0 3.0])
 
         cosA1 = convert(Matrix{elty},[-0.18287716254368605 -0.29517205254584633 0.761711400552759;
                                       0.23326967400345625 0.19797853773269333 -0.14758602627292305;
@@ -614,8 +615,8 @@ end
         sinA1 = convert(Matrix{elty}, [0.2865568596627417 -1.107751980582015 -0.13772915374386513;
                                        -0.6227405671629401 0.2176922827908092 -0.5538759902910078;
                                        -0.6227405671629398 -0.6916051440348725 0.3554214365346742])
-        @test cos(A1) ≈ cosA1
-        @test sin(A1) ≈ sinA1
+        @test @inferred(cos(A1)) ≈ cosA1
+        @test @inferred(sin(A1)) ≈ sinA1
 
         cosA2 = convert(Matrix{elty}, [-0.6331745163802187 0.12878366262380136 -0.17304181968301532;
                                        0.12878366262380136 -0.5596234510748788 0.5210483146041339;
@@ -637,36 +638,36 @@ end
         @test sin(A4) ≈ sinA4
 
         # Identities
-        for (i, A) in enumerate((A1, A2, A3, A4))
-            @test sincos(A) == (sin(A), cos(A))
+        for (i, A) in enumerate((A1, A2, A3, A4, A5))
+            @test @inferred(sincos(A)) == (sin(A), cos(A))
             @test cos(A)^2 + sin(A)^2 ≈ Matrix(I, size(A))
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
-            @test tan(A) ≈ sin(A) / cos(A)
+            @test @inferred(tan(A)) ≈ sin(A) / cos(A)
 
             @test cos(A) ≈ real(exp(im*A))
             @test sin(A) ≈ imag(exp(im*A))
             @test cos(A) ≈ real(cis(A))
             @test sin(A) ≈ imag(cis(A))
-            @test cis(A) ≈ cos(A) + im * sin(A)
+            @test @inferred(cis(A)) ≈ cos(A) + im * sin(A)
 
-            @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
-            @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
-            @test cosh(A) ≈ cosh(-A)
-            @test sinh(A) ≈ -sinh(-A)
+            @test @inferred(cosh(A)) ≈ 0.5 * (exp(A) + exp(-A))
+            @test @inferred(sinh(A)) ≈ 0.5 * (exp(A) - exp(-A))
+            @test @inferred(cosh(A)) ≈ cosh(-A)
+            @test @inferred(sinh(A)) ≈ -sinh(-A)
 
             # Some of the following identities fail for A3, A4 because the matrices are singular
-            if i in (1, 2)
-                @test sec(A) ≈ inv(cos(A))
-                @test csc(A) ≈ inv(sin(A))
-                @test cot(A) ≈ inv(tan(A))
-                @test sech(A) ≈ inv(cosh(A))
-                @test csch(A) ≈ inv(sinh(A))
-                @test coth(A) ≈ inv(tanh(A))
+            if i in (1, 2, 5)
+                @test @inferred(sec(A)) ≈ inv(cos(A))
+                @test @inferred(csc(A)) ≈ inv(sin(A))
+                @test @inferred(cot(A)) ≈ inv(tan(A))
+                @test @inferred(sech(A)) ≈ inv(cosh(A))
+                @test @inferred(csch(A)) ≈ inv(sinh(A))
+                @test @inferred(coth(A)) ≈ inv(@inferred tanh(A))
             end
             # The following identities fail for A1, A2 due to rounding errors;
             # probably needs better algorithm for the general case
-            if i in (3, 4)
+            if i in (3, 4, 5)
                 @test cosh(A)^2 - sinh(A)^2 ≈ Matrix(I, size(A))
                 @test tanh(A) ≈ sinh(A) / cosh(A)
             end
