@@ -110,12 +110,20 @@ function //(x::Number, y::Complex{<:Integer})
     end
     real_y = real(y)
     imag_y = imag(y)
-    denom = Int32(abs(real_y))^2 + Int32(abs(imag_y))^2
+    m=max(abs(real_y),abs(imag_y))
+    if(m==0)
+        return 1//0
+    end
+    scaled_a = real_y / m
+    scaled_b = imag_y / m
+    denom = Rational(m * (scaled_a^2 + scaled_b^2)^0.5)
     if denom == 0//1
         return 1//0
     end
     real_part = x * real_y // denom
+    real_part = real_part // denom
     imag_part = -x * imag_y // denom
+    imag_part = imag_part // denom
     return real_part + imag_part * im
 end
 //(X::AbstractArray, y::Number) = X .// y
