@@ -709,10 +709,15 @@ end
         @test take!(c, 5, buff) == [1, 2, 3]
     end
     let
-        c = Channel() do c
-            append!(c, 1:3)
+        for n in (typemax(Int), Inf, 5)
+            c = Channel() do c
+                append!(c, 1:3)
+            end
+            @test take!(c, n) == [1, 2, 3]
         end
-        @test take!(c, typemax(Int)) == [1, 2, 3]
+    end
+    for n in (-1, 1.5)
+        @test_throws ArgumentError take!(Channel(), n)
     end
 end
 

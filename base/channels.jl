@@ -190,9 +190,9 @@ function check_channel_state(c::Channel)
     end
 end
 
-# This function will run `f()` and return `true` if it throws an `InvalidStateException` because
-# a channel is closed, and `false` otherwise.
 function _do_is_closed(f)
+    # This function will run `f()` and return `true` if it throws an `InvalidStateException` because
+    # a channel is closed, and `false` otherwise.
     try
         f()
         return false
@@ -203,6 +203,23 @@ function _do_is_closed(f)
             rethrow()
         end
     end
+end
+
+function _positive_int(x::T, purpose::String) where {T<:Union{AbstractFloat, Integer}}
+    if T <: AbstractFloat
+        if x == Inf 
+            return typemax(Int)
+        end
+        x = try
+            convert(Int, x)
+        catch
+            -1
+        end
+    end
+    if x < 0
+        throw(ArgumentError(lazy"$purpose must be either 0, a positive integer or Inf"))
+    end
+    return x
 end
 
 """
@@ -721,8 +738,9 @@ end
 """
     take!(c::Channel, n::Integer[, buffer::AbstractVector])
 
-Take at most `n` items from the [`Channel`](@ref) `c` and return them in a `Vector`.
-If `buffer` is provided, it will be used to store the result. If the channel closes before
+Take at most `n` items from the [`Channel`](@ref) `c` and return them in a `Vector`. `n`
+must be 0, a positive integer, or `Inf`. If `buffer` is provided, it will be used to store
+the result. If the channel closes before
 `n` items are taken, the result will contain only the items that were available. For
 buffered channels, this operation requires fewer `lock` operations than individual `take!(c)`s.
 
@@ -743,7 +761,11 @@ julia> take!(c, 3, zeros(Int, 3))
 !!! compat "Julia 1.12"
     Requires at least Julia 1.12.
 """
-function take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) where {T}
+function take!(c::Channel{T}, n::N, b::AbstractVector = Vector{T}()) where {T, N<:Union{Integer, AbstractFloat}}
+    n = _positive_int(n, "Number of elements to take")
+    return _take!(c, n, b)
+end
+function _take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) where {T}
     # for small-ish n, we can avoid resizing the buffer as we push elements
     if n < 2^16
         resize!(buffer, n)
