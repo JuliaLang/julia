@@ -223,6 +223,20 @@ function _positive_int(x::T, purpose::String) where {T<:Union{AbstractFloat, Int
     return x
 end
 
+function _wait_for_space(c::Channel)
+    while length(c.data) == c.sz_max
+        check_channel_state(c)
+        wait(c.cond_put)
+    end
+end
+
+function _wait_for_data(c::Channel, min_len=1)
+    while length(c.data) < min_len
+        check_channel_state(c)
+        wait(c.cond_take)
+    end
+end
+
 """
     close(c::Channel[, excp::Exception])
 
@@ -449,10 +463,7 @@ function put_buffered(c::Channel, v)
         # Increment channel n_avail eagerly (before push!) to count data in the
         # buffer as well as offers from tasks which are blocked in wait().
         _increment_n_avail(c, 1)
-        while length(c.data) == c.sz_max
-            check_channel_state(c)
-            wait(c.cond_put)
-        end
+        _wait_for_space(c)
         check_channel_state(c)
         push!(c.data, v)
         did_buffer = true
@@ -540,19 +551,11 @@ function append!(c_dst::Channel, c_src::Channel{T}) where {T}
     try
         while isopen(c_src) || isready(c_src)
             # wait for data to become available
-            while isempty(c_src.data)
-                _do_is_closed() do
-                    check_channel_state(c_src)
-                    wait(c_src.cond_take)
-                end
-            end
+            _do_is_closed(() -> _wait_for_data(c_src))
 
             lock(c_dst)
             try
-                while length(c_dst.data) == c_dst.sz_max
-                    check_channel_state(c_dst)
-                    wait(c_dst.cond_put)
-                end
+                _wait_for_space(c_dst)
 
                 # append as many as possible to c1
                 n = min(c_dst.sz_max - length(c_dst.data), length(c_src.data))
@@ -599,10 +602,7 @@ function append_buffered(c::Channel{T}, iter::I) where {T,I}
     while !isempty(converted_items)
         lock(c)
         try
-            while length(c.data) == c.sz_max
-                check_channel_state(c)
-                wait(c.cond_put)
-            end
+            _wait_for_space(c)
 
             # Grab a chunk of items that will fit in the channel's buffer
             available_space = c.sz_max - length(c.data)
@@ -665,10 +665,7 @@ fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
 function fetch_buffered(c::Channel)
     lock(c)
     try
-        while isempty(c.data)
-            check_channel_state(c)
-            wait(c.cond_take)
-        end
+        _wait_for_data(c)
         return c.data[1]
     finally
         unlock(c)
@@ -711,10 +708,7 @@ take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
     lock(c)
     try
-        while isempty(c.data)
-            check_channel_state(c)
-            wait(c.cond_take)
-        end
+        _wait_for_data(c)
         v = popfirst!(c.data)
         _increment_n_avail(c, -1)
         notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
@@ -766,7 +760,7 @@ function take!(c::Channel{T}, n::N, b::AbstractVector = Vector{T}()) where {T, N
     n = _positive_int(n, "Number of elements to take")
     return _take!(c, n, b)
 end
-function _take!(c::Channel{T}, n::Integer, buffer::AbstractVector = Vector{T}()) where {T}
+function _take!(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
     # for small-ish n, we can avoid resizing the buffer as we push elements
     if n < 2^16
         resize!(buffer, n)
@@ -793,10 +787,7 @@ function _resize_buffer(buffer, n, resize_count, n_to_take=1)
     # for small n, we resize once at the beginning. But for larger n, we resize the buffer as needed.
     # We resize exponentially larger each time until we reach 2^16, at which point we resize by 2^16.
     len = length(buffer)
-    needed_space = max(
-        n_to_take,
-        2^resize_count
-    )
+    needed_space = max(n_to_take, 2^resize_count)
     resize!(buffer, min(len + needed_space, n))
     resize_count >= 16 && return resize_count
     return resize_count + 1
@@ -818,8 +809,8 @@ function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
     try
         while elements_taken < n && (isopen(c) || isready(c))
             # wait until the channel has at least min_n elements or is full
-            while length(c.data) < target_buffer_len && isopen(c)
-                _do_is_closed(() -> wait(c.cond_take)) && break
+            _do_is_closed() do
+                _wait_for_data(c, target_buffer_len)
             end
             # take as many elements as possible from the buffer
             n_to_take = min(n - elements_taken, length(c.data))
