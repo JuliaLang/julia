@@ -190,11 +190,11 @@ function check_channel_state(c::Channel)
     end
 end
 
-function _do_is_closed(f)
+function _ignore_closed_err(f, args...; kwargs...)
     # This function will run `f()` and return `true` if it throws an `InvalidStateException` because
     # a channel is closed, and `false` otherwise.
     try
-        f()
+        f(args...; kwargs...)
         return false
     catch e
         if isa(e, InvalidStateException) && e.state === :closed
@@ -551,7 +551,7 @@ function append!(c_dst::Channel, c_src::Channel{T}) where {T}
     try
         while isopen(c_src) || isready(c_src)
             # wait for data to become available
-            _do_is_closed(() -> _wait_for_data(c_src))
+            _ignore_closed_err(_wait_for_data, c_src)
 
             lock(c_dst)
             try
@@ -771,7 +771,7 @@ function _take!(c::Channel{T}, n::Integer, buffer::AbstractVector) where {T}
     if n == 0
         return buffer
     elseif n == 1
-        is_closed = _do_is_closed() do
+        is_closed = _ignore_closed_err() do
             buffer[begin] = take!(c)
         end
         # if we caught a :closed error when trying to get the element, we need to clear the
@@ -809,9 +809,7 @@ function take_buffered(c::Channel{T}, n, buffer::AbstractVector) where {T}
     try
         while elements_taken < n && (isopen(c) || isready(c))
             # wait until the channel has at least min_n elements or is full
-            _do_is_closed() do
-                _wait_for_data(c, target_buffer_len)
-            end
+            _ignore_closed_err(_wait_for_data, c, target_buffer_len)
             # take as many elements as possible from the buffer
             n_to_take = min(n - elements_taken, length(c.data))
             idx_start = idx1 + elements_taken
@@ -845,7 +843,7 @@ function take_unbuffered(c::Channel, n, buffer::AbstractVector)
             if i > lastindex(buffer)
                 resize_count = _resize_buffer(buffer, n, resize_count)
             end
-            _do_is_closed() do
+            _ignore_closed_err() do
                 buffer[i] = take_unbuffered(c)
             end && break
             last_idx = i
