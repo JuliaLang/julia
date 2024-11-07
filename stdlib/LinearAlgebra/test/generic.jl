@@ -530,24 +530,37 @@ end
         @test !istriu(pentadiag)
         @test istriu(pentadiag, -2)
         @test !istriu(tridiag)
+        @test istriu(tridiag) == istriu(tridiagG) == istriu(Tridiag)
         @test istriu(tridiag, -1)
+        @test istriu(tridiag, -1) == istriu(tridiagG, -1) == istriu(Tridiag, -1)
         @test istriu(ubidiag)
         @test istriu(ubidiag) == istriu(ubidiagG) == istriu(uBidiag)
         @test !istriu(ubidiag, 1)
+        @test istriu(ubidiag, 1) == istriu(ubidiagG, 1) == istriu(uBidiag, 1)
         @test !istriu(lbidiag)
+        @test istriu(lbidiag) == istriu(lbidiagG) == istriu(lBidiag)
         @test istriu(lbidiag, -1)
+        @test istriu(lbidiag, -1) == istriu(lbidiagG, -1) == istriu(lBidiag, -1)
         @test istriu(adiag)
+        @test istriu(adiag) == istriu(adiagG) == istriu(aDiag)
     end
     @testset "istril" begin
         @test !istril(pentadiag)
         @test istril(pentadiag, 2)
         @test !istril(tridiag)
+        @test istril(tridiag) == istril(tridiagG) == istril(Tridiag)
         @test istril(tridiag, 1)
+        @test istril(tridiag, 1) == istril(tridiagG, 1) == istril(Tridiag, 1)
         @test !istril(ubidiag)
+        @test istril(ubidiag) == istril(ubidiagG) == istril(ubidiagG)
         @test istril(ubidiag, 1)
+        @test istril(ubidiag, 1) == istril(ubidiagG, 1) == istril(uBidiag, 1)
         @test istril(lbidiag)
+        @test istril(lbidiag) == istril(lbidiagG) == istril(lBidiag)
         @test !istril(lbidiag, -1)
+        @test istril(lbidiag, -1) == istril(lbidiagG, -1) == istril(lBidiag, -1)
         @test istril(adiag)
+        @test istril(adiag) == istril(adiagG) == istril(aDiag)
     end
     @testset "isbanded" begin
         @test isbanded(pentadiag, -2, 2)
@@ -580,9 +593,13 @@ end
     end
     @testset "isdiag" begin
         @test !isdiag(tridiag)
+        @test isdiag(tridiag) == isdiag(tridiagG) == isdiag(Tridiag)
         @test !isdiag(ubidiag)
+        @test isdiag(ubidiag) == isdiag(ubidiagG) == isdiag(uBidiag)
         @test !isdiag(lbidiag)
+        @test isdiag(lbidiag) == isdiag(lbidiagG) == isdiag(lBidiag)
         @test isdiag(adiag)
+        @test isdiag(adiag) ==isdiag(adiagG) == isdiag(aDiag)
     end
 end
 
