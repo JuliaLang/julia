@@ -388,7 +388,7 @@ function cross(a::AbstractVector, b::AbstractVector)
     end
     a1, a2, a3 = a
     b1, b2, b3 = b
-    collect(cross((a1, a2, a3), (b1, b2, b3)))
+    [cross((a1, a2, a3), (b1, b2, b3))...]
 end
 function cross((a1, a2, a3)::Tuple{Vararg{Any, 3}}, (b1, b2, b3)::Tuple{Vararg{Any, 3}})
     (a2*b3-a3*b2, a3*b1-a1*b3, a1*b2-a2*b1)
