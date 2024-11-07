@@ -3,6 +3,8 @@
 export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
+public Condition
+
 """
     Threads.threadid([t::Task]) -> Int
 
