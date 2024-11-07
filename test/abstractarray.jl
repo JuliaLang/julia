@@ -335,6 +335,15 @@ end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
+
+    @testset "show" begin
+        A = zeros(2,3)
+        for B in (A, view(A, Base.IdentityUnitRange(2:4)))
+            l = LinearIndices(B)
+            s = sprint(show, l)
+            @test s == "LinearIndices($(axes(B)))"
+        end
+    end
 end
 
 @testset "copy for LinearIndices/CartesianIndices" begin
