@@ -4034,12 +4034,13 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
               // allocate a world for the new methods, and insert them there, invalidating content as needed
             size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
             jl_activate_methods(extext_methods, internal_methods, world);
+              // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
               // allow users to start running in this updated world
             jl_atomic_store_release(&jl_world_counter, world);
-              // but one of those immediate users is going to be our cache updates
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
               // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
+              // but one of those immediate users is going to be our cache insertions
+            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis); // restore existing caches (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);
             arraylist_free(&ccallable_list);
