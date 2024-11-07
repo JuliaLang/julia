@@ -34,7 +34,6 @@ end
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
 original_depot_path = copy(Base.DEPOT_PATH)
-include("precompile_utils.jl")
 
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
