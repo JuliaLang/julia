@@ -494,4 +494,6 @@ function entrypoint(@nospecialize(argt::Type))
     nothing
 end
 
+include("simd.jl")
+
 end
