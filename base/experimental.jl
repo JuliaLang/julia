@@ -526,14 +526,14 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_cpu_time_ns(t::Task) -> Union{Int, Nothing}
+    Base.Experimental.task_cpu_time_ns(t::Task) -> Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
-This metric only updates when `t` yields or completes, unless `t` is the current task
-in which it will update continuously.
+This metric is only updated when `t` yields or completes unless `t` is the current task, in
+which it will be updated continuously.
 See also [`Base.Experimental.task_wall_time_ns`](@ref).
 
-Will be `nothing` if task timings are not enabled.
+Returns `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! note "This metric is from the Julia scheduler"
@@ -548,21 +548,21 @@ function task_cpu_time_ns(t::Task=current_task())
     if t == current_task()
         # These metrics fields can't update while we're running.
         # But since we're running we need to include the time since we last started running!
-        return Int(t.cpu_time_ns + (time_ns() - t.last_started_running_at))
+        return t.cpu_time_ns + (time_ns() - t.last_started_running_at)
     else
-        return Int(t.cpu_time_ns)
+        return t.cpu_time_ns
     end
 end
 
 """
-    Base.Experimental.task_wall_time_ns(t::Task) -> Union{Int, Nothing}
+    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` was runnable.
-This is the time since the task entered the run queue until the time at which it completed,
-or until the current time if the task has not yet completed.
+This is the time since the task first entered the run queue until the time at which it
+completed, or until the current time if the task has not yet completed.
 See also [`Base.Experimental.task_cpu_time_ns`](@ref).
 
-Will be `nothing` if task timings are not enabled.
+Returns `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).
 
 !!! compat "Julia 1.12"
@@ -573,8 +573,8 @@ function task_wall_time_ns(t::Task=current_task())
     start_at = t.first_enqueued_at
     start_at == 0 && return 0
     end_at = t.finished_at
-    end_at == 0 && return Int(time_ns() - start_at)
-    return Int(end_at - start_at)
+    end_at == 0 && return time_ns() - start_at
+    return end_at - start_at
 end
 
 end # module
