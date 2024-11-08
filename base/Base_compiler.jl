@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 baremodule Base
+
 using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
@@ -128,7 +129,6 @@ function setpropertyonce!(x::Module, f::Symbol, desired, success_order::Symbol=:
     return Core.setglobalonce!(x, f, val, success_order, fail_order)
 end
 
-
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")
@@ -254,7 +254,6 @@ using .Order
 
 include("coreir.jl")
 
-
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
 function strcat(x::String, y::String)
@@ -267,10 +266,9 @@ function strcat(x::String, y::String)
     return out
 end
 
-BUILDROOT::String = ""
+global BUILDROOT::String = ""
 
-baremodule BuildSettings
-end
+baremodule BuildSettings end
 
 function process_sysimg_args!()
     let i = 1
@@ -299,4 +297,5 @@ include("flparse.jl")
 Core._setparser!(fl_parse)
 
 # Further definition of Base will happen in Base.jl if loaded.
-end
+
+end # baremodule Base

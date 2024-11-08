@@ -11,7 +11,7 @@ module MiniCassette
     # fancy features, but sufficient to exercise this code path in the compiler.
 
     using Core.IR
-    using Core.Compiler: retrieve_code_info, quoted, signature_type, anymap
+    using Core.Compiler: retrieve_code_info, quoted, anymap
     using Base.Meta: isexpr
 
     export Ctx, overdub
