@@ -717,21 +717,23 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         end
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            for ind in eachindex(P)
+            for ind in eachindex(P, U, V)
                 U[ind] += C[2k + 2] * P[ind]
                 V[ind] += C[2k + 1] * P[ind]
             end
         end
 
-        U = A * U
+        U′ = P # alias for the temporary matrix
+        mul!(U′, A, U)
 
         # Padé approximant:  (V-U)\(V+U)
-        tmp1, tmp2 = A, A2 # Reuse already allocated arrays
-        for ind in eachindex(tmp1)
-            tmp1[ind] = V[ind] - U[ind]
-            tmp2[ind] = V[ind] + U[ind]
+        VminU, VplusU = V, U # Reuse already allocated arrays
+        for ind in eachindex(V, U)
+            vi, ui = V[ind], U′[ind]
+            VminU[ind] = vi - ui
+            VplusU[ind] = vi + ui
         end
-        X = LAPACK.gesv!(tmp1, tmp2)[1]
+        X = LAPACK.gesv!(VminU, VplusU)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
@@ -799,10 +801,14 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
 
     if ilo > 1       # apply lower permutations in reverse order
-        for j in (ilo-1):-1:1; rcswap!(j, Int(scale[j]), X) end
+        for j in (ilo-1):-1:1
+            rcswap!(j, Int(scale[j]), X)
+        end
     end
     if ihi < n       # apply upper permutations in forward order
-        for j in (ihi+1):n;    rcswap!(j, Int(scale[j]), X) end
+        for j in (ihi+1):n
+            rcswap!(j, Int(scale[j]), X)
+        end
     end
     X
 end
