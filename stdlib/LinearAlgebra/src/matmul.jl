@@ -1049,7 +1049,7 @@ function _generic_matmatmul_generic!(C, A, B, alpha, beta)
 end
 
 # multiply 2x2 matrices
-Base.@constprop :aggressive function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
+function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
@@ -1065,11 +1065,11 @@ function __matmul_checks(C, A, B, sz)
 end
 
 # separate function with the core of matmul2x2! that doesn't depend on a MulAddMul
-Base.@constprop :aggressive function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (2,2))
     __matmul2x2_elements(tA, tB, A, B)
 end
-Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
+function __matmul2x2_elements(tA, A::AbstractMatrix)
     @inbounds begin
     tA_uc = uppercase(tA) # possibly unwrap a WrapperChar
     if tA_uc == 'N'
@@ -1102,7 +1102,7 @@ Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
     end # inbounds
     A11, A12, A21, A22
 end
-Base.@constprop :aggressive __matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
+__matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
 
 function _modify2x2!(Aelements, Belements, C, _add)
     (A11, A12, A21, A22), (B11, B12, B21, B22) = Aelements, Belements
@@ -1114,7 +1114,7 @@ function _modify2x2!(Aelements, Belements, C, _add)
     end # inbounds
     C
 end
-Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     α = true, β = false)
     Aelements, Belements = _matmul2x2_elements(C, tA, tB, A, B)
     @stable_muladdmul _modify2x2!(Aelements, Belements, C, MulAddMul(α, β))
@@ -1122,16 +1122,16 @@ Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::Ab
 end
 
 # Multiply 3x3 matrices
-Base.@constprop :aggressive function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
+function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
 # separate function with the core of matmul3x3! that doesn't depend on a MulAddMul
-Base.@constprop :aggressive function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (3,3))
     __matmul3x3_elements(tA, tB, A, B)
 end
-Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
+function __matmul3x3_elements(tA, A::AbstractMatrix)
     @inbounds begin
     tA_uc = uppercase(tA) # possibly unwrap a WrapperChar
     if tA_uc == 'N'
@@ -1172,7 +1172,7 @@ Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
     end # inbounds
     A11, A12, A13, A21, A22, A23, A31, A32, A33
 end
-Base.@constprop :aggressive __matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
+__matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
 
 function _modify3x3!(Aelements, Belements, C, _add)
     (A11, A12, A13, A21, A22, A23, A31, A32, A33),
@@ -1192,7 +1192,7 @@ function _modify3x3!(Aelements, Belements, C, _add)
     end # inbounds
     C
 end
-Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     α = true, β = false)
 
     Aelements, Belements = _matmul3x3_elements(C, tA, tB, A, B)
