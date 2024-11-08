@@ -2952,7 +2952,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_set_gs_ctr(gs_ctr);
     }
     else {
-        jl_atomic_fetch_add(&jl_world_counter, 1);
         offset_restored = jl_read_offset(&s);
         offset_init_order = jl_read_offset(&s);
         offset_extext_methods = jl_read_offset(&s);
@@ -3182,7 +3181,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_cache_type_((jl_datatype_t*)obj);
     }
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
         // check whether this is a gvar index
@@ -3236,6 +3234,16 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
+    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+    for (size_t i = 0; i < s.fixup_objs.len; i++) {
+        // decide if we need to allocate a world
+        uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
+        jl_value_t *obj = (jl_value_t*)(image_base + item);
+        if (jl_is_method(obj)) {
+            world = jl_atomic_fetch_add(&jl_world_counter, 1) + 1;
+            break;
+        }
+    }
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
