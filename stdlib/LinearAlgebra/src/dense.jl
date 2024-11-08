@@ -711,9 +711,8 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         U = similar(P)
         V = similar(P)
         for ind in CartesianIndices(P)
-            i, j = Tuple(ind)
-            U[ind] = C[4]*P[ind] + C[2]*I[i, j]
-            V[ind] = C[3]*P[ind] + C[1]*I[i, j]
+            U[ind] = C[4]*P[ind] + C[2]*I[ind]
+            V[ind] = C[3]*P[ind] + C[1]*I[ind]
         end
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
