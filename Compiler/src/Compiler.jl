@@ -86,13 +86,7 @@ function include(mod::Module, x::String)
     Base.include(mod, x)
 end
 
-
 macro _boundscheck() Expr(:boundscheck) end
-
-# These types are used by reflection.jl and expr.jl too, so declare them here.
-# Note that `@assume_effects` is available only after loading namedtuple.jl.
-abstract type MethodTableView end
-abstract type AbstractInterpreter end
 
 function return_type end
 function is_return_type(Core.@nospecialize(f))
@@ -189,6 +183,6 @@ if isdefined(Base, :IRShow)
     end
 end
 
-end
+end # baremodule Compiler
 
-end
+end # if isdefined(Base, :generating_output) && ...

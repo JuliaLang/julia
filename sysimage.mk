@@ -6,6 +6,7 @@ include $(JULIAHOME)/stdlib/stdlib.mk
 
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
+basecompiler-ji: $(build_private_libdir)/basecompiler.ji
 sysimg-ji: $(build_private_libdir)/sys.ji
 sysimg-bc: $(build_private_libdir)/sys-bc.a
 sysimg-release: $(build_private_libdir)/sys.$(SHLIB_EXT)
