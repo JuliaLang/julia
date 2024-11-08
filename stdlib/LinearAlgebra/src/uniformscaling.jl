@@ -86,6 +86,7 @@ julia> (0.7*I)(3)
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
+getindex(J::UniformScaling, ind::CartesianIndex{2}) = J[Tuple(ind)...]
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
 getindex(J::UniformScaling, n::Integer, m::AbstractVector{<:Integer}) = getindex(J, m, n)
