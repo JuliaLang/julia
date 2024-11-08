@@ -5318,6 +5318,14 @@ solution `X`.
 """
 hetrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
+for f in (:syevd!, :syev!)
+    _f = Symbol(:_, f)
+    @eval function $f(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
+        W, A = $_f(jobz, uplo, A)
+        jobz == 'V' ? (W, A) : W
+    end
+end
+
 # Symmetric (real) eigensolvers
 for (syev, syevr, syevd, sygvd, elty) in
     ((:dsyev_,:dsyevr_,:dsyevd_,:dsygvd_,:Float64),
@@ -5329,7 +5337,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkuplo(uplo)
@@ -5350,7 +5358,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                     resize!(work, lwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
@@ -5429,7 +5437,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5459,7 +5467,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                     resize!(iwork, liwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         # Generalized eigenproblem
@@ -5526,7 +5534,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5550,7 +5558,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
                     resize!(work, lwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
@@ -5639,7 +5647,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5673,7 +5681,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
                     resize!(iwork, liwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
