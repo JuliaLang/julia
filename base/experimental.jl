@@ -571,7 +571,7 @@ See [`Base.Experimental.task_metrics`](@ref).
 function task_wall_time_ns(t::Task=current_task())
     t.metrics_enabled || return nothing
     start_at = t.first_enqueued_at
-    start_at == 0 && return 0
+    start_at == 0 && return UInt64(0)
     end_at = t.finished_at
     end_at == 0 && return time_ns() - start_at
     return end_at - start_at
