@@ -218,7 +218,7 @@ function _positive_int(x::T, purpose::String) where {T<:Union{AbstractFloat, Int
         end
     end
     if x < 0
-        throw(ArgumentError(lazy"$purpose must be either 0, a positive integer or Inf"))
+        throw(ArgumentError("$purpose must be either 0, a positive integer or Inf"))
     end
     return x
 end
