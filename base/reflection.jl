@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Compiler = Core.Compiler
-
 """
     code_lowered(f, types; generated=true, debuginfo=:default)
 
@@ -151,7 +149,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match::Core.MethodMatch)
+        instance = specialize_method(match::Core.MethodMatch)
         push!(results, instance)
     end
     return results
@@ -348,6 +346,36 @@ function raise_match_failure(name::Symbol, @nospecialize(tt))
     error("$name: unanalyzable call given $sig_str")
 end
 
+const REFLECTION_COMPILER = RefValue{Union{Nothing, Module}}(nothing)
+
+function invoke_in_typeinf_world(args...)
+    vargs = Any[args...]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), vargs, length(vargs))
+end
+
+function invoke_default_compiler(fname::Symbol, args...)
+    if REFLECTION_COMPILER[] === nothing
+        return invoke_in_typeinf_world(getglobal(Compiler, fname), args...)
+    else
+        return getglobal(REFLECTION_COMPILER[], fname)(args...)
+    end
+end
+
+function invoke_interp_compiler(interp, fname::Symbol, args...)
+    if interp === nothing
+        return invoke_default_compiler(fname, args...)
+    else
+        T = typeof(interp)
+        while true
+            Tname = typename(T).name
+            Tname === :Any && error("Expected Interpreter")
+            Tname === :AbstractInterpreter && break
+            T = supertype(T)
+        end
+        return getglobal(typename(T).module, fname)(args...)
+    end
+end
+
 """
     code_typed_by_type(types::Type{<:Tuple}; ...)
 
@@ -358,7 +386,9 @@ function code_typed_by_type(@nospecialize(tt::Type);
                             optimize::Bool=true,
                             debuginfo::Symbol=:default,
                             world::UInt=get_world_counter(),
-                            interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                            interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if @isdefined(IRShow)
@@ -370,12 +400,12 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:code_typed, tt)
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        code = Compiler.typeinf_code(interp, match, optimize)
+        code = invoke_interp_compiler(passed_interp, :typeinf_code, interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
@@ -386,7 +416,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+function get_oc_code_rt(passed_interp, oc::Core.OpaqueClosure, types, optimize::Bool)
     @nospecialize oc types
     ccall(:jl_is_in_pure_context, Bool, ()) &&
         error("code reflection cannot be used from generated functions")
@@ -395,9 +425,9 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
         if isdefined(m, :source)
             if optimize
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
-                mi = Compiler.specialize_method(m, tt, Core.svec())
-                interp = Compiler.NativeInterpreter(m.primary_world)
-                code = Compiler.typeinf_code(interp, mi, optimize)
+                mi = specialize_method(m, tt, Core.svec())
+                interp = invoke_interp_compiler(passed_interp, :_default_interp, m.primary_world)
+                code = invoke_interp_compiler(passed_interp, :typeinf_code, interp, mi, optimize)
                 if code isa CodeInfo
                     return Pair{CodeInfo, Any}(code, code.rettype)
                 end
@@ -420,9 +450,10 @@ end
 function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
                                    debuginfo::Symbol=:default,
                                    optimize::Bool=true,
+                                   interp=nothing,
                                    _...)
     @nospecialize oc types
-    (code, rt) = get_oc_code_rt(oc, types, optimize)
+    (code, rt) = get_oc_code_rt(interp, oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
@@ -487,18 +518,20 @@ a full signature to query.
 function code_ircode_by_type(
     @nospecialize(tt::Type);
     world::UInt=get_world_counter(),
-    interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world),
+    interp=nothing,
     optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
 )
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     tt = to_tuple_type(tt)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:code_ircode, tt)
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Compiler.typeinf_ircode(interp, match, optimize_until)
+        (code, ty) = invoke_interp_compiler(passed_interp, :typeinf_ircode, interp, match, optimize_until)
         if code === nothing
             push!(asts, match.method => Any)
         else
@@ -508,24 +541,26 @@ function code_ircode_by_type(
     return asts
 end
 
-function _builtin_return_type(interp::Compiler.AbstractInterpreter,
+function _builtin_return_type(passed_interp, interp,
                               @nospecialize(f::Core.Builtin), @nospecialize(types))
     argtypes = Any[to_tuple_type(types).parameters...]
-    rt = Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-    return Compiler.widenconst(rt)
+    rt = invoke_interp_compiler(passed_interp, :builtin_tfunction, interp, f, argtypes, nothing)
+    return invoke_interp_compiler(passed_interp, :widenconst, rt)
 end
 
-function _builtin_effects(interp::Compiler.AbstractInterpreter,
+function _builtin_effects(passed_interp, interp,
                           @nospecialize(f::Core.Builtin), @nospecialize(types))
     argtypes = Any[to_tuple_type(types).parameters...]
-    rt = Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-    return Compiler.builtin_effects(Compiler.typeinf_lattice(interp), f, argtypes, rt)
+    rt = invoke_interp_compiler(passed_interp, :builtin_tfunction, interp, f, argtypes, nothing)
+    return invoke_interp_compiler(passed_interp, :builtin_effects,
+        invoke_interp_compiler(passed_interp, :typeinf_lattice, interp),
+        f, argtypes, rt)
 end
 
-function _builtin_exception_type(interp::Compiler.AbstractInterpreter,
+function _builtin_exception_type(passed_interp, interp,
                                  @nospecialize(f::Core.Builtin), @nospecialize(types))
-    effects = _builtin_effects(interp, f, types)
-    return Compiler.is_nothrow(effects) ? Union{} : Any
+    effects = _builtin_effects(passed_interp, interp, f, types)
+    return invoke_interp_compiler(passed_interp, :is_nothrow, effects) ? Union{} : Any
 end
 
 check_generated_context(world::UInt) =
@@ -581,20 +616,22 @@ julia> Base.return_types(sum, (Union{Vector{Int},UnitRange{Int}},))
 """
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world::UInt=get_world_counter(),
-                      interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                      interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types))
+        _, rt = only(code_typed_opaque_closure(f, types; Compiler))
         return Any[rt]
     elseif isa(f, Core.Builtin)
-        return Any[_builtin_return_type(interp, f, types)]
+        return Any[_builtin_return_type(passed_interp, interp, f, types)]
     end
     tt = signature_type(f, types)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:return_types, tt)
     rts = Any[]
     for match in matches.matches
-        ty = Compiler.typeinf_type(interp, match::Core.MethodMatch)
+        ty = invoke_interp_compiler(passed_interp, :typeinf_type, interp, match::Core.MethodMatch)
         push!(rts, something(ty, Any))
     end
     return rts
@@ -649,20 +686,22 @@ On the other hand `Base.infer_return_type` returns one collective result that su
 """
 function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
                            world::UInt=get_world_counter(),
-                           interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                           interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        return last(only(code_typed_opaque_closure(f, types)))
+        return last(only(code_typed_opaque_closure(f, types; interp=passed_interp)))
     elseif isa(f, Core.Builtin)
-        return _builtin_return_type(interp, f, types)
+        return _builtin_return_type(passed_interp, interp, f, types)
     end
     tt = signature_type(f, types)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:infer_return_type, tt)
     rt = Union{}
     for match in matches.matches
-        ty = Compiler.typeinf_type(interp, match::Core.MethodMatch)
-        rt = Compiler.tmerge(rt, something(ty, Any))
+        ty = invoke_interp_compiler(passed_interp, :typeinf_type, interp, match::Core.MethodMatch)
+        rt = invoke_interp_compiler(passed_interp, :tmerge, rt, something(ty, Any))
     end
     return rt
 end
@@ -719,31 +758,30 @@ julia> Base.infer_exception_types(throw_if_number, (Any,))
 """
 function infer_exception_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                                world::UInt=get_world_counter(),
-                               interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                               interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any[Any] # TODO
     elseif isa(f, Core.Builtin)
-        return Any[_builtin_exception_type(interp, f, types)]
+        return Any[_builtin_exception_type(passed_interp, interp, f, types)]
     end
     tt = signature_type(f, types)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:infer_exception_types, tt)
     excts = Any[]
     for match in matches.matches
-        frame = Compiler.typeinf_frame(interp, match::Core.MethodMatch, #=run_optimizer=#false)
+        frame = invoke_interp_compiler(passed_interp, :typeinf_frame, interp, match::Core.MethodMatch, #=run_optimizer=#false)
         if frame === nothing
             exct = Any
         else
-            exct = Compiler.widenconst(frame.result.exc_result)
+            exct = invoke_interp_compiler(passed_interp, :widenconst, frame.result.exc_result)
         end
         push!(excts, exct)
     end
     return excts
 end
-
-_may_throw_methoderror(matches#=::Core.Compiler.MethodLookupResult=#) =
-    matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
 
 """
     Base.infer_exception_type(
@@ -798,27 +836,18 @@ signature, the exception type is widened to `MethodError`.
 """
 function infer_exception_type(@nospecialize(f), @nospecialize(types=default_tt(f));
                               world::UInt=get_world_counter(),
-                              interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                              interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any # TODO
     elseif isa(f, Core.Builtin)
-        return _builtin_exception_type(interp, f, types)
+        return _builtin_exception_type(passed_interp, interp, f, types)
     end
     tt = signature_type(f, types)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
-    matches === nothing && raise_match_failure(:infer_exception_type, tt)
-    exct = Union{}
-    if _may_throw_methoderror(matches)
-        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        exct = Compiler.tmerge(exct, MethodError)
-    end
-    for match in matches.matches
-        match = match::Core.MethodMatch
-        frame = Compiler.typeinf_frame(interp, match, #=run_optimizer=#false)
-        frame === nothing && return Any
-        exct = Compiler.tmerge(exct, Compiler.widenconst(frame.result.exc_result))
-    end
+    exct = invoke_interp_compiler(passed_interp, :_infer_exception_type, interp, tt, false)
+    exct === nothing && raise_match_failure(:infer_exception_type, tt)
     return exct
 end
 
@@ -877,34 +906,25 @@ signature, the `:nothrow` bit gets tainted.
     The `Base.infer_effects` function should not be used from generated functions;
     doing so will result in an error.
 
-$(Core.Compiler.effects_key_string)
+$(Compiler.effects_key_string)
 
 # See Also
-- [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
+- [`Compiler.Effects`](@ref): A type representing the computational effects of a method call.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        optimize::Bool=true,
                        world::UInt=get_world_counter(),
-                       interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                       interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.Builtin)
-        return _builtin_effects(interp, f, types)
+        return _builtin_effects(passed_interp, interp, f, types)
     end
     tt = signature_type(f, types)
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
-    matches === nothing && raise_match_failure(:infer_effects, tt)
-    effects = Compiler.EFFECTS_TOTAL
-    if _may_throw_methoderror(matches)
-        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        effects = Compiler.Effects(effects; nothrow=false)
-    end
-    for match in matches.matches
-        match = match::Core.MethodMatch
-        frame = Compiler.typeinf_frame(interp, match, #=run_optimizer=#optimize)
-        frame === nothing && return Compiler.Effects()
-        effects = Compiler.merge_effects(effects, frame.result.ipo_effects)
-    end
+    effects = invoke_interp_compiler(passed_interp, :_infer_effects, interp, tt, optimize)
+    effects === nothing && raise_match_failure(:infer_effects, tt)
     return effects
 end
 
@@ -921,24 +941,24 @@ end
 
 function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world::UInt=get_world_counter(),
-                               interp::Compiler.AbstractInterpreter=Compiler.NativeInterpreter(world))
+                               interp=nothing)
+    passed_interp = interp
+    interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     tt = to_tuple_type(tt)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    matches = Compiler.findall(tt, Compiler.method_table(interp))
+    matches = invoke_interp_compiler(passed_interp, :_findall_matches, interp, tt)
     matches === nothing && raise_match_failure(:print_statement_costs, tt)
-    params = Compiler.OptimizationParams(interp)
     cst = Int[]
     for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        code = Compiler.typeinf_code(interp, match, true)
+        code = invoke_interp_compiler(passed_interp, :typeinf_code, interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
             empty!(cst)
             resize!(cst, length(code.code))
-            sptypes = Compiler.VarState[Compiler.VarState(sp, false) for sp in match.sparams]
-            maxcost = Compiler.statement_costs!(cst, code.code, code, sptypes, params)
+            maxcost = invoke_interp_compiler(passed_interp, :statement_costs!, interp, cst, code.code, code, match)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -953,18 +973,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type);
-    method_table::Union{Nothing,Core.MethodTable,Compiler.MethodTableView}=nothing,
+    method_table #=::Union{Nothing,Core.MethodTable,Compiler.MethodTableView}=# =nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    if method_table === nothing
-        table = Compiler.InternalMethodTable(world)
-    elseif method_table isa Core.MethodTable
-        table = Compiler.OverlayMethodTable(world, method_table)
-    else
-        table = method_table
-    end
-    match, = Compiler.findsup(tt, table)
+    match, = invoke_default_compiler(:findsup_mt, tt, world, method_table)
     if match === nothing
         raise && error("no unique matching method found for the specified argument types")
         return nothing
@@ -984,7 +997,7 @@ See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which),
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
     world = get_world_counter()
-    match, _ = Compiler._findsup(tt, nothing, world)
+    match, _ = invoke_default_compiler(:_findsup, tt, nothing, world)
     if match === nothing
         me = MethodError(f, t, world)
         ee = ErrorException(sprint(io -> begin
@@ -1350,7 +1363,7 @@ julia> @macroexpand @invoke (xs::Xs)[i::I] = v::V
     The additional syntax is supported as of Julia 1.10.
 """
 macro invoke(ex)
-    topmod = Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    topmod = _topmod(__module__)
     f, args, kwargs = destructure_callex(topmod, ex)
     types = Expr(:curly, :Tuple)
     out = Expr(:call, GlobalRef(Core, :invoke))
@@ -1409,7 +1422,7 @@ julia> @macroexpand @invokelatest xs[i] = v
     The additional `x.f` and `xs[i]` syntax requires Julia 1.10.
 """
 macro invokelatest(ex)
-    topmod = Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    topmod = _topmod(__module__)
     f, args, kwargs = destructure_callex(topmod, ex)
     out = Expr(:call, GlobalRef(Base, :invokelatest))
     isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))

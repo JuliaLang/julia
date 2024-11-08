@@ -212,14 +212,14 @@ end
 function argextype end # imported by EscapeAnalysis
 function try_compute_field end # imported by EscapeAnalysis
 
-include("compiler/ssair/heap.jl")
-include("compiler/ssair/slot2ssa.jl")
-include("compiler/ssair/inlining.jl")
-include("compiler/ssair/verify.jl")
-include("compiler/ssair/legacy.jl")
-include("compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl")
-include("compiler/ssair/passes.jl")
-include("compiler/ssair/irinterp.jl")
+include("ssair/heap.jl")
+include("ssair/slot2ssa.jl")
+include("ssair/inlining.jl")
+include("ssair/verify.jl")
+include("ssair/legacy.jl")
+include("ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("ssair/passes.jl")
+include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt

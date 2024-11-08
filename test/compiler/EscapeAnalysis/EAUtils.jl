@@ -127,10 +127,6 @@ end
 using Core: Argument, SSAValue
 using .CC: widenconst, singleton_type
 
-if EA._TOP_MOD === CC
-    Base.getindex(estate::EscapeState, @nospecialize(x)) = CC.getindex(estate, x)
-end
-
 function get_name_color(x::EscapeInfo, symbol::Bool = false)
     getname(x) = string(nameof(x))
     if x === EA.⊥

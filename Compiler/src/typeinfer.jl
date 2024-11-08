@@ -10,19 +10,19 @@ being used for this purpose alone.
 """
 module Timings
 
-using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
+using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
     @inbounds, copy, backtrace
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
     mi::Core.MethodInstance
     world::UInt64
-    sptypes::Vector{Core.Compiler.VarState}
+    sptypes::Vector{Compiler.VarState}
     slottypes::Vector{Any}
     nargs::Int
 end
 
-function _typeinf_identifier(frame::Core.Compiler.InferenceState)
+function _typeinf_identifier(frame::Compiler.InferenceState)
     mi_info = InferenceFrameInfo(
         frame.linfo,
         frame_world(sv),
@@ -36,7 +36,7 @@ end
 _typeinf_identifier(frame::InferenceFrameInfo) = frame
 
 """
-    Core.Compiler.Timing(mi_info, start_time, ...)
+    Compiler.Timing(mi_info, start_time, ...)
 
 Internal type containing the timing result for running type inference on a single
 MethodInstance.
@@ -65,18 +65,18 @@ const _timings = Timing[]
 # ROOT() is an empty function used as the top-level Timing node to measure all time spent
 # *not* in type inference during a given recording trace. It is used as a "dummy" node.
 function ROOT() end
-const ROOTmi = Core.Compiler.specialize_method(
-    first(Core.Compiler.methods(ROOT)), Tuple{typeof(ROOT)}, Core.svec())
+const ROOTmi = Compiler.specialize_method(
+    first(Compiler.methods(ROOT)), Tuple{typeof(ROOT)}, Core.svec())
 """
-    Core.Compiler.reset_timings()
+    Compiler.reset_timings()
 
-Empty out the previously recorded type inference timings (`Core.Compiler._timings`), and
+Empty out the previously recorded type inference timings (`Compiler._timings`), and
 start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
 """
 function reset_timings() end
 push!(_timings, Timing(
     # The MethodInstance for ROOT(), and default empty values for other fields.
-    InferenceFrameInfo(ROOTmi, 0x0, Core.Compiler.VarState[], Any[Core.Const(ROOT)], 1),
+    InferenceFrameInfo(ROOTmi, 0x0, Compiler.VarState[], Any[Core.Const(ROOT)], 1),
     _time_ns()))
 function close_current_timer() end
 function enter_new_timer(frame) end
@@ -85,7 +85,7 @@ function exit_current_timer(_expected_frame_) end
 end  # module Timings
 
 """
-    Core.Compiler.__set_measure_typeinf(onoff::Bool)
+    Compiler.__set_measure_typeinf(onoff::Bool)
 
 If set to `true`, record per-method-instance timings within type inference in the Compiler.
 """
@@ -861,7 +861,7 @@ function cached_return_type(code::CodeInstance)
     # the second subtyping/egal conditions are necessary to distinguish usual cases
     # from rare cases when `Const` wrapped those extended lattice type objects
     if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-        return PartialStruct(rettype, rettype_const)
+        return PartialStruct(fallback_lattice, rettype, rettype_const)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
@@ -1179,7 +1179,7 @@ end
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
 
 function return_type(@nospecialize(f), t::DataType, world::UInt)
@@ -1193,7 +1193,7 @@ end
 
 function return_type(t::DataType, world::UInt)
     args = Any[_return_type, NativeInterpreter(world), t]
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
 
 function _return_type(interp::AbstractInterpreter, t::DataType)

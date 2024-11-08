@@ -2047,7 +2047,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(aty)
                 return Conditional(a, thentype, elsetype)
             end
-        elseif f === Core.Compiler.not_int
+        elseif f === Core.Intrinsics.not_int
             aty = argtypes[2]
             if isa(aty, Conditional)
                 thentype = rt === Const(false) ? Bottom : aty.elsetype
@@ -2119,7 +2119,7 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     else
         fldidx > nminfld || return nothing
     end
-    return PartialStruct(objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
+    return PartialStruct(fallback_lattice, objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
         obj.fields[i] : fieldtype(objt0,i) for i = 1:fldidx])
 end
 
@@ -2955,7 +2955,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, vtypes::Union{V
                 # - any refinement information is available (`anyrefine`), or when
                 # - `nargs` is greater than `n_initialized` derived from the struct type
                 #   information alone
-                rt = PartialStruct(rt, ats)
+                rt = PartialStruct(𝕃ᵢ, rt, ats)
             end
         else
             rt = refine_partial_type(rt)
@@ -2990,7 +2990,7 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, vtypes::Un
                     all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
                 end))
             nothrow = isexact
-            rt = PartialStruct(rt, at.fields::Vector{Any})
+            rt = PartialStruct(𝕃ᵢ, rt, at.fields::Vector{Any})
         end
     else
         rt = refine_partial_type(rt)
@@ -3524,7 +3524,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(rt.typ, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

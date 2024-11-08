@@ -1,6 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be be loaded on top of either an existing system image built from
+# `Base_compiler.jl` or standalone, in which case we will build it now.
+let had_compiler = isdefined(Main, :Base)
+if had_compiler; else
+include("Base_compiler.jl")
+end
+
+Core.include(Base, "Base.jl")
+
+had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
+end
 
 using .Base
 

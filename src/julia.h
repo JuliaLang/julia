@@ -2536,6 +2536,8 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
+uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
+
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv
 JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv);
