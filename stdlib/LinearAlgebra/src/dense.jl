@@ -722,13 +722,14 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
             end
         end
 
-        U′ = P # alias for the temporary matrix
-        mul!(U′, A, U)
+        # U = A * U, but we overwrite P to avoid an allocation
+        mul!(P, A, U)
+        # P may be seen as an alias for U in the following code
 
         # Padé approximant:  (V-U)\(V+U)
         VminU, VplusU = V, U # Reuse already allocated arrays
         for ind in eachindex(V, U)
-            vi, ui = V[ind], U′[ind]
+            vi, ui = V[ind], P[ind]
             VminU[ind] = vi - ui
             VplusU[ind] = vi + ui
         end
