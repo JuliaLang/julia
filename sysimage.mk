@@ -22,6 +22,7 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 	@$(DSYMUTIL) $@
 
 COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
+		base/Base_compiler.jl \
 		base/boot.jl \
 		base/docs/core.jl \
 		base/abstractarray.jl \
@@ -49,24 +50,24 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/pointer.jl \
 		base/promotion.jl \
 		base/range.jl \
-		base/reflection.jl \
+		base/runtime_internals.jl \
 		base/traits.jl \
 		base/refvalue.jl \
 		base/tuple.jl)
-COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
+COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(SYSIMG_STDLIBS_SRCS)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 
-$(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
+$(build_private_libdir)/basecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
-		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 compiler/compiler.jl)
+		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl $(RELBUILDROOT))
 	@mv $@.tmp $@
 
-$(build_private_libdir)/sys.ji: $(build_private_libdir)/corecompiler.ji $(JULIAHOME)/VERSION $(BASE_SRCS) $(STDLIB_SRCS)
+$(build_private_libdir)/sys.ji: $(build_private_libdir)/basecompiler.ji $(JULIAHOME)/VERSION $(BASE_SRCS) $(STDLIB_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 			$(call spawn, $(JULIA_EXECUTABLE)) -g1 -O1 -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp $(JULIA_SYSIMG_BUILD_FLAGS) \

@@ -351,13 +351,13 @@ function decode_effects(e::UInt32)
     return Effects(
         UInt8((e >> 0) & 0x07),
         UInt8((e >> 3) & 0x03),
-        _Bool((e >> 5) & 0x01),
-        _Bool((e >> 6) & 0x01),
-        _Bool((e >> 7) & 0x01),
+        Bool((e >> 5) & 0x01),
+        Bool((e >> 6) & 0x01),
+        Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
         UInt8((e >> 10) & 0x03),
         UInt8((e >> 12) & 0x03),
-        _Bool((e >> 14) & 0x01))
+        Bool((e >> 14) & 0x01))
 end
 
 decode_statement_effects_override(ssaflag::UInt32) =

@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.PhiNode() = Core.PhiNode(Int32[], Any[])
-
 isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) ||
     isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
@@ -272,6 +270,7 @@ function InstructionStream(len::Int)
 end
 InstructionStream() = InstructionStream(0)
 length(is::InstructionStream) = length(is.stmt)
+iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
 isempty(is::InstructionStream) = isempty(is.stmt)
 function add_new_idx!(is::InstructionStream)
     ninst = length(is) + 1

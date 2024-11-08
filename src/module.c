@@ -1276,6 +1276,7 @@ JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 
 // TODO: make this part of the module constructor and read-only?
 JL_DLLEXPORT void jl_set_module_uuid(jl_module_t *m, jl_uuid_t uuid) { m->uuid = uuid; }
+JL_DLLEXPORT void jl_set_module_parent(jl_module_t *m, jl_module_t *parent) { m->parent = parent; }
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT
 {
@@ -1308,15 +1309,20 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_UNLOCK(&m->lock);
 }
 
+JL_DLLEXPORT void jl_add_to_module_init_list(jl_value_t *mod)
+{
+    if (jl_module_init_order == NULL)
+        jl_module_init_order = jl_alloc_vec_any(0);
+    jl_array_ptr_1d_push(jl_module_init_order, mod);
+}
+
 JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)
 {
     if (!jl_generating_output() || jl_options.incremental) {
         jl_module_run_initializer((jl_module_t*)mod);
     }
     else {
-        if (jl_module_init_order == NULL)
-            jl_module_init_order = jl_alloc_vec_any(0);
-        jl_array_ptr_1d_push(jl_module_init_order, mod);
+        jl_add_to_module_init_list(mod);
     }
 }
 

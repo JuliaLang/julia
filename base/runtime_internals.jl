@@ -20,7 +20,7 @@ Base
 """
 parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
-is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
 """
     moduleroot(m::Module) -> Module
@@ -1556,3 +1556,9 @@ function specialize_method(match::Core.MethodMatch; kwargs...)
 end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+
+###########
+# scoping #
+###########
+
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
