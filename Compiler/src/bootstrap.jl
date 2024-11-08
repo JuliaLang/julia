@@ -12,14 +12,17 @@ function bootstrap!()
         println("Compiling the compiler. This may take several minutes ...")
         interp = NativeInterpreter()
 
-        # analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, TODO}
+        ssa_inlining_pass!_tt = Tuple{typeof(ssa_inlining_pass!), IRCode, InliningState{NativeInterpreter}, Bool}
         optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
+        typeinf_ext_tt = Tuple{typeof(typeinf_ext), NativeInterpreter, MethodInstance, UInt8}
+        typeinf_tt = Tuple{typeof(typeinf), NativeInterpreter, InferenceState}
+        typeinf_edge_tt = Tuple{typeof(typeinf_edge), NativeInterpreter, Method, Any, SimpleVector, InferenceState, Bool, Bool}
         fs = Any[
             # we first create caches for the optimizer, because they contain many loop constructions
             # and they're better to not run in interpreter even during bootstrapping
-            #=analyze_escapes_tt,=# optimize_tt,
+            compact!, ssa_inlining_pass!_tt, optimize_tt,
             # then we create caches for inference entries
-            typeinf_ext, typeinf, typeinf_edge,
+            typeinf_ext_tt, typeinf_tt, typeinf_edge_tt,
         ]
         # tfuncs can't be inferred from the inference entries above, so here we infer them manually
         for x in T_FFUNC_VAL
@@ -40,14 +43,19 @@ function bootstrap!()
             else
                 tt = Tuple{typeof(f), Vararg{Any}}
             end
-            for m in _methods_by_ftype(tt, 10, get_world_counter())::Vector
-                # remove any TypeVars from the intersection
-                m = m::MethodMatch
-                typ = Any[m.spec_types.parameters...]
-                for i = 1:length(typ)
-                    typ[i] = unwraptv(typ[i])
+            matches = _methods_by_ftype(tt, 10, get_world_counter())::Vector
+            if isempty(matches)
+                println(stderr, "WARNING: no matching method found for `", tt, "`")
+            else
+                for m in matches
+                    # remove any TypeVars from the intersection
+                    m = m::MethodMatch
+                    params = Any[m.spec_types.parameters...]
+                    for i = 1:length(params)
+                        params[i] = unwraptv(params[i])
+                    end
+                    typeinf_type(interp, m.method, Tuple{params...}, m.sparams)
                 end
-                typeinf_type(interp, m.method, Tuple{typ...}, m.sparams)
             end
         end
         endtime = time()
