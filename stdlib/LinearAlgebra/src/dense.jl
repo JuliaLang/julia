@@ -1005,7 +1005,7 @@ cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
 cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
 function applydiagonal(f, A)
-    dinv = f(Diagonal(diag(A)))
+    dinv = f(Diagonal(A))
     copyto!(similar(A, eltype(dinv)), dinv)
 end
 
