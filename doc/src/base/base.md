@@ -285,7 +285,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
-Base.Fix
+Base.fix
 Base.Fix1
 Base.Fix2
 ```

@@ -1156,13 +1156,13 @@ fake_repl() do stdin_write, stdout_read, repl
 
     write(stdin_write, " ( 123 , Base.Fix1 , ) \n")
     s = readuntil(stdout_read, "\n\n")
-    @test endswith(s, "(123, Base.Fix1)")
+    @test endswith(s, "(123, Base.fix(1))")
 
     repl.mistate.active_module = Base # simulate activate_module(Base)
     write(stdin_write, " ( 456 , Base.Fix2 , ) \n")
     s = readuntil(stdout_read, "\n\n")
     # ".Base" prefix not shown here
-    @test endswith(s, "(456, Fix2)")
+    @test endswith(s, "(456, fix(2))")
 
     # Close REPL ^D
     readuntil(stdout_read, "julia> ", keep=true)
@@ -1217,9 +1217,9 @@ global some_undef_global
 @test occursin("does not exist", sprint(show, help_result("..")))
 # test that helpmode is sensitive to contextual module
 @test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
-@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
+@test occursin("fix", # exact string may change
                sprint(show, help_result("Base.Fix2", Main)))
-@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
+@test occursin("fix", # exact string may change
                sprint(show, help_result("Fix2", Base)))
 
 

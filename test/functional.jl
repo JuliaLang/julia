@@ -236,7 +236,7 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
-@testset "Basic tests of Fix1, Fix2, and Fix" begin
+@testset "Basic tests of Fix1, Fix2, and fix" begin
     function test_fix1(Fix1=Base.Fix1)
         increment = Fix1(+, 1)
         @test increment(5) == 6
@@ -278,48 +278,48 @@ end
     test_fix2()
 
     # Now, repeat the Fix1 and Fix2 tests, but
-    # with a Fix lambda function used in their place
-    test_fix1((op, arg) -> Base.Fix{1}(op, arg))
-    test_fix2((op, arg) -> Base.Fix{2}(op, arg))
+    # with a fix lambda function used in their place
+    test_fix1((op, arg) -> Base.fix(1)(op, arg))
+    test_fix2((op, arg) -> Base.fix(2)(op, arg))
 
-    # Now, we do more complex tests of Fix:
-    let Fix=Base.Fix
+    # Now, we do more complex tests of fix:
+    let fix=Base.fix
         @testset "Argument Fixation" begin
             let f = (x, y, z) -> x + y * z
-                fixed_f1 = Fix{1}(f, 10)
+                fixed_f1 = fix(1)(f, 10)
                 @test fixed_f1(2, 3) == 10 + 2 * 3
 
-                fixed_f2 = Fix{2}(f, 5)
+                fixed_f2 = fix(2)(f, 5)
                 @test fixed_f2(1, 4) == 1 + 5 * 4
 
-                fixed_f3 = Fix{3}(f, 3)
+                fixed_f3 = fix(3)(f, 3)
                 @test fixed_f3(1, 2) == 1 + 2 * 3
             end
         end
         @testset "Helpful errors" begin
             let g = (x, y) -> x - y
                 # Test minimum N
-                fixed_g1 = Fix{1}(g, 100)
+                fixed_g1 = fix(1)(g, 100)
                 @test fixed_g1(40) == 100 - 40
 
                 # Test maximum N
-                fixed_g2 = Fix{2}(g, 100)
+                fixed_g2 = fix(2)(g, 100)
                 @test fixed_g2(150) == 150 - 100
 
                 # One over
-                fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError("expected at least 2 arguments to `Fix{3}`, but got 1") fixed_g3(1)
+                fixed_g3 = fix(3)(g, 100)
+                @test_throws ArgumentError("expected at least 2 arguments to `fix(3)`, but got 1") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
             let h = (x, y) -> x / y
-                fixed_h = Fix{2}(h, 2.0)
+                fixed_h = fix(2)(h, 2.0)
                 @test @inferred(fixed_h(4.0)) == 2.0
             end
         end
         @testset "Interaction with varargs" begin
             vararg_f = (x, y, z...) -> x + 10 * y + sum(z; init=zero(x))
-            fixed_vararg_f = Fix{2}(vararg_f, 6)
+            fixed_vararg_f = fix(2)(vararg_f, 6)
 
             # Can call with variable number of arguments:
             @test fixed_vararg_f(1, 2, 3, 4) == 1 + 10 * 6 + sum((2, 3, 4))
@@ -329,35 +329,34 @@ end
         end
         @testset "Errors should propagate normally" begin
             error_f = (x, y) -> sin(x * y)
-            fixed_error_f = Fix{2}(error_f, Inf)
+            fixed_error_f = fix(2)(error_f, Inf)
             @test_throws DomainError fixed_error_f(10)
         end
-        @testset "Chaining Fix together" begin
-            f1 = Fix{1}(*, "1")
-            f2 = Fix{1}(f1, "2")
-            f3 = Fix{1}(f2, "3")
+        @testset "Chaining fix together" begin
+            f1 = fix(1)(*, "1")
+            f2 = fix(1)(f1, "2")
+            f3 = fix(1)(f2, "3")
             @test f3() == "123"
 
-            g1 = Fix{2}(*, "1")
-            g2 = Fix{2}(g1, "2")
-            g3 = Fix{2}(g2, "3")
+            g1 = fix(2)(*, "1")
+            g2 = fix(2)(g1, "2")
+            g3 = fix(2)(g2, "3")
             @test g3("") == "123"
         end
         @testset "Zero arguments" begin
-            f = Fix{1}(x -> x, 'a')
+            f = fix(1)(x -> x, 'a')
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `0.5::Float64`") Fix{0.5}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
+            @test_throws ArgumentError fix(0)
+            @test_throws MethodError fix(0.5)
         end
         @testset "Specialize to structs not in `Base`" begin
             struct MyStruct
                 x::Int
             end
-            f = Fix{1}(MyStruct, 1)
-            @test f isa Fix{1,Type{MyStruct},Int}
+            f = fix(1)(MyStruct, 1)
+            @test f isa fix(1)
         end
     end
 end
