@@ -43,15 +43,15 @@ function foldl_impl(op::OP, nt, itr) where {OP}
 end
 
 function _foldl_impl(op::OP, init, itr) where {OP}
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
+    # Unroll the loop once to check if the iterator is empty.
+    # If init is known, the call to op may be evaluated at compile time
     y = iterate(itr)
     y === nothing && return init
     v = op(init, y[1])
-    while true
-        y = iterate(itr, y[2])
-        y === nothing && break
-        v = op(v, y[1])
+    # Using a for loop is more performant than a while loop (see #56492)
+    # This unrolls the loop a second time before entering the body
+    for x in Iterators.rest(itr, y[2])
+        v = op(v, x)
     end
     return v
 end
