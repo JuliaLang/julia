@@ -259,12 +259,13 @@ else
     const UInt = UInt32
 end
 
-function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
+
+function iterate end
 
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)

@@ -463,8 +463,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
-        if (toplevel)
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
@@ -888,10 +886,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->mi = NULL;
     s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }

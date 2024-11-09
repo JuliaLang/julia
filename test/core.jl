@@ -2621,7 +2621,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test f8338(2) == 8
+    @test invokelatest(f8338, 2) == 8
 end
 
 # call overloading (#2403)
@@ -8332,3 +8332,13 @@ let s = mktemp() do path, io
     end
     @test strip(s) == "xxx = 42"
 end
+
+# `module` has an implicit world-age increment
+let foo = eval(Expr(:toplevel, :(module BarModuleInc; struct FooModuleInc; end; end), :(BarModuleInc.FooModuleInc())))
+    @Core.latestworld
+    @test foo == BarModuleInc.FooModuleInc()
+end
+
+eval(:(module BarModuleInc; module BazModuleInc; struct FooModuleInc; end; end; const foo = BazModuleInc.FooModuleInc(); end))
+@Core.latestworld
+@test BarModuleInc.foo == BarModuleInc.BazModuleInc.FooModuleInc()

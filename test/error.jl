@@ -93,7 +93,8 @@ end
 @testset "MethodError for methods without line numbers" begin
     try
         eval(Expr(:function, :(f44319()), 0))
-        f44319(1)
+        @Core.latestworld
+        f44319()
     catch e
         s = sprint(showerror, e)
         @test s == """MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))

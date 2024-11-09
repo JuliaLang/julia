@@ -225,9 +225,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     for (int i = 0; i < jl_array_nrows(exprs); i++) {
         // process toplevel form
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
         form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, filename, lineno);
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1, &filename, &lineno);
     }
     ct->world_age = last_age;
@@ -865,6 +864,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 
     if (head == jl_module_sym) {
         jl_value_t *val = jl_eval_module_expr(m, ex);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         JL_GC_POP();
         return val;
     }
@@ -920,6 +920,9 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
                 "syntax: malformed \"using\" statement");
         }
+        if (!expanded) {
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        }
         JL_GC_POP();
         return jl_nothing;
     }
@@ -968,6 +971,12 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
                 "syntax: malformed \"import\" statement");
         }
+        if (!expanded) {
+            // To avoid having to roundtrip every `using` expression through
+            // lowering, just to add the world-age increment effect, do it
+            // manually here.
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        }
         JL_GC_POP();
         return jl_nothing;
     }
@@ -1002,6 +1011,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_value_t *res = jl_nothing;
         int i;
         for (i = 0; i < jl_array_nrows(ex->args); i++) {
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             res = jl_toplevel_eval_flex(m, jl_array_ptr_ref(ex->args, i), fast, 0, toplevel_filename, toplevel_lineno);
         }
         JL_GC_POP();
@@ -1112,8 +1122,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
+    jl_task_t *ct = jl_current_task;
     jl_lineno = 1;
     jl_filename = "none";
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
     JL_TRY {
         v = jl_toplevel_eval(m, ex);
     }
@@ -1124,6 +1137,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     }
     jl_lineno = last_lineno;
     jl_filename = last_filename;
+    ct->world_age = last_age;
     assert(v);
     return v;
 }
@@ -1171,6 +1185,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
     size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     int lineno = 0;
     jl_lineno = 0;
     const char *filename_str = jl_string_data(filename);
@@ -1186,9 +1201,9 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_lineno = lineno;
                 continue;
             }
+            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
     }
