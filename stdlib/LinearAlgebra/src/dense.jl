@@ -1027,6 +1027,11 @@ function inv(A::StridedMatrix{T}) where T
     return Ai
 end
 
+# helper function to perform a broadcast in-place if the destination is strided
+# otherwise, this performs an out-of-place broadcast
+@inline _broadcast!!(dest::StridedArray, f::F, args...) where {F} = (dest .= f.(args...); dest)
+@inline _broadcast!!(dest, f::F, args...) where {F} = f.(args...)
+
 """
     cos(A::AbstractMatrix)
 
@@ -1050,8 +1055,6 @@ function cos(A::AbstractMatrix{<:Real})
     M = im .* float.(A)
     return real(exp_maybe_inplace(M))
 end
-@inline _broadcast!!(::Val{true}, f::F, dest, args...) where {F} = (dest .= f.(args...); dest)
-@inline _broadcast!!(::Val{false}, f::F, dest, args...) where {F} = f.(args...)
 function cos(A::AbstractMatrix{<:Complex})
     if ishermitian(A)
         return copytri!(parent(cos(Hermitian(A))), 'U', true)
@@ -1063,8 +1066,7 @@ function cos(A::AbstractMatrix{<:Complex})
     # Compute (X + Y)/2 and return the result.
     # Compute the result in-place if X is strided
     half = eltype(X)(0.5)
-    isstrided = X isa StridedMatrix
-    _broadcast!!(Val(isstrided), (x,y) -> half * (x + y),  X, X, Y)
+    _broadcast!!(X, (x,y) -> half * (x + y),  X, Y)
 end
 
 """
@@ -1101,8 +1103,7 @@ function sin(A::AbstractMatrix{<:Complex})
     # Compute (X - Y)/2im and return the result.
     # Compute the result in-place if X is strided
     halfim = eltype(X)(0.5)*im
-    isstrided = X isa StridedMatrix
-    _broadcast!!(Val(isstrided), (x,y) -> halfim * (y - x),  X, X, Y)
+    _broadcast!!(X, (x,y) -> halfim * (y - x), X, Y)
 end
 
 """
@@ -1202,8 +1203,7 @@ function cosh(A::AbstractMatrix)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
     half = eltype(X)(0.5)
-    isstrided = X isa StridedMatrix
-    _broadcast!!(Val(isstrided), (x,y) -> half * (x + y), X, X, Y)
+    _broadcast!!(X, (x,y) -> half * (x + y), X, Y)
 end
 
 """
@@ -1219,8 +1219,7 @@ function sinh(A::AbstractMatrix)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
     half = eltype(X)(0.5)
-    isstrided = X isa StridedMatrix
-    _broadcast!!(Val(isstrided), (x,y) -> half * (x - y), X, X, Y)
+    _broadcast!!(X, (x,y) -> half * (x - y), X, Y)
 end
 
 """
