@@ -684,7 +684,12 @@ Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
-    if ishermitian(A)
+    if isdiag(A)
+        for i in diagind(A, IndexStyle(A))
+            A[i] = exp(A[i])
+        end
+        return A
+    elseif ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
