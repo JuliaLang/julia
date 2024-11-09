@@ -605,14 +605,17 @@ end
 
 @testset "isbanded/istril/istriu with rectangular matrices" begin
     @testset "$(size(A))" for A in (zeros(2,5), zeros(5,2))
-        A[diagind(A)] .= 1
-        G = GenericArray(A)
-        @testset for (kl,ku) in Iterators.product(-6:6, -6:6)
-            @test isbanded(A, kl, ku) == isbanded(G, kl, ku) == (0 in (kl:ku))
-        end
-        @testset for k in -6:6
-            @test istriu(A,k) == istriu(G,k) == (k <= 0)
-            @test istril(A,k) == istril(G,k) == (k >= 0)
+        @testset for m in -1:1
+            A .= 0
+            A[diagind(A, m)] .= 1
+            G = GenericArray(A)
+            @testset for (kl,ku) in Iterators.product(-6:6, -6:6)
+                @test isbanded(A, kl, ku) == isbanded(G, kl, ku) == (m in (kl:ku))
+            end
+            @testset for k in -6:6
+                @test istriu(A,k) == istriu(G,k) == (k <= m)
+                @test istril(A,k) == istril(G,k) == (k >= m)
+            end
         end
     end
 end

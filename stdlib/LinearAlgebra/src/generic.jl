@@ -1353,13 +1353,13 @@ end
 
 ishermitian(x::Number) = (x == conj(x))
 
-# helper function equivalent to `all(iszero, v)`, but potentially without the fast exit feature
+# helper function equivalent to `iszero(v)`, but potentially without the fast exit feature
 # of `all` if this improves performance
-_alliszero(V) = all(iszero, V)
-# parallel Base.FastContiguousSubArray for a StridedArray
+_iszero(V) = iszero(V)
+# A Base.FastContiguousSubArray view of a StridedArray
 FastContiguousSubArrayStrided{T,N,P<:StridedArray,I<:Tuple{AbstractUnitRange, Vararg{Any}}} = Base.SubArray{T,N,P,I,true}
 # using mapreduce instead of all permits vectorization
-_alliszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true)
+_iszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true)
 
 """
     istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1392,14 +1392,18 @@ julia> istriu(c, -1)
 true
 ```
 """
-function istriu(A::AbstractMatrix, k::Integer = 0)
+istriu(A::AbstractMatrix, k::Integer = 0) = _istriu(A, k)
+istriu(x::Number) = true
+
+function _istriu(A::AbstractMatrix, k::Integer=0)
     require_one_based_indexing(A)
     for j in firstindex(A,2):min(lastindex(A,2), size(A,1) + k - 1)
-        _alliszero(@view A[max(begin, j - k + 1):end, j]) || return false
+        Arows_j = @view A[max(begin, j - k + 1):end, j]
+        _iszero(Arows_j) || return false
     end
     return true
 end
-istriu(x::Number) = true
+
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1432,7 +1436,10 @@ julia> istril(c, 1)
 true
 ```
 """
-function istril(A::AbstractMatrix, k::Integer = 0)
+istril(A::AbstractMatrix, k::Integer = 0) = _istril(A, k)
+istril(x::Number) = true
+
+function _istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
     # Split the column range into two parts for wide matrices,
     # as iterating over a slice is faster than over a UnitRange view.
@@ -1440,14 +1447,14 @@ function istril(A::AbstractMatrix, k::Integer = 0)
     # which should be zero for a banded matrix
     col_cutoff = size(A,1) + max(k,0)
     for j in max(firstindex(A,2), k + 2):min(lastindex(A,2), col_cutoff)
-        _alliszero(@view A[begin:min(j - k - 1, end), j]) || return false
+        Arows_j = @view A[begin:min(j - k - 1, end), j]
+        _iszero(Arows_j) || return false
     end
     for j in max(firstindex(A,2), col_cutoff + 1):lastindex(A,2)
-        _alliszero(@view A[:, j]) || return false
+        _iszero(@view A[:, j]) || return false
     end
     return true
 end
-istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1496,12 +1503,12 @@ function _isbanded(A::StridedMatrix, kl::Integer, ku::Integer)
     col_cutoff = size(A,1) + max(ku, 0)
     for col in firstindex(A,2):min(lastindex(A,2), col_cutoff)
         toprows = @view A[begin:min(col-ku-1, end), col]
-        _alliszero(toprows) || return false
+        _iszero(toprows) || return false
         bottomrows = @view A[max(begin, col-kl+1):end, col]
-        _alliszero(bottomrows) || return false
+        _iszero(bottomrows) || return false
     end
     for col in max(firstindex(A,2), col_cutoff+1):lastindex(A,2)
-        _alliszero(@view A[:, col]) || return false
+        _iszero(@view A[:, col]) || return false
     end
     return true
 end

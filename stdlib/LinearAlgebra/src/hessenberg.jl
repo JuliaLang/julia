@@ -75,7 +75,7 @@ imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
 Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
-    return _istriu(A, k)
+    return _istriu(parent(A), k)
 end
 
 function Matrix{T}(H::UpperHessenberg) where T

@@ -346,27 +346,14 @@ istril(A::UnitLowerTriangular, k::Integer=0) = k >= 0
 istriu(A::UnitUpperTriangular, k::Integer=0) = k <= 0
 Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
-    return _istril(A, k)
+    return _istril(parent(A), k)
 end
-@inline function _istril(A::LowerTriangular, k)
-    P = parent(A)
-    for j in max(firstindex(P,2), k + 2):lastindex(P,2)
-        all(iszero, @view(P[j:min(j - k - 1, end), j])) || return false
-    end
-    return true
-end
+
 Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
-    return _istriu(A, k)
+    return _istriu(parent(A), k)
 end
-@inline function _istriu(A::UpperTriangular, k)
-    P = parent(A)
-    m = size(A, 1)
-    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
-        all(iszero, @view(P[max(begin, j - k + 1):j, j])) || return false
-    end
-    return true
-end
+
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
 istriu(A::Adjoint, k::Integer=0) = istril(A.parent, -k)
