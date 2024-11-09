@@ -363,6 +363,61 @@ function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod)
     B
 end
 
+function Base._dropdims(A::PermutedDimsArray{T,N,perm}, dims::Base.Dims)  where {T,N,perm}
+    for d in dims
+        1 <= d <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+        # dropdims also demands size(A,d)==1 and allunique(dims), checked by Base._dropdims below.
+    end
+    # Drop the appropriate dims of the parent array:
+    innerdims = map(d -> perm[d], dims)
+    inner = Base._dropdims(parent(A), innerdims)
+    # Change the permutation two ways: first account for dropdims(parent(A)), then  skip entries at locations in dims.
+    innerperm = map(perm) do p
+        p - count(<=(p), innerdims)
+    end
+    newperm = ntuple(length(perm) - length(dims)) do d
+        i = d + count(<=(d), dims)
+        innerperm[i]
+    end
+    PermutedDimsArray(inner, newperm)
+end
+# Drop 1 dim of a matrix and you must get a vector, no need to wrap it:
+function Base._dropdims(A::PermutedDimsArray{T,2,perm}, dims::Tuple{Int})  where {T,perm}
+    1 <= only(dims) <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+    innerdim = perm[only(dims)]
+    Base._dropdims(parent(A), (innerdim,))
+end
+# Drop all dims
+function Base._dropdims(A::PermutedDimsArray{T,N,perm}, dims::NTuple{N,Int})  where {T,N,perm}
+    for d in dims
+        1 <= d <= ndims(A) || throw(ArgumentError("dropped dims must be in range 1:ndims(A)"))
+    end
+    Base._dropdims(parent(A), dims)
+end
+
+function Base._insertdims(A::PermutedDimsArray{T,N,perm}, dims::NTuple{M,Int})  where {T,N,perm,M}
+    for i in eachindex(dims)
+        1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
+        dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
+        for j = 1:i-1
+            dims[j] == dims[i] && throw(ArgumentError("inserted dims must be unique"))
+        end
+    end
+    # We can choose where to insert dims into parent array, choose the end?
+    innerdims = ntuple(d -> ndims(A) + d, length(dims))
+    inner = Base._insertdims(parent(A), innerdims)
+    # With that choice, the new permutation just needs to insert higher numbers into sequence
+    newperm = ntuple(length(perm) + length(dims)) do d
+        c = count(<=(d), dims)
+        if d in dims
+            ndims(A) + c
+        else
+            perm[d - c]
+        end
+    end
+    PermutedDimsArray(inner, newperm)
+end
+
 function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}
     print(io, "PermutedDimsArray(")
     Base.showarg(io, parent(A), false)

@@ -378,6 +378,62 @@ end
 
     @test isequal(reshape(reshape(1:27, 3, 3, 3), Val(2))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 end
+
+@testset "dropdims/insertdims on PermutedDimsArray" begin
+    # Matrix
+    P1 = PermutedDimsArray(randn(5,1), (2,1))
+    M1 = collect(P1)
+    @test dropdims(P1; dims=1) == dropdims(M1; dims=1)
+    @test insertdims(P1; dims=1) == insertdims(M1; dims=1)
+
+    @test dropdims(P1; dims=1) isa Vector
+    @test insertdims(P1; dims=1) isa PermutedDimsArray
+
+    @test_throws ArgumentError dropdims(P1; dims=0)
+    @test_throws ArgumentError dropdims(P1; dims=2)
+    @test_throws ArgumentError dropdims(P1; dims=3)
+    @test_throws ArgumentError dropdims(P1; dims=(1,1))
+
+    @test_throws ArgumentError insertdims(P1; dims=0)
+    @test_throws ArgumentError insertdims(P1; dims=4)
+    @test_throws ArgumentError insertdims(P1; dims=(1,1))
+
+    # More dims
+    P2 = PermutedDimsArray(randn(3,1,4), (3,2,1))
+    M2 = collect(P2)
+    @test dropdims(P2; dims=2) == dropdims(M2; dims=2)
+    @test insertdims(P2; dims=2) == insertdims(M2; dims=2)
+
+    P13 = PermutedDimsArray(randn(2,1,3,1,4), (4,5,2,1,3))
+    A13 = collect(P13)
+    @test dropdims(P13; dims=3) == dropdims(A13; dims=3)
+    @test dropdims(P13; dims=(1,3)) == dropdims(A13; dims=(1,3))
+    @test dropdims(P13; dims=(3,1)) == dropdims(A13; dims=(3,1))
+
+    @test insertdims(P13; dims=2) == insertdims(A13; dims=2)
+    @test insertdims(P13; dims=(4,6)) == insertdims(A13; dims=(4,6))
+    @test insertdims(P13; dims=(4,1)) == insertdims(A13; dims=(4,1))
+
+    @test dropdims(P13; dims=(1,3)) isa PermutedDimsArray
+    @test insertdims(P13; dims=(4,6)) isa PermutedDimsArray
+
+    @test_throws ArgumentError dropdims(P13; dims=0)
+    @test_throws ArgumentError dropdims(P13; dims=2)
+    @test_throws ArgumentError dropdims(P13; dims=4)
+    @test_throws ArgumentError dropdims(P13; dims=(3,3))
+
+    # Zero-dim cases
+    p1 = PermutedDimsArray(rand(1), (1,))
+    @test dropdims(p1; dims=1) == dropdims(collect(p1); dims=1)
+    p12 = PermutedDimsArray(rand(1,1), (2,1))
+    @test dropdims(p12; dims=2) == dropdims(collect(p12); dims=2)
+    @test dropdims(p12; dims=(1,2)) == dropdims(collect(p12); dims=(1,2))
+    a = fill(rand())
+    p = PermutedDimsArray(a, ())
+    @test insertdims(p, dims=1) == insertdims(a, dims=1)
+    @test insertdims(p, dims=(1,2)) == insertdims(a, dims=(1,2))
+end
+
 @testset "find(in(b), a)" begin
     # unsorted inputs
     a = [3, 5, -7, 6]
