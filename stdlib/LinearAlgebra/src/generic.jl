@@ -1399,7 +1399,7 @@ _alliszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true
 @inline function _istriu(A::AbstractMatrix, k)
     m, n = size(A)
     for j in 1:min(n, m + k - 1)
-        _alliszero(view(A, max(1, j - k + 1):m, j)) || return false
+        _alliszero(@view A[max(begin, j - k + 1):end, j]) || return false
     end
     return true
 end
@@ -1442,9 +1442,16 @@ end
 istril(x::Number) = true
 
 @inline function _istril(A::AbstractMatrix, k)
-    m, n = size(A)
-    for j in max(1, k + 2):n
-        _alliszero(view(A, 1:min(j - k - 1, m), j)) || return false
+    # Split the column range into two parts for wide matrices,
+    # as iterating over a slice is faster than over a UnitRange view.
+    # The second loop is over the block beyond the ku-th superdiagonal,
+    # which should be zero for a banded matrix
+    col_cutoff = size(A,1) + max(k,0)
+    for j in max(firstindex(A,2), k + 2):min(lastindex(A,2), col_cutoff)
+        _alliszero(@view A[begin:min(j - k - 1, end), j]) || return false
+    end
+    for j in max(firstindex(A,2), col_cutoff + 1):lastindex(A,2)
+        _alliszero(@view A[:, j]) || return false
     end
     return true
 end
@@ -1489,11 +1496,19 @@ _isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril
 # The istriu and istril loops are merged
 function _isbanded(A::StridedMatrix, kl::Integer, ku::Integer)
     Base.require_one_based_indexing(A)
-    for col in axes(A,2)
+    # Split the column range into two parts for wide matrices,
+    # as iterating over a slice is faster than over a UnitRange view.
+    # The second loop is over the block beyond the ku-th superdiagonal,
+    # which should be zero for a banded matrix
+    col_cutoff = size(A,1) + max(ku, 0)
+    for col in firstindex(A,2):min(lastindex(A,2), col_cutoff)
         toprows = @view A[begin:min(col-ku-1, end), col]
         _alliszero(toprows) || return false
         bottomrows = @view A[max(begin, col-kl+1):end, col]
         _alliszero(bottomrows) || return false
+    end
+    for col in max(firstindex(A,2), col_cutoff+1):lastindex(A,2)
+        _alliszero(@view A[:, col]) || return false
     end
     return true
 end
