@@ -1029,8 +1029,8 @@ end
 
 # helper function to perform a broadcast in-place if the destination is strided
 # otherwise, this performs an out-of-place broadcast
-@inline _broadcast!!(dest::StridedArray, f::F, args...) where {F} = (dest .= f.(args...); dest)
-@inline _broadcast!!(dest, f::F, args...) where {F} = f.(args...)
+@inline _broadcast!!(f, dest::StridedArray, args...) = broadcast!(f, dest, args...)
+@inline _broadcast!!(f, dest, args...) = broadcast(f, args...)
 
 """
     cos(A::AbstractMatrix)
@@ -1066,7 +1066,7 @@ function cos(A::AbstractMatrix{<:Complex})
     # Compute (X + Y)/2 and return the result.
     # Compute the result in-place if X is strided
     half = eltype(X)(0.5)
-    _broadcast!!(X, (x,y) -> half * (x + y),  X, Y)
+    _broadcast!!((x,y) -> half * (x + y), X, X, Y)
 end
 
 """
@@ -1103,7 +1103,7 @@ function sin(A::AbstractMatrix{<:Complex})
     # Compute (X - Y)/2im and return the result.
     # Compute the result in-place if X is strided
     halfim = eltype(X)(0.5)*im
-    _broadcast!!(X, (x,y) -> halfim * (y - x), X, Y)
+    _broadcast!!((x,y) -> halfim * (y - x), X, X, Y)
 end
 
 """
@@ -1203,7 +1203,7 @@ function cosh(A::AbstractMatrix)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
     half = eltype(X)(0.5)
-    _broadcast!!(X, (x,y) -> half * (x + y), X, Y)
+    _broadcast!!((x,y) -> half * (x + y), X, X, Y)
 end
 
 """
@@ -1219,7 +1219,7 @@ function sinh(A::AbstractMatrix)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
     half = eltype(X)(0.5)
-    _broadcast!!(X, (x,y) -> half * (x - y), X, Y)
+    _broadcast!!((x,y) -> half * (x - y), X, X, Y)
 end
 
 """
