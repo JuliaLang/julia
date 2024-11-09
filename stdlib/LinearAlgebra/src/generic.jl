@@ -1436,7 +1436,7 @@ function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
     # Split the column range into two parts for wide matrices,
     # as iterating over a slice is faster than over a UnitRange view.
-    # The second loop is over the block beyond the ku-th superdiagonal,
+    # The second loop is over the block beyond the k-th superdiagonal,
     # which should be zero for a banded matrix
     col_cutoff = size(A,1) + max(k,0)
     for j in max(firstindex(A,2), k + 2):min(lastindex(A,2), col_cutoff)
