@@ -1353,6 +1353,14 @@ end
 
 ishermitian(x::Number) = (x == conj(x))
 
+# helper function equivalent to `all(iszero, v)`, but potentially without the fast exit feature
+# of `all` if this improves performance
+_alliszero(V) = all(iszero, V)
+# parallel Base.FastContiguousSubArray for a StridedArray
+FastContiguousSubArrayStrided{T,N,P<:StridedArray,I<:Tuple{AbstractUnitRange, Vararg{Any}}} = Base.SubArray{T,N,P,I,true}
+# using mapreduce instead of all permits vectorization
+_alliszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true)
+
 """
     istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
 
@@ -1386,23 +1394,12 @@ true
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
-    return _istriu(A, k)
-end
-istriu(x::Number) = true
-
-_alliszero(V) = all(iszero, V)
-# parallel Base.FastContiguousSubArray for a StridedArray
-FastContiguousSubArrayStrided{T,N,P<:StridedArray,I<:Tuple{AbstractUnitRange, Vararg{Any}}} = Base.SubArray{T,N,P,I,true}
-# using mapreduce instead of all permits vectorization
-_alliszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true)
-
-@inline function _istriu(A::AbstractMatrix, k)
-    m, n = size(A)
-    for j in 1:min(n, m + k - 1)
+    for j in firstindex(A,2):min(lastindex(A,2), size(A,1) + k - 1)
         _alliszero(@view A[max(begin, j - k + 1):end, j]) || return false
     end
     return true
 end
+istriu(x::Number) = true
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1437,11 +1434,6 @@ true
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
     require_one_based_indexing(A)
-    return _istril(A, k)
-end
-istril(x::Number) = true
-
-@inline function _istril(A::AbstractMatrix, k)
     # Split the column range into two parts for wide matrices,
     # as iterating over a slice is faster than over a UnitRange view.
     # The second loop is over the block beyond the ku-th superdiagonal,
@@ -1455,6 +1447,7 @@ istril(x::Number) = true
     end
     return true
 end
+istril(x::Number) = true
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
