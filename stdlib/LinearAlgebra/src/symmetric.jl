@@ -307,7 +307,9 @@ function applytri(f, A::HermOrSym, B::HermOrSym)
         f(uppertriangular(_conjugation(A)(A.data)), uppertriangular(B.data))
     end
 end
-parentof_applytri(f, args...) = applytri(parent ∘ f, args...)
+_parent_tri(U::UpperOrLowerTriangular) = parent(U)
+_parent_tri(U) = U
+parentof_applytri(f, args...) = _parent_tri(applytri(f, args...))
 
 isdiag(A::HermOrSym) = applytri(isdiag, A)
 
@@ -967,7 +969,8 @@ for (hermtype, wrapper) in [(:Symmetric, :Symmetric), (:SymTridiagonal, :Symmetr
         function sincos(A::$hermtype{<:Real})
             n = checksquare(A)
             F = eigen(A)
-            S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+            T = float(eltype(F.values))
+            S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
             for i in 1:n
                 S.diag[i], C.diag[i] = sincos(F.values[i])
             end
@@ -978,7 +981,8 @@ end
 function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
     F = eigen(A)
-    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
+    T = float(eltype(F.values))
+    S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
     for i in 1:n
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end

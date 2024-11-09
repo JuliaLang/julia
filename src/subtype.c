@@ -2464,8 +2464,10 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
         return y;
     if (y == (jl_value_t*)jl_any_type && !jl_is_typevar(x))
         return x;
-    // band-aid for #46736
-    if (obviously_egal(x, y))
+    // band-aid for #46736 #56040
+    if (obviously_in_union(x, y))
+        return y;
+    if (obviously_in_union(y, x))
         return x;
 
     jl_varbinding_t *vars = NULL;
@@ -2495,6 +2497,9 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
+    // band-aid for #56040
+    if (!jl_is_uniontype(x) && obviously_in_union((jl_value_t *)u, x))
+        return x;
     int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
     if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;
@@ -4695,12 +4700,12 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_value_t *n = jl_unwrap_vararg_num(type);
         if (widen2ub == 0)
             widen2ub = !(n && jl_is_long(n)) || jl_unbox_long(n) > 1;
-        jl_value_t *newt;
-        JL_GC_PUSH2(&newt, &n);
-        newt = insert_nondiagonal(t, troot, widen2ub);
-        if (t != newt)
+        jl_value_t *newt = insert_nondiagonal(t, troot, widen2ub);
+        if (t != newt) {
+            JL_GC_PUSH1(&newt);
             type = (jl_value_t *)jl_wrap_vararg(newt, n, 0, 0);
-        JL_GC_POP();
+            JL_GC_POP();
+        }
     }
     else if (jl_is_datatype(type)) {
         if (jl_is_tuple_type(type)) {
@@ -4737,7 +4742,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
     jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
-    jl_value_t *nt;
+    jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
         nt = widen_diagonal(t, (jl_unionall_t *)u->body, &vb);

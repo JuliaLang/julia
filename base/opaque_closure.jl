@@ -38,24 +38,25 @@ macro opaque(ty, ex)
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
-using Core.Compiler: IRCode, SSAValue
-using Core: CodeInfo
+using Core: CodeInfo, SSAValue
+using Base: Compiler
+using .Compiler: IRCode
 
 function compute_ir_rettype(ir::IRCode)
     rt = Union{}
     for i = 1:length(ir.stmts)
         stmt = ir[SSAValue(i)][:stmt]
-        if isa(stmt, Core.Compiler.ReturnNode) && isdefined(stmt, :val)
-            rt = Core.Compiler.tmerge(Core.Compiler.argextype(stmt.val, ir), rt)
+        if isa(stmt, Core.ReturnNode) && isdefined(stmt, :val)
+            rt = Compiler.tmerge(Compiler.argextype(stmt.val, ir), rt)
         end
     end
-    return Core.Compiler.widenconst(rt)
+    return Compiler.widenconst(rt)
 end
 
 function compute_oc_signature(ir::IRCode, nargs::Int, isva::Bool)
     argtypes = Vector{Any}(undef, nargs)
     for i = 1:nargs
-        argtypes[i] = Core.Compiler.widenconst(ir.argtypes[i+1])
+        argtypes[i] = Compiler.widenconst(ir.argtypes[i+1])
     end
     if isva
         lastarg = pop!(argtypes)

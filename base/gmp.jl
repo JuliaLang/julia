@@ -11,7 +11,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
-             clamp
+             clamp, unsafe_takestring
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -761,7 +761,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)
-    String(sv)
+    unsafe_takestring(sv)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}

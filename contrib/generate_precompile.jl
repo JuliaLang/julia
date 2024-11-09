@@ -35,8 +35,8 @@ precompile(Base.unsafe_string, (Ptr{UInt8},))
 precompile(Base.unsafe_string, (Ptr{Int8},))
 
 # loading.jl
-precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
-precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.__require, (Module, Symbol))
+precompile(Base.__require, (Base.PkgId,))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
@@ -183,10 +183,10 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     # interactive startup uses this
     write(IOBuffer(), "")
 
-    # not critical, but helps hide unrelated compilation from @time when using --trace-compile
-    foo() = rand(2,2) * rand(2,2)
-    @time foo()
-    @time foo()
+    # Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
+    f55729() = Base.Experimental.@force_compile
+    @time @eval f55729()
+    @time @eval f55729()
 
     break   # only actually need to do this once
 end
@@ -202,12 +202,15 @@ if Artifacts !== nothing
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     artifact_hash("HelloWorldC", artifacts_toml)
-    oldpwd = pwd(); cd(dirname(artifacts_toml))
-    macroexpand(Main, :(@artifact_str("HelloWorldC")))
-    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    if best_platform !== nothing
+      # @artifact errors for unsupported platforms
+      oldpwd = pwd(); cd(dirname(artifacts_toml))
+      macroexpand(Main, :(@artifact_str("HelloWorldC")))
+      cd(oldpwd)
+    end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
@@ -356,6 +359,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
+    eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
     n_succeeded = 0
     # Make statements unique

@@ -18,6 +18,9 @@ using .Main.DualNumbers
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 Random.seed!(123)
 
 n = 5 # should be odd
@@ -128,53 +131,54 @@ end
 
 
 @testset "array and subarray" begin
-    aa = reshape([1.:6;], (2,3))
-    for a in (aa, view(aa, 1:2, 1:2))
-        am, an = size(a)
-        @testset "Scaling with rmul! and lmul" begin
-            @test rmul!(copy(a), 5.) == a*5
-            @test lmul!(5., copy(a)) == a*5
-            b = randn(2048)
-            subB = view(b, :, :)
-            @test rmul!(copy(b), 5.) == b*5
-            @test rmul!(copy(subB), 5.) == subB*5
-            @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
-            @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
-            @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
-        end
+    for aa in (reshape([1.:6;], (2,3)), fill(float.(rand(Int8,2,2)), 2,3))
+        for a in (aa, view(aa, 1:2, 1:2))
+            am, an = size(a)
+            @testset "Scaling with rmul! and lmul" begin
+                @test rmul!(copy(a), 5.) == a*5
+                @test lmul!(5., copy(a)) == a*5
+                b = randn(2048)
+                subB = view(b, :, :)
+                @test rmul!(copy(b), 5.) == b*5
+                @test rmul!(copy(subB), 5.) == subB*5
+                @test lmul!(Diagonal([1.; 2.]), copy(a)) == a.*[1; 2]
+                @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
+                @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
+                @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+                @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
+            end
 
-        @testset "Scaling with rdiv! and ldiv!" begin
-            @test rdiv!(copy(a), 5.) == a/5
-            @test ldiv!(5., copy(a)) == a/5
-            @test ldiv!(zero(a), 5., copy(a)) == a/5
-        end
+            @testset "Scaling with rdiv! and ldiv!" begin
+                @test rdiv!(copy(a), 5.) == a/5
+                @test ldiv!(5., copy(a)) == a/5
+                @test ldiv!(zero(a), 5., copy(a)) == a/5
+            end
 
-        @testset "Scaling with 3-argument mul!" begin
-            @test mul!(similar(a), 5., a) == a*5
-            @test mul!(similar(a), a, 5.) == a*5
-            @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
-            @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
-            @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
-            @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
-        end
+            @testset "Scaling with 3-argument mul!" begin
+                @test mul!(similar(a), 5., a) == a*5
+                @test mul!(similar(a), a, 5.) == a*5
+                @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
+                @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
+                @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+                @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
+                @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
+                @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
+            end
 
-        @testset "Scaling with 5-argument mul!" begin
-            @test mul!(copy(a), 5., a, 10, 100) == a*150
-            @test mul!(copy(a), a, 5., 10, 100) == a*150
-            @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
-            @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
-            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
-            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
-            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
-            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            @testset "Scaling with 5-argument mul!" begin
+                @test mul!(copy(a), 5., a, 10, 100) == a*150
+                @test mul!(copy(a), a, 5., 10, 100) == a*150
+                @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
+                @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
+                @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
+                @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+                @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+                @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
+            end
         end
     end
 end
@@ -723,6 +727,58 @@ end
     @test tril(A) == tril(M)
     @test tril(A, 1) == tril(M, 1)
     @test det(A) == det(M)
+end
+
+@testset "tril/triu" begin
+    @testset "with partly initialized matrices" begin
+        function test_triu(M, k=nothing)
+            M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
+            if isnothing(k)
+                MU = triu(M)
+            else
+                MU = triu(M, k)
+            end
+            @test iszero(MU[2,1])
+            @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
+        end
+        test_triu(Matrix{BigInt}(undef, 2, 3))
+        test_triu(Matrix{BigInt}(undef, 2, 3), 0)
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+
+        function test_tril(M, k=nothing)
+            M[1,1] = M[2,2] = M[2,1] = 3
+            if isnothing(k)
+                ML = tril(M)
+            else
+                ML = tril(M, k)
+            end
+            @test ML[1,2] == ML[1,3] == ML[2,3] == 0
+            @test ML[1,1] == ML[2,2] == ML[2,1] == 3
+        end
+        test_tril(Matrix{BigInt}(undef, 2, 3))
+        test_tril(Matrix{BigInt}(undef, 2, 3), 0)
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+        test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
+    end
+
+    @testset "block arrays" begin
+        for nrows in 0:3, ncols in 0:3
+            M = [randn(2,2) for _ in 1:nrows, _ in 1:ncols]
+            Mu = triu(M)
+            for col in axes(M,2)
+                rowcutoff = min(col, size(M,1))
+                @test @views Mu[1:rowcutoff, col] == M[1:rowcutoff, col]
+                @test @views Mu[rowcutoff+1:end, col] == zero.(M[rowcutoff+1:end, col])
+            end
+            Ml = tril(M)
+            for col in axes(M,2)
+                @test @views Ml[col:end, col] == M[col:end, col]
+                rowcutoff = min(col-1, size(M,1))
+                @test @views Ml[1:rowcutoff, col] == zero.(M[1:rowcutoff, col])
+            end
+        end
+    end
 end
 
 end # module TestGeneric

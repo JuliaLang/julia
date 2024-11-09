@@ -662,22 +662,19 @@ issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) 
 function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.d, max(0, length(M.d)-abs(n)))
     if n == 0
-        return copyto!(similar(M.d, length(M.d)), M.d)
+        copyto!(v, M.d)
     elseif n == -1
-        return copyto!(similar(M.dl, length(M.dl)), M.dl)
+        copyto!(v, M.dl)
     elseif n == 1
-        return copyto!(similar(M.du, length(M.du)), M.du)
+        copyto!(v, M.du)
     elseif abs(n) <= size(M,1)
-        v = similar(M.d, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
+    return v
 end
 
 @inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)

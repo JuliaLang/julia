@@ -1333,6 +1333,8 @@ end
 end
 @inline _all_tuple(f, anymissing) = anymissing ? missing : true
 
+all(::Tuple{Missing}) = missing
+
 ## count
 
 _bool(f) = x->f(x)::Bool

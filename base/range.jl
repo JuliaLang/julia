@@ -711,6 +711,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where {T} = oneunit(T) - zero(T)
+step(r::AbstractUnitRange{Bool}) = true
 step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
@@ -849,6 +850,11 @@ first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
 first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
+
+function first(r::OneTo, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
+    OneTo(oftype(r.stop, min(r.stop, n)))
+end
 
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
@@ -1679,4 +1685,15 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bpart = lookup_binding_partition(UInt(first(worlds)), gr)
+    if bpart.max_world < last(worlds)
+        error("Binding does not cover the full world range")
+    end
+    _resolve_in_world(UInt(last(worlds)), gr)
 end

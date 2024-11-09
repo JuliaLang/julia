@@ -37,6 +37,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -152,6 +160,8 @@ functions of submodules will be executed first. Two typical uses of `__init__` a
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
+
+See also: [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -1295,6 +1305,12 @@ kw";"
 
 Short-circuiting boolean AND.
 
+This is equivalent to `x ? y : false`: it returns `false` if `x` is `false` and the result of evaluating `y` if `x` is `true`.
+Note that if `y` is an expression, it is only evaluated when `x` is `true`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) && (statement)` can be used as shorthand for
+`if condition; statement; end` for an arbitrary `statement`.
+
 See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
 # Examples
@@ -1306,6 +1322,9 @@ true
 
 julia> x < 0 && error("expected positive x")
 false
+
+julia> x > 0 && "not a boolean"
+"not a boolean"
 ```
 """
 kw"&&"
@@ -1314,6 +1333,12 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+This is equivalent to `x ? true : y`: it returns `true` if `x` is `true` and the result of evaluating `y` if `x` is `false`.
+Note that if `y` is an expression, it is only evaluated when `x` is `false`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
+`if !(condition); statement; end` for an arbitrary `statement`.
 
 See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
@@ -1324,6 +1349,9 @@ true
 
 julia> false || true || println("neither is true!")
 true
+
+julia> pi < 3 || "not a boolean"
+"not a boolean"
 ```
 """
 kw"||"
@@ -1679,7 +1707,7 @@ ErrorException
 """
     FieldError(type::DataType, field::Symbol)
 
-An operation tried to access invalid `field` of `type`.
+An operation tried to access invalid `field` on an object of `type`.
 
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
@@ -2578,7 +2606,7 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
 julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
@@ -2586,7 +2614,7 @@ ERROR: UndefVarError: `a` not defined in `M`
 Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
 Stacktrace:
  [1] getproperty(x::Module, f::Symbol)
-   @ Base ./Base.jl:42
+   @ Base ./Base_compiler.jl:40
  [2] top-level scope
    @ none:1
 

@@ -143,13 +143,6 @@ macro task(ex)
     :(Task($thunk))
 end
 
-"""
-    current_task()
-
-Get the currently running [`Task`](@ref).
-"""
-current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
-
 # task states
 
 const task_state_runnable = UInt8(0)
@@ -856,6 +849,11 @@ function task_done_hook(t::Task)
     end
 end
 
+function init_task_lock(t::Task) # Function only called from jl_adopt_thread so foreign tasks have a lock.
+    if t.donenotify === nothing
+        t.donenotify = ThreadSynchronizer()
+    end
+end
 
 ## scheduler and work queue
 

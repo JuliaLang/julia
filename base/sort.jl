@@ -206,7 +206,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     u = T(1)
     lo = lo - u
     hi = hi + u
-    @inbounds while lo < hi - u
+    @inbounds while lo != hi - u
         m = midpoint(lo, hi)
         if lt(o, x, v[m])
             hi = m
@@ -224,15 +224,15 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     u = T(1)
     lo = ilo - u
     hi = ihi + u
-    @inbounds while lo < hi - u
+    @inbounds while lo != hi - u
         m = midpoint(lo, hi)
         if lt(o, v[m], x)
             lo = m
         elseif lt(o, x, v[m])
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = searchsortedfirst(v, x, lo+u, m, o)
+            b = searchsortedlast(v, x, m, hi-u, o)
             return a : b
         end
     end

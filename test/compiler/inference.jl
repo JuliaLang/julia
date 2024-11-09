@@ -1184,9 +1184,6 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(ComplexF32, Const(0)) === Const(false)
     @test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
     @test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
-    @test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
-    @test isdefined_tfunc(Const(Base), Symbol) == Bool
-    @test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
     @test isdefined_tfunc(Core.SimpleVector, Const(1)) === Const(false)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
     @test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
@@ -1538,7 +1535,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Base.Compiler.fallback_lattice, Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -2647,7 +2644,7 @@ g26826(x) = getfield26826(x, :a, :b)
 # If this test is broken (especially if inference is getting a correct, but loose result,
 # like a Union) then it's potentially an indication that the optimizer isn't hitting the
 # InferenceResult cache properly for varargs methods.
-let ct = Core.Compiler.code_typed(f26826, (Float64,))[1]
+let ct = code_typed(f26826, (Float64,))[1]
     typed_code, retty = ct.first, ct.second
     found_poorly_typed_getfield_call = false
     for i = 1:length(typed_code.code)
@@ -3384,9 +3381,9 @@ struct FooPartial
     b::Int
     c::Int
 end
-let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
-    PT2 = PartialStruct(FooPartial, Any[Const(1), Int, Int]),
-    PT3 = PartialStruct(FooPartial, Any[Const(1), Int, Const(3)])
+let PT1 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Const(2), Int]),
+    PT2 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Int, Int]),
+    PT3 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Int, Const(3)])
 
     @test PT1 ⊑ PT2
     @test !(PT1 ⊑ PT3) && !(PT2 ⊑ PT1)
@@ -4638,18 +4635,18 @@ end
 @testset "issue #43784" begin
     ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
     ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    𝕃 = Core.Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
-
     let init = Base.ImmutableDict{Any,Any}()
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Any,Any}(1,2)
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(getfield(init,1)), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4657,14 +4654,14 @@ end
     end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4672,8 +4669,8 @@ end
         @test c.fields[3] === ComplexF64
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4681,8 +4678,8 @@ end
         @test c.fields[3] === Complex
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(T, Any[T])
-        b = PartialStruct(T, Any[T, Number, Number])
+        a = PartialStruct(𝕃, T, Any[T])
+        b = PartialStruct(𝕃, T, Any[T, Number, Number])
         @test b ⊑ a
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4690,7 +4687,7 @@ end
         @test length(c.fields) == 1
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(T, Any[T])
+        a = PartialStruct(𝕃, T, Any[T])
         b = Const(T())
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4698,7 +4695,7 @@ end
     end
     let T = Base.ImmutableDict{Number,Number}
         a = Const(T())
-        b = PartialStruct(T, Any[T])
+        b = PartialStruct(𝕃, T, Any[T])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === T
@@ -4745,22 +4742,23 @@ end
 
 let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
     ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    𝕃 = Core.Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
-    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
-    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
-    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
-    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
-    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
-    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
-    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
 
     t = Const((false, false)) ⊔ Const((false, true))
     @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
@@ -4902,7 +4900,7 @@ let src = code_typed1() do
 end
 
 # Test that Const ⊑ PartialStruct respects vararg
-@test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+@test Const((1,2)) ⊑ PartialStruct(Core.Compiler.fallback_lattice, Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
 Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
@@ -6055,3 +6053,38 @@ f55916(::Vararg{T,T}) where {T} = "2"
 g55916(x) = f55916(x)
 # this shouldn't error
 @test only(code_typed(g55916, (Any,); optimize=false))[2] == Int
+
+# JuliaLang/julia#56248
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, 1)
+end === Union{}
+@test Base.infer_return_type() do
+    TypeVar(:Issue56248, Any, 1)
+end === Union{}
+
+@test Base.infer_return_type((Nothing,)) do x
+    @atomic x.count += 1
+end == Union{}
+@test Base.infer_return_type((Nothing,)) do x
+    @atomicreplace x.count 0 => 1
+end == Union{}
+mutable struct AtomicModifySafety
+    @atomic count::Int
+end
+let src = code_typed((Union{Nothing,AtomicModifySafety},)) do x
+        @atomic x.count += 1
+    end |> only |> first
+    @test any(@nospecialize(x)->Meta.isexpr(x, :invoke_modify), src.code)
+end
+
+function issue56387(nt::NamedTuple, field::Symbol=:a)
+    NT = typeof(nt)
+    names = fieldnames(NT)
+    types = fieldtypes(NT)
+    index = findfirst(==(field), names)
+    if index === nothing
+        throw(ArgumentError("Field $field not found"))
+    end
+    types[index]
+end
+@test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}

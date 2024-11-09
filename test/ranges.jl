@@ -65,6 +65,10 @@ using .Main.OffsetArrays
 
     unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
     @test_throws unitrangeerrstr UnitRange('a', 'b')
+
+    @test step(false:true) === true # PR 56405
+    @test eltype((false:true) + (Int8(0):Int8(1))) === Int8
+    @test eltype((false:true:true) + (Int8(0):Int8(1))) === Int8
 end
 
 using Dates, Random
@@ -1539,6 +1543,9 @@ end
         @test size(r) == (3,)
         @test step(r) == 1
         @test first(r) == 1
+        @test first(r,2) === Base.OneTo(2)
+        @test first(r,20) === r
+        @test_throws ArgumentError first(r,-20)
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
@@ -1569,6 +1576,9 @@ end
     let r = Base.OneTo(7)
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
+    end
+    let r = Base.OneTo(Int8(4))
+        @test first(r,4) === r
     end
     @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
     @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)

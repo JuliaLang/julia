@@ -31,7 +31,6 @@ endif
 endif
 
 # 64-bit BLAS interface
-$(error USE_BLAS64: $(USE_BLAS64))
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
@@ -44,7 +43,7 @@ OPENBLAS_FFLAGS := $(JFFLAGS) $(USE_BLAS_FFLAGS)
 OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
-ifneq ($(BUILD_OS),$(OS))
+ifneq ($(XC_HOST),)
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC) CROSS_SUFFIX=$(CROSS_COMPILE)
 endif
 ifeq ($(OS),WINNT)

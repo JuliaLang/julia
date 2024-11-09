@@ -355,6 +355,17 @@ copy
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
+# a mutating version of copyto! that results in dst aliasing src afterwards
+function _take!(dst::Array{T,N}, src::Array{T,N}) where {T,N}
+    if getfield(dst, :ref) !== getfield(src, :ref)
+        setfield!(dst, :ref, getfield(src, :ref))
+    end
+    if getfield(dst, :size) !== getfield(src, :size)
+        setfield!(dst, :size, getfield(src, :size))
+    end
+    return dst
+end
+
 ## Constructors ##
 
 similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
@@ -605,11 +616,9 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
-end
 
 ## copying iterators to containers
 
@@ -758,28 +767,15 @@ end
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                T = ($I).f
-            else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
-            end
-            promote_typejoin_union(T)
+macro default_eltype(itr)
+    I = esc(itr)
+    return quote
+        if $I isa Generator && ($I).f isa Type
+            T = ($I).f
+        else
+            T = Base._return_type(_iterator_upper_bound, Tuple{typeof($I)})
         end
-    end
-else
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
-            else
-                Any
-            end
-        end
+        promote_typejoin_union(T)
     end
 end
 
@@ -999,11 +995,11 @@ function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     x = x isa T ? x : convert(T, x)::T
     return _setindex!(A, x, i1, i2, I...)
 end
-function _setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+function _setindex!(A::Array{T}, x::T, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x, :not_atomic, false)
     return A
 end
 
@@ -1649,6 +1645,7 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 ```
 """
 function popat!(a::Vector, i::Integer)
+    @_propagate_inbounds_meta
     x = a[i]
     _deleteat!(a, i, 1)
     x
@@ -3130,10 +3127,6 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
     @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = memoryref(mem)
-    end
     return ref
 end
 

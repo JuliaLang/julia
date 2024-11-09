@@ -20,6 +20,7 @@
 #include "libsupport.h"
 #include <stdint.h>
 #include <string.h>
+#include <fenv.h>
 
 #include "htable.h"
 #include "arraylist.h"
@@ -255,7 +256,7 @@ typedef struct _jl_debuginfo_t {
     jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
 } jl_debuginfo_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
+// the following mirrors `struct EffectsOverride` in `base/expr.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint16_t ipo_consistent          : 1;
@@ -407,7 +408,7 @@ struct _jl_method_instance_t {
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
-    jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
+    jl_array_t *backedges; // list of code-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t cache_with_orig; // !cache_with_specTypes
 
@@ -425,8 +426,8 @@ typedef struct _jl_opaque_closure_t {
     jl_value_t *captures;
     size_t world;
     jl_method_t *source;
-    jl_fptr_args_t invoke;
-    void *specptr;
+    jl_fptr_args_t invoke; // n.b. despite the similar name, this is not an invoke ABI (jl_call_t / julia.call2), but rather the fptr1 (jl_fptr_args_t / julia.call) ABI
+    void *specptr; // n.b. despite the similarity in field name, this is not arbitrary private data for jlcall, but rather the codegen ABI for specsig, and is mandatory if specsig is valid
 } jl_opaque_closure_t;
 
 // This type represents an executable operation
@@ -452,6 +453,7 @@ typedef struct _jl_code_instance_t {
     // - null, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
+    _Atomic(jl_svec_t *) edges; // forward edge info
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
@@ -474,7 +476,7 @@ typedef struct _jl_code_instance_t {
                                    // & 0b100 == From image
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
-    _Atomic(jl_callptr_t) invoke; // jlcall entry point
+    _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
         _Atomic(jl_fptr_args_t) fptr1;
@@ -619,6 +621,7 @@ typedef struct _jl_weakref_t {
     jl_value_t *value;
 } jl_weakref_t;
 
+// N.B: Needs to be synced with runtime_internals.jl
 enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const`
     //  ->restriction holds the constant value
@@ -683,7 +686,7 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     _Atomic(jl_ptr_kind_union_t) restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
-    _Atomic(struct _jl_binding_partition_t*) next;
+    _Atomic(struct _jl_binding_partition_t *) next;
     size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
 } jl_binding_partition_t;
 
@@ -713,7 +716,7 @@ typedef struct _jl_module_t {
     jl_sym_t *file;
     int32_t line;
     // hidden fields:
-    arraylist_t usings;  // modules with all bindings potentially imported
+    arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
     _Atomic(uint32_t) counter;
@@ -726,6 +729,12 @@ typedef struct _jl_module_t {
     jl_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
+
+struct _jl_module_using {
+    jl_module_t *mod;
+    size_t min_world;
+    size_t max_world;
+};
 
 struct _jl_globalref_t {
     JL_DATA_TYPE
@@ -781,7 +790,7 @@ typedef struct _jl_methtable_t {
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
     jl_module_t *module; // sometimes used for debug printing
-    jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
+    jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
     uint8_t frozen; // whether this accepts adding new methods
@@ -1120,20 +1129,25 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o);
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 
+// Allocates a new weak-reference, assigns its value and increments Julia allocation
+// counters. If thread-local allocators are used, then this function should allocate in the
+// thread-local allocator of the current thread.
+JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
+
 // GC write barriers
 
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 && // parent is old and not in remset
-                   (jl_astaggedvalue(ptr)->bits.gc & 1) == 0)) // ptr is young
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
+                   (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)) // ptr is young
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
 {
     // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
+    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
@@ -1219,7 +1233,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
   0 = data is inlined
   1 = owns the gc-managed data, exclusively (will free it)
   2 = malloc-allocated pointer (does not own it)
-  3 = has a pointer to the object that owns the data pointer
+  3 = has a pointer to the String object that owns the data pointer (m must be isbits)
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
@@ -1235,8 +1249,6 @@ STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    if (jl_genericmemory_how(m) == 3)
-        return jl_genericmemory_data_owner_field(m);
     return (jl_value_t*)m;
 }
 
@@ -1266,8 +1278,6 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     assert(i < m_->length);
     jl_atomic_store_release(((_Atomic(jl_value_t*)*)(m_->ptr)) + i, (jl_value_t*)x);
     if (x) {
-        if (jl_genericmemory_how(m_) == 3)
-            m = (void*)jl_genericmemory_data_owner_field(m_);
         jl_gc_wb(m, x);
     }
     return (jl_value_t*)x;
@@ -1838,8 +1848,10 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_gensym(void);
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
-JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT);
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
@@ -2001,8 +2013,8 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
@@ -2282,6 +2294,9 @@ typedef struct _jl_task_t {
     uint16_t priority;
 
 // hidden state:
+    // cached floating point environment
+    // only updated at task switch
+    fenv_t fenv;
 
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
@@ -2329,7 +2344,13 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
 
+#ifdef __cplusplus
+}
+#endif
 #include "julia_locks.h"   // requires jl_task_t definition
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Return the exception currently being handled, or `jl_nothing`.
 //
@@ -2514,6 +2535,8 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
+
+uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

@@ -1,6 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be be loaded on top of either an existing system image built from
+# `Base_compiler.jl` or standalone, in which case we will build it now.
+let had_compiler = isdefined(Main, :Base)
+if had_compiler; else
+include("Base_compiler.jl")
+end
+
+Core.include(Base, "Base.jl")
+
+had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
+end
 
 using .Base
 
@@ -32,11 +42,7 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
+const include = Base.IncludeInto(Main)
 
 """
     eval(expr)
@@ -45,7 +51,7 @@ Evaluate an expression in the global scope of the containing module.
 Every `Module` (except those defined with `baremodule`) has its own 1-argument
 definition of `eval`, which evaluates expressions in that module.
 """
-eval(x) = Core.eval(Main, x)
+const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
