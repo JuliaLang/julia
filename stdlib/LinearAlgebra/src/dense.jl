@@ -1065,8 +1065,7 @@ function cos(A::AbstractMatrix{<:Complex})
     Y = exp_maybe_inplace(N)
     # Compute (X + Y)/2 and return the result.
     # Compute the result in-place if X is strided
-    half = eltype(X)(0.5)
-    _broadcast!!((x,y) -> half * (x + y), X, X, Y)
+    _broadcast!!((x,y) -> (x + y)/2, X, X, Y)
 end
 
 """
@@ -1102,8 +1101,7 @@ function sin(A::AbstractMatrix{<:Complex})
     Y = exp_maybe_inplace(Mneg)
     # Compute (X - Y)/2im and return the result.
     # Compute the result in-place if X is strided
-    halfim = eltype(X)(0.5)*im
-    _broadcast!!((x,y) -> halfim * (y - x), X, X, Y)
+    _broadcast!!((x,y) -> (x - y)/2im, X, X, Y)
 end
 
 """
@@ -1202,8 +1200,7 @@ function cosh(A::AbstractMatrix)
     X = exp(A)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
-    half = eltype(X)(0.5)
-    _broadcast!!((x,y) -> half * (x + y), X, X, Y)
+    _broadcast!!((x,y) -> (x + y)/2, X, X, Y)
 end
 
 """
@@ -1218,8 +1215,7 @@ function sinh(A::AbstractMatrix)
     X = exp(A)
     negA = @. float(-A)
     Y = exp_maybe_inplace(negA)
-    half = eltype(X)(0.5)
-    _broadcast!!((x,y) -> half * (x - y), X, X, Y)
+    _broadcast!!((x,y) -> (x - y)/2, X, X, Y)
 end
 
 """
