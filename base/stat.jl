@@ -537,7 +537,7 @@ julia> bitstring(ans)
 
 julia> has_read_permission(path) = bitstring(uperm(path))[end-2]=='1';
 
-julia> has_read_premission("dummy_file")
+julia> has_read_permission("dummy_file")
 true
 
 julia> rm("dummy_file")     # Clean up test-file
