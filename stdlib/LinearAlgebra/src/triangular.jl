@@ -349,14 +349,29 @@ Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     return _istril(A, k)
 end
 # additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
-_istril(A::LowerTriangular, k) = _isbanded_impl(parent(A), -size(A,1)+1, k)
+@inline function _istril(A::LowerTriangular, k)
+    P = parent(A)
+    for j in max(firstindex(P,2), k + 2):lastindex(P,2)
+        Pzero = @view P[max(j, begin):min(j - k - 1, end), j]
+        _iszero(Pzero) || return false
+    end
+    return true
+end
 
 Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
 end
 # additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
-_istriu(A::UpperTriangular, k) = _isbanded_impl(parent(A), k, size(A,2)-1)
+@inline function _istriu(A::UpperTriangular, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
+        Pzero = @view P[max(begin, j - k + 1):min(j, end), j]
+        _iszero(Pzero) || return false
+    end
+    return true
+end
 
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
