@@ -1461,7 +1461,6 @@ true
 ```
 """
 function isbanded(A::AbstractMatrix, kl::Integer, ku::Integer)
-    kl <= ku || return false
     _isbanded(A, kl, ku)
 end
 _isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
@@ -1472,18 +1471,61 @@ _isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril
 _isbanded(A::StridedMatrix, kl::Integer, ku::Integer) = _isbanded_impl(A, kl, ku)
 function _isbanded_impl(A, kl, ku)
     Base.require_one_based_indexing(A)
-    # Split the column range into two parts for wide matrices,
-    # as iterating over a slice is faster than over a UnitRange view.
-    # The second loop is over the block beyond the ku-th superdiagonal,
-    # which should be zero for a banded matrix
-    col_cutoff = size(A,1) + max(ku, 0)
-    for col in firstindex(A,2):min(lastindex(A,2), col_cutoff)
-        toprows = @view A[begin:min(col-ku-1, end), col]
-        _iszero(toprows) || return false
-        bottomrows = @view A[max(begin, col-kl+1):end, col]
-        _iszero(bottomrows) || return false
+
+    #=
+    We split the column range into four possible groups, depending on the values of kl and ku.
+
+    The first is the bottom left triangle, where bands below kl must be zero,
+    but there are no bands above ku in that column.
+
+    The second is where there are both bands below kl and above ku in the column.
+    These are the middle columns typically.
+
+    The third is the top right, where there are bands above ku but no bands below kl
+    in the column.
+
+    The fourth is mainly relevant for wide matrices, where there is a block to the right
+    beyond ku, where the elements should all be zero. The reason we separate this from the
+    third group is that we may loop over all the rows using A[:, col] instead of A[rowrange, col],
+    which is usally faster.
+    =#
+
+    last_col_nonzeroblocks = size(A,1) + ku # fully zero rectangular block beyond this column
+    last_col_emptytoprows = ku + 1 # empty top rows before this column
+    last_col_nonemptybottomrows = size(A,1) + kl - 1 # empty bottom rows after this column
+
+    colrange_onlybottomrows = firstindex(A,2):min(last_col_nonemptybottomrows, last_col_emptytoprows)
+    colrange_topbottomrows = max(last_col_emptytoprows, last(colrange_onlybottomrows))+1:last_col_nonzeroblocks
+    colrange_onlytoprows_nonzero = last(colrange_topbottomrows)+1:last_col_nonzeroblocks
+    colrange_zero_block = last_col_nonzeroblocks+1:lastindex(A,2)
+
+    for col in intersect(axes(A,2), colrange_onlybottomrows) # only loop over the bottom rows
+        botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
+        if !isempty(botrowinds)
+            bottomrows = @view A[botrowinds, col]
+            _iszero(bottomrows) || return false
+        end
     end
-    for col in max(firstindex(A,2), col_cutoff+1):lastindex(A,2)
+    for col in intersect(axes(A,2), colrange_topbottomrows)
+        toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
+        if !isempty(toprowinds)
+            toprows = @view A[toprowinds, col]
+            _iszero(toprows) || return false
+        end
+        botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
+        if !isempty(botrowinds)
+            bottomrows = @view A[botrowinds, col]
+            _iszero(bottomrows) || return false
+        end
+    end
+    for col in intersect(axes(A,2), colrange_onlytoprows_nonzero)
+        toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
+        if !isempty(toprowinds)
+            toprows = @view A[toprowinds, col]
+            _iszero(toprows) || return false
+        end
+    end
+    for col in intersect(axes(A,2), colrange_zero_block)
         _iszero(@view A[:, col]) || return false
     end
     return true
