@@ -75,8 +75,10 @@ imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
 Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
-    return _istriu(parent(A), k)
+    return _istriu(A, k)
 end
+# additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
+_istriu(A::UpperHessenberg, k) = _isbanded_impl(parent(A), k, size(A,2)-1)
 
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)

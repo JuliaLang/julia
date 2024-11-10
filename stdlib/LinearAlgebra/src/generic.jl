@@ -1392,18 +1392,8 @@ julia> istriu(c, -1)
 true
 ```
 """
-istriu(A::AbstractMatrix, k::Integer = 0) = _istriu(A, k)
+istriu(A::AbstractMatrix, k::Integer = 0) = _isbanded_impl(A, k, size(A,2)-1)
 istriu(x::Number) = true
-
-function _istriu(A::AbstractMatrix, k::Integer=0)
-    require_one_based_indexing(A)
-    for j in firstindex(A,2):min(lastindex(A,2), size(A,1) + k - 1)
-        Arows_j = @view A[max(begin, j - k + 1):end, j]
-        _iszero(Arows_j) || return false
-    end
-    return true
-end
-
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1436,25 +1426,8 @@ julia> istril(c, 1)
 true
 ```
 """
-istril(A::AbstractMatrix, k::Integer = 0) = _istril(A, k)
+istril(A::AbstractMatrix, k::Integer = 0) = _isbanded_impl(A, -size(A,1)+1, k)
 istril(x::Number) = true
-
-function _istril(A::AbstractMatrix, k::Integer = 0)
-    require_one_based_indexing(A)
-    # Split the column range into two parts for wide matrices,
-    # as iterating over a slice is faster than over a UnitRange view.
-    # The second loop is over the block beyond the k-th superdiagonal,
-    # which should be zero for a banded matrix
-    col_cutoff = size(A,1) + max(k,0)
-    for j in max(firstindex(A,2), k + 2):min(lastindex(A,2), col_cutoff)
-        Arows_j = @view A[begin:min(j - k - 1, end), j]
-        _iszero(Arows_j) || return false
-    end
-    for j in max(firstindex(A,2), col_cutoff + 1):lastindex(A,2)
-        _iszero(@view A[:, j]) || return false
-    end
-    return true
-end
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1494,7 +1467,10 @@ end
 _isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
 # Performance optimization for StridedMatrix by better utilizing cache locality
 # The istriu and istril loops are merged
-function _isbanded(A::StridedMatrix, kl::Integer, ku::Integer)
+# the additional indirection allows us to reuse the isbanded loop within istriu/istril
+# without encountering cycles
+_isbanded(A::StridedMatrix, kl::Integer, ku::Integer) = _isbanded_impl(A, kl, ku)
+function _isbanded_impl(A, kl, ku)
     Base.require_one_based_indexing(A)
     # Split the column range into two parts for wide matrices,
     # as iterating over a slice is faster than over a UnitRange view.
