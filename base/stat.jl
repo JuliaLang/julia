@@ -521,7 +521,7 @@ Or the equivalent as indicated by the file descriptor `stat_struct`.
 | 02    | Write Permission   |
 | 04    | Read Permission    |
 
-The fact that a bitfield is returned means that if the premission
+The fact that a bitfield is returned means that if the permission
 is read+write, the bitfield is "110", which maps to the decimal
 value of 0+2+4=6. This is reflected in the printing of the
 returned `UInt8` value.
