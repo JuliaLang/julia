@@ -1162,7 +1162,7 @@ function _sincos(X, Y)
     T = eltype(X)
     S = T(0.5)*im .* (Y .- X)
     C = T(0.5) .* (X .+ Y)
-    C, S
+    S, C
 end
 
 """
