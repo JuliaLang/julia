@@ -217,6 +217,7 @@ const META_OFFSET_THREADID = 5
 
 """
     print([io::IO = stdout,] [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
+    print(path::String, [cols::Int = 1000], [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
@@ -355,6 +356,13 @@ function print(io::IO,
         any_nosamples && warning_empty(summary = true)
     end
     return
+end
+
+function print(path::String, cols::Int = 1000, args...; kwargs...)
+    open(path, "w") do io
+        ioc = IOContext(io, :displaysize=>(1000,cols))
+        print(ioc, args...; kwargs...)
+    end
 end
 
 """
