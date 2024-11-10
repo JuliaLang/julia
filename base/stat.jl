@@ -559,7 +559,7 @@ gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
     operm(path_elements...)
     operm(stat_struct)
 
-Like [`uperm`](@ref) but gets the permissions for people who neither own the 
+Like [`uperm`](@ref) but gets the permissions for people who neither own the
 file nor are a member of the group owning the file.
 """
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
