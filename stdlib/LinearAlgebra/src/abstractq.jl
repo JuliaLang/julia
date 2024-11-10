@@ -456,10 +456,8 @@ end
 
 det(Q::QRPackedQ) = _det_tau(Q.τ)
 det(Q::QRCompactWYQ) =
-    prod(i -> _det_tau(_diagview(Q.T[:, i:min(i + size(Q.T, 1), size(Q.T, 2))])),
+    prod(i -> _det_tau(diagview(Q.T[:, i:min(i + size(Q.T, 1), size(Q.T, 2))])),
          1:size(Q.T, 1):size(Q.T, 2))
-
-_diagview(A) = @view A[diagind(A)]
 
 # Compute `det` from the number of Householder reflections.  Handle
 # the case `Q.τ` contains zeros.

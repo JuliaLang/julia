@@ -188,7 +188,7 @@ end
 function full(A::UnitUpperOrUnitLowerTriangular)
     isupper = A isa UnitUpperTriangular
     Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
-    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    diagview(Ap) .= diagview(A)
     return Ap
 end
 
@@ -400,12 +400,12 @@ function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
         return UpperTriangular(A.data)
     elseif k == 0
         fill!(A.data, zero(T))
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return UpperTriangular(A.data)
     else
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return UpperTriangular(tril!(A.data,k))
@@ -413,7 +413,7 @@ function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
 end
 
 function triu!(A::UnitUpperTriangular, k::Integer=0)
-    for i in diagind(A.data)
+    for i in diagind(A.data, IndexStyle(A.data))
         A.data[i] = oneunit(eltype(A))
     end
     return triu!(UpperTriangular(A.data), k)
@@ -448,12 +448,12 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
         return LowerTriangular(A.data)
     elseif k == 0
         fill!(A.data, zero(T))
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return LowerTriangular(A.data)
     else
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return LowerTriangular(triu!(A.data, k))
@@ -461,7 +461,7 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
 end
 
 function tril!(A::UnitLowerTriangular, k::Integer=0)
-    for i in diagind(A.data)
+    for i in diagind(A.data, IndexStyle(A.data))
         A.data[i] = oneunit(eltype(A))
     end
     return tril!(LowerTriangular(A.data), k)
