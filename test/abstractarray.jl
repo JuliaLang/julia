@@ -2179,6 +2179,10 @@ end
     copyto!(A, 1, x, 1, length(A))
     @test A == axes(A,1)
     A .= 0
+    copyto!(A, 1, x, 1, 2)
+    @test A[1:2] == first(x,2)
+    @test iszero(A[3:end])
+    A .= 0
     copyto!(A, 1, x, 1)
     @test A == axes(A,1)
 end
