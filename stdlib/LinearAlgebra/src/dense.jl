@@ -683,7 +683,12 @@ Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
-    if ishermitian(A)
+    if isdiag(A)
+        for i in diagind(A, IndexStyle(A))
+            A[i] = exp(A[i])
+        end
+        return A
+    elseif ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
@@ -1014,9 +1019,16 @@ end
 cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
 cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
+function applydiagonal(f, A)
+    dinv = f(Diagonal(A))
+    copyto!(similar(A, eltype(dinv)), dinv)
+end
+
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    if istriu(A)
+    if isdiag(A)
+        Ai = applydiagonal(inv, A)
+    elseif istriu(A)
         Ai = triu!(parent(inv(UpperTriangular(A))))
     elseif istril(A)
         Ai = tril!(parent(inv(LowerTriangular(A))))
@@ -1044,14 +1056,18 @@ julia> cos(fill(1.0, (2,2)))
 ```
 """
 function cos(A::AbstractMatrix{<:Real})
-    if issymmetric(A)
+    if isdiag(A)
+        return applydiagonal(cos, A)
+    elseif issymmetric(A)
         return copytri!(parent(cos(Symmetric(A))), 'U')
     end
     T = complex(float(eltype(A)))
     return real(exp!(T.(im .* A)))
 end
 function cos(A::AbstractMatrix{<:Complex})
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(cos, A)
+    elseif ishermitian(A)
         return copytri!(parent(cos(Hermitian(A))), 'U', true)
     end
     T = complex(float(eltype(A)))
@@ -1077,14 +1093,18 @@ julia> sin(fill(1.0, (2,2)))
 ```
 """
 function sin(A::AbstractMatrix{<:Real})
-    if issymmetric(A)
+    if isdiag(A)
+        return applydiagonal(sin, A)
+    elseif issymmetric(A)
         return copytri!(parent(sin(Symmetric(A))), 'U')
     end
     T = complex(float(eltype(A)))
     return imag(exp!(T.(im .* A)))
 end
 function sin(A::AbstractMatrix{<:Complex})
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(sin, A)
+    elseif ishermitian(A)
         return copytri!(parent(sin(Hermitian(A))), 'U', true)
     end
     T = complex(float(eltype(A)))
@@ -1163,7 +1183,9 @@ julia> tan(fill(1.0, (2,2)))
 ```
 """
 function tan(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(tan, A)
+    elseif ishermitian(A)
         return copytri!(parent(tan(Hermitian(A))), 'U', true)
     end
     S, C = sincos(A)
@@ -1177,7 +1199,9 @@ end
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
 function cosh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(cosh, A)
+    elseif ishermitian(A)
         return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
@@ -1191,7 +1215,9 @@ end
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
 function sinh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(sinh, A)
+    elseif ishermitian(A)
         return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
@@ -1205,7 +1231,9 @@ end
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
 function tanh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(tanh, A)
+    elseif ishermitian(A)
         return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
@@ -1240,7 +1268,9 @@ julia> acos(cos([0.5 0.1; -0.2 0.3]))
 ```
 """
 function acos(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(acos, A)
+    elseif ishermitian(A)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
@@ -1271,7 +1301,9 @@ julia> asin(sin([0.5 0.1; -0.2 0.3]))
 ```
 """
 function asin(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(asin, A)
+    elseif ishermitian(A)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
@@ -1302,7 +1334,9 @@ julia> atan(tan([0.5 0.1; -0.2 0.3]))
 ```
 """
 function atan(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(atan, A)
+    elseif ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
@@ -1320,7 +1354,9 @@ logarithmic formulas used to compute this function, see [^AH16_4].
 [^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function acosh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(acosh, A)
+    elseif ishermitian(A)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
@@ -1339,7 +1375,9 @@ logarithmic formulas used to compute this function, see [^AH16_5].
 [^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function asinh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(asinh, A)
+    elseif ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
@@ -1357,7 +1395,9 @@ logarithmic formulas used to compute this function, see [^AH16_6].
 [^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function atanh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(atanh, A)
+    elseif ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
