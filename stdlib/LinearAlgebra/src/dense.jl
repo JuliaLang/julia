@@ -1151,7 +1151,7 @@ function sincos(A::AbstractMatrix{<:Complex})
     _sincos(X, Y)
 end
 function _sincos(X::StridedMatrix, Y::StridedMatrix)
-    @inbounds for i in eachindex(X)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
         Y[i] = x+y
@@ -1160,9 +1160,9 @@ function _sincos(X::StridedMatrix, Y::StridedMatrix)
 end
 function _sincos(X, Y)
     T = eltype(X)
-    X′ = T(0.5)*im .* (Y .- X)
-    Y′ = T(0.5) .* (X .+ Y)
-    X′, Y′
+    S = T(0.5)*im .* (Y .- X)
+    C = T(0.5) .* (X .+ Y)
+    C, S
 end
 
 """
