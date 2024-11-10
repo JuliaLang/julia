@@ -2172,3 +2172,13 @@ end
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
 end
+
+@testset "copyto! with non-AbstractArray src" begin
+    A = zeros(4)
+    x = (i for i in axes(A,1))
+    copyto!(A, 1, x, 1, length(A))
+    @test A == axes(A,1)
+    A .= 0
+    copyto!(A, 1, x, 1)
+    @test A == axes(A,1)
+end
