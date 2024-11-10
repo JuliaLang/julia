@@ -280,6 +280,7 @@ end
 end
 
 @testset "istriu/istril forwards to parent" begin
+    n = 10
     @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
                 Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
                 Diagonal(randn(n)),

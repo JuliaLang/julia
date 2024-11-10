@@ -1487,7 +1487,7 @@ function _isbanded_impl(A, kl, ku)
     The fourth is mainly relevant for wide matrices, where there is a block to the right
     beyond ku, where the elements should all be zero. The reason we separate this from the
     third group is that we may loop over all the rows using A[:, col] instead of A[rowrange, col],
-    which is usally faster.
+    which is usually faster.
     =#
 
     last_col_nonzeroblocks = size(A,1) + ku # fully zero rectangular block beyond this column
