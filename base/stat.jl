@@ -386,8 +386,7 @@ ispath(path::AbstractString) = ispath(String(path))
     isfifo(path_elements...) -> Bool
     isfifo(stat_struct) -> Bool
 
-Return `true` if the file at `path` is FIFO, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the file at `path` or file descriptor `stat_struct` is FIFO, `false` otherwise.
 """
 isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
