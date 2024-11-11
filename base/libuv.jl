@@ -26,10 +26,10 @@ for r in uv_req_types
 @eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
-uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
+uv_handle_data(handle) = ccall(:uv_handle_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_data(handle) = ccall(:uv_req_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_set_data(req, data) = ccall(:uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:uv_handle_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
     return quote

@@ -87,6 +87,7 @@ export
     diag,
     diagind,
     diagm,
+    diagview,
     dot,
     eigen!,
     eigen,
@@ -169,12 +170,15 @@ export
 public AbstractTriangular,
         Givens,
         checksquare,
+        haszero,
         hermitian,
         hermitian_type,
         isbanded,
         peakflops,
         symmetric,
-        symmetric_type
+        symmetric_type,
+        zeroslike,
+        matprod_dest
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -394,17 +398,8 @@ julia> Y = zero(X);
 
 julia> ldiv!(Y, qr(A), X);
 
-julia> Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> Y ≈ A\\X
+true
 ```
 """
 ldiv!(Y, A, B)
@@ -435,17 +430,8 @@ julia> Y = copy(X);
 
 julia> ldiv!(qr(A), X);
 
-julia> X
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.051652892561983674
-  0.10020661157024757
-
-julia> A\\Y
-3-element Vector{Float64}:
-  0.7128099173553719
- -0.05165289256198333
-  0.10020661157024785
+julia> X ≈ A\\Y
+true
 ```
 """
 ldiv!(A, B)
@@ -671,6 +657,8 @@ matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
 _matprod_dest_diag(A, TS) = similar(A, TS)
+_matprod_dest_diag(A::UnitUpperTriangular, TS) = UpperTriangular(similar(parent(A), TS))
+_matprod_dest_diag(A::UnitLowerTriangular, TS) = LowerTriangular(similar(parent(A), TS))
 function _matprod_dest_diag(A::SymTridiagonal, TS)
     n = size(A, 1)
     ev = similar(A, TS, max(0, n-1))

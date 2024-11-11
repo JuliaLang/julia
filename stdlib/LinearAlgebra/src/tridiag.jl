@@ -183,44 +183,27 @@ issymmetric(S::SymTridiagonal) = true
 
 tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
-@noinline function throw_diag_outofboundserror(n, sz)
-    sz1, sz2 = sz
-    throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-sz1) ",
-            lazy"and at most $sz2 for an $(sz1)-by-$(sz2) matrix")))
-end
+_diagiter(M::SymTridiagonal{<:Number}) = M.dv
+_diagiter(M::SymTridiagonal) = (symmetric(x, :U) for x in M.dv)
+_eviter_transposed(M::SymTridiagonal{<:Number}) = _evview(M)
+_eviter_transposed(M::SymTridiagonal) = (transpose(x) for x in _evview(M))
 
-function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
-    # every branch call similar(..., ::Int) to make sure the
-    # same vector type is returned independent of n
-    absn = abs(n)
-    if absn == 0
-        return copyto!(similar(M.dv, length(M.dv)), M.dv)
-    elseif absn == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
-    elseif absn <= size(M,1)
-        v = similar(M.dv, size(M,1)-absn)
-        for i in eachindex(v)
-            v[i] = M[BandIndex(n,i)]
-        end
-        return v
-    else
-        throw_diag_outofboundserror(n, size(M))
-    end
-end
 function diag(M::SymTridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.dv, max(0, length(M.dv)-abs(n)))
     if n == 0
-        return copyto!(similar(M.dv, length(M.dv)), symmetric.(M.dv, :U))
+        return copyto!(v, _diagiter(M))
     elseif n == 1
-        return copyto!(similar(M.ev, length(M.dv)-1), _evview(M))
+        return copyto!(v, _evview(M))
     elseif n == -1
-        return copyto!(similar(M.ev, length(M.dv)-1), transpose.(_evview(M)))
-    elseif n <= size(M,1)
-        throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
+        return copyto!(v, _eviter_transposed(M))
     else
-        throw_diag_outofboundserror(n, size(M))
+        for i in eachindex(v)
+            v[i] = M[BandIndex(n,i)]
+        end
     end
+    return v
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, _evview(A)+_evview(B))
@@ -497,6 +480,7 @@ Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev)
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
+        issymmetric(x) || throw(ArgumentError("cannot set a diagonal entry of a SymTridiagonal to an asymmetric value"))
         @inbounds A.dv[i] = x
     else
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
@@ -628,9 +612,9 @@ function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
     if haszero(T) # optimized path for types with zero(T) defined
         size(A,1) > 2 && fill!(A, zero(T))
-        copyto!(view(A, diagind(A)), M.d)
-        copyto!(view(A, diagind(A,1)), M.du)
-        copyto!(view(A, diagind(A,-1)), M.dl)
+        copyto!(diagview(A), M.d)
+        copyto!(diagview(A,1), M.du)
+        copyto!(diagview(A,-1), M.dl)
     else
         copyto!(A, M)
     end
@@ -675,25 +659,22 @@ issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) 
 
 \(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
-function diag(M::Tridiagonal{T}, n::Integer=0) where T
+function diag(M::Tridiagonal, n::Integer=0)
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
+    v = similar(M.d, max(0, length(M.d)-abs(n)))
     if n == 0
-        return copyto!(similar(M.d, length(M.d)), M.d)
+        copyto!(v, M.d)
     elseif n == -1
-        return copyto!(similar(M.dl, length(M.dl)), M.dl)
+        copyto!(v, M.dl)
     elseif n == 1
-        return copyto!(similar(M.du, length(M.du)), M.du)
+        copyto!(v, M.du)
     elseif abs(n) <= size(M,1)
-        v = similar(M.d, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
-        return v
-    else
-        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
+    return v
 end
 
 @inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
@@ -1111,7 +1092,7 @@ function show(io::IO, T::Tridiagonal)
 end
 function show(io::IO, S::SymTridiagonal)
     print(io, "SymTridiagonal(")
-    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    show(io, _diagview(S))
     print(io, ", ")
     show(io, S.ev)
     print(io, ")")

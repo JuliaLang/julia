@@ -963,6 +963,19 @@
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
+(define (insert-struct-shim field-types name)
+  (map (lambda (x)
+      (expr-replace (lambda (y)
+                      (and (length= y 3) (eq? (car y) '|.|)
+                            (or (equal? (caddr y) `(quote ,name))
+                                (equal? (caddr y) `(inert ,name)))))
+                    x
+                    (lambda (y)
+                      `(call (core struct_name_shim)
+                              ,(cadr y) ,(caddr y)
+                              (thismodule) ,name))))
+        field-types))
+
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
    (fields defs) (separate eventually-decl? fields0)
@@ -1022,11 +1035,9 @@
                                                               prev
                                                               params)
                                                       (quote parameters))))
-                               '()))
-                  ;; otherwise do an assignment to trigger an error
-                  (const (globalref (thismodule) ,name) ,name)))
-             (const (globalref (thismodule) ,name) ,name))
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
+                               '())))))
+         (call (core _typebody!) ,name (call (core svec) ,@(insert-struct-shim field-types name)))
+         (const (globalref (thismodule) ,name) ,name)
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -4246,7 +4257,7 @@ f(x) = yt(x)
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
-                                                                `(call (core typeof) ,ve)))
+                                                                `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
                                       type-name
@@ -4854,10 +4865,14 @@ f(x) = yt(x)
                  ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
                  (if finally
-                     (begin (enter-finally-block catchcode #f) ;; enter block via exception
+                     (begin (set! finally-handler last-finally-handler)
+                            (set! catch-token-stack (cons handler-token catch-token-stack))
+                            (compile (caddr e) break-labels #f #f) ;; enter block via exception
+                            (emit '(call (top rethrow)))
+                            (emit-return tail '(null)) ; unreachable
+                            (set! catch-token-stack (cdr catch-token-stack))
                             (mark-label endl) ;; non-exceptional control flow enters here
-                            (set! finally-handler last-finally-handler)
-                            (compile (caddr e) break-labels #f #f)
+                            (compile (renumber-assigned-ssavalues (caddr e)) break-labels #f #f)
                             ;; emit actions to be taken at exit of finally
                             ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))

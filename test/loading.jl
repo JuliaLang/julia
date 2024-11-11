@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-original_depot_path = copy(Base.DEPOT_PATH)
-
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
+# NOTE: the __LINE__ numbers for these first couple tests are significant, so
+# adding any lines here will make those tests fail
 @test (@__LINE__) == 8
 
 macro macro_caller_lineno()
@@ -32,6 +32,9 @@ end
 @test (@emit_LINE) == ((@__LINE__) - 3, @__LINE__)
 @test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
 @test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
+
+original_depot_path = copy(Base.DEPOT_PATH)
+include("precompile_utils.jl")
 
 loaded_files = String[]
 push!(Base.include_callbacks, (mod::Module, fn::String) -> push!(loaded_files, fn))
@@ -728,7 +731,7 @@ end
         "" => [],
         "$s" => [default; bundled],
         "$tmp$s" => [tmp; bundled],
-        "$s$tmp" => [bundled; tmp],
+        "$s$tmp" => [default; bundled; tmp],
         )
     for (env, result) in pairs(cases)
         script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
@@ -1126,25 +1129,6 @@ end
             run(cmd_proj_ext)
         end
 
-        # Sysimage extensions
-        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
-        # if it gets moved out, this test will need to be updated.
-        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
-        sysimg_ext_test_code = """
-            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
-            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
-            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
-            using HasExtensions
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
-            using LinearAlgebra
-            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
-            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
-        """
-        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
-        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
-        run(cmd)
-
-
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
         try
@@ -1167,6 +1151,74 @@ end
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
         @test occursin("Hello Cycles!", String(read(cmd)))
+
+        # Extension-to-extension dependencies
+
+        mktempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using ExtToExtDependency
+            Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            ExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello ext-to-ext!", String(read(cmd)))
+        end
+        mktempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using ExtToExtDependency
+            Base.get_extension(ExtToExtDependency, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(ExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            ExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "ExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello ext-to-ext!", String(read(cmd)))
+        end
+
+        mktempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using CrossPackageExtToExtDependency
+            Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            CrossPackageExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
+        end
+        mktempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using CrossPackageExtToExtDependency
+            Base.get_extension(CrossPackageExtToExtDependency.CyclicExtensions, :ExtA) isa Module || error("expected extension to load")
+            Base.get_extension(CrossPackageExtToExtDependency, :ExtAB) isa Module || error("expected extension to load")
+            CrossPackageExtToExtDependency.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "CrossPackageExtToExtDependency")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
+        end
 
     finally
         try
@@ -1222,10 +1274,7 @@ end
     @test cf.check_bounds == 3
     @test cf.inline
     @test cf.opt_level == 3
-
-    io = PipeBuffer()
-    show(io, cf)
-    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+    @test repr(cf) == "CacheFlags(; use_pkgimages=true, debug_level=3, check_bounds=3, inline=true, opt_level=3)"
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1338,6 +1387,18 @@ end
     end
 end
 
+@testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
+        # handled by falling back to the stdlib Project.toml for dependency truth.
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+        ))
+    end
+end
+
 @testset "code coverage disabled during precompilation" begin
     mktempdir() do depot
         cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
@@ -1405,13 +1466,16 @@ end
                         "JULIA_DEPOT_PATH" => depot_path,
                         "JULIA_DEBUG" => "loading")
 
-            out = Pipe()
-            proc = run(pipeline(cmd, stdout=out, stderr=out))
-            close(out.in)
-
-            log = @async String(read(out))
-            @test success(proc)
-            fetch(log)
+            out = Base.PipeEndpoint()
+            log = @async read(out, String)
+            try
+                proc = run(pipeline(cmd, stdout=out, stderr=out))
+                @test success(proc)
+            catch
+                @show fetch(log)
+                rethrow()
+            end
+            return fetch(log)
         end
 
         log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
@@ -1601,5 +1665,34 @@ end
         @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
     finally
         copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "require_stdlib loading duplication" begin
+    depot_path = mktempdir()
+    oldBase64 = nothing
+    try
+        push!(empty!(DEPOT_PATH), depot_path)
+        Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
+        oldBase64 = Base.unreference_module(Base64_key)
+        cc = Base.compilecache(Base64_key)
+        @test Base.isprecompiled(Base64_key, cachepaths=String[cc[1]])
+        empty!(DEPOT_PATH)
+        Base.require_stdlib(Base64_key)
+        push!(DEPOT_PATH, depot_path)
+        append!(DEPOT_PATH, original_depot_path)
+        oldloaded = @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[])))
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded
+        Base.unreference_module(Base64_key)
+        empty!(DEPOT_PATH)
+        push!(DEPOT_PATH, depot_path)
+        Base.require(Base64_key)
+        @test @lock(Base.require_lock, length(get(Base.loaded_precompiles, Base64_key, Module[]))) == oldloaded + 1
+        Base.unreference_module(Base64_key)
+    finally
+        oldBase64 === nothing || Base.register_root_module(oldBase64)
+        copy!(DEPOT_PATH, original_depot_path)
+        rm(depot_path, force=true, recursive=true)
     end
 end

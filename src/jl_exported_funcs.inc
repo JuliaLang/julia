@@ -316,6 +316,7 @@
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_getloc) \
     XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
@@ -546,22 +547,6 @@
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraMPMAddCPUFeaturesPass) \
-    YY(LLVMExtraMPMAddRemoveNIPass) \
-    YY(LLVMExtraMPMAddMultiVersioningPass) \
-    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
-    YY(LLVMExtraMPMAddLowerPTLSPass) \
-    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
-    YY(LLVMExtraFPMAddCombineMulAddPass) \
-    YY(LLVMExtraFPMAddLateLowerGCPass) \
-    YY(LLVMExtraFPMAddAllocOptPass) \
-    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
-    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
-    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
-    YY(LLVMExtraFPMAddFinalLowerGCPass) \
-    YY(LLVMExtraLPMAddJuliaLICMPass) \
-    YY(LLVMExtraLPMAddLowerSIMDLoopPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

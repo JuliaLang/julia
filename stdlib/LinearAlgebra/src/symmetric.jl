@@ -219,9 +219,15 @@ convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Hermitian} = m isa T
 
 const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const SymSymTri{T} = Union{Symmetric{T}, SymTridiagonal{T}}
+const RealHermSymSymTri{T<:Real} = Union{RealHermSym{T}, SymTridiagonal{T}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
+const RealHermSymSymTriComplexHerm{T<:Real} = Union{RealHermSymComplexSym{T}, SymTridiagonal{T}}
 const SelfAdjoint = Union{Symmetric{<:Real}, Hermitian{<:Number}}
+
+wrappertype(::Union{Symmetric, SymTridiagonal}) = Symmetric
+wrappertype(::Hermitian) = Hermitian
 
 size(A::HermOrSym) = size(A.data)
 axes(A::HermOrSym) = axes(A.data)
@@ -307,7 +313,9 @@ function applytri(f, A::HermOrSym, B::HermOrSym)
         f(uppertriangular(_conjugation(A)(A.data)), uppertriangular(B.data))
     end
 end
-parentof_applytri(f, args...) = applytri(parent ∘ f, args...)
+_parent_tri(U::UpperOrLowerTriangular) = parent(U)
+_parent_tri(U) = U
+parentof_applytri(f, args...) = _parent_tri(applytri(f, args...))
 
 isdiag(A::HermOrSym) = applytri(isdiag, A)
 
@@ -810,25 +818,31 @@ end
 # Matrix functions
 ^(A::Symmetric{<:Real}, p::Integer) = sympow(A, p)
 ^(A::Symmetric{<:Complex}, p::Integer) = sympow(A, p)
-function sympow(A::Symmetric, p::Integer)
+^(A::SymTridiagonal{<:Real}, p::Integer) = sympow(A, p)
+^(A::SymTridiagonal{<:Complex}, p::Integer) = sympow(A, p)
+function sympow(A::SymSymTri, p::Integer)
     if p < 0
         return Symmetric(Base.power_by_squaring(inv(A), -p))
     else
         return Symmetric(Base.power_by_squaring(A, p))
     end
 end
-function ^(A::Symmetric{<:Real}, p::Real)
-    isinteger(p) && return integerpow(A, p)
-    F = eigen(A)
-    if all(λ -> λ ≥ 0, F.values)
-        return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
-    else
-        return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
+for hermtype in (:Symmetric, :SymTridiagonal)
+    @eval begin
+        function ^(A::$hermtype{<:Real}, p::Real)
+            isinteger(p) && return integerpow(A, p)
+            F = eigen(A)
+            if all(λ -> λ ≥ 0, F.values)
+                return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
+            else
+                return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
+            end
+        end
+        function ^(A::$hermtype{<:Complex}, p::Real)
+            isinteger(p) && return integerpow(A, p)
+            return Symmetric(schurpow(A, p))
+        end
     end
-end
-function ^(A::Symmetric{<:Complex}, p::Real)
-    isinteger(p) && return integerpow(A, p)
-    return Symmetric(schurpow(A, p))
 end
 function ^(A::Hermitian, p::Integer)
     if p < 0
@@ -836,8 +850,8 @@ function ^(A::Hermitian, p::Integer)
     else
         retmat = Base.power_by_squaring(A, p)
     end
-    for i = 1:size(A,1)
-        retmat[i,i] = real(retmat[i,i])
+    for i in diagind(retmat, IndexStyle(retmat))
+        retmat[i] = real(retmat[i])
     end
     return Hermitian(retmat)
 end
@@ -849,58 +863,64 @@ function ^(A::Hermitian{T}, p::Real) where T
         if T <: Real
             return Hermitian(retmat)
         else
-            for i = 1:size(A,1)
-                retmat[i,i] = real(retmat[i,i])
+            for i in diagind(retmat, IndexStyle(retmat))
+                retmat[i] = real(retmat[i])
             end
             return Hermitian(retmat)
         end
     else
-        return (F.vectors * Diagonal((complex.(F.values).^p))) * F.vectors'
+        retmat = (F.vectors * Diagonal((complex.(F.values).^p))) * F.vectors'
+        if T <: Real
+            return Symmetric(retmat)
+        else
+            return retmat
+        end
     end
 end
 
-for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh)
+for func in (:exp, :cos, :sin, :tan, :cosh, :sinh, :tanh, :atan, :asinh, :atanh, :cbrt)
     @eval begin
-        function ($func)(A::HermOrSym{<:Real})
+        function ($func)(A::RealHermSymSymTri)
             F = eigen(A)
-            return Symmetric((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
+            return wrappertype(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
         end
         function ($func)(A::Hermitian{<:Complex})
-            n = checksquare(A)
             F = eigen(A)
             retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
-            for i = 1:n
-                retmat[i,i] = real(retmat[i,i])
+            for i in diagind(retmat, IndexStyle(retmat))
+                retmat[i] = real(retmat[i])
             end
             return Hermitian(retmat)
         end
     end
 end
 
-function cis(A::Union{RealHermSymComplexHerm,SymTridiagonal{<:Real}})
+function cis(A::RealHermSymSymTri)
     F = eigen(A)
-    # The returned matrix is unitary, and is complex-symmetric for real A
+    return Symmetric(F.vectors .* cis.(F.values') * F.vectors')
+end
+function cis(A::Hermitian{<:Complex})
+    F = eigen(A)
     return F.vectors .* cis.(F.values') * F.vectors'
 end
 
+
 for func in (:acos, :asin)
     @eval begin
-        function ($func)(A::HermOrSym{<:Real})
+        function ($func)(A::RealHermSymSymTri)
             F = eigen(A)
             if all(λ -> -1 ≤ λ ≤ 1, F.values)
-                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
+                return wrappertype(A)((F.vectors * Diagonal(($func).(F.values))) * F.vectors')
             else
-                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+                return Symmetric((F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors')
             end
-            return Symmetric(retmat)
         end
         function ($func)(A::Hermitian{<:Complex})
-            n = checksquare(A)
             F = eigen(A)
             if all(λ -> -1 ≤ λ ≤ 1, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
-                for i = 1:n
-                    retmat[i,i] = real(retmat[i,i])
+                for i in diagind(retmat, IndexStyle(retmat))
+                    retmat[i] = real(retmat[i])
                 end
                 return Hermitian(retmat)
             else
@@ -910,22 +930,20 @@ for func in (:acos, :asin)
     end
 end
 
-function acosh(A::HermOrSym{<:Real})
+function acosh(A::RealHermSymSymTri)
     F = eigen(A)
     if all(λ -> λ ≥ 1, F.values)
-        retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
+        return wrappertype(A)((F.vectors * Diagonal(acosh.(F.values))) * F.vectors')
     else
-        retmat = (F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors'
+        return Symmetric((F.vectors * Diagonal(acosh.(complex.(F.values)))) * F.vectors')
     end
-    return Symmetric(retmat)
 end
 function acosh(A::Hermitian{<:Complex})
-    n = checksquare(A)
     F = eigen(A)
     if all(λ -> λ ≥ 1, F.values)
         retmat = (F.vectors * Diagonal(acosh.(F.values))) * F.vectors'
-        for i = 1:n
-            retmat[i,i] = real(retmat[i,i])
+        for i in diagind(retmat, IndexStyle(retmat))
+            retmat[i] = real(retmat[i])
         end
         return Hermitian(retmat)
     else
@@ -933,26 +951,28 @@ function acosh(A::Hermitian{<:Complex})
     end
 end
 
-function sincos(A::HermOrSym{<:Real})
+function sincos(A::RealHermSymSymTri)
     n = checksquare(A)
     F = eigen(A)
-    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
-    for i in 1:n
+    T = float(eltype(F.values))
+    S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
+    for i in eachindex(S.diag, C.diag, F.values)
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
-    return Symmetric((F.vectors * S) * F.vectors'), Symmetric((F.vectors * C) * F.vectors')
+    return wrappertype(A)((F.vectors * S) * F.vectors'), wrappertype(A)((F.vectors * C) * F.vectors')
 end
 function sincos(A::Hermitian{<:Complex})
     n = checksquare(A)
     F = eigen(A)
-    S, C = Diagonal(similar(A, (n,))), Diagonal(similar(A, (n,)))
-    for i in 1:n
+    T = float(eltype(F.values))
+    S, C = Diagonal(similar(A, T, (n,))), Diagonal(similar(A, T, (n,)))
+    for i in eachindex(S.diag, C.diag, F.values)
         S.diag[i], C.diag[i] = sincos(F.values[i])
     end
     retmatS, retmatC = (F.vectors * S) * F.vectors', (F.vectors * C) * F.vectors'
-    for i = 1:n
-        retmatS[i,i] = real(retmatS[i,i])
-        retmatC[i,i] = real(retmatC[i,i])
+    for i in diagind(retmatS, IndexStyle(retmatS))
+        retmatS[i] = real(retmatS[i])
+        retmatC[i] = real(retmatC[i])
     end
     return Hermitian(retmatS), Hermitian(retmatC)
 end
@@ -963,25 +983,23 @@ for func in (:log, :sqrt)
     rtolarg = func === :sqrt ? Any[Expr(:kw, :(rtol::Real), :(eps(real(float(one(T))))*size(A,1)))] : Any[]
     rtolval = func === :sqrt ? :(-maximum(abs, F.values) * rtol) : 0
     @eval begin
-        function ($func)(A::HermOrSym{T}; $(rtolarg...)) where {T<:Real}
+        function ($func)(A::RealHermSymSymTri{T}; $(rtolarg...)) where {T<:Real}
             F = eigen(A)
             λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
             if all(λ -> λ ≥ λ₀, F.values)
-                retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
+                return wrappertype(A)((F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors')
             else
-                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
+                return Symmetric((F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors')
             end
-            return Symmetric(retmat)
         end
-
         function ($func)(A::Hermitian{T}; $(rtolarg...)) where {T<:Complex}
             n = checksquare(A)
             F = eigen(A)
             λ₀ = $rtolval # treat λ ≥ λ₀ as "zero" eigenvalues up to roundoff
             if all(λ -> λ ≥ λ₀, F.values)
                 retmat = (F.vectors * Diagonal(($func).(max.(0, F.values)))) * F.vectors'
-                for i = 1:n
-                    retmat[i,i] = real(retmat[i,i])
+                for i in diagind(retmat, IndexStyle(retmat))
+                    retmat[i] = real(retmat[i])
                 end
                 return Hermitian(retmat)
             else
@@ -990,13 +1008,6 @@ for func in (:log, :sqrt)
             end
         end
     end
-end
-
-# Cube root of a real-valued symmetric matrix
-function cbrt(A::HermOrSym{<:Real})
-    F = eigen(A)
-    A = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
-    return A
 end
 
 """

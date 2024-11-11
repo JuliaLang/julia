@@ -2,6 +2,8 @@
 
 using Random, LinearAlgebra
 
+include("compiler/irutils.jl")
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
@@ -332,6 +334,15 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+    end
+
+    @testset "show" begin
+        A = zeros(2,3)
+        for B in (A, view(A, Base.IdentityUnitRange(2:4)))
+            l = LinearIndices(B)
+            s = sprint(show, l)
+            @test s == "LinearIndices($(axes(B)))"
+        end
     end
 end
 
@@ -1403,6 +1414,8 @@ end
 Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
 Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
 
+push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int, @nospecialize(y)) = push!(v, (; x, y))
+
 @testset "push! and pushfirst!" begin
     a_orig = [1]
     tpa = TestPushArray{Int, 2}(a_orig)
@@ -1412,6 +1425,11 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
+        # After optimization, all `push!` and `convert` calls should have been inlined
+        @test all((x)->!iscall((src, push!))(x) && !iscall((src, convert))(x), src.code)
+    end
 end
 
 mutable struct SimpleArray{T} <: AbstractVector{T}
@@ -2153,4 +2171,18 @@ end
 
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
+end
+
+@testset "copyto! with non-AbstractArray src" begin
+    A = zeros(4)
+    x = (i for i in axes(A,1))
+    copyto!(A, 1, x, 1, length(A))
+    @test A == axes(A,1)
+    A .= 0
+    copyto!(A, 1, x, 1, 2)
+    @test A[1:2] == first(x,2)
+    @test iszero(A[3:end])
+    A .= 0
+    copyto!(A, 1, x, 1)
+    @test A == axes(A,1)
 end

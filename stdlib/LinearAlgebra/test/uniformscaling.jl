@@ -28,8 +28,8 @@ Random.seed!(1234543)
 end
 
 @testset "getindex" begin
-    @test I[1,1] == 1
-    @test I[1,2] == 0
+    @test I[1,1] == I[CartesianIndex(1,1)] == 1
+    @test I[1,2] == I[CartesianIndex(1,2)] == 0
 
     J = I(15)
     for (a, b) in [
@@ -224,6 +224,13 @@ let
         @test copyto!(A, I) == one(A)
         B = Matrix{ComplexF64}(undef, (1,2))
         @test copyto!(B, J) == [λ zero(λ)]
+    end
+
+    @testset "copy!" begin
+        A = Matrix{Int}(undef, (3,3))
+        @test copy!(A, I) == one(A)
+        B = Matrix{ComplexF64}(undef, (1,2))
+        @test copy!(B, J) == [λ zero(λ)]
     end
 
     @testset "binary ops with vectors" begin

@@ -12,6 +12,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/Statistic.h>
 #if JL_LLVM_VERSION >= 170000

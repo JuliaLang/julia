@@ -1,6 +1,6 @@
 # `EscapeAnalysis`
 
-`Core.Compiler.EscapeAnalysis` is a compiler utility module that aims to analyze
+`Compiler.EscapeAnalysis` is a compiler utility module that aims to analyze
 escape information of [Julia's SSA-form IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
 
 This escape analysis aims to:
@@ -59,7 +59,7 @@ The symbols on the side of each call argument and SSA statements represent the f
 - `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
 - `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
-- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Core.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `′`: this value has additional object field / array element information in its `AliasInfo` property
 
 Escape information of each call argument and SSA value can be inspected programmatically as like:
@@ -74,7 +74,7 @@ result.state[Core.SSAValue(3)] # get EscapeInfo of `r3`
 ### Lattice Design
 
 `EscapeAnalysis` is implemented as a [data-flow analysis](https://en.wikipedia.org/wiki/Data-flow_analysis)
-that works on a lattice of [`x::EscapeInfo`](@ref Core.Compiler.EscapeAnalysis.EscapeInfo),
+that works on a lattice of [`x::EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo),
 which is composed of the following properties:
 - `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
 - `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
@@ -366,9 +366,9 @@ More interestingly, it is also valid to use `IPO EA` escape information for type
 e.g., inference accuracy can be improved by forming `Const`/`PartialStruct`/`MustAlias` of mutable object.
 
 ```@docs
-Core.Compiler.EscapeAnalysis.analyze_escapes
-Core.Compiler.EscapeAnalysis.EscapeState
-Core.Compiler.EscapeAnalysis.EscapeInfo
+Base.Compiler.EscapeAnalysis.analyze_escapes
+Base.Compiler.EscapeAnalysis.EscapeState
+Base.Compiler.EscapeAnalysis.EscapeInfo
 ```
 
 --------------------------------------------------------------------------------------------

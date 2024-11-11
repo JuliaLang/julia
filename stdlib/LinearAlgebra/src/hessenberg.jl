@@ -70,7 +70,6 @@ Base.dataids(A::UpperHessenberg) = Base.dataids(parent(A))
 Base.unaliascopy(A::UpperHessenberg) = UpperHessenberg(Base.unaliascopy(parent(A)))
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
-real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
@@ -446,7 +445,7 @@ This is useful because multiple shifted solves `(F + μ*I) \\ b`
 Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 3×3 Matrix{Float64}:
  4.0  9.0  7.0

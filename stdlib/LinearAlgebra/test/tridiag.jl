@@ -287,8 +287,8 @@ end
             @test (@inferred diag(A, 1))::typeof(d) == (mat_type == Tridiagonal ? du : dl)
             @test (@inferred diag(A, -1))::typeof(d) == dl
             @test (@inferred diag(A, n-1))::typeof(d) == zeros(elty, 1)
-            @test_throws ArgumentError diag(A, -n - 1)
-            @test_throws ArgumentError diag(A, n + 1)
+            @test isempty(@inferred diag(A, -n - 1))
+            @test isempty(@inferred diag(A, n + 1))
             GA = mat_type == Tridiagonal ? mat_type(GenericArray.((dl, d, du))...) : mat_type(GenericArray.((d, dl))...)
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
@@ -501,10 +501,14 @@ end
     @test @inferred diag(A, 1) == fill(M, n-1)
     @test @inferred diag(A, 0) == fill(Symmetric(M), n)
     @test @inferred diag(A, -1) == fill(transpose(M), n-1)
-    @test_throws ArgumentError diag(A, -2)
-    @test_throws ArgumentError diag(A, 2)
-    @test_throws ArgumentError diag(A, n+1)
-    @test_throws ArgumentError diag(A, -n-1)
+    @test_broken diag(A, -2) == fill(M, n-2)
+    @test_broken diag(A, 2) == fill(M, n-2)
+    @test isempty(@inferred diag(A, n+1))
+    @test isempty(@inferred diag(A, -n-1))
+
+    A[1,1] = Symmetric(2M)
+    @test A[1,1] == Symmetric(2M)
+    @test_throws ArgumentError A[1,1] = M
 
     @test tr(A) == sum(diag(A))
     @test issymmetric(tr(A))
@@ -516,10 +520,10 @@ end
     @test @inferred diag(A, 1) == fill(M, n-1)
     @test @inferred diag(A, 0) == fill(M, n)
     @test @inferred diag(A, -1) == fill(M, n-1)
-    @test_throws MethodError diag(A, -2)
-    @test_throws MethodError diag(A, 2)
-    @test_throws ArgumentError diag(A, n+1)
-    @test_throws ArgumentError diag(A, -n-1)
+    @test_broken diag(A, -2) == fill(M, n-2)
+    @test_broken diag(A, 2) == fill(M, n-2)
+    @test isempty(@inferred diag(A, n+1))
+    @test isempty(@inferred diag(A, -n-1))
 
     for n in 0:2
         dv, ev = fill(M, n), fill(M, max(n-1,0))
@@ -529,6 +533,13 @@ end
         A = Tridiagonal(ev, dv, ev)
         @test A == Matrix{eltype(A)}(A)
     end
+
+    M = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    S = SymTridiagonal(fill(M,4), fill(M,3))
+    @test diag(S,2) == fill(zero(M), 2)
+    @test diag(S,-2) == fill(zero(M), 2)
+    @test isempty(diag(S,4))
+    @test isempty(diag(S,-4))
 end
 
 @testset "Issue 12068" begin
@@ -1052,6 +1063,16 @@ end
         @test D * T ≈ Matrix(D) * Matrix(T)
         @test T * D ≈ Matrix(T) * Matrix(D)
     end
+end
+
+@testset "diagview" begin
+    A = Tridiagonal(rand(3), rand(4), rand(3))
+    for k in -5:5
+        @test diagview(A,k) == diag(A,k)
+    end
+    v = diagview(A,1)
+    v .= 0
+    @test all(iszero, diag(A,1))
 end
 
 end # module TestTridiagonal

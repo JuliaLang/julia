@@ -367,6 +367,7 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
 
 #include "abi_arm.cpp"
 #include "abi_aarch64.cpp"
+#include "abi_riscv.cpp"
 #include "abi_ppc64le.cpp"
 #include "abi_win32.cpp"
 #include "abi_win64.cpp"
@@ -391,6 +392,8 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
   typedef ABI_ARMLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
   typedef ABI_AArch64Layout DefaultAbiState;
+#elif defined _CPU_RISCV64_
+  typedef ABI_RiscvLayout DefaultAbiState;
 #elif defined _CPU_PPC64_
   typedef ABI_PPC64leLayout DefaultAbiState;
 #else

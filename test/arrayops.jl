@@ -496,6 +496,11 @@ end
         @test vc == [v[1:(i-1)]; 5; v[i:end]]
     end
     @test_throws BoundsError insert!(v, 5, 5)
+
+    # test that data is copied when there is plenty of room to do so
+    v = empty!(collect(1:100))
+    pushfirst!(v, 1)
+    @test length(v.ref.mem) == 100
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1404,6 +1409,14 @@ end
 end
 
 @testset "lexicographic comparison" begin
+    @testset "zero-dimensional" begin
+        vals = (0, 0.0, 1, 1.0)
+        for l ∈ vals
+            for r ∈ vals
+                @test cmp(fill(l), fill(r)) == cmp(l, r)
+            end
+        end
+    end
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0
     @test cmp([1, 1], [1, 1]) == 0
