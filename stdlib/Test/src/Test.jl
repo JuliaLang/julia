@@ -890,10 +890,17 @@ macro test_warn(msg, expr)
     quote
         let fname = tempname()
             try
-                ret = open(fname, "w") do f
-                    redirect_stderr(f) do
-                        $(esc(expr))
-                    end
+                f = open(fname, "w")
+                stdold = stderr
+                redirect_stderr(f)
+                ret = try
+                    # We deliberately don't use the thunk versions of open/redirect
+                    # to ensure that adding the macro does not change the toplevel-ness
+                    # of the resulting expression.
+                    $(esc(expr))
+                finally
+                    redirect_stderr(stdold)
+                    close(f)
                 end
                 @test contains_warn(read(fname, String), $(esc(msg)))
                 ret
@@ -922,10 +929,14 @@ macro test_nowarn(expr)
         # here.
         let fname = tempname()
             try
-                ret = open(fname, "w") do f
-                    redirect_stderr(f) do
-                        $(esc(expr))
-                    end
+                f = open(fname, "w")
+                stdold = stderr
+                redirect_stderr(f)
+                ret = try
+                    $(esc(expr))
+                finally
+                    redirect_stderr(stdold)
+                    close(f)
                 end
                 stderr_content = read(fname, String)
                 print(stderr, stderr_content) # this is helpful for debugging
