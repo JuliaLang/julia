@@ -191,8 +191,8 @@ function Matrix{T}(A::Bidiagonal) where T
     B = Matrix{T}(undef, size(A))
     if haszero(T) # optimized path for types with zero(T) defined
         size(B,1) > 1 && fill!(B, zero(T))
-        copyto!(view(B, diagind(B)), A.dv)
-        copyto!(view(B, diagind(B, _offdiagind(A.uplo))), A.ev)
+        copyto!(diagview(B), A.dv)
+        copyto!(diagview(B, _offdiagind(A.uplo)), A.ev)
     else
         copyto!(B, A)
     end
@@ -570,7 +570,7 @@ end
 # to avoid allocations in _mul! below (#24324, #24578)
 _diag(A::Tridiagonal, k) = k == -1 ? A.dl : k == 0 ? A.d : A.du
 _diag(A::SymTridiagonal{<:Number}, k) = k == 0 ? A.dv : A.ev
-_diag(A::SymTridiagonal, k) = k == 0 ? view(A, diagind(A, IndexStyle(A))) : view(A, diagind(A, 1, IndexStyle(A)))
+_diag(A::SymTridiagonal, k) = diagview(A,k)
 function _diag(A::Bidiagonal, k)
     if k == 0
         return A.dv

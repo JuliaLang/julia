@@ -151,7 +151,8 @@ Standard library changes
 * The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
   This function is now public ([#55537]).
 * The function `haszero(T::Type)` is used to check if a type `T` has a unique zero element defined as `zero(T)`.
-  This is now public.
+  This is now public ([#56223]).
+* A new function `diagview` is added that returns a view into a specific band of an `AbstractMatrix` ([#56175]).
 
 #### Logging
 

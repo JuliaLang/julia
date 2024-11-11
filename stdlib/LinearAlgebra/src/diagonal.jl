@@ -120,7 +120,7 @@ function Matrix{T}(D::Diagonal) where {T}
     B = Matrix{T}(undef, size(D))
     if haszero(T) # optimized path for types with zero(T) defined
         size(B,1) > 1 && fill!(B, zero(T))
-        copyto!(view(B, diagind(B)), D.diag)
+        copyto!(diagview(B), D.diag)
     else
         copyto!(B, D)
     end
@@ -1041,7 +1041,7 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
 function dot(D::Diagonal, B::AbstractMatrix)
     size(D) == size(B) || throw(DimensionMismatch(lazy"Matrix sizes $(size(D)) and $(size(B)) differ"))
-    return dot(D.diag, view(B, diagind(B, IndexStyle(B))))
+    return dot(D.diag, diagview(B))
 end
 
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))

@@ -201,7 +201,7 @@ end
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
     TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
-    for i in diagind(B)
+    for i in diagind(B, IndexStyle(B))
         B[i] = A[i] + J
     end
     return B
@@ -211,7 +211,7 @@ function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
     TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     B .= .-B
-    for i in diagind(B)
+    for i in diagind(B, IndexStyle(B))
         B[i] = J - A[i]
     end
     return B
