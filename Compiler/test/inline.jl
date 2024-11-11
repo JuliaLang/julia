@@ -254,7 +254,7 @@ let code = code_typed(f_pointerref, Tuple{Type{Int}})[1][1].code
     @test !any_ptrref
 end
 
-# Test that inlining can inline _applys of builtins/_applys on SimpleVectors
+# Test that inlining can inline _apply_iterate of builtins/_apply_iterate on SimpleVectors
 function foo_apply_apply_type_svec()
     A = (Tuple, Float32)
     B = Tuple{Float32, Float32}
