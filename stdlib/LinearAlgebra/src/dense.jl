@@ -1601,7 +1601,7 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return similar(A, Tout, (n, m))
     end
     if isdiag(A)
-        dA = diagview(A, indA)
+        dA = diagview(A)
         maxabsA = maximum(abs, dA)
         tol = max(rtol * maxabsA, atol)
         B = fill!(similar(A, Tout, (n, m)), 0)
