@@ -592,3 +592,4 @@ end
 # istriu/istril for triangular wrappers of structured matrices
 _istril(A::LowerTriangular{<:Any, <:BandedMatrix}, k) = istril(parent(A), k)
 _istriu(A::UpperTriangular{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)
+_istriu(A::UpperHessenberg{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)
