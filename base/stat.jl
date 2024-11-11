@@ -534,7 +534,7 @@ julia> uperm("dummy_file")
 julia> bitstring(ans)
 "00000110"
 
-julia> has_read_permission(path) = bitstring(uperm(path))[end-2]=='1';
+julia> has_read_permission(path) = uperm(path) & 0b00000100 != 0;
 
 julia> has_read_permission("dummy_file")
 true
