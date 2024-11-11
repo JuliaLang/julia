@@ -1,11 +1,11 @@
 module test_EA
 
-const use_core_compiler = true
+global use_core_compiler::Bool = true
 
 if use_core_compiler
     const EscapeAnalysis = Core.Compiler.EscapeAnalysis
 else
-    include(normpath(Sys.BINDIR, "..", "..", "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
+    include(normpath(Sys.BINDIR, "..", "..", "Compiler", "src", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
 end
 
 include("EAUtils.jl")
