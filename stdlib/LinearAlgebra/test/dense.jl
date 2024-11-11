@@ -5,6 +5,10 @@ module TestDense
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+import Main.FillArrays
+
 @testset "Check that non-floats are correctly promoted" begin
     @test [1 0 0; 0 1 0]\[1,1] ≈ [1;1;0]
 end
@@ -1299,6 +1303,19 @@ end
         @test tr(A) === Int8(5)
         @test tr(view(A, :, :)) === Int8(5)
         @test tr(view(A, axes(A)...)) === Int8(5)
+    end
+end
+
+@testset "trig functions for non-strided" begin
+    @testset for T in (Float32,ComplexF32)
+        A = FillArrays.Fill(T(0.1), 4, 4) # all.(<(1), eigvals(A)) for atanh
+        M = Matrix(A)
+        @testset for f in (sin,cos,tan,sincos,sinh,cosh,tanh)
+            @test f(A) == f(M)
+        end
+        @testset for f in (asin,acos,atan,asinh,acosh,atanh)
+            @test f(A) == f(M)
+        end
     end
 end
 
