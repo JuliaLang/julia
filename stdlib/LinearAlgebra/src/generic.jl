@@ -33,6 +33,14 @@ struct MulAddMul{ais1, bis0, TA, TB}
     beta::TB
 end
 
+@noinline throw_alpha(ais1, alpha) = throw(ArgumentError(lazy"alpha = $alpha is inconsistent with the type parameter ais1 = $ais1"))
+@noinline throw_beta(bis0, beta) = throw(ArgumentError(lazy"beta = $beta is inconsistent with the type parameter bis0 = $bis0"))
+@inline function MulAddMul{ais1,bis0}(alpha::TA, beta::TB) where {ais1,bis0,TA,TB}
+    xor(ais1, isone(alpha)) && throw_alpha(ais1, alpha)
+    xor(bis0, iszero(beta)) && throw_beta(bis0, beta)
+    MulAddMul{ais1,bis0,TA,TB}(alpha,beta)
+end
+
 @inline function MulAddMul(alpha::TA, beta::TB) where {TA,TB}
     if isone(alpha)
         if iszero(beta)
