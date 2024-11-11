@@ -827,4 +827,13 @@ end
     @test_throws "cannot set entry" B[1,2] = 4
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    dv, ev = rand(4), rand(3)
+    for A in (Bidiagonal(dv, ev, :U), Bidiagonal(dv, ev, :L))
+        D = Diagonal(dv)
+        @test rmul!(copy(A), D) ≈ A * D
+        @test lmul!(D, copy(A)) ≈ D * A
+    end
+end
+
 end # module TestBidiagonal

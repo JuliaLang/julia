@@ -411,6 +411,32 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
 \(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
 
+# B .= D * B
+function lmul!(D::Diagonal, B::Bidiagonal)
+    _muldiag_size_check(D, B)
+    (; dv, ev) = B
+    isL = B.uplo == 'L'
+    dv[1] = D.diag[1] * dv[1]
+    for i in axes(ev,1)
+        ev[i] = D.diag[i + isL] * ev[i]
+        dv[i+1] = D.diag[i+1] * dv[i+1]
+    end
+    return B
+end
+
+# B .= B * D
+function rmul!(B::Bidiagonal, D::Diagonal)
+    _muldiag_size_check(B, D)
+    (; dv, ev) = B
+    isU = B.uplo == 'U'
+    dv[1] *= D.diag[1]
+    for i in axes(ev,1)
+        ev[i] *= D.diag[i + isU]
+        dv[i+1] *= D.diag[i+1]
+    end
+    return B
+end
+
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         return A.dv == B.dv && A.ev == B.ev

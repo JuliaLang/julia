@@ -802,4 +802,12 @@ end
     end
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    dl, d, du = rand(3), rand(4), rand(3)
+    A = Tridiagonal(dl, d, du)
+    D = Diagonal(d)
+    @test rmul!(copy(A), D) ≈ A * D
+    @test lmul!(D, copy(A)) ≈ D * A
+end
+
 end # module TestTridiagonal
