@@ -1460,9 +1460,7 @@ julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
-function isbanded(A::AbstractMatrix, kl::Integer, ku::Integer)
-    _isbanded(A, kl, ku)
-end
+isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = _isbanded(A, kl, ku)
 _isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
 # Performance optimization for StridedMatrix by better utilizing cache locality
 # The istriu and istril loops are merged
