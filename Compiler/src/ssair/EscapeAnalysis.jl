@@ -33,7 +33,7 @@ using ..Compiler: # Core.Compiler specific definitions
 function include(x)
     if !isdefined(_TOP_MOD.Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
-        x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "ssair/EscapeAnalysis/", x)
+        x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "ssair/", x)
     end
     _TOP_MOD.include(@__MODULE__, x)
 end

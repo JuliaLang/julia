@@ -1,4 +1,5 @@
 AbstractInterpreter
+EscapeAnalysis
 codegen
 compact
 contextual
