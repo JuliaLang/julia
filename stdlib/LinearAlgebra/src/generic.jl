@@ -1501,29 +1501,21 @@ function _isbanded_impl(A, kl, ku)
 
     for col in intersect(axes(A,2), colrange_onlybottomrows) # only loop over the bottom rows
         botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
-        if !isempty(botrowinds)
-            bottomrows = @view A[botrowinds, col]
-            _iszero(bottomrows) || return false
-        end
+        bottomrows = @view A[botrowinds, col]
+        _iszero(bottomrows) || return false
     end
     for col in intersect(axes(A,2), colrange_topbottomrows)
         toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
-        if !isempty(toprowinds)
-            toprows = @view A[toprowinds, col]
-            _iszero(toprows) || return false
-        end
+        toprows = @view A[toprowinds, col]
+        _iszero(toprows) || return false
         botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
-        if !isempty(botrowinds)
-            bottomrows = @view A[botrowinds, col]
-            _iszero(bottomrows) || return false
-        end
+        bottomrows = @view A[botrowinds, col]
+        _iszero(bottomrows) || return false
     end
     for col in intersect(axes(A,2), colrange_onlytoprows_nonzero)
         toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
-        if !isempty(toprowinds)
-            toprows = @view A[toprowinds, col]
-            _iszero(toprows) || return false
-        end
+        toprows = @view A[toprowinds, col]
+        _iszero(toprows) || return false
     end
     for col in intersect(axes(A,2), colrange_zero_block)
         _iszero(@view A[:, col]) || return false

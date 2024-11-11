@@ -352,8 +352,7 @@ end
 @inline function _istril(A::LowerTriangular, k)
     P = parent(A)
     for j in max(firstindex(P,2), k + 2):lastindex(P,2)
-        Pzero = @view P[max(j, begin):min(j - k - 1, end), j]
-        _iszero(Pzero) || return false
+        _iszero(@view P[max(j, begin):min(j - k - 1, end), j]) || return false
     end
     return true
 end
@@ -367,8 +366,7 @@ end
     P = parent(A)
     m = size(A, 1)
     for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
-        Pzero = @view P[max(begin, j - k + 1):min(j, end), j]
-        _iszero(Pzero) || return false
+        _iszero(@view P[max(begin, j - k + 1):min(j, end), j]) || return false
     end
     return true
 end
