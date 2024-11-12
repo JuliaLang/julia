@@ -395,8 +395,7 @@ isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
     ischardev(path_elements...) -> Bool
     ischardev(stat_struct) -> Bool
 
-Return `true` if `path` points to a character device, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the path `path` or file descriptor `stat_struct` refer to a character device, `false` otherwise.
 """
 ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
@@ -424,8 +423,7 @@ isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
     isblockdev(path_elements...) -> Bool
     isblockdev(stat_struct) -> Bool
 
-Return `true` if `path` points to a block device, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the path `path` or file descriptor `stat_struct` refer to a block device, `false` otherwise.
 """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
@@ -480,8 +478,7 @@ issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
     issetuid(path_elements...) -> Bool
     issetuid(stat_struct) -> Bool
 
-Return `true` if the file at `path` has the setuid flag set, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the setuid flag set, `false` otherwise.
 """
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
 
@@ -490,8 +487,7 @@ issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
     issetgid(path_elements...) -> Bool
     issetgid(stat_struct) -> Bool
 
-Return `true` if the file at `path` has the setgid flag set, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the setgid flag set, `false` otherwise.
 """
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
 
@@ -500,8 +496,7 @@ issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
     issticky(path_elements...) -> Bool
     issticky(stat_struct) -> Bool
 
-Return `true` if the file at `path` has the sticky bit set, `false` otherwise.
-Or the equivalent as indicated by the file descriptor `stat_struct`.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the sticky bit set, `false` otherwise.
 """
 issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
 
@@ -510,9 +505,7 @@ issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
     uperm(path_elements...)
     uperm(stat_struct)
 
-Get the permissions of the owner of the file at `path` as a bitfield,
-Or the equivalent as indicated by the file descriptor `stat_struct`.
-
+Return a bitfield of the owner permissions for the file at `path` or file descriptor `stat_struct`.
 
 | Value | Description        |
 |:------|:-------------------|
@@ -525,6 +518,8 @@ is read+write, the bitfield is "110", which maps to the decimal
 value of 0+2+4=6. This is reflected in the printing of the
 returned `UInt8` value.
 
+See also [`gperm`](@ref) and [`operm`](@ref).
+
 ```jldoctest
 julia> touch("dummy_file")  # Create test-file without contents;
 
@@ -534,7 +529,7 @@ julia> uperm("dummy_file")
 julia> bitstring(ans)
 "00000110"
 
-julia> has_read_permission(path) = uperm(path) & 0b00000100 != 0;
+julia> has_read_permission(path) = uperm(path) & 0b00000100 != 0;  # Use bit mask to check specific bit
 
 julia> has_read_permission("dummy_file")
 true
@@ -550,6 +545,8 @@ uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
     gperm(stat_struct)
 
 Like [`uperm`](@ref) but gets the permissions of the group owning the file.
+
+See also [`operm`](@ref).
 """
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
@@ -560,6 +557,8 @@ gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
 Like [`uperm`](@ref) but gets the permissions for people who neither own the
 file nor are a member of the group owning the file.
+
+See also [`gperm`](@ref).
 """
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 
@@ -603,6 +602,7 @@ samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
     ismount(path) -> Bool
+    ismount(path_elements...) -> Bool
 
 Return `true` if `path` is a mount point, `false` otherwise.
 """
