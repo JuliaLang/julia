@@ -919,7 +919,13 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         memset(&c, 0, sizeof(c));
      #if defined(_OS_LINUX_) && defined(__GLIBC__)
         __jmp_buf *mctx = &t->ctx.ctx.uc_mcontext->__jmpbuf;
+        #if defined(_CPU_AARCH64_)
+        // Only on aarch64-linux libunwind uses a different struct than system's one:
+        // <https://github.com/libunwind/libunwind/blob/e63e024b72d35d4404018fde1a546fde976da5c5/include/libunwind-aarch64.h#L193-L205>.
+        struct unw_sigcontext *mc = &c.uc_mcontext;
+        #else
         mcontext_t *mc = &c.uc_mcontext;
+        #endif
       #if defined(_CPU_X86_)
         // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
         // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h

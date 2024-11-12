@@ -138,6 +138,19 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
     ssyms = names(mod, all = all, imported = imported)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
+
+    # don't complete string and command macros when the input matches the internal name like `r_` to `r"`
+    if !startswith(name, "@")
+        filter!(macros) do m
+            s = String(m)
+            if endswith(s, "_str") || endswith(s, "_cmd")
+                occursin(name, first(s, length(s)-4))
+            else
+                true
+            end
+        end
+    end
+
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
@@ -387,6 +400,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     in_double_quotes = false
     in_back_ticks = false
     in_comment = 0
+    num_single_quotes_in_string = count('\'', s)
     while i <= ncodeunits(r)
         c, i = iterate(r, i)
         if c == '#' && i <= ncodeunits(r) && iterate(r, i)[1] == '='
@@ -409,7 +423,9 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 braces += 1
             elseif c == c_end
                 braces -= 1
-            elseif c == '\''
+            elseif c == '\'' && num_single_quotes_in_string % 2 == 0
+                # ' can be a transpose too, so check if there are even number of 's in the string
+                # TODO: This probably needs to be more robust
                 in_single_quotes = true
             elseif c == '"'
                 in_double_quotes = true
@@ -1066,7 +1082,9 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             if !isinfix
                 # Handle infix call argument completion of the form bar + foo(qux).
                 frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
-                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == ex.args[end]
+                if !isempty(frange) # if find_start_brace fails to find the brace just continue
+                    isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == ex.args[end]
+                end
             end
             if isinfix
                 ex = ex.args[end]

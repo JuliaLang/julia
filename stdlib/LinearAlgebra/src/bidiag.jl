@@ -201,7 +201,7 @@ Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix
-promote_rule(::Type{Matrix}, ::Type{<:Bidiagonal}) = Matrix
+promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 
 #Converting from Bidiagonal to Tridiagonal
 function Tridiagonal{T}(A::Bidiagonal) where T
@@ -410,6 +410,32 @@ end
 *(B::Number, A::Bidiagonal) = Bidiagonal(B*A.dv, B*A.ev, A.uplo)
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.uplo)
 \(B::Number, A::Bidiagonal) = Bidiagonal(B\A.dv, B\A.ev, A.uplo)
+
+# B .= D * B
+function lmul!(D::Diagonal, B::Bidiagonal)
+    _muldiag_size_check(D, B)
+    (; dv, ev) = B
+    isL = B.uplo == 'L'
+    dv[1] = D.diag[1] * dv[1]
+    for i in axes(ev,1)
+        ev[i] = D.diag[i + isL] * ev[i]
+        dv[i+1] = D.diag[i+1] * dv[i+1]
+    end
+    return B
+end
+
+# B .= B * D
+function rmul!(B::Bidiagonal, D::Diagonal)
+    _muldiag_size_check(B, D)
+    (; dv, ev) = B
+    isU = B.uplo == 'U'
+    dv[1] *= D.diag[1]
+    for i in axes(ev,1)
+        ev[i] *= D.diag[i + isU]
+        dv[i+1] *= D.diag[i+1]
+    end
+    return B
+end
 
 function ==(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo

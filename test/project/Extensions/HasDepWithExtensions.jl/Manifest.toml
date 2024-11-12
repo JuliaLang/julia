@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0-DEV"
+julia_version = "1.10.6"
 manifest_format = "2.0"
-project_hash = "d523b3401f72a1ed34b7b43749fd2655c6b78542"
+project_hash = "eed4f16fdd2e22799229e480394c255a569eb19c"
 
 [[deps.ExtDep]]
 deps = ["SomePackage"]
@@ -15,7 +15,13 @@ path = "../ExtDep2"
 uuid = "55982ee5-2ad5-4c40-8cfe-5e9e1b01500d"
 version = "0.1.0"
 
+[[deps.ExtDep3]]
+path = "../ExtDep3.jl"
+uuid = "a5541f1e-a556-4fdc-af15-097880d743a1"
+version = "0.1.0"
+
 [[deps.HasExtensions]]
+deps = ["ExtDep3"]
 path = "../HasExtensions.jl"
 uuid = "4d3288b3-3afc-4bb6-85f3-489fffe514c8"
 version = "0.1.0"
@@ -23,6 +29,7 @@ weakdeps = ["ExtDep", "ExtDep2"]
 
     [deps.HasExtensions.extensions]
     Extension = "ExtDep"
+    ExtensionDep = "ExtDep3"
     ExtensionFolder = ["ExtDep", "ExtDep2"]
 
 [[deps.SomePackage]]

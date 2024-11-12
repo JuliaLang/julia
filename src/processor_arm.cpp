@@ -203,7 +203,7 @@ static constexpr auto feature_masks = get_feature_masks(
 #undef JL_FEATURE_DEF
     -1);
 static const auto real_feature_masks =
-    feature_masks & FeatureList<feature_sz>{{(uint32_t)-1, (uint32_t)-1, 0}};
+    feature_masks & FeatureList<feature_sz>{{UINT32_MAX, UINT32_MAX, 0}};
 
 namespace Feature {
 enum : uint32_t {
@@ -461,7 +461,7 @@ static constexpr auto feature_masks = get_feature_masks(
 #undef JL_FEATURE_DEF
     -1);
 static const auto real_feature_masks =
-    feature_masks & FeatureList<feature_sz>{{(uint32_t)-1, (uint32_t)-1, 0}};
+    feature_masks & FeatureList<feature_sz>{{UINT32_MAX, UINT32_MAX, 0}};
 
 namespace Feature {
 enum : uint32_t {
@@ -1493,7 +1493,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
         }
 #endif
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
-        if (fbit == (uint32_t)-1)
+        if (fbit == UINT32_MAX)
             return false;
         set_bit(list, fbit, true);
         return true;
@@ -1574,7 +1574,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
         }
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
-    if (match.best_idx == -1)
+    if (match.best_idx == UINT32_MAX)
         return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
@@ -1846,7 +1846,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == (uint32_t)-1)
+    if (match_idx == UINT32_MAX)
         return rejection_reason;
     return jl_nothing;
 }

@@ -325,6 +325,12 @@ end
 # inexistent completion inside a cmd
 @test_nocompletion("run(`lol")
 
+# issue 55856: copy(A').<TAB> errors in the REPL
+let
+    c, r = test_complete("copy(A').")
+    @test isempty(c)
+end
+
 # test latex symbol completions
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
@@ -1474,6 +1480,16 @@ test_dict_completion("test_repl_comp_customdict")
     @test "testcmd`" in c
     c, r, res = test_complete("CompletionFoo.tϵsτc")
     @test "tϵsτcmδ`" in c
+
+    # Issue #56071: don't complete string and command macros when the input matches the internal name like `r_` to `r"`
+    c, r, res = test_complete("CompletionFoo.teststr_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.teststr_s")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_")
+    @test isempty(c)
+    c, r, res = test_complete("CompletionFoo.testcmd_c")
+    @test isempty(c)
 end
 
 @testset "Keyword-argument completion" begin

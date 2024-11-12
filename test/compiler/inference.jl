@@ -5164,3 +5164,11 @@ end
 
 issue55882_nfields(x::Union{T,Nothing}) where T<:Number = nfields(x)
 @test only(Base.return_types(issue55882_nfields)) <: Int
+
+# JuliaLang/julia#56248
+@test only(Base.return_types() do
+    TypeVar(:Issue56248, 1)
+end) === Union{}
+@test only(Base.Base.return_types() do
+    TypeVar(:Issue56248, Any, 1)
+end) === Union{}

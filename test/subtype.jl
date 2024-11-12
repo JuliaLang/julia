@@ -1436,6 +1436,9 @@ struct A23764_2{T, N, S} <: AbstractArray{Union{Ref{T}, S}, N}; end
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N}} where {T,N}
 @test Tuple{A23764_2{T, 1, Nothing} where T} <: Tuple{AbstractArray{T,N} where {T,N}}
 
+# issue #50716
+@test !<:(Ref{Vector{Tuple{K}} where K}, Ref{<:Vector{K}} where K)
+
 # issue #26131
 @test !(Vector{Vector{Number}} <: Vector{Union{Vector{Number}, Vector{S}}} where S<:Integer)
 
@@ -2371,12 +2374,41 @@ let S = Tuple{T2, V2} where {T2, N2, V2<:(Array{S2, N2} where {S2 <: T2})},
     @testintersect(S, T, !Union{})
 end
 
-# A simple case which has a small local union.
-# make sure the env is not widened too much when we intersect(Int8, Int8).
-struct T48006{A1,A2,A3} end
-@testintersect(Tuple{T48006{Float64, Int, S1}, Int} where {F1<:Real, S1<:Union{Int8, Val{F1}}},
-               Tuple{T48006{F2, I, S2}, I} where {F2<:Real, I<:Int, S2<:Union{Int8, Val{F2}}},
-               Tuple{T48006{Float64, Int, S1}, Int} where S1<:Union{Val{Float64}, Int8})
+let S = Dict{Int, S1} where {F1, S1<:Union{Int8, Val{F1}}},
+    T = Dict{F2, S2} where {F2, S2<:Union{Int8, Val{F2}}}
+    @test_broken typeintersect(S, T) == Dict{Int, S} where S<:Union{Val{Int}, Int8}
+    @test typeintersect(T, S) == Dict{Int, S} where S<:Union{Val{Int}, Int8}
+end
+
+# Ensure inner `intersect_all` never under-esitimate.
+let S = Tuple{F1, Dict{Int, S1}} where {F1, S1<:Union{Int8, Val{F1}}},
+    T = Tuple{Any, Dict{F2, S2}} where {F2, S2<:Union{Int8, Val{F2}}}
+    @test Tuple{Nothing, Dict{Int, Int8}} <: S
+    @test Tuple{Nothing, Dict{Int, Int8}} <: T
+    @test Tuple{Nothing, Dict{Int, Int8}} <: typeintersect(S, T)
+    @test Tuple{Nothing, Dict{Int, Int8}} <: typeintersect(T, S)
+end
+
+let S = Tuple{F1, Val{S1}} where {F1, S1<:Dict{F1}}
+    T = Tuple{Any, Val{S2}} where {F2, S2<:Union{map(T->Dict{T}, Base.BitInteger_types)...}}
+    ST = typeintersect(S, T)
+    TS = typeintersect(S, T)
+    for U in Base.BitInteger_types
+        @test Tuple{U, Val{Dict{U,Nothing}}} <: S
+        @test Tuple{U, Val{Dict{U,Nothing}}} <: T
+        @test Tuple{U, Val{Dict{U,Nothing}}} <: ST
+        @test Tuple{U, Val{Dict{U,Nothing}}} <: TS
+    end
+end
+
+#issue 55206
+struct T55206{A,B<:Complex{A},C<:Union{Dict{Nothing},Dict{A}}} end
+@testintersect(T55206, T55206{<:Any,<:Any,<:Dict{Nothing}}, T55206{A,<:Complex{A},<:Dict{Nothing}} where {A})
+@testintersect(
+    Tuple{Dict{Int8, Int16}, Val{S1}} where {F1, S1<:AbstractSet{F1}},
+    Tuple{Dict{T1, T2}, Val{S2}} where {T1, T2, S2<:Union{Set{T1},Set{T2}}},
+    Tuple{Dict{Int8, Int16}, Val{S1}} where {S1<:Union{Set{Int8},Set{Int16}}}
+)
 
 f48167(::Type{Val{L2}}, ::Type{Union{Val{L1}, Set{R}}}) where {L1, R, L2<:L1} = 1
 f48167(::Type{Val{L1}}, ::Type{Union{Val{L2}, Set{R}}}) where {L1, R, L2<:L1} = 2
@@ -2545,7 +2577,7 @@ end
 let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} where T<:Val{A} where A where S<:Val,
     S = Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
     # optimal = Union{}?
-    @test typeintersect(T, S) == Tuple{Type{A}, Union{Val{A}, Val{S} where S<:Union{Val, A}, Val{x} where x<:Val, Val{x} where x<:Union{Val, A}}, Val{A}} where A<:(Val{S} where S<:Val)
+    @test typeintersect(T, S) == Tuple{Type{T}, Union{Val{T}, Val{S}}, Val{T}} where {S<:Val, T<:Val}
     @test typeintersect(S, T) == Tuple{Type{T}, Union{Val{T}, Val{S}}, Val{T}} where {T<:Val, S<:(Union{Val{A}, Val} where A)}
 end
 
@@ -2637,4 +2669,13 @@ let S = Tuple{Val, Val{T}} where {T}, R = Tuple{Val{Val{T}}, Val{T}} where {T},
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{B,Tuple{Int}}}}, S{(1,)}, R{(1,)})
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{(:a),B}}}, S{NTuple{2,Int}}, R{NTuple{2,Int}})
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{B,Tuple{Int,Int}}}}, S{(:a,:a)}, R{(:a,:a)})
+end
+
+#issue 56040
+let S = Dict{V,V} where {V},
+    T = Dict{Ref{Union{Set{A2}, Set{A3}, A3}}, Ref{Union{Set{A3}, Set{A2}, Set{A1}, Set{A4}, A4}}} where {A1, A2<:Set{A1}, A3<:Union{Set{A1}, Set{A2}}, A4<:Union{Set{A2}, Set{A1}, Set{A3}}},
+    A = Dict{Ref{Set{Union{}}}, Ref{Set{Union{}}}}
+    @testintersect(S, T, !Union{})
+    @test A <: typeintersect(S, T)
+    @test A <: typeintersect(T, S)
 end

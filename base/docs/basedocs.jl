@@ -36,6 +36,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -3284,6 +3292,9 @@ unused and delete the entire benchmark code).
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 
 # Examples
 

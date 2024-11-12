@@ -506,3 +506,16 @@ macro timed(ex)
         (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
     end
 end
+
+# Exported, documented, and tested in InteractiveUtils
+# here so it's possible to time/trace all imports, including InteractiveUtils and its deps
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
