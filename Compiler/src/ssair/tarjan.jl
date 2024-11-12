@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: DomTree, CFG, BasicBlock, StmtRange, dominates
+using .Compiler: DomTree, CFG, BasicBlock, StmtRange, dominates
 
 struct SCCStackItem
     v::Int32

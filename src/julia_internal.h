@@ -615,8 +615,8 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
+size_t memory_block_usable_size(void *mem, int isaligned) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
-void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
@@ -956,12 +956,14 @@ STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFE
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 
 EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
     return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
 }
 
 STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 
 #ifndef __clang_analyzer__
 STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
@@ -974,6 +976,19 @@ STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl
             return pku;
         *bnd = (jl_binding_t*)decode_restriction_value(pku);
         *bpart = jl_get_binding_partition(*bnd, world);
+    }
+}
+
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (!*bpart)
+            return encode_restriction(NULL, BINDING_KIND_GUARD);
+        jl_ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
+        if (!jl_bkind_is_some_import(decode_restriction_kind(pku)))
+            return pku;
+        *bnd = (jl_binding_t*)decode_restriction_value(pku);
+        *bpart = jl_get_binding_partition_all(*bnd, min_world, max_world);
     }
 }
 #endif
@@ -1129,7 +1144,7 @@ void jl_safepoint_end_gc(void);
 // The caller should set it **BEFORE** calling this function.
 void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
 void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
-
+int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
 // If the safepoint is enabled to deliver sigint, disable it

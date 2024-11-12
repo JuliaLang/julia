@@ -7,6 +7,7 @@ function maybe_show_ir(ir::IRCode)
     else
         Core.show(ir)
     end
+    Core.println(Core.stdout)
 end
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
@@ -25,7 +26,8 @@ end
 
 is_toplevel_expr_head(head::Symbol) = head === :global || head === :method || head === :thunk
 is_value_pos_expr_head(head::Symbol) = head === :static_parameter
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int,
+    allow_frontend_forms::Bool, @nospecialize(raise_error))
     if isa(op, SSAValue)
         op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
@@ -39,14 +41,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             else
                 if op.id >= use_idx
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
-                    error("")
+                    raise_error()
                 end
             end
         else
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value %$(op.id) at %$(printed_use_idx))"
-                error("")
+                raise_error()
             end
         end
 
@@ -56,12 +58,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             # an earlier block got deleted, but for some reason we didn't figure
             # out yet that this entire block is dead also.
             @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
-            error("")
+            raise_error()
         end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
-            error("")
+            raise_error()
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
@@ -72,15 +74,15 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         elseif !is_value_pos_expr_head(op.head)
             if !allow_frontend_forms || op.head !== :opaque_closure_method
                 @verify_error "Expr not allowed in value position"
-                error("")
+                raise_error()
             end
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
-        error("")
+        raise_error()
     elseif isa(op, SlotNumber)
         @verify_error "Left over slot detected in converted IR"
-        error("")
+        raise_error()
     end
 end
 
@@ -96,31 +98,49 @@ end
 
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
-                   𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance)
+                   𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance,
+                   mi::Union{Nothing,MethodInstance}=nothing)
+    function raise_error()
+        error_args = Any["IR verification failed."]
+        if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+            # ensure we use I/O that does not yield, as this gets called during compilation
+            firstline = invokelatest(Core.Main.Base.IRShow.debuginfo_firstline, ir.debuginfo)
+        else
+            firstline = nothing
+        end
+        if firstline !== nothing
+            file, line = firstline
+            push!(error_args, "\n", "    Code location: ", file, ":", line)
+        end
+        if mi !== nothing
+            push!(error_args, "\n", "  Method instance: ", mi)
+        end
+        error(error_args...)
+    end
     # Verify CFG graph. Must be well formed to construct domtree
     if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
         @verify_error "CFG index length ($(length(ir.cfg.index))) does not correspond to # of blocks $(length(ir.cfg.blocks))"
-        error("")
+        raise_error()
     end
     if length(ir.stmts.stmt) != length(ir.stmts)
         @verify_error "IR stmt length is invalid $(length(ir.stmts.stmt)) / $(length(ir.stmts))"
-        error("")
+        raise_error()
     end
     if length(ir.stmts.type) != length(ir.stmts)
         @verify_error "IR type length is invalid $(length(ir.stmts.type)) / $(length(ir.stmts))"
-        error("")
+        raise_error()
     end
     if length(ir.stmts.info) != length(ir.stmts)
         @verify_error "IR info length is invalid $(length(ir.stmts.info)) / $(length(ir.stmts))"
-        error("")
+        raise_error()
     end
     if length(ir.stmts.line) != length(ir.stmts) * 3
         @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts) * 3)"
-        error("")
+        raise_error()
     end
     if length(ir.stmts.flag) != length(ir.stmts)
         @verify_error "IR flag length is invalid $(length(ir.stmts.flag)) / $(length(ir.stmts))"
-        error("")
+        raise_error()
     end
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
@@ -132,43 +152,43 @@ function verify_ir(ir::IRCode, print::Bool=true,
             p == 0 && continue
             if !(1 <= p <= length(ir.cfg.blocks))
                 @verify_error "Predecessor $p of block $idx out of bounds for IR"
-                error("")
+                raise_error()
             end
             c = count_int(idx, ir.cfg.blocks[p].succs)
             if c == 0
                 @verify_error "Predecessor $p of block $idx not in successor list"
-                error("")
+                raise_error()
             elseif c == 2
                 if count_int(p, block.preds) != 2
                     @verify_error "Double edge from $p to $idx not correctly accounted"
-                    error("")
+                    raise_error()
                 end
             end
         end
         for s in block.succs
             if !(1 <= s <= length(ir.cfg.blocks))
                 @verify_error "Successor $s of block $idx out of bounds for IR"
-                error("")
+                raise_error()
             end
             if !(idx in ir.cfg.blocks[s].preds)
                 #Base.@show ir.cfg
                 #Base.@show ir
                 #Base.@show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
-                error("")
+                raise_error()
             end
         end
         if !(1 <= first(block.stmts) <= length(ir.stmts))
             @verify_error "First statement of BB $idx ($(first(block.stmts))) out of bounds for IR (length=$(length(ir.stmts)))"
-            error("")
+            raise_error()
         end
         if !(1 <= last(block.stmts) <= length(ir.stmts))
             @verify_error "Last statement of BB $idx ($(last(block.stmts))) out of bounds for IR (length=$(length(ir.stmts)))"
-            error("")
+            raise_error()
         end
         if idx <= length(ir.cfg.index) && last(block.stmts) + 1 != ir.cfg.index[idx]
             @verify_error "End of BB $idx ($(last(block.stmts))) is not one less than CFG index ($(ir.cfg.index[idx]))"
-            error("")
+            raise_error()
         end
     end
     # Verify statements
@@ -177,7 +197,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if first(block.stmts) != last_end + 1
             #ranges = [(idx,first(bb.stmts),last(bb.stmts)) for (idx, bb) in pairs(ir.cfg.blocks)]
             @verify_error "First statement of BB $idx ($(first(block.stmts))) does not match end of previous ($last_end)"
-            error("")
+            raise_error()
         end
         last_end = last(block.stmts)
         terminator = ir[SSAValue(last_end)][:stmt]
@@ -186,32 +206,32 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if isa(terminator, ReturnNode)
             if !isempty(block.succs)
                 @verify_error "Block $idx ends in return or unreachable, but has successors"
-                error("")
+                raise_error()
             end
         elseif isa(terminator, GotoNode)
             if length(block.succs) != 1 || block.succs[1] != terminator.label
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoNode terminator ($(terminator.label))"
-                error("")
+                raise_error()
             end
         elseif isa(terminator, GotoIfNot)
             if terminator.dest == idx + 1
                 @verify_error "Block $idx terminator forms a double edge to block $(idx+1)"
-                error("")
+                raise_error()
             end
             if length(block.succs) != 2 || (block.succs != [terminator.dest, idx+1] && block.succs != [idx+1, terminator.dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
-                error("")
+                raise_error()
             end
         elseif isa(terminator, EnterNode)
             @label enter_check
             if length(block.succs) == 1
                 if terminator.catch_dest != 0
                     @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
-                    error("")
+                    raise_error()
                 end
             elseif (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.catch_dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
-                error("")
+                raise_error()
             end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
@@ -233,14 +253,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     # here, but that isn't always possible.
                 else
                     @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
-                    error("")
+                    raise_error()
                 end
             end
         end
     end
     if length(ir.stmts) != last(ir.cfg.blocks[end].stmts)
         @verify_error "End of last BB $(last(ir.cfg.blocks[end].stmts)) does not match last IR statement $(length(ir.stmts))"
-        error("")
+        raise_error()
     end
     lastbb = 0
     is_phinode_block = false
@@ -260,7 +280,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if isa(stmt, PhiNode)
             if !is_phinode_block
                 @verify_error "φ node $idx is not at the beginning of the basic block $bb"
-                error("")
+                raise_error()
             end
             lastphi = idx
             @assert length(stmt.edges) == length(stmt.values)
@@ -271,20 +291,20 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     if edge == edge′
                         # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is always unique.
                         @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
-                        error("")
+                        raise_error()
                     end
                 end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
                     #Base.@show ir.argtypes
                     #Base.@show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
-                    error("")
+                    raise_error()
                 end
                 edge == 0 && continue
                 if bb_unreachable(domtree, Int(edge))
                     # TODO: Disallow?
                     #@verify_error "Unreachable edge from #$edge should have been cleaned up at idx $idx"
-                    #error("")
+                    #raise_error()
                     continue
                 end
                 isassigned(stmt.values, i) || continue
@@ -297,10 +317,11 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         #    PhiNode type was $phiT
                         #    Value type was $(ir.stmts[val.id][:type])
                         #"""
-                        #error("")
+                        #raise_error()
                     end
                 end
-                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i, allow_frontend_forms)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i,
+                    allow_frontend_forms, raise_error)
             end
             continue
         end
@@ -311,7 +332,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 for validate_idx in firstidx:(lastphi-1)
                     validate_stmt = ir[SSAValue(validate_idx)][:stmt]
                     isa(validate_stmt, PhiNode) && continue
-                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0, allow_frontend_forms)
+                    check_op(ir, domtree, validate_stmt, bb, idx, idx, print, false, 0,
+                        allow_frontend_forms, raise_error)
                 end
                 is_phinode_block = false
             end
@@ -321,21 +343,21 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 val = stmt.values[i]
                 if !isa(val, SSAValue)
                     @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
-                    error("")
+                    raise_error()
                 end
                 if !isa(ir[val][:stmt], UpsilonNode)
                     @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
-                    error("")
+                    raise_error()
                 end
             end
         elseif isterminator(stmt)
             if idx != last(ir.cfg.blocks[bb].stmts)
                 @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
-                error("")
+                raise_error()
             end
             if !isa(stmt, ReturnNode) && ir[SSAValue(idx)][:type] !== Any
                 @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
-                error("")
+                raise_error()
             end
         else
             isforeigncall = false
@@ -343,7 +365,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 if stmt.head === :(=)
                     if stmt.args[1] isa SSAValue
                         @verify_error "SSAValue as assignment LHS"
-                        error("")
+                        raise_error()
                     end
                     if stmt.args[2] isa GlobalRef
                         # undefined GlobalRef as assignment RHS is OK
@@ -352,7 +374,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 elseif stmt.head === :isdefined
                     if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
                         @verify_error "malformed isdefined"
-                        error("")
+                        raise_error()
                     end
                     if stmt.args[1] isa GlobalRef
                         # undefined GlobalRef is OK in isdefined
@@ -380,12 +402,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         arg = stmt.args[i]
                         if !isa(arg, Union{Nothing, SSAValue})
                             @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
-                            error()
+                            raise_error()
                         elseif isa(arg, SSAValue)
                             enter_stmt = ir[arg::SSAValue][:stmt]
                             if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
                                 @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
-                                error()
+                                raise_error()
                             end
                         end
                     end
@@ -394,7 +416,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
             n = 1
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, idx, print, isforeigncall, n, allow_frontend_forms)
+                check_op(ir, domtree, op, bb, idx, idx, print, isforeigncall, n,
+                    allow_frontend_forms, raise_error)
                 n += 1
             end
         end

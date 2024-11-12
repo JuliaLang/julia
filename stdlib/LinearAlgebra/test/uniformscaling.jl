@@ -28,8 +28,8 @@ Random.seed!(1234543)
 end
 
 @testset "getindex" begin
-    @test I[1,1] == 1
-    @test I[1,2] == 0
+    @test I[1,1] == I[CartesianIndex(1,1)] == 1
+    @test I[1,2] == I[CartesianIndex(1,2)] == 0
 
     J = I(15)
     for (a, b) in [

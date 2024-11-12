@@ -963,6 +963,19 @@
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
+(define (insert-struct-shim field-types name)
+  (map (lambda (x)
+      (expr-replace (lambda (y)
+                      (and (length= y 3) (eq? (car y) '|.|)
+                            (or (equal? (caddr y) `(quote ,name))
+                                (equal? (caddr y) `(inert ,name)))))
+                    x
+                    (lambda (y)
+                      `(call (core struct_name_shim)
+                              ,(cadr y) ,(caddr y)
+                              (thismodule) ,name))))
+        field-types))
+
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
    (fields defs) (separate eventually-decl? fields0)
@@ -1022,11 +1035,9 @@
                                                               prev
                                                               params)
                                                       (quote parameters))))
-                               '()))
-                  ;; otherwise do an assignment to trigger an error
-                  (const (globalref (thismodule) ,name) ,name)))
-             (const (globalref (thismodule) ,name) ,name))
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
+                               '())))))
+         (call (core _typebody!) ,name (call (core svec) ,@(insert-struct-shim field-types name)))
+         (const (globalref (thismodule) ,name) ,name)
          (null)))
        ;; "inner" constructors
        (scope-block

@@ -1233,7 +1233,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
   0 = data is inlined
   1 = owns the gc-managed data, exclusively (will free it)
   2 = malloc-allocated pointer (does not own it)
-  3 = has a pointer to the object that owns the data pointer
+  3 = has a pointer to the String object that owns the data pointer (m must be isbits)
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
@@ -1249,8 +1249,6 @@ STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    if (jl_genericmemory_how(m) == 3)
-        return jl_genericmemory_data_owner_field(m);
     return (jl_value_t*)m;
 }
 
@@ -1280,8 +1278,6 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     assert(i < m_->length);
     jl_atomic_store_release(((_Atomic(jl_value_t*)*)(m_->ptr)) + i, (jl_value_t*)x);
     if (x) {
-        if (jl_genericmemory_how(m_) == 3)
-            m = (void*)jl_genericmemory_data_owner_field(m_);
         jl_gc_wb(m, x);
     }
     return (jl_value_t*)x;
@@ -2539,6 +2535,8 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 // any arguments that should be passed on to the script.
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
+
+uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

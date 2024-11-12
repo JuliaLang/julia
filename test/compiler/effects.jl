@@ -357,18 +357,21 @@ end
 
 @test !Core.Compiler.builtin_nothrow(Core.Compiler.fallback_lattice, Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
-# Nothrow for assignment to globals
+# effects modeling for assignment to globals
 global glob_assign_int::Int = 0
-f_glob_assign_int() = global glob_assign_int += 1
-let effects = Base.infer_effects(f_glob_assign_int, ())
+f_glob_assign_int() = global glob_assign_int = 1
+let effects = Base.infer_effects(f_glob_assign_int, (); optimize=false)
+    @test Core.Compiler.is_consistent(effects)
     @test !Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
-# Nothrow for setglobal!
+# effects modeling for for setglobal!
 global SETGLOBAL!_NOTHROW::Int = 0
-let effects = Base.infer_effects() do
+let effects = Base.infer_effects(; optimize=false) do
         setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
     end
+    @test Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
 
@@ -924,7 +927,7 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 # purely abstract recursion should not taint :terminates
 # https://github.com/JuliaLang/julia/issues/48983
 abstractly_recursive1() = abstractly_recursive2()
-abstractly_recursive2() = (Core.Compiler._return_type(abstractly_recursive1, Tuple{}); 1)
+abstractly_recursive2() = (Base._return_type(abstractly_recursive1, Tuple{}); 1)
 abstractly_recursive3() = abstractly_recursive2()
 @test_broken Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
 actually_recursive1(x) = actually_recursive2(x)

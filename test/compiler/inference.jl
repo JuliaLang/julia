@@ -1535,7 +1535,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Base.Compiler.fallback_lattice, Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -3381,9 +3381,9 @@ struct FooPartial
     b::Int
     c::Int
 end
-let PT1 = PartialStruct(FooPartial, Any[Const(1), Const(2), Int]),
-    PT2 = PartialStruct(FooPartial, Any[Const(1), Int, Int]),
-    PT3 = PartialStruct(FooPartial, Any[Const(1), Int, Const(3)])
+let PT1 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Const(2), Int]),
+    PT2 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Int, Int]),
+    PT3 = PartialStruct(Base.Compiler.fallback_lattice, FooPartial, Any[Const(1), Int, Const(3)])
 
     @test PT1 ⊑ PT2
     @test !(PT1 ⊑ PT3) && !(PT2 ⊑ PT1)
@@ -4635,18 +4635,18 @@ end
 @testset "issue #43784" begin
     ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
     ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    𝕃 = Core.Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
-
     let init = Base.ImmutableDict{Any,Any}()
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Any,Any}(1,2)
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(getfield(init,1)), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4654,14 +4654,14 @@ end
     end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
-        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4669,8 +4669,8 @@ end
         @test c.fields[3] === ComplexF64
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4678,8 +4678,8 @@ end
         @test c.fields[3] === Complex
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(T, Any[T])
-        b = PartialStruct(T, Any[T, Number, Number])
+        a = PartialStruct(𝕃, T, Any[T])
+        b = PartialStruct(𝕃, T, Any[T, Number, Number])
         @test b ⊑ a
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4687,7 +4687,7 @@ end
         @test length(c.fields) == 1
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(T, Any[T])
+        a = PartialStruct(𝕃, T, Any[T])
         b = Const(T())
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4695,7 +4695,7 @@ end
     end
     let T = Base.ImmutableDict{Number,Number}
         a = Const(T())
-        b = PartialStruct(T, Any[T])
+        b = PartialStruct(𝕃, T, Any[T])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === T
@@ -4742,22 +4742,23 @@ end
 
 let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
     ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    𝕃 = Core.Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
-    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
-    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
-    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
-    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
-    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
-    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
-    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
-    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
-    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
 
     t = Const((false, false)) ⊔ Const((false, true))
     @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
@@ -4899,7 +4900,7 @@ let src = code_typed1() do
 end
 
 # Test that Const ⊑ PartialStruct respects vararg
-@test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+@test Const((1,2)) ⊑ PartialStruct(Core.Compiler.fallback_lattice, Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
 Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)

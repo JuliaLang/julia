@@ -141,7 +141,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    return InliningState(sv.edges, sv.world, interp)
+    return InliningState(sv.edges, frame_world(sv), interp)
 end
 function InliningState(interp::AbstractInterpreter)
     return InliningState(Any[], get_inference_world(interp), interp)
@@ -212,14 +212,14 @@ end
 function argextype end # imported by EscapeAnalysis
 function try_compute_field end # imported by EscapeAnalysis
 
-include("compiler/ssair/heap.jl")
-include("compiler/ssair/slot2ssa.jl")
-include("compiler/ssair/inlining.jl")
-include("compiler/ssair/verify.jl")
-include("compiler/ssair/legacy.jl")
-include("compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl")
-include("compiler/ssair/passes.jl")
-include("compiler/ssair/irinterp.jl")
+include("ssair/heap.jl")
+include("ssair/slot2ssa.jl")
+include("ssair/inlining.jl")
+include("ssair/verify.jl")
+include("ssair/legacy.jl")
+include("ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("ssair/passes.jl")
+include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
@@ -1033,7 +1033,7 @@ function run_passes_ipo_safe(
     end
     if is_asserts()
         @timeit "verify 3" begin
-            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end

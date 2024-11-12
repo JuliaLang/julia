@@ -641,7 +641,7 @@ end
                             ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
             end
         end
-        anyrefine && return PartialStruct(aty, fields)
+        anyrefine && return PartialStruct(𝕃, aty, fields)
     end
     return nothing
 end

@@ -9,7 +9,7 @@ Profiling support.
 - `@profile foo()` to profile a specific call.
 - `Profile.print()` to print the report. Paths are clickable links in supported terminals and specialized for JULIA_EDITOR etc.
 - `Profile.clear()` to clear the buffer.
-- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+- Send a SIGUSR1 (on linux) or SIGINFO (on macOS/BSD) signal to the process to automatically trigger a profile and print. i.e. `kill -s SIGUSR1/SIGINFO 1234`, where 1234 is the pid of the julia process. On macOS & BSD platforms `ctrl-t` can be used directly.
 
 ## Memory profiling
 - `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
@@ -217,6 +217,7 @@ const META_OFFSET_THREADID = 5
 
 """
     print([io::IO = stdout,] [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
+    print(path::String, [cols::Int = 1000], [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
@@ -355,6 +356,13 @@ function print(io::IO,
         any_nosamples && warning_empty(summary = true)
     end
     return
+end
+
+function print(path::String, cols::Int = 1000, args...; kwargs...)
+    open(path, "w") do io
+        ioc = IOContext(io, :displaysize=>(1000,cols))
+        print(ioc, args...; kwargs...)
+    end
 end
 
 """
@@ -529,9 +537,11 @@ function flatten(data::Vector, lidict::LineInfoDict)
 end
 
 const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
+const COMPILER_DIR = "././../usr/share/julia/Compiler/"
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
+# filenamecache is a dict of spath -> (fullpath or "" if !isfile, modulename, shortpath)
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
@@ -544,6 +554,10 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         elseif startswith(path_norm, lib_dir)
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
+        elseif startswith(path, COMPILER_DIR)
+            remainder = only(split(path, COMPILER_DIR, keepempty=false))
+            possible_compiler_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder))
+            return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,

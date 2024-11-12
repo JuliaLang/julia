@@ -1289,6 +1289,21 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
     return jl_cstr_to_string(path);
 }
 
+JL_DLLEXPORT jl_value_t *jl_prepend_string(jl_value_t *prefix, jl_value_t *str)
+{
+    char path[1024];
+    const char *pstr = (const char*)jl_string_data(prefix);
+    size_t sz = strlen(pstr);
+    const char *fstr = (const char*)jl_string_data(str);
+    if (strlen(fstr) + sz >= sizeof(path)) {
+        jl_errorf("use a bigger buffer for jl_fullpath");
+    }
+    strcpy(path, pstr);
+    strcpy(path + sz, fstr);
+    return jl_cstr_to_string(path);
+}
+
+
 #ifdef __cplusplus
 }
 #endif

@@ -359,6 +359,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
+    eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
     n_succeeded = 0
     # Make statements unique

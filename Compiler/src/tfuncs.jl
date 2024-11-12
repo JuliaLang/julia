@@ -1436,7 +1436,7 @@ end
             if TF2 === Bottom
                 RT = Bottom
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
-                RT = PartialStruct(RT, Any[TF, TF2])
+                RT = PartialStruct(fallback_lattice, RT, Any[TF, TF2])
             end
             info = ModifyOpInfo(callinfo.info)
             return CallMeta(RT, Any, Effects(), info)
@@ -1996,7 +1996,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
     issingletontype(typ) && return Const(typ.instance)
-    return anyinfo ? PartialStruct(typ, argtypes) : typ
+    return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
 end
 
 @nospecs function memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
@@ -2497,11 +2497,11 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     elseif f === getglobal
         2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_getglobal
-        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
+        return generic_getglobal_effects
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return EFFECTS_THROWS
         # Modeled more precisely in abstract_eval_get_binding_type
-        return Effects(EFFECTS_TOTAL; effect_free=ALWAYS_FALSE)
+        return Effects(EFFECTS_TOTAL; nothrow=get_binding_type_nothrow(𝕃, argtypes[1], argtypes[2]))
     elseif f === compilerbarrier
         length(argtypes) == 2 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
         setting = argtypes[1]

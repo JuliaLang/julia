@@ -16,6 +16,8 @@ function iterate(result::MethodLookupResult, args...)
 end
 getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
 
+abstract type MethodTableView end
+
 """
     struct InternalMethodTable <: MethodTableView
 
