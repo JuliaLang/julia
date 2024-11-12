@@ -1856,6 +1856,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_release_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_latestworld_sym;
 
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
