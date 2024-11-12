@@ -57,7 +57,7 @@ using Base: Ordering, vect, EffectsOverride, BitVector, @_gc_preserve_begin, @_g
 using Base.Order
 import Base: getindex, setindex!, length, iterate, push!, isempty, first, convert, ==,
     copy, popfirst!, in, haskey, resize!, copy!, append!, last, get!, size,
-    get, iterate, findall, min_world, max_world, _topmod
+    get, iterate, findall, min_world, max_world, _topmod, isready
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
