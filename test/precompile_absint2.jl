@@ -16,7 +16,7 @@ precompile_test_harness() do load_path
 
         module Custom
             const CC = Core.Compiler
-            include("$($newinterp_path)")
+            include($newinterp_path)
             @newinterp PrecompileInterpreter
             struct CustomData
                 inferred

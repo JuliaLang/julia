@@ -15,7 +15,7 @@ precompile_test_harness() do load_path
         import SimpleModule: basic_caller, basic_callee
 
         module Custom
-            include("$($newinterp_path)")
+            include($newinterp_path)
             @newinterp PrecompileInterpreter
         end
 
