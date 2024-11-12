@@ -524,7 +524,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
                     if (jl_options.trim != JL_TRIM_NO && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
-                    } else {
+                    }
+                    else {
                         JL_GC_PROMISE_ROOTED(codeinst->rettype);
                         orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
                                 params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
@@ -608,6 +609,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
             else if (func == "jl_fptr_sparam") {
                 func_id = -2;
+            }
+            else if (decls.functionObject == "jl_f_opaque_closure_call") {
+                func_id = -4;
             }
             else {
                 //Safe b/c context is locked by params
@@ -904,11 +908,13 @@ static bool canPartition(const GlobalValue &G) {
     return true;
 }
 
-static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
+static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     bool bad = false;
 #ifndef JL_NDEBUG
-    SmallVector<uint32_t, 0> fvars(fvars_size);
-    SmallVector<uint32_t, 0> gvars(gvars_size);
+    size_t fvars_size = fvars.size();
+    size_t gvars_size = gvars.size();
+    SmallVector<uint32_t, 0> fvars_partition(fvars_size);
+    SmallVector<uint32_t, 0> gvars_partition(gvars_size);
     StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
@@ -919,18 +925,18 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             GVNames[name.getKey()] = i;
         }
         for (auto &fvar : partitions[i].fvars) {
-            if (fvars[fvar.second] != 0) {
+            if (fvars_partition[fvar.second] != 0) {
                 bad = true;
-                dbgs() << "Duplicate fvar " << fvar.first() << " in partitions " << i << " and " << fvars[fvar.second] - 1 << "\n";
+                dbgs() << "Duplicate fvar " << fvar.first() << " in partitions " << i << " and " << fvars_partition[fvar.second] - 1 << "\n";
             }
-            fvars[fvar.second] = i+1;
+            fvars_partition[fvar.second] = i+1;
         }
         for (auto &gvar : partitions[i].gvars) {
-            if (gvars[gvar.second] != 0) {
+            if (gvars_partition[gvar.second] != 0) {
                 bad = true;
-                dbgs() << "Duplicate gvar " << gvar.first() << " in partitions " << i << " and " << gvars[gvar.second] - 1 << "\n";
+                dbgs() << "Duplicate gvar " << gvar.first() << " in partitions " << i << " and " << gvars_partition[gvar.second] - 1 << "\n";
             }
-            gvars[gvar.second] = i+1;
+            gvars_partition[gvar.second] = i+1;
         }
     }
     for (auto &GV : M.global_values()) {
@@ -967,13 +973,14 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
         }
     }
     for (uint32_t i = 0; i < fvars_size; i++) {
-        if (fvars[i] == 0) {
+        if (fvars_partition[i] == 0) {
+            auto gv = find_if(fvars.begin(), fvars.end(), [i](auto var) { return var.second == i; });
             bad = true;
-            dbgs() << "fvar " << i << " not in any partition\n";
+            dbgs() << "fvar " << gv->first->getName() << " at " << i << " not in any partition\n";
         }
     }
     for (uint32_t i = 0; i < gvars_size; i++) {
-        if (gvars[i] == 0) {
+        if (gvars_partition[i] == 0) {
             bad = true;
             dbgs() << "gvar " << i << " not in any partition\n";
         }
@@ -1117,7 +1124,9 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
-    bool verified = verify_partitioning(partitions, M, fvars.size(), gvars.size());
+    bool verified = verify_partitioning(partitions, M, fvars, gvars);
+    if (!verified)
+        M.dump();
     assert(verified && "Partitioning failed to partition globals correctly");
     (void) verified;
 
