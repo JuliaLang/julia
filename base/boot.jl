@@ -271,7 +271,7 @@ macro nospecialize(x)
 end
 Expr(@nospecialize args...) = _expr(args...)
 
-macro worldinc() Expr(:worldinc) end
+macro latestworld() Expr(:latestworld) end
 
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
