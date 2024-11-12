@@ -87,6 +87,7 @@ export
     diag,
     diagind,
     diagm,
+    diagview,
     dot,
     eigen!,
     eigen,
@@ -169,6 +170,7 @@ export
 public AbstractTriangular,
         Givens,
         checksquare,
+        haszero,
         hermitian,
         hermitian_type,
         isbanded,
@@ -655,6 +657,8 @@ matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
 _matprod_dest_diag(A, TS) = similar(A, TS)
+_matprod_dest_diag(A::UnitUpperTriangular, TS) = UpperTriangular(similar(parent(A), TS))
+_matprod_dest_diag(A::UnitLowerTriangular, TS) = LowerTriangular(similar(parent(A), TS))
 function _matprod_dest_diag(A::SymTridiagonal, TS)
     n = size(A, 1)
     ev = similar(A, TS, max(0, n-1))

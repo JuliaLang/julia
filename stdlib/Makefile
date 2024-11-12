@@ -39,7 +39,6 @@ install-$$($(1)_JLL_NAME)_jll: get-$$($(1)_JLL_NAME)_jll
 endef
 $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
-
 STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
           Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization \
@@ -55,7 +54,6 @@ $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shel
 ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
 $(error ERROR duplicated STDLIBS in list)
 endif
-
 
 # Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
 $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))

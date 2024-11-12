@@ -805,7 +805,7 @@ or `nothing` if it is not found, a clear type instability. In order to make it e
 type instabilities that are likely to be important, `Union`s containing either `missing` or `nothing`
 are color highlighted in yellow, instead of red.
 
-The following examples may help you interpret expressions marked as containing non-leaf types:
+The following examples may help you interpret expressions marked as containing non-concrete types:
 
   * Function body starting with `Body::Union{T1,T2})`
       * Interpretation: function with unstable return type
@@ -821,7 +821,7 @@ The following examples may help you interpret expressions marked as containing n
         element accesses
 
   * `Base.getfield(%%x, :(:data))::Array{Float64,N} where N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
+      * Interpretation: getting a field that is of non-concrete type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`

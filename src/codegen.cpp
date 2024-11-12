@@ -1435,18 +1435,6 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
                 AttributeSet::get(C, RetAttrs),
                 None); },
 };
-static const auto jlarray_data_owner_func = new JuliaFunction<>{
-    XSTR(jl_array_data_owner),
-    [](LLVMContext &C) {
-        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
-        return FunctionType::get(T_prjlvalue,
-            {T_prjlvalue}, false);
-    },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind}),
-            Attributes(C, {Attribute::NonNull}),
-            None); },
-};
 #define BOX_FUNC(ct,at,attrs,nbytes)                                                    \
 static const auto box_##ct##_func = new JuliaFunction<>{                           \
     XSTR(jl_box_##ct),                                                           \
@@ -2247,7 +2235,10 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
             break;
         }
         if (caller) {
-            assert(ctx.emission_context.enqueuers.count(caller) == 1);
+
+            // assert(ctx.emission_context.enqueuers.count(caller) == 1);
+            // Each enqueuer should only be enqueued at least once and only once. Check why this assert is triggering
+            // This isn't a fatal error, just means that we may get a wrong backtrace
             if (jl_is_method_instance(caller)) {
                 //TODO: Use a subrange when C++20 is a thing
                 for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
@@ -3444,26 +3435,33 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
+static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, jl_module_t *mod, jl_sym_t *name)
+{
+    Value *bp = julia_binding_gv(ctx, bnd);
+    Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
+    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
+    return mark_julia_type(ctx, v, true, jl_any_type);
+}
+
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    assert(bnd);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
     }
-    assert(bnd);
-    Value *bp = NULL;
     // bpart was updated in place - this will change with full partition
     pku = jl_atomic_load_acquire(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // Redo the lookup at runtime
-        bp = julia_binding_gv(ctx, bnd);
-        Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
-        undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
-        return mark_julia_type(ctx, v, true, jl_any_type);
+        return emit_globalref_runtime(ctx, bnd, mod, name);
     } else {
         while (true) {
             if (!bpart)
@@ -3474,7 +3472,9 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 cg_bdw(ctx, name, bnd);
             }
             bnd = (jl_binding_t*)decode_restriction_value(pku);
-            bpart = jl_get_binding_partition(bnd, ctx.max_world);
+            bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+            if (!bpart)
+                break;
             pku = jl_atomic_load_acquire(&bpart->restriction);
         }
         if (bpart && jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
@@ -3486,7 +3486,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             return mark_julia_const(ctx, constval);
         }
     }
-    bp = julia_binding_gv(ctx, bnd);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
+    Value *bp = julia_binding_gv(ctx, bnd);
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
@@ -3505,7 +3508,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     if (bp == NULL)
         return jl_cgval_t();
     if (bpart) {
@@ -4338,8 +4341,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         Value *data_owner = NULL; // owner object against which the write barrier must check
         if (isboxed || layout->first_ptr >= 0) { // if elements are just bits, don't need a write barrier
-            Value *V = emit_memoryref_FCA(ctx, ref, layout);
-            data_owner = emit_genericmemoryowner(ctx, CreateSimplifiedExtractValue(ctx, V, 1));
+            data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
         *ret = typed_store(ctx,
                     ptr,
@@ -5732,10 +5734,34 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             // special case for some known builtin not handled by emit_builtin_call
             auto it = builtin_func_map().find(builtin_fptr);
             if (it != builtin_func_map().end()) {
-                if (trim_may_error(ctx.params->trim) && may_dispatch_builtins().count(builtin_fptr)) {
-                    errs() << "ERROR: Dynamic call to builtin" << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
-                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stacktrace(ctx, ctx.params->trim);
+                if (trim_may_error(ctx.params->trim)) {
+                    bool may_dispatch = may_dispatch_builtins().count(builtin_fptr);
+                    if (may_dispatch && f.constant == jl_builtin__apply_iterate && nargs >= 4) {
+                        if (jl_subtype(argv[2].typ, (jl_value_t*)jl_builtin_type)) {
+                            static jl_value_t *jl_dispatchfree_apply_iterate_type = NULL;
+                            if (!jl_dispatchfree_apply_iterate_type) {
+                                jl_value_t *types[5] = {
+                                    (jl_value_t *)jl_simplevector_type,
+                                    (jl_value_t *)jl_genericmemory_type,
+                                    (jl_value_t *)jl_array_type,
+                                    (jl_value_t *)jl_tuple_type,
+                                    (jl_value_t *)jl_namedtuple_type,
+                                };
+                                jl_dispatchfree_apply_iterate_type = jl_as_global_root(jl_type_union(types, 5), 1);
+                            }
+                            for (size_t i = 3; i < nargs; i++) {
+                                auto ai = argv[i].typ;
+                                if (!jl_subtype(ai, jl_dispatchfree_apply_iterate_type))
+                                    break;
+                            }
+                            may_dispatch = false;
+                        }
+                    }
+                    if (may_dispatch) {
+                        errs() << "ERROR: Dynamic call to builtin " << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
+                        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+                        print_stacktrace(ctx, ctx.params->trim);
+                    }
                 }
                 Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
                 setName(ctx.emission_context, ret, it->second->name + "_ret");
@@ -5751,6 +5777,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         else {
             fptr = FunctionCallee(get_func_sig(ctx.builder.getContext()), ctx.builder.CreateCall(prepare_call(jlgetbuiltinfptr_func), {emit_typeof(ctx, f)}));
             cc = julia_call;
+        }
+        if (trim_may_error(ctx.params->trim)) {
+            errs() << "ERROR: Dynamic call to unknown builtin";
+            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+            print_stacktrace(ctx, ctx.params->trim);
         }
         Value *ret = emit_jlcall(ctx, fptr, nullptr, argv, nargs, cc);
         setName(ctx.emission_context, ret, "Builtin_ret");
@@ -5774,7 +5805,8 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
     int failed_dispatch = !argv[0].constant;
     if (ctx.params->trim != JL_TRIM_NO) {
-        abort(); // this code path is unsound, unsafe, and probably bad
+        // TODO: Implement the last-minute call resolution that used to be here
+        //       in inference instead.
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {
@@ -5834,7 +5866,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
                                      jl_binding_t **pbnd, bool assign, bool alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (assign) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
@@ -5845,11 +5877,11 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             // try to look this up now
             b = jl_get_binding(m, s);
-            bpart = jl_get_binding_partition(b, ctx.max_world);
+            bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
         }
-        pku = jl_walk_binding_inplace(&b, &bpart, ctx.max_world);
+        pku = jl_walk_binding_inplace_all(&b, &bpart, ctx.min_world, ctx.max_world);
     }
-    if (b == NULL) {
+    if (!b || !bpart) {
         // var not found. switch to delayed lookup.
         Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
         GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), ctx.types().T_pjlvalue,
@@ -6001,7 +6033,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             name = (jl_sym_t*)sym;
         }
         jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.min_world);
+        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
         jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
         if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (jl_get_binding_value_if_const(bnd))
@@ -10133,7 +10165,8 @@ jl_llvm_functions_t jl_emit_codeinst(
                         !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file
                 // Never end up in a situation where the codeinst has no invoke, but also no source, so we never fall
                 // through the cracks of SOURCE_MODE_ABI.
-                jl_atomic_store_release(&codeinst->invoke, jl_fptr_wait_for_compiled_addr);
+                jl_callptr_t expected = NULL;
+                jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected, jl_fptr_wait_for_compiled_addr);
                 jl_atomic_store_release(&codeinst->inferred, jl_nothing);
             }
         }

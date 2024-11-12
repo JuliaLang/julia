@@ -459,6 +459,11 @@ end
     end
 end
 
+# Issue #51710 and PR #54855
+@test_throws MethodError stat(7)
+@test_throws MethodError ispath(false)
+@test_throws MethodError ispath(1)
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -1727,6 +1732,13 @@ cd(dirwalk) do
         @test root == joinpath(".", "sub_dir3")
         @test dirs == []
         @test files == ["foo"]
+    end
+
+    # pwd() as default directory
+    for ((r1, d1, f1), (r2, d2, f2)) in zip(walkdir(), walkdir(pwd()))
+        @test r1 == r2
+        @test d1 == d2
+        @test f1 == f2
     end
 end
 rm(dirwalk, recursive=true)

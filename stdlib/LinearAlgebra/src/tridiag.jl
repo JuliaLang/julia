@@ -612,9 +612,9 @@ function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
     if haszero(T) # optimized path for types with zero(T) defined
         size(A,1) > 2 && fill!(A, zero(T))
-        copyto!(view(A, diagind(A)), M.d)
-        copyto!(view(A, diagind(A,1)), M.du)
-        copyto!(view(A, diagind(A,-1)), M.dl)
+        copyto!(diagview(A), M.d)
+        copyto!(diagview(A,1), M.du)
+        copyto!(diagview(A,-1), M.dl)
     else
         copyto!(A, M)
     end
@@ -1092,7 +1092,7 @@ function show(io::IO, T::Tridiagonal)
 end
 function show(io::IO, S::SymTridiagonal)
     print(io, "SymTridiagonal(")
-    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    show(io, _diagview(S))
     print(io, ", ")
     show(io, S.ev)
     print(io, ")")

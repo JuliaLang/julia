@@ -32,7 +32,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -7669,7 +7669,7 @@ end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
 @test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
-@test @isdefined(X36104)
+@test !@isdefined(X36104)
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end

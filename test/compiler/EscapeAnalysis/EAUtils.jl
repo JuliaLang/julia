@@ -11,15 +11,14 @@ const EA = EscapeAnalysis
 
 # imports
 import .CC:
-    AbstractInterpreter, NativeInterpreter, WorldView, WorldRange,
-    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache,
-    ipo_dataflow_analysis!, cache_result!
+    AbstractInterpreter, NativeInterpreter, WorldView, WorldRange, InferenceParams,
+    OptimizationParams, get_world_counter, get_inference_cache, ipo_dataflow_analysis!
 # usings
 using Core:
     CodeInstance, MethodInstance, CodeInfo
 using .CC:
     InferenceResult, InferenceState, OptimizationState, IRCode
-using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
+using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeState
 
 struct EAToken end
 
@@ -128,10 +127,6 @@ end
 using Core: Argument, SSAValue
 using .CC: widenconst, singleton_type
 
-if EA._TOP_MOD === CC
-    Base.getindex(estate::EscapeState, @nospecialize(x)) = CC.getindex(estate, x)
-end
-
 function get_name_color(x::EscapeInfo, symbol::Bool = false)
     getname(x) = string(nameof(x))
     if x === EA.⊥
@@ -166,6 +161,42 @@ function Base.show(io::IO, x::EscapeInfo)
     else
         printstyled(io, name; color)
     end
+end
+
+function get_sym_color(x::ArgEscapeInfo)
+    escape_bits = x.escape_bits
+    if escape_bits == EA.ARG_ALL_ESCAPE
+        color, sym = :red, "X"
+    elseif escape_bits == 0x00
+        color, sym = :green, "✓"
+    else
+        color, sym = :bold, "*"
+        if !iszero(escape_bits & EA.ARG_RETURN_ESCAPE)
+            color, sym = :blue, "↑"
+        end
+        if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
+            color = :yellow
+        end
+    end
+    return sym, color
+end
+
+function Base.show(io::IO, x::ArgEscapeInfo)
+    escape_bits = x.escape_bits
+    if escape_bits == EA.ARG_ALL_ESCAPE
+        color, sym = :red, "X"
+    elseif escape_bits == 0x00
+        color, sym = :green, "✓"
+    else
+        color, sym = :bold, "*"
+        if !iszero(escape_bits & EA.ARG_RETURN_ESCAPE)
+            color, sym = :blue, "↑"
+        end
+        if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
+            color = :yellow
+        end
+    end
+    printstyled(io, "ArgEscapeInfo(", sym, ")"; color)
 end
 
 struct EscapeResult
