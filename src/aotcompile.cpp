@@ -900,12 +900,9 @@ struct Partition {
     size_t weight;
 };
 
-static bool canPartition(const GlobalValue &G) {
-    if (auto F = dyn_cast<Function>(&G)) {
-        if (F->hasFnAttribute(Attribute::AlwaysInline))
-            return false;
-    }
-    return true;
+static bool canPartition(const Function &F)
+{
+    return !F.hasFnAttribute(Attribute::AlwaysInline);
 }
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
@@ -947,13 +944,6 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
         } else {
             // Local global values are not partitioned
-            if (!canPartition(GV)) {
-                if (GVNames.count(GV.getName())) {
-                    bad = true;
-                    dbgs() << "Shouldn't have partitioned " << GV.getName() << ", but is in partition " << GVNames[GV.getName()] << "\n";
-                }
-                continue;
-            }
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
@@ -1042,8 +1032,6 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        if (!canPartition(G))
-            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1052,7 +1040,8 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
-        } else {
+        }
+        else {
             partitioner.make(&G, 1);
         }
     }
@@ -1380,6 +1369,12 @@ static void materializePreserved(Module &M, Partition &partition) {
             continue;
         if (Preserve.contains(&F))
             continue;
+        if (!canPartition(F)) {
+            F.setLinkage(GlobalValue::AvailableExternallyLinkage);
+            F.setVisibility(GlobalValue::HiddenVisibility);
+            F.setDSOLocal(true);
+            continue;
+        }
         F.deleteBody();
         F.setLinkage(GlobalValue::ExternalLinkage);
         F.setVisibility(GlobalValue::HiddenVisibility);
