@@ -2,7 +2,7 @@
 
 using Random, LinearAlgebra
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
@@ -1885,7 +1885,7 @@ end
 end
 
 module IRUtils
-    include("compiler/irutils.jl")
+    include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 end
 
 function check_pointer_strides(A::AbstractArray)
