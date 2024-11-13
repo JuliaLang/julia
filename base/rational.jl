@@ -49,13 +49,6 @@ Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
-"""
-    divgcd(x::Integer, y::Integer)
-
-Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
-
-See also [`div`](@ref), [`gcd`](@ref).
-"""
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
     g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
@@ -106,32 +99,31 @@ end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 function //(x::Number, y::Complex)
-    if(iszero((x//abs2(y))) || isinf((x//abs2(y))==1//0))
-        return (x//abs2(y))
+    if(iszero(abs2(y)))
+        throw(DivideError())
+    end
+    if(iszero((x//abs2(y))) )
+        return 0//1 + 0//1*im
     end
     return (x//abs2(y))*conj(y)
 end
 function //(x::Number, y::Complex{<:Integer})
-    if isinf(real(y)) || isinf(imag(y))
-        return 0//1
-    end
     real_y = real(y)
     imag_y = imag(y)
     m=max(abs(real_y),abs(imag_y))
     if(m==0)
-        return 1//0
+        throw(DivideError())
     end
     scaled_a = real_y // m
     scaled_b = imag_y // m
     denom =  (scaled_a^2 + scaled_b^2)
-    if iszero(denom)
-        return 1//0
-    end
     real_part = (x * (((real_y//denom)//m)//m))
     imag_part = (-x * (((imag_y// denom)//m)//m))
     ans = (real_part + imag_part * im)
     return ans
 end
+
+
 //(X::AbstractArray, y::Number) = X .// y
 
 function show(io::IO, x::Rational)
