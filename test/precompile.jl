@@ -2252,7 +2252,7 @@ precompile_test_harness("No package module") do load_path
 end
 
 precompile_test_harness("pkgdir eval during init") do load_path
-    srcpath = joinpath(load_path, "PkgdirDuringInit.jl")
+    srcpath = joinpath(load_path, "src", "PkgdirDuringInit.jl")
     write(srcpath,
         """
         module PkgdirDuringInit
