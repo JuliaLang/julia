@@ -19,6 +19,17 @@ using Test
     @test -7//0 == -1//0
     @test  (-1//2) // (-2//5) == 5//4
     @testset "Complex//Number Overflow" begin
+        @test (true//true) // complex(false, true) === 0//1 - 1//1*im
+        @test (false//true) // complex(false, true) === 0//1 + 0//1*im
+        @test (false//true) // complex(true, false) === 0//1 + 0//1*im
+        @test (false//true) // complex(true, true) === 0//1 + 0//1*im
+        @test (true//true) // complex(true, true) === 1//2 - 1//2*im
+        @test (false//true) // complex(true//true, true//true) === 0//1 + 0//1*im
+        @test (true//true) // complex(true//true, true//true) === 1//2 - 1//2*im
+        @test (false//true) // complex(true//false, false//true) === 0//1 + 0//1*im
+        @test (true//true) // complex(true//true, true//false) === 0//1 + 0//1*im
+        @test_throws DivideError (0//1) // complex(0, 0)
+        @test_throws DivideError (1//1) // complex(0, 0)
         for y ∈ (1 // 0, -1 // 0)
             @test (7 // complex(y)) == (7 // y)
         end
