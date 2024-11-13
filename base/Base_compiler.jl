@@ -286,6 +286,8 @@ function process_sysimg_args!()
 end
 process_sysimg_args!()
 
+function isready end
+
 include(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
 
 const _return_type = Compiler.return_type
