@@ -521,7 +521,7 @@ returned `UInt8` value.
 See also [`gperm`](@ref) and [`operm`](@ref).
 
 ```jldoctest
-julia> touch("dummy_file")  # Create test-file without contents;
+julia> touch("dummy_file");  # Create test-file without contents
 
 julia> uperm("dummy_file")
 0x06
