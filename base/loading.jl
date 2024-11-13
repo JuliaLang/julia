@@ -1254,6 +1254,17 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         M = M::Module
         if parentmodule(M) === M && PkgId(M) == pkg
             register && register_root_module(M)
+            inits = sv[2]::Vector{Any}
+            if !isempty(inits)
+                unlock(require_lock) # temporarily _unlock_ during these callbacks
+                try
+                    for (i, mod) in pairs(inits)
+                        run_module_init(mod, i)
+                    end
+                finally
+                    lock(require_lock)
+                end
+            end
             if timing_imports
                 elapsed_time = time_ns() - t_before
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
@@ -1354,18 +1365,6 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     # Register this cache path now - If Requires.jl is loaded, Revise may end
     # up looking at the cache path during the init callback.
     get!(PkgOrigin, pkgorigins, pkg).cachepath = path
-
-    inits = sv[2]::Vector{Any}
-    if !isempty(inits)
-        unlock(require_lock) # temporarily _unlock_ during these callbacks
-        try
-            for (i, mod) in pairs(inits)
-                run_module_init(mod, i)
-            end
-        finally
-            lock(require_lock)
-        end
-    end
     return restored
 end
 
