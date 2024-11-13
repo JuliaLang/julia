@@ -2822,23 +2822,14 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 module IRShow
-    import ..Compiler
-    using Core.IR
-    import ..Base
-    import .Compiler: IRCode, CFG, scan_ssa_use!,
-        isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
-        VarState, InvalidIRError, argextype, widenconst, singleton_type,
-        sptypes_from_meth_instance, EMPTY_SPTYPES, InferenceState,
-        NativeInterpreter, CachedMethodTable, LimitedAccuracy, Timings
-
+    using ..Compiler: Compiler
     Base.include(IRShow, Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/ssair/show.jl"))
 
     const __debuginfo = Dict{Symbol, Any}(
         # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
         :source => src -> statementidx_lineinfo_printer(src),
         # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-        :none => src -> Base.IRShow.lineinfo_disabled,
+        :none => src -> lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
     debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
