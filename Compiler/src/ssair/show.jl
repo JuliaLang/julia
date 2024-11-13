@@ -3,10 +3,17 @@
 # This file is not loaded into `Core.Compiler` but rather loaded into the context of
 # `Base.IRShow` and thus does not participate in bootstrapping.
 
-@nospecialize
+using Base, Core.IR
 
-import Base: show_unquoted
-using Base: printstyled, with_output_color, prec_decl, @invoke
+import Base: show
+using Base: isexpr, prec_decl, show_unquoted, with_output_color
+using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_inst,
+    CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
+    EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
+    InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
+    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst
+
+@nospecialize
 
 function Base.show(io::IO, cfg::CFG)
     print(io, "CFG with $(length(cfg.blocks)) blocks:")
@@ -497,7 +504,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                 started::Bool = false
                 if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
-                    Base.with_output_color(linecolor, io) do io
+                    with_output_color(linecolor, io) do io
                         print(io, indent("│"))
                         print(io, "┌ invoke ", frame.method)
                         println(io)
@@ -505,7 +512,7 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                     started = true
                 end
                 print(io, linestart)
-                Base.with_output_color(linecolor, io) do io
+                with_output_color(linecolor, io) do io
                     print(io, indent("│"))
                     push!(context, frame)
                     if update_line_only
@@ -914,7 +921,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    maxssaid = length(ir.stmts) + Compiler.length(ir.new_nodes)
+    maxssaid = length(ir.stmts) + length(ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, ir, 1:length(ir.stmts), config, ir.sptypes, used, cfg, 1; pop_new_node!)
     end
@@ -971,13 +978,13 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         still_to_be_inserted = (last(input_bb.stmts) - compact.idx) + count
 
         result_bb = result_bbs[compact.active_result_bb]
-        result_bbs[compact.active_result_bb] = Compiler.BasicBlock(result_bb,
-            Compiler.StmtRange(first(result_bb.stmts), compact.result_idx+still_to_be_inserted))
+        result_bbs[compact.active_result_bb] = BasicBlock(result_bb,
+            StmtRange(first(result_bb.stmts), compact.result_idx+still_to_be_inserted))
     end
     compact_cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
 
     pop_new_node! = new_nodes_iter(compact)
-    maxssaid = length(compact.result) + Compiler.length(compact.new_new_nodes)
+    maxssaid = length(compact.result) + length(compact.new_new_nodes)
     bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact, 1:compact.result_idx-1, config, compact.ir.sptypes,
                       used_compacted, compact_cfg, 1; pop_new_node!)
@@ -998,8 +1005,8 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     inputs_bbs = copy(cfg.blocks)
     for (i, bb) in enumerate(inputs_bbs)
         if bb.stmts.stop < bb.stmts.start
-            inputs_bbs[i] = Compiler.BasicBlock(bb,
-                Compiler.StmtRange(last(bb.stmts), last(bb.stmts)))
+            inputs_bbs[i] = BasicBlock(bb,
+                StmtRange(last(bb.stmts), last(bb.stmts)))
             # this is not entirely correct, and will result in the bb starting again,
             # but is the best we can do without changing how `finish_current_bb!` works.
         end
@@ -1007,7 +1014,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     uncompacted_cfg = CFG(inputs_bbs, Int[first(inputs_bbs[i].stmts) for i in 2:length(inputs_bbs)])
 
     pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
-    maxssaid = length(compact.ir.stmts) + Compiler.length(compact.ir.new_nodes)
+    maxssaid = length(compact.ir.stmts) + length(compact.ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
         # first show any new nodes to be attached after the last compacted statement
         if compact.idx > 1
@@ -1071,13 +1078,12 @@ function Base.show(io::IO, e::Effects)
     print(io, ')')
 end
 
-
-function show(io::IO, inferred::Compiler.InferenceResult)
+function Base.show(io::IO, inferred::InferenceResult)
     mi = inferred.linfo
     tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
-    if isa(rettype, Compiler.InferenceState)
+    if isa(rettype, InferenceState)
         rettype = rettype.bestguess
     end
     if isa(mi.def, Method)
@@ -1102,9 +1108,8 @@ function Base.show(io::IO, limited::LimitedAccuracy)
     print(io, ", #= ", length(limited.causes), " cause(s) =#)")
 end
 
-
 # These sometimes show up as Const-values in InferenceFrameInfo signatures
-function show(io::IO, mi_info::Timings.InferenceFrameInfo)
+function Base.show(io::IO, mi_info::Timings.InferenceFrameInfo)
     mi = mi_info.mi
     def = mi.def
     if isa(def, Method)
@@ -1125,7 +1130,7 @@ function show(io::IO, mi_info::Timings.InferenceFrameInfo)
     end
 end
 
-function show(io::IO, tinf::Timings.Timing)
+function Base.show(io::IO, tinf::Timings.Timing)
     print(io, "Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 

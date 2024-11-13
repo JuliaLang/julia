@@ -169,15 +169,7 @@ include("reflection_interface.jl")
 
 if isdefined(Base, :IRShow)
     @eval module IRShow
-        import ..Compiler
-        using Core.IR
-        using ..Base
-        import .Compiler: IRCode, CFG, scan_ssa_use!,
-            isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-            Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
-            VarState, InvalidIRError, argextype, widenconst, singleton_type,
-            sptypes_from_meth_instance, EMPTY_SPTYPES, InferenceState,
-            NativeInterpreter, CachedMethodTable, LimitedAccuracy, Timings
+        using ..Compiler: Compiler
         # During bootstrap, Base will later include this into its own "IRShow module"
         Compiler.include(IRShow, "ssair/show.jl")
     end
