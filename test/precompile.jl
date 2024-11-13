@@ -2251,6 +2251,23 @@ precompile_test_harness("No package module") do load_path
         String(take!(io)))
 end
 
+precompile_test_harness("pkgdir eval during init") do load_path
+    srcpath = joinpath(load_path, "PkgdirDuringInit.jl")
+    write(srcpath,
+        """
+        module PkgdirDuringInit
+        x = nothing
+        function __init__()
+            global x
+            x = pkgdir(@__MODULE__)
+        end
+        end
+        """)
+    Base.compilecache(Base.PkgId("PkgdirDuringInit"))
+    @eval using PkgdirDuringInit
+    @test PkgdirDuringInit.x == srcpath
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
