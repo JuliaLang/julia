@@ -1340,7 +1340,7 @@ end
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]
     @test [0 t...; t... 0] == [0 1 2; 1 2 0]
-    @test_throws ArgumentError [t...; 3 4 5]
+    @test_throws DimensionMismatch [t...; 3 4 5]
 
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
