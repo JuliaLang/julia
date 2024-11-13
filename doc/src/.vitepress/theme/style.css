@@ -1,0 +1,227 @@
+@import url(https://fonts.googleapis.com/css?family=Space+Mono:regular,italic,700,700italic);
+@import url(https://fonts.googleapis.com/css?family=Space+Grotesk:regular,italic,700,700italic);
+
+/* Customize default theme styling by overriding CSS variables:
+https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
+ */
+
+  /* Layouts */
+
+/* 
+ :root {
+  --vp-layout-max-width: 1440px;
+} */
+
+.VPHero .clip {
+  white-space: pre;
+  max-width: 500px;
+}
+
+/* Fonts */
+
+:root {
+  /* Typography */
+  --vp-font-family-base: "Barlow", "Inter var experimental", "Inter var",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+
+  /* Code Snippet font */
+  --vp-font-family-mono: "Fira Code", Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+/* Colors */
+
+:root {
+  --julia-blue: #4063D8;
+  --julia-purple: #9558B2;
+  --julia-red: #CB3C33;
+  --julia-green: #389826;
+  --purple-lav: #9B82DB;
+
+--c-white-dark: #f8f8f8;
+  --c-black-darker: #0d121b;
+  --c-black: #111827;
+  --c-black-light: #161f32;
+  --c-black-lighter: #262a44;
+  --vp-c-brand: #4063D8;
+  --vp-c-brand-light: #4063D8;
+  --vp-c-brand-lighter: #3d6692;
+  --vp-c-brand-lightest: #bcc0ff;
+  --vp-c-brand-dark: #535bf2;
+  --vp-c-brand-darker: #454ce1;
+  --vp-c-brand-dimm: rgba(100, 108, 255, 0.08);
+
+  --c-text-dark-1: #d9e6eb;
+  --c-text-dark-2: #c4dde6;
+  --c-text-dark-3: #abc4cc;
+  --c-text-light-1: #2c3e50;
+  --c-text-light-2: #476582;
+  --c-text-light-3: #90a4b7;
+}
+
+ /* Component: Button */
+
+:root {
+  --vp-button-brand-border: var(--vp-c-brand-light);
+  --vp-button-brand-text: var(--vp-c-white);
+  --vp-button-brand-bg: var(--vp-c-brand);
+  --vp-button-brand-hover-border: var(--vp-c-brand-light);
+  --vp-button-brand-hover-text: var(--vp-c-white);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-light);
+  --vp-button-brand-active-border: var(--vp-c-brand-light);
+  --vp-button-brand-active-text: var(--vp-c-white);
+  --vp-button-brand-active-bg: var(--vp-button-brand-bg);
+}
+
+/* Component: Home */
+
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(
+    292deg,
+    var(--c-text-light-2) 50%,
+    var(--c-green-2)
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    45deg,
+    var(--julia-green) 35%,
+    var(--c-text-light-2) 35%
+  );
+  --vp-home-hero-image-filter: blur(40px);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
+}
+
+/* Component: Custom Block */
+
+:root.dark {
+  --vp-custom-block-tip-border: var(--vp-c-brand);
+  --vp-custom-block-tip-text: var(--vp-c-brand-lightest);
+  --vp-custom-block-tip-bg: var(--vp-c-brand-dimm);
+
+    /* // Tweak the color palette for blacks and dark grays */
+    --vp-c-black: hsl(220 20% 9%);
+    --vp-c-black-pure: hsl(220, 24%, 4%);
+    --vp-c-black-soft: hsl(220 16% 13%);
+    --vp-c-black-mute: hsl(220 14% 17%);
+    --vp-c-gray: hsl(220 8% 56%);
+    --vp-c-gray-dark-1: hsl(220 10% 39%);
+    --vp-c-gray-dark-2: hsl(220 12% 28%);
+    --vp-c-gray-dark-3: hsl(220 12% 23%);
+    --vp-c-gray-dark-4: hsl(220 14% 17%);
+    --vp-c-gray-dark-5: hsl(220 16% 13%);
+  
+    /* // Backgrounds */
+    /* --vp-c-bg: hsl(240, 2%, 11%); */
+    --vp-custom-block-info-bg: hsl(220 14% 17%);
+    /* --vp-c-gutter: hsl(220 20% 9%);
+
+    --vp-c-bg-alt: hsl(220 20% 9%);
+    --vp-c-bg-soft: hsl(220 14% 17%);
+    --vp-c-bg-mute: hsl(220 12% 23%);
+     */
+}
+
+ /* Component: Algolia */
+
+.DocSearch {
+  --docsearch-primary-color: var(--vp-c-brand) !important;
+}
+
+/* Component: MathJax */
+
+mjx-container > svg {
+  display: block;
+  margin: auto;
+}
+
+mjx-container {
+  padding: 0.5rem 0;
+}
+
+mjx-container {
+  display: inline-block;
+  margin: auto 2px -2px;
+}
+
+mjx-container > svg {
+  margin: auto;
+  display: inline-block;
+}
+
+/**
+/**
+ * Colors links
+ * -------------------------------------------------------------------------- */
+
+ :root {
+  --vp-c-brand-1: #0087d7;
+  --vp-c-brand-2: #0773b2;
+  --vp-c-brand-3: #347090;
+  --vp-c-sponsor: #ee4e95;
+  --vitest-c-sponsor-hover: #c13071;
+}
+
+.dark {
+  --vp-c-bg: var(--c-black);
+  --vp-c-bg-soft: var(--c-black-light);
+  --vp-c-bg-soft-up: var(--c-black-lighter);
+  --vp-c-bg-mute: var(--c-black-light);
+  --vp-c-bg-soft-mute: var(--c-black-lighter);
+  --vp-c-bg-alt: #0d121b;
+  --vp-c-bg-elv: var(--vp-c-bg-soft);
+  --vp-c-bg-elv-mute: var(--vp-c-bg-soft-mute);
+  --vp-c-mute: var(--vp-c-bg-mute);
+  --vp-c-mute-dark: var(--c-black-lighter);
+  --vp-c-mute-darker: var(--c-black-darker);
+  --vp-c-brand-1: var(--purple-lav);
+  --vp-c-brand-2: var(--julia-purple);
+  --vp-c-brand-3: var(--julia-purple);
+  --vp-c-sponsor: var(--julia-purple);
+  --vitest-c-sponsor-hover: #e51370;
+}
+
+
+.VPDoc.has-aside .content-container {
+  max-width: 100% !important;
+}
+.aside {
+  max-width: 200px !important;
+  padding-left: 0 !important;
+}
+.VPDoc {
+  padding-top: 15px !important;
+  padding-left: 5px !important;
+
+}
+/* This one does the right menu */
+
+.VPDocOutlineItem li {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.VPNavBar .title {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .VPDoc {
+    padding-left: 25px !important;  
+  }
+}

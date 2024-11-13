@@ -1,0 +1,17 @@
+{
+    "devDependencies": {
+        "markdown-it": "^14.1.0",
+        "markdown-it-mathjax3": "^4.3.2",
+        "vitepress": "^1.2.2",
+        "vitepress-plugin-tabs": "^0.5.0"
+    },
+    "scripts": {
+        "docs:dev": "vitepress dev _build/html/en/.documenter",
+        "docs:build": "vitepress build _build/html/en/.documenter",
+        "docs:preview": "vitepress preview _build/html/en/.documenter"
+    },
+    "dependencies": {
+        "@shikijs/transformers": "^1.1.7",
+        "markdown-it-footnote": "^4.0.0"
+    }
+}

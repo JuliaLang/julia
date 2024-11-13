@@ -2,7 +2,7 @@
 
 julia_version = "1.12.0-DEV"
 manifest_format = "2.0"
-project_hash = "1e9ffa7d4739f7d125a5e2c66af8747a8effd889"
+project_hash = "38e76f9ae2e42e494d7351ebe72607f73ee7d2af"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -48,6 +48,20 @@ deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", 
 git-tree-sha1 = "f15a91e6e3919055efa4f206f942a73fedf5dfe6"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.4.0"
+
+[[deps.DocumenterVitepress]]
+deps = ["ANSIColoredPrinters", "Base64", "DocStringExtensions", "Documenter", "IOCapture", "Markdown", "NodeJS_20_jll", "REPL"]
+git-tree-sha1 = "2a1474c0f28828869216f610413f28a668918467"
+repo-rev = "master"
+repo-url = "https://github.com/LuxDL/DocumenterVitepress.jl"
+uuid = "4710194d-e776-4893-9690-8d956a29c365"
+version = "0.1.2"
+
+    [deps.DocumenterVitepress.extensions]
+    DocumenterVitepressDocumenterCitationsExt = "DocumenterCitations"
+
+    [deps.DocumenterVitepress.weakdeps]
+    DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -99,6 +113,11 @@ git-tree-sha1 = "31e996f0a15c7b280ba9f76636b3ff9e2ae58c9a"
 uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 version = "0.21.4"
 
+[[deps.JuliaSyntaxHighlighting]]
+deps = ["StyledStrings"]
+uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
+version = "1.11.0"
+
 [[deps.LazilyInitializedFields]]
 git-tree-sha1 = "8f7f3cabab0fd1800699663533b6d5cb3fc0e612"
 uuid = "0e77f7df-68c5-4e49-93ce-4cd80f5598bf"
@@ -113,10 +132,6 @@ version = "0.6.4"
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll", "Zlib_jll", "nghttp2_jll"]
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
 version = "8.6.0+0"
-
-[[deps.JuliaSyntaxHighlighting]]
-deps = ["StyledStrings"]
-uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
 
 [[deps.LibGit2]]
 deps = ["LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
@@ -174,6 +189,12 @@ version = "2024.3.11"
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
+
+[[deps.NodeJS_20_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "0b1b4a83773cfdefa5d9dc0322e4c0624ce88b5b"
+uuid = "c7aee132-11e1-519c-8219-0a43005e73c2"
+version = "20.12.2+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
