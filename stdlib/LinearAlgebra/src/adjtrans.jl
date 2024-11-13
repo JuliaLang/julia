@@ -302,6 +302,16 @@ function Base.showarg(io::IO, v::Transpose, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
+function Base.show(io::IO, v::Adjoint{<:Real, <:AbstractVector})
+    print(io, "adjoint(")
+    show(io, parent(v))
+    print(io, ")")
+end
+function Base.show(io::IO, v::Transpose{<:Number, <:AbstractVector})
+    print(io, "transpose(")
+    show(io, parent(v))
+    print(io, ")")
+end
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
@@ -327,7 +337,6 @@ size(A::AdjOrTransAbsMat) = reverse(size(A.parent))
 axes(v::AdjOrTransAbsVec) = (axes(v.parent,2), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
-IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 @propagate_inbounds Base.isassigned(v::AdjOrTransAbsVec, i::Int) = isassigned(v.parent, i-1+first(axes(v.parent)[1]))
 @propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
@@ -465,7 +474,7 @@ tr(A::Transpose) = transpose(tr(parent(A)))
 function _dot_nonrecursive(u, v)
     lu = length(u)
     if lu != length(v)
-        throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
+        throw(DimensionMismatch(lazy"first array has length $(lu) which does not match the length of the second, $(length(v))."))
     end
     if lu == 0
         zero(eltype(u)) * zero(eltype(v))

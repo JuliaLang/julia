@@ -3,6 +3,9 @@
 using Base: findprevnot, findnextnot
 using Random, LinearAlgebra, Test
 
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
+
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
@@ -82,6 +85,25 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !isassigned(b, length(b) + 1)
 end
 
+@testset "trues and falses with custom axes" begin
+    for ax in ((SizedArrays.SOneTo(2),), (SizedArrays.SOneTo(2), Base.OneTo(2)))
+        t = trues(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test all(t)
+
+        f = falses(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test !any(f)
+    end
+end
 
 @testset "Conversions for size $sz" for (sz, T) in allsizes
     b1 = rand!(falses(sz...))
@@ -1335,11 +1357,11 @@ timesofar("find")
     @test findprev(b1, 777)  == findprevnot(b2, 777)  == findprev(!, b2, 777)  == 777
     @test findprev(b1, 776)  == findprevnot(b2, 776)  == findprev(!, b2, 776)  == 77
     @test findprev(b1, 77)   == findprevnot(b2, 77)   == findprev(!, b2, 77)   == 77
-    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   == nothing
-    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   == nothing
-    @test findprev(identity, b1, -1) == nothing
-    @test findprev(Returns(false), b1, -1) == nothing
-    @test findprev(Returns(true), b1, -1) == nothing
+    @test findprev(b1, 76)   == findprevnot(b2, 76)   == findprev(!, b2, 76)   === nothing
+    @test findprev(b1, -1)   == findprevnot(b2, -1)   == findprev(!, b2, -1)   === nothing
+    @test findprev(identity, b1, -1) === nothing
+    @test findprev(Returns(false), b1, -1) === nothing
+    @test findprev(Returns(true), b1, -1) === nothing
     @test_throws BoundsError findnext(b1, -1)
     @test_throws BoundsError findnextnot(b2, -1)
     @test_throws BoundsError findnext(!, b2, -1)
@@ -1350,28 +1372,28 @@ timesofar("find")
     @test findnext(b1, 77)   == findnextnot(b2, 77)   == findnext(!, b2, 77)   == 77
     @test findnext(b1, 78)   == findnextnot(b2, 78)   == findnext(!, b2, 78)   == 777
     @test findnext(b1, 777)  == findnextnot(b2, 777)  == findnext(!, b2, 777)  == 777
-    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  == nothing
-    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) == nothing
-    @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) == nothing
+    @test findnext(b1, 778)  == findnextnot(b2, 778)  == findnext(!, b2, 778)  === nothing
+    @test findnext(b1, 1001) == findnextnot(b2, 1001) == findnext(!, b2, 1001) === nothing
+    @test findnext(identity, b1, 1001) == findnext(Returns(false), b1, 1001) == findnext(Returns(true), b1, 1001) === nothing
 
     @test findlast(b1) == Base.findlastnot(b2) == 777
     @test findfirst(b1) == Base.findfirstnot(b2) == 77
 
     b0 = BitVector()
-    @test findprev(Returns(true), b0, -1) == nothing
+    @test findprev(Returns(true), b0, -1) === nothing
     @test_throws BoundsError findprev(Returns(true), b0, 1)
     @test_throws BoundsError findnext(Returns(true), b0, -1)
-    @test findnext(Returns(true), b0, 1) == nothing
+    @test findnext(Returns(true), b0, 1) === nothing
 
     b1 = falses(10)
     @test findprev(Returns(true), b1, 5) == 5
     @test findnext(Returns(true), b1, 5) == 5
-    @test findprev(Returns(true), b1, -1) == nothing
-    @test findnext(Returns(true), b1, 11) == nothing
-    @test findprev(Returns(false), b1, 5) == nothing
-    @test findnext(Returns(false), b1, 5) == nothing
-    @test findprev(Returns(false), b1, -1) == nothing
-    @test findnext(Returns(false), b1, 11) == nothing
+    @test findprev(Returns(true), b1, -1) === nothing
+    @test findnext(Returns(true), b1, 11) === nothing
+    @test findprev(Returns(false), b1, 5) === nothing
+    @test findnext(Returns(false), b1, 5) === nothing
+    @test findprev(Returns(false), b1, -1) === nothing
+    @test findnext(Returns(false), b1, 11) === nothing
     @test_throws BoundsError findprev(Returns(true), b1, 11)
     @test_throws BoundsError findnext(Returns(true), b1, -1)
 
@@ -1393,7 +1415,7 @@ timesofar("find")
     for l = [1, 63, 64, 65, 127, 128, 129]
         f = falses(l)
         t = trues(l)
-        @test findprev(f, l) == findprevnot(t, l) == nothing
+        @test findprev(f, l) == findprevnot(t, l) === nothing
         @test findprev(t, l) == findprevnot(f, l) == l
         b1 = falses(l)
         b1[end] = true

@@ -1,6 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be be loaded on top of either an existing system image built from
+# `Base_compiler.jl` or standalone, in which case we will build it now.
+let had_compiler = isdefined(Main, :Base)
+if had_compiler; else
+include("Base_compiler.jl")
+end
+
+Core.include(Base, "Base.jl")
+
+had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
+end
 
 using .Base
 
@@ -32,11 +42,7 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
+const include = Base.IncludeInto(Main)
 
 """
     eval(expr)
@@ -45,7 +51,7 @@ Evaluate an expression in the global scope of the containing module.
 Every `Module` (except those defined with `baremodule`) has its own 1-argument
 definition of `eval`, which evaluates expressions in that module.
 """
-eval(x) = Core.eval(Main, x)
+const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
@@ -68,22 +74,29 @@ let
 
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
-    stdlibs = [
-        # No dependencies
-        :FileWatching, # used by loading.jl -- implicit assumption that init runs
-        :Libdl, # Transitive through LinAlg
-        :Artifacts, # Transitive through LinAlg
-        :SHA, # transitive through Random
-        :Sockets, # used by stream.jl
+    if isdefined(Base.BuildSettings, :INCLUDE_STDLIBS)
+        # e.g. INCLUDE_STDLIBS = "FileWatching,Libdl,Artifacts,SHA,Sockets,LinearAlgebra,Random"
+        stdlibs = Symbol.(split(Base.BuildSettings.INCLUDE_STDLIBS, ","))
+    else
+        # TODO: this is included for compatibility with PackageCompiler, which looks for it.
+        # This should eventually be removed so we only use `BuildSettings`.
+        stdlibs = [
+            # No dependencies
+            :FileWatching, # used by loading.jl -- implicit assumption that init runs
+            :Libdl, # Transitive through LinAlg
+            :Artifacts, # Transitive through LinAlg
+            :SHA, # transitive through Random
+            :Sockets, # used by stream.jl
 
-        # Transitive through LingAlg
-        # OpenBLAS_jll
-        # libblastrampoline_jll
+            # Transitive through LingAlg
+            # OpenBLAS_jll
+            # libblastrampoline_jll
 
-        # 1-depth packages
-        :LinearAlgebra, # Commits type-piracy and GEMM
-        :Random, # Can't be removed due to rand being exported by Base
-    ]
+            # 1-depth packages
+            :LinearAlgebra, # Commits type-piracy and GEMM
+            :Random, # Can't be removed due to rand being exported by Base
+        ]
+    end
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
@@ -139,6 +152,7 @@ end
 
 empty!(Base.TOML_CACHE.d)
 Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+@eval Base BUILDROOT = ""
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

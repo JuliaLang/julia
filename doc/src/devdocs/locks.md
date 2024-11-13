@@ -71,18 +71,7 @@ The following is a level 5 lock
 
 The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 
->   * codegen
 >   * jl_modules_mutex
-
-The following is an almost root lock (level end-1), meaning only the root look may be held when
-trying to acquire it:
-
->   * typeinf
->
->     > this one is perhaps one of the most tricky ones, since type-inference can be invoked from many
->     > points
->     >
->     > currently the lock is merged with the codegen lock, since they call each other recursively
 
 The following lock synchronizes IO operation. Be aware that doing any I/O (for example,
 printing warning messages or debug information) while holding any other lock listed above
@@ -149,7 +138,7 @@ Module serializer : toplevel lock
 
 JIT & type-inference : codegen lock
 
-MethodInstance/CodeInstance updates : Method->writelock, codegen lock
+MethodInstance/CodeInstance updates : Method->writelock
 
 >   * These are set at construction and immutable:
 >       * specTypes
@@ -157,26 +146,9 @@ MethodInstance/CodeInstance updates : Method->writelock, codegen lock
 >       * def
 >       * owner
 
->   * These are set by `jl_type_infer` (while holding codegen lock):
->       * cache
->       * rettype
->       * inferred
-        * valid ages
-
->   * `inInference` flag:
->       * optimization to quickly avoid recurring into `jl_type_infer` while it is already running
->       * actual state (of setting `inferred`, then `fptr`) is protected by codegen lock
-
 >   * Function pointers:
->       * these transition once, from `NULL` to a value, while the codegen lock is held
+>       * these transition once, from `NULL` to a value, which is coordinated internal to the JIT
 >
->   * Code-generator cache (the contents of `functionObjectsDecls`):
->       * these can transition multiple times, but only while the codegen lock is held
->       * it is valid to use old version of this, or block for new versions of this, so races are benign,
->         as long as the code is careful not to reference other data in the method instance (such as `rettype`)
->         and assume it is coordinated, unless also holding the codegen lock
->
-LLVMContext : codegen lock
 
 Method : Method->writelock
 

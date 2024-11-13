@@ -1,0 +1,26 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.10.4"
+manifest_format = "2.0"
+project_hash = "ec25ff8df3a5e2212a173c3de2c7d716cc47cd36"
+
+[[deps.ExtDep]]
+deps = ["SomePackage", "SomeOtherPackage"]
+path = "../ExtDep.jl"
+uuid = "fa069be4-f60b-4d4c-8b95-f8008775090c"
+version = "0.1.0"
+
+[[deps.ExtDep2]]
+path = "../ExtDep2"
+uuid = "55982ee5-2ad5-4c40-8cfe-5e9e1b01500d"
+version = "0.1.0"
+
+[[deps.SomeOtherPackage]]
+path = "../SomeOtherPackage"
+uuid = "178f68a2-4498-45ee-a775-452b36359b63"
+version = "0.1.0"
+
+[[deps.SomePackage]]
+path = "../SomePackage"
+uuid = "678608ae-7bb3-42c7-98b1-82102067a3d8"
+version = "0.1.0"

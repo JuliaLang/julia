@@ -60,14 +60,14 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
  3. At the *Select Packages* step, select the following:
 
-    1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
-    2.  From the *Net* category: `curl`
-    3.  From *Interpreters* (or *Python*) category: `m4`, `python3`
-    4.  From the *Archive* category: `p7zip`
-    5.  For 32 bit Julia, and also from the *Devel* category:
-        `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
-    6.  For 64 bit Julia, and also from the *Devel* category:
-        `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
+    1. From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
+    2. From the *Net* category: `curl`
+    3. From *Interpreters* (or *Python*) category: `m4`, `python3`
+    4. From the *Archive* category: `p7zip`
+    5. For 32 bit Julia, and also from the *Devel* category:
+       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
+    6. For 64 bit Julia, and also from the *Devel* category:
+       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
     *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
@@ -208,7 +208,7 @@ done
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now
 [XQuartz](https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
-or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`, or `brew
+or [Homebrew](https://brew.sh/). Then run `port install wine wget mingw-w64`, or `brew
 install wine wget mingw-w64`, as appropriate.
 
 **Then run the build:**
@@ -259,14 +259,14 @@ Then run the resulting installer.
 ### GDB not attaching to the right process
 
  - Use the PID from the Windows task manager or `WINPID` from the `ps` command
-   instead of the PID from unix-style command line tools (e.g. `pgrep`).  You
+   instead of the PID from unix-style command line tools (e.g. `pgrep`). You
    may need to add the PID column if it is not shown by default in the Windows
    task manager.
 
 ### GDB not showing the right backtrace
 
  - When attaching to the julia process, GDB may not be attaching to the right
-   thread.  Use `info threads` command to show all the threads and
+   thread. Use `info threads` command to show all the threads and
    `thread <threadno>` to switch threads.
  - Be sure to use a 32 bit version of GDB to debug a 32 bit build of Julia, or
    a 64 bit version of GDB to debug a 64 bit build of Julia.

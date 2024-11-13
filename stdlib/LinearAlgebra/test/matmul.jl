@@ -30,6 +30,30 @@ mul_wrappers = [
     h(A) = LinearAlgebra.wrap(LinearAlgebra._unwrap(A), LinearAlgebra.wrapper_char(A))
     @test @inferred(h(transpose(A))) === transpose(A)
     @test @inferred(h(adjoint(A))) === transpose(A)
+
+    M = rand(2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === Symmetric(M)
+    end
+    M = rand(ComplexF64,2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === S
+    end
+
+    @testset "WrapperChar" begin
+        @test LinearAlgebra.WrapperChar('c') == 'c'
+        @test LinearAlgebra.WrapperChar('C') == 'C'
+        @testset "constant propagation in uppercase/lowercase" begin
+            v = @inferred (() -> Val(uppercase(LinearAlgebra.WrapperChar('C'))))()
+            @test v isa Val{'C'}
+            v = @inferred (() -> Val(uppercase(LinearAlgebra.WrapperChar('s'))))()
+            @test v isa Val{'S'}
+            v = @inferred (() -> Val(lowercase(LinearAlgebra.WrapperChar('C'))))()
+            @test v isa Val{'c'}
+            v = @inferred (() -> Val(lowercase(LinearAlgebra.WrapperChar('s'))))()
+            @test v isa Val{'s'}
+        end
+    end
 end
 
 @testset "matrices with zero dimensions" begin
@@ -184,6 +208,18 @@ end
         C .= C0 = rand(eltype(C), size(C))
         @test mul!(C, vf, transpose(vf), 2, 3) ≈ 2vf * vf' .+ 3C0
     end
+
+    @testset "zero stride" begin
+        for AAv in (view(AA, StepRangeLen(2,0,size(AA,1)), :),
+                    view(AA, StepRangeLen.(2,0,size(AA))...),
+                    view(complex.(AA, AA), StepRangeLen.(2,0,size(AA))...),)
+            for BB2 in (BB, complex.(BB, BB))
+                C = AAv * BB2
+                @test allequal(C)
+                @test C ≈ Array(AAv) * BB2
+            end
+        end
+    end
 end
 
 @testset "generic_matvecmul for vectors of vectors" begin
@@ -213,6 +249,18 @@ end
         @test v == Au
         mul!(v, A, u, 2, -1)
         @test v == Au
+    end
+end
+
+@testset "generic_matvecmul for vectors of matrices" begin
+    x = [1 2 3; 4 5 6]
+    A = reshape([x,2x,3x,4x],2,2)
+    b = [x, 2x]
+    for f in (adjoint, transpose)
+        c = f(A) * b
+        for i in eachindex(c)
+            @test c[i] == sum(f(A)[i, j] * b[j] for j in eachindex(b))
+        end
     end
 end
 
@@ -1058,7 +1106,8 @@ end
     end
 end
 
-@testset "Issue #46865: mul!() with non-const alpha, beta" begin
+#46865
+@testset "mul!() with non-const alpha, beta" begin
     f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
     alphas = [1.0]
     betas = [0.5]
@@ -1067,8 +1116,36 @@ end
         B = copy(A)
         C = copy(A)
         f!(C, A, B, alphas, betas)
-        @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
+        @test (@allocated f!(C, A, B, alphas, betas)) == 0
     end
+end
+
+@testset "vector-matrix multiplication" begin
+    a = [1,2]
+    A = reshape([1,2], 2, 1)
+    B = [1 2]
+    @test a * B ≈ A * B
+    B = reshape([1,2], 2, 1)
+    @test a * B' ≈ A * B'
+    @test a * transpose(B) ≈ A * transpose(B)
+end
+
+@testset "issue #56085" begin
+    struct Thing
+        data::Float64
+    end
+
+    Base.zero(::Type{Thing}) = Thing(0.)
+    Base.zero(::Thing)       = Thing(0.)
+    Base.one(::Type{Thing})  = Thing(1.)
+    Base.one(::Thing)        = Thing(1.)
+    Base.:+(t1::Thing, t::Thing...) = +(getfield.((t1, t...), :data)...)
+    Base.:*(t1::Thing, t::Thing...) = *(getfield.((t1, t...), :data)...)
+
+    M = Float64[1 2; 3 4]
+    A = Thing.(M)
+
+    @test A * A ≈ M * M
 end
 
 end # module TestMatmul

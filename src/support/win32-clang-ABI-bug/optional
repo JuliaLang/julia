@@ -23,6 +23,7 @@
 #include <new>
 #include <utility>
 #include <type_traits>
+#include "llvm-version.h"
 
 namespace std {
 
@@ -56,6 +57,15 @@ namespace optional_detail {
 //
 // The move constructible / assignable conditions emulate the remaining behavior
 // of std::is_trivially_copyable.
+#if JL_LLVM_VERSION >= 170000
+template <typename T,
+          bool = (std::is_trivially_copy_constructible<T>::value &&
+                  std::is_trivially_copy_assignable<T>::value &&
+                  (std::is_trivially_move_constructible<T>::value ||
+                   !std::is_move_constructible<T>::value) &&
+                  (std::is_trivially_move_assignable<T>::value ||
+                   !std::is_move_assignable<T>::value))>
+#else
 template <typename T,
           bool = (llvm::is_trivially_copy_constructible<T>::value &&
                   std::is_trivially_copy_assignable<T>::value &&
@@ -63,6 +73,7 @@ template <typename T,
                    !std::is_move_constructible<T>::value) &&
                   (std::is_trivially_move_assignable<T>::value ||
                    !std::is_move_assignable<T>::value))>
+#endif
 class OptionalStorage {
   union {
     char empty;

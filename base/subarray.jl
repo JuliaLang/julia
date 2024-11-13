@@ -115,11 +115,14 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
     copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
-    SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
+    indices = map(_trimmedindex, V.indices)
+    stride1 = LD ? compute_stride1(dest, indices) : 0
+    offset1 = LD ? compute_offset1(dest, stride1, indices) : 0
+    SubArray{T,N,A,I,LD}(dest, indices, offset1, stride1)
 end
 # Get the proper trimmed shape
 _trimmedshape(::ScalarIndex, rest...) = (1, _trimmedshape(rest...)...)
-_trimmedshape(i::AbstractRange, rest...) = (maximum(i), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractRange, rest...) = (isempty(i) ? zero(eltype(i)) : maximum(i), _trimmedshape(rest...)...)
 _trimmedshape(i::Union{UnitRange,StepRange,OneTo}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
@@ -214,10 +217,6 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::OneTo, r2::OneTo)
-    @_propagate_inbounds_meta
-    getindex(r1, r2)
-end
 function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
@@ -320,30 +319,15 @@ end
 
 # But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
+# We define a convenience functions to compute the shifted parent index
+# This differs from reindex as this accepts the view directly, instead of its indices
+@inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
+@inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i
+
 function getindex(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + V.stride1*i]
-    r
-end
-# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
-# or if all the indices are scalars, i.e. the view is for a single value only
-FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
-                                      Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
-function getindex(V::FastContiguousSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + i]
-    r
-end
-# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
-# so we may just forward the indexing to the parent
-# This may only be done for non-offset ranges, as the result would otherwise have offset axes
-const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
-function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 .+ i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
 
@@ -352,15 +336,47 @@ end
 function getindex(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + V.stride1*i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
-function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
+
+# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
+# or if all the indices are scalars, i.e. the view is for a single value only
+FastContiguousSubArray{T,N,P,I<:Union{Tuple{AbstractUnitRange, Vararg{Any}},
+                                      Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
+
+@inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
+@inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
+
+"""
+An internal type representing arrays stored contiguously in memory.
+"""
+const DenseArrayType{T,N} = Union{
+    DenseArray{T,N},
+    <:FastContiguousSubArray{T,N,<:DenseArray},
+}
+
+"""
+An internal type representing mutable arrays stored contiguously in memory.
+"""
+const MutableDenseArrayType{T,N} = Union{
+    Array{T, N},
+    Memory{T},
+    FastContiguousSubArray{T,N,<:Array},
+    FastContiguousSubArray{T,N,<:Memory}
+}
+
+# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
+# so we may just forward the indexing to the parent
+# This may only be done for non-offset ranges, as the result would otherwise have offset axes
+const _OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::_OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
+
 @inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
 # Indexed assignment follows the same pattern as `getindex` above
@@ -373,40 +389,23 @@ end
 function setindex!(V::FastSubArray, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-function setindex!(V::FastContiguousSubArray, x, i::Int)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + i] = x
-    V
-end
-function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ V.stride1 .* i] = x
-    V
-end
-function setindex!(V::FastContiguousSubArray, x, i::AbstractUnitRange{Int})
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i] = x
-    V
-end
-
 function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
+
+function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
+
 @inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)
 
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
@@ -418,30 +417,17 @@ end
 function isassigned(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
-end
-function isassigned(V::FastContiguousSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
-end
-function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
-IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent
@@ -451,7 +437,8 @@ substrides(strds::Tuple{}, ::Tuple{}) = ()
 substrides(strds::NTuple{N,Int}, I::Tuple{ScalarIndex, Vararg{Any}}) where N = (substrides(tail(strds), tail(I))...,)
 substrides(strds::NTuple{N,Int}, I::Tuple{Slice, Vararg{Any}}) where N = (first(strds), substrides(tail(strds), tail(I))...)
 substrides(strds::NTuple{N,Int}, I::Tuple{AbstractRange, Vararg{Any}}) where N = (first(strds)*step(I[1]), substrides(tail(strds), tail(I))...)
-substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
+substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(
+    LazyString("strides is invalid for SubArrays with indices of type ", typeof(I[1]))))
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
@@ -463,7 +450,7 @@ compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
     (@inline; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
-compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
+compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError(LazyString("invalid strided index type ", typeof(I[1]))))
 
 elsize(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 

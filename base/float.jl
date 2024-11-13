@@ -248,8 +248,6 @@ for t1 in (Float16, Float32, Float64)
     end
 end
 
-Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
-
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
@@ -463,6 +461,19 @@ round(x::IEEEFloat, ::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
+
+rounds_up(x, ::RoundingMode{:Down}) = false
+rounds_up(x, ::RoundingMode{:Up}) = true
+rounds_up(x, ::RoundingMode{:ToZero}) = signbit(x)
+rounds_up(x, ::RoundingMode{:FromZero}) = !signbit(x)
+function _round_convert(::Type{T}, x_integer, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
+    x_t = convert(T, x_integer)
+    if rounds_up(x, r)
+        x_t < x ? nextfloat(x_t) : x_t
+    else
+        x_t > x ? prevfloat(x_t) : x_t
+    end
+end
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32

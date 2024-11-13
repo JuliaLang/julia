@@ -1,12 +1,12 @@
 # Reporting and analyzing crashes (segfaults)
 
-So you managed to break Julia.  Congratulations!  Collected here are some general procedures you
-can undergo for common symptoms encountered when something goes awry.  Including the information
+So you managed to break Julia. Congratulations!  Collected here are some general procedures you
+can undergo for common symptoms encountered when something goes awry. Including the information
 from these debugging steps can greatly help the maintainers when tracking down a segfault or trying
 to figure out why your script is running slower than expected.
 
 If you've been directed to this page, find the symptom that best matches what you're experiencing
-and follow the instructions to generate the debugging information requested.  Table of symptoms:
+and follow the instructions to generate the debugging information requested. Table of symptoms:
 
   * [Segfaults during bootstrap (`sysimg.jl`)](@ref)
   * [Segfaults when running a script](@ref)
@@ -26,10 +26,10 @@ versioninfo()
 ## Segfaults during bootstrap (`sysimg.jl`)
 
 Segfaults toward the end of the `make` process of building Julia are a common symptom of something
-going wrong while Julia is preparsing the corpus of code in the `base/` folder.  Many factors
+going wrong while Julia is preparsing the corpus of code in the `base/` folder. Many factors
 can contribute toward this process dying unexpectedly, however it is as often as not due to an
 error in the C-code portion of Julia, and as such must typically be debugged with a debug build
-inside of `gdb`.  Explicitly:
+inside of `gdb`. Explicitly:
 
 Create a debug build of Julia:
 
@@ -40,7 +40,7 @@ $ make debug
 
 Note that this process will likely fail with the same error as a normal `make` incantation, however
 this will create a debug executable that will offer `gdb` the debugging symbols needed to get
-accurate backtraces.  Next, manually run the bootstrap process inside of `gdb`:
+accurate backtraces. Next, manually run the bootstrap process inside of `gdb`:
 
 ```
 $ cd base/
@@ -48,14 +48,14 @@ $ gdb -x ../contrib/debug_bootstrap.gdb
 ```
 
 This will start `gdb`, attempt to run the bootstrap process using the debug build of Julia, and
-print out a backtrace if (when) it segfaults.  You may need to hit `<enter>` a few times to get
-the full backtrace.  Create a [gist](https://gist.github.com) with the backtrace, the [version info](@ref dev-version-info),
+print out a backtrace if (when) it segfaults. You may need to hit `<enter>` a few times to get
+the full backtrace. Create a [gist](https://gist.github.com) with the backtrace, the [version info](@ref dev-version-info),
 and any other pertinent information you can think of and open a new [issue](https://github.com/JuliaLang/julia/issues?q=is%3Aopen)
 on Github with a link to the gist.
 
 ## Segfaults when running a script
 
-The procedure is very similar to [Segfaults during bootstrap (`sysimg.jl`)](@ref).  Create a debug
+The procedure is very similar to [Segfaults during bootstrap (`sysimg.jl`)](@ref). Create a debug
 build of Julia, and run your script inside of a debugged Julia process:
 
 ```
@@ -64,7 +64,7 @@ $ make debug
 $ gdb --args usr/bin/julia-debug <path_to_your_script>
 ```
 
-Note that `gdb` will sit there, waiting for instructions.  Type `r` to run the process, and `bt`
+Note that `gdb` will sit there, waiting for instructions. Type `r` to run the process, and `bt`
 to generate a backtrace once it segfaults:
 
 ```

@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
+// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -Xclang -verify -x c %s
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -328,7 +328,7 @@ void scopes() {
 jl_module_t *propagation(jl_module_t *m JL_PROPAGATES_ROOT);
 void module_member(jl_module_t *m)
 {
-    for(int i=(int)m->usings.len-1; i >= 0; --i) {
+    for(int i=(int)m->usings.len-1; i >= 0; i -= 3) {
       jl_module_t *imp = propagation(m);
       jl_gc_safepoint();
       look_at_value((jl_value_t*)imp);
