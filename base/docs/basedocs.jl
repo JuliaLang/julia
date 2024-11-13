@@ -2614,7 +2614,7 @@ ERROR: UndefVarError: `a` not defined in `M`
 Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
 Stacktrace:
  [1] getproperty(x::Module, f::Symbol)
-   @ Base ./Base.jl:42
+   @ Base ./Base_compiler.jl:40
  [2] top-level scope
    @ none:1
 

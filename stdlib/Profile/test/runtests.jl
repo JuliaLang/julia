@@ -95,6 +95,9 @@ for options in ((format=:tree, C=true),
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin

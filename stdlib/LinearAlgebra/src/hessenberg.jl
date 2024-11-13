@@ -77,6 +77,16 @@ Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
     return _istriu(A, k)
 end
+# additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
+@inline function _istriu(A::UpperHessenberg, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
+        Prows = @view P[max(begin, j - k + 1):min(j+1,end), j]
+        _iszero(Prows) || return false
+    end
+    return true
+end
 
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)

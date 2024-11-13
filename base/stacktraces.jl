@@ -124,7 +124,7 @@ end
 
 const top_level_scope_sym = Symbol("top-level scope")
 
-function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
+function lookup(ip::Base.InterpreterIP)
     code = ip.code
     if code === nothing
         # interpreted top-level expression with no CodeInfo
@@ -175,7 +175,7 @@ Return a stack trace in the form of a vector of `StackFrame`s. (By default stack
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
-Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Core.Compiler.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
+Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
     for ip in trace
         for frame in lookup(ip)

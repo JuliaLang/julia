@@ -400,6 +400,23 @@ If set to anything besides `0`, then Julia's thread policy is consistent with
 running on a dedicated machine: the master thread is on proc 0, and threads are
 affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
+## Garbage Collection
+
+### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
+
+Environment variable equivalent to the `--heap-size-hint=<size>[<unit>]` command line option.
+
+Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
+
+    - B  (bytes)
+    - K  (kibibytes)
+    - M  (mebibytes)
+    - G  (gibibytes)
+    - T  (tebibytes)
+    - %  (percentage of physical memory)
+
+For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
+
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
