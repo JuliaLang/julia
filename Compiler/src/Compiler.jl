@@ -6,13 +6,13 @@
 # the system image and simply returns that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
 if isdefined(Base, :generating_output) && Base.generating_output(true) &&
-        Base.samefile(Base._compiler_require_dependencies[1][2], @eval @__FILE__) &&
+        Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
         !Base.any_includes_stale(
-            map(Base.CacheHeaderIncludes, Base._compiler_require_dependencies),
+            map(Base.compiler_chi, Base._compiler_require_dependencies),
             "sysimg", nothing)
 
     Base.prepare_compiler_stub_image!()
-    append!(Base._require_dependencies, Base._compiler_require_dependencies)
+    append!(Base._require_dependencies, map(Base.expand_compiler_path, Base._compiler_require_dependencies))
     # There isn't much point in precompiling native code - downstream users will
     # specialize their own versions of the compiler code and we don't activate
     # the compiler by default anyway, so let's save ourselves some disk space.

@@ -3938,6 +3938,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         size_t len = jl_array_nrows(*restored);
         assert(len > 0);
         jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        // Ordinarily set during deserialization, but our compiler stub image,
+        // just returns a reference to the sysimage version, so we set it here.
+        topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
         arraylist_push(&jl_top_mods, (void*)topmod);
     }

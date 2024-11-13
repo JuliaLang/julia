@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Core.IR
 using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
 using Base.Meta: isexpr
