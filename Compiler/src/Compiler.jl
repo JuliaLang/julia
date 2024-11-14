@@ -180,7 +180,7 @@ include("optimize.jl")
 include("bootstrap.jl")
 include("reflection_interface.jl")
 
-if isdefined(Base, :IRShow)
+if isdefined(Base, :end_base_include)
     @eval module IRShow
         using ..Compiler: Compiler
         # During bootstrap, Base will later include this into its own "IRShow module"
