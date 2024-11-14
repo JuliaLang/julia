@@ -306,7 +306,7 @@ Random.seed!(1)
                         b = bb
                         c = cc
                     else
-                        b = view(bb, 1:n)
+                        b = view(bb, 1:n, 1:1)
                         c = view(cc, 1:n, 1:2)
                     end
                 end
