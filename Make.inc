@@ -1068,6 +1068,7 @@ endif
 # If we are running on riscv64, set certain options automatically
 ifneq (,$(findstring riscv64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=1
+BINARY:=64
 endif
 
 # Set MARCH-specific flags
