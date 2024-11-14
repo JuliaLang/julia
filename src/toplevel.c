@@ -607,7 +607,8 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_const_sym ||
          ((jl_expr_t*)e)->head == jl_toplevel_sym ||
          ((jl_expr_t*)e)->head == jl_error_sym ||
-         ((jl_expr_t*)e)->head == jl_incomplete_sym);
+         ((jl_expr_t*)e)->head == jl_incomplete_sym ||
+         ((jl_expr_t*)e)->head == jl_latestworld_sym);
 }
 
 int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
@@ -1288,6 +1289,21 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
     strcpy(path + sz + 1, fstr);
     return jl_cstr_to_string(path);
 }
+
+JL_DLLEXPORT jl_value_t *jl_prepend_string(jl_value_t *prefix, jl_value_t *str)
+{
+    char path[1024];
+    const char *pstr = (const char*)jl_string_data(prefix);
+    size_t sz = strlen(pstr);
+    const char *fstr = (const char*)jl_string_data(str);
+    if (strlen(fstr) + sz >= sizeof(path)) {
+        jl_errorf("use a bigger buffer for jl_fullpath");
+    }
+    strcpy(path, pstr);
+    strcpy(path + sz, fstr);
+    return jl_cstr_to_string(path);
+}
+
 
 #ifdef __cplusplus
 }

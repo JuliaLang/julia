@@ -1707,7 +1707,7 @@ ErrorException
 """
     FieldError(type::DataType, field::Symbol)
 
-An operation tried to access invalid `field` of `type`.
+An operation tried to access invalid `field` on an object of `type`.
 
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
@@ -2614,7 +2614,7 @@ ERROR: UndefVarError: `a` not defined in `M`
 Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
 Stacktrace:
  [1] getproperty(x::Module, f::Symbol)
-   @ Base ./Base.jl:42
+   @ Base ./Base_compiler.jl:40
  [2] top-level scope
    @ none:1
 

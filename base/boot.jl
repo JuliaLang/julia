@@ -271,6 +271,8 @@ macro nospecialize(x)
 end
 Expr(@nospecialize args...) = _expr(args...)
 
+macro latestworld() Expr(:latestworld) end
+
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
@@ -512,7 +514,6 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
@@ -984,6 +985,14 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+# During definition of struct type `B`, if an `A.B` expression refers to
+# the eventual global name of the struct, then return the partially-initialized
+# type object.
+# TODO: remove. This is a shim for backwards compatibility.
+function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecialize(t))
+    return x === mod ? t : getfield(x, name)
+end
 
 # Binding for the julia parser, called as
 #

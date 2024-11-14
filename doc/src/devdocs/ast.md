@@ -501,9 +501,9 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The number of required arguments for a varargs function definition.
 
-      * `args[5]::QuoteNode{Symbol}` : calling convention
+      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}}`: calling convention
 
-        The calling convention for the call.
+        The calling convention for the call, optionally with effects.
 
       * `args[6:5+length(args[3])]` : arguments
 

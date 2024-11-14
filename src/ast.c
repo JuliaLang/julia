@@ -119,6 +119,7 @@ JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
+JL_DLLEXPORT jl_sym_t *jl_latestworld_sym;
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -461,6 +462,7 @@ void jl_init_common_symbols(void)
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
     jl_uninferred_sym = jl_symbol("uninferred");
+    jl_latestworld_sym = jl_symbol("latestworld");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
