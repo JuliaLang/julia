@@ -974,7 +974,7 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
         if (*maxworld != 0)
             jl_atomic_store_relaxed(&child->min_world, *minworld);
         jl_atomic_store_relaxed(&child->max_world, *maxworld);
-        void **bp = ptrhash_bp(visiting, codeinst);
+        void **bp = ptrhash_bp(visiting, child);
         assert(*bp == (char*)HT_NOTFOUND + stack->len + 1);
         *bp = HT_NOTFOUND;
         if (_jl_debug_method_invalidation && *maxworld < current_world) {
