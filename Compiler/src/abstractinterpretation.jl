@@ -583,14 +583,6 @@ function abstract_call_method(interp::AbstractInterpreter,
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
-                if call_result_unused(si)
-                    add_remark!(interp, sv, RECURSION_UNUSED_MSG)
-                    # since we don't use the result (typically),
-                    # we have a self-cycle in the call-graph, but not in the inference graph (typically):
-                    # break this edge now (before we record it) by returning early
-                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
-                end
                 topmost = nothing
                 edgecycle = true
                 break
