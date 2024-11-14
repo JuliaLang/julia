@@ -528,7 +528,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
                 i += 2
                 continue
             elseif isa(callee, CodeInstance)
-                callee = callee.def
+                callee = get_ci_mi(callee)
             end
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
             i += 2

@@ -379,7 +379,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                 jl_init_function(proto.decl, params.TargetTriple);
                 // TODO: maybe this can be cached in codeinst->specfptr?
                 int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
-                jl_method_instance_t *mi = codeinst->def;
+                jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
                 size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
                 bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
                 emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke);
@@ -569,7 +569,7 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             jl_ExecutionEngine->addModule(std::move(TSM)); // may safepoint
             // If logging of the compilation stream is enabled,
             // then dump the method-instance specialization type to the stream
-            jl_method_instance_t *mi = codeinst->def;
+            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             if (jl_is_method(mi->def.method)) {
                 auto stream = *jl_ExecutionEngine->get_dump_compiles_stream();
                 if (stream) {
@@ -690,7 +690,7 @@ static void jl_emit_codeinst_to_jit(
     params.cache = true;
     params.imaging_mode = imaging_default();
     orc::ThreadSafeModule result_m =
-        jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.DL, params.TargetTriple);
+        jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)), params.tsctx, params.DL, params.TargetTriple);
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH1(&params.temporary_roots);
     jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
@@ -698,7 +698,7 @@ static void jl_emit_codeinst_to_jit(
         JL_GC_POP();
         return;
     }
-    jl_optimize_roots(params, codeinst->def, *result_m.getModuleUnlocked()); // contains safepoints
+    jl_optimize_roots(params, jl_get_ci_mi(codeinst), *result_m.getModuleUnlocked()); // contains safepoints
     params.temporary_roots = nullptr;
     JL_GC_POP();
     { // drop lock before acquiring engine_lock
@@ -922,14 +922,14 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         compiler_start_time = jl_hrtime();
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    jl_method_t *def = unspec->def->def.method;
+    jl_method_t *def = jl_get_ci_mi(unspec)->def.method;
     if (jl_is_method(def)) {
         src = (jl_code_info_t*)def->source;
         if (src && (jl_value_t*)src != jl_nothing)
             src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
     }
     else {
-        jl_method_instance_t *mi = unspec->def;
+        jl_method_instance_t *mi = jl_get_ci_mi(unspec);
         jl_code_instance_t *uninferred = jl_cached_uninferred(
             jl_atomic_load_relaxed(&mi->cache), 1);
         assert(uninferred);
@@ -2234,7 +2234,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl
         else {
             stream_fname << "jlsys_";
         }
-        const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
+        const char* unadorned_name = jl_symbol_name(jl_get_ci_mi(codeinst)->def.method->name);
         stream_fname << unadorned_name << "_" << RLST_inc++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
