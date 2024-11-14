@@ -707,7 +707,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) --project=$(Base.active_project()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
