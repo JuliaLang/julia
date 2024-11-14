@@ -1618,6 +1618,9 @@ end
     finally
         oldBase64 === nothing || Base.register_root_module(oldBase64)
         copy!(DEPOT_PATH, original_depot_path)
-        rm(depot_path, force=true, recursive=true)
+        try # don't error if removing depot failed
+            rm(depot_path, force=true, recursive=true)
+        catch
+        end
     end
 end
