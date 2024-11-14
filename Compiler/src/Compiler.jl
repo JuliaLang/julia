@@ -1,15 +1,28 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if isdefined(Base, :end_base_include) && !isdefined(Base, :Compiler)
+
+# Define a dummy `Compiler` module to make it installable even on Julia versions where
+# Compiler.jl is not available as a standard library.
+@eval module Compiler
+    function __init__()
+        println("""
+        The `Compiler` standard library is not available for this version of Julia.
+        Use Julia version `v"1.12.0-DEV.1581"` or later.
+        """)
+    end
+end
+
 # When generating an incremental precompile file, we first check whether we
 # already have a copy of this *exact* code in the system image. If so, we
 # simply generates a pkgimage that has the dependency edges we recorded in
 # the system image and simply returns that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
-if isdefined(Base, :generating_output) && Base.generating_output(true) &&
+elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
         Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
         !Base.any_includes_stale(
             map(Base.compiler_chi, Base._compiler_require_dependencies),
-            "sysimg", nothing)
+            "sysimg", nothing))
 
     Base.prepare_compiler_stub_image!()
     append!(Base._require_dependencies, map(Base.expand_compiler_path, Base._compiler_require_dependencies))
@@ -167,12 +180,12 @@ include("optimize.jl")
 include("bootstrap.jl")
 include("reflection_interface.jl")
 
-if isdefined(Base, :IRShow)
-    @eval module IRShow
-        using ..Compiler: Compiler
-        # During bootstrap, Base will later include this into its own "IRShow module"
-        Compiler.include(IRShow, "ssair/show.jl")
-    end
+module IRShow end
+if !isdefined(Base, :end_base_include)
+    # During bootstrap, skip including this file and defer it to base/show.jl to include later
+else
+    # When this module is loaded as the standard library, include this file as usual
+    include(IRShow, "ssair/show.jl")
 end
 
 end # baremodule Compiler
