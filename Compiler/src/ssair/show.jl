@@ -1135,3 +1135,12 @@ function Base.show(io::IO, tinf::Timings.Timing)
 end
 
 @specialize
+
+const __debuginfo = Dict{Symbol, Any}(
+    # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
+    :source => src -> statementidx_lineinfo_printer(src),
+    # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
+    :none => src -> lineinfo_disabled,
+    )
+const default_debuginfo = Ref{Symbol}(:none)
+debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
