@@ -180,12 +180,12 @@ include("optimize.jl")
 include("bootstrap.jl")
 include("reflection_interface.jl")
 
-if isdefined(Base, :end_base_include)
-    @eval module IRShow
-        using ..Compiler: Compiler
-        # During bootstrap, Base will later include this into its own "IRShow module"
-        Compiler.include(IRShow, "ssair/show.jl")
-    end
+module IRShow end
+if !isdefined(Base, :end_base_include)
+    # During bootstrap, skip including this file and defer it to base/show.jl to include later
+else
+    # When this module is loaded as the standard library, include this file as usual
+    include(IRShow, "ssair/show.jl")
 end
 
 end # baremodule Compiler

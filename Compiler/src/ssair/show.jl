@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This file is not loaded into `Core.Compiler` but rather loaded into the context of
-# `Base.IRShow` and thus does not participate in bootstrapping.
+# This file does not participate in bootstrapping, but is included in the system image by
+# being loaded from `base/show.jl`. Compiler.jl as the standard library will simply include
+# this file in the context of `Compiler.IRShow`.
 
 using Base, Core.IR
 
