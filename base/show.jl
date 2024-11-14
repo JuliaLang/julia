@@ -1353,7 +1353,13 @@ end
 show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
-    show_mi(io, codeinst.def)
+    def = codeinst.def
+    if isa(def, Core.ABIOverride)
+        show_mi(io, def.def)
+        print(io, " (ABI Overridden)")
+    else
+        show_mi(io, def::MethodInstance)
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)

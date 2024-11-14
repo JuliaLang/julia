@@ -915,7 +915,7 @@ precompile_test_harness("code caching") do dir
             # external callers
             mods = Module[]
             for be in mi.backedges
-                push!(mods, (be.def.def::Method).module) # XXX
+                push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
             end
             @test MA ∈ mods
             @test MB ∈ mods
@@ -1837,7 +1837,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
     @test new_ext_cis === nothing || any(new_ext_cis) do ci
-        mi = ci.def
+        mi = ci.def::Core.MethodInstance
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
