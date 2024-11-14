@@ -207,14 +207,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         rettype = from_interprocedural!(interp, rettype, sv, arginfo, conditionals)
 
         # Also considering inferring the compilation signature for this method, so
-        # it is available to the compiler in case it ends up needing it for the invoke.
+        # it is available to the compiler, unless it should not end up needing it (for an invoke).
         if (isa(sv, InferenceState) && infer_compilation_signature(interp) &&
-            (seenall && 1 == napplicable) && !is_removable_if_unused(all_effects))
+            (seenall && 1 == napplicable) && (!is_removable_if_unused(all_effects) || !call_result_unused(si)))
             (; match) = applicable[1]
             method = match.method
             sig = match.spec_types
             mi = specialize_method(match; preexisting=true)
-            if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
+            if mi === nothing || !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
                 csig = get_compileable_sig(method, sig, match.sparams)
                 if csig !== nothing && csig !== sig
                     abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)::Future
