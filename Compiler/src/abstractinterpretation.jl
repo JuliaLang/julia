@@ -2637,6 +2637,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
     hasintersect(sig, ocsig) || return Future(CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo()))
     ocmethod = closure.source::Method
+    if !isdefined(ocmethod, :source)
+        # This opaque closure was created from optimized source. We cannot infer it further.
+        ocrt = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[2], tt)
+        if isa(ocrt, DataType)
+            return Future(CallMeta(ocrt, Any, Effects(), NoCallInfo()))
+        end
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
