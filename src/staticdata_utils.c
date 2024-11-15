@@ -505,13 +505,18 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage)
     return checksumpos;
 }
 
+static int is_serialization_root_module(jl_module_t *mod) JL_NOTSAFEPOINT
+{
+    return mod->parent == jl_main_module || mod->parent == jl_base_module || mod->parent == mod;
+}
+
 // serialize information about the result of deserializing this file
 static void write_worklist_for_header(ios_t *s, jl_array_t *worklist)
 {
     int i, l = jl_array_nrows(worklist);
     for (i = 0; i < l; i++) {
         jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
-        if (workmod->parent == jl_main_module || workmod->parent == workmod) {
+        if (is_serialization_root_module(workmod)) {
             size_t l = strlen(jl_symbol_name(workmod->name));
             write_int32(s, l);
             ios_write(s, jl_symbol_name(workmod->name), l);
@@ -525,7 +530,7 @@ static void write_worklist_for_header(ios_t *s, jl_array_t *worklist)
 
 static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
 {
-    if (depmod->parent == jl_main_module || depmod->parent == depmod)
+    if (is_serialization_root_module(depmod))
         return;
     const char *mname = jl_symbol_name(depmod->name);
     size_t slen = strlen(mname);
@@ -603,13 +608,13 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
-        while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
+        while (!is_serialization_root_module(depmod_top))
             depmod_top = depmod_top->parent;
         unsigned provides = 0;
         size_t j, lj = jl_array_nrows(worklist);
         for (j = 0; j < lj; j++) {
             jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(worklist, j);
-            if (workmod->parent == jl_main_module || workmod->parent == workmod) {
+            if (is_serialization_root_module(workmod)) {
                 ++provides;
                 if (workmod == depmod_top) {
                     write_int32(s, provides);

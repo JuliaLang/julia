@@ -207,14 +207,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         rettype = from_interprocedural!(interp, rettype, sv, arginfo, conditionals)
 
         # Also considering inferring the compilation signature for this method, so
-        # it is available to the compiler in case it ends up needing it for the invoke.
+        # it is available to the compiler, unless it should not end up needing it (for an invoke).
         if (isa(sv, InferenceState) && infer_compilation_signature(interp) &&
-            (seenall && 1 == napplicable) && !is_removable_if_unused(all_effects))
+            (seenall && 1 == napplicable) && (!is_removable_if_unused(all_effects) || !call_result_unused(si)))
             (; match) = applicable[1]
             method = match.method
             sig = match.spec_types
             mi = specialize_method(match; preexisting=true)
-            if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
+            if mi === nothing || !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
                 csig = get_compileable_sig(method, sig, match.sparams)
                 if csig !== nothing && csig !== sig
                     abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)::Future
@@ -583,14 +583,6 @@ function abstract_call_method(interp::AbstractInterpreter,
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
-                if call_result_unused(si)
-                    add_remark!(interp, sv, RECURSION_UNUSED_MSG)
-                    # since we don't use the result (typically),
-                    # we have a self-cycle in the call-graph, but not in the inference graph (typically):
-                    # break this edge now (before we record it) by returning early
-                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
-                end
                 topmost = nothing
                 edgecycle = true
                 break
@@ -2190,23 +2182,26 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds = findsup(lookupsig, method_table(interp))
-    match === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    matched, valid_worlds = findsup(lookupsig, method_table(interp))
+    matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     update_valid_age!(sv, valid_worlds)
-    method = match.method
+    method = matched.method
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
+    ft′_box = Core.Box(ft′)
+    lookupsig_box = Core.Box(lookupsig)
+    invokecall = InvokeCall(types, lookupsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
-        res = nothing
+        local ft′ = ft′_box.contents
         sig = match.spec_types
-        argtypes′ = invoke_rewrite(argtypes)
+        argtypes′ = invoke_rewrite(arginfo.argtypes)
         fargs = arginfo.fargs
         fargs′ = fargs === nothing ? nothing : invoke_rewrite(fargs)
-        arginfo = ArgInfo(fargs′, argtypes′)
+        arginfo′ = ArgInfo(fargs′, argtypes′)
         # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
         # for i in 1:length(argtypes′)
         #     t, a = ti.parameters[i], argtypes′[i]
@@ -2215,9 +2210,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         f = singleton_type(ft′)
-        invokecall = InvokeCall(types, lookupsig)
         const_call_result = abstract_call_method_with_const_args(interp,
-            result, f, arginfo, si, match, sv, invokecall)
+            result, f, arginfo′, si, match, sv, invokecall)
         const_result = volatile_inf_result
         if const_call_result !== nothing
             const_edge = nothing
@@ -2231,8 +2225,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 edge = const_edge
             end
         end
-        rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-        info = InvokeCallInfo(edge, match, const_result, lookupsig)
+        rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
+        info = InvokeCallInfo(edge, match, const_result, lookupsig_box.contents)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -2637,6 +2631,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
     hasintersect(sig, ocsig) || return Future(CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo()))
     ocmethod = closure.source::Method
+    if !isdefined(ocmethod, :source)
+        # This opaque closure was created from optimized source. We cannot infer it further.
+        ocrt = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[2], tt)
+        if isa(ocrt, DataType)
+            return Future(CallMeta(ocrt, Any, Effects(), NoCallInfo()))
+        end
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
