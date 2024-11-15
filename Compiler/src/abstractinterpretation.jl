@@ -2202,27 +2202,26 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds = findsup(lookupsig, method_table(interp))
-    match === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    matched, valid_worlds = findsup(lookupsig, method_table(interp))
+    matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     update_valid_age!(sv, valid_worlds)
-    method = match.method
+    method = matched.method
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
-    ft_box = Core.Box(ft)
     ft′_box = Core.Box(ft′)
+    lookupsig_box = Core.Box(lookupsig)
+    invokecall = InvokeCall(types, lookupsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
-        local argtypes = arginfo.argtypes
-        local ft = ft_box.contents
         local ft′ = ft′_box.contents
         sig = match.spec_types
-        argtypes′ = invoke_rewrite(argtypes)
+        argtypes′ = invoke_rewrite(arginfo.argtypes)
         fargs = arginfo.fargs
         fargs′ = fargs === nothing ? nothing : invoke_rewrite(fargs)
-        arginfo = ArgInfo(fargs′, argtypes′)
+        arginfo′ = ArgInfo(fargs′, argtypes′)
         # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
         # for i in 1:length(argtypes′)
         #     t, a = ti.parameters[i], argtypes′[i]
@@ -2231,9 +2230,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         f = singleton_type(ft′)
-        invokecall = InvokeCall(types, lookupsig)
         const_call_result = abstract_call_method_with_const_args(interp,
-            result, f, arginfo, si, match, sv, invokecall)
+            result, f, arginfo′, si, match, sv, invokecall)
         const_result = volatile_inf_result
         if const_call_result !== nothing
             const_edge = nothing
@@ -2247,8 +2245,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 edge = const_edge
             end
         end
-        rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-        info = InvokeCallInfo(edge, match, const_result, lookupsig)
+        rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
+        info = InvokeCallInfo(edge, match, const_result, lookupsig_box.contents)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
