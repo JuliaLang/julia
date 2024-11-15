@@ -2252,7 +2252,9 @@ precompile_test_harness("No package module") do load_path
 end
 
 precompile_test_harness("pkgdir eval during init") do load_path
-    srcpath = joinpath(load_path, "src", "PkgdirDuringInit.jl")
+    pkg_dir = joinpath(load_path, "PkgdirDuringInit")
+    mkpath(joinpath(pkg_dir, "src"))
+    srcpath = joinpath(pkg_dir, "src", "PkgdirDuringInit.jl")
     write(srcpath,
         """
         module PkgdirDuringInit
@@ -2261,11 +2263,11 @@ precompile_test_harness("pkgdir eval during init") do load_path
             global x
             x = pkgdir(@__MODULE__)
         end
-        end
+        end #module
         """)
     Base.compilecache(Base.PkgId("PkgdirDuringInit"))
     @eval using PkgdirDuringInit
-    @test PkgdirDuringInit.x == srcpath
+    @test PkgdirDuringInit.x == pkg_dir
 end
 
 empty!(Base.DEPOT_PATH)
