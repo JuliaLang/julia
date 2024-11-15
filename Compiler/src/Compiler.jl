@@ -179,6 +179,7 @@ include("optimize.jl")
 
 include("bootstrap.jl")
 include("reflection_interface.jl")
+include("opaque_closure.jl")
 
 module IRShow end
 if !isdefined(Base, :end_base_include)
