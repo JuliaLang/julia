@@ -47,7 +47,10 @@ using .Main.OffsetArrays
         @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
     end
 
-    @test 1:π:100 isa StepRangeLen{Float64}
+    @test Float16(1):π:100 isa StepRangeLen{Float16,Float64,Float64,Int}
+    @test 1:π:100 isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64},Int}
+    @test length(1:π:-1) == 0
+    @test length(1:π:1) == 1
 
     @test first(10:3) === 10
     @test last(10:3) === 9
