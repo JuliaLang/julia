@@ -69,9 +69,8 @@
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
 
-    a = Base.AnnotatedString("hello", :label => 1)
-    b = Base.AnnotatedString("hello", [(1:5, :label, 1)])
-    @test a == b
+    a = Base.AnnotatedString("hello", [(1:5, :label, 1)])
+    @test first(a) == Base.AnnotatedChar('h', [(:label, 1)])
 end
 
 @testset "AnnotatedChar" begin
@@ -88,10 +87,6 @@ end
     @test str[1] == Base.AnnotatedChar('h', [(:attr, "h0h0")])
     @test str[2] == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
     @test str[3] == Base.AnnotatedChar('m', [(:attr, "m1m2")])
-
-    a = Base.AnnotatedChar('h' , :label => 1)
-    b = Base.AnnotatedChar('h', [(1:1, :label, 1)])
-    @test a == b
 end
 
 @testset "Styling preservation" begin
