@@ -587,6 +587,7 @@ typedef enum {
     JL_API_BOXED,
     JL_API_CONST,
     JL_API_WITH_PARAMETERS,
+    JL_API_OC_CALL,
     JL_API_INTERPRETED,
     JL_API_BUILTIN,
     JL_API_MAX
@@ -1797,6 +1798,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 else if (invokeptr_id == -2) {
                                     fptr_id = JL_API_WITH_PARAMETERS;
                                 }
+                                else if (invokeptr_id == -3) {
+                                    abort();
+                                }
+                                else if (invokeptr_id == -4) {
+                                    fptr_id = JL_API_OC_CALL;
+                                }
                                 else {
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
@@ -2033,10 +2040,14 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         case JL_API_BOXED:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
-            JL_FALLTHROUGH;
+            return (uintptr_t)NULL;
         case JL_API_WITH_PARAMETERS:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
+            return (uintptr_t)NULL;
+        case JL_API_OC_CALL:
+            if (s->image->fptrs.nptrs)
+                return (uintptr_t)jl_f_opaque_closure_call;
             return (uintptr_t)NULL;
         case JL_API_CONST:
             return (uintptr_t)jl_fptr_const_return;

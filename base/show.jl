@@ -2821,19 +2821,8 @@ function show(io::IO, vm::Core.TypeofVararg)
     end
 end
 
-module IRShow
-    using ..Compiler: Compiler
-    Base.include(IRShow, Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/ssair/show.jl"))
-
-    const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
-        :source => src -> statementidx_lineinfo_printer(src),
-        # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-        :none => src -> lineinfo_disabled,
-        )
-    const default_debuginfo = Ref{Symbol}(:none)
-    debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
-end
+Compiler.include(Compiler.IRShow, "ssair/show.jl") # define `show` for the compiler types
+const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body

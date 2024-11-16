@@ -4114,7 +4114,7 @@ callsig_backprop_any(::Any) = nothing
 callsig_backprop_lhs(::Int) = nothing
 callsig_backprop_bailout(::Val{0}) = 0
 callsig_backprop_bailout(::Val{1}) = undefvar # undefvar::Any triggers `bail_out_call`
-callsig_backprop_bailout(::Val{2}) = 2
+callsig_backprop_bailout(::Val) = 2
 callsig_backprop_addinteger(a::Integer, b::Integer) = a + b # results in too many matching methods and triggers `bail_out_call`)
 @test Base.infer_return_type(callsig_backprop_addinteger) == Any
 let effects = Base.infer_effects(callsig_backprop_addinteger)

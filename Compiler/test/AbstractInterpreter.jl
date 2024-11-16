@@ -70,18 +70,15 @@ end |> !Core.Compiler.is_nonoverlayed
 
 # account for overlay possibility in unanalyzed matching method
 callstrange(::Float64) = strangesin(x)
-callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
+callstrange(::Number) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
+callstrange(::Any) = 1.0
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
     matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
     @test matches !== nothing
-    @test Core.Compiler.length(matches) == 2
-    if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
-        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
-        @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
-    else
-        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
-    end
+    @test Core.Compiler.length(matches) == 3
+    @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+    @test "Call inference reached maximally imprecise information: bailing on doing more abstract inference." in interp.meta
 end
 
 # but it should never apply for the native compilation

@@ -28,13 +28,7 @@ BOOTSTRAP_DEBUG_LEVEL ?= 0
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
 OPENBLAS_LIBNAMESUFFIX:=
-
-# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
-ifneq ($(OPENBLAS_TARGET_ARCH),)
 OPENBLAS_DYNAMIC_ARCH:=0
-else
-OPENBLAS_DYNAMIC_ARCH:=1
-endif
 OPENBLAS_USE_THREAD:=1
 
 # Flags for using libraries available on the system instead of building them.
@@ -995,9 +989,15 @@ MTUNE=native
 endif
 endif
 
+# If we are running on x86 or x86_64, set certain options automatically
+ifeq (1,$(ISX86))
+OPENBLAS_DYNAMIC_ARCH:=1
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=POWER8
 BINARY:=64
 # GCC doesn't do -march= on ppc64le
@@ -1054,14 +1054,20 @@ endif
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
-OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
 BINARY:=32
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
 ifneq (,$(findstring aarch64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=ARMV8
+BINARY:=64
+endif
+
+# If we are running on riscv64, set certain options automatically
+ifneq (,$(findstring riscv64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=1
 BINARY:=64
 endif
 

@@ -571,17 +571,6 @@ Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))
 
-Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(Array{typeof(v)}, inds), v)
-Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), zero(T))
-Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), one(T))
-Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), true)
-Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), false)
-
 Base.zero(A::OffsetArray) = parent_call(zero, A)
 Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 

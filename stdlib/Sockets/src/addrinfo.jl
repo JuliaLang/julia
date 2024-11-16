@@ -282,16 +282,14 @@ See also [`getipaddrs`](@ref).
 """
 function getipaddr(addr_type::Type{T}) where T<:IPAddr
     addrs = getipaddrs(addr_type)
+    isempty(addrs) && error("No networking interface available")
 
-    if length(addrs) == 0
-        error("No networking interface available")
-    end
-
-    # Prefer the first IPv4 address
+    # When `addr_type` is `IPAddr`, `addrs` contain IP addresses of all types
+    # In that case, we prefer to return the first IPv4
     i = something(findfirst(ip -> ip isa IPv4, addrs), 1)
     return addrs[i]
 end
-getipaddr() = getipaddr(IPv4)
+getipaddr() = getipaddr(IPAddr)
 
 
 """
