@@ -1606,6 +1606,7 @@ pairs(s::AbstractString) = IterableStatePairs(s)
     nth(itr, n::Integer)
 
 Get the `n`th element of an iterable collection. Return `nothing` if not existing.
+Will advance any `Stateful`[@ref] iterator.
 
 See also: [`first`](@ref), [`last`](@ref)
 
@@ -1616,17 +1617,24 @@ julia> nth(2:2:10, 4)
 
 julia> nth(reshape(1:30, (5,6)), 6)
 6
+
+julia> stateful = Stateful(1:10); nth(stateful, 7)
+7
+
+julia> first(stateful)
+8
 ```
 """
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
-nth(itr::AbstractArray, n::Integer) = n > length(itr) ? nothing : itr[n]
+nth(itr::AbstractArray, n::Integer) = n > length(itr) ? nothing : _inbounds_nth(itr, n)
+nth(itr::AbstractRange, n) = getindex(itr, n)
 
 _nth(::SizeUnknown, itr, n) = _fallback_nth(itr, n)
 _nth(::Union{HasShape,HasLength}, itr, n) = _withlength_nth(itr, n, length(itr))
 _nth(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
 
 _inbounds_nth(itr, n) = iterate(drop(itr, n - 1))[1]
-_inbounds_nth(itr::AbstractArray, n) = itr[n]
+_inbounds_nth(itr::AbstractArray, n) = getindex(itr, nth(eachindex(IndexLinear(), itr), n))
 
 _withlength_nth(itr, n, N) = n > N ? nothing : _inbounds_nth(itr, n)
 
