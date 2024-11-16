@@ -1133,6 +1133,30 @@ end
     end
 end
 
+@testset "nth" begin
+    Z = Array{Int,0}(undef)
+    Z[] = 17
+    itrs = (collect(1:1000), 10:6:1000, "∀ϵ>0", (1, 3, 5, 10, 78), reshape(1:30, (5, 6)),
+        Z, 3, true, 'x', 4 => 5, view(Z), view(reshape(1:30, (5, 6)), 2:4, 2:6),
+        (x^2 for x in 1:10), Iterators.Filter(isodd, 1:10), Iterators.flatten((1:10, 50:60)),
+        pairs(50:60), zip(1:10, 21:30, 51:60), Iterators.product(1:3, 10:12),
+        Iterators.repeated(3.14159, 5), (a=2, b=3, c=5, d=7, e=11), Iterators.cycle(collect(1:100)),
+        Iterators.cycle([1, 2, 3, 4, 5], 5))
+    ns = (
+        234, 123, 3, 2, 21, 1, 1, 1, 1, 1, 1, 10, 9, 3, 15, 7, 6, 3, 4, 4, 99999, 25
+    )
+    expected = (
+        234, 742, '>', 3, 21, 17, 3, true, 'x', 4, 17, 22, 81, 5, 54, (7 => 56), (6, 26, 56), (3, 10), 3.14159, 7, 99, 5
+    )
+    @test length(itrs) == length(ns) == length(expected)
+    testset = zip(itrs, ns, expected)
+    @testset "iter: $IT" for (IT, n, exp) in testset
+        @test exp == nth(IT, n)
+        IT isa Cycle && continue # cycles are infinite so never OOB
+        @test nth(IT, 999999999) === nothing
+    end
+end
+
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end
