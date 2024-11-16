@@ -10,12 +10,12 @@ precompile_test_harness() do load_path
         basic_caller(x) = basic_callee(x)
     end) |> string)
 
-    newinterp_path = abspath("compiler/newinterp.jl")
+    newinterp_path = abspath(joinpath(@__DIR__,"../Compiler/test/newinterp.jl"))
     write(joinpath(load_path, "TestAbsIntPrecompile1.jl"), :(module TestAbsIntPrecompile1
         import SimpleModule: basic_caller, basic_callee
 
         module Custom
-            include("$($newinterp_path)")
+            include($newinterp_path)
             @newinterp PrecompileInterpreter
         end
 

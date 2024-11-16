@@ -3435,26 +3435,33 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
+static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, jl_module_t *mod, jl_sym_t *name)
+{
+    Value *bp = julia_binding_gv(ctx, bnd);
+    Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
+    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
+    return mark_julia_type(ctx, v, true, jl_any_type);
+}
+
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    assert(bnd);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
     }
-    assert(bnd);
-    Value *bp = NULL;
     // bpart was updated in place - this will change with full partition
     pku = jl_atomic_load_acquire(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // Redo the lookup at runtime
-        bp = julia_binding_gv(ctx, bnd);
-        Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
-        undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
-        return mark_julia_type(ctx, v, true, jl_any_type);
+        return emit_globalref_runtime(ctx, bnd, mod, name);
     } else {
         while (true) {
             if (!bpart)
@@ -3465,7 +3472,9 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 cg_bdw(ctx, name, bnd);
             }
             bnd = (jl_binding_t*)decode_restriction_value(pku);
-            bpart = jl_get_binding_partition(bnd, ctx.max_world);
+            bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+            if (!bpart)
+                break;
             pku = jl_atomic_load_acquire(&bpart->restriction);
         }
         if (bpart && jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
@@ -3477,7 +3486,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             return mark_julia_const(ctx, constval);
         }
     }
-    bp = julia_binding_gv(ctx, bnd);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
+    Value *bp = julia_binding_gv(ctx, bnd);
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
@@ -3496,7 +3508,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     if (bp == NULL)
         return jl_cgval_t();
     if (bpart) {
@@ -5854,7 +5866,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
                                      jl_binding_t **pbnd, bool assign, bool alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (assign) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
@@ -5865,11 +5877,11 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             // try to look this up now
             b = jl_get_binding(m, s);
-            bpart = jl_get_binding_partition(b, ctx.max_world);
+            bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
         }
-        pku = jl_walk_binding_inplace(&b, &bpart, ctx.max_world);
+        pku = jl_walk_binding_inplace_all(&b, &bpart, ctx.min_world, ctx.max_world);
     }
-    if (b == NULL) {
+    if (!b || !bpart) {
         // var not found. switch to delayed lookup.
         Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
         GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), ctx.types().T_pjlvalue,
@@ -6021,7 +6033,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             name = (jl_sym_t*)sym;
         }
         jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.min_world);
+        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
         jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
         if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (jl_get_binding_value_if_const(bnd))

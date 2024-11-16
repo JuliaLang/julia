@@ -51,14 +51,24 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     (; valid_worlds, applicable, info) = matches
-    update_valid_age!(sv, valid_worlds)
+    update_valid_age!(sv, valid_worlds) # need to record the negative world now, since even if we don't generate any useful information, inlining might want to add an invoke edge and it won't have this information anymore
+    if bail_out_toplevel_call(interp, sv)
+        napplicable = length(applicable)
+        for i = 1:napplicable
+            sig = applicable[i].match.spec_types
+            if !isdispatchtuple(sig)
+                # only infer fully concrete call sites in top-level expressions (ignoring even isa_compileable_sig matches)
+                add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
+                return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+            end
+        end
+    end
 
     # final result
     gfresult = Future{CallMeta}()
     # intermediate work for computing gfresult
     rettype = exctype = Bottom
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
-    seenall = true
     const_results = nothing # or const_results::Vector{Union{Nothing,ConstResult}} if any const results are available
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
@@ -69,16 +79,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     f = Core.Box(f)
     atype = Core.Box(atype)
     function infercalls(interp, sv)
-        napplicable = length(applicable)
-        multiple_matches = napplicable > 1
+        local napplicable = length(applicable)
+        local multiple_matches = napplicable > 1
         while i <= napplicable
             (; match, edges, edge_idx) = applicable[i]
             method = match.method
             sig = match.spec_types
-            if bail_out_toplevel_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
-                # only infer concrete call sites in top-level expressions
-                add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
-                seenall = false
+            if bail_out_call(interp, InferenceLoopState(rettype, all_effects), sv)
+                add_remark!(interp, sv, "Call inference reached maximally imprecise information: bailing on doing more abstract inference.")
                 break
             end
             # TODO: this is unmaintained now as it didn't seem to improve things, though it does avoid hard-coding the union split at the higher level,
@@ -162,17 +170,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                        Any[Bottom for _ in 1:length(argtypes)]
                     end
                     for i = 1:length(argtypes)
-                        cnd = conditional_argtype(𝕃ᵢ, this_conditional, sig, argtypes, i)
+                        cnd = conditional_argtype(𝕃ᵢ, this_conditional, match.spec_types, argtypes, i)
                         conditionals[1][i] = conditionals[1][i] ⊔ᵢ cnd.thentype
                         conditionals[2][i] = conditionals[2][i] ⊔ᵢ cnd.elsetype
                     end
                 end
                 edges[edge_idx] = edge
-                if i < napplicable && bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
-                    add_remark!(interp, sv, "Call inference reached maximally imprecise information. Bailing on.")
-                    seenall = false
-                    i = napplicable # break in outer function
-                end
+
                 i += 1
                 return true
             end # function handle1
@@ -184,12 +188,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
         end # while
 
-        if const_results !== nothing
-            @assert napplicable == nmatches(info) == length(const_results)
-            info = ConstCallInfo(info, const_results)
-        end
-
-        if seenall
+        seenall = i > napplicable
+        if seenall # small optimization to skip some work that is already implied
+            if const_results !== nothing
+                @assert napplicable == nmatches(info) == length(const_results)
+                info = ConstCallInfo(info, const_results)
+            end
             if !fully_covering(matches) || any_ambig(matches)
                 # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
                 all_effects = Effects(all_effects; nothrow=false)
@@ -198,52 +202,67 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             if sv isa InferenceState && fargs !== nothing
                 slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
             end
+            rettype = from_interprocedural!(interp, rettype, sv, arginfo, conditionals)
+            if call_result_unused(si) && !(rettype === Bottom)
+                add_remark!(interp, sv, "Call result type was widened because the return value is unused")
+                # We're mainly only here because the optimizer might want this code,
+                # but we ourselves locally don't typically care about it locally
+                # (beyond checking if it always throws).
+                # So avoid adding an edge, since we don't want to bother attempting
+                # to improve our result even if it does change (to always throw),
+                # and avoid keeping track of a more complex result type.
+                rettype = Any
+            end
+            # if from_interprocedural added any pclimitations to the set inherited from the arguments,
+            # some of those may be part of our cycles, so those can be deleted now
+            # TODO: and those might need to be deleted later too if the cycle grows to include them?
+            if isa(sv, InferenceState)
+                # TODO (#48913) implement a proper recursion handling for irinterp:
+                # This works just because currently the `:terminate` condition guarantees that
+                # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+                # We should revisit this once we have a better story for handling cycles in irinterp.
+                if !isempty(sv.pclimitations) # remove self, if present
+                    delete!(sv.pclimitations, sv)
+                    for caller in callers_in_cycle(sv)
+                        delete!(sv.pclimitations, caller)
+                    end
+                end
+            end
         else
             # there is unanalyzed candidate, widen type and effects to the top
             rettype = exctype = Any
             all_effects = Effects()
+            const_results = nothing
         end
-
-        rettype = from_interprocedural!(interp, rettype, sv, arginfo, conditionals)
 
         # Also considering inferring the compilation signature for this method, so
-        # it is available to the compiler in case it ends up needing it.
-        if (isa(sv, InferenceState) && infer_compilation_signature(interp) &&
-            (seenall && 1 == napplicable) && rettype !== Any && rettype !== Bottom &&
-            !is_removable_if_unused(all_effects))
-            (; match) = applicable[1]
-            method = match.method
-            sig = match.spec_types
-            mi = specialize_method(match; preexisting=true)
-            if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
-                csig = get_compileable_sig(method, sig, match.sparams)
-                if csig !== nothing && csig !== sig
-                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)::Future
+        # it is available to the compiler in case it ends up needing it for the invoke.
+        if isa(sv, InferenceState) && infer_compilation_signature(interp) && (!is_removable_if_unused(all_effects) || !call_result_unused(si))
+            i = 1
+            function infercalls2(interp, sv)
+                local napplicable = length(applicable)
+                local multiple_matches = napplicable > 1
+                while i <= napplicable
+                    (; match, edges, edge_idx) = applicable[i]
+                    i += 1
+                    method = match.method
+                    sig = match.spec_types
+                    mi = specialize_method(match; preexisting=true)
+                    if mi === nothing || !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
+                        csig = get_compileable_sig(method, sig, match.sparams)
+                        if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
+                            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), csig, method.sig)::SimpleVector
+                            if match.sparams === sp_[2]
+                                mresult = abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)::Future
+                                isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
+                            end
+                        end
+                    end
                 end
+                return true
             end
-        end
-
-        if call_result_unused(si) && !(rettype === Bottom)
-            add_remark!(interp, sv, "Call result type was widened because the return value is unused")
-            # We're mainly only here because the optimizer might want this code,
-            # but we ourselves locally don't typically care about it locally
-            # (beyond checking if it always throws).
-            # So avoid adding an edge, since we don't want to bother attempting
-            # to improve our result even if it does change (to always throw),
-            # and avoid keeping track of a more complex result type.
-            rettype = Any
-        end
-        if isa(sv, InferenceState)
-            # TODO (#48913) implement a proper recursion handling for irinterp:
-            # This works just because currently the `:terminate` condition guarantees that
-            # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
-            # We should revisit this once we have a better story for handling cycles in irinterp.
-            if !isempty(sv.pclimitations) # remove self, if present
-                delete!(sv.pclimitations, sv)
-                for caller in callers_in_cycle(sv)
-                    delete!(sv.pclimitations, caller)
-                end
-            end
+            # start making progress on the first call
+            infercalls2(interp, sv) || push!(sv.tasks, infercalls2)
         end
 
         gfresult[] = CallMeta(rettype, exctype, all_effects, info, slotrefinements)
@@ -584,14 +603,6 @@ function abstract_call_method(interp::AbstractInterpreter,
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
-                if call_result_unused(si)
-                    add_remark!(interp, sv, RECURSION_UNUSED_MSG)
-                    # since we don't use the result (typically),
-                    # we have a self-cycle in the call-graph, but not in the inference graph (typically):
-                    # break this edge now (before we record it) by returning early
-                    # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                    return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
-                end
                 topmost = nothing
                 edgecycle = true
                 break
@@ -1796,6 +1807,14 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         i = 1
         while i <= length(ctypes)
             ct = ctypes[i]
+            if bail_out_apply(interp, InferenceLoopState(res, all_effects), sv)
+                add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information: bailing on analysis of more methods.")
+                # there is unanalyzed candidate, widen type and effects to the top
+                let retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
+                    applyresult[] = CallMeta(Any, Any, Effects(), retinfo)
+                    return true
+                end
+            end
             lct = length(ct)
             # truncate argument list at the first Vararg
             for k = 1:lct-1
@@ -1817,14 +1836,6 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                 res = tmerge(typeinf_lattice(interp), res, rt)
                 exctype = tmerge(typeinf_lattice(interp), exctype, exct)
                 all_effects = merge_effects(all_effects, effects)
-                if i < length(ctypes) && bail_out_apply(interp, InferenceLoopState(ctypes[i], res, all_effects), sv)
-                    add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information. Bailing on.")
-                    # there is unanalyzed candidate, widen type and effects to the top
-                    let retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
-                        applyresult[] = CallMeta(Any, Any, Effects(), retinfo)
-                        return true
-                    end
-                end
             end
             i += 1
         end
@@ -2191,23 +2202,26 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds = findsup(lookupsig, method_table(interp))
-    match === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    matched, valid_worlds = findsup(lookupsig, method_table(interp))
+    matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     update_valid_age!(sv, valid_worlds)
-    method = match.method
+    method = matched.method
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
+    ft′_box = Core.Box(ft′)
+    lookupsig_box = Core.Box(lookupsig)
+    invokecall = InvokeCall(types, lookupsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
-        res = nothing
+        local ft′ = ft′_box.contents
         sig = match.spec_types
-        argtypes′ = invoke_rewrite(argtypes)
+        argtypes′ = invoke_rewrite(arginfo.argtypes)
         fargs = arginfo.fargs
         fargs′ = fargs === nothing ? nothing : invoke_rewrite(fargs)
-        arginfo = ArgInfo(fargs′, argtypes′)
+        arginfo′ = ArgInfo(fargs′, argtypes′)
         # # typeintersect might have narrowed signature, but the accuracy gain doesn't seem worth the cost involved with the lattice comparisons
         # for i in 1:length(argtypes′)
         #     t, a = ti.parameters[i], argtypes′[i]
@@ -2216,9 +2230,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         f = singleton_type(ft′)
-        invokecall = InvokeCall(types, lookupsig)
         const_call_result = abstract_call_method_with_const_args(interp,
-            result, f, arginfo, si, match, sv, invokecall)
+            result, f, arginfo′, si, match, sv, invokecall)
         const_result = volatile_inf_result
         if const_call_result !== nothing
             const_edge = nothing
@@ -2232,8 +2245,8 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
                 edge = const_edge
             end
         end
-        rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-        info = InvokeCallInfo(edge, match, const_result, lookupsig)
+        rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
+        info = InvokeCallInfo(edge, match, const_result, lookupsig_box.contents)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -2638,6 +2651,14 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
     hasintersect(sig, ocsig) || return Future(CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo()))
     ocmethod = closure.source::Method
+    if !isdefined(ocmethod, :source)
+        # This opaque closure was created from optimized source. We cannot infer it further.
+        ocrt = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[2], tt)
+        if isa(ocrt, DataType)
+            return Future(CallMeta(ocrt, Any, Effects(), NoCallInfo()))
+        end
+        return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+    end
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)

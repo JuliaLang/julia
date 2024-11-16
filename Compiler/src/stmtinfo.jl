@@ -352,7 +352,7 @@ allow the optimizer to rewrite the return type parameter of the `OpaqueClosure` 
 struct OpaqueClosureCreateInfo <: CallInfo
     unspec::CallMeta
     function OpaqueClosureCreateInfo(unspec::CallMeta)
-        @assert isa(unspec.info, OpaqueClosureCallInfo)
+        @assert isa(unspec.info, Union{OpaqueClosureCallInfo, NoCallInfo})
         return new(unspec)
     end
 end

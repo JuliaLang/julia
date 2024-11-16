@@ -607,7 +607,8 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_const_sym ||
          ((jl_expr_t*)e)->head == jl_toplevel_sym ||
          ((jl_expr_t*)e)->head == jl_error_sym ||
-         ((jl_expr_t*)e)->head == jl_incomplete_sym);
+         ((jl_expr_t*)e)->head == jl_incomplete_sym ||
+         ((jl_expr_t*)e)->head == jl_latestworld_sym);
 }
 
 int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT

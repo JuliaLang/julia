@@ -482,6 +482,7 @@ function block_for_inst(ir::IRCode, inst::Int)
     end
     block_for_inst(ir.cfg, inst)
 end
+block_for_inst(ir::IRCode, ssa::SSAValue) = block_for_inst(ir, ssa.id)
 
 function getindex(ir::IRCode, s::SSAValue)
     id = s.id

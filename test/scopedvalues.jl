@@ -2,7 +2,7 @@
 
 using Base.ScopedValues
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0

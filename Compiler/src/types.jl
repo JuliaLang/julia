@@ -24,7 +24,7 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `cache_owner(interp::NewInterpreter)` - return the owner of any new cache entries
 """
-:(AbstractInterpreter)
+abstract type AbstractInterpreter end
 
 abstract type AbstractLattice end
 
@@ -464,6 +464,12 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
+
+function code_cache(interp::AbstractInterpreter)
+  cache = InternalCodeCache(cache_owner(interp))
+  worlds = WorldRange(get_inference_world(interp))
+  return WorldView(cache, worlds)
+end
 
 get_escape_cache(interp::AbstractInterpreter) = GetNativeEscapeCache(interp)
 

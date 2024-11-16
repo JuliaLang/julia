@@ -217,7 +217,7 @@ include("ssair/slot2ssa.jl")
 include("ssair/inlining.jl")
 include("ssair/verify.jl")
 include("ssair/legacy.jl")
-include("ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 

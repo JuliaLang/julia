@@ -44,19 +44,6 @@ else
 end
 limited_worker_rss = max_worker_rss != typemax(Csize_t)
 
-function test_path(test)
-    t = split(test, '/')
-    if t[1] in STDLIBS
-        if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
-        else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
-        end
-    else
-        return joinpath(@__DIR__, test)
-    end
-end
-
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
 if !all(isfiles)

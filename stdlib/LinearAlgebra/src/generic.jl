@@ -1353,6 +1353,14 @@ end
 
 ishermitian(x::Number) = (x == conj(x))
 
+# helper function equivalent to `iszero(v)`, but potentially without the fast exit feature
+# of `all` if this improves performance
+_iszero(V) = iszero(V)
+# A Base.FastContiguousSubArray view of a StridedArray
+FastContiguousSubArrayStrided{T,N,P<:StridedArray,I<:Tuple{AbstractUnitRange, Vararg{Any}}} = Base.SubArray{T,N,P,I,true}
+# using mapreduce instead of all permits vectorization
+_iszero(V::FastContiguousSubArrayStrided) = mapreduce(iszero, &, V, init=true)
+
 """
     istriu(A::AbstractMatrix, k::Integer = 0) -> Bool
 
@@ -1384,19 +1392,8 @@ julia> istriu(c, -1)
 true
 ```
 """
-function istriu(A::AbstractMatrix, k::Integer = 0)
-    require_one_based_indexing(A)
-    return _istriu(A, k)
-end
+istriu(A::AbstractMatrix, k::Integer = 0) = _isbanded_impl(A, k, size(A,2)-1)
 istriu(x::Number) = true
-
-@inline function _istriu(A::AbstractMatrix, k)
-    m, n = size(A)
-    for j in 1:min(n, m + k - 1)
-        all(iszero, view(A, max(1, j - k + 1):m, j)) || return false
-    end
-    return true
-end
 
 """
     istril(A::AbstractMatrix, k::Integer = 0) -> Bool
@@ -1429,19 +1426,8 @@ julia> istril(c, 1)
 true
 ```
 """
-function istril(A::AbstractMatrix, k::Integer = 0)
-    require_one_based_indexing(A)
-    return _istril(A, k)
-end
+istril(A::AbstractMatrix, k::Integer = 0) = _isbanded_impl(A, -size(A,1)+1, k)
 istril(x::Number) = true
-
-@inline function _istril(A::AbstractMatrix, k)
-    m, n = size(A)
-    for j in max(1, k + 2):n
-        all(iszero, view(A, 1:min(j - k - 1, m), j)) || return false
-    end
-    return true
-end
 
 """
     isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) -> Bool
@@ -1474,7 +1460,66 @@ julia> LinearAlgebra.isbanded(b, -1, 0)
 true
 ```
 """
-isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
+isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = _isbanded(A, kl, ku)
+_isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(A, ku)
+# Performance optimization for StridedMatrix by better utilizing cache locality
+# The istriu and istril loops are merged
+# the additional indirection allows us to reuse the isbanded loop within istriu/istril
+# without encountering cycles
+_isbanded(A::StridedMatrix, kl::Integer, ku::Integer) = _isbanded_impl(A, kl, ku)
+function _isbanded_impl(A, kl, ku)
+    Base.require_one_based_indexing(A)
+
+    #=
+    We split the column range into four possible groups, depending on the values of kl and ku.
+
+    The first is the bottom left triangle, where bands below kl must be zero,
+    but there are no bands above ku in that column.
+
+    The second is where there are both bands below kl and above ku in the column.
+    These are the middle columns typically.
+
+    The third is the top right, where there are bands above ku but no bands below kl
+    in the column.
+
+    The fourth is mainly relevant for wide matrices, where there is a block to the right
+    beyond ku, where the elements should all be zero. The reason we separate this from the
+    third group is that we may loop over all the rows using A[:, col] instead of A[rowrange, col],
+    which is usually faster.
+    =#
+
+    last_col_nonzeroblocks = size(A,1) + ku # fully zero rectangular block beyond this column
+    last_col_emptytoprows = ku + 1 # empty top rows before this column
+    last_col_nonemptybottomrows = size(A,1) + kl - 1 # empty bottom rows after this column
+
+    colrange_onlybottomrows = firstindex(A,2):min(last_col_nonemptybottomrows, last_col_emptytoprows)
+    colrange_topbottomrows = max(last_col_emptytoprows, last(colrange_onlybottomrows))+1:last_col_nonzeroblocks
+    colrange_onlytoprows_nonzero = last(colrange_topbottomrows)+1:last_col_nonzeroblocks
+    colrange_zero_block = last_col_nonzeroblocks+1:lastindex(A,2)
+
+    for col in intersect(axes(A,2), colrange_onlybottomrows) # only loop over the bottom rows
+        botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
+        bottomrows = @view A[botrowinds, col]
+        _iszero(bottomrows) || return false
+    end
+    for col in intersect(axes(A,2), colrange_topbottomrows)
+        toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
+        toprows = @view A[toprowinds, col]
+        _iszero(toprows) || return false
+        botrowinds = max(firstindex(A,1), col-kl+1):lastindex(A,1)
+        bottomrows = @view A[botrowinds, col]
+        _iszero(bottomrows) || return false
+    end
+    for col in intersect(axes(A,2), colrange_onlytoprows_nonzero)
+        toprowinds = firstindex(A,1):min(col-ku-1, lastindex(A,1))
+        toprows = @view A[toprowinds, col]
+        _iszero(toprows) || return false
+    end
+    for col in intersect(axes(A,2), colrange_zero_block)
+        _iszero(@view A[:, col]) || return false
+    end
+    return true
+end
 
 """
     isdiag(A) -> Bool

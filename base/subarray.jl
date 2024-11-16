@@ -342,7 +342,7 @@ end
 
 # We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
 # or if all the indices are scalars, i.e. the view is for a single value only
-FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
+FastContiguousSubArray{T,N,P,I<:Union{Tuple{AbstractUnitRange, Vararg{Any}},
                                       Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
 
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i

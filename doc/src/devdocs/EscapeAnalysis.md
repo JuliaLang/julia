@@ -22,10 +22,10 @@ defines the convenience entries `code_escapes` and `@code_escapes` for testing a
 ```@repl EAUtils
 let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
     # load `EscapeAnalysis` module to define the core analysis code
-    include(normpath(JULIA_DIR, "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
+    include(normpath(JULIA_DIR, "Compiler", "src", "ssair", "EscapeAnalysis.jl"))
     using .EscapeAnalysis
     # load `EAUtils` module to define the utilities
-    include(normpath(JULIA_DIR, "test", "compiler", "EscapeAnalysis", "EAUtils.jl"))
+    include(normpath(JULIA_DIR, "Compiler", "test", "EAUtils.jl"))
     using .EAUtils
 end
 
