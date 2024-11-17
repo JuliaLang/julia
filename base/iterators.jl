@@ -1634,7 +1634,7 @@ _nth(::Union{HasShape,HasLength}, itr, n) = _withlength_nth(itr, n, length(itr))
 _nth(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
 
 _inbounds_nth(itr, n) = iterate(drop(itr, n - 1))[1]
-_inbounds_nth(itr::AbstractArray, n) = getindex(itr, nth(eachindex(IndexLinear(), itr), n))
+_inbounds_nth(itr::AbstractArray, n) = itr[begin + n-1]
 
 _withlength_nth(itr, n, N) = n > N ? nothing : _inbounds_nth(itr, n)
 
