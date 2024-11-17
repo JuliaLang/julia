@@ -49,6 +49,13 @@ Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
+"""
+    divgcd(x::Integer, y::Integer)
+
+Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+
+See also [`div`](@ref), [`gcd`](@ref).
+"""
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
     g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
@@ -293,8 +300,14 @@ julia> numerator(4)
 4
 ```
 """
-numerator(x::Integer) = x
+numerator(x::Union{Integer,Complex{<:Integer}}) = x
 numerator(x::Rational) = x.num
+function numerator(z::Complex{<:Rational})
+    den = denominator(z)
+    reim = (real(z), imag(z))
+    result = checked_mul.(numerator.(reim), div.(den, denominator.(reim)))
+    complex(result...)
+end
 
 """
     denominator(x)
@@ -310,8 +323,9 @@ julia> denominator(4)
 1
 ```
 """
-denominator(x::Integer) = one(x)
+denominator(x::Union{Integer,Complex{<:Integer}}) = one(x)
 denominator(x::Rational) = x.den
+denominator(z::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)

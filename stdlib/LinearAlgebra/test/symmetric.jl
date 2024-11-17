@@ -223,8 +223,8 @@ end
 
         @testset "linalg unary ops" begin
             @testset "tr" begin
-                @test tr(asym) == tr(Symmetric(asym))
-                @test tr(aherm) == tr(Hermitian(aherm))
+                @test tr(asym) ≈ tr(Symmetric(asym))
+                @test tr(aherm) ≈ tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin
@@ -1113,6 +1113,68 @@ end
         S = ST(M)
         @test_throws "invalid index" S[true, true]
         @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
+@testset "tr for block matrices" begin
+    m = [1 2; 3 4]
+    for b in (m, m * (1 + im))
+        M = fill(b, 3, 3)
+        for ST in (Symmetric, Hermitian)
+            S = ST(M)
+            @test tr(S) == sum(diag(S))
+        end
+    end
+end
+
+@testset "setindex! returns the destination" begin
+    M = rand(2,2)
+    for T in (Symmetric, Hermitian)
+        S = T(M)
+        @test setindex!(S, 0, 2, 2) === S
+    end
+end
+
+@testset "partly iniitalized matrices" begin
+    a = Matrix{BigFloat}(undef, 2,2)
+    a[1] = 1; a[3] = 1; a[4] = 1
+    h = Hermitian(a)
+    s = Symmetric(a)
+    d = Diagonal([1,1])
+    symT = SymTridiagonal([1 1;1 1])
+    @test h+d == Array(h) + Array(d)
+    @test h+symT == Array(h) + Array(symT)
+    @test s+d == Array(s) + Array(d)
+    @test s+symT == Array(s) + Array(symT)
+    @test h-d == Array(h) - Array(d)
+    @test h-symT == Array(h) - Array(symT)
+    @test s-d == Array(s) - Array(d)
+    @test s-symT == Array(s) - Array(symT)
+    @test d+h == Array(d) + Array(h)
+    @test symT+h == Array(symT) + Array(h)
+    @test d+s == Array(d) + Array(s)
+    @test symT+s == Array(symT) + Array(s)
+    @test d-h == Array(d) - Array(h)
+    @test symT-h == Array(symT) - Array(h)
+    @test d-s == Array(d) - Array(s)
+    @test symT-s == Array(symT) - Array(s)
+end
+
+@testset "issue #56283" begin
+    a = 1.0
+    D = Diagonal(randn(10))
+    H = Hermitian(D*D')
+    @test a*H == H
+end
+
+@testset "trigonometric functions for Integer matrices" begin
+    A = diagm(0=>1:4, 1=>1:3, -1=>1:3)
+    for B in (Symmetric(A), Symmetric(complex.(A)))
+        SC = @inferred(sincos(B))
+        @test SC[1] ≈ sin(B)
+        @test SC[2] ≈ cos(B)
+        @test cos(A) ≈ real(exp(im*A))
+        @test sin(A) ≈ imag(exp(im*A))
     end
 end
 

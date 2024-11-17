@@ -70,13 +70,22 @@ Base.dataids(A::UpperHessenberg) = Base.dataids(parent(A))
 Base.unaliascopy(A::UpperHessenberg) = UpperHessenberg(Base.unaliascopy(parent(A)))
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
-real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
 Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
     return _istriu(A, k)
+end
+# additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
+@inline function _istriu(A::UpperHessenberg, k)
+    P = parent(A)
+    m = size(A, 1)
+    for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
+        Prows = @view P[max(begin, j - k + 1):min(j+1,end), j]
+        _iszero(Prows) || return false
+    end
+    return true
 end
 
 function Matrix{T}(H::UpperHessenberg) where T
@@ -446,7 +455,7 @@ This is useful because multiple shifted solves `(F + μ*I) \\ b`
 Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 
 # Examples
-```jldoctest
+```julia-repl
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 3×3 Matrix{Float64}:
  4.0  9.0  7.0

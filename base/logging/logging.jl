@@ -3,7 +3,7 @@
 module CoreLogging
 
 import Base: isless, +, -, convert, show
-import Base: ScopedValue, with, @with
+import Base.ScopedValues: ScopedValue, with, @with
 
 export
     AbstractLogger,
@@ -60,7 +60,7 @@ function min_enabled_level end
     catch_exceptions(logger)
 
 Return `true` if the logger should catch exceptions which happen during log
-record construction.  By default, messages are caught
+record construction.  By default, messages are caught.
 
 By default all exceptions are caught to prevent log message generation from
 crashing the program.  This lets users confidently toggle little-used

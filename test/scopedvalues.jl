@@ -2,7 +2,7 @@
 
 using Base.ScopedValues
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -137,6 +137,12 @@ end
     @with begin
         @test sval[] == 1
         @test sval_float[] == 1.0
+    end
+    @with sval=>2 sval_float=>2.0 begin
+        @with begin
+            @test sval[] == 2
+            @test sval_float[] == 2.0
+        end
     end
 end
 

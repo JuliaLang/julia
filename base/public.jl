@@ -14,25 +14,23 @@ public
     AsyncCondition,
     CodeUnits,
     Event,
+    Fix,
     Fix1,
     Fix2,
     Generator,
     ImmutableDict,
     OneTo,
     LogRange,
-    AnnotatedString,
-    AnnotatedChar,
     UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
 
 # Semaphores
     Semaphore,
     acquire,
     release,
+
+# arrays
+    has_offset_axes,
+    require_one_based_indexing,
 
 # collections
     IteratorEltype,
@@ -66,7 +64,7 @@ public
     ispublic,
     remove_linenums!,
 
-# Opperators
+# Operators
     operator_associativity,
     operator_precedence,
     isbinaryoperator,
@@ -108,8 +106,13 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
+
+# filesystem operations
+    rename,
 
 # misc
     notnothing,
     runtests,
-    text_colors
+    text_colors,
+    depwarn

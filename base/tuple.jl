@@ -427,10 +427,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 # constructing from an iterator
 
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
@@ -496,14 +492,12 @@ _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 _totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
-end
-
 ## find ##
 
 _findfirst_rec(f, i::Int, ::Tuple{}) = nothing
 _findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
 function _findfirst_loop(f::Function, t)
-    for i in 1:length(t)
+    for i in eachindex(t)
         f(t[i]) && return i
     end
     return nothing
@@ -537,7 +531,7 @@ function _isequal(t1::Tuple{Any,Vararg{Any}}, t2::Tuple{Any,Vararg{Any}})
     return isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
 end
 function _isequal(t1::Any32, t2::Any32)
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         if !isequal(t1[i], t2[i])
             return false
         end
@@ -568,7 +562,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
 end
 function _eq(t1::Any32, t2::Any32)
     anymissing = false
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
             anymissing = true
@@ -664,7 +658,9 @@ all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
 all(x::Tuple{Bool, Bool}) = x[1]&x[2]
 all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
+all(x::Tuple{Any}) = x[1] || return false
+all(f, x::Tuple{}) = true
+all(f, x::Tuple{Any}) = all((f(x[1]),))
 
 any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]

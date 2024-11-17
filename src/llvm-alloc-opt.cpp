@@ -224,8 +224,11 @@ void Optimizer::optimizeAll()
         checkInst(orig);
         if (use_info.escaped) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+                    << "GC allocation escaped " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -233,8 +236,11 @@ void Optimizer::optimizeAll()
         }
         if (use_info.haserror || use_info.returned) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -243,8 +249,11 @@ void Optimizer::optimizeAll()
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
-                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+                    << "GC allocation removed " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
@@ -252,10 +261,12 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
+        bool has_unboxed = use_info.has_unknown_unboxed;
         bool has_ref = use_info.has_unknown_objref;
         bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
+            has_unboxed |= field.hasunboxed;
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
@@ -268,8 +279,11 @@ void Optimizer::optimizeAll()
         }
         if (has_refaggr) {
             REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
@@ -277,16 +291,38 @@ void Optimizer::optimizeAll()
         }
         if (!use_info.hasunknownmem && !use_info.addrescaped) {
             REMARK([&](){
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
                 return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
-                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", StringRef(str));
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
             continue;
         }
+        // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
+        // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
+        // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
+        // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
+        if (has_unboxed && has_ref) {
+            REMARK([&]() {
+                std::string str;
+                llvm::raw_string_ostream rso(str);
+                orig->print(rso);
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", StringRef(str));
+            });
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
+        }
         REMARK([&](){
+            std::string str;
+            llvm::raw_string_ostream rso(str);
+            orig->print(rso);
             return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
-                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", StringRef(str));
         });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref, use_info.allockind);
@@ -365,7 +401,10 @@ void Optimizer::checkInst(CallInst *I)
         std::string suse_info;
         llvm::raw_string_ostream osuse_info(suse_info);
         use_info.dump(osuse_info);
-        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+        std::string str;
+        llvm::raw_string_ostream rso(str);
+        I->print(rso);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", StringRef(str)) << "\n" << ore::NV("UseInfo", osuse_info.str());
     });
 }
 
@@ -607,14 +646,9 @@ void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, 
         return;
     assert(!buff->isArrayAllocation());
     Type *T = buff->getAllocatedType();
-    Value *Init = UndefValue::get(T);
-    if ((allockind & AllocFnKind::Zeroed) != AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // zero, as described
-    else if (allockind == AllocFnKind::Unknown)
-        Init = Constant::getNullValue(T); // assume zeroed since we didn't find the attribute
-    else
-        Init = prolog_builder.CreateFreeze(UndefValue::get(T)); // assume freeze, since LLVM does not natively support this case
-    prolog_builder.CreateStore(Init, buff);
+    const DataLayout &DL = F.getParent()->getDataLayout();
+    prolog_builder.CreateMemSet(buff, ConstantInt::get(Type::getInt8Ty(prolog_builder.getContext()), 0), DL.getTypeAllocSize(T), buff->getAlign());
+
 }
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
@@ -755,26 +789,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            #if JL_LLVM_VERSION >= 170000
-            #ifndef JL_NDEBUG
-            auto cast_t = PointerType::get(user->getType(), new_i->getType()->getPointerAddressSpace());
-            Type *new_t = new_i->getType();
-            assert(cast_t == new_t);
-            #endif
-            auto replace_i = new_i;
-            #else
-            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), new_i->getType()->getPointerAddressSpace());
-            auto replace_i = new_i;
-            Type *new_t = new_i->getType();
-            if (cast_t != new_t) {
-                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-                assert(cast_t->getContext().supportsTypedPointers());
-                replace_i = new BitCastInst(replace_i, cast_t, "", user);
-                replace_i->setDebugLoc(user->getDebugLoc());
-                replace_i->takeName(user);
-            }
-            #endif
-            push_frame(user, replace_i);
+            push_frame(user, new_i);
         }
         else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
@@ -909,8 +924,11 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 REMARK([&](){
+                    std::string str;
+                    llvm::raw_string_ostream rso(str);
+                    orig_inst->print(rso);
                     return OptimizationRemark(DEBUG_TYPE, "typeof", call)
-                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", StringRef(str));
                 });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to

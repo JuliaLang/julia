@@ -37,6 +37,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -152,6 +160,8 @@ functions of submodules will be executed first. Two typical uses of `__init__` a
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
+
+See also: [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -663,8 +673,11 @@ kw"{", kw"{}", kw"}"
 """
     []
 
-Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
-[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+Square brackets are used for [indexing](@ref man-array-indexing) ([`getindex`](@ref)),
+[indexed assignment](@ref man-indexed-assignment) ([`setindex!`](@ref)),
+[array literals](@ref man-array-literals) ([`Base.vect`](@ref)),
+[array concatenation](@ref man-array-concatenation) ([`vcat`](@ref), [`hcat`](@ref), [`hvcat`](@ref), [`hvncat`](@ref)),
+and [array comprehensions](@ref man-comprehensions) ([`collect`](@ref)).
 """
 kw"[", kw"[]", kw"]"
 
@@ -934,11 +947,14 @@ expression, rather than the side effects that evaluating `b` or `c` may have.
 See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
 
 # Examples
-```
+```jldoctest
 julia> x = 1; y = 2;
 
-julia> x > y ? println("x is larger") : println("y is larger")
-y is larger
+julia> x > y ? println("x is larger") : println("x is not larger")
+x is not larger
+
+julia> x > y ? "x is larger" : x == y ? "x and y are equal" : "y is larger"
+"y is larger"
 ```
 """
 kw"?", kw"?:"
@@ -1050,6 +1066,17 @@ exception object to the given variable within the `catch` block.
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
+A `try/catch` block can also have an `else` clause that executes only if no exception occurred:
+```julia
+try
+    a_dangerous_operation()
+catch
+    @warn "The operation failed."
+else
+    @info "The operation succeeded."
+end
+```
+
 A `try` or `try`/`catch` block can also have a [`finally`](@ref) clause that executes
 at the end, regardless of whether an exception occurred.  For example, this can be
 used to guarantee that an opened file is closed:
@@ -1064,6 +1091,9 @@ finally
 end
 ```
 (`finally` can also be used without a `catch` block.)
+
+!!! compat "Julia 1.8"
+    Else clauses require at least Julia 1.8.
 """
 kw"try", kw"catch"
 
@@ -1275,6 +1305,12 @@ kw";"
 
 Short-circuiting boolean AND.
 
+This is equivalent to `x ? y : false`: it returns `false` if `x` is `false` and the result of evaluating `y` if `x` is `true`.
+Note that if `y` is an expression, it is only evaluated when `x` is `true`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) && (statement)` can be used as shorthand for
+`if condition; statement; end` for an arbitrary `statement`.
+
 See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
 # Examples
@@ -1286,6 +1322,9 @@ true
 
 julia> x < 0 && error("expected positive x")
 false
+
+julia> x > 0 && "not a boolean"
+"not a boolean"
 ```
 """
 kw"&&"
@@ -1294,6 +1333,12 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+This is equivalent to `x ? true : y`: it returns `true` if `x` is `true` and the result of evaluating `y` if `x` is `false`.
+Note that if `y` is an expression, it is only evaluated when `x` is `false`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
+`if !(condition); statement; end` for an arbitrary `statement`.
 
 See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
@@ -1304,6 +1349,9 @@ true
 
 julia> false || true || println("neither is true!")
 true
+
+julia> pi < 3 || "not a boolean"
+"not a boolean"
 ```
 """
 kw"||"
@@ -1372,7 +1420,11 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array.
+collection or the first index of a dimension of an array. For example,
+`a[begin]` is the first element of an array `a`.
+
+!!! compat "Julia 1.4"
+    Use of `begin` as an index requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -1433,8 +1485,20 @@ kw"struct"
     mutable struct
 
 `mutable struct` is similar to [`struct`](@ref), but additionally allows the
-fields of the type to be set after construction. See the manual section on
-[Composite Types](@ref) for more information.
+fields of the type to be set after construction.
+
+Individual fields of a mutable struct can be marked as `const` to make them immutable:
+
+```julia
+mutable struct Baz
+    a::Int
+    const b::Float64
+end
+```
+!!! compat "Julia 1.8"
+    The `const` keyword for fields of mutable structs requires at least Julia 1.8.
+
+See the manual section on [Composite Types](@ref) for more information.
 """
 kw"mutable struct"
 
@@ -1643,7 +1707,7 @@ ErrorException
 """
     FieldError(type::DataType, field::Symbol)
 
-An operation tried to access invalid `field` of `type`.
+An operation tried to access invalid `field` on an object of `type`.
 
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
@@ -1661,7 +1725,7 @@ julia> ab = AB(1, 3)
 AB(1.0f0, 3.0)
 
 julia> ab.c # field `c` doesn't exist
-ERROR: FieldError: type AB has no field c
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
 Stacktrace:
 [...]
 ```
@@ -1805,11 +1869,14 @@ Stacktrace:
 DomainError
 
 """
-    Task(func)
+    Task(func[, reserved_stack::Int])
 
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+The optional `reserved_stack` argument specifies the size of the stack available
+for this task, in bytes. The default, `0`, uses the system-dependent stack size default.
 
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
@@ -2539,7 +2606,7 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
 julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
@@ -2547,7 +2614,7 @@ ERROR: UndefVarError: `a` not defined in `M`
 Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
 Stacktrace:
  [1] getproperty(x::Module, f::Symbol)
-   @ Base ./Base.jl:42
+   @ Base ./Base_compiler.jl:40
  [2] top-level scope
    @ none:1
 
@@ -3152,13 +3219,26 @@ Any
 """
     Union{}
 
-`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
-is `Core.TypeofBottom`.
+`Union{}`, the empty [`Union`](@ref) of types, is the *bottom* type of the type system. That is, for each
+`T::Type`, `Union{} <: T`. Also see the subtyping operator's documentation: [`<:`](@ref).
+
+As such, `Union{}` is also an *empty*/*uninhabited* type, meaning that it has no values. That is, for each `x`,
+`isa(x, Union{}) == false`.
+
+`Base.Bottom` is defined as its alias and the type of `Union{}` is `Core.TypeofBottom`.
 
 # Examples
 ```jldoctest
 julia> isa(nothing, Union{})
+false
+
+julia> Union{} <: Int
+true
+
+julia> typeof(Union{}) === Core.TypeofBottom
+true
+
+julia> isa(Union{}, Union)
 false
 ```
 """
@@ -3662,6 +3742,9 @@ unused and delete the entire benchmark code).
     *if* the intrinsic is semantically executed, then there is some program state at
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
 
 # Examples
 

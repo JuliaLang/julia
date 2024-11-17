@@ -43,15 +43,15 @@ function foldl_impl(op::OP, nt, itr) where {OP}
 end
 
 function _foldl_impl(op::OP, init, itr) where {OP}
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
+    # Unroll the loop once to check if the iterator is empty.
+    # If init is known, the call to op may be evaluated at compile time
     y = iterate(itr)
     y === nothing && return init
     v = op(init, y[1])
-    while true
-        y = iterate(itr, y[2])
-        y === nothing && break
-        v = op(v, y[1])
+    # Using a for loop is more performant than a while loop (see #56492)
+    # This unrolls the loop a second time before entering the body
+    for x in Iterators.rest(itr, y[2])
+        v = op(v, x)
     end
     return v
 end
@@ -638,11 +638,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+        for i in start:4:simdstop
+            v1 = _fast(op, v1, f(@inbounds(A[i+0])))
+            v2 = _fast(op, v2, f(@inbounds(A[i+1])))
+            v3 = _fast(op, v3, f(@inbounds(A[i+2])))
+            v4 = _fast(op, v4, f(@inbounds(A[i+3])))
         end
         checkbounds(A, simdstop+3)
         start += chunk_len
@@ -1332,6 +1332,8 @@ end
     return _all_tuple(f, anymissing, rest...)
 end
 @inline _all_tuple(f, anymissing) = anymissing ? missing : true
+
+all(::Tuple{Missing}) = missing
 
 ## count
 

@@ -14,7 +14,7 @@ $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/so
 	echo 1 > $@
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 define ITTAPI_INSTALL

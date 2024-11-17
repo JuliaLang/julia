@@ -18,29 +18,20 @@ using .Base:
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
 using Core: @doc
 
-if Base !== Core.Compiler
 using .Base:
     cld, fld, SubArray, view, resize!, IndexCartesian
 using .Base.Checked: checked_mul
-else
-    # Checked.checked_mul is not available during bootstrapping:
-    const checked_mul = *
-end
 
 import .Base:
     first, last,
     isempty, length, size, axes, ndims,
-    eltype, IteratorSize, IteratorEltype,
+    eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition
 public accumulate, filter, map, peel, reverse, Stateful
-
-if Base !== Core.Compiler
-export partition
-end
 
 """
     Iterators.map(f, iterators...)
@@ -279,10 +270,8 @@ pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-if Base !== Core.Compiler
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, Base.CartesianIndices(axes(A)))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
-end
 
 length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
@@ -1213,6 +1202,7 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
+eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}} = promote_typejoin(map(eltype, fieldtypes(I))...)
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
@@ -1301,7 +1291,6 @@ true
 """
 flatmap(f, c...) = flatten(map(f, c...))
 
-if Base !== Core.Compiler # views are not defined
 @doc """
     partition(collection, n)
 
@@ -1507,8 +1496,6 @@ end
 IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa IsInfinite ? IsInfinite() : SizeUnknown()
 eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
 IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
-
-end # if statement several hundred lines above
 
 """
     only(x)

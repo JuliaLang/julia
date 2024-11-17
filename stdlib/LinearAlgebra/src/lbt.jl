@@ -17,7 +17,7 @@ end
 macro get_warn(map, key)
     return quote
         if !haskey($(esc(map)), $(esc(key)))
-            @warn(string("[LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
+            println(Core.stderr, string("Warning: [LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
             # All the unknown values share a common value: `-1`
             $(esc(map))[$(esc(LBT_INTERFACE_UNKNOWN))]
         else
@@ -132,7 +132,7 @@ struct LBTConfig
             if str_ptr != C_NULL
                 push!(exported_symbols, unsafe_string(str_ptr))
             else
-                @error("NULL string in lbt_config.exported_symbols[$(sym_idx)]")
+                println(Core.stderr, "Error: NULL string in lbt_config.exported_symbols[$(sym_idx)]")
             end
         end
 
@@ -281,6 +281,25 @@ function lbt_find_backing_library(symbol_name, interface::Symbol;
 
     # No backing library was found
     return nothing
+end
+
+
+"""
+    lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+
+Given a backing library `lib`, return the list of all functions that are
+forwarded to that library, as a vector of `String`s.
+"""
+function lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+    forwarded_funcs = String[]
+    for (symbol_idx, symbol) in enumerate(config.exported_symbols)
+        forward_byte_offset = div(symbol_idx - 1, 8)
+        forward_byte_mask = 1 << mod(symbol_idx - 1, 8)
+        if lib.active_forwards[forward_byte_offset+1] & forward_byte_mask != 0x00
+            push!(forwarded_funcs, symbol)
+        end
+    end
+    return forwarded_funcs
 end
 
 

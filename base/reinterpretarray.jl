@@ -373,6 +373,7 @@ has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
+unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if isprimitivetype(T) && isprimitivetype(S)

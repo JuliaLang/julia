@@ -1,18 +1,7 @@
 ## Pkg stuff needed before Pkg has loaded
 
 const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-const Pkg_REPLExt_pkgid = Base.PkgId(Base.UUID("ceef7b17-42e7-5b1c-81d4-4cc4a2494ccf"), "REPLExt")
-
-function load_pkg()
-    @lock Base.require_lock begin
-        REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
-        # require_stdlib does not guarantee that the `__init__` of the package is done when loading is done async
-        # but we need to wait for the repl mode to be set up
-        lock = get(Base.package_locks, Pkg_REPLExt_pkgid.uuid, nothing)
-        lock !== nothing && wait(lock[2])
-        return REPLExt
-    end
-end
+load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt")
 
 ## Below here copied/tweaked from Pkg Types.jl so that the dummy Pkg prompt
 # can populate the env correctly before Pkg loads
@@ -71,7 +60,9 @@ end
 function projname(project_file::String)
     if isfile(project_file)
         name = try
-            p = Base.TOML.Parser()
+            # The `nothing` here means that this TOML parser does not return proper Dates.jl
+            # objects - but that's OK since we're just checking the name here.
+            p = Base.TOML.Parser{nothing}()
             Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
             proj = Base.TOML.parse(p)
             get(proj, "name", nothing)
@@ -86,7 +77,7 @@ function projname(project_file::String)
     end
     for depot in Base.DEPOT_PATH
         envdir = joinpath(depot, "environments")
-        if startswith(abspath(project_file), abspath(envdir))
+        if startswith(safe_realpath(project_file), safe_realpath(envdir))
             return "@" * name
         end
     end
@@ -125,5 +116,5 @@ function Pkg_promptf()
         end
     end
     # Note no handling of Pkg.offline, as the Pkg version does here
-    return "$(prefix)pkg> "
+    return "$(prefix)$(PKG_PROMPT)"
 end

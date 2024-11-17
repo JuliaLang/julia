@@ -272,4 +272,37 @@ end
     @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
 end
 
+@testset "complex Symmetric" begin
+    D = diagm(0=>ComplexF64[1,2])
+    S = Symmetric(D)
+    H = hessenberg(S)
+    @test H.H == D
+end
+
+@testset "istriu/istril forwards to parent" begin
+    n = 10
+    @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        U = UpperHessenberg(M)
+        A = Array(U)
+        for k in -n:n
+            @test istriu(U, k) == istriu(A, k)
+            @test istril(U, k) == istril(A, k)
+        end
+    end
+    z = zeros(n,n)
+    P = Matrix{BigFloat}(undef, n, n)
+    copytrito!(P, z, 'U')
+    P[diagind(P,-1)] .= 0
+    U = UpperHessenberg(P)
+    A = Array(U)
+    @testset for k in -n:n
+        @test istriu(U, k) == istriu(A, k)
+        @test istril(U, k) == istril(A, k)
+    end
+end
+
 end # module TestHessenberg

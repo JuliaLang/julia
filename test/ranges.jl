@@ -65,6 +65,10 @@ using .Main.OffsetArrays
 
     unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
     @test_throws unitrangeerrstr UnitRange('a', 'b')
+
+    @test step(false:true) === true # PR 56405
+    @test eltype((false:true) + (Int8(0):Int8(1))) === Int8
+    @test eltype((false:true:true) + (Int8(0):Int8(1))) === Int8
 end
 
 using Dates, Random
@@ -292,15 +296,10 @@ end
 
     rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
 
-    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
-
     # For this test the `BigFloat` mantissa needs to be just a bit
     # larger than the `Float64` mantissa
     setprecision(BigFloat, 70) do
         n = 10
-        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
-            rand_twiceprecision_is_ok(T)
-        end
         @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
             twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
         end
@@ -437,17 +436,57 @@ end
     @testset "findfirst" begin
         @test findfirst(==(1), Base.IdentityUnitRange(-1:1)) == 1
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
-        @test findfirst(==(0), Base.OneTo(10)) == nothing
-        @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test findfirst(==(0), Base.OneTo(10)) === nothing
+        @test findfirst(==(11), Base.OneTo(10)) === nothing
+        @test @inferred((r -> Val(findfirst(iszero, r)))(Base.OneTo(10))) == Val(nothing)
+        @test findfirst(isone, Base.OneTo(10)) === 1
+        @test findfirst(isone, Base.OneTo(0)) === nothing
         @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
-        @test findfirst(==(2), Int16(3):Int16(7)) == nothing
-        @test findfirst(isequal(8), 3:7) == nothing
+        @test findfirst(==(2), Int16(3):Int16(7)) === nothing
+        @test findfirst(isequal(8), 3:7) === nothing
+        @test findfirst(==(0), UnitRange(-0.5, 0.5)) === nothing
+        @test findfirst(==(2), big(1):big(2)) === 2
         @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(iszero, -5:5) == 6
+        @test findfirst(iszero, 2:5) === nothing
+        @test findfirst(iszero, 6:5) === nothing
+        @test findfirst(isone, -5:5) == 7
+        @test findfirst(isone, 2:5) === nothing
+        @test findfirst(isone, 6:5) === nothing
         @test findfirst(==(7), 1:2:10) == 4
-        @test findfirst(==(10), 1:2:10) == nothing
-        @test findfirst(==(11), 1:2:10) == nothing
+        @test findfirst(==(10), 1:2:10) === nothing
+        @test findfirst(==(11), 1:2:10) === nothing
         @test findfirst(==(-7), 1:-1:-10) == 9
-        @test findfirst(==(2),1:-1:2) == nothing
+        @test findfirst(==(2),1:-1:2) === nothing
+        @test findfirst(iszero, 5:-2:-5) === nothing
+        @test findfirst(iszero, 6:-2:-6) == 4
+        @test findfirst(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
+    end
+    @testset "findlast" begin
+        @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
+        @test findlast(isequal(3), Base.OneTo(10)) == 3
+        @test findlast(==(0), Base.OneTo(10)) === nothing
+        @test findlast(==(11), Base.OneTo(10)) === nothing
+        @test @inferred((() -> Val(findlast(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test findlast(isone, Base.OneTo(10)) == 1
+        @test findlast(isone, Base.OneTo(0)) === nothing
+        @test findlast(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findlast(==(2), Int16(3):Int16(7)) === nothing
+        @test findlast(isequal(8), 3:7) === nothing
+        @test findlast(==(0), UnitRange(-0.5, 0.5)) === nothing
+        @test findlast(==(2), big(1):big(2)) === 2
+        @test findlast(isequal(7), 1:2:10) == 4
+        @test findlast(iszero, -5:5) == 6
+        @test findlast(iszero, 2:5) === nothing
+        @test findlast(iszero, 6:5) === nothing
+        @test findlast(==(7), 1:2:10) == 4
+        @test findlast(==(10), 1:2:10) === nothing
+        @test findlast(==(11), 1:2:10) === nothing
+        @test findlast(==(-7), 1:-1:-10) == 9
+        @test findlast(==(2),1:-1:2) === nothing
+        @test findlast(iszero, 5:-2:-5) === nothing
+        @test findlast(iszero, 6:-2:-6) == 4
+        @test findlast(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
@@ -1544,6 +1583,9 @@ end
         @test size(r) == (3,)
         @test step(r) == 1
         @test first(r) == 1
+        @test first(r,2) === Base.OneTo(2)
+        @test first(r,20) === r
+        @test_throws ArgumentError first(r,-20)
         @test last(r) == 3
         @test minimum(r) == 1
         @test maximum(r) == 3
@@ -1574,6 +1616,9 @@ end
     let r = Base.OneTo(7)
         @test findall(in(2:(length(r) - 1)), r) === 2:(length(r) - 1)
         @test findall(in(r), 2:(length(r) - 1)) === 1:(length(r) - 2)
+    end
+    let r = Base.OneTo(Int8(4))
+        @test first(r,4) === r
     end
     @test convert(Base.OneTo, 1:2) === Base.OneTo{Int}(2)
     @test_throws ArgumentError("first element must be 1, got 2") convert(Base.OneTo, 2:3)

@@ -28,13 +28,7 @@ BOOTSTRAP_DEBUG_LEVEL ?= 0
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
 OPENBLAS_LIBNAMESUFFIX:=
-
-# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
-ifneq ($(OPENBLAS_TARGET_ARCH),)
 OPENBLAS_DYNAMIC_ARCH:=0
-else
-OPENBLAS_DYNAMIC_ARCH:=1
-endif
 OPENBLAS_USE_THREAD:=1
 
 # Flags for using libraries available on the system instead of building them.
@@ -92,6 +86,9 @@ WITH_DTRACE := 0
 # Enable ITTAPI integration
 WITH_ITTAPI := 0
 
+# Enable NVTX integration
+WITH_NVTX := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
@@ -115,6 +112,51 @@ SPACE:=$(eval) $(eval)
 export LC_ALL=C
 export LANG=C
 
+# Respect `FORCE_COLOR` environment variable: <https://force-color.org/>.
+ifndef FORCE_COLOR
+FORCE_COLOR := ""
+endif
+
+# Respect `NO_COLOR` environment variable: <https://no-color.org/>.
+ifndef NO_COLOR
+NO_COLOR := ""
+endif
+
+# When both `FORCE_COLOR` and `NO_COLOR` are defined, the former has precedence.
+ifneq ($(FORCE_COLOR), "")
+NO_COLOR = ""
+endif
+
+WARNCOLOR:="\033[33;1m"
+ENDCOLOR:="\033[0m"
+
+CCCOLOR:="\033[34m"
+LINKCOLOR:="\033[34;1m"
+PERLCOLOR:="\033[35m"
+FLISPCOLOR:="\033[32m"
+JULIACOLOR:="\033[32;1m"
+DTRACECOLOR:="\033[32;1m"
+
+SRCCOLOR:="\033[33m"
+BINCOLOR:="\033[37;1m"
+JULCOLOR:="\033[34;1m"
+
+ifneq ($(NO_COLOR), "")
+WARNCOLOR:=""
+ENDCOLOR:=""
+
+CCCOLOR:=""
+LINKCOLOR:=""
+PERLCOLOR:=""
+FLISPCOLOR:=""
+JULIACOLOR:=""
+DTRACECOLOR:=""
+
+SRCCOLOR:=""
+BINCOLOR:=""
+JULCOLOR:=""
+endif
+
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
 PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
@@ -137,7 +179,7 @@ ifeq ($(BUILDROOT),)
 ifeq ("$(origin O)", "command line")
   BUILDROOT := $(abspath $O)
   BUILDDIR := $(abspath $(BUILDROOT)/$(call rel_path,$(JULIAHOME),$(SRCDIR)))
-  $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
+  $(info $(shell printf '$(JULIACOLOR)Building into $(BUILDROOT)$(ENDCOLOR)')) # use printf to expand the escape sequences
 else
   BUILDROOT:=$(JULIAHOME)
 endif
@@ -492,7 +534,7 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
@@ -501,7 +543,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -512,6 +554,11 @@ DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
 SHIPFLAGS_COMMON  := -O3
 SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
 SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
+BOLT_LDFLAGS :=
+
+BOLT_CFLAGS_GCC    :=
+BOLT_CFLAGS_CLANG  :=
 
 ifeq ($(OS), Darwin)
 JCPPFLAGS_CLANG   += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
@@ -529,7 +576,8 @@ JCFLAGS    := $(JCFLAGS_GCC)
 JCPPFLAGS  := $(JCPPFLAGS_GCC)
 JCXXFLAGS  := $(JCXXFLAGS_GCC)
 DEBUGFLAGS := $(DEBUGFLAGS_GCC)
-SHIPFLAGS  := $(SHIPFLAGS_GCC)
+SHIPFLAGS  := $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
+BOLT_CFLAGS  := $(BOLT_CFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
@@ -539,7 +587,8 @@ JCFLAGS    := $(JCFLAGS_CLANG)
 JCPPFLAGS  := $(JCPPFLAGS_CLANG)
 JCXXFLAGS  := $(JCXXFLAGS_CLANG)
 DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
-SHIPFLAGS  := $(SHIPFLAGS_CLANG)
+SHIPFLAGS  := $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
+BOLT_CFLAGS  := $(BOLT_CFLAGS_CLANG)
 
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
@@ -808,6 +857,11 @@ JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
 endif
 
+ifeq ($(WITH_NVTX), 1)
+JCXXFLAGS += -DUSE_NVTX
+JCFLAGS += -DUSE_NVTX
+endif
+
 # ===========================================================================
 
 # Select the cpu architecture to target, or automatically detects the user's compiler
@@ -923,21 +977,40 @@ endif
 
 #If nothing is set default to native unless we are cross-compiling
 ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
-ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+ifeq ($(ARCH),aarch64)
+# ARM recommends only setting MCPU for AArch64
 MCPU=native
+else ifneq (,$(findstring riscv64,$(ARCH)))
+# RISC-V doesn't have a native option
+$(error Building for RISC-V requires a specific MARCH to be set))
 else
 MARCH=native
 MTUNE=native
 endif
 endif
 
+# If we are running on x86 or x86_64, set certain options automatically
+ifeq (1,$(ISX86))
+OPENBLAS_DYNAMIC_ARCH:=1
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=POWER8
 BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
+endif
+
+# Allow Clang to use CRC instructions (only applicable on AArch64)
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq ($(USECLANG),1)
+ifeq (,$(MARCH))
+JCFLAGS += -mcrc
+endif
+endif
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -971,6 +1044,9 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 DIST_ARCH:=arm
 endif
+ifneq (,$(findstring riscv64,$(ARCH)))
+DIST_ARCH:=riscv64
+endif
 
 JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
 endif
@@ -978,16 +1054,20 @@ endif
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
-USE_BLAS64:=0
-OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
+BINARY:=32
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
 ifneq (,$(findstring aarch64,$(ARCH)))
-OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=ARMV8
-USE_BLAS64:=1
+BINARY:=64
+endif
+
+# If we are running on riscv64, set certain options automatically
+ifneq (,$(findstring riscv64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=1
 BINARY:=64
 endif
 
@@ -996,7 +1076,11 @@ ifneq ($(MARCH),)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
+# On RISC-V, don't forward the MARCH ISA string to JULIA_CPU_TARGET,
+# as it's always incompatible with LLVM's CPU target name parser.
+ifeq (,$(findstring riscv64,$(ARCH)))
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
 endif
 
 # Set MCPU-specific flags
@@ -1071,20 +1155,13 @@ LIBUNWIND:=
 else ifneq ($(DISABLE_LIBUNWIND), 0)
 LIBUNWIND:=
 else
-ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
-ifneq ($(OS),Darwin)
 LIBUNWIND:=-lunwind
-# Only for linux since we want to use not yet released libunwind features
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
+JCPPFLAGS+=-DLLVMLIBUNWIND
+else ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+# Only for linux and freebsd since we want to use not yet released gnu libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
-endif
-else
-ifneq ($(findstring $(OS),Darwin OpenBSD),)
-LIBUNWIND:=-lunwind
-JCPPFLAGS+=-DLLVMLIBUNWIND
-else
-LIBUNWIND:=-lunwind
-endif
 endif
 endif
 
@@ -1278,7 +1355,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1384,9 +1461,16 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # make it loaded first to
 # prevent from linking to outdated system libs.
 # See #21788
+# TODO: Determine whether the condition here on AArch64 (added in #55089) should actually
+# be `ifneq ($(USE_BINARYBUILDER),0)`. We vendor a correctly versioned libgcc_s when using
+# BinaryBuilder which we want to link in early as noted above, but it could be the case
+# that without BinaryBuilder, regardless of architecture, we need to delay linking libgcc_s
+# to avoid getting the system one.
+ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
+endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--undefined-version -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
 endif
 
@@ -1726,23 +1810,9 @@ ifndef VERBOSE
 VERBOSE := 0
 endif
 
-WARNCOLOR:="\033[33;1m"
-ENDCOLOR:="\033[0m"
-
 ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
-
-CCCOLOR:="\033[34m"
-LINKCOLOR:="\033[34;1m"
-PERLCOLOR:="\033[35m"
-FLISPCOLOR:="\033[32m"
-JULIACOLOR:="\033[32;1m"
-DTRACECOLOR:="\033[32;1m"
-
-SRCCOLOR:="\033[33m"
-BINCOLOR:="\033[37;1m"
-JULCOLOR:="\033[34;1m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
@@ -1764,7 +1834,7 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
 
-endif
+endif # VERBOSE
 
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable

@@ -94,9 +94,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
             jl_error("method: invalid declaration");
         }
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        _Atomic(jl_value_t*) *bp = &b->value;
-        jl_value_t *gf = jl_generic_function_def(fname, modu, bp, b);
-        return gf;
+        return jl_declare_const_gf(b, modu, fname);
     }
 
     jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
@@ -644,6 +642,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
                     jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
                     s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_latestworld_sym) {
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
