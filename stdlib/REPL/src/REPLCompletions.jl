@@ -2,7 +2,7 @@
 
 module REPLCompletions
 
-export completions, shell_completions, bslash_completions, named_completion
+export completions, shell_completions, bslash_completions, completion_text, named_completion
 
 using Core: Const
 # We want to insulate the REPLCompletion module from any changes the user may
@@ -109,21 +109,27 @@ function Base.getproperty(c::Completion, name::Symbol)
     return getfield(c, name)
 end
 
-_named_completion(c::TextCompletion) = NamedCompletion(c.text)
-_named_completion(c::KeywordCompletion) = NamedCompletion(c.keyword)
-_named_completion(c::KeyvalCompletion) = NamedCompletion(c.keyval)
-_named_completion(c::PathCompletion) = NamedCompletion(c.path)
-_named_completion(c::ModuleCompletion) = NamedCompletion(c.mod)
-_named_completion(c::PackageCompletion) = NamedCompletion(c.package)
-_named_completion(c::PropertyCompletion) = NamedCompletion(sprint(Base.show_sym, c.property))
-_named_completion(c::FieldCompletion) = NamedCompletion(sprint(Base.show_sym, c.field))
-_named_completion(c::MethodCompletion) = NamedCompletion(repr(c.method))
-_named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
-_named_completion(c::ShellCompletion) = NamedCompletion(c.text)
-_named_completion(c::DictCompletion) = NamedCompletion(c.key)
-_named_completion(c::KeywordArgumentCompletion) = NamedCompletion(c.kwarg*'=')
+_completion_text(c::TextCompletion) = c.text
+_completion_text(c::KeywordCompletion) = c.keyword
+_completion_text(c::KeyvalCompletion) = c.keyval
+_completion_text(c::PathCompletion) = c.path
+_completion_text(c::ModuleCompletion) = c.mod
+_completion_text(c::PackageCompletion) = c.package
+_completion_text(c::PropertyCompletion) = sprint(Base.show_sym, c.property)
+_completion_text(c::FieldCompletion) = sprint(Base.show_sym, c.field)
+_completion_text(c::MethodCompletion) = repr(c.method)
+_completion_text(c::ShellCompletion) = c.text
+_completion_text(c::DictCompletion) = c.key
+_completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 
-named_completion(c) = _named_completion(c)::NamedCompletion
+completion_text(c) = _completion_text(c)::String
+
+named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+
+function named_completion(c)
+    text = completion_text(c)::String
+    return NamedCompletion(text, text)
+end
 
 named_completion_completion(c) = named_completion(c).completion::String
 

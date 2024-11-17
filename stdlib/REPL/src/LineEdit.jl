@@ -388,6 +388,18 @@ function complete_line(s::MIState)
     end
 end
 
+# due to close coupling of the Pkg ReplExt `complete_line` can still return a vector of strings,
+# so we convert those in this helper
+function complete_line_named(args...; kwargs...)::Tuple{Vector{NamedCompletion},String,Bool}
+    result = complete_line(args...; kwargs...)::Union{Tuple{Vector{NamedCompletion},String,Bool},Tuple{Vector{String},String,Bool}}
+    if result isa Tuple{Vector{NamedCompletion},String,Bool}
+        return result
+    else
+        completions, partial, should_complete = result
+        return map(NamedCompletion, completions), partial, should_complete
+    end
+end
+
 function check_for_hint(s::MIState)
     st = state(s)
     if !options(st).hint_tab_completes || !eof(buffer(st))
@@ -398,7 +410,7 @@ function check_for_hint(s::MIState)
     end
 
     named_completions, partial, should_complete = try
-        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{NamedCompletion},String,Bool}
+        complete_line_named(st.p.complete, st, s.active_module; hint = true)
     catch
         @debug "error completing line for hint" exception=current_exceptions()
         return clear_hint(st)
@@ -441,7 +453,7 @@ function clear_hint(s::ModeState)
 end
 
 function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line(s.p.complete, s, mod; hint)::Tuple{Vector{NamedCompletion},String,Bool}
+    completions, partial, should_complete = complete_line_named(s.p.complete, s, mod; hint)
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
