@@ -115,7 +115,9 @@ copy(x::Number) = x # some code treats numbers as collection-like
 """
     signbit(x)
 
-Return `true` if the value of the sign of `x` is negative, otherwise `false`.
+For nonzero `x`, `signbit(x)` is equivalent to `x < zero(x)`.
+Otherwise, when `iszero(x)`, the returned value depends on the type of `x`.
+For example, some floating-point types might wish to support a *signed* zero.
 
 See also [`sign`](@ref) and [`copysign`](@ref).
 
