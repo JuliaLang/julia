@@ -34,7 +34,7 @@ function json_repr(io::IO, val::AbstractVector; indent::Int=0)
     for i in eachindex(val)
         print(io, '\n', ' '^(indent + 2))
         json_repr(io, val[i]; indent=indent+2)
-        i == length(val) || print(io, ',')
+        i == lastindex(val) || print(io, ',')
     end
     print(io, '\n', ' '^indent, ']')
 end
