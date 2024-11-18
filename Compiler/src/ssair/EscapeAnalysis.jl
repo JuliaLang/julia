@@ -10,32 +10,32 @@ export
     has_thrown_escape,
     has_all_escape
 
-const _TOP_MOD = ccall(:jl_base_relative_to, Any, (Any,), EscapeAnalysis)::Module
+using Base: Base
 
 # imports
-import ._TOP_MOD: ==, getindex, setindex!
+import Base: ==, getindex, setindex!
 # usings
 using Core: MethodMatch, SimpleVector, ifelse, sizeof
 using Core.IR
-using ._TOP_MOD:     # Base definitions
-    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline, @show,
+using Base:       # Base definitions
+    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline,
     @nospecialize, @specialize, BitSet, Callable, Csize_t, IdDict, IdSet, UnitRange, Vector,
     copy, delete!, empty!, enumerate, error, first, get, get!, haskey, in, isassigned,
     isempty, ismutabletype, keys, last, length, max, min, missing, pop!, push!, pushfirst!,
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆,
     hasintersect
-using ..Compiler: # Core.Compiler specific definitions
+using ..Compiler: # Compiler specific definitions
     AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
     is_meta_expr_head, is_identity_free_argtype, isexpr, println, setfield!_nothrow,
     singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, Compiler
 
-function include(x)
-    if !isdefined(_TOP_MOD.Base, :end_base_include)
+function include(x::String)
+    if !isdefined(Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
         x = ccall(:jl_prepend_string, Ref{String}, (Any, Any), "ssair/", x)
     end
-    _TOP_MOD.include(@__MODULE__, x)
+    Compiler.include(@__MODULE__, x)
 end
 
 include("disjoint_set.jl")
