@@ -3691,6 +3691,42 @@ begin
 end
 @test Foreign54607.bar == 9
 
+# Test that lowering doesn't accidentally put a `Module` in the Method name slot
+let src = @Meta.lower let capture=1
+    global foo_lower_block
+    foo_lower_block() = capture
+end
+    code = src.args[1].code
+    for i = length(code):-1:1
+        expr = code[i]
+        Meta.isexpr(expr, :method) || continue
+        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+    end
+end
+
+let src = Meta.@lower let
+    try
+        try
+            return 1
+        catch
+        end
+    finally
+        nothing
+    end
+end
+    code = src.args[1].code
+    for stmt in code
+        if Meta.isexpr(stmt, :leave) && length(stmt.args) > 1
+            # Expr(:leave, ...) should list the arguments to pop from
+            # inner-most scope to outer-most
+            @test issorted(Int[
+                (arg::Core.SSAValue).id
+                for arg in stmt.args
+            ]; rev=true)
+        end
+    end
+end
+
 # Test that globals can be `using`'d even if they are not yet defined
 module UndefGlobal54954
     global theglobal54954::Int
