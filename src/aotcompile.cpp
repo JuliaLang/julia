@@ -1115,7 +1115,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
 
     bool verified = verify_partitioning(partitions, M, fvars, gvars);
     if (!verified)
-        M.dump();
+        llvm_dump(&M);
     assert(verified && "Partitioning failed to partition globals correctly");
     (void) verified;
 
