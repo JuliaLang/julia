@@ -130,6 +130,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // worker
                         NULL, // cookie
                         JL_OPTIONS_HANDLE_SIGNALS_ON,
+                        JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_NO,
                         JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
                         JL_OPTIONS_USE_COMPILED_MODULES_YES,
                         JL_OPTIONS_USE_PKGIMAGES_YES,
@@ -150,7 +151,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
                         0, // trace_compile_timing
-                        0, // trim
+                        JL_TRIM_NO, // trim
     };
     jl_options_initialized = 1;
 }
@@ -303,6 +304,7 @@ static const char opts_hidden[]  =
     "                                               functions\n\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
+    " --experimental                                Enable the use of experimental (alpha) features\n"
     " --output-unopt-bc <name>                      Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
@@ -372,6 +374,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_experimental_features,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -427,6 +430,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
+        { "experimental",    no_argument,       0, opt_experimental_features },
         { "worker",          optional_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
@@ -569,6 +573,9 @@ restart_switch:
                 jl_options.banner = 2;
             else
                 jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
+            break;
+        case opt_experimental_features:
+            jl_options.use_experimental_features = JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES;
             break;
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
@@ -977,6 +984,10 @@ restart_switch:
         }
     }
     parsing_args_done:
+    if (!jl_options.use_experimental_features) {
+        if (jl_options.trim != JL_TRIM_NO)
+            jl_errorf("julia: --trim is an experimental feature, you must enable it with --experimental");
+    }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;

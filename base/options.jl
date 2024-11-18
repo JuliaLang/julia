@@ -39,6 +39,7 @@ struct JLOptions
     worker::Int8
     cookie::Ptr{UInt8}
     handle_signals::Int8
+    use_experimental_features::Int8
     use_sysimage_native_code::Int8
     use_compiled_modules::Int8
     use_pkgimages::Int8
