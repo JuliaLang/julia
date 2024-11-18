@@ -1955,7 +1955,7 @@ public:
     // local var info. globals are not in here.
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
-    std::map<int, std::pair<Value*, Value*> > scope_restore;
+    std::map<int, Value*> scope_tokens;
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -6573,8 +6573,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_leave_sym) {
         int hand_n_leave = 0;
-        Value *scope_to_restore = nullptr;
-        Value *scope_ptr = nullptr;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6584,8 +6582,20 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, enter_idx);
             if (enter_stmt == jl_nothing)
                 continue;
-            if (ctx.scope_restore.count(enter_idx))
-                std::tie(scope_to_restore, scope_ptr) = ctx.scope_restore[enter_idx];
+            if (ctx.scope_tokens.count(enter_idx)) {
+                // TODO: The semantics of `gc_preserve` are not perfect here. An `Expr(:enter, ...)` block may
+                //       have multiple exits, but effects of `preserve_end` are only extended to the end of the
+                //       dominance of each `Expr(:leave, ...)`.
+                //
+                //       That means that a scope object can suddenly end up preserved again outside of an
+                //       `Expr(:enter, ...)` region where it ought to be dead. It'd be preferable if the effects
+                //       of gc_preserve_end propagated through a control-flow joins as long as all incoming
+                //       agree about the preserve state.
+                //
+                //       This is correct as-is anyway - it just means the scope lives longer than it needs to
+                //       if the `Expr(:enter, ...)` has multiple exits.
+                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {ctx.scope_tokens[enter_idx]});
+            }
             if (jl_enternode_catch_dest(enter_stmt)) {
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
@@ -6593,11 +6603,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
-        if (scope_to_restore) {
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            scope_ai.decorateInst(
-                ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
-        }
     }
     else if (head == jl_pop_exception_sym) {
         jl_cgval_t excstack_state = emit_expr(ctx, jl_exprarg(expr, 0));
@@ -7180,7 +7185,7 @@ static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 static Value *get_scope_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
-    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "current_scope");
+    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "scope");
 }
 
 Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
@@ -9604,28 +9609,6 @@ static jl_llvm_functions_t
             continue;
         }
         else if (jl_is_enternode(stmt)) {
-            // For the two-arg version of :enter, twiddle the scope
-            Value *scope_ptr = NULL;
-            Value *old_scope = NULL;
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            if (jl_enternode_scope(stmt)) {
-                jl_cgval_t new_scope = emit_expr(ctx, jl_enternode_scope(stmt));
-                if (new_scope.typ == jl_bottom_type) {
-                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
-                    // at the point of the miscompile, rather than later when something attempts to
-                    // read the scope.
-                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
-                    find_next_stmt(-1);
-                    continue;
-                }
-                Value *new_scope_boxed = boxed(ctx, new_scope);
-                scope_ptr = get_scope_field(ctx);
-                old_scope = scope_ai.decorateInst(
-                        ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr));
-                scope_ai.decorateInst(
-                    ctx.builder.CreateAlignedStore(new_scope_boxed, scope_ptr, ctx.types().alignof_ptr));
-                ctx.scope_restore[cursor] = std::make_pair(old_scope, scope_ptr);
-            }
             int lname = jl_enternode_catch_dest(stmt);
             if (lname) {
                 // Save exception stack depth at enter for use in pop_exception
@@ -9651,15 +9634,30 @@ static jl_llvm_functions_t
                 ctx.builder.SetInsertPoint(catchpop);
                 {
                     ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
-                    if (old_scope) {
-                        scope_ai.decorateInst(
-                            ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
-                    }
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
                 auto ehptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, eh));
                 ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
+            }
+            // For the two-arg version of :enter, twiddle the scope
+            if (jl_enternode_scope(stmt)) {
+                jl_cgval_t scope = emit_expr(ctx, jl_enternode_scope(stmt));
+                if (scope.typ == jl_bottom_type) {
+                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
+                    // at the point of the miscompile, rather than later when something attempts to
+                    // read the scope.
+                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
+                    find_next_stmt(-1);
+                    continue;
+                }
+                Value *scope_boxed = boxed(ctx, scope);
+                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, get_scope_field(ctx), ctx.types().alignof_ptr);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
+                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
+                // and may be removed from jl_current_task by any nested block and then
+                // replaced later
+                ctx.scope_tokens[cursor] = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {scope_boxed});
             }
         }
         else {
