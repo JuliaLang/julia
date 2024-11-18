@@ -296,6 +296,8 @@ end
     @test findnext(",b", "foo,bar,baz", 10) === nothing
     @test findfirst("az", "foo,bar,baz") == 10:11
     @test findnext("az", "foo,bar,baz", 12) === nothing
+end
+
 # See the comments in #54579
 @testset "Search for invalid chars" begin
     @test findfirst(==('\xff'), "abc\xffde") == 4
