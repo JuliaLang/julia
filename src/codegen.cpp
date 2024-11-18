@@ -5496,10 +5496,19 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     bool handled = false;
     jl_cgval_t result;
     if (lival.constant) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
+        jl_method_instance_t *mi;
+        jl_value_t *ci = nullptr;
+        if (jl_is_method_instance(lival.constant)) {
+            mi = (jl_method_instance_t*)lival.constant;
+        }
+        else {
+            ci = lival.constant;
+            assert(jl_is_code_instance(ci));
+            mi = ((jl_code_instance_t*)ci)->def;
+        }
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
-            // handle self-recursion specially
+            // handle self-recursion specially (TODO: assuming ci is a valid invoke for mi?)
             jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
@@ -5514,8 +5523,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
-            if (ci != jl_nothing) {
+            if (ci) {
                 jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
@@ -10343,24 +10351,8 @@ int jl_opaque_ptrs_set = 0;
 
 extern "C" void jl_init_llvm(void)
 {
-    jl_default_cgparams = {
-        /* track_allocations */ 1,
-        /* code_coverage */ 1,
-        /* prefer_specsig */ 0,
-#ifdef _OS_WINDOWS_
-        /* gnu_pubnames */ 0,
-#else
-        /* gnu_pubnames */ 1,
-#endif
-        /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        /* debug_info_level */ (int) jl_options.debug_level,
-        /* safepoint_on_entry */ 1,
-        /* gcstack_arg */ 1,
-        /* use_jlplt*/ 1,
-        /* trim */ 0,
-        /* lookup */ jl_rettype_inferred_addr };
     jl_page_size = jl_getpagesize();
-    jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
+    jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
