@@ -3,6 +3,8 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
+using Test: GenericArray
+using LinearAlgebra: isbanded
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -511,56 +513,110 @@ end
 end
 
 @testset "generic functions for checking whether matrices have banded structure" begin
-    using LinearAlgebra: isbanded
     pentadiag = [1 2 3; 4 5 6; 7 8 9]
     tridiag   = [1 2 0; 4 5 6; 0 8 9]
+    tridiagG  = GenericArray([1 2 0; 4 5 6; 0 8 9])
+    Tridiag   = Tridiagonal(tridiag)
     ubidiag   = [1 2 0; 0 5 6; 0 0 9]
+    ubidiagG  = GenericArray([1 2 0; 0 5 6; 0 0 9])
+    uBidiag   = Bidiagonal(ubidiag, :U)
     lbidiag   = [1 0 0; 4 5 0; 0 8 9]
+    lbidiagG  = GenericArray([1 0 0; 4 5 0; 0 8 9])
+    lBidiag   = Bidiagonal(lbidiag, :L)
     adiag     = [1 0 0; 0 5 0; 0 0 9]
+    adiagG    = GenericArray([1 0 0; 0 5 0; 0 0 9])
+    aDiag     = Diagonal(adiag)
     @testset "istriu" begin
         @test !istriu(pentadiag)
         @test istriu(pentadiag, -2)
         @test !istriu(tridiag)
+        @test istriu(tridiag) == istriu(tridiagG) == istriu(Tridiag)
         @test istriu(tridiag, -1)
+        @test istriu(tridiag, -1) == istriu(tridiagG, -1) == istriu(Tridiag, -1)
         @test istriu(ubidiag)
+        @test istriu(ubidiag) == istriu(ubidiagG) == istriu(uBidiag)
         @test !istriu(ubidiag, 1)
+        @test istriu(ubidiag, 1) == istriu(ubidiagG, 1) == istriu(uBidiag, 1)
         @test !istriu(lbidiag)
+        @test istriu(lbidiag) == istriu(lbidiagG) == istriu(lBidiag)
         @test istriu(lbidiag, -1)
+        @test istriu(lbidiag, -1) == istriu(lbidiagG, -1) == istriu(lBidiag, -1)
         @test istriu(adiag)
+        @test istriu(adiag) == istriu(adiagG) == istriu(aDiag)
     end
     @testset "istril" begin
         @test !istril(pentadiag)
         @test istril(pentadiag, 2)
         @test !istril(tridiag)
+        @test istril(tridiag) == istril(tridiagG) == istril(Tridiag)
         @test istril(tridiag, 1)
+        @test istril(tridiag, 1) == istril(tridiagG, 1) == istril(Tridiag, 1)
         @test !istril(ubidiag)
+        @test istril(ubidiag) == istril(ubidiagG) == istril(ubidiagG)
         @test istril(ubidiag, 1)
+        @test istril(ubidiag, 1) == istril(ubidiagG, 1) == istril(uBidiag, 1)
         @test istril(lbidiag)
+        @test istril(lbidiag) == istril(lbidiagG) == istril(lBidiag)
         @test !istril(lbidiag, -1)
+        @test istril(lbidiag, -1) == istril(lbidiagG, -1) == istril(lBidiag, -1)
         @test istril(adiag)
+        @test istril(adiag) == istril(adiagG) == istril(aDiag)
     end
     @testset "isbanded" begin
         @test isbanded(pentadiag, -2, 2)
         @test !isbanded(pentadiag, -1, 2)
         @test !isbanded(pentadiag, -2, 1)
         @test isbanded(tridiag, -1, 1)
+        @test isbanded(tridiag, -1, 1) == isbanded(tridiagG, -1, 1) == isbanded(Tridiag, -1, 1)
         @test !isbanded(tridiag, 0, 1)
+        @test isbanded(tridiag, 0, 1) == isbanded(tridiagG, 0, 1) == isbanded(Tridiag, 0, 1)
         @test !isbanded(tridiag, -1, 0)
+        @test isbanded(tridiag, -1, 0) == isbanded(tridiagG, -1, 0) == isbanded(Tridiag, -1, 0)
         @test isbanded(ubidiag, 0, 1)
+        @test isbanded(ubidiag, 0, 1) == isbanded(ubidiagG, 0, 1) == isbanded(uBidiag, 0, 1)
         @test !isbanded(ubidiag, 1, 1)
+        @test isbanded(ubidiag, 1, 1) == isbanded(ubidiagG, 1, 1) == isbanded(uBidiag, 1, 1)
         @test !isbanded(ubidiag, 0, 0)
+        @test isbanded(ubidiag, 0, 0) == isbanded(ubidiagG, 0, 0) == isbanded(uBidiag, 0, 0)
         @test isbanded(lbidiag, -1, 0)
+        @test isbanded(lbidiag, -1, 0) == isbanded(lbidiagG, -1, 0) == isbanded(lBidiag, -1, 0)
         @test !isbanded(lbidiag, 0, 0)
+        @test isbanded(lbidiag, 0, 0) == isbanded(lbidiagG, 0, 0) == isbanded(lBidiag, 0, 0)
         @test !isbanded(lbidiag, -1, -1)
+        @test isbanded(lbidiag, -1, -1) == isbanded(lbidiagG, -1, -1) == isbanded(lBidiag, -1, -1)
         @test isbanded(adiag, 0, 0)
+        @test isbanded(adiag, 0, 0) == isbanded(adiagG, 0, 0) == isbanded(aDiag, 0, 0)
         @test !isbanded(adiag, -1, -1)
+        @test isbanded(adiag, -1, -1) == isbanded(adiagG, -1, -1) == isbanded(aDiag, -1, -1)
         @test !isbanded(adiag, 1, 1)
+        @test isbanded(adiag, 1, 1) == isbanded(adiagG, 1, 1) == isbanded(aDiag, 1, 1)
     end
     @testset "isdiag" begin
         @test !isdiag(tridiag)
+        @test isdiag(tridiag) == isdiag(tridiagG) == isdiag(Tridiag)
         @test !isdiag(ubidiag)
+        @test isdiag(ubidiag) == isdiag(ubidiagG) == isdiag(uBidiag)
         @test !isdiag(lbidiag)
+        @test isdiag(lbidiag) == isdiag(lbidiagG) == isdiag(lBidiag)
         @test isdiag(adiag)
+        @test isdiag(adiag) ==isdiag(adiagG) == isdiag(aDiag)
+    end
+end
+
+@testset "isbanded/istril/istriu with rectangular matrices" begin
+    @testset "$(size(A))" for A in [zeros(0,4), zeros(2,5), zeros(5,2), zeros(4,0)]
+        @testset for m in -(size(A,1)-1):(size(A,2)-1)
+            A .= 0
+            A[diagind(A, m)] .= 1
+            G = GenericArray(A)
+            @testset for (kl,ku) in Iterators.product(-6:6, -6:6)
+                @test isbanded(A, kl, ku) == isbanded(G, kl, ku) == isempty(A) || (m in (kl:ku))
+            end
+            @testset for k in -6:6
+                @test istriu(A,k) == istriu(G,k) == isempty(A) || (k <= m)
+                @test istril(A,k) == istril(G,k) == isempty(A) || (k >= m)
+            end
+        end
     end
 end
 

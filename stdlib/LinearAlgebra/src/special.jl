@@ -22,7 +22,7 @@ function Tridiagonal(A::Bidiagonal)
 end
 
 _diagview(S::SymTridiagonal{<:Number}) = S.dv
-_diagview(S::SymTridiagonal) = view(S, diagind(S, IndexStyle(S)))
+_diagview(S::SymTridiagonal) = diagview(S)
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(_diagview(A))
@@ -370,20 +370,20 @@ function copyto!(dest::BandedMatrix, src::BandedMatrix)
 end
 function _copyto_banded!(T::Tridiagonal, D::Diagonal)
     T.d .= D.diag
-    T.dl .= view(D, diagind(D, -1, IndexStyle(D)))
-    T.du .= view(D, diagind(D,  1, IndexStyle(D)))
+    T.dl .= diagview(D, -1)
+    T.du .= diagview(D,  1)
     return T
 end
 function _copyto_banded!(SymT::SymTridiagonal, D::Diagonal)
     issymmetric(D) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal"))
     SymT.dv .= D.diag
     _ev = _evview(SymT)
-    _ev .= view(D, diagind(D,  1, IndexStyle(D)))
+    _ev .= diagview(D,  1)
     return SymT
 end
 function _copyto_banded!(B::Bidiagonal, D::Diagonal)
     B.dv .= D.diag
-    B.ev .= view(D, diagind(D,  B.uplo == 'U' ? 1 : -1, IndexStyle(D)))
+    B.ev .= diagview(D, _offdiagind(B.uplo))
     return B
 end
 function _copyto_banded!(D::Diagonal, B::Bidiagonal)
@@ -411,10 +411,10 @@ function _copyto_banded!(T::Tridiagonal, B::Bidiagonal)
     T.d .= B.dv
     if B.uplo == 'U'
         T.du .= B.ev
-        T.dl .= view(B, diagind(B, -1, IndexStyle(B)))
+        T.dl .= diagview(B,-1)
     else
         T.dl .= B.ev
-        T.du .= view(B, diagind(B,  1, IndexStyle(B)))
+        T.du .= diagview(B, 1)
     end
     return T
 end
@@ -592,3 +592,4 @@ end
 # istriu/istril for triangular wrappers of structured matrices
 _istril(A::LowerTriangular{<:Any, <:BandedMatrix}, k) = istril(parent(A), k)
 _istriu(A::UpperTriangular{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)
+_istriu(A::UpperHessenberg{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)

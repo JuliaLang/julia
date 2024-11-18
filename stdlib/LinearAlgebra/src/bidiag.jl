@@ -191,8 +191,8 @@ function Matrix{T}(A::Bidiagonal) where T
     B = Matrix{T}(undef, size(A))
     if haszero(T) # optimized path for types with zero(T) defined
         size(B,1) > 1 && fill!(B, zero(T))
-        copyto!(view(B, diagind(B)), A.dv)
-        copyto!(view(B, diagind(B, _offdiagind(A.uplo))), A.ev)
+        copyto!(diagview(B), A.dv)
+        copyto!(diagview(B, _offdiagind(A.uplo)), A.ev)
     else
         copyto!(B, A)
     end
@@ -472,10 +472,14 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
-    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+for T in (:AbstractMatrix, :Diagonal)
+    @eval begin
+        @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::$T, alpha::Number, beta::Number) =
+            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+        @inline _mul!(C::AbstractMatrix, A::$T, B::BandedMatrix, alpha::Number, beta::Number) =
+            @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+    end
+end
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
@@ -570,7 +574,7 @@ end
 # to avoid allocations in _mul! below (#24324, #24578)
 _diag(A::Tridiagonal, k) = k == -1 ? A.dl : k == 0 ? A.d : A.du
 _diag(A::SymTridiagonal{<:Number}, k) = k == 0 ? A.dv : A.ev
-_diag(A::SymTridiagonal, k) = k == 0 ? view(A, diagind(A, IndexStyle(A))) : view(A, diagind(A, 1, IndexStyle(A)))
+_diag(A::SymTridiagonal, k) = diagview(A,k)
 function _diag(A::Bidiagonal, k)
     if k == 0
         return A.dv
@@ -831,6 +835,8 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
     C
 end
 
+_mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
@@ -1067,6 +1073,8 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAdd
     C
 end
 
+_mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 _mul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add::MulAddMul) =
     _dibimul!(C, A, B, _add)
 _mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul) =

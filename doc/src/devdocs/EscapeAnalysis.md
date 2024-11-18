@@ -1,6 +1,6 @@
 # `EscapeAnalysis`
 
-`Core.Compiler.EscapeAnalysis` is a compiler utility module that aims to analyze
+`Compiler.EscapeAnalysis` is a compiler utility module that aims to analyze
 escape information of [Julia's SSA-form IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
 
 This escape analysis aims to:
@@ -20,12 +20,9 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 defines the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
+using Base.Compiler: EscapeAnalysis # or `using Compiler: EscapeAnalysis` to use the stdlib version
 let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
-    # load `EscapeAnalysis` module to define the core analysis code
-    include(normpath(JULIA_DIR, "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
-    using .EscapeAnalysis
-    # load `EAUtils` module to define the utilities
-    include(normpath(JULIA_DIR, "test", "compiler", "EscapeAnalysis", "EAUtils.jl"))
+    include(normpath(JULIA_DIR, "Compiler", "test", "EAUtils.jl"))
     using .EAUtils
 end
 
@@ -37,19 +34,17 @@ Base.setindex!(x::SafeRef, v) = x.x = v;
 Base.isassigned(x::SafeRef) = true;
 get′(x) = isassigned(x) ? x[] : throw(x);
 
-result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
-    r1 = Ref(s1)
+result = code_escapes((Base.RefValue{String},String,String,)) do r1, s2, s3
     r2 = Ref(s2)
     r3 = SafeRef(s3)
     try
         s1 = get′(r1)
         ret = sizeof(s1)
     catch err
-        global GV = err # will definitely escape `r1`
+        global GV = err # `r1` may escape
     end
-    s2 = get′(r2)       # still `r2` doesn't escape fully
-    s3 = get′(r3)       # still `r3` doesn't escape fully
-    s4 = sizeof(s4)     # the argument `s4` doesn't escape here
+    s2 = get′(r2)       # `r2` doesn't escape
+    s3 = get′(r3)       # `r3` doesn't escape
     return s2, s3, s4
 end
 ```
@@ -59,7 +54,7 @@ The symbols on the side of each call argument and SSA statements represent the f
 - `✓` (green or cyan): this value never escapes (`has_no_escape(result.state[x])` holds), colored blue if it has arg escape also (`has_arg_escape(result.state[x])` holds)
 - `↑` (blue or yellow): this value can escape to the caller via return (`has_return_escape(result.state[x])` holds), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `X` (red): this value can escape to somewhere the escape analysis can't reason about like escapes to a global memory (`has_all_escape(result.state[x])` holds)
-- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Core.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
+- `*` (bold): this value's escape state is between the `ReturnEscape` and `AllEscape` in the partial order of [`EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo), colored yellow if it has unhandled thrown escape also (`has_thrown_escape(result.state[x])` holds)
 - `′`: this value has additional object field / array element information in its `AliasInfo` property
 
 Escape information of each call argument and SSA value can be inspected programmatically as like:
@@ -74,7 +69,7 @@ result.state[Core.SSAValue(3)] # get EscapeInfo of `r3`
 ### Lattice Design
 
 `EscapeAnalysis` is implemented as a [data-flow analysis](https://en.wikipedia.org/wiki/Data-flow_analysis)
-that works on a lattice of [`x::EscapeInfo`](@ref Core.Compiler.EscapeAnalysis.EscapeInfo),
+that works on a lattice of [`x::EscapeInfo`](@ref Base.Compiler.EscapeAnalysis.EscapeInfo),
 which is composed of the following properties:
 - `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
 - `x.ReturnEscape::BitSet`: records SSA statements where `x` can escape to the caller via return
@@ -105,10 +100,10 @@ One distinctive design of this escape analysis is that it is fully _backward_,
 i.e. escape information flows _from usages to definitions_.
 For example, in the code snippet below, EA first analyzes the statement `return %1` and
 imposes `ReturnEscape` on `%1` (corresponding to `obj`), and then it analyzes
-`%1 = %new(Base.RefValue{String, _2}))` and propagates the `ReturnEscape` imposed on `%1`
-to the call argument `_2` (corresponding to `s`):
+`%1 = %new(Base.RefValue{Base.RefValue{String}, _2}))` and propagates the `ReturnEscape`
+imposed on `%1` to the call argument `_2` (corresponding to `s`):
 ```@repl EAUtils
-code_escapes((String,)) do s
+code_escapes((Base.RefValue{String},)) do s
     obj = Ref(s)
     return obj
 end
@@ -120,7 +115,7 @@ As a result this scheme enables a simple implementation of escape analysis,
 e.g. `PhiNode` for example can be handled simply by propagating escape information
 imposed on a `PhiNode` to its predecessor values:
 ```@repl EAUtils
-code_escapes((Bool, String, String)) do cnd, s, t
+code_escapes((Bool, Base.RefValue{String}, Base.RefValue{String})) do cnd, s, t
     if cnd
         obj = Ref(s)
     else
@@ -366,9 +361,9 @@ More interestingly, it is also valid to use `IPO EA` escape information for type
 e.g., inference accuracy can be improved by forming `Const`/`PartialStruct`/`MustAlias` of mutable object.
 
 ```@docs
-Core.Compiler.EscapeAnalysis.analyze_escapes
-Core.Compiler.EscapeAnalysis.EscapeState
-Core.Compiler.EscapeAnalysis.EscapeInfo
+Base.Compiler.EscapeAnalysis.analyze_escapes
+Base.Compiler.EscapeAnalysis.EscapeState
+Base.Compiler.EscapeAnalysis.EscapeInfo
 ```
 
 --------------------------------------------------------------------------------------------

@@ -34,6 +34,54 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+/* This function is also used by gc-stock.c to parse the
+ * JULIA_HEAP_SIZE_HINT environment variable. */
+uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
+{
+    long double value = 0.0;
+    char unit[4] = {0};
+    int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
+    if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && ascii_tolower(unit[1]) != 'b')) {
+        jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
+    }
+    uint64_t multiplier = 1ull;
+    switch (ascii_tolower(unit[0])) {
+        case '\0':
+        case 'b':
+            break;
+        case 'k':
+            multiplier <<= 10;
+            break;
+        case 'm':
+            multiplier <<= 20;
+            break;
+        case 'g':
+            multiplier <<= 30;
+            break;
+        case 't':
+            multiplier <<= 40;
+            break;
+        case '%':
+            if (value > 100)
+                jl_errorf("julia: invalid percentage specified in %s", option_name);
+            uint64_t mem = uv_get_total_memory();
+            uint64_t cmem = uv_get_constrained_memory();
+            if (cmem > 0 && cmem < mem)
+                mem = cmem;
+            multiplier = mem/100;
+            break;
+        default:
+            jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
+            break;
+    }
+    long double sz = value * multiplier;
+    if (isnan(sz) || sz < 0) {
+        jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
+    }
+    const long double limit = ldexpl(1.0, 64); // UINT64_MAX + 1
+    return sz < limit ? (uint64_t)sz : UINT64_MAX;
+}
+
 static int jl_options_initialized = 0;
 
 JL_DLLEXPORT void jl_init_options(void)
@@ -231,10 +279,11 @@ static const char opts[]  =
     "                                               current environment and fallbacks to the latest\n"
     "                                               compatible BugReporting.jl if not. For more\n"
     "                                               information, see --bug-report=help.\n\n"
-    " --heap-size-hint=<size>                       Forces garbage collection if memory usage is higher\n"
+    " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
     "                                               than the given value. The value may be specified as a\n"
-    "                                               number of bytes, optionally in units of KB, MB, GB,\n"
-    "                                               or TB, or as a percentage of physical memory with %.\n\n"
+    "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
+    "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
+    "                                               of physical memory).\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -880,52 +929,10 @@ restart_switch:
             jl_options.strip_ir = 1;
             break;
         case opt_heap_size_hint:
-            if (optarg != NULL) {
-                long double value = 0.0;
-                char unit[4] = {0};
-                int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
-                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && ascii_tolower(unit[1]) != 'b')) {
-                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
-                }
-                uint64_t multiplier = 1ull;
-                switch (ascii_tolower(unit[0])) {
-                    case '\0':
-                    case 'b':
-                        break;
-                    case 'k':
-                        multiplier <<= 10;
-                        break;
-                    case 'm':
-                        multiplier <<= 20;
-                        break;
-                    case 'g':
-                        multiplier <<= 30;
-                        break;
-                    case 't':
-                        multiplier <<= 40;
-                        break;
-                    case '%':
-                        if (value > 100)
-                            jl_errorf("julia: invalid percentage specified in --heap-size-hint");
-                        uint64_t mem = uv_get_total_memory();
-                        uint64_t cmem = uv_get_constrained_memory();
-                        if (cmem > 0 && cmem < mem)
-                            mem = cmem;
-                        multiplier = mem/100;
-                        break;
-                    default:
-                        jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
-                        break;
-                }
-                long double sz = value * multiplier;
-                if (isnan(sz) || sz < 0) {
-                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
-                }
-                const long double limit = ldexpl(1.0, 64); // UINT64_MAX + 1
-                jl_options.heap_size_hint = sz < limit ? (uint64_t)sz : UINT64_MAX;
-            }
+            if (optarg != NULL)
+                jl_options.heap_size_hint = parse_heap_size_hint(optarg, "--heap-size-hint=<size>[<unit>]");
             if (jl_options.heap_size_hint == 0)
-                jl_errorf("julia: invalid memory size specified in --heap-size-hint");
+                jl_errorf("julia: invalid memory size specified in --heap-size-hint=<size>[<unit>]");
 
             break;
         case opt_gc_threads:

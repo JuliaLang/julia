@@ -476,7 +476,12 @@ function lpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want pad^max(0, npad - ncodeunits(str)) * str to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
@@ -508,7 +513,12 @@ function rpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want str * pad^max(0, npad - ncodeunits(str)) to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
