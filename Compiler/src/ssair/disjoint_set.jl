@@ -3,14 +3,9 @@
 # under the MIT license: https://github.com/JuliaCollections/DataStructures.jl/blob/master/License.md
 
 # imports
-import ._TOP_MOD:
-    length,
-    eltype,
-    union!,
-    push!
+import Base: length, eltype, union!, push!
 # usings
-import ._TOP_MOD:
-    OneTo, collect, zero, zeros, one, typemax
+import Base: OneTo, collect, zero, zeros, one, typemax
 
 # Disjoint-Set
 
@@ -27,7 +22,8 @@ import ._TOP_MOD:
 #
 ############################################################
 
-_intdisjointset_bounds_err_msg(T) = "the maximum number of elements in IntDisjointSet{$T} is $(typemax(T))"
+_intdisjointset_bounds_err_msg(@nospecialize T) =
+    "the maximum number of elements in IntDisjointSet{$T} is $(typemax(T))"
 
 """
     IntDisjointSet{T<:Integer}(n::Integer)
