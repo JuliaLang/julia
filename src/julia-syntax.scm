@@ -1224,7 +1224,7 @@
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
            (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
-           `(block (method ,name) (latestworld) (unnecessary ,name)))
+           `(method ,name))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
            (let* ((raw-typevars (or where '()))

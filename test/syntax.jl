@@ -4019,3 +4019,17 @@ end
 @test f45494() === (0,)
 
 @test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))
+
+# Inner function declaration world age
+function create_inner_f_no_methods()
+    function inner_f end
+end
+@test isa(create_inner_f_no_methods(), Function)
+@test length(methods(create_inner_f_no_methods())) == 0
+
+function create_inner_f_one_method()
+    inner_f() = 1
+end
+@test isa(create_inner_f_no_methods(), Function)
+@test length(methods(create_inner_f_no_methods())) == 0
+@test Base.invoke_in_world(first(methods(create_inner_f_one_method)).primary_world, create_inner_f_one_method()) == 1
