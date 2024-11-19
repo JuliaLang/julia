@@ -96,9 +96,6 @@ Cholesky(A::AbstractMatrix{T}, uplo::AbstractChar, info::Integer) where {T} =
 Cholesky(U::UpperTriangular{T}) where {T} = Cholesky{T,typeof(U.data)}(U.data, 'U', 0)
 Cholesky(L::LowerTriangular{T}) where {T} = Cholesky{T,typeof(L.data)}(L.data, 'L', 0)
 
-Base.convert(::Type{Cholesky{T,S}}, C::Cholesky{T,S}) where {T,S<:AbstractMatrix} = C
-Base.convert(::Type{Cholesky{T,S}}, C::Cholesky) where {T,S<:AbstractMatrix} = Cholesky{T,S}(C.factors, C.uplo, C.info)
-
 # iteration for destructuring into components
 Base.iterate(C::Cholesky) = (C.L, Val(:U))
 Base.iterate(C::Cholesky, ::Val{:U}) = (C.U, Val(:done))
@@ -173,10 +170,6 @@ CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::AbstractVector{<:
 @deprecate(CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix},
            CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info), false)
 
-Base.convert(::Type{CholeskyPivoted{T,S}}, C::CholeskyPivoted{T,S}) where {T,S<:AbstractMatrix} = C
-Base.convert(::Type{CholeskyPivoted{T,S}}, C::CholeskyPivoted) where {T,S<:AbstractMatrix} = CholeskyPivoted{T,S}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
-Base.convert(::Type{CholeskyPivoted{T,S,P}}, C::CholeskyPivoted{T,S,P}) where {T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} = C
-Base.convert(::Type{CholeskyPivoted{T,S,P}}, C::CholeskyPivoted) where {T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} = CholeskyPivoted{T,S,P}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
 
 # iteration for destructuring into components
 Base.iterate(C::CholeskyPivoted) = (C.L, Val(:U))
@@ -638,11 +631,16 @@ function Cholesky{T}(C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo, C.info)
 end
+Cholesky{T,S}(C::Cholesky) where {T,S<:AbstractMatrix} = Cholesky{T,S}(C.factors, C.uplo, C.info)
 Factorization{T}(C::Cholesky{T}) where {T} = C
 Factorization{T}(C::Cholesky) where {T} = Cholesky{T}(C)
 CholeskyPivoted{T}(C::CholeskyPivoted{T}) where {T} = C
 CholeskyPivoted{T}(C::CholeskyPivoted) where {T} =
-    CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
+    CholeskyPivoted(AbstractMatrix{T}(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
+CholeskyPivoted{T,S}(C::CholeskyPivoted) where {T,S<:AbstractMatrix} =
+    CholeskyPivoted{T,S,typeof(C.piv)}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
+CholeskyPivoted{T,S,P}(C::CholeskyPivoted) where {T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} =
+    CholeskyPivoted{T,S,P}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
 Factorization{T}(C::CholeskyPivoted{T}) where {T} = C
 Factorization{T}(C::CholeskyPivoted) where {T} = CholeskyPivoted{T}(C)
 

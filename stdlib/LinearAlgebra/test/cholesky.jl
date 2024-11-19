@@ -292,11 +292,12 @@ end
 
         capd = cholesky(apd, RowMaximum())
         @test convert(CholeskyPivoted{Float64}, capd) === capd
-        @test convert(CholeskyPivoted{Float64,Matrix{Float64}}, capd) == capd
+        @test convert(CholeskyPivoted{Float64,Matrix{Float64}}, capd) === capd
         @test convert(CholeskyPivoted{Float64,Matrix{Float64},Vector{Int}}, capd) === convert(typeof(capd), capd) === capd
         @test eltype(convert(CholeskyPivoted{Float32}, capd)) === Float32
         @test eltype(convert(CholeskyPivoted{Float32,Matrix{Float32}}, capd)) === Float32
         @test eltype(convert(CholeskyPivoted{Float32,Matrix{Float32},Vector{Int}}, capd)) === Float32
+        @test eltype(convert(CholeskyPivoted{Float32,Matrix{Float32},Vector{Int16}}, capd).piv) === Int16
     end
 end
 
