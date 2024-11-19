@@ -266,6 +266,21 @@ function strcat(x::String, y::String)
     return out
 end
 
+function file_exists(filename::String)
+    file = ccall(
+        (:fopen, "libc"),
+        Ptr{Cvoid},
+        (Ptr{UInt8}, Ptr{UInt8}),
+        filename, "r"
+    )
+    if file != C_NULL
+        ccall((:fclose, "libc"), Cint, (Ptr{Cvoid},), file)
+        return true
+    else
+        return false
+    end
+end
+
 global BUILDROOT::String = ""
 
 baremodule BuildSettings end
@@ -288,7 +303,11 @@ process_sysimg_args!()
 
 function isready end
 
-include(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
+if file_exists(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
+    include(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
+else
+    include(strcat(BUILDROOT, "../share/julia/Compiler/src/Compiler.jl"))
+end
 
 const _return_type = Compiler.return_type
 
