@@ -577,7 +577,7 @@ let io = IOBuffer()
     serialize(io, f)
     seekstart(io)
     f2 = deserialize(io)
-    @test f2(1) === 1f0
+    @test invokelatest(f2, 1) === 1f0
 end
 
 # using a filename; #30151
