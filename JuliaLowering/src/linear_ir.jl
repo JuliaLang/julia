@@ -8,8 +8,6 @@ function is_simple_atom(ctx, ex)
         (k == K"core" && ex.name_val == "nothing")
 end
 
-# This assumes that resolve-scopes has run, so outerref is equivalent to a
-# global in the current scope.
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
     if is_simple_atom(ctx, ex) || k == K"inert" || k == K"top" || k == K"core"
@@ -26,8 +24,6 @@ function is_valid_ir_argument(ctx, ex)
             # broken when precompiling a module `B` in the presence of a badly
             # behaved module `A`, which inconsistently defines globals during
             # `A.__init__()`??)
-            #
-            # TODO (k == K"outerref" && nothrow_julia_global(ex[1]))
             is_defined_nothrow_global(binfo.mod, Symbol(binfo.name))
         else
             false
@@ -126,7 +122,7 @@ end
 function is_simple_arg(ctx, ex)
     k = kind(ex)
     return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
-           k == K"top" || k == K"core" || k == K"globalref" || k == K"outerref"
+           k == K"top" || k == K"core" || k == K"globalref"
 end
 
 function is_single_assign_var(ctx::LinearIRContext, ex)
@@ -150,7 +146,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
-            # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref
+            # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref
             kind(rhs) in KSet"new call foreigncall")
 end
 
@@ -465,7 +461,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         finally_handler = FinallyHandler(new_mutable_var(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
-        emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar -1::K"Integer"])
+        emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar (-1)::K"Integer"])
     end
     push!(ctx.handler_token_stack, handler_token)
 
@@ -569,7 +565,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"Placeholder"
-        # TODO: other kinds: copyast $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
+        # TODO: other kinds: copyast $ globalref thismodule cdecl stdcall fastcall thiscall llvmcall
         if needs_value && k == K"Placeholder"
             # TODO: ensure outterref, globalref work here
             throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
@@ -789,13 +785,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"isdefined"
+    elseif k == K"isdefined" # TODO || k == K"throw_undef_if_not" (See upstream #53875)
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
             ex
-        else
-            emit(ctx, ex)
         end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
@@ -860,7 +854,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
                 makeleaf(ctx, ex, K"globalref", binfo.name, mod=binfo.mod)
             end
         end
-    elseif k == K"outerref" || k == K"meta"
+    elseif k == K"meta"
         TODO(ex, "_renumber $k")
     elseif is_literal(k) || is_quoted(k)
         ex

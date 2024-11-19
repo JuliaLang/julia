@@ -47,7 +47,7 @@ baremodule M
     using JuliaSyntax
 
     macro K_str(str)
-        convert(JuliaSyntax.Kind, str)
+        JuliaSyntax.Kind(str)
     end
 
     function var"@inert"(__context__::JuliaLowering.MacroContext, ex)

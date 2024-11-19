@@ -62,7 +62,6 @@ function _register_kinds()
             "toplevel_butfirst"
             "const_if_global"
             "moved_local"
-            "outerref"
             "label"
             "trycatchelse"
             "tryfinally"

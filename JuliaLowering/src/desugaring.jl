@@ -518,6 +518,19 @@ function expand_setindex(ctx, ex)
     ]
 end
 
+# Expand UnionAll definitions, eg `X{T} = Y{T,T}`
+function expand_unionall_def(ctx, srcref, lhs, rhs)
+    if numchildren(lhs) <= 1
+        throw(LoweringError(lhs, "empty type parameter list in type alias"))
+    end
+    name = lhs[1]
+    @ast ctx srcref [K"block"
+        [K"const_if_global" name]
+        unionall_type = expand_forms_2(ctx, [K"where" rhs lhs[2:end]...])
+        expand_forms_2([K"=" name unionall_type])
+    ]
+end
+
 # Expand general assignment syntax, including
 #   * UnionAll definitions
 #   * Chained assignments
@@ -531,19 +544,7 @@ function expand_assignment(ctx, ex)
     rhs = ex[2]
     kl = kind(lhs)
     if kl == K"curly"
-        # Expand UnionAll definitions
-        if numchildren(lhs) <= 1
-            throw(LoweringError(lhs, "empty type parameter list in type alias"))
-        end
-        name = lhs[1]
-        unionall_def = @ast ctx ex [K"="
-            name 
-            [K"where" ex[2] lhs[2:end]...]
-        ]
-        @ast ctx ex [K"block"
-            [K"const_if_global" name]
-            expand_forms_2(ctx, unionall_def)
-        ]
+        expand_unionall_def(ctx, ex, lhs, rhs)
     elseif kind(rhs) == K"="
         # Expand chains of assignments
         # a = b = c  ==>  b=c; a=c
@@ -1206,7 +1207,7 @@ function expand_decls(ctx, ex)
     makenode(ctx, ex, K"block", stmts)
 end
 
-function analyze_function_arg(full_ex)
+function match_function_arg(full_ex)
     name = nothing
     type = nothing
     default = nothing
@@ -1318,8 +1319,10 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
         arg_names = SyntaxList(ctx)
         arg_types = SyntaxList(ctx)
+        first_default = 0
+        arg_defaults = SyntaxList(ctx)
         for (i,arg) in enumerate(args)
-            info = analyze_function_arg(arg)
+            info = match_function_arg(arg)
             aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
             push!(arg_names, aname)
             atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
@@ -1329,6 +1332,27 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                     throw(LoweringError(arg, "`...` may only be used for the last function argument"))
                 end
                 atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
+            end
+            if isnothing(info.default)
+                if !isempty(arg_defaults) && !info.is_slurp
+                    # TODO: Referring to multiple pieces of syntax in one error message is necessary.
+                    # TODO: Poision ASTs with error nodes and continue rather than immediately throwing.
+                    #
+                    # We should make something like the following kind of thing work!
+                    # arg_defaults[1] = @ast_error ctx arg_defaults[1] """
+                    #     Positional arguments with defaults must occur at the end.
+                    #
+                    #     We found a [non-optional position argument]($arg) *after*
+                    #     one with a [default value]($(first(arg_defaults)))
+                    # """
+                    #
+                    throw(LoweringError(args[first_default], "optional positional arguments must occur at end"))
+                end
+            else
+                if isempty(arg_defaults)
+                    first_default = i
+                end
+                push!(arg_defaults, info.default)
             end
             push!(arg_types, atype)
         end

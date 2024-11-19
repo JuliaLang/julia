@@ -63,7 +63,7 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
-        if !(kind(v) in KSet"BindingId globalref outerref Placeholder")
+        if !(kind(v) in KSet"BindingId globalref Placeholder")
             get!(assignments, NameKey(v), v)
         end
         _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, ex[2])

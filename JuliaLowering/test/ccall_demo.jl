@@ -5,7 +5,7 @@ using JuliaLowering: is_identifier_like, numchildren, children, MacroExpansionEr
 
 # Hacky utils
 # macro K_str(str)
-#     convert(JuliaSyntax.Kind, str[1].value)
+#     JuliaSyntax.Kind(str[1].value)
 # end
 #
 # # Needed because we can't lower kwarg calls yet ehehe :-/

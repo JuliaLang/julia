@@ -71,7 +71,7 @@ macro outer()
 end
 
 macro K_str(str)
-    convert(JuliaSyntax.Kind, str[1].value)
+    JuliaSyntax.Kind(str[1].value)
 end
 
 # Recursive macro call
