@@ -1651,6 +1651,8 @@ static const auto &may_dispatch_builtins() {
         jl_f__call_in_world_addr,
         jl_f__call_in_world_total_addr,
         jl_f__call_latest_addr,
+        // jl_f_invoke_addr,
+        // jl_f_finalizer_addr,
         });
     return *builtins;
 }
@@ -2300,11 +2302,6 @@ static void print_stacktrace(jl_codectx_t &ctx, int trim)
         exit(1);
     }
     return;
-}
-
-static int trim_may_error(int trim)
-{
-    return (trim == JL_TRIM_SAFE) || (trim == JL_TRIM_UNSAFE_WARN);
 }
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
@@ -5227,6 +5224,40 @@ isdefined_unknown_idx:
         *ret = argv[2];
         return true;
     }
+    else if (f == jl_builtin_finalizer) {
+        if ((ctx.params->trim != JL_TRIM_NO) && nargs == 2) {
+            // TODO: It would probably be preferable to add a `Core.finalizer_invoke()` intrinsic
+            //       that asks for a specific invoke of the finalizer, rather than a call.
+            //
+            //       That would allow `inlining` to inform us that we have a specific method target
+            //       even though the static object type here is not concrete.
+            int resolved = 0;
+            if (jl_is_concrete_type(argv[1].typ) && jl_is_concrete_type(argv[2].typ)) {
+                // TODO: This method lookup is pretty sloppy and probably uses the wrong world.
+                jl_value_t *types[2] = { argv[1].typ, argv[2].typ };
+                jl_tupletype_t *tt = (jl_tupletype_t *)jl_apply_tuple_type_v(types, 2);
+                size_t world = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *mi = jl_method_lookup_by_tt(tt, world, jl_nothing);
+                if (mi != jl_nothing) {
+                    arraylist_push(&new_invokes, mi);
+                    resolved = 1;
+                }
+            }
+            if (!resolved) {
+                errs() << "Dynamic call to finalizer ";
+                if (argv[1].constant) {
+                    jl_(argv[1].constant);
+                } else {
+                    errs() << "(unknown function)";
+                }
+                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx, ctx.params->trim);
+            }
+            // return false, since we didn't actually implement the call - we just lifted the dispatch
+            return false;
+        }
+    }
 
     return false;
 }
@@ -5449,6 +5480,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
                                           ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *inferred_retty)
 {
     Value *theFptr;
+
     if (fromexternal) {
         std::string namep("p");
         namep += specFunctionObject;
@@ -5510,6 +5542,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             else if (ft != ctx.types().T_jlfuncparams) {
                 unsigned return_roots = 0;
                 result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, nullptr, argv, nargs, &cc, &return_roots, rt);
+                if (trim_may_error(ctx.params->trim)) {
+                    if (lival.constant) {
+                        arraylist_push(&new_invokes, lival.constant);
+                        push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
+                    }
+                    else {
+                        errs() << "Dynamic call to unknown function";
+                        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                        print_stacktrace(ctx, ctx.params->trim);
+                    }
+                }
                 handled = true;
             }
         }
@@ -5571,8 +5615,22 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     unsigned return_roots = 0;
                     if (specsig)
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt);
-                    else
+                    else {
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt);
+                        if (trim_may_error(ctx.params->trim)) {
+                            if (lival.constant) {
+                                arraylist_push(&new_invokes, lival.constant);
+                                push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
+                            }
+                            else {
+                                errs() << "Dynamic call to unknown function";
+                                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                                print_stacktrace(ctx, ctx.params->trim);
+                            }
+                        }
+                    }
+
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -5587,6 +5645,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     if (!handled) {
         if (trim_may_error(ctx.params->trim)) {
             if (lival.constant) {
+                arraylist_push(&new_invokes, lival.constant);
                 push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
             }
             else {
@@ -5805,8 +5864,41 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
     int failed_dispatch = !argv[0].constant;
     if (ctx.params->trim != JL_TRIM_NO) {
-        // TODO: Implement the last-minute call resolution that used to be here
-        //       in inference instead.
+        size_t min_valid = 1;
+        size_t max_valid = ~(size_t)0;
+        size_t latest_world = jl_get_world_counter(); // TODO: marshal the world age of the compilation here.
+
+        // Find all methods matching the call signature
+        jl_array_t *matches = NULL;
+        jl_value_t *tup = NULL;
+        JL_GC_PUSH2(&tup, &matches);
+        if (!failed_dispatch) {
+            SmallVector<jl_value_t*> argtypes;
+            for (auto& arg: argv)
+                argtypes.push_back(arg.typ);
+            tup = jl_apply_tuple_type_v(argtypes.data(), argtypes.size());
+            matches = (jl_array_t*)jl_matching_methods((jl_tupletype_t*)tup, jl_nothing, 10 /*TODO: make global*/, 1,
+                                                latest_world, &min_valid, &max_valid, NULL);
+            if ((jl_value_t*)matches == jl_nothing)
+                failed_dispatch = 1;
+        }
+
+        // Expand each matching method to its unique specialization, if it has exactly one
+        if (!failed_dispatch) {
+            size_t k;
+            size_t len = new_invokes.len;
+            for (k = 0; k < jl_array_nrows(matches); k++) {
+                jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 0);
+                if (!mi) {
+                    new_invokes.len = len;
+                    failed_dispatch = 1;
+                    break;
+                }
+                arraylist_push(&new_invokes, mi);
+            }
+        }
+        JL_GC_POP();
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {
@@ -7198,7 +7290,9 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, M
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f, params.TargetTriple);
-    if (trim_may_error(params.params->trim)) {
+    if (ctx.params->trim != JL_TRIM_NO) {
+        // TODO: Debuginfo!
+        arraylist_push(&new_invokes, codeinst->def); // Try t compile this invoke
         // TODO: Debuginfo!
         push_frames(ctx, ctx.linfo, codeinst->def, 1);
     }

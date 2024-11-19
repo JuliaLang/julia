@@ -2522,7 +2522,7 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
-
+JL_DLLEXPORT void jl_breakpoint(jl_value_t *v);
 // julia options -----------------------------------------------------------
 
 #include "jloptions.h"
