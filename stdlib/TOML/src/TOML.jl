@@ -1,6 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+TOML.jl is a Julia standard library for parsing and writing TOML v1.0 files.
+This module provides functions to parse TOML strings and files into Julia data structures
+and to serialize Julia data structures to TOML format.
+"""
 module TOML
+
+using Dates
 
 module Internals
     # The parser is defined in Base
@@ -18,7 +25,7 @@ module Internals
 end
 
 # https://github.com/JuliaLang/julia/issues/36605
-readstring(f::AbstractString) = isfile(f) ? read(f, String) : error(repr(f), ": No such file")
+_readstring(f::AbstractString) = isfile(f) ? read(f, String) : error(repr(f), ": No such file")
 
 """
     Parser()
@@ -29,7 +36,14 @@ explicitly create a `Parser` but instead one directly use use
 will however reuse some internal data structures which can be beneficial for
 performance if a larger number of small files are parsed.
 """
-const Parser = Internals.Parser
+struct Parser
+    _p::Internals.Parser{Dates}
+end
+
+# Dates-enabled constructors
+Parser() = Parser(Internals.Parser{Dates}())
+Parser(io::IO) = Parser(Internals.Parser{Dates}(io))
+Parser(str::String; filepath=nothing) = Parser(Internals.Parser{Dates}(str; filepath))
 
 """
     parsefile(f::AbstractString)
@@ -41,9 +55,9 @@ Parse file `f` and return the resulting table (dictionary). Throw a
 See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.parse(Internals.Parser{Dates}(_readstring(f); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.parse(Internals.reinit!(p._p, _readstring(f); filepath=abspath(f)))
 
 """
     tryparsefile(f::AbstractString)
@@ -55,9 +69,9 @@ Parse file `f` and return the resulting table (dictionary). Return a
 See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Internals.Parser{Dates}(_readstring(f); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+    Internals.tryparse(Internals.reinit!(p._p, _readstring(f); filepath=abspath(f)))
 
 """
     parse(x::Union{AbstractString, IO})
@@ -68,10 +82,11 @@ Throw a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.tryparse`](@ref).
 """
+parse(p::Parser) = Internals.parse(p._p)
 parse(str::AbstractString) =
-    Internals.parse(Parser(String(str)))
+    Internals.parse(Internals.Parser{Dates}(String(str)))
 parse(p::Parser, str::AbstractString) =
-    Internals.parse(Internals.reinit!(p, String(str)))
+    Internals.parse(Internals.reinit!(p._p, String(str)))
 parse(io::IO) = parse(read(io, String))
 parse(p::Parser, io::IO) = parse(p, read(io, String))
 
@@ -84,10 +99,11 @@ Return a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.parse`](@ref).
 """
+tryparse(p::Parser) = Internals.tryparse(p._p)
 tryparse(str::AbstractString) =
-    Internals.tryparse(Parser(String(str)))
+    Internals.tryparse(Internals.Parser{Dates}(String(str)))
 tryparse(p::Parser, str::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, String(str)))
+    Internals.tryparse(Internals.reinit!(p._p, String(str)))
 tryparse(io::IO) = tryparse(read(io, String))
 tryparse(p::Parser, io::IO) = tryparse(p, read(io, String))
 
@@ -105,10 +121,11 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity, inline_tables::IdSet{<:AbstractDict})
 
 Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
-sort tables according to the function given by the keyword argument `by`.
+sort tables according to the function given by the keyword argument `by`. If the keyword argument
+`inline_tables` is given, it should be a set of tables that should be printed "inline".
 
 The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
@@ -117,5 +134,18 @@ pass the function `to_toml` that takes the data types and returns a value of a
 supported type.
 """
 const print = Internals.Printer.print
+
+public Parser, parsefile, tryparsefile, parse, tryparse, ParserError, print
+
+# These methods are private Base interfaces, but we do our best to support them over
+# the TOML stdlib types anyway to minimize downstream breakage.
+Base.TOMLCache(p::Parser) = Base.TOMLCache(p._p, Dict{String, Base.CachedTOMLDict}())
+Base.TOMLCache(p::Parser, d::Base.CachedTOMLDict) = Base.TOMLCache(p._p, d)
+Base.TOMLCache(p::Parser, d::Dict{String, Dict{String, Any}}) = Base.TOMLCache(p._p, d)
+
+Internals.reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing) =
+    Internals.reinit!(p._p, str; filepath)
+Internals.parse(p::Parser) = Internals.parse(p._p)
+Internals.tryparse(p::Parser) = Internals.tryparse(p._p)
 
 end

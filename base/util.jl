@@ -207,6 +207,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_compiled_modules == 3 && push!(addflags, "--compiled-modules=strict")
+    opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
+    opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
@@ -242,14 +245,11 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
-    if opts.use_pkgimages == 0
-        push!(addflags, "--pkgimages=no")
-    end
     return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
-    if !Base.isdebugbuild()
+    if !isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -271,15 +271,29 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
 !!! info "Windows"
     Note that on Windows, the secret might be displayed as it is typed; see
     `Base.winprompt` for securely retrieving username/password pairs from a
     graphical interface.
+
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
+# Examples
+
+```julia-repl
+julia> Base.getpass("Secret")
+Secret: SecretBuffer("*******")
+
+julia> Base.getpass("Secret> "; with_suffix=false)
+Secret> SecretBuffer("*******")
+```
 """
 function getpass end
 
@@ -339,11 +353,13 @@ function with_raw_tty(f::Function, input::TTY)
     end
 end
 
-function getpass(input::TTY, output::IO, prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bool=true)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     with_raw_tty(stdin) do
-        print(output, prompt, ": ")
+        print(output, prompt)
+        with_suffix && print(output, ": ")
         flush(output)
+
         s = SecretBuffer()
         plen = 0
         while true
@@ -364,7 +380,7 @@ end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -375,7 +391,7 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> your_name = Base.prompt("Enter your name");
@@ -491,8 +507,10 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+
+function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
 
 function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
@@ -512,7 +530,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
@@ -564,24 +581,31 @@ Stacktrace:
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
-    T = expr.args[2]
+    _, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
         T = T.args[1]
     end
 
-    params_ex = Expr(:parameters)
-    call_args = Any[]
+    fieldnames = Any[]
+    defvals = Any[]
+    extract_names_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, defvals)
+    parameters = map(fieldnames, defvals) do fieldname, defval
+        if isnothing(defval)
+            return fieldname
+        else
+            return Expr(:kw, fieldname, esc(defval))
+        end
+    end
 
-    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
-    if !isempty(params_ex.args)
-        if T isa Symbol
-            sig = :(($(esc(T)))($params_ex))
-            call = :(($(esc(T)))($(call_args...)))
-            body = Expr(:block, __source__, call)
+    if !isempty(parameters)
+        T_no_esc = Meta.unescape(T)
+        if T_no_esc isa Symbol
+            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
             kwdefs = Expr(:function, sig, body)
-        elseif isexpr(T, :curly)
+        elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
@@ -589,11 +613,11 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, :(($(esc(S)))($(call_args...))))
-            sig1 = :(($(esc(S)))($params_ex))
+            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
+            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
-            body2 = Expr(:block, __source__, :(($(esc(SQ)))($(call_args...))))
-            sig2 = :(($(esc(SQ)))($params_ex) where {$(esc.(P)...)})
+            body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
+            sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
             def2 = Expr(:function, sig2, body2)
             kwdefs = Expr(:block, def1, def2)
         else
@@ -610,54 +634,44 @@ end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_args, call_args)
-    for i in eachindex(blk.args)
-        ei = blk.args[i]
-        if ei isa Symbol
-            #  var
-            push!(params_args, ei)
-            push!(call_args, ei)
-        elseif ei isa Expr
-            is_atomic = ei.head === :atomic
-            ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
-            is_const = ei.head === :const
-            ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
-            # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
-            if ei isa Symbol
-                # const var
-                push!(params_args, ei)
-                push!(call_args, ei)
-            elseif ei.head === :(=)
-                lhs = ei.args[1]
-                if lhs isa Symbol
-                    #  var = defexpr
-                    var = lhs
-                elseif lhs isa Expr && lhs.head === :(::) && lhs.args[1] isa Symbol
-                    #  var::T = defexpr
-                    var = lhs.args[1]
-                else
-                    # something else, e.g. inline inner constructor
-                    #   F(...) = ...
-                    continue
+function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
+    for (i, item) in pairs(block.args)
+        if isexpr(item, :block)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+        elseif item isa Expr && item.head in (:escape, :var"hygienic-scope")
+            n = length(names)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+            for j in n+1:length(defvals)
+                if !isnothing(defvals[j])
+                    defvals[j] = Expr(item.head, defvals[j])
                 end
-                defexpr = ei.args[2]  # defexpr
-                push!(params_args, Expr(:kw, var, esc(defexpr)))
-                push!(call_args, var)
-                lhs = is_const ? Expr(:const, lhs) : lhs
-                lhs = is_atomic ? Expr(:atomic, lhs) : lhs
-                blk.args[i] = lhs # overrides arg
-            elseif ei.head === :(::) && ei.args[1] isa Symbol
-                # var::Typ
-                var = ei.args[1]
-                push!(params_args, var)
-                push!(call_args, var)
-            elseif ei.head === :block
-                # can arise with use of @static inside type decl
-                _kwdef!(ei, params_args, call_args)
             end
+        else
+            def, name, defval = @something(def_name_defval_from_kwdef_fielddef(item), continue)
+            block.args[i] = def
+            push!(names, name)
+            push!(defvals, defval)
         end
     end
-    blk
+end
+
+function def_name_defval_from_kwdef_fielddef(kwdef)
+    if kwdef isa Symbol
+        return kwdef, kwdef, nothing
+    elseif isexpr(kwdef, :(::))
+        name, _ = kwdef.args
+        return kwdef, Meta.unescape(name), nothing
+    elseif isexpr(kwdef, :(=))
+        lhs, rhs = kwdef.args
+        def, name, _ = @something(def_name_defval_from_kwdef_fielddef(lhs), return nothing)
+        return def, name, rhs
+    elseif kwdef isa Expr && kwdef.head in (:const, :atomic)
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, defval
+    elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+    end
 end
 
 # testing
@@ -690,6 +704,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
+    ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
@@ -697,11 +712,9 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
         nothing
     catch
         buf = PipeBuffer()
-        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        let InteractiveUtils = Base.require(Base, :InteractiveUtils)
+        let InteractiveUtils = Base.require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             @invokelatest InteractiveUtils.versioninfo(buf)
         end
-        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

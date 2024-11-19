@@ -236,22 +236,23 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    ishermitian(A) && return eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    AA = eigencopy_oftype(A, eigtype(T))
-    return eigen!(AA; permute, scale, sortby)
+    _eigen(A; permute, scale, sortby)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    E = if ishermitian(A)
-        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    else
-        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
-    end
+    E = _eigen(A; permute, scale, sortby)
     values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
     vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
     return Eigen(values, vectors)
 end
+function _eigen(A::AbstractMatrix{T}; permute=true, scale=true, sortby=eigsortby) where {T}
+    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    else
+        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
+    end
+end
+
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
@@ -345,7 +346,7 @@ eigvals(A::AbstractMatrix{T}; kws...) where T =
 """
 For a scalar input, `eigvals` will return a scalar.
 
-# Example
+# Examples
 ```jldoctest
 julia> eigvals(-2)
 -2
@@ -657,14 +658,19 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.vectors)
 end
 
-function Base.hash(F::Eigen, h::UInt)
-    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
-end
-function Base.:(==)(A::Eigen, B::Eigen)
-    return A.values == B.values && A.vectors == B.vectors
-end
-function Base.isequal(A::Eigen, B::Eigen)
-    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+_equalcheck(f, Avalues, Avectors, Bvalues, Bvectors) = f(Avalues, Bvalues) && f(Avectors, Bvectors)
+for T in (Eigen, GeneralizedEigen)
+    @eval begin
+        function Base.hash(F::$T, h::UInt)
+            return hash(F.values, hash(F.vectors, hash($T, h)))
+        end
+        function Base.:(==)(A::$T, B::$T)
+            return _equalcheck(==, A..., B...)
+        end
+        function Base.isequal(A::$T, B::$T)
+            return _equalcheck(isequal, A..., B...)
+        end
+    end
 end
 
 # Conversion methods

@@ -5,12 +5,11 @@ Interface to BLAS subroutines.
 """
 module BLAS
 
-import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
 export
 # Note: `xFUNC_NAME` is a placeholder for not exported BLAS functions
-#   ref: http://www.netlib.org/blas/blasqr.pdf
+#   ref: https://www.netlib.org/blas/blasqr.pdf
 # Level 1
     # xROTG
     # xROTMG
@@ -85,7 +84,7 @@ export
     trsm!,
     trsm
 
-using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
+using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, chkstride1
 
 include("lbt.jl")
 
@@ -160,16 +159,15 @@ function check()
     interface = USE_BLAS64 ? :ilp64 : :lp64
     if !any(lib.interface == interface for lib in config.loaded_libs)
         interfacestr = uppercase(string(interface))
-        @error("No loaded BLAS libraries were built with $(interfacestr) support")
-        println("Quitting.")
-        exit()
+        println(Core.stderr, "No loaded BLAS libraries were built with $interfacestr support.")
+        exit(1)
     end
 end
 
 "Check that upper/lower (for special matrices) is correctly specified"
 function chkuplo(uplo::AbstractChar)
     if !(uplo == 'U' || uplo == 'L')
-        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got '$uplo'"))
     end
     uplo
 end
@@ -1065,7 +1063,7 @@ sbmv(uplo, k, A, x)
 Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
-<http://www.netlib.org/lapack/explore-html/>.
+<https://www.netlib.org/lapack/explore-html/>.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
 Return the updated `y`.

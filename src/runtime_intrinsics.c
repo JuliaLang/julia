@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 const unsigned int host_char_bit = 8;
 
@@ -213,7 +214,7 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
 // x86-specific helpers for emulating the (B)Float16 ABI
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #include <xmmintrin.h>
-static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
+__attribute__((unused)) static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
     __m128 xmm_output;
     asm (
         "movd %[input], %%xmm0\n\t"
@@ -224,7 +225,7 @@ static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
     );
     return xmm_output;
 }
-static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
+__attribute__((unused)) static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
     uint32_t output;
     asm (
         "movss %[xmm_input], %%xmm0\n\t"
@@ -239,11 +240,14 @@ static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
 
 // float16 conversion API
 
-// for use in APInt (without the ABI shenanigans from below)
-uint16_t julia_float_to_half(float param) {
+// for use in APInt and other soft-float ABIs (i.e. without the ABI shenanigans from below)
+JL_DLLEXPORT uint16_t julia_float_to_half(float param) {
     return float_to_half(param);
 }
-float julia_half_to_float(uint16_t param) {
+JL_DLLEXPORT uint16_t julia_double_to_half(double param) {
+    return double_to_half(param);
+}
+JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 
@@ -252,7 +256,7 @@ float julia_half_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 11) || \
      (defined(__clang__) && __clang_major__ > 14)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
-    !defined(_OS_WINDOWS_)
+    !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define FLOAT16_TYPE _Float16
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define FLOAT16_FROM_UINT16(x) (*(_Float16*)&(x))
@@ -351,7 +355,7 @@ float julia_bfloat_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
      (defined(__clang__) && __clang_major__ > 16)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
-    !defined(_OS_WINDOWS_)
+    !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define BFLOAT16_FROM_UINT16(x) (*(__bf16*)&(x))
@@ -581,9 +585,9 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     char *pp = (char*)jl_unbox_long(p);
     jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_value_t *result = NULL;
+    JL_GC_PUSH1(&result);
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t *result;
-        JL_GC_PUSH1(&result);
         result = expected;
         int success;
         while (1) {
@@ -592,8 +596,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
                 break;
         }
         result = jl_new_struct(rettyp, result, success ? jl_true : jl_false);
-        JL_GC_POP();
-        return result;
     }
     else {
         if (jl_typeof(x) != ety)
@@ -601,8 +603,20 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
             jl_error("atomic_pointerreplace: invalid pointer for atomic operation");
-        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, rettyp, pp, expected, x, nb);
+        int isptr = jl_field_isptr(rettyp, 0);
+        jl_task_t *ct = jl_current_task;
+        result = jl_gc_alloc(ct->ptls, isptr ? nb : jl_datatype_size(rettyp), isptr ? ety : (jl_value_t*)rettyp);
+        int success = jl_atomic_cmpswap_bits((jl_datatype_t*)ety, result, pp, expected, x, nb);
+        if (isptr) {
+            jl_value_t *z = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp);
+            *(jl_value_t**)z = result;
+            result = z;
+            nb = sizeof(jl_value_t*);
+        }
+        *((uint8_t*)result + nb) = success ? 1 : 0;
     }
+    JL_GC_POP();
+    return result;
 }
 
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
@@ -660,8 +674,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     void *ptr;
     jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
-    jl_value_t *jv = jl_gc_alloc_1w();
-    jl_set_typeof(jv, rt);
+    jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
     JL_GC_POP();
     return jv;
@@ -1371,10 +1384,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
 #define add(a,b) a + b
 bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
-bi_iintrinsic_fast(LLVMAdd, add, add_ptr, u)
 #define sub(a,b) a - b
 bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
-bi_iintrinsic_fast(LLVMSub, sub, sub_ptr, u)
 #define mul(a,b) a * b
 bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
 #define div(a,b) a / b
@@ -1563,6 +1574,16 @@ bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
+#if JL_LLVM_VERSION >= 170000
+//uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
+uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
+//#define ctlz_op(a) __builtin_ctlz(a)
+//uu_iintrinsic_fast(LLVMCountl_zero, ctlz_op, ctlz_int, u)
+uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
+//#define cttz_op(a) __builtin_cttz(a)
+//uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
+uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
+#else
 //uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
@@ -1571,6 +1592,7 @@ uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
+#endif
 #define not_op(a) ~a
 un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 
@@ -1682,4 +1704,20 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(add_ptr, pointer, ptr);
+    JL_TYPECHK(add_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) + jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
+}
+
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(sub_ptr, pointer, ptr);
+    JL_TYPECHK(sub_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) - jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
 }

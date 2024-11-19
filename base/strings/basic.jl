@@ -146,9 +146,8 @@ Stacktrace:
 
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
-be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised. The `iterate` function, as part of the iteration
-protocol may assume that `i` is the start of a character in `s`.
+be iterated, yielding a sequences of characters. The `iterate` function, as part
+of the iteration protocol may assume that `i` is the start of a character in `s`.
 
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
@@ -259,9 +258,7 @@ julia> 'j' * "ulia"
 ```
 """
 function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
-    isannotated = s1 isa AnnotatedString || s1 isa AnnotatedChar ||
-        any(s -> s isa AnnotatedString || s isa AnnotatedChar, ss)
-    if isannotated
+    if _isannotated(s1) || any(_isannotated, ss)
         annotatedstring(s1, ss...)
     else
         string(s1, ss...)
@@ -269,6 +266,12 @@ function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, Ab
 end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
+
+# This could be written as a single statement with three ||-clauses, however then effect
+# analysis thinks it may throw and runtime checks are added.
+# Also see `substring.jl` for the `::SubString{T}` method.
+_isannotated(S::Type) = S != Union{} && (S <: AnnotatedString || S <: AnnotatedChar)
+_isannotated(s) = _isannotated(typeof(s))
 
 ## generic string comparison ##
 

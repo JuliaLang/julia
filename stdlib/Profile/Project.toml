@@ -2,6 +2,12 @@ name = "Profile"
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 version = "1.11.0"
 
+[deps]
+StyledStrings = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+
+[compat]
+StyledStrings = "1.11.0"
+
 [extras]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"

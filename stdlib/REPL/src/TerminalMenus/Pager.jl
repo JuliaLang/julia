@@ -39,4 +39,4 @@ function pager(terminal, object)
     pager = Pager(String(take!(buffer)); pagesize = div(lines, 2))
     return request(terminal, pager)
 end
-pager(object) = pager(terminal, object)
+pager(object) = pager(default_terminal(), object)

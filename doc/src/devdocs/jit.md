@@ -59,20 +59,22 @@ In addition, there are a number of different transitional states that occur duri
 
 1. When writing `invoke`, `specsigflags`, and `specptr`:
       1. Perform an atomic compare-exchange operation of specptr assuming the old value was NULL. This compare-exchange operation should have at least acquire-release ordering, to provide ordering guarantees of the remaining memory operations in the write.
-      2. If `specptr` was non-null, cease the write operation and wait for bit 0b10 of `specsigflags` to be written.
+      2. If `specptr` was non-null, cease the write operation and wait for bit 0b10 of `specsigflags` to be written, then restart from step 1 if desired.
       3. Write the new low bit of `specsigflags` to its final value. This may be a relaxed write.
       4. Write the new `invoke` pointer to its final value. This must have at least a release memory ordering to synchronize with reads of `invoke`.
       5. Set the second bit of `specsigflags` to 1. This must be at least a release memory ordering to synchronize with reads of `specsigflags`. This step completes the write operation and announces to all other threads that all fields have been set.
 2. When reading all of `invoke`, `specsigflags`, and `specptr`:
-   1. Read the `invoke` field with at least an acquire memory ordering. This load will be referred to as `initial_invoke`.
-   2. If `initial_invoke` is NULL, the codeinst is not yet executable. `invoke` is NULL, `specsigflags` may be treated as 0b00, `specptr` may be treated as NULL.
-   3. Read the `specptr` field with at least an acquire memory ordering.
+   1. Read the `specptr` field with any memory ordering.
+   2. Read the `invoke` field with at least an acquire memory ordering. This load will be referred to as `initial_invoke`.
+   3. If `initial_invoke` is NULL, the codeinst is not yet executable. `invoke` is NULL, `specsigflags` may be treated as 0b00, `specptr` may be treated as NULL.
    4. If `specptr` is NULL, then the `initial_invoke` pointer must not be relying on `specptr` to guarantee correct execution. Therefore, `invoke` is non-null, `specsigflags` may be treated as 0b00, `specptr` may be treated as NULL.
    5. If `specptr` is non-null, then `initial_invoke` might not be the final `invoke` field that uses `specptr`. This can occur if `specptr` has been written, but `invoke` has not yet been written. Therefore, spin on the second bit of `specsigflags` until it is set to 1 with at least acquire memory ordering.
-   6. Re-read the `invoke` field with at least an acquire memory ordering. This load will be referred to as `final_invoke`.
+   6. Re-read the `invoke` field with any memory ordering. This load will be referred to as `final_invoke`.
    7. Read the `specsigflags` field with any memory ordering.
    8. `invoke` is `final_invoke`, `specsigflags` is the value read in step 7, `specptr` is the value read in step 3.
 3. When updating a `specptr` to a different but equivalent function pointer:
    1. Perform a release store of the new function pointer to `specptr`. Races here must be benign, as the old function pointer is required to still be valid, and any new ones are also required to be valid as well. Once a pointer has been written to `specptr`, it must always be callable whether or not it is later overwritten.
+
+Correctly reading these fields is implemented in `jl_read_codeinst_invoke`.
 
 Although these write, read, and update steps are complicated, they ensure that the JIT can update codeinsts without invalidating existing codeinsts, and that the JIT can update codeinsts without invalidating existing `invoke` pointers. This allows the JIT to potentially reoptimize functions at higher optimization levels in the future, and also will allow the JIT to support concurrent compilation of functions in the future.

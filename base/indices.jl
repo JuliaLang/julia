@@ -106,26 +106,49 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
+# Consistent error message for promote_shape mismatch, hiding type details like
+# OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
+function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = nothing)
+    if a isa Tuple{Vararg{Base.OneTo}} && (b === nothing || b isa Tuple{Vararg{Base.OneTo}})
+        a = map(lastindex, a)::Dims
+        b === nothing || (b = map(lastindex, b)::Dims)
     end
+    _has_axes = !(a isa Dims && (b === nothing || b isa Dims))
+    if _has_axes
+        _normalize(d) = map(x -> firstindex(x):lastindex(x), d)
+        a = _normalize(a)
+        b === nothing || (b = _normalize(b))
+        _things = "axes "
+    else
+        _things = "size "
+    end
+    msg = IOBuffer()
+    print(msg, "a has ", _things)
+    print(msg, a)
+    if b ≢ nothing
+        print(msg, ", b has ", _things)
+        print(msg, b)
+    end
+    if i ≢ nothing
+        print(msg, ", mismatch at dim ", i)
+    end
+    throw(DimensionMismatch(String(take!(msg))))
+end
+
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
+    a[1] != b[1] && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != 1) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != b[2]) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
@@ -153,14 +176,10 @@ function promote_shape(a::Dims, b::Dims)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -174,14 +193,10 @@ function promote_shape(a::Indices, b::Indices)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1:1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -295,9 +310,9 @@ to_index(I::AbstractArray{Bool}) = LogicalIndex(I)
 to_index(I::AbstractArray) = I
 to_index(I::AbstractArray{Union{}}) = I
 to_index(I::AbstractArray{<:Union{AbstractArray, Colon}}) =
-    throw(ArgumentError("invalid index: $(limitrepr(I)) of type $(typeof(I))"))
+    throw(ArgumentError(LazyString("invalid index: ", limitrepr(I), " of type ", typeof(I))))
 to_index(::Colon) = throw(ArgumentError("colons must be converted by to_indices(...)"))
-to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(typeof(i))"))
+to_index(i) = throw(ArgumentError(LazyString("invalid index: ", limitrepr(i), " of type ", typeof(i))))
 
 # The general to_indices is mostly defined in multidimensional.jl, but this
 # definition is required for bootstrap:
@@ -349,15 +364,8 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
-    @inline
-    head = _to_indices1(A, inds, I[1])
-    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
-    (head..., rest...)
-end
-
-_to_indices1(A, inds, I1) = (to_index(A, I1),)
-_cutdim(inds, I1) = safe_tail(inds)
+to_indices(A, inds, I::Tuple{Any, Vararg}) =
+    (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
     Slice(indices)
@@ -415,15 +423,57 @@ first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
+getindex(S::IdentityUnitRange, i::Integer) = (@inline; @boundscheck checkbounds(S, i); convert(eltype(S), i))
+getindex(S::IdentityUnitRange, i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return convert(AbstractUnitRange{eltype(S)}, i)
+end
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{Bool})
+    @inline
+    @boundscheck checkbounds(S, i)
+    range(first(i) ? first(S) : last(S), length = last(i))
+end
+function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return convert(AbstractRange{eltype(S)}, i)
+end
+function getindex(S::IdentityUnitRange, i::StepRange{Bool})
+    @inline
+    @boundscheck checkbounds(S, i)
+    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+end
+# Indexing with offset ranges should preserve the axes of the indices
+# however, this is only really possible in general with OffsetArrays.
+# In some cases, though, we may obtain correct results using Base ranges
+# the following methods are added to allow OffsetArrays to dispatch on the first argument without ambiguities
+function getindex(S::IdentityUnitRange{<:AbstractUnitRange{<:Integer}},
+                    i::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return i
+end
+function getindex(S::Slice{<:AbstractUnitRange{<:Integer}},
+                    i::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return i
+end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 # For OneTo, the values and indices of the values are identical, so this may be defined in Base.
 # In general such an indexing operation would produce offset ranges
-getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@inline; @boundscheck checkbounds(S, I); I)
+# This should also ideally return an AbstractUnitRange{eltype(S)}, but currently
+# we're restricted to eltype(::IdentityUnitRange) == Int by definition
+function getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, I)
+    return I
+end
 
 """
     LinearIndices(A::AbstractArray)
@@ -456,7 +506,7 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
-# Example
+# Examples
 
 The main purpose of this constructor is intuitive conversion
 from cartesian to linear indexing:
@@ -515,6 +565,7 @@ function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @boundscheck checkbounds(iter, i)
     @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
+copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
 iterate(iter::LinearIndices{1}, s...) = iterate(axes1(iter.indices[1]), s...)
@@ -525,3 +576,7 @@ first(iter::LinearIndices) = 1
 first(iter::LinearIndices{1}) = (@inline; first(axes1(iter.indices[1])))
 last(iter::LinearIndices) = (@inline; length(iter))
 last(iter::LinearIndices{1}) = (@inline; last(axes1(iter.indices[1])))
+
+function show(io::IO, iter::LinearIndices)
+    print(io, "LinearIndices(", iter.indices, ")")
+end

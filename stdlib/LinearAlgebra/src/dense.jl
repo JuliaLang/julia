@@ -14,17 +14,18 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
-        _isone_triacheck(A, m)
+        _isone_triacheck(A)
     else
-        _isone_cachefriendly(A, m)
+        _isone_cachefriendly(A)
     end
 end
 
-@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in i:m
+@inline function _isone_triacheck(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -35,8 +36,8 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
-    @inbounds for i in 1:m, j in 1:m
+@inline function _isone_cachefriendly(A::AbstractMatrix)
+    @inbounds for i in axes(A,2), j in axes(A,1)
         if i == j
             isone(A[i,i]) || return false
         else
@@ -106,6 +107,24 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+"""
+    haszero(T::Type)
+
+Return whether a type `T` has a unique zero element defined using `zero(T)`.
+If a type `M` specializes `zero(M)`, it may also choose to set `haszero(M)` to `true`.
+By default, `haszero` is assumed to be `false`, in which case the zero elements
+are deduced from values rather than the type.
+
+!!! note
+    `haszero` is a conservative check that is used to dispatch to
+    optimized paths. Extending it is optional, but encouraged.
+"""
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+haszero(::Type{Union{Missing,T}}) where {T<:Number} = haszero(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, inds...) where {T} = haszero(T) ? zero(T) : zero(M[inds...])
+
 """
     triu!(M, k::Integer)
 
@@ -136,7 +155,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
@@ -173,12 +192,13 @@ function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
 end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
@@ -190,7 +210,7 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     require_one_based_indexing(A)
     m, n = size(A)
     xT = convert(T, x)
-    for j in 1:n
+    for j in axes(A,2)
         for i in max(1,j-u):min(m,j-l)
             @inbounds A[i, j] = xT
         end
@@ -210,9 +230,15 @@ function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
 end
 
 """
-    diagind(M, k::Integer=0)
+    diagind(M::AbstractMatrix, k::Integer = 0, indstyle::IndexStyle = IndexLinear())
+    diagind(M::AbstractMatrix, indstyle::IndexStyle = IndexLinear())
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
+Optionally, an index style may be specified which determines the type of the range returned.
+If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
+On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
+
+If `k` is not provided, it is assumed to be `0` (corresponding to the main diagonal).
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
@@ -224,14 +250,22 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> diagind(A,-1)
+julia> diagind(A, -1)
 2:4:6
+
+julia> diagind(A, IndexCartesian())
+StepRangeLen(CartesianIndex(1, 1), CartesianIndex(1, 1), 3)
 ```
+
+!!! compat "Julia 1.11"
+     Specifying an `IndexStyle` requires at least Julia 1.11.
 """
-function diagind(A::AbstractMatrix, k::Integer=0)
+function diagind(A::AbstractMatrix, k::Integer=0, indexstyle::IndexStyle = IndexLinear())
     require_one_based_indexing(A)
-    diagind(IndexStyle(A), size(A,1), size(A,2), k)
+    diagind(indexstyle, size(A,1), size(A,2), k)
 end
+
+diagind(A::AbstractMatrix, indexstyle::IndexStyle) = diagind(A, 0, indexstyle)
 
 """
     diag(M, k::Integer=0)
@@ -254,7 +288,36 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A, k, IndexStyle(A))]
+
+"""
+    diagview(M, k::Integer=0)
+
+Return a view into the `k`th diagonal of the matrix `M`.
+
+See also [`diag`](@ref), [`diagind`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> diagview(A)
+3-element view(::Vector{Int64}, 1:4:9) with eltype Int64:
+ 1
+ 5
+ 9
+
+julia> diagview(A, 1)
+2-element view(::Vector{Int64}, 4:4:8) with eltype Int64:
+ 2
+ 6
+```
+"""
+diagview(A::AbstractMatrix, k::Integer=0) = @view A[diagind(A, k, IndexStyle(A))]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
@@ -316,7 +379,7 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
-    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch(lazy"invalid size=$size"))
     return m, n
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
@@ -349,13 +412,10 @@ julia> diagm([1,2,3])
 diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
-function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    @inbounds @simd for i in 1:n
-        t += A[i,i]
-    end
-    t
+function tr(A::StridedMatrix{T}) where T
+    checksquare(A)
+    isempty(A) && return zero(T)
+    reduce(+, (A[i] for i in diagind(A, IndexStyle(A))))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
@@ -471,8 +531,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
@@ -528,14 +588,13 @@ function schurpow(A::AbstractMatrix, p)
     end
 end
 function (^)(A::AbstractMatrix{T}, p::Real) where T
-    n = checksquare(A)
-
+    checksquare(A)
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
         retmat = copymutable_oftype(A, TT)
-        for i in 1:n
-            retmat[i, i] = retmat[i, i] ^ p
+        for i in diagind(retmat, IndexStyle(retmat))
+            retmat[i] = retmat[i] ^ p
         end
         return retmat
     end
@@ -544,9 +603,6 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
 
     # If possible, use diagonalization
-    if issymmetric(A)
-        return (Symmetric(A)^p)
-    end
     if ishermitian(A)
         return (Hermitian(A)^p)
     end
@@ -656,7 +712,12 @@ Base.:^(::Irrational{:ℯ}, A::AbstractMatrix) = exp(A)
 ## "Functions of Matrices: Theory and Computation", SIAM
 function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     n = checksquare(A)
-    if ishermitian(A)
+    if isdiag(A)
+        for i in diagind(A, IndexStyle(A))
+            A[i] = exp(A[i])
+        end
+        return A
+    elseif ishermitian(A)
         return copytri!(parent(exp(Hermitian(A))), 'U', true)
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
@@ -680,26 +741,40 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Compute U and V: Even/odd terms in Padé numerator & denom
         # Expansion of k=1 in for loop
         P = A2
-        U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
-        V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
+        U = similar(P)
+        V = similar(P)
+        for ind in CartesianIndices(P)
+            U[ind] = C[4]*P[ind] + C[2]*I[ind]
+            V[ind] = C[3]*P[ind] + C[1]*I[ind]
+        end
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
-            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
+            for ind in eachindex(P, U, V)
+                U[ind] += C[2k + 2] * P[ind]
+                V[ind] += C[2k + 1] * P[ind]
+            end
         end
 
-        U = A * U
+        # U = A * U, but we overwrite P to avoid an allocation
+        mul!(P, A, U)
+        # P may be seen as an alias for U in the following code
 
         # Padé approximant:  (V-U)\(V+U)
-        tmp1, tmp2 = A, A2 # Reuse already allocated arrays
-        tmp1 .= V .- U
-        tmp2 .= V .+ U
-        X = LAPACK.gesv!(tmp1, tmp2)[1]
+        VminU, VplusU = V, U # Reuse already allocated arrays
+        for ind in eachindex(V, U)
+            vi, ui = V[ind], P[ind]
+            VminU[ind] = vi - ui
+            VplusU[ind] = vi + ui
+        end
+        X = LAPACK.gesv!(VminU, VplusU)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = ceil(Int,s)
-            A ./= convert(T,2^si)
+            twopowsi = convert(T,2^si)
+            for ind in eachindex(A)
+                A[ind] /= twopowsi
+            end
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,
@@ -714,8 +789,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
         #           CC[8].*A6 .+ CC[6].*A4 .+ CC[4]*A2+CC[2]*I)
-        tmp1 .= CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2
-        tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[14]*A6[ind] + CC[12]*A4[ind] + CC[10]*A2[ind]
+            tmp2[ind] = CC[8]*A6[ind] + CC[6]*A4[ind] + CC[4]*A2[ind]
+        end
         mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
         U = mul!(tmp2, A6, tmp1, true, true)
         U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
@@ -723,13 +800,17 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
         #           CC[7].*A6 .+ CC[5].*A4 .+ CC[3]*A2 .+ CC[1]*I
-        tmp1 .= CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2
-        tmp2 .= CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[13]*A6[ind] + CC[11]*A4[ind] + CC[9]*A2[ind]
+            tmp2[ind] = CC[7]*A6[ind] + CC[5]*A4[ind] + CC[3]*A2[ind]
+        end
         mul!(tmp2, true, CC[1]*I, true, true) # tmp2 .+= CC[1]*I
         V = mul!(tmp2, A6, tmp1, true, true)
 
-        tmp1 .= V .+ U
-        tmp2 .= V .- U # tmp2 already contained V but this seems more readable
+        for ind in eachindex(tmp1)
+            tmp1[ind] = V[ind] + U[ind]
+            tmp2[ind] = V[ind] - U[ind] # tmp2 already contained V but this seems more readable
+        end
         X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
 
         if s > 0
@@ -753,20 +834,24 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
     end
 
     if ilo > 1       # apply lower permutations in reverse order
-        for j in (ilo-1):-1:1; rcswap!(j, Int(scale[j]), X) end
+        for j in (ilo-1):-1:1
+            rcswap!(j, Int(scale[j]), X)
+        end
     end
     if ihi < n       # apply upper permutations in forward order
-        for j in (ihi+1):n;    rcswap!(j, Int(scale[j]), X) end
+        for j in (ihi+1):n
+            rcswap!(j, Int(scale[j]), X)
+        end
     end
     X
 end
 
 ## Swap rows i and j and columns i and j in X
 function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
-    for k = 1:size(X,1)
+    for k = axes(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
-    for k = 1:size(X,2)
+    for k = axes(X,2)
         X[i,k], X[j,k] = X[j,k], X[i,k]
     end
 end
@@ -963,9 +1048,16 @@ end
 cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
 cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
+function applydiagonal(f, A)
+    dinv = f(Diagonal(A))
+    copyto!(similar(A, eltype(dinv)), dinv)
+end
+
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    if istriu(A)
+    if isdiag(A)
+        Ai = applydiagonal(inv, A)
+    elseif istriu(A)
         Ai = triu!(parent(inv(UpperTriangular(A))))
     elseif istril(A)
         Ai = tril!(parent(inv(LowerTriangular(A))))
@@ -975,6 +1067,11 @@ function inv(A::StridedMatrix{T}) where T
     end
     return Ai
 end
+
+# helper function to perform a broadcast in-place if the destination is strided
+# otherwise, this performs an out-of-place broadcast
+@inline _broadcast!!(f, dest::StridedArray, args...) = broadcast!(f, dest, args...)
+@inline _broadcast!!(f, dest, args...) = broadcast(f, args...)
 
 """
     cos(A::AbstractMatrix)
@@ -993,20 +1090,27 @@ julia> cos(fill(1.0, (2,2)))
 ```
 """
 function cos(A::AbstractMatrix{<:Real})
-    if issymmetric(A)
+    if isdiag(A)
+        return applydiagonal(cos, A)
+    elseif issymmetric(A)
         return copytri!(parent(cos(Symmetric(A))), 'U')
     end
-    T = complex(float(eltype(A)))
-    return real(exp!(T.(im .* A)))
+    M = im .* float.(A)
+    return real(exp_maybe_inplace(M))
 end
 function cos(A::AbstractMatrix{<:Complex})
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(cos, A)
+    elseif ishermitian(A)
         return copytri!(parent(cos(Hermitian(A))), 'U', true)
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    @. X = (X + $exp!(T(-im*A))) / 2
-    return X
+    M = im .* float.(A)
+    N = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(N)
+    # Compute (X + Y)/2 and return the result.
+    # Compute the result in-place if X is strided
+    _broadcast!!((x,y) -> (x + y)/2, X, X, Y)
 end
 
 """
@@ -1026,24 +1130,27 @@ julia> sin(fill(1.0, (2,2)))
 ```
 """
 function sin(A::AbstractMatrix{<:Real})
-    if issymmetric(A)
+    if isdiag(A)
+        return applydiagonal(sin, A)
+    elseif issymmetric(A)
         return copytri!(parent(sin(Symmetric(A))), 'U')
     end
-    T = complex(float(eltype(A)))
-    return imag(exp!(T.(im .* A)))
+    M = im .* float.(A)
+    return imag(exp_maybe_inplace(M))
 end
 function sin(A::AbstractMatrix{<:Complex})
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(sin, A)
+    elseif ishermitian(A)
         return copytri!(parent(sin(Hermitian(A))), 'U', true)
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X)
-        x, y = X[i]/2, Y[i]/2
-        X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
-    end
-    return X
+    M = im .* float.(A)
+    Mneg = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(Mneg)
+    # Compute (X - Y)/2im and return the result.
+    # Compute the result in-place if X is strided
+    _broadcast!!((x,y) -> (x - y)/2im, X, X, Y)
 end
 
 """
@@ -1073,8 +1180,8 @@ function sincos(A::AbstractMatrix{<:Real})
         cosA = copytri!(parent(symcosA), 'U')
         return sinA, cosA
     end
-    T = complex(float(eltype(A)))
-    c, s = reim(exp!(T.(im .* A)))
+    M =  im .* float.(A)
+    c, s = reim(exp_maybe_inplace(M))
     return s, c
 end
 function sincos(A::AbstractMatrix{<:Complex})
@@ -1084,15 +1191,25 @@ function sincos(A::AbstractMatrix{<:Complex})
         cosA = copytri!(parent(hermcosA), 'U', true)
         return sinA, cosA
     end
-    T = complex(float(eltype(A)))
-    X = exp!(T.(im .* A))
-    Y = exp!(T.(.-im .* A))
-    @inbounds for i in eachindex(X)
+    M = im .* float.(A)
+    Mneg = -M
+    X = exp_maybe_inplace(M)
+    Y = exp_maybe_inplace(Mneg)
+    _sincos(X, Y)
+end
+function _sincos(X::StridedMatrix, Y::StridedMatrix)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i]/2, Y[i]/2
         X[i] = Complex(imag(x)-imag(y), real(y)-real(x))
         Y[i] = x+y
     end
     return X, Y
+end
+function _sincos(X, Y)
+    T = eltype(X)
+    S = T(0.5)*im .* (Y .- X)
+    C = T(0.5) .* (X .+ Y)
+    S, C
 end
 
 """
@@ -1112,7 +1229,9 @@ julia> tan(fill(1.0, (2,2)))
 ```
 """
 function tan(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(tan, A)
+    elseif ishermitian(A)
         return copytri!(parent(tan(Hermitian(A))), 'U', true)
     end
     S, C = sincos(A)
@@ -1126,12 +1245,15 @@ end
 Compute the matrix hyperbolic cosine of a square matrix `A`.
 """
 function cosh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(cosh, A)
+    elseif ishermitian(A)
         return copytri!(parent(cosh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    @. X = (X + $exp!(float(-A))) / 2
-    return X
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    _broadcast!!((x,y) -> (x + y)/2, X, X, Y)
 end
 
 """
@@ -1140,12 +1262,15 @@ end
 Compute the matrix hyperbolic sine of a square matrix `A`.
 """
 function sinh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(sinh, A)
+    elseif ishermitian(A)
         return copytri!(parent(sinh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    @. X = (X - $exp!(float(-A))) / 2
-    return X
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    _broadcast!!((x,y) -> (x - y)/2, X, X, Y)
 end
 
 """
@@ -1154,19 +1279,26 @@ end
 Compute the matrix hyperbolic tangent of a square matrix `A`.
 """
 function tanh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(tanh, A)
+    elseif ishermitian(A)
         return copytri!(parent(tanh(Hermitian(A))), 'U', true)
     end
     X = exp(A)
-    Y = exp!(float.(.-A))
-    @inbounds for i in eachindex(X)
+    negA = @. float(-A)
+    Y = exp_maybe_inplace(negA)
+    X′, Y′ = _subadd!!(X, Y)
+    return X′ / Y′
+end
+function _subadd!!(X::StridedMatrix, Y::StridedMatrix)
+    @inbounds for i in eachindex(X, Y)
         x, y = X[i], Y[i]
         X[i] = x - y
         Y[i] = x + y
     end
-    X /= Y
-    return X
+    return X, Y
 end
+_subadd!!(X, Y) = X - Y, X + Y
 
 """
     acos(A::AbstractMatrix)
@@ -1189,7 +1321,9 @@ julia> acos(cos([0.5 0.1; -0.2 0.3]))
 ```
 """
 function acos(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(acos, A)
+    elseif ishermitian(A)
         acosHermA = acos(Hermitian(A))
         return isa(acosHermA, Hermitian) ? copytri!(parent(acosHermA), 'U', true) : parent(acosHermA)
     end
@@ -1220,7 +1354,9 @@ julia> asin(sin([0.5 0.1; -0.2 0.3]))
 ```
 """
 function asin(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(asin, A)
+    elseif ishermitian(A)
         asinHermA = asin(Hermitian(A))
         return isa(asinHermA, Hermitian) ? copytri!(parent(asinHermA), 'U', true) : parent(asinHermA)
     end
@@ -1251,7 +1387,9 @@ julia> atan(tan([0.5 0.1; -0.2 0.3]))
 ```
 """
 function atan(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(atan, A)
+    elseif ishermitian(A)
         return copytri!(parent(atan(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
@@ -1269,7 +1407,9 @@ logarithmic formulas used to compute this function, see [^AH16_4].
 [^AH16_4]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function acosh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(acosh, A)
+    elseif ishermitian(A)
         acoshHermA = acosh(Hermitian(A))
         return isa(acoshHermA, Hermitian) ? copytri!(parent(acoshHermA), 'U', true) : parent(acoshHermA)
     end
@@ -1288,7 +1428,9 @@ logarithmic formulas used to compute this function, see [^AH16_5].
 [^AH16_5]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function asinh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(asinh, A)
+    elseif ishermitian(A)
         return copytri!(parent(asinh(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
@@ -1306,7 +1448,9 @@ logarithmic formulas used to compute this function, see [^AH16_6].
 [^AH16_6]: Mary Aprahamian and Nicholas J. Higham, "Matrix Inverse Trigonometric and Inverse Hyperbolic Functions: Theory and Algorithms", MIMS EPrint: 2016.4. [https://doi.org/10.1137/16M1057577](https://doi.org/10.1137/16M1057577)
 """
 function atanh(A::AbstractMatrix)
-    if ishermitian(A)
+    if isdiag(A)
+        return applydiagonal(atanh, A)
+    elseif ishermitian(A)
         return copytri!(parent(atanh(Hermitian(A))), 'U', true)
     end
     SchurF = Schur{Complex}(schur(A))
@@ -1353,15 +1497,14 @@ end
     factorize(A)
 
 Compute a convenient factorization of `A`, based upon the type of the input matrix.
-`factorize` checks `A` to see if it is symmetric/triangular/etc. if `A` is passed
-as a generic matrix. `factorize` checks every element of `A` to verify/rule out
-each property. It will short-circuit as soon as it can rule out symmetry/triangular
-structure. The return value can be reused for efficient solving of multiple
-systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
+If `A` is passed as a generic matrix, `factorize` checks to see if it is
+symmetric/triangular/etc. To this end, `factorize` may check every element of `A` to
+verify/rule out each property. It will short-circuit as soon as it can rule out
+symmetry/triangular structure. The return value can be reused for efficient solving
+of multiple systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholesky`](@ref))  |
 | Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bunchkaufman`](@ref)) |
 | Sparse Symmetric/Hermitian | LDLt (see [`ldlt`](@ref))      |
 | Triangular                 | Triangular                                     |
@@ -1371,9 +1514,6 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 | Symmetric real tridiagonal | LDLt (see [`ldlt`](@ref))      |
 | General square             | LU (see [`lu`](@ref))            |
 | General non-square         | QR (see [`qr`](@ref))            |
-
-If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
-will return a Cholesky factorization.
 
 # Examples
 ```jldoctest
@@ -1393,8 +1533,9 @@ julia> factorize(A) # factorize will check to see that A is already factorized
   ⋅    ⋅    ⋅   1.0  1.0
   ⋅    ⋅    ⋅    ⋅   1.0
 ```
-This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
-(e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
+
+This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra
+functions (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
 function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
@@ -1456,12 +1597,7 @@ function factorize(A::AbstractMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A; check = false)
-            if cf.info == 0
-                return cf
-            else
-                return factorize(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))
@@ -1529,13 +1665,11 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return similar(A, Tout, (n, m))
     end
     if isdiag(A)
-        indA = diagind(A)
-        dA = view(A, indA)
+        dA = diagview(A)
         maxabsA = maximum(abs, dA)
         tol = max(rtol * maxabsA, atol)
         B = fill!(similar(A, Tout, (n, m)), 0)
-        indB = diagind(B)
-        B[indB] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        diagview(B) .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
     SVD         = svd(A)
@@ -1625,7 +1759,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             end
         end
     end
-    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

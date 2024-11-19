@@ -277,3 +277,7 @@ ci = code_lowered(g, Tuple{Val{true}})[1]
                                  [], 0, 0, :propagate)[1] == Expr(:isdefined, GlobalRef(Base, :foo))
 
 end
+
+@testset "Base.Meta docstrings" begin
+    @test isempty(Docs.undocumented_names(Meta))
+end

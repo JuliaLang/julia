@@ -14,11 +14,13 @@ arch_mapping = {
     'i686': "i\\d86",
     'aarch64': "(arm|aarch)64",
     'armv7l': "arm(v7l)?",
+    'riscv64': "(rv64|riscv64)",
     'powerpc64le': "p(ower)?pc64le",
 }
 platform_mapping = {
     'darwin': "-apple-darwin[\\d\\.]*",
     'freebsd': "-(.*-)?freebsd[\\d\\.]*",
+    'openbsd': "-(.*-)?openbsd[\\d\\.]*",
     'windows': "-w64-mingw32",
     'linux': "-(.*-)?linux",
 }
@@ -96,6 +98,7 @@ def p(x):
         'darwin': 'apple-darwin',
         'windows': 'w64-mingw32',
         'freebsd': 'unknown-freebsd',
+        'openbsd': 'unknown-openbsd',
     }
     x = r(x)
     if x:

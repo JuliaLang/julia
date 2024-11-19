@@ -3,7 +3,7 @@
 # Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/
+# Paper and reference code: https://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 

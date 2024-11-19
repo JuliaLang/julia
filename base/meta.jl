@@ -5,8 +5,6 @@ Convenience functions for metaprogramming.
 """
 module Meta
 
-using ..CoreLogging
-
 export quot,
        isexpr,
        isidentifier,
@@ -451,7 +449,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !Core.Compiler.is_meta_expr_head(head)
+        elseif !Base.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -460,5 +458,46 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
+
+"""
+    Meta.unblock(expr)
+
+Peel away redundant block expressions.
+
+Specifically, the following expressions are stripped by this function:
+- `:block` expressions with a single non-line-number argument.
+- Pairs of `:var"hygienic-scope"` / `:escape` expressions.
+"""
+function unblock(@nospecialize ex)
+    while isexpr(ex, :var"hygienic-scope")
+        isexpr(ex.args[1], :escape) || break
+        ex = ex.args[1].args[1]
+    end
+    isexpr(ex, :block) || return ex
+    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
+    length(exs) == 1 || return ex
+    return unblock(exs[1])
+end
+
+"""
+    Meta.unescape(expr)
+
+Peel away `:escape` expressions and redundant block expressions (see
+[`unblock`](@ref)).
+"""
+function unescape(@nospecialize ex)
+    ex = unblock(ex)
+    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
+       ex = unblock(ex.args[1])
+    end
+    return ex
+end
+
+"""
+    Meta.uncurly(expr)
+
+Turn `T{P...}` into just `T`.
+"""
+uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 end # module

@@ -26,20 +26,22 @@ Handle only negative LAPACK error codes
 """
 function chkargsok(ret::BlasInt)
     if ret < 0
-        throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
+        throw(ArgumentError(lazy"invalid argument #$(-ret) to LAPACK call"))
     end
 end
 
 "Handle all nonzero info codes"
-function chklapackerror(ret::BlasInt)
+function chklapackerror(ret::BlasInt, f...)
     if ret == 0
         return
     elseif ret < 0
-        throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
+        throw(ArgumentError(lazy"invalid argument #$(-ret) to LAPACK call"))
     else # ret > 0
-        throw(LAPACKException(ret))
+        chklapackerror_positive(ret, f...)
     end
 end
+
+chklapackerror_positive(ret, f...) = throw(LAPACKException(ret))
 
 function chknonsingular(ret::BlasInt)
     if ret > 0
@@ -53,10 +55,27 @@ function chkposdef(ret::BlasInt)
     end
 end
 
+# Generic fallback function to assert that parameters are valid
+# In specific cases, the following functions may be more useful
+macro chkvalidparam(position::Int, param, validvalues)
+    :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
+end
+function chkvalidparam(position::Int, var::String, val, validvals)
+    # mimic `repr` for chars without explicitly calling it
+    # This is because `repr` introduces dynamic dispatch
+    _repr(c::AbstractChar) = "'$c'"
+    _repr(c) = c
+    if val ∉ validvals
+        throw(ArgumentError(
+            lazy"argument #$position: $var must be one of $validvals, but $(_repr(val)) was passed"))
+    end
+    return val
+end
+
 "Check that {c}transpose is correctly specified"
 function chktrans(trans::AbstractChar)
     if !(trans == 'N' || trans == 'C' || trans == 'T')
-        throw(ArgumentError("trans argument must be 'N' (no transpose), 'T' (transpose), or 'C' (conjugate transpose), got $trans"))
+        throw(ArgumentError(lazy"trans argument must be 'N' (no transpose), 'T' (transpose), or 'C' (conjugate transpose), got '$trans'"))
     end
     trans
 end
@@ -64,7 +83,7 @@ end
 "Check that left/right hand side multiply is correctly specified"
 function chkside(side::AbstractChar)
     if !(side == 'L' || side == 'R')
-        throw(ArgumentError("side argument must be 'L' (left hand multiply) or 'R' (right hand multiply), got $side"))
+        throw(ArgumentError(lazy"side argument must be 'L' (left hand multiply) or 'R' (right hand multiply), got '$side'"))
     end
     side
 end
@@ -72,7 +91,7 @@ end
 "Check that unit diagonal flag is correctly specified"
 function chkdiag(diag::AbstractChar)
     if !(diag == 'U' || diag =='N')
-        throw(ArgumentError("diag argument must be 'U' (unit diagonal) or 'N' (non-unit diagonal), got $diag"))
+        throw(ArgumentError(lazy"diag argument must be 'U' (unit diagonal) or 'N' (non-unit diagonal), got '$diag'"))
     end
     diag
 end
@@ -91,6 +110,7 @@ end
 
 function chkuplofinite(A::AbstractMatrix, uplo::AbstractChar)
     require_one_based_indexing(A)
+    chkuplo(uplo)
     m, n = size(A)
     if uplo == 'U'
         @inbounds for j in 1:n, i in 1:j
@@ -140,7 +160,7 @@ for (gbtrf, gbtrs, elty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($gbtrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}),
                   m, n, kl, ku, AB, max(1,stride(AB,2)), ipiv, info)
             chklapackerror(info[])
             AB, ipiv
@@ -162,12 +182,12 @@ for (gbtrf, gbtrs, elty) in
             info = Ref{BlasInt}()
             n    = size(AB,2)
             if m != n || m != size(B,1)
-                throw(DimensionMismatch("matrix AB has dimensions $(size(AB)), but right hand side matrix B has dimensions $(size(B))"))
+                throw(DimensionMismatch(lazy"matrix AB has dimensions $(size(AB)), but right hand side matrix B has dimensions $(size(B))"))
             end
             ccall((@blasfunc($gbtrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Clong),
+                   Ref{BlasInt}, Clong),
                   trans, n, kl, ku, size(B,2), AB, max(1,stride(AB,2)), ipiv,
                   B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
@@ -211,7 +231,9 @@ for (gebal, gebak, elty, relty) in
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
         function gebal!(job::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
+            @chkvalidparam 1 job ('N', 'P', 'S', 'B')
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
             ihi = Ref{BlasInt}()
@@ -220,7 +242,7 @@ for (gebal, gebak, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($gebal), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ref{BlasInt}, Clong),
                   job, n, A, max(1,stride(A,2)), ilo, ihi, scale, info, 1)
             chklapackerror(info[])
             ilo[], ihi[], scale
@@ -236,6 +258,7 @@ for (gebal, gebak, elty, relty) in
                         ilo::BlasInt, ihi::BlasInt, scale::AbstractVector{$relty},
                         V::AbstractMatrix{$elty})
             require_one_based_indexing(scale, V)
+            @chkvalidparam 1 job ('N', 'P', 'S', 'B')
             chkstride1(scale, V)
             chkside(side)
             chkfinite(V) # balancing routines don't support NaNs and Infs
@@ -336,7 +359,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
             if length(tau) != min(m,n)
-                throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
             work  = Vector{$elty}(undef, 1)
@@ -367,7 +390,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
             if length(tau) != min(m,n)
-                throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
             work  = Vector{$elty}(undef, 1)
@@ -397,10 +420,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A,jpvt,tau)
             m,n = size(A)
             if length(tau) != min(m,n)
-                throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             if length(jpvt) != n
-                throw(DimensionMismatch("jpvt has length $(length(jpvt)), but needs length $n"))
+                throw(DimensionMismatch(lazy"jpvt has length $(length(jpvt)), but needs length $n"))
             end
             lda = stride(A,2)
             if lda == 0
@@ -447,11 +470,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             minmn = min(m, n)
             nb = size(T, 1)
             if nb > minmn
-                throw(ArgumentError("block size $nb > $minmn too large"))
+                throw(ArgumentError(lazy"block size $nb > $minmn too large"))
             end
             lda = max(1, stride(A,2))
             work = Vector{$elty}(undef, nb*n)
-            if n > 0
+            if minmn > 0
                 info = Ref{BlasInt}()
                 ccall((@blasfunc($geqrt), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
@@ -472,12 +495,12 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             m, n = size(A)
             p, q = size(T)
             if m < n
-                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but should have more rows than columns"))
+                throw(DimensionMismatch(lazy"input matrix A has dimensions ($m,$n), but should have more rows than columns"))
             end
             if p != n || q != n
-                throw(DimensionMismatch("block reflector T has dimensions ($p,$q), but should have dimensions ($n,$n)"))
+                throw(DimensionMismatch(lazy"block reflector T has dimensions ($p,$q), but should have dimensions ($n,$n)"))
             end
-            if n > 0
+            if n > 0    # this implies `m > 0` because of `m >= n`
                 info = Ref{BlasInt}()
                 ccall((@blasfunc($geqrt3), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
@@ -500,7 +523,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A,tau)
             m, n  = size(A)
             if length(tau) != min(m,n)
-                throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -529,7 +552,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A,tau)
             m, n  = size(A)
             if length(tau) != min(m,n)
-                throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), but needs length $(min(m,n))"))
             end
             lwork = BlasInt(-1)
             work  = Vector{$elty}(undef, 1)
@@ -563,7 +586,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             info = Ref{BlasInt}()
             ccall((@blasfunc($getrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
-                   Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}),
                   m, n, A, lda, ipiv, info)
             chkargsok(info[])
             A, ipiv, info[] #Error code is stored in LU factorization type
@@ -622,11 +645,13 @@ does not equal zero then the `j`th column of `A` is permuted to the front of
 geqp3!(A::AbstractMatrix, jpvt::AbstractVector{BlasInt}, tau::AbstractVector)
 
 function geqp3!(A::AbstractMatrix{<:BlasFloat}, jpvt::AbstractVector{BlasInt})
+    require_one_based_indexing(A, jpvt)
     m, n = size(A)
     geqp3!(A, jpvt, similar(A, min(m, n)))
 end
 
 function geqp3!(A::AbstractMatrix{<:BlasFloat})
+    require_one_based_indexing(A)
     m, n = size(A)
     geqp3!(A, zeros(BlasInt, n), similar(A, min(m, n)))
 end
@@ -775,6 +800,7 @@ for (larfg, elty) in
         #        .. Array Arguments ..
         #        DOUBLE PRECISION   x( * )
         function larfg!(x::AbstractVector{$elty})
+            require_one_based_indexing(x)
             N    = BlasInt(length(x))
             α    = Ref{$elty}(x[1])
             incx = BlasInt(1)
@@ -803,6 +829,7 @@ for (larf, elty) in
         #        DOUBLE PRECISION   c( ldc, * ), v( * ), work( * )
         function larf!(side::AbstractChar, v::AbstractVector{$elty},
                        τ::$elty, C::AbstractMatrix{$elty}, work::AbstractVector{$elty})
+            require_one_based_indexing(v, C, work)
             m, n = size(C)
             chkside(side)
             ldc = max(1, stride(C, 2))
@@ -818,6 +845,7 @@ for (larf, elty) in
 
         function larf!(side::AbstractChar, v::AbstractVector{$elty},
                        τ::$elty, C::AbstractMatrix{$elty})
+            require_one_based_indexing(v, C)
             m, n = size(C)
             chkside(side)
             lwork = side == 'L' ? n : m
@@ -845,7 +873,7 @@ for (tzrzf, ormrz, elty) in
             chkstride1(A)
             m, n = size(A)
             if n < m
-                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but cannot have fewer columns than rows"))
+                throw(DimensionMismatch(lazy"input matrix A has dimensions ($m,$n), but cannot have fewer columns than rows"))
             end
             lda = max(1, stride(A,2))
             tau = similar(A, $elty, m)
@@ -895,7 +923,7 @@ for (tzrzf, ormrz, elty) in
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                     Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                     side, trans, m, n,
                     k, l, A, lda,
                     tau, C, ldc, work,
@@ -950,7 +978,7 @@ for (gels, gesv, getrs, getri, elty) in
             btrn  = trans == 'T'
             m, n  = size(A)
             if size(B,1) != (btrn ? n : m)
-                throw(DimensionMismatch("matrix A has dimensions ($m,$n), transposed: $btrn, but leading dimension of B is $(size(B,1))"))
+                throw(DimensionMismatch(lazy"matrix A has dimensions ($m,$n), transposed: $btrn, but leading dimension of B is $(size(B,1))"))
             end
             info  = Ref{BlasInt}()
             work  = Vector{$elty}(undef, 1)
@@ -959,7 +987,7 @@ for (gels, gesv, getrs, getri, elty) in
                 ccall((@blasfunc($gels), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       (btrn ? 'T' : 'N'), m, n, size(B,2), A, max(1,stride(A,2)),
                       B, max(1,stride(B,2)), work, lwork, info, 1)
                 chklapackerror(info[])
@@ -993,7 +1021,7 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, B)
             n = checksquare(A)
             if size(B,1) != n
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)), but needs $n"))
             end
             ipiv = similar(A, BlasInt, n)
             info = Ref{BlasInt}()
@@ -1018,16 +1046,16 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, B, ipiv)
             n = checksquare(A)
             if n != size(B, 1)
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)), but needs $n"))
             end
             if n != length(ipiv)
-                throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs to be $n"))
+                throw(DimensionMismatch(lazy"ipiv has length $(length(ipiv)), but needs to be $n"))
             end
             nrhs = size(B, 2)
             info = Ref{BlasInt}()
             ccall((@blasfunc($getrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   trans, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -1044,7 +1072,7 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A, ipiv)
             n = checksquare(A)
             if n != length(ipiv)
-                throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs $n"))
+                throw(DimensionMismatch(lazy"ipiv has length $(length(ipiv)), but needs $n"))
             end
             lda = max(1,stride(A, 2))
             lwork = BlasInt(-1)
@@ -1132,6 +1160,7 @@ for (gesvx, elty) in
                         AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::AbstractChar,
                         R::AbstractVector{$elty}, C::AbstractVector{$elty}, B::AbstractVecOrMat{$elty})
             require_one_based_indexing(A, AF, ipiv, R, C, B)
+            @chkvalidparam 1 fact ('F', 'N', 'E')
             chktrans(trans)
             chkstride1(ipiv, R, C, B)
             n    = checksquare(A)
@@ -1152,7 +1181,7 @@ for (gesvx, elty) in
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                Ref{UInt8}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-               Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
+               Ptr{$elty}, Ptr{BlasInt}, Ref{BlasInt}, Clong, Clong, Clong),
               fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, R, C, B,
               ldb, X, n, rcond, ferr, berr, work, iwork, info, 1, 1, 1)
             chklapackerror(info[])
@@ -1166,6 +1195,7 @@ for (gesvx, elty) in
         end
 
         function gesvx!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+            require_one_based_indexing(A, B)
             n = size(A,1)
             X, equed, R, C, B, rcond, ferr, berr, rpgf =
                 gesvx!('N', 'N', A,
@@ -1202,6 +1232,7 @@ for (gesvx, elty, relty) in
                         AF::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt}, equed::AbstractChar,
                         R::AbstractVector{$relty}, C::AbstractVector{$relty}, B::AbstractVecOrMat{$elty})
             require_one_based_indexing(A, AF, ipiv, R, C, B)
+            @chkvalidparam 1 fact ('F', 'N', 'E')
             chktrans(trans)
             chkstride1(A, AF, ipiv, R, C, B)
             n   = checksquare(A)
@@ -1222,7 +1253,7 @@ for (gesvx, elty, relty) in
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                Ref{UInt8}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$relty},
-               Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong),
+               Ptr{$elty}, Ptr{$relty}, Ref{BlasInt}, Clong, Clong, Clong),
               fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, R, C, B,
               ldb, X, n, rcond, ferr, berr, work, rwork, info, 1, 1, 1)
             chklapackerror(info[])
@@ -1237,6 +1268,7 @@ for (gesvx, elty, relty) in
 
         #Wrapper for the no-equilibration, no-transpose calculation
         function gesvx!(A::AbstractMatrix{$elty}, B::AbstractVecOrMat{$elty})
+            require_one_based_indexing(A, B)
             n = size(A,1)
             X, equed, R, C, B, rcond, ferr, berr, rpgf =
                 gesvx!('N', 'N', A,
@@ -1303,7 +1335,7 @@ for (gelsd, gelsy, elty) in
             chkstride1(A, B)
             m, n  = size(A)
             if size(B, 1) != m
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)) but needs $m"))
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $elty, min(m, n))
@@ -1348,7 +1380,7 @@ for (gelsd, gelsy, elty) in
             n = size(A, 2)
             nrhs = size(B, 2)
             if size(B, 1) != m
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)) but needs $m"))
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, stride(A,2))
@@ -1398,7 +1430,7 @@ for (gelsd, gelsy, elty, relty) in
             chkstride1(A, B)
             m, n  = size(A)
             if size(B, 1) != m
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)) but needs $m"))
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             s     = similar(A, $relty, min(m, n))
@@ -1445,7 +1477,7 @@ for (gelsd, gelsy, elty, relty) in
             m, n = size(A)
             nrhs = size(B, 2)
             if size(B, 1) != m
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)) but needs $m"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)) but needs $m"))
             end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
             lda = max(1, m)
@@ -1519,13 +1551,13 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             m, n = size(A)
             p = size(B, 1)
             if size(B, 2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)), needs $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)), needs $n"))
             end
             if length(c) != m
-                throw(DimensionMismatch("c has length $(length(c)), needs $m"))
+                throw(DimensionMismatch(lazy"c has length $(length(c)), needs $m"))
             end
             if length(d) != p
-                throw(DimensionMismatch("d has length $(length(d)), needs $p"))
+                throw(DimensionMismatch(lazy"d has length $(length(d)), needs $p"))
             end
             X = zeros($elty, n)
             info  = Ref{BlasInt}()
@@ -1575,8 +1607,11 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         #       DOUBLE PRECISION   A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
         function geev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
+            @chkvalidparam 1 jobvl ('N', 'V')
+            @chkvalidparam 2 jobvr ('N', 'V')
             chkfinite(A) # balancing routines don't support NaNs and Infs
             lvecs = jobvl == 'V'
             rvecs = jobvr == 'V'
@@ -1599,7 +1634,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
+                           Ptr{$relty}, Ref{BlasInt}, Clong, Clong),
                           jobvl, jobvr, n, A, max(1,stride(A,2)), W, VL, n, VR, n,
                           work, lwork, rwork, info, 1, 1)
                 else
@@ -1607,7 +1642,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                           Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                           jobvl, jobvr, n, A, max(1,stride(A,2)), WR, WI, VL, n,
                           VR, n, work, lwork, info, 1, 1)
                 end
@@ -1633,6 +1668,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function gesdd!(job::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             chkstride1(A)
+            @chkvalidparam 1 job ('A', 'S', 'O', 'N')
             m, n   = size(A)
             minmn  = min(m, n)
             if job == 'A'
@@ -1663,7 +1699,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+                           Ptr{$relty}, Ptr{BlasInt}, Ref{BlasInt}, Clong),
                           job, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
                           work, lwork, rwork, iwork, info, 1)
                 else
@@ -1671,7 +1707,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+                           Ptr{BlasInt}, Ref{BlasInt}, Clong),
                           job, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
                           work, lwork, iwork, info, 1)
                 end
@@ -1714,6 +1750,9 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function gesvd!(jobu::AbstractChar, jobvt::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             chkstride1(A)
+            @chkvalidparam 1 jobu ('A', 'S', 'O', 'N')
+            @chkvalidparam 2 jobvt ('A', 'S', 'O', 'N')
+            (jobu == jobvt == 'O') && throw(ArgumentError("jobu and jobvt cannot both be O"))
             m, n   = size(A)
             minmn  = min(m, n)
             S      = similar(A, $relty, minmn)
@@ -1732,7 +1771,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
+                           Ref{BlasInt}, Ptr{$relty}, Ref{BlasInt}, Clong, Clong),
                           jobu, jobvt, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
                           work, lwork, rwork, info, 1, 1)
                 else
@@ -1740,7 +1779,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                           Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                           jobu, jobvt, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
                           work, lwork, info, 1, 1)
                 end
@@ -1783,9 +1822,12 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function ggsvd!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             require_one_based_indexing(A, B)
             chkstride1(A, B)
+            @chkvalidparam 1 jobu ('U', 'N')
+            @chkvalidparam 2 jobv ('V', 'N')
+            @chkvalidparam 3 jobq ('Q', 'N')
             m, n = size(A)
             if size(B, 2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs $n"))
             end
             p = size(B, 1)
             k = Vector{BlasInt}(undef, 1)
@@ -1910,9 +1952,12 @@ for (f, elty) in ((:dggsvd3_, :Float64),
         function ggsvd3!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             require_one_based_indexing(A, B)
             chkstride1(A, B)
+            @chkvalidparam 1 jobu ('U', 'N')
+            @chkvalidparam 2 jobv ('V', 'N')
+            @chkvalidparam 3 jobq ('Q', 'N')
             m, n = size(A)
             if size(B, 2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs $n"))
             end
             p = size(B, 1)
             k = Ref{BlasInt}()
@@ -1969,9 +2014,12 @@ for (f, elty, relty) in ((:zggsvd3_, :ComplexF64, :Float64),
         function ggsvd3!(jobu::AbstractChar, jobv::AbstractChar, jobq::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             require_one_based_indexing(A, B)
             chkstride1(A, B)
+            @chkvalidparam 1 jobu ('U', 'N')
+            @chkvalidparam 2 jobv ('V', 'N')
+            @chkvalidparam 3 jobq ('Q', 'N')
             m, n = size(A)
             if size(B, 2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs $n"))
             end
             p = size(B, 1)
             k = Vector{BlasInt}(undef, 1)
@@ -1999,7 +2047,7 @@ for (f, elty, relty) in ((:zggsvd3_, :ComplexF64, :Float64),
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
-                    Ptr{BlasInt}, Clong, Clong, Clong),
+                    Ref{BlasInt}, Clong, Clong, Clong),
                     jobu, jobv, jobq, m,
                     n, p, k, l,
                     A, lda, B, ldb,
@@ -2055,31 +2103,34 @@ for (geevx, ggev, ggev3, elty) in
         #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
         function geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix{$elty})
-            n = checksquare(A)
-            chkfinite(A) # balancing routines don't support NaNs and Infs
-            lda = max(1,stride(A,2))
-            wr = similar(A, $elty, n)
-            wi = similar(A, $elty, n)
-            if balanc ∉ ['N', 'P', 'S', 'B']
-                throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+            require_one_based_indexing(A)
+            @chkvalidparam 1 balanc ('N', 'P', 'S', 'B')
+            @chkvalidparam 4 sense ('N', 'E', 'V', 'B')
+            if sense ∈ ('E', 'B') && !(jobvl == jobvr == 'V')
+                throw(ArgumentError(lazy"sense = '$sense' requires jobvl = 'V' and jobvr = 'V'"))
             end
+            n = checksquare(A)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 0
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            VL = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 0
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
+            chkfinite(A) # balancing routines don't support NaNs and Infs
+            lda = max(1,stride(A,2))
+            wr = similar(A, $elty, n)
+            wi = similar(A, $elty, n)
+            VL = similar(A, $elty, ldvl, n)
             VR = similar(A, $elty, ldvr, n)
             ilo = Ref{BlasInt}()
             ihi = Ref{BlasInt}()
@@ -2095,7 +2146,7 @@ for (geevx, ggev, ggev3, elty) in
             elseif sense == 'V' || sense == 'B'
                 iworksize = 2*n - 2
             else
-                throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
+                throw(ArgumentError(lazy"sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
             end
             iwork = Vector{BlasInt}(undef, iworksize)
             info = Ref{BlasInt}()
@@ -2139,30 +2190,30 @@ for (geevx, ggev, ggev3, elty) in
             chkstride1(A,B)
             n, m = checksquare(A,B)
             if n != m
-                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
-            lda = max(1, stride(A, 2))
-            ldb = max(1, stride(B, 2))
-            alphar = similar(A, $elty, n)
-            alphai = similar(A, $elty, n)
-            beta = similar(A, $elty, n)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 1
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            vl = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 1
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            vl = similar(A, $elty, ldvl, n)
             vr = similar(A, $elty, ldvr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2203,30 +2254,30 @@ for (geevx, ggev, ggev3, elty) in
             chkstride1(A,B)
             n, m = checksquare(A,B)
             if n != m
-                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
-            lda = max(1, stride(A, 2))
-            ldb = max(1, stride(B, 2))
-            alphar = similar(A, $elty, n)
-            alphai = similar(A, $elty, n)
-            beta = similar(A, $elty, n)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 1
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            vl = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 1
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            vl = similar(A, $elty, ldvl, n)
             vr = similar(A, $elty, ldvr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2273,33 +2324,37 @@ for (geevx, ggev, ggev3, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   W( * ), WORK( * )
         function geevx!(balanc::AbstractChar, jobvl::AbstractChar, jobvr::AbstractChar, sense::AbstractChar, A::AbstractMatrix{$elty})
-            n = checksquare(A)
-            chkfinite(A) # balancing routines don't support NaNs and Infs
-            lda = max(1,stride(A,2))
-            w = similar(A, $elty, n)
-            if balanc ∉ ['N', 'P', 'S', 'B']
-                throw(ArgumentError("balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
+            require_one_based_indexing(A)
+            if balanc ∉ ('N', 'P', 'S', 'B')
+                throw(ArgumentError(lazy"balanc must be 'N', 'P', 'S', or 'B', but $balanc was passed"))
             end
+            if sense ∉ ('N','E','V','B')
+                throw(ArgumentError(lazy"sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
+            end
+            if sense ∈ ('E', 'B') && !(jobvl == jobvr == 'V')
+                throw(ArgumentError(lazy"sense = '$sense' requires jobvl = 'V' and jobvr = 'V'"))
+            end
+            n = checksquare(A)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 0
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            VL = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 0
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
-            if sense ∉ ['N','E','V','B']
-                throw(ArgumentError("sense must be 'N', 'E', 'V' or 'B', but $sense was passed"))
-            end
+            chkfinite(A) # balancing routines don't support NaNs and Infs
+            lda = max(1,stride(A,2))
+            w = similar(A, $elty, n)
+            VL = similar(A, $elty, ldvl, n)
             VR = similar(A, $elty, ldvr, n)
             ilo = Ref{BlasInt}()
             ihi = Ref{BlasInt}()
@@ -2350,29 +2405,29 @@ for (geevx, ggev, ggev3, elty, relty) in
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
-            lda = max(1, stride(A, 2))
-            ldb = max(1, stride(B, 2))
-            alpha = similar(A, $elty, n)
-            beta = similar(A, $elty, n)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 1
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            vl = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 1
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            vl = similar(A, $elty, ldvl, n)
             vr = similar(A, $elty, ldvr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2415,29 +2470,29 @@ for (geevx, ggev, ggev3, elty, relty) in
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
             end
-            lda = max(1, stride(A, 2))
-            ldb = max(1, stride(B, 2))
-            alpha = similar(A, $elty, n)
-            beta = similar(A, $elty, n)
             ldvl = 0
             if jobvl == 'V'
                 ldvl = n
             elseif jobvl == 'N'
                 ldvl = 1
             else
-                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+                throw(ArgumentError(lazy"jobvl must be 'V' or 'N', but $jobvl was passed"))
             end
-            vl = similar(A, $elty, ldvl, n)
             ldvr = 0
             if jobvr == 'V'
                 ldvr = n
             elseif jobvr == 'N'
                 ldvr = 1
             else
-                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+                throw(ArgumentError(lazy"jobvr must be 'V' or 'N', but $jobvr was passed"))
             end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            vl = similar(A, $elty, ldvl, n)
             vr = similar(A, $elty, ldvr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2522,9 +2577,10 @@ for (laic1, elty) in
         function laic1!(job::Integer, x::AbstractVector{$elty},
                         sest::$elty, w::AbstractVector{$elty}, gamma::$elty)
             require_one_based_indexing(x, w)
+            @chkvalidparam 1 job (1,2)
             j = length(x)
             if j != length(w)
-                throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
+                throw(DimensionMismatch(lazy"vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
             sestpr = Ref{$elty}()
             s = Ref{$elty}()
@@ -2556,9 +2612,10 @@ for (laic1, elty, relty) in
         function laic1!(job::Integer, x::AbstractVector{$elty},
                         sest::$relty, w::AbstractVector{$elty}, gamma::$elty)
             require_one_based_indexing(x, w)
+            @chkvalidparam 1 job (1,2)
             j = length(x)
             if j != length(w)
-                throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
+                throw(DimensionMismatch(lazy"vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
             sestpr = Ref{$relty}()
             s = Ref{$elty}()
@@ -2593,13 +2650,13 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(B, dl, d, du)
             n = length(d)
             if !(n >= length(dl) >= n - 1)
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $n or $(n - 1)"))
+                throw(DimensionMismatch(lazy"subdiagonal has length $(length(dl)), but should be $n or $(n - 1)"))
             end
             if !(n >= length(du) >= n - 1)
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $n or $(n - 1)"))
+                throw(DimensionMismatch(lazy"superdiagonal has length $(length(du)), but should be $n or $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)), but should have $n"))
             end
             if n == 0
                 return B # Early exit if possible
@@ -2624,17 +2681,17 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(dl,d,du)
             n    = length(d)
             if length(dl) != n - 1
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $(n - 1)"))
+                throw(DimensionMismatch(lazy"subdiagonal has length $(length(dl)), but should be $(n - 1)"))
             end
             if length(du) != n - 1
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $(n - 1)"))
+                throw(DimensionMismatch(lazy"superdiagonal has length $(length(du)), but should be $(n - 1)"))
             end
             du2  = similar(d, $elty, n-2)
             ipiv = similar(d, BlasInt, n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gttrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                   Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{BlasInt}, Ref{BlasInt}),
                   n, dl, d, du, du2, ipiv, info)
             chklapackerror(info[])
             dl, d, du, du2, ipiv
@@ -2655,19 +2712,19 @@ for (gtsv, gttrf, gttrs, elty) in
             chkstride1(B, ipiv, dl, d, du, du2)
             n = length(d)
             if length(dl) != n - 1
-                throw(DimensionMismatch("subdiagonal has length $(length(dl)), but should be $(n - 1)"))
+                throw(DimensionMismatch(lazy"subdiagonal has length $(length(dl)), but should be $(n - 1)"))
             end
             if length(du) != n - 1
-                throw(DimensionMismatch("superdiagonal has length $(length(du)), but should be $(n - 1)"))
+                throw(DimensionMismatch(lazy"superdiagonal has length $(length(du)), but should be $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
+                throw(DimensionMismatch(lazy"B has leading dimension $(size(B,1)), but should have $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($gttrs), libblastrampoline), Cvoid,
                    (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                    Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                    Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                    trans, n, size(B,2), dl, d, du, du2, ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -2725,7 +2782,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             n = size(A, 2)
             m = min(n, size(A, 1))
             if k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= m = $m"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2759,7 +2816,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2795,7 +2852,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2830,10 +2887,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             chkstride1(A,tau)
             m, n = size(A)
             if n < m
-                throw(DimensionMismatch("input matrix A has dimensions ($m,$n), but cannot have fewer columns than rows"))
+                throw(DimensionMismatch(lazy"input matrix A has dimensions ($m,$n), but cannot have fewer columns than rows"))
             end
             if k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2871,16 +2928,16 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             nA = size(A, 2)
             k   = length(tau)
             if side == 'L' && m != nA
-                throw(DimensionMismatch("for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
+                throw(DimensionMismatch(lazy"for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
             end
             if side == 'R' && n != nA
-                throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $n, must equal the second dimension of A, $nA"))
+                throw(DimensionMismatch(lazy"for a right-sided multiplication, the second dimension of C, $n, must equal the second dimension of A, $nA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2889,7 +2946,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                 ccall((@blasfunc($ormlq), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                       side, trans, m, n, k, A, max(1,stride(A,2)), tau,
                       C, max(1,stride(C,2)), work, lwork, info, 1, 1)
                 chklapackerror(info[])
@@ -2918,16 +2975,16 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             mA  = size(A, 1)
             k   = length(tau)
             if side == 'L' && m != mA
-                throw(DimensionMismatch("for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
+                throw(DimensionMismatch(lazy"for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
             end
             if side == 'R' && n != mA
-                throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
+                throw(DimensionMismatch(lazy"for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2937,7 +2994,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Clong, Clong),
+                       Ref{BlasInt}, Clong, Clong),
                       side, trans, m, n,
                       k, A, max(1,stride(A,2)), tau,
                       C, max(1, stride(C,2)), work, lwork,
@@ -2968,16 +3025,16 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             mA  = size(A, 1)
             k   = length(tau)
             if side == 'L' && m != mA
-                throw(DimensionMismatch("for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
+                throw(DimensionMismatch(lazy"for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $mA"))
             end
             if side == 'R' && n != mA
-                throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
+                throw(DimensionMismatch(lazy"for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $mA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -2987,7 +3044,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Clong, Clong),
+                       Ref{BlasInt}, Clong, Clong),
                       side, trans, m, n,
                       k, A, max(1,stride(A,2)), tau,
                       C, max(1, stride(C,2)), work, lwork,
@@ -3018,16 +3075,16 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             nA  = size(A, 2)
             k   = length(tau)
             if side == 'L' && m != nA
-                throw(DimensionMismatch("for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
+                throw(DimensionMismatch(lazy"for a left-sided multiplication, the first dimension of C, $m, must equal the second dimension of A, $nA"))
             end
             if side == 'R' && n != nA
-                throw(DimensionMismatch("for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $nA"))
+                throw(DimensionMismatch(lazy"for a right-sided multiplication, the second dimension of C, $m, must equal the second dimension of A, $nA"))
             end
             if side == 'L' && k > m
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= m = $m"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= m = $m"))
             end
             if side == 'R' && k > n
-                throw(DimensionMismatch("invalid number of reflectors: k = $k should be <= n = $n"))
+                throw(DimensionMismatch(lazy"invalid number of reflectors: k = $k should be <= n = $n"))
             end
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -3036,7 +3093,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                 ccall((@blasfunc($ormrq), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                       side, trans, m, n, k, A, max(1,stride(A,2)), tau,
                       C, max(1,stride(C,2)), work, lwork, info, 1, 1)
                 chklapackerror(info[])
@@ -3060,31 +3117,31 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             end
             if side == 'L'
                 if !(0 <= k <= m)
-                    throw(DimensionMismatch("wrong value for k = $k: must be between 0 and $m"))
+                    throw(DimensionMismatch(lazy"wrong value for k = $k: must be between 0 and $m"))
                 end
                 if m != size(V,1)
-                    throw(DimensionMismatch("first dimensions of C, $m, and V, $(size(V,1)) must match"))
+                    throw(DimensionMismatch(lazy"first dimensions of C, $m, and V, $(size(V,1)) must match"))
                 end
                 ldv = stride(V,2)
                 if ldv < max(1, m)
-                    throw(DimensionMismatch("Q and C don't fit! The stride of V, $ldv, is too small"))
+                    throw(DimensionMismatch(lazy"Q and C don't fit! The stride of V, $ldv, is too small"))
                 end
                 wss = n*k
             elseif side == 'R'
                 if !(0 <= k <= n)
-                    throw(DimensionMismatch("wrong value for k = $k: must be between 0 and $n"))
+                    throw(DimensionMismatch(lazy"wrong value for k = $k: must be between 0 and $n"))
                 end
                 if n != size(V,1)
-                    throw(DimensionMismatch("second dimension of C, $n, and first dimension of V, $(size(V,1)) must match"))
+                    throw(DimensionMismatch(lazy"second dimension of C, $n, and first dimension of V, $(size(V,1)) must match"))
                 end
                 ldv = stride(V,2)
                 if ldv < max(1, n)
-                    throw(DimensionMismatch("Q and C don't fit! The stride of V, $ldv, is too small"))
+                    throw(DimensionMismatch(lazy"Q and C don't fit! The stride of V, $ldv, is too small"))
                 end
                 wss = m*k
             end
             if !(1 <= nb <= k)
-                throw(DimensionMismatch("wrong value for nb = $nb, which must be between 1 and $k"))
+                throw(DimensionMismatch(lazy"wrong value for nb = $nb, which must be between 1 and $k"))
             end
             ldc = stride(C, 2)
             work = Vector{$elty}(undef, wss)
@@ -3093,7 +3150,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                 Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                 side, trans, m, n,
                 k, nb, V, ldv,
                 T, max(1,stride(T,2)), C, max(1,ldc),
@@ -3205,12 +3262,12 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             n = checksquare(A)
             chkuplo(uplo)
             if size(B,1) != n
-                throw(DimensionMismatch("first dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
+                throw(DimensionMismatch(lazy"first dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($posv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), B, max(1,stride(B,2)), info, 1)
             chkargsok(info[])
             chkposdef(info[])
@@ -3234,7 +3291,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($potrf), libblastrampoline), Cvoid,
-                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, size(A,1), A, lda, info, 1)
             chkargsok(info[])
             #info[] > 0 means the leading minor of order info[] is not positive definite
@@ -3255,7 +3312,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkuplo(uplo)
             info = Ref{BlasInt}()
             ccall((@blasfunc($potri), libblastrampoline), Cvoid,
-                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, size(A,1), A, max(1,stride(A,2)), info, 1)
             chkargsok(info[])
             chknonsingular(info[])
@@ -3275,7 +3332,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkuplo(uplo)
             nrhs = size(B,2)
             if size(B,1) != n
-                throw(DimensionMismatch("first dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
+                throw(DimensionMismatch(lazy"first dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
             end
             lda = max(1,stride(A,2))
             if lda == 0 || nrhs == 0
@@ -3285,7 +3342,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($potrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
-                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                    uplo, n, nrhs, A,
                    lda, B, ldb, info, 1)
             chklapackerror(info[])
@@ -3301,6 +3358,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         #       DOUBLE PRECISION   A( LDA, * ), WORK( 2*N )
         #       INTEGER            PIV( N )
         function pstrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, tol::Real)
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3310,7 +3368,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($pstrf), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                   Ptr{BlasInt}, Ref{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ref{$rtyp}, Ptr{$rtyp}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), piv, rank, tol, work, info, 1)
             chkargsok(info[])
             A, piv, rank[1], info[] #Stored in CholeskyPivoted
@@ -3391,10 +3449,10 @@ for (ptsv, pttrf, elty, relty) in
             chkstride1(B, D, E)
             n = length(D)
             if length(E) != n - 1
-                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"E has length $(length(E)), but needs $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($ptsv), libblastrampoline), Cvoid,
@@ -3415,7 +3473,7 @@ for (ptsv, pttrf, elty, relty) in
             chkstride1(D, E)
             n = length(D)
             if length(E) != n - 1
-                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"E has length $(length(E)), but needs $(n - 1)"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($pttrf), libblastrampoline), Cvoid,
@@ -3459,10 +3517,10 @@ for (pttrs, elty, relty) in
             chkstride1(B, D, E)
             n = length(D)
             if length(E) != n - 1
-                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"E has length $(length(E)), but needs $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($pttrs), libblastrampoline), Cvoid,
@@ -3493,15 +3551,15 @@ for (pttrs, elty, relty) in
             chkuplo(uplo)
             n = length(D)
             if length(E) != n - 1
-                throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"E has length $(length(E)), but needs $(n - 1)"))
             end
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($pttrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), D, E, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -3532,6 +3590,7 @@ for (trtri, trtrs, elty) in
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * )
         function trtri!(uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -3540,7 +3599,7 @@ for (trtri, trtrs, elty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($trtri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Clong, Clong),
+                   Ref{BlasInt}, Clong, Clong),
                   uplo, diag, n, A, lda, info, 1, 1)
             chklapackerror(info[])
             A
@@ -3561,7 +3620,7 @@ for (trtri, trtrs, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($trtrs), libblastrampoline), Cvoid,
@@ -3571,11 +3630,12 @@ for (trtri, trtrs, elty) in
                   uplo, trans, diag, n, size(B,2), A, max(1,stride(A,2)),
                   B, max(1,stride(B,2)), info,
                   1, 1, 1)
-            chklapackerror(info[])
+            chklapackerror(info[], trtrs!)
             B
         end
     end
 end
+chklapackerror_positive(ret, ::typeof(trtrs!)) = chknonsingular(ret)
 
 """
     trtri!(uplo, diag, A)
@@ -3613,10 +3673,12 @@ for (trcon, trevc, trrfs, elty) in
         # INTEGER            IWORK( * )
         # DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             chkdiag(diag)
             n = checksquare(A)
             chkuplo(uplo)
+            @chkvalidparam 1 norm ('O', '1', 'I')
             rcond = Ref{$elty}()
             work  = Vector{$elty}(undef, 3n)
             iwork = Vector{BlasInt}(undef, n)
@@ -3643,14 +3705,15 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        Base.@constprop :aggressive function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             require_one_based_indexing(select, T, VL, VR)
             # Extract
-            if side ∉ ['L','R','B']
-                throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
+            if side ∉ ('L','R','B')
+                throw(ArgumentError(lazy"side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
             end
+            @chkvalidparam 2 howmny ('A', 'B', 'S')
             n, mm = checksquare(T), size(VL, 2)
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
@@ -3666,7 +3729,7 @@ for (trcon, trevc, trrfs, elty) in
                 (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                 Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                 side, howmny, select, n,
                 T, ldt, VL, ldvl,
                 VR, ldvr, mm, m,
@@ -3714,7 +3777,7 @@ for (trcon, trevc, trrfs, elty) in
             n = size(A,2)
             nrhs = size(B,2)
             if nrhs != size(X,2)
-                throw(DimensionMismatch("second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
+                throw(DimensionMismatch(lazy"second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
             end
             work = Vector{$elty}(undef, 3n)
             iwork = Vector{BlasInt}(undef, n)
@@ -3722,7 +3785,7 @@ for (trcon, trevc, trrfs, elty) in
             ccall((@blasfunc($trrfs), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ref{BlasInt}, Clong, Clong, Clong),
                 uplo, trans, diag, n,
                 nrhs, A, max(1,stride(A,2)), B, max(1,stride(B,2)), X, max(1,stride(X,2)),
                 Ferr, Berr, work, iwork, info, 1, 1, 1)
@@ -3746,8 +3809,10 @@ for (trcon, trevc, trrfs, elty, relty) in
         # DOUBLE PRECISION   RWORK( * )
         # COMPLEX*16         A( LDA, * ), WORK( * )
         function trcon!(norm::AbstractChar, uplo::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
+            @chkvalidparam 1 norm ('O', '1', 'I')
             chkuplo(uplo)
             chkdiag(diag)
             rcond = Ref{$relty}(1)
@@ -3787,9 +3852,10 @@ for (trcon, trevc, trrfs, elty, relty) in
 
             # Check
             chkstride1(T, select, VL, VR)
-            if side ∉ ['L','R','B']
-                throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
+            if side ∉ ('L','R','B')
+                throw(ArgumentError(lazy"side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
             end
+            @chkvalidparam 2 howmny ('A', 'B', 'S')
 
             # Allocate
             m = Ref{BlasInt}()
@@ -3800,7 +3866,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                 (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
+                 Ptr{$elty}, Ptr{$relty}, Ref{BlasInt}, Clong, Clong),
                 side, howmny, select, n,
                 T, ldt, VL, ldvl,
                 VR, ldvr, mm, m,
@@ -3848,7 +3914,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             n = size(A,2)
             nrhs = size(B,2)
             if nrhs != size(X,2)
-                throw(DimensionMismatch("second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
+                throw(DimensionMismatch(lazy"second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
             end
             work  = Vector{$elty}(undef, 2n)
             rwork = Vector{$relty}(undef, n)
@@ -3856,7 +3922,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             ccall((@blasfunc($trrfs), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong),
+                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ref{BlasInt}, Clong, Clong, Clong),
                 uplo, trans, diag, n,
                 nrhs, A, max(1,stride(A,2)), B, max(1,stride(B,2)), X, max(1,stride(X,2)),
                 Ferr, Berr, work, rwork, info, 1, 1, 1)
@@ -3916,17 +3982,18 @@ for (stev, stebz, stegr, stein, elty) in
     @eval begin
         function stev!(job::AbstractChar, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
             require_one_based_indexing(dv, ev)
+            @chkvalidparam 1 job ('N', 'V')
             chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1 && length(ev) != n
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than or equal to dv's length, $n)"))
+                throw(DimensionMismatch(lazy"ev has length $(length(ev)) but needs one less than or equal to dv's length, $n)"))
             end
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Vector{$elty}(undef, max(1, 2n-2))
             info = Ref{BlasInt}()
             ccall((@blasfunc($stev), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                   Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   job, n, dv, ev, Zmat, n, work, info, 1)
             chklapackerror(info[])
             dv, Zmat
@@ -3938,10 +4005,12 @@ for (stev, stebz, stegr, stein, elty) in
         #*  eigenvalues.
         function stebz!(range::AbstractChar, order::AbstractChar, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::AbstractVector{$elty}, ev::AbstractVector{$elty})
             require_one_based_indexing(dv, ev)
+            @chkvalidparam 1 range ('A', 'V', 'I')
+            @chkvalidparam 2 order ('B', 'E')
             chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+                throw(DimensionMismatch(lazy"ev has length $(length(ev)) but needs one less than dv's length, $n)"))
             end
             m = Ref{BlasInt}()
             nsplit = Vector{BlasInt}(undef, 1)
@@ -3957,7 +4026,7 @@ for (stev, stebz, stegr, stein, elty) in
                 Ref{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                Ptr{BlasInt}, Ref{BlasInt}, Clong, Clong),
                 range, order, n, vl,
                 vu, il, iu, abstol,
                 dv, ev, m, nsplit,
@@ -3969,6 +4038,8 @@ for (stev, stebz, stegr, stein, elty) in
 
         function stegr!(jobz::AbstractChar, range::AbstractChar, dv::AbstractVector{$elty}, ev::AbstractVector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             require_one_based_indexing(dv, ev)
+            @chkvalidparam 1 jobz ('N', 'V')
+            @chkvalidparam 2 range ('A', 'V', 'I')
             chkstride1(dv, ev)
             n = length(dv)
             ne = length(ev)
@@ -3978,7 +4049,7 @@ for (stev, stebz, stegr, stein, elty) in
                 eev = copy(ev)
                 eev[n] = zero($elty)
             else
-                throw(DimensionMismatch("ev has length $ne but needs one less than or equal to dv's length, $n)"))
+                throw(DimensionMismatch(lazy"ev has length $ne but needs one less than or equal to dv's length, $n)"))
             end
 
             abstol = Vector{$elty}(undef, 1)
@@ -4028,12 +4099,12 @@ for (stev, stebz, stegr, stein, elty) in
                 ev = copy(ev_in)
                 ev[n] = zero($elty)
             else
-                throw(DimensionMismatch("ev_in has length $ne but needs one less than or equal to dv's length, $n)"))
+                throw(DimensionMismatch(lazy"ev_in has length $ne but needs one less than or equal to dv's length, $n)"))
             end
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             if !(1 <= length(w_in) <= n)
-                throw(DimensionMismatch("w_in has length $(length(w_in)), but needs to be between 1 and $n"))
+                throw(DimensionMismatch(lazy"w_in has length $(length(w_in)), but needs to be between 1 and $n"))
             end
             m = length(w_in)
             #If iblock and isplit are invalid input, assume worst-case block partitioning,
@@ -4141,6 +4212,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function syconv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4148,7 +4220,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($syconv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                   uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info, 1, 1)
             chklapackerror(info[])
             A, work
@@ -4168,7 +4240,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4177,7 +4249,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info,  1)
                 chkargsok(info[])
@@ -4198,6 +4270,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4210,7 +4283,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, stride(A,2), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -4222,6 +4295,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         end
 
         function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            chkuplo(uplo)
             n = checksquare(A)
             ipiv = similar(A, BlasInt, n)
             sytrf!(uplo, A, ipiv)
@@ -4244,7 +4319,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #             for i in 1:2
 #                 ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ref{BlasInt}, Clong),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 @assertargsok
 #                 chknonsingular(info[])
@@ -4264,6 +4339,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4271,7 +4347,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chkargsok(info[])
             chknonsingular(info[])
@@ -4293,12 +4369,12 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -4325,7 +4401,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4334,7 +4410,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info, 1)
                 chkargsok(info[])
@@ -4355,6 +4431,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4368,7 +4445,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, stride(A,2), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -4387,6 +4464,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4394,7 +4472,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chkargsok(info[])
             chknonsingular(info[])
@@ -4416,12 +4494,12 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -4450,10 +4528,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
                 throw(ArgumentError("way must be C or R"))
             end
             if length(ipiv) != n
-                throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
+                throw(ArgumentError(lazy"length of pivot vector was $(length(ipiv)) but should have been $n"))
             end
             if length(e) != n
-                throw(ArgumentError("length of e vector was $(length(e)) but should have been $n"))
+                throw(ArgumentError(lazy"length of e vector was $(length(e)) but should have been $n"))
             end
 
             # allocate
@@ -4489,6 +4567,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
        #        INTEGER            IPIV( * )
        #        COMPLEX*16         A( LDA, * ), WORK( * )
         function syconv!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A,ipiv)
             chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4496,7 +4575,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($syconv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong, Clong),
                   uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info, 1, 1)
             chklapackerror(info[])
             A, work
@@ -4516,7 +4595,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4525,7 +4604,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($hesv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info, 1)
                 chklapackerror(info[])
@@ -4546,6 +4625,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4555,7 +4635,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             for i in 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($hetrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -4567,6 +4647,8 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         end
 
         function hetrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            chkuplo(uplo)
             n = checksquare(A)
             ipiv = similar(A, BlasInt, n)
             hetrf!(uplo, A, ipiv)
@@ -4590,7 +4672,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #             for i in 1:2
 #                 ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ref{BlasInt}, Clong),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 chklapackerror(info[])
 #                 if lwork < 0
@@ -4611,6 +4693,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4618,7 +4701,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
@@ -4635,15 +4718,16 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         function hetrs!(uplo::AbstractChar, A::AbstractMatrix{$elty},
                        ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             require_one_based_indexing(A, ipiv, B)
+            chkuplo(uplo)
             chkstride1(A,B,ipiv)
             n = checksquare(A)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($hetrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -4669,7 +4753,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4678,7 +4762,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($hesv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info, 1)
                 chklapackerror(info[])
@@ -4699,6 +4783,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4709,7 +4794,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             for i in 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($hetrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -4729,6 +4814,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function hetri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A,ipiv)
             chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4736,7 +4822,7 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
@@ -4754,14 +4840,15 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
                              ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat{$elty})
             require_one_based_indexing(A, ipiv, B)
             chkstride1(A,B,ipiv)
+            chkuplo(uplo)
             n = checksquare(A)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($hetrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -4788,7 +4875,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4797,7 +4884,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info, 1)
                 chkargsok(info[])
@@ -4819,6 +4906,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4831,7 +4919,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -4843,6 +4931,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         end
 
         function sytrf!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            chkuplo(uplo)
             n = checksquare(A)
             ipiv = similar(A, BlasInt, n)
             sytrf!(uplo, A, ipiv)
@@ -4866,7 +4956,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #             for i in 1:2
 #                 ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ref{BlasInt}, Clong),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 chklapackerror(info[])
 #                 if lwork < 0
@@ -4886,6 +4976,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytri!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4893,7 +4984,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
@@ -4914,12 +5005,12 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info,  1)
             chklapackerror(info[])
             B
@@ -4946,7 +5037,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             ipiv  = similar(A, BlasInt, n)
             work  = Vector{$elty}(undef, 1)
@@ -4955,7 +5046,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
                       work, lwork, info, 1)
                 chkargsok(info[])
@@ -4977,6 +5068,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytrf_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkuplo(uplo)
@@ -4990,7 +5082,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                       uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
@@ -5010,6 +5102,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function sytri_rook!(uplo::AbstractChar, A::AbstractMatrix{$elty}, ipiv::AbstractVector{BlasInt})
+            require_one_based_indexing(A, ipiv)
             chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
@@ -5017,7 +5110,7 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
                   uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
@@ -5038,12 +5131,12 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
-                throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
+                throw(DimensionMismatch(lazy"B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
             ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                   uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
@@ -5071,13 +5164,13 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             # check
             chkuplo(uplo)
             if way != 'C' && way != 'R'
-                throw(ArgumentError("way must be 'C' or 'R'"))
+                throw(ArgumentError(lazy"way must be 'C' or 'R'"))
             end
             if length(ipiv) != n
-                throw(ArgumentError("length of pivot vector was $(length(ipiv)) but should have been $n"))
+                throw(ArgumentError(lazy"length of pivot vector was $(length(ipiv)) but should have been $n"))
             end
             if length(e) != n
-                throw(ArgumentError("length of e vector was $(length(e)) but should have been $n"))
+                throw(ArgumentError(lazy"length of e vector was $(length(e)) but should have been $n"))
             end
 
             # allocate
@@ -5225,6 +5318,14 @@ solution `X`.
 """
 hetrs!(uplo::AbstractChar, A::AbstractMatrix, ipiv::AbstractVector{BlasInt}, B::AbstractVecOrMat)
 
+for f in (:syevd!, :syev!)
+    _f = Symbol(:_, f)
+    @eval function $f(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
+        W, A = $_f(jobz, uplo, A)
+        jobz == 'V' ? (W, A) : W
+    end
+end
+
 # Symmetric (real) eigensolvers
 for (syev, syevr, syevd, sygvd, elty) in
     ((:dsyev_,:dsyevr_,:dsyevd_,:dsygvd_,:Float64),
@@ -5236,7 +5337,10 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
+            chkuplo(uplo)
             chkstride1(A)
             n = checksquare(A)
             W     = similar(A, $elty, n)
@@ -5246,7 +5350,7 @@ for (syev, syevr, syevd, sygvd, elty) in
             for i = 1:2  # first call returns lwork as work[1]
                 ccall((@blasfunc($syev), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                       jobz, uplo, n, A, max(1,stride(A,2)), W, work, lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
@@ -5254,7 +5358,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                     resize!(work, lwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
@@ -5270,15 +5374,18 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )
         function syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
+            @chkvalidparam 2 range ('A', 'V', 'I')
             chkstride1(A)
             n = checksquare(A)
-            chkuplofinite(A, uplo)
             if range == 'I' && !(1 <= il <= iu <= n)
-                throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu = $iu), which must be between 1 and n = $n"))
+                throw(ArgumentError(lazy"illegal choice of eigenvalue indices (il = $il, iu = $iu), which must be between 1 and n = $n"))
             end
             if range == 'V' && vl >= vu
-                throw(ArgumentError("lower boundary, $vl, must be less than upper boundary, $vu"))
+                throw(ArgumentError(lazy"lower boundary, $vl, must be less than upper boundary, $vu"))
             end
+            chkuplofinite(A, uplo)
             lda = stride(A,2)
             m = Ref{BlasInt}()
             W = similar(A, $elty, n)
@@ -5301,7 +5408,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                         Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
-                        Ptr{BlasInt}, Clong, Clong, Clong),
+                        Ref{BlasInt}, Clong, Clong, Clong),
                     jobz, range, uplo, n,
                     A, max(1,lda), vl, vu,
                     il, iu, abstol, m,
@@ -5330,7 +5437,9 @@ for (syev, syevr, syevd, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
             n = checksquare(A)
             chkuplofinite(A, uplo)
@@ -5346,7 +5455,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                 ccall((@blasfunc($syevd), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
-                        Ptr{BlasInt}, Clong, Clong),
+                        Ref{BlasInt}, Clong, Clong),
                     jobz, uplo, n, A, max(1,lda),
                     W, work, lwork, iwork, liwork,
                     info, 1, 1)
@@ -5358,7 +5467,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                     resize!(iwork, liwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         # Generalized eigenproblem
@@ -5372,10 +5481,14 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), W( * ), WORK( * )
         function sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 itype 1:3
+            @chkvalidparam 2 jobz ('N', 'V')
+            chkuplo(uplo)
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
@@ -5390,7 +5503,7 @@ for (syev, syevr, syevd, sygvd, elty) in
                     (Ref{BlasInt}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                     Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                     itype, jobz, uplo, n,
                     A, lda, B, ldb,
                     w, work, lwork, iwork,
@@ -5421,7 +5534,9 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
             chkuplofinite(A, uplo)
             n = checksquare(A)
@@ -5443,7 +5558,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
                     resize!(work, lwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
@@ -5461,14 +5576,17 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * )
         function syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
+            @chkvalidparam 2 range ('A', 'V', 'I')
             chkstride1(A)
             chkuplofinite(A, uplo)
             n = checksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
-                throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu=$iu), which must be between 1 and n = $n"))
+                throw(ArgumentError(lazy"illegal choice of eigenvalue indices (il = $il, iu=$iu), which must be between 1 and n = $n"))
             end
             if range == 'V' && vl >= vu
-                throw(ArgumentError("lower boundary, $vl, must be less than upper boundary, $vu"))
+                throw(ArgumentError(lazy"lower boundary, $vl, must be less than upper boundary, $vu"))
             end
             lda = max(1,stride(A,2))
             m = Ref{BlasInt}()
@@ -5529,7 +5647,9 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :none function _syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
+            @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
             chkuplofinite(A, uplo)
             n = checksquare(A)
@@ -5547,7 +5667,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
                 ccall((@blasfunc($syevd), liblapack), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ref{BlasInt},
-                    Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                    Ptr{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                     jobz, uplo, n, A, stride(A,2),
                     W, work, lwork, rwork, lrwork,
                     iwork, liwork, info, 1, 1)
@@ -5561,7 +5681,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
                     resize!(iwork, liwork)
                 end
             end
-            jobz == 'V' ? (W, A) : W
+            W, A
         end
 
         #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
@@ -5575,12 +5695,15 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 itype 1:3
+            @chkvalidparam 2 jobz ('N', 'V')
             chkstride1(A, B)
             chkuplofinite(A, uplo)
             chkuplofinite(B, uplo)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
@@ -5651,11 +5774,6 @@ syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractM
 Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
 of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
-
-Use the divide-and-conquer method, instead of the QR iteration used by
-`syev!` or multiple relatively robust representations used by `syevr!`.
-See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
-a comparison of the accuracy and performatce of different methods.
 """
 syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
 
@@ -5691,19 +5809,19 @@ for (bdsqr, relty, elty) in
             # Do checks
             chkuplo(uplo)
             if length(e_) != n - 1
-                throw(DimensionMismatch("off-diagonal has length $(length(e_)) but should have length $(n - 1)"))
+                throw(DimensionMismatch(lazy"off-diagonal has length $(length(e_)) but should have length $(n - 1)"))
             end
             if ncvt > 0 && ldvt < n
-                throw(DimensionMismatch("leading dimension of Vt, $ldvt, must be at least $n"))
+                throw(DimensionMismatch(lazy"leading dimension of Vt, $ldvt, must be at least $n"))
             end
             if ldu < nru
-                throw(DimensionMismatch("leading dimension of U, $ldu, must be at least $nru"))
+                throw(DimensionMismatch(lazy"leading dimension of U, $ldu, must be at least $nru"))
             end
             if size(U, 2) != n
-                throw(DimensionMismatch("U must have $n columns but has $(size(U, 2))"))
+                throw(DimensionMismatch(lazy"U must have $n columns but has $(size(U, 2))"))
             end
             if ncc > 0 && ldc < n
-                throw(DimensionMismatch("leading dimension of C, $ldc, must be at least $n"))
+                throw(DimensionMismatch(lazy"leading dimension of C, $ldc, must be at least $n"))
             end
             # Allocate
             work = Vector{$relty}(undef, 4n)
@@ -5712,7 +5830,7 @@ for (bdsqr, relty, elty) in
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong),
+                 Ref{BlasInt}, Ptr{$relty}, Ref{BlasInt}, Clong),
                 uplo, n, ncvt, nru,
                 ncc, d, e_, Vt,
                 ldvt, U, ldu, C,
@@ -5770,7 +5888,7 @@ for (bdsdc, elty) in
                 ldvt=ldu=max(1, n)
                 lwork=3*n^2 + 4*n
             else
-                throw(ArgumentError("COMPQ argument must be 'N', 'P' or 'I', got $(repr(compq))"))
+                throw(ArgumentError(lazy"COMPQ argument must be 'N', 'P' or 'I', got $(repr(compq))"))
             end
             u  = similar(d, $elty, (ldu,  n))
             vt = similar(d, $elty, (ldvt, n))
@@ -5824,6 +5942,8 @@ for (gecon, elty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function gecon!(normtype::AbstractChar, A::AbstractMatrix{$elty}, anorm::$elty)
+            require_one_based_indexing(A)
+            @chkvalidparam 1 normtype ('0', '1', 'I')
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
@@ -5834,7 +5954,7 @@ for (gecon, elty) in
             ccall((@blasfunc($gecon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{BlasInt}, Clong),
+                   Ref{BlasInt}, Clong),
                   normtype, n, A, lda, anorm, rcond, work, iwork,
                   info, 1)
             chklapackerror(info[])
@@ -5858,6 +5978,8 @@ for (gecon, elty, relty) in
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function gecon!(normtype::AbstractChar, A::AbstractMatrix{$elty}, anorm::$relty)
+            require_one_based_indexing(A)
+            @chkvalidparam 1 normtype ('0', '1', 'I')
             chkstride1(A)
             n = checksquare(A)
             lda = max(1, stride(A, 2))
@@ -5868,7 +5990,7 @@ for (gecon, elty, relty) in
             ccall((@blasfunc($gecon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{$relty}, Ref{$relty}, Ptr{$elty}, Ptr{$relty},
-                   Ptr{BlasInt}, Clong),
+                   Ref{BlasInt}, Clong),
                   normtype, n, A, lda, anorm, rcond, work, rwork,
                   info, 1)
             chklapackerror(info[])
@@ -5900,6 +6022,7 @@ for (gehrd, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION  A( LDA, * ), TAU( * ), WORK( * )
         function gehrd!(ilo::Integer, ihi::Integer, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
             chkfinite(A) # balancing routines don't support NaNs and Infs
@@ -5953,7 +6076,7 @@ for (orghr, elty) in
             chkstride1(A, tau)
             n = checksquare(A)
             if n - length(tau) != 1
-                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), needs $(n - 1)"))
             end
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
@@ -6002,11 +6125,13 @@ for (ormhr, elty) in
 
             require_one_based_indexing(A, tau, C)
             chkstride1(A, tau, C)
+            chkside(side)
+            chktrans(trans)
             n = checksquare(A)
             mC, nC = size(C, 1), size(C, 2)
 
             if n - length(tau) != 1
-                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), needs $(n - 1)"))
             end
             if (side == 'L' && mC != n) || (side == 'R' && nC != n)
                 throw(DimensionMismatch("A and C matrices are not conformable"))
@@ -6020,7 +6145,7 @@ for (ormhr, elty) in
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                     Ref{BlasInt}, Ref{BlasInt}, Clong, Clong),
                     side, trans, mC, nC,
                     ilo, ihi, A, max(1, stride(A, 2)),
                     tau, C, max(1, stride(C, 2)), work,
@@ -6049,6 +6174,8 @@ for (hseqr, elty) in
         function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
                         H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
             require_one_based_indexing(H, Z)
+            @chkvalidparam 1 job ('E', 'S')
+            @chkvalidparam 2 compz ('N', 'I', 'V')
             chkstride1(H)
             n = checksquare(H)
             checksquare(Z) == n || throw(DimensionMismatch())
@@ -6091,6 +6218,8 @@ for (hseqr, elty) in
         function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
                         H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
             require_one_based_indexing(H, Z)
+            @chkvalidparam 1 job ('E', 'S')
+            @chkvalidparam 2 compz ('N', 'I', 'V')
             chkstride1(H)
             n = checksquare(H)
             checksquare(Z) == n || throw(DimensionMismatch())
@@ -6149,10 +6278,10 @@ for (hetrd, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION  A( LDA, * ), D( * ), E( * ), TAU( * ), WORK( * )
         function hetrd!(uplo::AbstractChar, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
-            chkuplo(uplo)
-            chkfinite(A) # balancing routines don't support NaNs and Infs
+            chkuplofinite(A, uplo) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             d = Vector{$relty}(undef, n)
             e = Vector{$relty}(undef, max(0,n - 1))
@@ -6163,7 +6292,7 @@ for (hetrd, elty) in
                 ccall((@blasfunc($hetrd), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$relty},
-                    Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                    Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Clong),
                     uplo, n, A, max(1, stride(A, 2)), d, e, tau, work, lwork, info, 1)
                 chklapackerror(info[])
                 if i == 1
@@ -6203,7 +6332,7 @@ for (orgtr, elty) in
             chkstride1(A, tau)
             n = checksquare(A)
             if n - length(tau) != 1
-                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), needs $(n - 1)"))
             end
             chkuplo(uplo)
             work = Vector{$elty}(undef, 1)
@@ -6213,7 +6342,7 @@ for (orgtr, elty) in
                 ccall((@blasfunc($orgtr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                     Ptr{BlasInt}, Clong),
+                     Ref{BlasInt}, Clong),
                     uplo, n, A,
                     max(1, stride(A, 2)), tau, work, lwork,
                     info, 1)
@@ -6254,14 +6383,16 @@ for (ormtr, elty) in
             require_one_based_indexing(A, tau, C)
             chkstride1(A, tau, C)
             n = checksquare(A)
+            chkside(side)
             chkuplo(uplo)
+            chktrans(trans)
             mC, nC = size(C, 1), size(C, 2)
 
             if n - length(tau) != 1
-                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+                throw(DimensionMismatch(lazy"tau has length $(length(tau)), needs $(n - 1)"))
             end
             if (side == 'L' && mC != n) || (side == 'R' && nC != n)
-                throw(DimensionMismatch("A and C matrices are not conformable"))
+                throw(DimensionMismatch(lazy"A and C matrices are not conformable"))
             end
 
             work = Vector{$elty}(undef, 1)
@@ -6272,7 +6403,7 @@ for (ormtr, elty) in
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
+                     Ref{BlasInt}, Ref{BlasInt}, Clong, Clong, Clong),
                     side, uplo, trans, mC, nC,
                     A, max(1, stride(A, 2)),
                     tau, C, max(1, stride(C, 2)), work,
@@ -6302,6 +6433,7 @@ for (gees, gges, gges3, elty) in
         #    $                   WR( * )
         function gees!(jobvs::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
+            @chkvalidparam 1 jobvs ('N', 'V')
             chkstride1(A)
             n     = checksquare(A)
             sdim  = Vector{BlasInt}(undef, 1)
@@ -6328,7 +6460,7 @@ for (gees, gges, gges3, elty) in
                     resize!(work, lwork)
                 end
             end
-            A, vs, iszero(wi) ? wr : complex.(wr, wi)
+            iszero(wi) ? (A, vs, wr) : (A, vs, complex.(wr, wi))
         end
 
         # *     .. Scalar Arguments ..
@@ -6341,10 +6473,13 @@ for (gees, gges, gges3, elty) in
         #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
         #      $                   VSR( LDVSR, * ), WORK( * )
         function gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 jobvsl ('N', 'V')
+            @chkvalidparam 2 jobvsr ('N', 'V')
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             sdim = BlasInt(0)
             alphar = similar(A, $elty, n)
@@ -6390,10 +6525,13 @@ for (gees, gges, gges3, elty) in
         #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
         #      $                   VSR( LDVSR, * ), WORK( * )
         function gges3!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 jobvsl ('N', 'V')
+            @chkvalidparam 2 jobvsr ('N', 'V')
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             sdim = BlasInt(0)
             alphar = similar(A, $elty, n)
@@ -6445,6 +6583,7 @@ for (gees, gges, gges3, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), VS( LDVS, * ), W( * ), WORK( * )
         function gees!(jobvs::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
+            @chkvalidparam 1 jobvs ('N', 'V')
             chkstride1(A)
             n     = checksquare(A)
             sort  = 'N'
@@ -6486,10 +6625,13 @@ for (gees, gges, gges3, elty, relty) in
         #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
         #      $                   WORK( * )
         function gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 jobvsl ('N', 'V')
+            @chkvalidparam 2 jobvsr ('N', 'V')
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
@@ -6536,10 +6678,13 @@ for (gees, gges, gges3, elty, relty) in
         #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
         #      $                   WORK( * )
         function gges3!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            @chkvalidparam 1 jobvsl ('N', 'V')
+            @chkvalidparam 2 jobvsr ('N', 'V')
             chkstride1(A, B)
             n, m = checksquare(A, B)
             if n != m
-                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($n,$n), and B, ($m,$m), must match"))
             end
             sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
@@ -6624,6 +6769,8 @@ for (trexc, trsen, tgsen, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+            require_one_based_indexing(T, Q)
+            @chkvalidparam 1 compq ('V', 'N')
             chkstride1(T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -6634,7 +6781,7 @@ for (trexc, trsen, tgsen, elty) in
                   (Ref{UInt8},  Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Clong),
+                   Ptr{$elty}, Ref{BlasInt}, Clong),
                   compq, n,
                   T, ldt, Q, ldq,
                   ifst, ilst,
@@ -6656,6 +6803,9 @@ for (trexc, trsen, tgsen, elty) in
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
         function trsen!(job::AbstractChar, compq::AbstractChar, select::AbstractVector{BlasInt},
                         T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+            require_one_based_indexing(T, Q, select)
+            @chkvalidparam 1 job ('N', 'E', 'V', 'B')
+            @chkvalidparam 2 compq ('V', 'N')
             chkstride1(T, Q, select)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -6677,7 +6827,7 @@ for (trexc, trsen, tgsen, elty) in
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ref{$elty},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
-                    Ptr{BlasInt}, Clong, Clong),
+                    Ref{BlasInt}, Clong, Clong),
                     job, compq, select, n,
                     T, ldt, Q, ldq,
                     wr, wi, m, s, sep,
@@ -6691,7 +6841,7 @@ for (trexc, trsen, tgsen, elty) in
                     resize!(iwork, liwork)
                 end
             end
-            T, Q, iszero(wi) ? wr : complex.(wr, wi), s[], sep[]
+            iszero(wi) ? (T, Q, wr, s[], sep[]) : (T, Q, complex.(wr, wi), s[], sep[])
         end
         trsen!(select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)
@@ -6711,16 +6861,17 @@ for (trexc, trsen, tgsen, elty) in
         #        ..
         function tgsen!(select::AbstractVector{BlasInt}, S::AbstractMatrix{$elty}, T::AbstractMatrix{$elty},
                         Q::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
+            require_one_based_indexing(select, S, T, Q, Z)
             chkstride1(select, S, T, Q, Z)
             n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
             end
             if n != nq
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and Q, ($nq,$nq), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and Q, ($nq,$nq), must match"))
             end
             if n != nz
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and Z, ($nz,$nz), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and Z, ($nz,$nz), must match"))
             end
             lds = max(1, stride(S, 2))
             ldt = max(1, stride(T, 2))
@@ -6776,6 +6927,8 @@ for (trexc, trsen, tgsen, elty, relty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WORK( * )
         function trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+            require_one_based_indexing(T, Q)
+            @chkvalidparam 1 compq ('V', 'N')
             chkstride1(T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -6785,7 +6938,7 @@ for (trexc, trsen, tgsen, elty, relty) in
                   (Ref{UInt8},  Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{BlasInt}, Clong),
+                   Ref{BlasInt}, Clong),
                   compq, n,
                   T, ldt, Q, ldq,
                   ifst, ilst,
@@ -6806,6 +6959,9 @@ for (trexc, trsen, tgsen, elty, relty) in
         #      COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
         function trsen!(job::AbstractChar, compq::AbstractChar, select::AbstractVector{BlasInt},
                         T::AbstractMatrix{$elty}, Q::AbstractMatrix{$elty})
+            require_one_based_indexing(select, T, Q)
+            @chkvalidparam 1 job ('N', 'E', 'V', 'B')
+            @chkvalidparam 2 compq ('N', 'V')
             chkstride1(select, T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
@@ -6824,7 +6980,7 @@ for (trexc, trsen, tgsen, elty, relty) in
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ref{$relty}, Ref{$relty},
                     Ptr{$elty}, Ref{BlasInt},
-                    Ptr{BlasInt}, Clong, Clong),
+                    Ref{BlasInt}, Clong, Clong),
                     job, compq, select, n,
                     T, ldt, Q, ldq,
                     w, m, s, sep,
@@ -6856,16 +7012,17 @@ for (trexc, trsen, tgsen, elty, relty) in
         #        ..
         function tgsen!(select::AbstractVector{BlasInt}, S::AbstractMatrix{$elty}, T::AbstractMatrix{$elty},
                         Q::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
+            require_one_based_indexing(select, S, T, Q, Z)
             chkstride1(select, S, T, Q, Z)
             n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
             end
             if n != nq
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and Q, ($nq,$nq), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and Q, ($nq,$nq), must match"))
             end
             if n != nz
-                throw(DimensionMismatch("dimensions of S, ($n,$n), and Z, ($nz,$nz), must match"))
+                throw(DimensionMismatch(lazy"dimensions of S, ($n,$n), and Z, ($nz,$nz), must match"))
             end
             lds = max(1, stride(S, 2))
             ldt = max(1, stride(T, 2))
@@ -6956,13 +7113,15 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
         function trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix{$elty},
                         B::AbstractMatrix{$elty}, C::AbstractMatrix{$elty}, isgn::Int=1)
             require_one_based_indexing(A, B, C)
+            chktrans(transa)
+            chktrans(transb)
             chkstride1(A, B, C)
             m, n = checksquare(A), checksquare(B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)
             if m != m1 || n != n1
-                throw(DimensionMismatch("dimensions of A, ($m,$n), and C, ($m1,$n1), must match"))
+                throw(DimensionMismatch(lazy"dimensions of A, ($m,$n), and C, ($m1,$n1), must match"))
             end
             ldc = max(1, stride(C, 2))
             scale = Ref{$relty}()
@@ -6970,7 +7129,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
+                 Ptr{$relty}, Ref{BlasInt}, Clong, Clong),
                 transa, transb, isgn, m, n,
                 A, lda, B, ldb, C, ldc,
                 scale, info, 1, 1)
@@ -7010,9 +7169,15 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
             chkstride1(A, B)
-            m,n = size(A)
-            m1,n1 = size(B)
-            (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            m, n = size(A)
+            m1, n1 = size(B)
+            if uplo == 'U'
+                lacpy_size_check((m1, n1), (n < m ? n : m, n))
+            elseif uplo == 'L'
+                lacpy_size_check((m1, n1), (m, m < n ? m : n))
+            else
+                lacpy_size_check((m1, n1), (m, n))
+            end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
@@ -7023,6 +7188,9 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         end
     end
 end
+
+# The noinline annotation reduces latency
+@noinline lacpy_size_check((m1, n1), (m, n)) = (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
 
 """
     lacpy!(B, A, uplo) -> B

@@ -10,7 +10,7 @@ using Random
 
 import SHA
 
-export UUID, uuid1, uuid4, uuid5, uuid_version
+export UUID, uuid1, uuid4, uuid5, uuid7, uuid_version
 
 import Base: UUID
 
@@ -39,7 +39,7 @@ const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-
     uuid1([rng::AbstractRNG]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
-by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
+by [RFC 4122](https://www.ietf.org/rfc/rfc4122). Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
 
 The default rng used by `uuid1` is not `Random.default_rng()` and every invocation of `uuid1()` without
@@ -62,6 +62,13 @@ UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
 """
 function uuid1(rng::AbstractRNG=Random.RandomDevice())
+    # 0x01b21dd213814000 is the number of 100 nanosecond intervals
+    # between the UUID epoch and Unix epoch
+    timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
+    _build_uuid1(rng, timestamp)
+end
+
+function _build_uuid1(rng::AbstractRNG, timestamp::UInt64)
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -70,9 +77,6 @@ function uuid1(rng::AbstractRNG=Random.RandomDevice())
     # set the unicast/multicast bit and version
     u |= 0x00000000000010000000010000000000
 
-    # 0x01b21dd213814000 is the number of 100 nanosecond intervals
-    # between the UUID epoch and Unix epoch
-    timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
     ts_low = timestamp & typemax(UInt32)
     ts_mid = (timestamp >> 32) & typemax(UInt16)
     ts_hi = (timestamp >> 48) & 0x0fff
@@ -81,14 +85,14 @@ function uuid1(rng::AbstractRNG=Random.RandomDevice())
     u |= UInt128(ts_mid) << 80
     u |= UInt128(ts_hi) << 64
 
-    UUID(u)
+    return UUID(u)
 end
 
 """
     uuid4([rng::AbstractRNG]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
-as specified by RFC 4122.
+as specified by [RFC 4122](https://www.ietf.org/rfc/rfc4122).
 
 The default rng used by `uuid4` is not `Random.default_rng()` and every invocation of `uuid4()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
@@ -155,6 +159,49 @@ function uuid5(ns::UUID, name::String)
         v = (v << 0x08) | hash_result[idx]
     end
     return UUID(v)
+end
+
+"""
+    uuid7([rng::AbstractRNG]) -> UUID
+
+Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
+as specified by [RFC 9652](https://www.rfc-editor.org/rfc/rfc9562).
+
+The default rng used by `uuid7` is not `Random.default_rng()` and every invocation of `uuid7()` without
+an argument should be expected to return a unique identifier. Importantly, the outputs of
+`uuid7` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.12),
+`uuid7` uses `Random.RandomDevice` as the default rng. However, this is an implementation
+detail that may change in the future.
+
+!!! compat "Julia 1.12"
+    `uuid7()` is available as of Julia 1.12.
+
+# Examples
+```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
+julia> using Random
+
+julia> rng = Xoshiro(123);
+
+julia> uuid7(rng)
+UUID("019026ca-e086-772a-9638-f7b8557cd282")
+```
+"""
+function uuid7(rng::AbstractRNG=Random.RandomDevice())
+    # current time in ms, rounded to an Integer
+    timestamp = round(UInt128, time() * 1e3)
+    _build_uuid7(rng, timestamp)
+end
+
+function _build_uuid7(rng::AbstractRNG, timestamp::UInt128)
+    bytes = rand(rng, UInt128)
+    # make space for the timestamp
+    bytes &= 0x0000000000000fff3fffffffffffffff
+    # version & variant
+    bytes |= 0x00000000000070008000000000000000
+
+    bytes |= timestamp << UInt128(80)
+
+    return UUID(bytes)
 end
 
 end
