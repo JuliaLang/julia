@@ -595,6 +595,11 @@ end
     if isa(a, PartialTypeVar) || isa(b, PartialTypeVar)
         return false
     end
+    if isa(a, ConstSet) || isa(b, ConstSet)
+        # N.B. Assumes a === b checked above
+        # TODO: ConstSet with different order
+        return false
+    end
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
