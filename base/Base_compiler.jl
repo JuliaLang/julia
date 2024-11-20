@@ -266,19 +266,9 @@ function strcat(x::String, y::String)
     return out
 end
 
-function file_exists(filename::String)
-    file = ccall(
-        (:fopen, "libc"),
-        Ptr{Cvoid},
-        (Ptr{UInt8}, Ptr{UInt8}),
-        filename, "r"
-    )
-    if file != C_NULL
-        ccall((:fclose, "libc"), Cint, (Ptr{Cvoid},), file)
-        return true
-    else
-        return false
-    end
+function file_exists(path::String)::Bool
+    result = ccall(:access, Cint, (Cstring, Cint), path, 0 #=F_OK=#)
+    return result == 0  # If result is 0, the file exists
 end
 
 global BUILDROOT::String = ""
