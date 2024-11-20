@@ -2267,6 +2267,15 @@ typedef struct _jl_handler_t {
 
 #define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
 
+// delta_timestamp values are nanoseconds since the boot-time of the julia runtime system.
+// To convert to a real time, use jl_dt2hrtime(dt) and jl_hrtime2ns(hrt).
+typedef uint32_t delta_timestamp;
+
+extern JL_DLLEXPORT uint64_t jl_system_boot_time;
+JL_DLLEXPORT delta_timestamp jl_delta_time_now(void);
+JL_DLLEXPORT delta_timestamp jl_delta_timestamp(uint64_t t);
+JL_DLLEXPORT uint64_t jl_hrtime_from_delta(delta_timestamp t);
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
@@ -2289,13 +2298,13 @@ typedef struct _jl_task_t {
     // flag indicating whether or not to record timing metrics for this task
     uint8_t metrics_enabled;
     // timestamp this task first entered the run queue
-    _Atomic(uint64_t) first_enqueued_at;
+    _Atomic(uint32_t) first_enqueued_at;
     // timestamp this task was most recently scheduled to run
-    _Atomic(uint64_t) last_started_running_at;
+    _Atomic(uint32_t) last_started_running_at;
     // time this task has spent running; updated when it yields or finishes.
-    _Atomic(uint64_t) cpu_time_ns;
+    _Atomic(uint32_t) cpu_time_ns;
     // timestamp this task finished (i.e. entered state DONE or FAILED).
-    _Atomic(uint64_t) finished_at;
+    _Atomic(uint32_t) finished_at;
 
 // hidden state:
     // cached floating point environment
