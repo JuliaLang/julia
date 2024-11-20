@@ -460,8 +460,6 @@ function _precompilepkgs(pkgs::Vector{String},
     # consider exts of direct deps to be direct deps so that errors are reported
     append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
 
-    @debug "precompile: deps collected"
-
     # An extension effectively depends on another extension if it has a strict superset of its triggers
     for ext_a in keys(exts)
         for ext_b in keys(exts)
@@ -471,14 +469,49 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
 
+    function expand_indirect_dependencies(direct_deps)
+        function visit!(visited, node, all_deps)
+            if node in visited
+                return
+            end
+            push!(visited, node)
+            for dep in get(Set{Base.PkgId}, direct_deps, node)
+                if !(dep in all_deps)
+                    push!(all_deps, dep)
+                    visit!(visited, dep, all_deps)
+                end
+            end
+        end
+
+        indirect_deps = Dict{Base.PkgId, Set{Base.PkgId}}()
+        for package in keys(direct_deps)
+            # Initialize a set to keep track of all dependencies for 'package'
+            all_deps = Set{Base.PkgId}()
+            visited = Set{Base.PkgId}()
+            visit!(visited, package, all_deps)
+            # Update direct_deps with the complete set of dependencies for 'package'
+            indirect_deps[package] = all_deps
+        end
+        return indirect_deps
+    end
+
+    indirect_deps = expand_indirect_dependencies(depsmap)
+    @debug "precompile: deps collected"
+
     # this loop must be run after the full depsmap has been populated
-    for (pkg, pkg_exts) in pkg_exts_map
-        # find any packages that depend on the extension(s)'s deps and replace those deps in their deps list with the extension(s),
-        # basically injecting the extension into the precompile order in the graph, to avoid race to precompile extensions
-        for (_pkg, deps) in depsmap # for each manifest dep
-            if !in(_pkg, keys(exts)) && pkg in deps # if not an extension and depends on pkg
-                append!(deps, pkg_exts) # add the package extensions to deps
-                filter!(!isequal(pkg), deps) # remove the pkg from deps
+    for ext in keys(exts)
+        ext_loadable_in_pkg = Dict{Base.PkgId,Bool}()
+        for pkg in keys(depsmap)
+            is_trigger = in(pkg, depsmap[ext])
+            is_extension = in(pkg, keys(exts))
+            has_triggers = issubset(depsmap[ext], indirect_deps[pkg])
+            ext_loadable_in_pkg[pkg] = !is_extension && has_triggers && !is_trigger
+        end
+        for (pkg, ext_loadable) in ext_loadable_in_pkg
+            if ext_loadable && !any((dep)->ext_loadable_in_pkg[dep], depsmap[pkg])
+                # add an edge if the extension is loadable by pkg, and was not loadable in any
+                # of the pkg's dependencies
+                push!(depsmap[pkg], ext)
             end
         end
     end
