@@ -41,6 +41,7 @@ struct StmtInfo
     need thus not be computed.
     """
     used::Bool
+    bailed::Bool
 end
 
 struct SpecInfo
