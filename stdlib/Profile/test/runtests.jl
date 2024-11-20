@@ -204,19 +204,21 @@ end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
+import InteractiveUtils
+
 @testset "Module short names" begin
     Profile.clear()
-    @profile peakflops()
+    @profile InteractiveUtils.peakflops()
     io = IOBuffer()
-    IOContext(io, :displaysize=>(1000,1000))
+    ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)
     str = String(take!(io))
-    @test occursin("@Compiler/src", str)
-    @test occursin("@Base/src", str)
-    @test occursin("@InteractiveUtils/src", str)
-    @test occursin("@LinearAlgebra/src", str)
-    @test occursin("@juliasrc", str)
-    @test occursin("@julialib", str)
+    @test occursin("@Compiler/src/", str)
+    @test occursin("@Base/", str)
+    @test occursin("@InteractiveUtils/src/", str)
+    @test occursin("@LinearAlgebra/src/", str)
+    @test occursin("@juliasrc/", str)
+    @test occursin("@julialib/", str)
 end
 
 # Profile deadlocking in compilation (debuginfo registration)

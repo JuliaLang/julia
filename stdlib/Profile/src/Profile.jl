@@ -554,8 +554,8 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         elseif startswith(path_norm, lib_dir)
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
-        elseif startswith(path, COMPILER_DIR)
-            remainder = only(split(path, COMPILER_DIR, keepempty=false))
+        elseif contains(path, COMPILER_DIR)
+            remainder = split(path, COMPILER_DIR, keepempty=false)[end]
             possible_compiler_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder))
             return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
