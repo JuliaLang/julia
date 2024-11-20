@@ -2074,12 +2074,16 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     if uplo == 'U'
         LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
         for j in axes(A,2), i in axes(A,1)[begin : min(j,end)]
-            @inbounds B[i,j] = A[i,j]
+            # extract the parents for UpperTriangular matrices
+            Bv, Av = _uppertridata(B), _uppertridata(A)
+            @inbounds Bv[i,j] = Av[i,j]
         end
     else # uplo == 'L'
         LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
         for j in axes(A,2), i in axes(A,1)[j:end]
-            @inbounds B[i,j] = A[i,j]
+            # extract the parents for LowerTriangular matrices
+            Bv, Av = _lowertridata(B), _lowertridata(A)
+            @inbounds Bv[i,j] = Av[i,j]
         end
     end
     return B

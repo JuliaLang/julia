@@ -647,6 +647,11 @@ function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
     return B
 end
 
+_uppertridata(A) = A
+_lowertridata(A) = A
+_uppertridata(A::UpperTriangular) = parent(A)
+_lowertridata(A::LowerTriangular) = parent(A)
+
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
 @inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =

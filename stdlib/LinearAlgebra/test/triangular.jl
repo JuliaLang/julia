@@ -1405,6 +1405,8 @@ end
         M[1+!isupper, 1+isupper] = 4
         uplo, loup = U isa UpperTriangular ? ('U', 'L') : ('L', 'U' )
         @test copytrito!(similar(U), U, uplo) == U
+        @test copytrito!(zero(M), U, uplo) == U
+        @test copytrito!(similar(U), Array(U), uplo) == U
         @test copytrito!(zero(U), U, loup) == zero(U)
         Ubig = T(similar(M, (3,3)))
         copytrito!(Ubig, U, uplo)
