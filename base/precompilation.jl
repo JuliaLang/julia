@@ -601,7 +601,12 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        @warn """Circular dependency detected. Precompilation will be skipped for:\n  $(join(string.(circular_deps), "\n  "))"""
+        deps_list = ""
+        for pkg in circular_deps
+            name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
+            deps_list *= "  $name\n"
+        end
+        @warn """Circular dependency detected. Precompilation will be skipped for:\n$deps_list"""
     end
     @debug "precompile: circular dep check done"
 
