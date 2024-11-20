@@ -1407,7 +1407,9 @@ end
         @test copytrito!(similar(U), U, uplo) == U
         @test copytrito!(zero(M), U, uplo) == U
         @test copytrito!(similar(U), Array(U), uplo) == U
-        @test copytrito!(zero(U), U, loup) == zero(U)
+        @test copytrito!(zero(U), U, loup) == Diagonal(U)
+        @test copytrito!(similar(U), MyTriangular(U), uplo) == U
+        @test copytrito!(zero(M), MyTriangular(U), uplo) == U
         Ubig = T(similar(M, (3,3)))
         copytrito!(Ubig, U, uplo)
         @test Ubig[axes(U)...] == U
