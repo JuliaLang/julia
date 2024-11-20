@@ -658,10 +658,12 @@ function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
     return B
 end
 
-_uppertridata(A) = A
-_lowertridata(A) = A
-_uppertridata(A::UpperTriangular) = parent(A)
-_lowertridata(A::LowerTriangular) = parent(A)
+uppertridata(A) = A
+lowertridata(A) = A
+# we restrict these specializations only to strided matrices to avoid cases where an UpperTriangular type
+# doesn't share its indexing with the parent
+uppertridata(A::UpperTriangular{<:Any, <:StridedMatrix}) = parent(A)
+lowertridata(A::LowerTriangular{<:Any, <:StridedMatrix}) = parent(A)
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
