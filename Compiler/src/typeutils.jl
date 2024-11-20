@@ -238,6 +238,9 @@ function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vect
         if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
             ti = widenconst(ti)
         end
+        if isa(ti, ConstSet)
+            ti = widenconst(ti)
+        end
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max
@@ -274,6 +277,12 @@ function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion
         if isa(ti, Union)
             for ty in uniontypes(ti)
                 t[i] = ty
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+            end
+            t[i] = origti
+        elseif isa(ti, ConstSet) && isa(widenconst(ti), Union)
+            for ty in uniontypes(widenconst(ti))
+                t[i] = tmeet(𝕃, ti, ty)
                 _switchtupleunion(𝕃, t, i - 1, tunion, origt)
             end
             t[i] = origti

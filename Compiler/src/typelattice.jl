@@ -645,6 +645,24 @@ end
             return Bottom
         end
         return v
+    elseif isa(v, ConstSet)
+        typ = tmeet(widenlattice(lattice), widenconst(v), t)
+        if typ === Bottom
+            return Bottom
+        end
+        vals = Any[]
+        for c in v.vals
+            c′ = tmeet(lattice, c, t)
+            if c′ !== Bottom
+                push!(vals, c′)
+            end
+        end
+        if isempty(vals)
+            return Bottom
+        elseif length(vals) == 1
+            return vals[1]
+        end
+        return Core._ConstSet(typ, vals)
     end
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
@@ -797,8 +815,10 @@ function Core.ConstSet(lattice::AbstractLattice,
         typb = widenconst(b)
     end
 
-    # Need to define compiler version
-    # unique!(vals)
-    # vals = collect(IdSet(vals))
+    set = IdSet()
+    for v in vals
+        push!(set, v)
+    end
+    vals = collect(set)
     return Core._ConstSet(tmerge(lattice, typa, typb), vals)
 end

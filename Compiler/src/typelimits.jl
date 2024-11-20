@@ -695,6 +695,7 @@ end
     if acp && bcp
         typea === typeb && return typea
 
+        # Uncomment to activate ConstSet formation
         # if !isa(typea, PartialTypeVar) && !isa(typeb, PartialTypeVar)
         #     return ConstSet(lattice, typea, typeb)
         # end
