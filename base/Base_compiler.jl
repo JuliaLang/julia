@@ -163,21 +163,6 @@ between two moments in time.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
-"""
-    delta_time_ns() -> UInt32
-
-Get the amount of nanoseconds since system boot.
-To convert to a time matching `time_ns()`, call `delta_ns_to_time_ns(dt)`.
-"""
-delta_time_ns() = ccall(:jl_delta_time_now, UInt32, ())
-
-"""
-    delta_ns_to_time_ns(dt::UInt32) -> UInt64
-
-Convert the return value of `delta_time_ns()` to a time matching `time_ns()`.
-"""
-delta_ns_to_time_ns(dt) = ccall(:jl_hrtime_from_delta, UInt64, (UInt32,), dt)
-
 # A warning to be interpolated in the docstring of every dangerous mutating function in Base, see PR #50824
 const _DOCS_ALIASING_WARNING = """
 !!! warning

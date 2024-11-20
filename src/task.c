@@ -316,7 +316,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     if (ct->metrics_enabled) {
         // [task] user_time -finished-> wait_time
         assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
-        delta_timestamp now = jl_delta_time_now();
+        uint64_t now = jl_hrtime();
         jl_atomic_store_relaxed(&ct->finished_at, now);
         jl_atomic_fetch_add_relaxed(&ct->cpu_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
     }
@@ -1261,7 +1261,7 @@ CFI_NORETURN
         // [task] wait_time -started-> user_time
         assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
         assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
-        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_delta_time_now());
+        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
     }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
@@ -1619,7 +1619,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
     if (ct->metrics_enabled) {
         // [task] created -started-> user_time
-        delta_timestamp now = jl_delta_time_now();
+        uint64_t now = jl_hrtime();
         jl_atomic_store_relaxed(&ct->first_enqueued_at, now);
         jl_atomic_store_relaxed(&ct->last_started_running_at, now);
     }

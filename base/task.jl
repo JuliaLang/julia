@@ -1118,7 +1118,7 @@ function try_yieldto(undo)
     ct = current_task()
     # [task] wait_time -(re)started-> user_time
     if ct.metrics_enabled
-        @atomic :monotonic ct.last_started_running_at = delta_time_ns()
+        @atomic :monotonic ct.last_started_running_at = time_ns()
     end
     if ct._isexception
         exc = ct.result
@@ -1209,7 +1209,7 @@ end
 # update the `cpu_time_ns` field of `t` to include the time since it last started running.
 function record_cpu_time!(t::Task)
     if t.metrics_enabled && !istaskdone(t)
-        @atomic :monotonic t.cpu_time_ns += delta_time_ns() - t.last_started_running_at
+        @atomic :monotonic t.cpu_time_ns += time_ns() - t.last_started_running_at
     end
     return t
 end
@@ -1219,7 +1219,7 @@ end
 # then set the `first_enqueued_at` field to the current time.
 function maybe_record_enqueued!(t::Task)
     if t.metrics_enabled && t.first_enqueued_at == 0
-        @atomic :monotonic t.first_enqueued_at = delta_time_ns()
+        @atomic :monotonic t.first_enqueued_at = time_ns()
     end
     return t
 end

@@ -46,18 +46,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 jl_array_t *jl_module_init_order;
 arraylist_t *jl_entrypoint_mis;
 
-JL_DLLEXPORT uint64_t jl_system_boot_time = 0;
 JL_DLLEXPORT size_t jl_page_size;
-
-JL_DLLEXPORT delta_timestamp jl_delta_time_now(void) {
-    return jl_delta_timestamp(jl_hrtime() - jl_system_boot_time);
-}
-JL_DLLEXPORT delta_timestamp jl_delta_timestamp(uint64_t t) {
-    return (t - jl_system_boot_time);
-}
-JL_DLLEXPORT uint64_t jl_hrtime_from_delta(delta_timestamp t) {
-    return t + jl_system_boot_time;
-}
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -760,8 +749,6 @@ static void init_global_mutexes(void) {
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
-    jl_system_boot_time = jl_hrtime();
-
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
     // configuration features

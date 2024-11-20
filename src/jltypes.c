@@ -3786,10 +3786,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_bool_type,
                                 jl_uint16_type,
                                 jl_bool_type,
-                                jl_uint32_type,
-                                jl_uint32_type,
-                                jl_uint32_type,
-                                jl_uint32_type),
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
