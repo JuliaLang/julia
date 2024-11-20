@@ -892,18 +892,19 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
             j += 2 + nedges;
             edge = sig;
         }
-        else if (jl_is_mtable(edge)) {
-            // skip the legacy edge (missing backedge)
-            j += 2;
-            continue;
-        }
         else {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(callees, j + 1);
             jl_method_t *meth;
+            if (jl_is_mtable(callee)) {
+                // skip the legacy edge (missing backedge)
+                j += 2;
+                continue;
+            }
             if (jl_is_code_instance(callee))
                 callee = ((jl_code_instance_t*)callee)->def;
-            if (jl_is_method_instance(callee))
+            if (jl_is_method_instance(callee)) {
                 meth = callee->def.method;
+            }
             else {
                 assert(jl_is_method(callee));
                 meth = (jl_method_t*)callee;
@@ -1052,16 +1053,17 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_ci_list)
                             jl_method_instance_add_backedge((jl_method_instance_t*)edge, NULL, codeinst);
                             j += 1;
                         }
-                        else if (jl_is_mtable(edge)) {
-                            jl_methtable_t *mt = (jl_methtable_t*)edge;
-                            jl_value_t *sig = jl_svecref(callees, j + 1);
-                            jl_method_table_add_backedge(mt, sig, codeinst);
-                            j += 2;
-                        }
                         else {
                             jl_value_t *callee = jl_svecref(callees, j + 1);
-                            if (jl_is_code_instance(callee))
+                            if (jl_is_mtable(callee)) {
+                                jl_methtable_t *mt = (jl_methtable_t*)callee;
+                                jl_method_table_add_backedge(mt, edge, codeinst);
+                                j += 2;
+                                continue;
+                            }
+                            else if (jl_is_code_instance(callee)) {
                                 callee = (jl_value_t*)((jl_code_instance_t*)callee)->def;
+                            }
                             else if (jl_is_method(callee)) {
                                 j += 2;
                                 continue;

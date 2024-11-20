@@ -64,20 +64,11 @@ end
 
 struct InliningEdgeTracker
     edges::Vector{Any}
-    invokesig::Union{Nothing,Vector{Any}}
-    InliningEdgeTracker(state::InliningState, invokesig::Union{Nothing,Vector{Any}}=nothing) =
-        new(state.edges, invokesig)
+    InliningEdgeTracker(state::InliningState) = new(state.edges)
 end
 
-function add_inlining_edge!(et::InliningEdgeTracker, edge::Union{CodeInstance,MethodInstance})
-    (; edges, invokesig) = et
-    if invokesig === nothing
-        add_one_edge!(edges, edge)
-    else # invoke backedge
-        add_invoke_edge!(edges, invoke_signature(invokesig), edge)
-    end
-    return nothing
-end
+add_inlining_edge!(et::InliningEdgeTracker, edge::CodeInstance) = add_inlining_edge!(et.edges, edge)
+add_inlining_edge!(et::InliningEdgeTracker, edge::MethodInstance) = add_inlining_edge!(et.edges, edge)
 
 function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
@@ -795,10 +786,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
             return nothing
         end
     end
-    add_inlining_edge!(et, mi) # to the dispatch lookup
-    if mi_invoke !== mi
-        add_invoke_edge!(et.edges, method.sig, mi_invoke) # add_inlining_edge to the invoke call, if that is different
-    end
+    add_inlining_edge!(et, mi_invoke) # to the dispatch lookup
     return InvokeCase(mi_invoke, effects, info)
 end
 
@@ -834,9 +822,8 @@ end
 
 # the general resolver for usual and const-prop'ed calls
 function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,VolatileInferenceResult},
-    @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    invokesig::Union{Nothing,Vector{Any}}=nothing)
-    et = InliningEdgeTracker(state, invokesig)
+    @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
+    et = InliningEdgeTracker(state)
 
     preserve_local_sources = true
     if isa(result, InferenceResult)
@@ -922,7 +909,7 @@ end
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing,
+    allow_typevars::Bool,
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
     method = match.method
 
@@ -953,7 +940,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     # Get the specialization for this method signature
     # (later we will decide what to do with it)
     mi = specialize_method(match)
-    return resolve_todo(mi, volatile_inf_result, info, flag, state; invokesig)
+    return resolve_todo(mi, volatile_inf_result, info, flag, state)
 end
 
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::String)
@@ -1164,9 +1151,8 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         return nothing
     end
     result = info.result
-    invokesig = sig.argtypes
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, info, state; invokesig)
+        item = concrete_result_item(result, info, state)
     elseif isa(result, SemiConcreteResult)
         item = semiconcrete_result_item(result, info, flag, state)
     else
@@ -1175,13 +1161,13 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
             mi = result.result.linfo
             validate_sparams(mi.sparam_vals) || return nothing
             if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
-                item = resolve_todo(mi, result.result, info, flag, state; invokesig)
+                item = resolve_todo(mi, result.result, info, flag, state)
                 handle_single_case!(todo, ir, idx, stmt, item, true)
                 return nothing
             end
         end
         volatile_inf_result = result isa VolatileInferenceResult ? result : nothing
-        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig, volatile_inf_result)
+        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, volatile_inf_result)
     end
     handle_single_case!(todo, ir, idx, stmt, item, true)
     return nothing
@@ -1477,10 +1463,9 @@ end
 may_inline_concrete_result(result::ConcreteResult) =
     isdefined(result, :result) && is_inlineable_constant(result.result)
 
-function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState;
-    invokesig::Union{Nothing,Vector{Any}}=nothing)
+function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
     if !may_inline_concrete_result(result)
-        et = InliningEdgeTracker(state, invokesig)
+        et = InliningEdgeTracker(state)
         return compileable_specialization(result.edge.def, result.effects, et, info, state)
     end
     @assert result.effects === EFFECTS_TOTAL
