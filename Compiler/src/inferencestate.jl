@@ -1032,17 +1032,15 @@ decode_statement_effects_override(sv::AbsIntState) =
     decode_statement_effects_override(get_curr_ssaflag(sv))
 
 struct InferenceLoopState
-    sig
     rt
     effects::Effects
-    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
-        new(sig, rt, effects)
+    function InferenceLoopState(@nospecialize(rt), effects::Effects)
+        new(rt, effects)
     end
 end
 
-bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::InferenceState) =
-    sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
-bail_out_toplevel_call(::AbstractInterpreter, ::InferenceLoopState, ::IRInterpretationState) = false
+bail_out_toplevel_call(::AbstractInterpreter, sv::InferenceState) = sv.restrict_abstract_call_sites
+bail_out_toplevel_call(::AbstractInterpreter, ::IRInterpretationState) = false
 
 bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
     state.rt === Any && !is_foldable(state.effects)

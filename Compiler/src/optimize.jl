@@ -217,14 +217,14 @@ include("ssair/slot2ssa.jl")
 include("ssair/inlining.jl")
 include("ssair/verify.jl")
 include("ssair/legacy.jl")
-include("ssair/EscapeAnalysis/EscapeAnalysis.jl")
+include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = opt.inlining.edges
+    src.edges = Core.svec(opt.inlining.edges...)
     opt.ir = nothing
     maybe_validate_code(linfo, src, "optimized")
     return src

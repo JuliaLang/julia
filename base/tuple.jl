@@ -427,10 +427,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 # constructing from an iterator
 
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
@@ -495,8 +491,6 @@ _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 _totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
-
-end
 
 ## find ##
 

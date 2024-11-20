@@ -2263,6 +2263,7 @@ typedef struct _jl_excstack_t jl_excstack_t;
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
+    jl_value_t *scope;
     struct _jl_handler_t *prev;
     int8_t gc_state;
     size_t locks_len;
@@ -2597,6 +2598,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 #define JL_OPTIONS_HANDLE_SIGNALS_ON 1
 #define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
+
+#define JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES 1
+#define JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_NO 0
 
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES 1
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO 0

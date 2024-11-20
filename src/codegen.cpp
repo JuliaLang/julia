@@ -3435,26 +3435,33 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 
 // --- generating function calls ---
 
+static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, jl_module_t *mod, jl_sym_t *name)
+{
+    Value *bp = julia_binding_gv(ctx, bnd);
+    Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
+    undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
+    return mark_julia_type(ctx, v, true, jl_any_type);
+}
+
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    assert(bnd);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
     }
-    assert(bnd);
-    Value *bp = NULL;
     // bpart was updated in place - this will change with full partition
     pku = jl_atomic_load_acquire(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // Redo the lookup at runtime
-        bp = julia_binding_gv(ctx, bnd);
-        Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
-        undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
-        return mark_julia_type(ctx, v, true, jl_any_type);
+        return emit_globalref_runtime(ctx, bnd, mod, name);
     } else {
         while (true) {
             if (!bpart)
@@ -3465,7 +3472,9 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 cg_bdw(ctx, name, bnd);
             }
             bnd = (jl_binding_t*)decode_restriction_value(pku);
-            bpart = jl_get_binding_partition(bnd, ctx.max_world);
+            bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+            if (!bpart)
+                break;
             pku = jl_atomic_load_acquire(&bpart->restriction);
         }
         if (bpart && jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
@@ -3477,7 +3486,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             return mark_julia_const(ctx, constval);
         }
     }
-    bp = julia_binding_gv(ctx, bnd);
+    if (!bpart) {
+        return emit_globalref_runtime(ctx, bnd, mod, name);
+    }
+    Value *bp = julia_binding_gv(ctx, bnd);
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
@@ -3496,7 +3508,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     if (bp == NULL)
         return jl_cgval_t();
     if (bpart) {
@@ -5854,7 +5866,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
                                      jl_binding_t **pbnd, bool assign, bool alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ctx.max_world);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (assign) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
@@ -5865,11 +5877,11 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             // try to look this up now
             b = jl_get_binding(m, s);
-            bpart = jl_get_binding_partition(b, ctx.max_world);
+            bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
         }
-        pku = jl_walk_binding_inplace(&b, &bpart, ctx.max_world);
+        pku = jl_walk_binding_inplace_all(&b, &bpart, ctx.min_world, ctx.max_world);
     }
-    if (b == NULL) {
+    if (!b || !bpart) {
         // var not found. switch to delayed lookup.
         Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
         GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), ctx.types().T_pjlvalue,
@@ -6021,7 +6033,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             name = (jl_sym_t*)sym;
         }
         jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.min_world);
+        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
         jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
         if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (jl_get_binding_value_if_const(bnd))
@@ -6561,8 +6573,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_leave_sym) {
         int hand_n_leave = 0;
-        Value *scope_to_restore = nullptr;
-        Value *scope_ptr = nullptr;
+        Value *scope_to_restore = nullptr, *token = nullptr;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6572,18 +6583,32 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, enter_idx);
             if (enter_stmt == jl_nothing)
                 continue;
-            if (ctx.scope_restore.count(enter_idx))
-                std::tie(scope_to_restore, scope_ptr) = ctx.scope_restore[enter_idx];
+            if (ctx.scope_restore.count(enter_idx)) {
+                // TODO: The semantics of `gc_preserve` are not perfect here. An `Expr(:enter, ...)` block may
+                //       have multiple exits, but effects of `preserve_end` are only extended to the end of the
+                //       dominance of each `Expr(:leave, ...)`.
+                //
+                //       That means that a scope object can suddenly end up preserved again outside of an
+                //       `Expr(:enter, ...)` region where it ought to be dead. It'd be preferable if the effects
+                //       of gc_preserve_end propagated through a control-flow joins as long as all incoming
+                //       agree about the preserve state.
+                //
+                //       This is correct as-is anyway - it just means the scope lives longer than it needs to
+                //       if the `Expr(:enter, ...)` has multiple exits.
+                std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
+                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
+            }
             if (jl_enternode_catch_dest(enter_stmt)) {
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
                 hand_n_leave += 1;
+                scope_to_restore = nullptr; // restored by exception handler
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
         if (scope_to_restore) {
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            scope_ai.decorateInst(
+            Value *scope_ptr = get_scope_field(ctx);
+            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
         }
     }
@@ -7168,7 +7193,7 @@ static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 static Value *get_scope_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
-    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "current_scope");
+    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "scope");
 }
 
 Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
@@ -9592,28 +9617,6 @@ static jl_llvm_functions_t
             continue;
         }
         else if (jl_is_enternode(stmt)) {
-            // For the two-arg version of :enter, twiddle the scope
-            Value *scope_ptr = NULL;
-            Value *old_scope = NULL;
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            if (jl_enternode_scope(stmt)) {
-                jl_cgval_t new_scope = emit_expr(ctx, jl_enternode_scope(stmt));
-                if (new_scope.typ == jl_bottom_type) {
-                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
-                    // at the point of the miscompile, rather than later when something attempts to
-                    // read the scope.
-                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
-                    find_next_stmt(-1);
-                    continue;
-                }
-                Value *new_scope_boxed = boxed(ctx, new_scope);
-                scope_ptr = get_scope_field(ctx);
-                old_scope = scope_ai.decorateInst(
-                        ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr));
-                scope_ai.decorateInst(
-                    ctx.builder.CreateAlignedStore(new_scope_boxed, scope_ptr, ctx.types().alignof_ptr));
-                ctx.scope_restore[cursor] = std::make_pair(old_scope, scope_ptr);
-            }
             int lname = jl_enternode_catch_dest(stmt);
             if (lname) {
                 // Save exception stack depth at enter for use in pop_exception
@@ -9639,15 +9642,34 @@ static jl_llvm_functions_t
                 ctx.builder.SetInsertPoint(catchpop);
                 {
                     ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
-                    if (old_scope) {
-                        scope_ai.decorateInst(
-                            ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
-                    }
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
                 auto ehptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, eh));
                 ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
+            }
+            // For the two-arg version of :enter, twiddle the scope
+            if (jl_enternode_scope(stmt)) {
+                jl_cgval_t scope = emit_expr(ctx, jl_enternode_scope(stmt));
+                if (scope.typ == jl_bottom_type) {
+                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
+                    // at the point of the miscompile, rather than later when something attempts to
+                    // read the scope.
+                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
+                    find_next_stmt(-1);
+                    continue;
+                }
+                Value *scope_boxed = boxed(ctx, scope);
+                Value *scope_ptr = get_scope_field(ctx);
+                LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
+                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
+                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
+                // and may be removed from jl_current_task by any nested block and then
+                // replaced later
+                Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {scope_boxed});
+                ctx.scope_restore[cursor] = std::make_pair(scope_token, current_scope);
             }
         }
         else {

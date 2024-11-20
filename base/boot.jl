@@ -271,6 +271,8 @@ macro nospecialize(x)
 end
 Expr(@nospecialize args...) = _expr(args...)
 
+macro latestworld() Expr(:latestworld) end
+
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
@@ -983,6 +985,14 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+# During definition of struct type `B`, if an `A.B` expression refers to
+# the eventual global name of the struct, then return the partially-initialized
+# type object.
+# TODO: remove. This is a shim for backwards compatibility.
+function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecialize(t))
+    return x === mod ? t : getfield(x, name)
+end
 
 # Binding for the julia parser, called as
 #

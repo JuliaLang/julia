@@ -86,6 +86,7 @@ julia> (0.7*I)(3)
 eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 Base.has_offset_axes(::UniformScaling) = false
+getindex(J::UniformScaling, ind::CartesianIndex{2}) = J[Tuple(ind)...]
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
 getindex(J::UniformScaling, n::Integer, m::AbstractVector{<:Integer}) = getindex(J, m, n)
@@ -200,7 +201,7 @@ end
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
     TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
-    for i in diagind(B)
+    for i in diagind(B, IndexStyle(B))
         B[i] = A[i] + J
     end
     return B
@@ -210,7 +211,7 @@ function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
     TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     B .= .-B
-    for i in diagind(B)
+    for i in diagind(B, IndexStyle(B))
         B[i] = J - A[i]
     end
     return B

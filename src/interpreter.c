@@ -527,16 +527,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
-                jl_value_t *old_scope = ct->scope;
-                JL_GC_PUSH1(&old_scope);
-                jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
-                ct->scope = new_scope;
+                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
+                JL_GC_PUSH1(&scope);
+                ct->scope = scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
-                ct->scope = old_scope;
                 JL_GC_POP();
             }
             else {
@@ -642,6 +640,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
                     jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
                     s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_latestworld_sym) {
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);

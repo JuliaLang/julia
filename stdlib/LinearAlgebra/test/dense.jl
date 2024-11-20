@@ -5,6 +5,10 @@ module TestDense
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+import Main.FillArrays
+
 @testset "Check that non-floats are correctly promoted" begin
     @test [1 0 0; 0 1 0]\[1,1] ≈ [1;1;0]
 end
@@ -607,6 +611,7 @@ end
                        -0.4579038628067864 1.7361475641080275 6.478801851038108])
         A3 = convert(Matrix{elty}, [0.25 0.25; 0 0])
         A4 = convert(Matrix{elty}, [0 0.02; 0 0])
+        A5 = convert(Matrix{elty}, [2.0 0; 0 3.0])
 
         cosA1 = convert(Matrix{elty},[-0.18287716254368605 -0.29517205254584633 0.761711400552759;
                                       0.23326967400345625 0.19797853773269333 -0.14758602627292305;
@@ -614,8 +619,8 @@ end
         sinA1 = convert(Matrix{elty}, [0.2865568596627417 -1.107751980582015 -0.13772915374386513;
                                        -0.6227405671629401 0.2176922827908092 -0.5538759902910078;
                                        -0.6227405671629398 -0.6916051440348725 0.3554214365346742])
-        @test cos(A1) ≈ cosA1
-        @test sin(A1) ≈ sinA1
+        @test @inferred(cos(A1)) ≈ cosA1
+        @test @inferred(sin(A1)) ≈ sinA1
 
         cosA2 = convert(Matrix{elty}, [-0.6331745163802187 0.12878366262380136 -0.17304181968301532;
                                        0.12878366262380136 -0.5596234510748788 0.5210483146041339;
@@ -637,36 +642,36 @@ end
         @test sin(A4) ≈ sinA4
 
         # Identities
-        for (i, A) in enumerate((A1, A2, A3, A4))
-            @test sincos(A) == (sin(A), cos(A))
+        for (i, A) in enumerate((A1, A2, A3, A4, A5))
+            @test @inferred(sincos(A)) == (sin(A), cos(A))
             @test cos(A)^2 + sin(A)^2 ≈ Matrix(I, size(A))
             @test cos(A) ≈ cos(-A)
             @test sin(A) ≈ -sin(-A)
-            @test tan(A) ≈ sin(A) / cos(A)
+            @test @inferred(tan(A)) ≈ sin(A) / cos(A)
 
             @test cos(A) ≈ real(exp(im*A))
             @test sin(A) ≈ imag(exp(im*A))
             @test cos(A) ≈ real(cis(A))
             @test sin(A) ≈ imag(cis(A))
-            @test cis(A) ≈ cos(A) + im * sin(A)
+            @test @inferred(cis(A)) ≈ cos(A) + im * sin(A)
 
-            @test cosh(A) ≈ 0.5 * (exp(A) + exp(-A))
-            @test sinh(A) ≈ 0.5 * (exp(A) - exp(-A))
-            @test cosh(A) ≈ cosh(-A)
-            @test sinh(A) ≈ -sinh(-A)
+            @test @inferred(cosh(A)) ≈ 0.5 * (exp(A) + exp(-A))
+            @test @inferred(sinh(A)) ≈ 0.5 * (exp(A) - exp(-A))
+            @test @inferred(cosh(A)) ≈ cosh(-A)
+            @test @inferred(sinh(A)) ≈ -sinh(-A)
 
             # Some of the following identities fail for A3, A4 because the matrices are singular
-            if i in (1, 2)
-                @test sec(A) ≈ inv(cos(A))
-                @test csc(A) ≈ inv(sin(A))
-                @test cot(A) ≈ inv(tan(A))
-                @test sech(A) ≈ inv(cosh(A))
-                @test csch(A) ≈ inv(sinh(A))
-                @test coth(A) ≈ inv(tanh(A))
+            if i in (1, 2, 5)
+                @test @inferred(sec(A)) ≈ inv(cos(A))
+                @test @inferred(csc(A)) ≈ inv(sin(A))
+                @test @inferred(cot(A)) ≈ inv(tan(A))
+                @test @inferred(sech(A)) ≈ inv(cosh(A))
+                @test @inferred(csch(A)) ≈ inv(sinh(A))
+                @test @inferred(coth(A)) ≈ inv(@inferred tanh(A))
             end
             # The following identities fail for A1, A2 due to rounding errors;
             # probably needs better algorithm for the general case
-            if i in (3, 4)
+            if i in (3, 4, 5)
                 @test cosh(A)^2 - sinh(A)^2 ≈ Matrix(I, size(A))
                 @test tanh(A) ≈ sinh(A) / cosh(A)
             end
@@ -1024,6 +1029,15 @@ end
     @test diag(zeros(0,1),2) == []
 end
 
+@testset "diagview" begin
+    for sz in ((3,3), (3,5), (5,3))
+        A = rand(sz...)
+        for k in -5:5
+            @test diagview(A,k) == diag(A,k)
+        end
+    end
+end
+
 @testset "issue #39857" begin
     @test lyap(1.0+2.0im, 3.0+4.0im) == -1.5 - 2.0im
 end
@@ -1298,6 +1312,19 @@ end
         @test tr(A) === Int8(5)
         @test tr(view(A, :, :)) === Int8(5)
         @test tr(view(A, axes(A)...)) === Int8(5)
+    end
+end
+
+@testset "trig functions for non-strided" begin
+    @testset for T in (Float32,ComplexF32)
+        A = FillArrays.Fill(T(0.1), 4, 4) # all.(<(1), eigvals(A)) for atanh
+        M = Matrix(A)
+        @testset for f in (sin,cos,tan,sincos,sinh,cosh,tanh)
+            @test f(A) == f(M)
+        end
+        @testset for f in (asin,acos,atan,asinh,acosh,atanh)
+            @test f(A) == f(M)
+        end
     end
 end
 
