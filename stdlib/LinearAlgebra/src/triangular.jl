@@ -633,7 +633,7 @@ end
     return dest
 end
 
-function copytrito_triangular!(Bdata, Adata, uplo, uplomatch, sz)
+Base.@constprop :aggressive function copytrito_triangular!(Bdata, Adata, uplo, uplomatch, sz)
     if uplomatch
         copytrito!(Bdata, Adata, uplo)
     else
