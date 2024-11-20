@@ -633,28 +633,26 @@ end
     return dest
 end
 
-function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
-    if uplo == 'U'
-        copytrito!(B.data, A.data, 'U')
+function copytrito_triangular!(Bdata, Adata, uplo, uplomatch, sz)
+    if uplomatch
+        copytrito!(Bdata, Adata, uplo)
     else
         BLAS.chkuplo(uplo)
-        m,n = size(A)
-        LAPACK.lacpy_size_check(size(B), (m, m < n ? m : n))
+        LAPACK.lacpy_size_check(size(Bdata), sz)
         # only the diagonal is copied in this case
-        copyto!(diagview(B.data), diagview(A.data))
+        copyto!(diagview(Bdata), diagview(Adata))
     end
+    return Bdata
+end
+
+function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'U', (m, m < n ? m : n))
     return B
 end
 function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
-    if uplo == 'L'
-        copytrito!(B.data, A.data, 'L')
-    else
-        BLAS.chkuplo(uplo)
-        m,n = size(A)
-        LAPACK.lacpy_size_check(size(B), (n < m ? n : m, n))
-        # only the diagonal is copied in this case
-        copyto!(diagview(B.data), diagview(A.data))
-    end
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'L', (n < m ? n : m, n))
     return B
 end
 
