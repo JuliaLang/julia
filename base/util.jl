@@ -708,7 +708,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
-    project_flag = propagate_project ? "--project" : ""
+    project_flag = propagate_project ? `--project` : ``
     try
         run(setenv(`$(julia_cmd()) $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
