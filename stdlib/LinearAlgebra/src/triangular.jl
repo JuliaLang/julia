@@ -637,12 +637,20 @@ end
 function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
     if uplo == 'U'
         copytrito!(B.data, A.data, 'U')
+    else
+        BLAS.chkuplo(uplo)
+        m,n = size(A)
+        LAPACK.lacpy_size_check(size(B), (m, m < n ? m : n))
     end
     return B
 end
 function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
     if uplo == 'L'
         copytrito!(B.data, A.data, 'L')
+    else
+        BLAS.chkuplo(uplo)
+        m,n = size(A)
+        LAPACK.lacpy_size_check(size(B), (n < m ? n : m, n))
     end
     return B
 end
