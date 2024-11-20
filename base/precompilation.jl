@@ -2,7 +2,7 @@ module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project
+            base_project, isdefined
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -1031,14 +1031,16 @@ end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
 function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor)
+    if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
+        return f()
+    end
     pkg, config = pkg_config
     flags, cacheflags = config
-    FileWatching = Base.loaded_modules[Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching")]
     stale_age = Base.compilecache_pidlock_stale_age
     pidfile = Base.compilecache_pidfile_path(pkg, flags=cacheflags)
-    cachefile = FileWatching.trymkpidlock(f, pidfile; stale_age)
+    cachefile = @invokelatest Base.trymkpidlock_hook(f, pidfile; stale_age)
     if cachefile === false
-        pid, hostname, age = FileWatching.Pidfile.parse_pidfile(pidfile)
+        pid, hostname, age = @invokelatest Base.parse_pidfile_hook(pidfile)
         pkgspidlocked[pkg_config] = if isempty(hostname) || hostname == gethostname()
             if pid == getpid()
                 "an async task in this process (pidfile: $pidfile)"
@@ -1052,15 +1054,16 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
             println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         # wait until the lock is available
-        FileWatching.mkpidlock(pidfile; stale_age) do
-            # double-check in case the other process crashed or the lock expired
-            if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
-                return nothing # returning nothing indicates a process waited for another
-            else
-                delete!(pkgspidlocked, pkg_config)
-                return f() # precompile
-            end
-        end
+        @invokelatest Base.mkpidlock_hook(() -> begin
+                # double-check in case the other process crashed or the lock expired
+                if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
+                    return nothing # returning nothing indicates a process waited for another
+                else
+                    delete!(pkgspidlocked, pkg_config)
+                    return f() # precompile
+                end
+            end,
+            pidfile; stale_age)
     end
     return cachefile
 end
