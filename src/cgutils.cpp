@@ -397,7 +397,8 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 
 // --- emitting pointers directly into code ---
 
-
+static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val);
+static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
 static inline Constant *literal_static_pointer_val(const void *p, Type *T);
 
 static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
@@ -777,7 +778,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
             return getVoidTy(ctxt);
         Type *_struct_decl = NULL;
-        // TODO: we should probably make a temporary root for `jst` somewhere
+        if (ctx)
+            jl_temporary_root(*ctx, jt);
         // don't use pre-filled struct_decl for llvmcall (f16, etc. may be different)
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
         if (struct_decl)
@@ -3506,8 +3508,6 @@ static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction<TypeFn_t> *intr, 
     return Call;
 }
 
-static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val);
-
 static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
@@ -3540,7 +3540,9 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
             if (s) {
-                s = jl_ensure_rooted(ctx, s);
+                JL_GC_PUSH1(&s);
+                jl_temporary_root(ctx, s);
+                JL_GC_POP();
                 return track_pjlvalue(ctx, literal_pointer_val(ctx, s));
             }
         }
