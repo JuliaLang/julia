@@ -1337,7 +1337,9 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
     local all_result_count = 0
     local joint_effects = EFFECTS_TOTAL
     for i = 1:nunion
-        meth = getsplit(info, i)
+        # Base.@show info
+        query = getsplit(info, i)
+        meth = query.results
         if meth.ambig
             # Too many applicable methods
             # Or there is a (partial?) ambiguity
@@ -1377,7 +1379,8 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             # we handled everything except one match with unmatched sparams,
             # so try to handle it by bypassing validate_sparams
             (i, j, k) = revisit_idx
-            match = getsplit(info, i)[j]
+            query = getsplit(info, i)
+            match = query.results[j]
             result = getresult(info, k)
             handled_all_cases &= handle_any_const_result!(cases,
                 result, match, argtypes, info, flag, state; allow_typevars=true)

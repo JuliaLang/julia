@@ -479,14 +479,14 @@ function add_edges!(edges::Vector{Any}, info::CallInfo)
     nothing
 end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
-getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupQuery
 getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)#=::Union{Nothing,ConstResult}=#
 
 add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
     All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("""
-    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupResult`
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupQuery`
     in order to correctly opt in to inlining""")
 getresult_impl(::CallInfo, ::Int) = nothing
 
