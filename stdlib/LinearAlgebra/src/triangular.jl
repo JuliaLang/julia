@@ -641,6 +641,8 @@ function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
         BLAS.chkuplo(uplo)
         m,n = size(A)
         LAPACK.lacpy_size_check(size(B), (m, m < n ? m : n))
+        # only the diagonal is copied in this case
+        copyto!(diagview(B.data), diagview(A.data))
     end
     return B
 end
@@ -651,6 +653,8 @@ function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
         BLAS.chkuplo(uplo)
         m,n = size(A)
         LAPACK.lacpy_size_check(size(B), (n < m ? n : m, n))
+        # only the diagonal is copied in this case
+        copyto!(diagview(B.data), diagview(A.data))
     end
     return B
 end
