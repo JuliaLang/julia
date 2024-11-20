@@ -537,7 +537,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
 end
 
 const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
-const COMPILER_DIR = "././../usr/share/julia/Compiler/"
+const COMPILER_DIR = "../usr/share/julia/Compiler/"
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
