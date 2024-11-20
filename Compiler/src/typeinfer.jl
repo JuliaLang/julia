@@ -513,13 +513,16 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
         if isa(item, MethodInstance) # regular dispatch
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, nothing, caller)
             i += 1
-        else # `invoke` call
+        else
             callee = edges[i+1]
-            if isa(callee, Method)
+            if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
                 i += 2
                 continue
-            elseif isa(callee, MethodTable) # abstract dispatch (legacy style edges)
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
+            end
+            # `invoke` edge
+            if isa(callee, Method)
+                # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
                 i += 2
                 continue
             elseif isa(callee, CodeInstance)
