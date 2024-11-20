@@ -572,7 +572,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
                         project_file = joinpath(root, proj)
                         if Base.isfile_casesensitive(project_file)
                             pkgid = Base.project_file_name_uuid(project_file, "")
-                            isempty(pkgid.name) && return path # bad Project file
+                            isempty(pkgid.name) && return path, "", path # bad Project file
                             # return the joined the module name prefix and path suffix
                             _short_path = path[nextind(path, sizeof(root)):end]
                             return path, string("@", pkgid.name), _short_path
