@@ -87,14 +87,14 @@ eval(m, x) = Core.eval(m, x)
 function include(x::String)
     if !isdefined(Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(Compiler, x)
 end
 
 function include(mod::Module, x::String)
     if !isdefined(Base, :end_base_include)
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(mod, x)
 end
