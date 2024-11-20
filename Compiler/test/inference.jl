@@ -3,7 +3,7 @@
 include("irutils.jl")
 
 # tests for Compiler correctness and precision
-import .Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
+using .Compiler: Conditional, ⊑
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Compiler.isdispatchelem(x)
 
 using Random, Core.IR
@@ -1721,7 +1721,7 @@ g_test_constant() = (f_constant(3) == 3 && f_constant(4) == 4 ? true : "BAD")
 f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test @inferred f_pure_add()
 
-import Core: Const
+using Core: Const
 mutable struct ARef{T}
     @atomic x::T
 end
@@ -1762,7 +1762,7 @@ let getfield_tfunc(@nospecialize xs...) =
     @test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
 end
 
-import .Compiler: Const
+using Core: Const
 mutable struct XY{X,Y}
     x::X
     y::Y
@@ -2765,10 +2765,10 @@ end |> only === Int
 
 # `apply_type_tfunc` accuracy for constrained type construction
 # https://github.com/JuliaLang/julia/issues/47089
-import Core: Const
-import .Compiler: apply_type_tfunc
 struct Issue47089{A<:Number,B<:Number} end
-let 𝕃 = Compiler.fallback_lattice
+let apply_type_tfunc = Compiler.apply_type_tfunc
+    𝕃 = Compiler.fallback_lattice
+    Const = Core.Const
     A = Type{<:Integer}
     @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
@@ -4554,7 +4554,8 @@ end |> only == Tuple{Int,Int}
 end |> only == Int
 
 # form PartialStruct for mutables with `const` field
-import .Compiler: Const, ⊑
+using Core: Const
+using .Compiler: ⊑
 mutable struct PartialMutable{S,T}
     const s::S
     t::T
@@ -5700,7 +5701,8 @@ let x = 1, _Any = Any
 end
 
 # Issue #51927
-let 𝕃 = Compiler.fallback_lattice
+let apply_type_tfunc = Compiler.apply_type_tfunc
+    𝕃 = Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Tuple{Vararg{Any,N}} where N), Int) == Type{NTuple{_A, Any}} where _A
 end
 
@@ -6074,6 +6076,29 @@ function issue56387(nt::NamedTuple, field::Symbol=:a)
 end
 @test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
 
+# `apply_type_tfunc` with `Union` in its arguments
+let apply_type_tfunc = Compiler.apply_type_tfunc
+    𝕃 = Compiler.fallback_lattice
+    Const = Core.Const
+    @test apply_type_tfunc(𝕃, Any[Const(Vector), Union{Type{Int},Type{Nothing}}]) == Union{Type{Vector{Int}},Type{Vector{Nothing}}}
+end
+
+@test Base.infer_return_type((Bool,Int,)) do b, y
+    x = b ? 1 : missing
+    inner = y -> x + y
+    return inner(y)
+end == Union{Int,Missing}
+
+function issue31909(ys)
+    x = if @noinline rand(Bool)
+        1
+    else
+        missing
+    end
+    map(y -> x + y, ys)
+end
+@test Base.infer_return_type(issue31909, (Vector{Int},)) == Union{Vector{Int},Vector{Missing}}
+
 global setglobal!_refine::Int
 @test Base.infer_return_type((Integer,)) do x
     setglobal!(@__MODULE__, :setglobal!_refine, x)
@@ -6098,4 +6123,4 @@ function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
-@test !Base.Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )

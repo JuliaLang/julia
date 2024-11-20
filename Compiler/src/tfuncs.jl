@@ -1350,14 +1350,14 @@ end
     T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
     PT = Const(Pair)
-    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T), true)[1]
+    return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
     o′ = widenconst(o)
     T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
-    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
+    return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T]), true)[1]
 end
 @nospecs function setfieldonce!_tfunc(𝕃::AbstractLattice, o, f, v, success_order=Symbol, failure_order=Symbol)
     setfield!_tfunc(𝕃, o, f, v) === Bottom && return Bottom
@@ -1713,8 +1713,12 @@ end
 const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K, :_L, :_M,
                           :_N, :_O, :_P, :_Q, :_R, :_S, :_T, :_U, :_V, :_W, :_X, :_Y, :_Z]
 
-# TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
-@nospecs function apply_type_tfunc(𝕃::AbstractLattice, headtypetype, args...)
+function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
+                          max_union_splitting::Int=InferenceParams().max_union_splitting)
+    if isempty(argtypes)
+        return Bottom
+    end
+    headtypetype = argtypes[1]
     headtypetype = widenslotwrapper(headtypetype)
     if isa(headtypetype, Const)
         headtype = headtypetype.val
@@ -1723,15 +1727,15 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     else
         return Any
     end
-    if !isempty(args) && isvarargtype(args[end])
+    largs = length(argtypes)
+    if largs > 1 && isvarargtype(argtypes[end])
         return isvarargtype(headtype) ? TypeofVararg : Type
     end
-    largs = length(args)
     if headtype === Union
-        largs == 0 && return Const(Bottom)
+        largs == 1 && return Const(Bottom)
         hasnonType = false
-        for i = 1:largs
-            ai = args[i]
+        for i = 2:largs
+            ai = argtypes[i]
             if isa(ai, Const)
                 if !isa(ai.val, Type)
                     if isa(ai.val, TypeVar)
@@ -1750,14 +1754,14 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 end
             end
         end
-        if largs == 1 # Union{T} --> T
-            return tmeet(widenconst(args[1]), Union{Type,TypeVar})
+        if largs == 2 # Union{T} --> T
+            return tmeet(widenconst(argtypes[2]), Union{Type,TypeVar})
         end
         hasnonType && return Type
         ty = Union{}
         allconst = true
-        for i = 1:largs
-            ai = args[i]
+        for i = 2:largs
+            ai = argtypes[i]
             if isType(ai)
                 aty = ai.parameters[1]
                 allconst &= hasuniquerep(aty)
@@ -1768,6 +1772,18 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         end
         return allconst ? Const(ty) : Type{ty}
     end
+    if 1 < unionsplitcost(𝕃, argtypes) ≤ max_union_splitting
+        ⊔ = join(𝕃)
+        rt = Bottom
+        for split_argtypes = switchtupleunion(𝕃, argtypes)
+            rt = rt ⊔ _apply_type_tfunc(𝕃, headtype, split_argtypes)
+        end
+        return rt
+    end
+    return _apply_type_tfunc(𝕃, headtype, argtypes)
+end
+@nospecs function _apply_type_tfunc(𝕃::AbstractLattice, headtype, argtypes::Vector{Any})
+    largs = length(argtypes)
     istuple = headtype === Tuple
     if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
         return Union{}
@@ -1781,20 +1797,20 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     # first push the tailing vars from headtype into outervars
     outer_start, ua = 0, headtype
     while isa(ua, UnionAll)
-        if (outer_start += 1) > largs
+        if (outer_start += 1) > largs - 1
             push!(outervars, ua.var)
         end
         ua = ua.body
     end
-    if largs > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
+    if largs - 1 > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
         return Bottom # too many arguments
     end
-    outer_start = outer_start - largs + 1
+    outer_start = outer_start - largs + 2
 
     varnamectr = 1
     ua = headtype
-    for i = 1:largs
-        ai = widenslotwrapper(args[i])
+    for i = 2:largs
+        ai = widenslotwrapper(argtypes[i])
         if isType(ai)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
@@ -1868,7 +1884,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
-                    if !(uw.parameters[1] isa Tuple || (i == 2 && tparams[1] isa Tuple))
+                    if !(uw.parameters[1] isa Tuple || (i == 3 && tparams[1] isa Tuple))
                         ub = Any
                     end
                 else
@@ -1910,7 +1926,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         # throwing errors.
         appl = headtype
         if isa(appl, UnionAll)
-            for _ = 1:largs
+            for _ = 2:largs
                 appl = appl::UnionAll
                 push!(outervars, appl.var)
                 appl = appl.body
@@ -1930,6 +1946,8 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     end
     return ans
 end
+@nospecs apply_type_tfunc(𝕃::AbstractLattice, headtypetype, args...) =
+    apply_type_tfunc(𝕃, pushfirst!(collect(Any, args), headtypetype))
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
@@ -2016,7 +2034,7 @@ end
     T = _memoryref_elemtype(mem)
     T === Bottom && return Bottom
     PT = Const(Pair)
-    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T), true)[1]
+    return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function memoryrefreplace!_tfunc(𝕃::AbstractLattice, mem, x, v, success_order, failure_order, boundscheck)
     memoryrefset!_tfunc(𝕃, mem, v, success_order, boundscheck) === Bottom && return Bottom
@@ -2024,7 +2042,7 @@ end
     T = _memoryref_elemtype(mem)
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
-    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
+    return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T]), true)[1]
 end
 @nospecs function memoryrefsetonce!_tfunc(𝕃::AbstractLattice, mem, v, success_order, failure_order, boundscheck)
     memoryrefset!_tfunc(𝕃, mem, v, success_order, boundscheck) === Bottom && return Bottom
@@ -2666,6 +2684,8 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                 end
             end
             return current_scope_tfunc(interp, sv)
+        elseif f === Core.apply_type
+            return apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting=InferenceParams(interp).max_union_splitting)
         end
         fidx = find_tfunc(f)
         if fidx === nothing
