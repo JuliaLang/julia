@@ -143,6 +143,7 @@ const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTri
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
 const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
+const UpperTriangularOrLowerTriangular{T,S} = Union{UpperTriangular{T,S}, LowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -631,6 +632,19 @@ end
         end
     end
     return dest
+end
+
+function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
+    if uplo == 'U'
+        copytrito!(B.data, A.data, 'U')
+    end
+    return B
+end
+function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
+    if uplo == 'L'
+        copytrito!(B.data, A.data, 'L')
+    end
+    return B
 end
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
