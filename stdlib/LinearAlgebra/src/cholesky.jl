@@ -631,11 +631,16 @@ function Cholesky{T}(C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo, C.info)
 end
+Cholesky{T,S}(C::Cholesky) where {T,S<:AbstractMatrix} = Cholesky{T,S}(C.factors, C.uplo, C.info)
 Factorization{T}(C::Cholesky{T}) where {T} = C
 Factorization{T}(C::Cholesky) where {T} = Cholesky{T}(C)
 CholeskyPivoted{T}(C::CholeskyPivoted{T}) where {T} = C
 CholeskyPivoted{T}(C::CholeskyPivoted) where {T} =
-    CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
+    CholeskyPivoted(AbstractMatrix{T}(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
+CholeskyPivoted{T,S}(C::CholeskyPivoted) where {T,S<:AbstractMatrix} =
+    CholeskyPivoted{T,S,typeof(C.piv)}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
+CholeskyPivoted{T,S,P}(C::CholeskyPivoted) where {T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} =
+    CholeskyPivoted{T,S,P}(C.factors, C.uplo, C.piv, C.rank, C.tol, C.info)
 Factorization{T}(C::CholeskyPivoted{T}) where {T} = C
 Factorization{T}(C::CholeskyPivoted) where {T} = CholeskyPivoted{T}(C)
 

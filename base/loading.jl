@@ -3839,9 +3839,9 @@ const compilecache_pidlock_stale_age = 10
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
-        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
+        cachefile = @invokelatest trymkpidlock_hook(f, pidfile; stale_age)
         if cachefile === false
-            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
+            pid, hostname, age = @invokelatest parse_pidfile_hook(pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
                 @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
@@ -3850,7 +3850,7 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
-            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
+            return @invokelatest mkpidlock_hook(Returns(nothing), pidfile; stale_age)
         end
         return cachefile
     else
@@ -4191,7 +4191,7 @@ end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
 precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
-    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+    (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)

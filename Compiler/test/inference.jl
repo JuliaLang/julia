@@ -6088,3 +6088,31 @@ function issue56387(nt::NamedTuple, field::Symbol=:a)
     types[index]
 end
 @test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
+
+global setglobal!_refine::Int
+@test Base.infer_return_type((Integer,)) do x
+    setglobal!(@__MODULE__, :setglobal!_refine, x)
+end === Int
+global setglobal!_must_throw::Int = 42
+@test Base.infer_return_type((String,)) do x
+    setglobal!(@__MODULE__, :setglobal!_must_throw, x)
+end === Union{}
+
+global swapglobal!_xxx::Int = 42
+@test Base.infer_return_type((Int,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
+end === Int
+@test Base.infer_return_type((String,)) do x
+    swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
+end === Union{}
+
+global swapglobal!_must_throw
+@newinterp SwapGlobalInterp
+let CC = Base.Compiler
+    CC.InferenceParams(::SwapGlobalInterp) = CC.InferenceParams(; assume_bindings_static=true)
+end
+function func_swapglobal!_must_throw(x)
+    swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
+end
+@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
+@test !Base.Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )

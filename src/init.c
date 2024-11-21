@@ -722,7 +722,21 @@ static void restore_fp_env(void)
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
-JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
+        /* track_allocations */ 1,
+        /* code_coverage */ 1,
+        /* prefer_specsig */ 0,
+#ifdef _OS_WINDOWS_
+        /* gnu_pubnames */ 0,
+#else
+        /* gnu_pubnames */ 1,
+#endif
+        /* debug_info_kind */ 0, // later DICompileUnit::DebugEmissionKind::FullDebug,
+        /* debug_info_level */ 0, // later jl_options.debug_level,
+        /* safepoint_on_entry */ 1,
+        /* gcstack_arg */ 1,
+        /* use_jlplt*/ 1,
+        /* trim */ 0 };
 
 static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");

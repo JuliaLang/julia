@@ -2069,17 +2069,20 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     require_one_based_indexing(A, B)
     BLAS.chkuplo(uplo)
     m,n = size(A)
-    m1,n1 = size(B)
     A = Base.unalias(B, A)
     if uplo == 'U'
-        LAPACK.lacpy_size_check((m1, n1), (n < m ? n : m, n))
+        LAPACK.lacpy_size_check(size(B), (n < m ? n : m, n))
         for j in axes(A,2), i in axes(A,1)[begin : min(j,end)]
-            @inbounds B[i,j] = A[i,j]
+            # extract the parents for UpperTriangular matrices
+            Bv, Av = uppertridata(B), uppertridata(A)
+            @inbounds Bv[i,j] = Av[i,j]
         end
     else # uplo == 'L'
-        LAPACK.lacpy_size_check((m1, n1), (m, m < n ? m : n))
+        LAPACK.lacpy_size_check(size(B), (m, m < n ? m : n))
         for j in axes(A,2), i in axes(A,1)[j:end]
-            @inbounds B[i,j] = A[i,j]
+            # extract the parents for LowerTriangular matrices
+            Bv, Av = lowertridata(B), lowertridata(A)
+            @inbounds Bv[i,j] = Av[i,j]
         end
     end
     return B

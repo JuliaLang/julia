@@ -20,11 +20,8 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 defines the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
+using Base.Compiler: EscapeAnalysis # or `using Compiler: EscapeAnalysis` to use the stdlib version
 let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
-    # load `EscapeAnalysis` module to define the core analysis code
-    include(normpath(JULIA_DIR, "Compiler", "src", "ssair", "EscapeAnalysis.jl"))
-    using .EscapeAnalysis
-    # load `EAUtils` module to define the utilities
     include(normpath(JULIA_DIR, "Compiler", "test", "EAUtils.jl"))
     using .EAUtils
 end
@@ -37,19 +34,17 @@ Base.setindex!(x::SafeRef, v) = x.x = v;
 Base.isassigned(x::SafeRef) = true;
 get′(x) = isassigned(x) ? x[] : throw(x);
 
-result = code_escapes((String,String,String,String)) do s1, s2, s3, s4
-    r1 = Ref(s1)
+result = code_escapes((Base.RefValue{String},String,String,)) do r1, s2, s3
     r2 = Ref(s2)
     r3 = SafeRef(s3)
     try
         s1 = get′(r1)
         ret = sizeof(s1)
     catch err
-        global GV = err # will definitely escape `r1`
+        global GV = err # `r1` may escape
     end
-    s2 = get′(r2)       # still `r2` doesn't escape fully
-    s3 = get′(r3)       # still `r3` doesn't escape fully
-    s4 = sizeof(s4)     # the argument `s4` doesn't escape here
+    s2 = get′(r2)       # `r2` doesn't escape
+    s3 = get′(r3)       # `r3` doesn't escape
     return s2, s3, s4
 end
 ```
@@ -105,10 +100,10 @@ One distinctive design of this escape analysis is that it is fully _backward_,
 i.e. escape information flows _from usages to definitions_.
 For example, in the code snippet below, EA first analyzes the statement `return %1` and
 imposes `ReturnEscape` on `%1` (corresponding to `obj`), and then it analyzes
-`%1 = %new(Base.RefValue{String, _2}))` and propagates the `ReturnEscape` imposed on `%1`
-to the call argument `_2` (corresponding to `s`):
+`%1 = %new(Base.RefValue{Base.RefValue{String}, _2}))` and propagates the `ReturnEscape`
+imposed on `%1` to the call argument `_2` (corresponding to `s`):
 ```@repl EAUtils
-code_escapes((String,)) do s
+code_escapes((Base.RefValue{String},)) do s
     obj = Ref(s)
     return obj
 end
@@ -120,7 +115,7 @@ As a result this scheme enables a simple implementation of escape analysis,
 e.g. `PhiNode` for example can be handled simply by propagating escape information
 imposed on a `PhiNode` to its predecessor values:
 ```@repl EAUtils
-code_escapes((Bool, String, String)) do cnd, s, t
+code_escapes((Bool, Base.RefValue{String}, Base.RefValue{String})) do cnd, s, t
     if cnd
         obj = Ref(s)
     else

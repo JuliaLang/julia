@@ -97,7 +97,12 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
     result = caller.result
     opt = result.src
     if opt isa OptimizationState
-        result.src = ir_to_codeinf!(opt)
+        src = ir_to_codeinf!(opt)
+        edges = src.edges::SimpleVector
+        caller.src = result.src = src
+    else
+        edges = Core.svec(caller.edges...)
+        caller.src.edges = edges
     end
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
     if isdefined(result, :ci)
@@ -112,7 +117,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         if last(result.valid_worlds) == typemax(UInt)
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
-            store_backedges(ci, caller.edges)
+            store_backedges(ci, edges)
         end
         inferred_result = nothing
         relocatability = 0x1
@@ -142,7 +147,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         end
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, relocatability, di, Core.svec(caller.edges...))
+            result.analysis_results, relocatability, di, edges)
         engine_reject(interp, ci)
     end
     return nothing
@@ -444,9 +449,10 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     maybe_validate_code(me.linfo, me.src, "inferred")
 
     # finish populating inference results into the CodeInstance if possible, and maybe cache that globally for use elsewhere
-    if isdefined(result, :ci) && !limited_ret
+    if isdefined(result, :ci)
         result_type = result.result
-        @assert !(result_type === nothing || result_type isa LimitedAccuracy)
+        result_type isa LimitedAccuracy && (result_type = result_type.typ)
+        @assert !(result_type === nothing)
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = is_result_constabi_eligible(result) ? 0x3 : 0x2
@@ -488,14 +494,43 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
 end
 
 # record the backedges
-function store_backedges(caller::CodeInstance, edges::Vector{Any})
+function store_backedges(caller::CodeInstance, edges::SimpleVector)
     isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
-    for itr in BackedgeIterator(edges)
-        callee = itr.caller
-        if isa(callee, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
+    i = 1
+    while true
+        i > length(edges) && return nothing
+        item = edges[i]
+        if item isa Int
+            i += 2
+            continue # ignore the query information if present but process the contents
+        elseif isa(item, Method)
+            # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            i += 1
+            continue
+        end
+        if isa(item, CodeInstance)
+            item = item.def
+        end
+        if isa(item, MethodInstance) # regular dispatch
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, nothing, caller)
+            i += 1
         else
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
+            callee = edges[i+1]
+            if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
+                i += 2
+                continue
+            end
+            # `invoke` edge
+            if isa(callee, Method)
+                # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+                i += 2
+                continue
+            elseif isa(callee, CodeInstance)
+                callee = callee.def
+            end
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
+            i += 2
         end
     end
     nothing
@@ -726,21 +761,30 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
     return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
 end
 
-# allocate a dummy `edge::CodeInstance` to be added by `add_edges!`
-function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState)
+# allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
+# TODO: fill this in fully correctly (currently IPO info such as effects and return types are lost)
+function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nospecialize existing_edge)
     mi = sv.linfo
-    owner = cache_owner(interp)
     min_world, max_world = first(sv.world.valid_worlds), last(sv.world.valid_worlds)
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
-    ci = CodeInstance(mi, owner, Any, Any, nothing, nothing, zero(Int32),
-        min_world, max_world, zero(UInt32), nothing, zero(UInt8), nothing, Core.svec(sv.edges...))
+    edges = Core.svec(sv.edges...)
+    if existing_edge isa CodeInstance
+        # return an existing_edge, if the existing edge has more restrictions already (more edges and narrower worlds)
+        if existing_edge.min_world >= min_world &&
+           existing_edge.max_world <= max_world &&
+           existing_edge.edges == edges
+            return existing_edge
+        end
+    end
+    ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
+        min_world, max_world, zero(UInt32), nothing, zero(UInt8), nothing, edges)
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
         # TODO: this should probably come after we decide this edge is even useful
-        store_backedges(ci, sv.edges)
+        store_backedges(ci, edges)
     end
     return ci
 end

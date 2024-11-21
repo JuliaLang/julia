@@ -5496,10 +5496,19 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     bool handled = false;
     jl_cgval_t result;
     if (lival.constant) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
+        jl_method_instance_t *mi;
+        jl_value_t *ci = nullptr;
+        if (jl_is_method_instance(lival.constant)) {
+            mi = (jl_method_instance_t*)lival.constant;
+        }
+        else {
+            ci = lival.constant;
+            assert(jl_is_code_instance(ci));
+            mi = ((jl_code_instance_t*)ci)->def;
+        }
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
-            // handle self-recursion specially
+            // handle self-recursion specially (TODO: assuming ci is a valid invoke for mi?)
             jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
@@ -5514,8 +5523,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
-            if (ci != jl_nothing) {
+            if (ci) {
                 jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
@@ -6573,8 +6581,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_leave_sym) {
         int hand_n_leave = 0;
-        Value *scope_to_restore = nullptr;
-        Value *scope_ptr = nullptr;
+        Value *scope_to_restore = nullptr, *token = nullptr;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6584,18 +6591,32 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, enter_idx);
             if (enter_stmt == jl_nothing)
                 continue;
-            if (ctx.scope_restore.count(enter_idx))
-                std::tie(scope_to_restore, scope_ptr) = ctx.scope_restore[enter_idx];
+            if (ctx.scope_restore.count(enter_idx)) {
+                // TODO: The semantics of `gc_preserve` are not perfect here. An `Expr(:enter, ...)` block may
+                //       have multiple exits, but effects of `preserve_end` are only extended to the end of the
+                //       dominance of each `Expr(:leave, ...)`.
+                //
+                //       That means that a scope object can suddenly end up preserved again outside of an
+                //       `Expr(:enter, ...)` region where it ought to be dead. It'd be preferable if the effects
+                //       of gc_preserve_end propagated through a control-flow joins as long as all incoming
+                //       agree about the preserve state.
+                //
+                //       This is correct as-is anyway - it just means the scope lives longer than it needs to
+                //       if the `Expr(:enter, ...)` has multiple exits.
+                std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
+                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
+            }
             if (jl_enternode_catch_dest(enter_stmt)) {
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
                 hand_n_leave += 1;
+                scope_to_restore = nullptr; // restored by exception handler
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
         if (scope_to_restore) {
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            scope_ai.decorateInst(
+            Value *scope_ptr = get_scope_field(ctx);
+            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
                 ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
         }
     }
@@ -6706,6 +6727,18 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     JL_GC_POP();
     return std::make_pair(F, specF);
+}
+
+static void emit_latestworld(jl_codectx_t &ctx)
+{
+    auto world_age_field = get_tls_world_age_field(ctx);
+    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr,
+        /*isVolatile*/false);
+    world->setOrdering(AtomicOrdering::Acquire);
+    StoreInst *store_world = ctx.builder.CreateAlignedStore(world, world_age_field,
+        ctx.types().alignof_ptr, /*isVolatile*/false);
+    (void)store_world;
 }
 
 // `expr` is not clobbered in JL_TRY
@@ -7128,6 +7161,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
+    else if (head == jl_latestworld_sym && !jl_is_method(ctx.linfo->def.method)) {
+        emit_latestworld(ctx);
+        return jl_cgval_t((jl_value_t*)jl_nothing_type);
+    }
     else {
         if (jl_is_toplevel_only_expr(expr) &&
             !jl_is_method(ctx.linfo->def.method)) {
@@ -7180,7 +7217,7 @@ static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 static Value *get_scope_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
-    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "current_scope");
+    return emit_ptrgep(ctx, ct, offsetof(jl_task_t, scope), "scope");
 }
 
 Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
@@ -9555,7 +9592,9 @@ static jl_llvm_functions_t
             }
 
             mallocVisitStmt(sync_bytes, have_dbg_update);
-            if (toplevel || ctx.is_opaque_closure)
+            // N.B.: For toplevel thunks, we expect world age restore to be handled
+            // by the interpreter which invokes us.
+            if (ctx.is_opaque_closure)
                 ctx.builder.CreateStore(last_age, world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
                 retval->getType() == ctx.f->getReturnType());
@@ -9604,28 +9643,6 @@ static jl_llvm_functions_t
             continue;
         }
         else if (jl_is_enternode(stmt)) {
-            // For the two-arg version of :enter, twiddle the scope
-            Value *scope_ptr = NULL;
-            Value *old_scope = NULL;
-            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            if (jl_enternode_scope(stmt)) {
-                jl_cgval_t new_scope = emit_expr(ctx, jl_enternode_scope(stmt));
-                if (new_scope.typ == jl_bottom_type) {
-                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
-                    // at the point of the miscompile, rather than later when something attempts to
-                    // read the scope.
-                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
-                    find_next_stmt(-1);
-                    continue;
-                }
-                Value *new_scope_boxed = boxed(ctx, new_scope);
-                scope_ptr = get_scope_field(ctx);
-                old_scope = scope_ai.decorateInst(
-                        ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr));
-                scope_ai.decorateInst(
-                    ctx.builder.CreateAlignedStore(new_scope_boxed, scope_ptr, ctx.types().alignof_ptr));
-                ctx.scope_restore[cursor] = std::make_pair(old_scope, scope_ptr);
-            }
             int lname = jl_enternode_catch_dest(stmt);
             if (lname) {
                 // Save exception stack depth at enter for use in pop_exception
@@ -9651,15 +9668,34 @@ static jl_llvm_functions_t
                 ctx.builder.SetInsertPoint(catchpop);
                 {
                     ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
-                    if (old_scope) {
-                        scope_ai.decorateInst(
-                            ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
-                    }
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
                 auto ehptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, eh));
                 ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
+            }
+            // For the two-arg version of :enter, twiddle the scope
+            if (jl_enternode_scope(stmt)) {
+                jl_cgval_t scope = emit_expr(ctx, jl_enternode_scope(stmt));
+                if (scope.typ == jl_bottom_type) {
+                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
+                    // at the point of the miscompile, rather than later when something attempts to
+                    // read the scope.
+                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
+                    find_next_stmt(-1);
+                    continue;
+                }
+                Value *scope_boxed = boxed(ctx, scope);
+                Value *scope_ptr = get_scope_field(ctx);
+                LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
+                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
+                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
+                // and may be removed from jl_current_task by any nested block and then
+                // replaced later
+                Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {scope_boxed});
+                ctx.scope_restore[cursor] = std::make_pair(scope_token, current_scope);
             }
         }
         else {
@@ -9922,17 +9958,6 @@ static jl_llvm_functions_t
                     if (!in_prologue || !F || !(F->isIntrinsic() || F->getName().starts_with("julia.") || &I == restTuple)) {
                         I.setDebugLoc(topdebugloc);
                     }
-                }
-                if (toplevel && !ctx.is_opaque_closure && !in_prologue) {
-                    // we're at toplevel; insert an atomic barrier between every instruction
-                    // TODO: inference is invalid if this has any effect (which it often does)
-                    LoadInst *world = new LoadInst(ctx.types().T_size,
-                        prepare_global_in(jl_Module, jlgetworld_global), Twine(),
-                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
-                    world->setOrdering(AtomicOrdering::Acquire);
-                    StoreInst *store_world = new StoreInst(world, world_age_field,
-                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
-                    (void)store_world;
                 }
             }
             if (&I == &prologue_end)
@@ -10326,24 +10351,8 @@ int jl_opaque_ptrs_set = 0;
 
 extern "C" void jl_init_llvm(void)
 {
-    jl_default_cgparams = {
-        /* track_allocations */ 1,
-        /* code_coverage */ 1,
-        /* prefer_specsig */ 0,
-#ifdef _OS_WINDOWS_
-        /* gnu_pubnames */ 0,
-#else
-        /* gnu_pubnames */ 1,
-#endif
-        /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        /* debug_info_level */ (int) jl_options.debug_level,
-        /* safepoint_on_entry */ 1,
-        /* gcstack_arg */ 1,
-        /* use_jlplt*/ 1,
-        /* trim */ 0,
-        /* lookup */ jl_rettype_inferred_addr };
     jl_page_size = jl_getpagesize();
-    jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
+    jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();

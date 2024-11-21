@@ -968,9 +968,10 @@ end
 end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
-    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 10 > @allocations sort(v)
-    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    let v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+        @test 10 > @allocations sort(v)
+        @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    end
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end
