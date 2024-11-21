@@ -629,14 +629,26 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        deps_list = join((full_name(ext_to_parent, pkg) for pkg in circular_deps), "\n  ")
-	cycles_names = join((join((full_name(ext_to_parent, pkg) for pkg in cycle), " → ") * " ↩" for cycle in cycles), "\n  ")
+        cycles_names = ""
+        for cycle in cycles
+            cycle_str = ""
+            for (i, pkg) in enumerate(cycle)
+                if i == 1
+                    line = "  "
+                elseif i < length(cycle)
+                    line = "  │" * " " ^(i - 2)
+                else
+                    line = "  └" * "─" ^(max(0, i - 3)) * " "
+                end
+                line = color_string(line, :light_black) * full_name(ext_to_parent, pkg) * "\n"
+                cycle_str *= line
+            end
+            cycles_names *= cycle_str
+        end
+        plural = length(cycles) > 1 ? "these cycles" : "this cycle"
         @warn """
-        Circular dependency detected. Precompilation will be skipped for:
-          $deps_list
-        Cycles:
-          $cycles_names
-        """
+        Circular dependency detected. Precompilation will be skipped for all packages/extensions in $plural:
+        $cycles_names"""
     end
     @debug "precompile: circular dep check done"
 
