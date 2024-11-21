@@ -192,7 +192,7 @@ void JL_UV_LOCK(void);
 extern _Atomic(unsigned) _threadedregion;
 extern _Atomic(uint16_t) io_loop_tid;
 
-int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 
 //--------------------------------------------------
 // timers
