@@ -213,10 +213,10 @@ import InteractiveUtils
     ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)
     str = String(take!(io))
-    @test occursin("@Compiler/src/", str)
+    @test occursin("@Compiler/", str)
     @test occursin("@Base/", str)
-    @test occursin("@InteractiveUtils/src/", str)
-    @test occursin("@LinearAlgebra/src/", str)
+    @test occursin("@InteractiveUtils/", str)
+    @test occursin("@LinearAlgebra/", str)
     @test occursin("@juliasrc/", str)
     @test occursin("@julialib/", str)
 end
