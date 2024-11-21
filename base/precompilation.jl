@@ -365,9 +365,9 @@ const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
 # name or parent → ext
-function full_name(ext_to_parent::Dict{PkgId, String}, pkg::PkgId, arrowspace::Bool=true)
+function full_name(ext_to_parent::Dict{PkgId, String}, pkg::PkgId)
     if haskey(ext_to_parent, pkg)
-        return string(ext_to_parent[pkg], arrowspace ? " → " : "→", pkg.name)
+        return string(ext_to_parent[pkg], " → ", pkg.name)
     else
         return pkg.name
     end
@@ -621,7 +621,7 @@ function _precompilepkgs(pkgs::Vector{String},
     end
     if !isempty(circular_deps)
         deps_list = join((full_name(ext_to_parent, pkg) for pkg in circular_deps), "\n  ")
-        cycles_names = join((join((full_name(ext_to_parent, pkg, false) for pkg in cycle), " → ") * " ↩" for cycle in cycles), "\n  ")
+	cycles_names = join((join((full_name(ext_to_parent, pkg) for pkg in cycle), " → ") * " ↩" for cycle in cycles), "\n  ")
         @warn """
         Circular dependency detected. Precompilation will be skipped for:
           $deps_list
