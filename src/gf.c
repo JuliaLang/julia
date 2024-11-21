@@ -3196,7 +3196,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     if (mi == NULL)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
-    jl_compile_method_instance(mi, NULL, world);
+    jl_compile_method_instance(mi, types, world);
     return 1;
 }
 

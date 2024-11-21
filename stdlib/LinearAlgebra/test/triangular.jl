@@ -1396,4 +1396,24 @@ end
     @test exp(log(M)) ≈ M
 end
 
+@testset "copytrito!" begin
+    for T in (UpperTriangular, LowerTriangular)
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = 3
+        U = T(M)
+        isupper = U isa UpperTriangular
+        M[1+!isupper, 1+isupper] = 4
+        uplo, loup = U isa UpperTriangular ? ('U', 'L') : ('L', 'U' )
+        @test copytrito!(similar(U), U, uplo) == U
+        @test copytrito!(zero(M), U, uplo) == U
+        @test copytrito!(similar(U), Array(U), uplo) == U
+        @test copytrito!(zero(U), U, loup) == Diagonal(U)
+        @test copytrito!(similar(U), MyTriangular(U), uplo) == U
+        @test copytrito!(zero(M), MyTriangular(U), uplo) == U
+        Ubig = T(similar(M, (3,3)))
+        copytrito!(Ubig, U, uplo)
+        @test Ubig[axes(U)...] == U
+    end
+end
+
 end # module TestTriangular

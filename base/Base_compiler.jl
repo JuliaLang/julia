@@ -266,21 +266,25 @@ function strcat(x::String, y::String)
     return out
 end
 
-global BUILDROOT::String = ""
+BUILDROOT::String = ""
+DATAROOT::String = ""
 
 baremodule BuildSettings end
 
 function process_sysimg_args!()
-    let i = 1
-        global BUILDROOT
+    let i = 2 # skip file name
         while i <= length(Core.ARGS)
+            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
-                i += 1
+            elseif Core.ARGS[i] == "--buildroot"
+                global BUILDROOT = Core.ARGS[i+1]
+            elseif Core.ARGS[i] == "--dataroot"
+                global DATAROOT = Core.ARGS[i+1]
             else
-                BUILDROOT = Core.ARGS[i]
+                error(strcat("invalid sysimage argument: ", Core.ARGS[i]))
             end
-            i += 1
+            i += 2
         end
     end
 end
@@ -288,7 +292,8 @@ process_sysimg_args!()
 
 function isready end
 
-include(strcat(BUILDROOT, "../usr/share/julia/Compiler/src/Compiler.jl"))
+include(strcat(DATAROOT, "julia/Compiler/src/Compiler.jl"))
+
 
 const _return_type = Compiler.return_type
 

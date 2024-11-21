@@ -39,6 +39,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :using => 1:typemax(Int),
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
+    :latestworld => 0:0,
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this

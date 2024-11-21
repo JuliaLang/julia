@@ -1955,7 +1955,7 @@ public:
     // local var info. globals are not in here.
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
-    std::map<int, Value*> scope_tokens;
+    std::map<int, std::pair<Value*, Value*> > scope_restore;
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -5489,10 +5489,19 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     bool handled = false;
     jl_cgval_t result;
     if (lival.constant) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
+        jl_method_instance_t *mi;
+        jl_value_t *ci = nullptr;
+        if (jl_is_method_instance(lival.constant)) {
+            mi = (jl_method_instance_t*)lival.constant;
+        }
+        else {
+            ci = lival.constant;
+            assert(jl_is_code_instance(ci));
+            mi = ((jl_code_instance_t*)ci)->def;
+        }
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
-            // handle self-recursion specially
+            // handle self-recursion specially (TODO: assuming ci is a valid invoke for mi?)
             jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
@@ -5507,8 +5516,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
-            if (ci != jl_nothing) {
+            if (ci) {
                 jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
@@ -6566,6 +6574,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_leave_sym) {
         int hand_n_leave = 0;
+        Value *scope_to_restore = nullptr, *token = nullptr;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6575,7 +6584,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, enter_idx);
             if (enter_stmt == jl_nothing)
                 continue;
-            if (ctx.scope_tokens.count(enter_idx)) {
+            if (ctx.scope_restore.count(enter_idx)) {
                 // TODO: The semantics of `gc_preserve` are not perfect here. An `Expr(:enter, ...)` block may
                 //       have multiple exits, but effects of `preserve_end` are only extended to the end of the
                 //       dominance of each `Expr(:leave, ...)`.
@@ -6587,15 +6596,22 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 //
                 //       This is correct as-is anyway - it just means the scope lives longer than it needs to
                 //       if the `Expr(:enter, ...)` has multiple exits.
-                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {ctx.scope_tokens[enter_idx]});
+                std::tie(token, scope_to_restore) = ctx.scope_restore[enter_idx];
+                ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
             }
             if (jl_enternode_catch_dest(enter_stmt)) {
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
                 hand_n_leave += 1;
+                scope_to_restore = nullptr; // restored by exception handler
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
+        if (scope_to_restore) {
+            Value *scope_ptr = get_scope_field(ctx);
+            jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
+                ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
+        }
     }
     else if (head == jl_pop_exception_sym) {
         jl_cgval_t excstack_state = emit_expr(ctx, jl_exprarg(expr, 0));
@@ -6704,6 +6720,18 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     JL_GC_POP();
     return std::make_pair(F, specF);
+}
+
+static void emit_latestworld(jl_codectx_t &ctx)
+{
+    auto world_age_field = get_tls_world_age_field(ctx);
+    LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr,
+        /*isVolatile*/false);
+    world->setOrdering(AtomicOrdering::Acquire);
+    StoreInst *store_world = ctx.builder.CreateAlignedStore(world, world_age_field,
+        ctx.types().alignof_ptr, /*isVolatile*/false);
+    (void)store_world;
 }
 
 // `expr` is not clobbered in JL_TRY
@@ -7124,6 +7152,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         assert(token.V->getType()->isTokenTy());
         if (!isa<ConstantTokenNone>(token.V))
             ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token.V});
+        return jl_cgval_t((jl_value_t*)jl_nothing_type);
+    }
+    else if (head == jl_latestworld_sym && !jl_is_method(ctx.linfo->def.method)) {
+        emit_latestworld(ctx);
         return jl_cgval_t((jl_value_t*)jl_nothing_type);
     }
     else {
@@ -9553,7 +9585,9 @@ static jl_llvm_functions_t
             }
 
             mallocVisitStmt(sync_bytes, have_dbg_update);
-            if (toplevel || ctx.is_opaque_closure)
+            // N.B.: For toplevel thunks, we expect world age restore to be handled
+            // by the interpreter which invokes us.
+            if (ctx.is_opaque_closure)
                 ctx.builder.CreateStore(last_age, world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||
                 retval->getType() == ctx.f->getReturnType());
@@ -9645,12 +9679,16 @@ static jl_llvm_functions_t
                     continue;
                 }
                 Value *scope_boxed = boxed(ctx, scope);
-                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, get_scope_field(ctx), ctx.types().alignof_ptr);
+                Value *scope_ptr = get_scope_field(ctx);
+                LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
+                StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
+                jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
                 // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
                 // and may be removed from jl_current_task by any nested block and then
                 // replaced later
-                ctx.scope_tokens[cursor] = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {scope_boxed});
+                Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {scope_boxed});
+                ctx.scope_restore[cursor] = std::make_pair(scope_token, current_scope);
             }
         }
         else {
@@ -9913,17 +9951,6 @@ static jl_llvm_functions_t
                     if (!in_prologue || !F || !(F->isIntrinsic() || F->getName().starts_with("julia.") || &I == restTuple)) {
                         I.setDebugLoc(topdebugloc);
                     }
-                }
-                if (toplevel && !ctx.is_opaque_closure && !in_prologue) {
-                    // we're at toplevel; insert an atomic barrier between every instruction
-                    // TODO: inference is invalid if this has any effect (which it often does)
-                    LoadInst *world = new LoadInst(ctx.types().T_size,
-                        prepare_global_in(jl_Module, jlgetworld_global), Twine(),
-                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
-                    world->setOrdering(AtomicOrdering::Acquire);
-                    StoreInst *store_world = new StoreInst(world, world_age_field,
-                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
-                    (void)store_world;
                 }
             }
             if (&I == &prologue_end)
@@ -10316,24 +10343,8 @@ int jl_opaque_ptrs_set = 0;
 
 extern "C" void jl_init_llvm(void)
 {
-    jl_default_cgparams = {
-        /* track_allocations */ 1,
-        /* code_coverage */ 1,
-        /* prefer_specsig */ 0,
-#ifdef _OS_WINDOWS_
-        /* gnu_pubnames */ 0,
-#else
-        /* gnu_pubnames */ 1,
-#endif
-        /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        /* debug_info_level */ (int) jl_options.debug_level,
-        /* safepoint_on_entry */ 1,
-        /* gcstack_arg */ 1,
-        /* use_jlplt*/ 1,
-        /* trim */ 0,
-        /* lookup */ jl_rettype_inferred_addr };
     jl_page_size = jl_getpagesize();
-    jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
+    jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();

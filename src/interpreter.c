@@ -135,8 +135,9 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
-    jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
-    assert(jl_is_method_instance(meth));
+    jl_value_t *c = args[0];
+    assert(jl_is_code_instance(c) || jl_is_method_instance(c));
+    jl_method_instance_t *meth = jl_is_method_instance(c) ? (jl_method_instance_t*)c : ((jl_code_instance_t*)c)->def;
     jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
     JL_GC_POP();
     return result;
@@ -463,8 +464,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
-        if (toplevel)
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;

@@ -1038,6 +1038,7 @@
                                '())))))
          (call (core _typebody!) ,name (call (core svec) ,@(insert-struct-shim field-types name)))
          (const (globalref (thismodule) ,name) ,name)
+         (latestworld)
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -1087,6 +1088,7 @@
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 (define (primitive-type-def-expr n name params super)
@@ -1107,6 +1109,7 @@
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
@@ -2744,6 +2747,9 @@
                  ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
                    `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                 ((eq? f 'include)
+                  (let ((r (make-ssavalue)))
+                    `(block (= ,r ,(map expand-forms e)) (latestworld-if-toplevel) ,r)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -4125,7 +4131,8 @@ f(x) = yt(x)
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                        ,body)))))
+                                        ,body)))
+                          (latestworld)))
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
                                (top-stmts (cdr exprs))
@@ -4133,7 +4140,8 @@ f(x) = yt(x)
                           `(toplevel-butfirst
                             (block ,@sp-inits
                                    (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
-                                           ,(julia-bq-macro newlam)))
+                                           ,(julia-bq-macro newlam))
+                                   (latestworld))
                             ,@top-stmts))))
 
                  ;; local case - lift to a new type at top level
@@ -4272,7 +4280,8 @@ f(x) = yt(x)
                        `(toplevel-butfirst
                          (null)
                          ,@sp-inits
-                         ,@mk-method)
+                         ,@mk-method
+                         (latestworld))
                        (begin
                          (put! defined name #t)
                          `(toplevel-butfirst
@@ -4280,7 +4289,8 @@ f(x) = yt(x)
                            ,@typedef
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
-                           ,@mk-method))))))))
+                           ,@mk-method
+                           (latestworld)))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
@@ -4513,7 +4523,7 @@ f(x) = yt(x)
           ((struct_type)       "\"struct\" expression")
           ((method)            "method definition")
           ((set_binding_type!) (string "type declaration for global \"" (deparse (cadr e)) "\""))
-          ((latestworld)          "World age increment")
+          ((latestworld)       "World age increment")
           (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " not at top level"))))
@@ -4965,7 +4975,12 @@ f(x) = yt(x)
                      (else  (emit temp)))))
 
             ;; top level expressions
-            ((thunk module)
+            ((thunk)
+             (check-top-level e)
+             (emit e)
+             (if tail (emit-return tail '(null)))
+             '(null))
+            ((module)
              (check-top-level e)
              (emit e)
              (if tail (emit-return tail '(null)))
@@ -4989,7 +5004,9 @@ f(x) = yt(x)
             ;; other top level expressions
             ((import using export public latestworld)
              (check-top-level e)
-             (emit e)
+             (if (not (eq? (car e) 'latestworld))
+              (emit e))
+             (emit `(latestworld))
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (if (and tail (not have-ret?))
                    (emit-return tail '(null))))

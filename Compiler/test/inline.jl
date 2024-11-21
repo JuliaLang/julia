@@ -121,7 +121,7 @@ f29083(;μ,σ) = μ + σ*randn()
 g29083() = f29083(μ=2.0,σ=0.1)
 let c = code_typed(g29083, ())[1][1].code
     # make sure no call to kwfunc remains
-    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.name === :kwfunc)), c)
+    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.def.name === :kwfunc)), c)
 end
 
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
@@ -723,7 +723,7 @@ mktempdir() do dir
                 ci, rt = only(code_typed(issue42246))
                 if any(ci.code) do stmt
                        Meta.isexpr(stmt, :invoke) &&
-                       stmt.args[1].def.name === nameof(IOBuffer)
+                       stmt.args[1].def.def.name === nameof(IOBuffer)
                    end
                     exit(0)
                 else
@@ -1797,7 +1797,7 @@ end
 
 isinvokemodify(y) = @nospecialize(x) -> isinvokemodify(y, x)
 isinvokemodify(sym::Symbol, @nospecialize(x)) = isinvokemodify(mi->mi.def.name===sym, x)
-isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred(x.args[1]::MethodInstance)
+isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred((x.args[1]::CodeInstance).def)
 
 mutable struct Atomic{T}
     @atomic x::T
@@ -2131,7 +2131,7 @@ let src = code_typed1((Type,)) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
     end == 1
 end
 let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
@@ -2139,7 +2139,7 @@ let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
     end == 1
 end
 # test the union split case
@@ -2148,7 +2148,7 @@ let src = code_typed1((Union{DataType,UnionAll},)) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
     end == 2
 end
 let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
@@ -2156,11 +2156,11 @@ let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes())
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
     end == 1
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
     end == 1
 end
 
