@@ -69,6 +69,7 @@
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
+extern arraylist_t new_invokes;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
@@ -305,6 +306,11 @@ Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
+
+static inline int trim_may_error(int trim)
+{
+    return (trim == JL_TRIM_SAFE) || (trim == JL_TRIM_UNSAFE_WARN);
+}
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {

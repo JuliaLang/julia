@@ -372,7 +372,7 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
         assert(proto.decl->isDeclaration());
         Function *pinvoke = nullptr;
         if (preal_decl.empty()) {
-            if (invokeName.empty() && params.params->trim) {
+            if (params.params->trim != JL_TRIM_NO) {
                 errs() << "Bailed out to invoke when compiling:";
                 jl_(codeinst->def);
                 abort();
@@ -431,7 +431,7 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
     JL_GC_POP();
 }
 
-
+arraylist_t new_invokes;
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -481,6 +481,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.imaging_mode = imaging;
     params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
+    arraylist_new(&new_invokes, 0);
     size_t compile_for[] = { jl_typeinf_world, _world };
     int worlds = 0;
     if (jl_options.trim != JL_TRIM_NO)
@@ -505,6 +506,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 continue;
             }
             mi = (jl_method_instance_t*)item;
+            compile_mi:
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
@@ -512,7 +514,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
-                if (jl_options.trim != JL_TRIM_NO && !codeinst) {
+                if (trim_may_error(params.params->trim) && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
                     jl_safe_printf("Codegen decided not to compile code root");
@@ -522,7 +524,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 if (codeinst && !compiled_functions.count(codeinst) && !data->jl_fvar_map.count(codeinst)) {
                     // now add it to our compilation results
                     // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
-                    if (jl_options.trim != JL_TRIM_NO && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
+                    if (params.params->trim != JL_TRIM_NO && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
                     }
                     else {
@@ -533,7 +535,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                         if (result_m)
                             compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
-                        else if (jl_options.trim != JL_TRIM_NO) {
+                        else if (params.params->trim != JL_TRIM_NO) {
                             // if we're building a small image, we need to compile everything
                             // to ensure that we have all the information we need.
                             jl_safe_printf("codegen failed to compile code root");
@@ -550,9 +552,15 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 abort();
                 */
             }
+            mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
+            if (mi != NULL) {
+                jl_(mi);
+                goto compile_mi;
+            }
         }
     }
     JL_GC_POP();
+    arraylist_free(&new_invokes);
     // finally, make sure all referenced methods also get compiled or fixed up
     compile_workqueue(params, policy, compiled_functions);
 
