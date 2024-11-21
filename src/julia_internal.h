@@ -1133,7 +1133,7 @@ void jl_safepoint_init(void);
 // before calling this function. If the calling thread is to run the GC,
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
-int jl_safepoint_start_gc(void);
+int jl_safepoint_start_gc(jl_task_t *ct);
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
 // the `mprotect` may not be removed if there's pending SIGINT) and wake
@@ -1143,8 +1143,8 @@ void jl_safepoint_end_gc(void);
 // Wait for the GC to finish
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
-void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
-void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_thread_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -1170,7 +1170,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-void jl_set_gc_and_wait(void); // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct); // n.b. not used on _OS_DARWIN_
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT

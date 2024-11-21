@@ -392,7 +392,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
-        jl_set_gc_and_wait();
+        jl_set_gc_and_wait(ct);
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
             return;

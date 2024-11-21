@@ -427,11 +427,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    // we also can't use jl_safepoint_wait_gc because that assumes we're in a task.
     jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    while (jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause();
-    }
+    // pass NULL as a special token to indicate we are running on an unmanaged task
+    jl_safepoint_wait_gc(NULL);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
