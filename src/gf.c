@@ -8,6 +8,7 @@
   . static parameter inference
   . method specialization and caching, invoking type inference
 */
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "julia.h"
@@ -24,6 +25,7 @@
 extern "C" {
 #endif
 
+static _Atomic(bool) allow_new_worlds = true;
 JL_DLLEXPORT _Atomic(size_t) jl_world_counter = 1; // uses atomic acquire/release
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
@@ -1718,6 +1720,8 @@ static void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_insta
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_method_instance_t *caller)
 {
+    if (!jl_atomic_load_acquire(&allow_new_worlds))
+        return;
     JL_LOCK(&callee->def.method->writelock);
     if (invokesig == jl_nothing)
         invokesig = NULL;      // julia uses `nothing` but C uses NULL (#undef)
@@ -1753,6 +1757,8 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
 // add a backedge from a non-existent signature to caller
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller)
 {
+    if (!jl_atomic_load_acquire(&allow_new_worlds))
+        return;
     JL_LOCK(&mt->writelock);
     if (!mt->backedges) {
         // lazy-init the backedges array
@@ -1915,8 +1921,48 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
     }
 }
 
+static int erase_method_backedges(jl_typemap_entry_t *def, void *closure)
+{
+    jl_method_t *method = def->func.method;
+    jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+    if (jl_is_svec(specializations)) {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if ((jl_value_t*)mi != jl_nothing) {
+                mi->backedges = NULL;
+            }
+        }
+    }
+    else {
+        jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
+        mi->backedges = NULL;
+    }
+    return 1;
+}
+
+static int erase_all_backedges(jl_methtable_t *mt, void *env)
+{
+    // removes all method caches
+    // this might not be entirely safe (GC or MT), thus we only do it very early in bootstrapping
+    mt->backedges = NULL;
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), erase_method_backedges, env);
+    return 1;
+}
+
+JL_DLLEXPORT void jl_disable_new_worlds(void)
+{
+    if (jl_generating_output())
+        jl_error("Disabling Method changes is not possible when generating output.");
+    jl_atomic_store_release(&allow_new_worlds, false);
+    jl_foreach_reachable_mtable(erase_all_backedges, (void*)NULL);
+}
+
+
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
+    if (!jl_atomic_load_acquire(&allow_new_worlds))
+        jl_error("Method changes have been disabled via a call to jl_disable_new_worlds.");
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
@@ -1986,6 +2032,8 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
+    if (!jl_atomic_load_acquire(&allow_new_worlds))
+        jl_error("Method changes have been disabled via a call to jl_disable_new_worlds.");
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));

@@ -3447,11 +3447,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
             JL_SIGATOMIC_END();
 
-            // Insert method extensions
-            jl_insert_methods(extext_methods);
             // No special processing of `new_specializations` is required because recaching handled it
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            // Insert method extensions
+            jl_insert_methods(extext_methods);
             // Handle edges
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations, world); // restore external backedges (needs to be last)
