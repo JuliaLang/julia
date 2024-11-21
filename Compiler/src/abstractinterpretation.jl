@@ -2419,8 +2419,8 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     if isa(M, Const) && isa(s, Const)
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            exct = global_assignment_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
-            return CallMeta(v, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), NoCallInfo())
+            rt, exct = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), NoCallInfo())
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2485,7 +2485,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             if binding_kind(partition) == BINDING_KIND_GLOBAL
                 T = partition_restriction(partition)
             end
-            exct = Union{rte.exct, global_assignment_binding_exct(partition, v)}
+            exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
             sg = CallMeta(Any, exct, effects, NoCallInfo())
         else
@@ -3401,31 +3401,35 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     return ret
 end
 
-function global_assignment_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
+function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Union{ErrorException, TypeError}
+        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
     end
     partition = abstract_eval_binding_partition!(interp, g, sv)
-    return global_assignment_binding_exct(partition, newty)
+    return global_assignment_binding_rt_exct(interp, partition, newty)
 end
 
-function global_assignment_binding_exct(partition::Core.BindingPartition, @nospecialize(newty))
+function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partition::Core.BindingPartition, @nospecialize(newty))
     kind = binding_kind(partition)
-    if is_some_guard(kind) || is_some_const_binding(kind)
-        return ErrorException
+    if is_some_guard(kind)
+        return Pair{Any,Any}(newty, ErrorException)
+    elseif is_some_const_binding(kind)
+        return Pair{Any,Any}(Bottom, ErrorException)
     end
-
     ty = partition_restriction(partition)
-    if !(widenconst(newty) <: ty)
-        return TypeError
+    wnewty = widenconst(newty)
+    if !hasintersect(wnewty, ty)
+        return Pair{Any,Any}(Bottom, TypeError)
+    elseif !(wnewty <: ty)
+        retty = tmeet(typeinf_lattice(interp), newty, ty)
+        return Pair{Any,Any}(retty, TypeError)
     end
-
-    return Union{}
+    return Pair{Any,Any}(newty, Bottom)
 end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, saw_latestworld::Bool, lhs::GlobalRef, @nospecialize(newty))
     effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_exct(interp, frame, saw_latestworld, lhs, ignorelimited(newty)) === Union{}
+    nothrow = global_assignment_rt_exct(interp, frame, saw_latestworld, lhs, ignorelimited(newty))[2] === Union{}
     inaccessiblememonly = ALWAYS_FALSE
     if !nothrow
         sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)

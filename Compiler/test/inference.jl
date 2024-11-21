@@ -6088,3 +6088,12 @@ function issue56387(nt::NamedTuple, field::Symbol=:a)
     types[index]
 end
 @test Base.infer_return_type(issue56387, (typeof((;a=1)),)) == Type{Int}
+
+global setglobal!_refine::Int
+@test Base.infer_return_type((Integer,)) do x
+    setglobal!(@__MODULE__, :setglobal!_refine, x)
+end === Int
+global setglobal!_must_throw::Int = 42
+@test Base.infer_return_type((String,)) do x
+    setglobal!(@__MODULE__, :setglobal!_must_throw, x)
+end === Union{}
