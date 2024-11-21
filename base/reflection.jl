@@ -248,30 +248,17 @@ struct CodegenParams
     """
     trim::Cint
 
-    """
-    A pointer of type
-
-    typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
-    size_t min_world, size_t max_world);
-
-    that may be used by external compilers as a callback to look up the code instance corresponding
-    to a particular method instance.
-    """
-    lookup::Ptr{Cvoid}
-
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0),
-                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim),
-            lookup)
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim))
     end
 end
 

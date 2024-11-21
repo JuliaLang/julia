@@ -449,9 +449,10 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     maybe_validate_code(me.linfo, me.src, "inferred")
 
     # finish populating inference results into the CodeInstance if possible, and maybe cache that globally for use elsewhere
-    if isdefined(result, :ci) && !limited_ret
+    if isdefined(result, :ci)
         result_type = result.result
-        @assert !(result_type === nothing || result_type isa LimitedAccuracy)
+        result_type isa LimitedAccuracy && (result_type = result_type.typ)
+        @assert !(result_type === nothing)
         if isa(result_type, Const)
             rettype_const = result_type.val
             const_flags = is_result_constabi_eligible(result) ? 0x3 : 0x2
@@ -760,16 +761,24 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
     return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
 end
 
-# allocate a dummy `edge::CodeInstance` to be added by `add_edges!`
-function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState)
+# allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
+# TODO: fill this in fully correctly (currently IPO info such as effects and return types are lost)
+function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nospecialize existing_edge)
     mi = sv.linfo
-    owner = cache_owner(interp)
     min_world, max_world = first(sv.world.valid_worlds), last(sv.world.valid_worlds)
     if max_world >= get_world_counter()
         max_world = typemax(UInt)
     end
     edges = Core.svec(sv.edges...)
-    ci = CodeInstance(mi, owner, Any, Any, nothing, nothing, zero(Int32),
+    if existing_edge isa CodeInstance
+        # return an existing_edge, if the existing edge has more restrictions already (more edges and narrower worlds)
+        if existing_edge.min_world >= min_world &&
+           existing_edge.max_world <= max_world &&
+           existing_edge.edges == edges
+            return existing_edge
+        end
+    end
+    ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
         min_world, max_world, zero(UInt32), nothing, zero(UInt8), nothing, edges)
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,

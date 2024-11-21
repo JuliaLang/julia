@@ -1050,6 +1050,7 @@ call obsolete versions of a function `f`.
     Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
@@ -1084,6 +1085,7 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)

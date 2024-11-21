@@ -289,21 +289,22 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
-jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world)
+static jl_code_instance_t *jl_ci_cache_lookup(jl_method_instance_t *mi, size_t world, jl_codeinstance_lookup_t lookup)
 {
     ++CICacheLookups;
-    jl_value_t *ci = cgparams.lookup(mi, world, world);
+    jl_value_t *ci = lookup(mi, world, world);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing && jl_atomic_load_relaxed(&((jl_code_instance_t *)ci)->inferred) != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
     }
     else {
-        if (cgparams.lookup != jl_rettype_inferred_addr) {
+        if (lookup != jl_rettype_inferred_addr) {
             // XXX: This will corrupt and leak a lot of memory which may be very bad
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
+            // XXX: SOURCE_MODE_ABI is wrong here (not sufficient)
             codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI);
             /* Even if this codeinst is ordinarily not cacheable, we need to force
              * it into the cache here, since it was explicitly requested and is
@@ -440,13 +441,15 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world, jl_codeinstance_lookup_t lookup)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_nrows(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
+    if (lookup == NULL)
+        lookup = &jl_rettype_inferred_native;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     CompilationPolicy policy = (CompilationPolicy) _policy;
     bool imaging = imaging_default() || _imaging_mode == 1;
@@ -511,7 +514,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             // then we want to compile and emit this
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
-                jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
+                jl_code_instance_t *codeinst = jl_ci_cache_lookup(mi, this_world, lookup);
                 if (jl_options.trim != JL_TRIM_NO && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
