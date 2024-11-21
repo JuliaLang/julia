@@ -43,6 +43,8 @@ using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
+const slash = Sys.iswindows() ? "\\" : "/"
+
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
@@ -944,8 +946,8 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             Base.printstyled(io, pkgname, color=pkgcolor)
             file_trunc = ltruncate(file, max(1, wfile))
             wpad = wfile - textwidth(pkgname)
-            if !isempty(pkgname) && !startswith(file_trunc, "/")
-                Base.print(io, "/")
+            if !isempty(pkgname) && !startswith(file_trunc, slash)
+                Base.print(io, slash)
                 wpad -= 1
             end
             if isempty(path)
@@ -1048,8 +1050,8 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
                 remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
                 linenum = li.line == -1 ? "?" : string(li.line)
-                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
-                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                _slash = (!isempty(pkgname) && !startswith(remaining_path, slash)) ? slash : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$(_slash)$remaining_path:$linenum"
                 rich_file = if isempty(path)
                     styled_path
                 else

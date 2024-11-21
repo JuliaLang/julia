@@ -213,12 +213,13 @@ import InteractiveUtils
     ioc = IOContext(io, :displaysize=>(1000,1000))
     Profile.print(ioc, C=true)
     str = String(take!(io))
-    @test occursin("@Compiler/", str)
-    @test occursin("@Base/", str)
-    @test occursin("@InteractiveUtils/", str)
-    @test occursin("@LinearAlgebra/", str)
-    @test occursin("@juliasrc/", str)
-    @test occursin("@julialib/", str)
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
 end
 
 # Profile deadlocking in compilation (debuginfo registration)
