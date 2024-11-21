@@ -633,6 +633,36 @@ end
     return dest
 end
 
+Base.@constprop :aggressive function copytrito_triangular!(Bdata, Adata, uplo, uplomatch, sz)
+    if uplomatch
+        copytrito!(Bdata, Adata, uplo)
+    else
+        BLAS.chkuplo(uplo)
+        LAPACK.lacpy_size_check(size(Bdata), sz)
+        # only the diagonal is copied in this case
+        copyto!(diagview(Bdata), diagview(Adata))
+    end
+    return Bdata
+end
+
+function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'U', (m, m < n ? m : n))
+    return B
+end
+function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'L', (n < m ? n : m, n))
+    return B
+end
+
+uppertridata(A) = A
+lowertridata(A) = A
+# we restrict these specializations only to strided matrices to avoid cases where an UpperTriangular type
+# doesn't share its indexing with the parent
+uppertridata(A::UpperTriangular{<:Any, <:StridedMatrix}) = parent(A)
+lowertridata(A::LowerTriangular{<:Any, <:StridedMatrix}) = parent(A)
+
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
 @inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
