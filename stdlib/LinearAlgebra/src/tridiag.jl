@@ -1096,6 +1096,8 @@ function show(io::IO, S::SymTridiagonal)
     print(io, ", ")
     show(io, S.ev)
     print(io, ")")
+end
+
 ###################
 #     opnorms     #
 ###################
