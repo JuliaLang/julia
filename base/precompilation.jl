@@ -911,7 +911,7 @@ function _precompilepkgs(pkgs::Vector{String},
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
                                 errmsg = String(take!(get(IOBuffer, std_outputs, pkg_config)))
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
-                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
+                                failed_deps[pkg_config] = (strict || is_project_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
                                 !fancyprint && lock(print_lock) do
                                     println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
                                 end
