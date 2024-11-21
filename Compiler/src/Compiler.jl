@@ -137,9 +137,7 @@ if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
 end
 end
 
-if false
-    import Base: Base, @show
-else
+if !isdefined(Base, :end_base_include)
     macro show(ex...)
         blk = Expr(:block)
         for s in ex
@@ -149,6 +147,8 @@ else
         isempty(ex) || push!(blk.args, :value)
         blk
     end
+else
+    using Base: @show
 end
 
 include("cicache.jl")
