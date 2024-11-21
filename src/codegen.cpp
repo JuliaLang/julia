@@ -6724,8 +6724,6 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 static void emit_latestworld(jl_codectx_t &ctx)
 {
     auto world_age_field = get_tls_world_age_field(ctx);
-    // we're at toplevel; insert an atomic barrier between every instruction
-    // TODO: inference is invalid if this has any effect (which it often does)
     LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
         prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr,
         /*isVolatile*/false);
@@ -9586,6 +9584,8 @@ static jl_llvm_functions_t
             }
 
             mallocVisitStmt(sync_bytes, have_dbg_update);
+            // N.B.: For toplevel thunks, we expect world age restore to be handled
+            // by the interpreter which invokes us.
             if (ctx.is_opaque_closure)
                 ctx.builder.CreateStore(last_age, world_age_field);
             assert(type_is_ghost(retty) || returninfo.cc == jl_returninfo_t::SRet ||

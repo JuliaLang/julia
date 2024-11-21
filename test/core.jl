@@ -8339,6 +8339,16 @@ let foo = eval(Expr(:toplevel, :(module BarModuleInc; struct FooModuleInc; end; 
     @test foo == BarModuleInc.FooModuleInc()
 end
 
-eval(:(module BarModuleInc; module BazModuleInc; struct FooModuleInc; end; end; const foo = BazModuleInc.FooModuleInc(); end))
-@Core.latestworld
-@test BarModuleInc.foo == BarModuleInc.BazModuleInc.FooModuleInc()
+let
+    eval(:(module BarModuleInc2; module BazModuleInc; struct FooModuleInc; end; end; const foo = BazModuleInc.FooModuleInc(); end))
+    @Core.latestworld
+    @test BarModuleInc2.foo == BarModuleInc2.BazModuleInc.FooModuleInc()
+end
+
+# `toplevel` has implicit world age increment between expansion and evaluation
+macro define_call(sym)
+    Core.eval(__module__, :($sym() = 1))
+    :($sym())
+end
+@test eval(Expr(:toplevel, :(@define_call(f_macro_defined1)))) == 1
+@test @define_call(f_macro_defined2) == 1

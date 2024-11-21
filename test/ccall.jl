@@ -70,10 +70,8 @@ function gen_ccall_echo(x, T, U, ret=nothing)
         func_ex = :($ret($func_ex))
     end
     @gensym func_name
-    quote
-        @noinline $(esc(func_name))(x) = $func_ex
-        $(esc(func_name))($(esc(x)))
-    end
+    @eval @noinline $func_name(x) = $func_ex
+    :($func_name($(esc(x))))
 end
 
 macro ccall_echo_func(x, T, U)

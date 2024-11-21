@@ -50,7 +50,7 @@ function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int
 end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, irsv::IRInterpretationState)
-    si = StmtInfo(true, sstate.bailed) # TODO better job here?
+    si = StmtInfo(true, sstate.saw_latestworld) # TODO better job here?
     call = abstract_call(interp, arginfo, si, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info

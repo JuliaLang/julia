@@ -113,7 +113,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
     ⊑ₚ, ⋤ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
     argtypes = arginfo.argtypes
-    if si.bailed
+    if si.saw_latestworld
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
@@ -2335,12 +2335,12 @@ function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vecto
 end
 
 const generic_getglobal_effects = Effects(EFFECTS_THROWS, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE)
-function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, @nospecialize(M), @nospecialize(s))
+function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s))
     ⊑ = partialorder(typeinf_lattice(interp))
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return CallMeta(abstract_eval_globalref(interp, GlobalRef(M, s), bailed, sv), NoCallInfo())
+            return CallMeta(abstract_eval_globalref(interp, GlobalRef(M, s), saw_latestworld, sv), NoCallInfo())
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
@@ -2358,17 +2358,17 @@ function merge_exct(cm::CallMeta, @nospecialize(exct))
     return cm
 end
 
-function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(order))
+function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(order))
     goe = global_order_exct(order, #=loading=#true, #=storing=#false)
-    cm = abstract_eval_getglobal(interp, sv, bailed, M, s)
+    cm = abstract_eval_getglobal(interp, sv, saw_latestworld, M, s)
     return merge_exct(cm, goe)
 end
 
-function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, argtypes::Vector{Any})
+function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) == 3
-        return abstract_eval_getglobal(interp, sv, bailed, argtypes[2], argtypes[3])
+        return abstract_eval_getglobal(interp, sv, saw_latestworld, argtypes[2], argtypes[3])
     elseif length(argtypes) == 4
-        return abstract_eval_getglobal(interp, sv, bailed, argtypes[2], argtypes[3], argtypes[4])
+        return abstract_eval_getglobal(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4])
     elseif !isvarargtype(argtypes[end]) || length(argtypes) > 5
         return CallMeta(Union{}, ArgumentError, EFFECTS_THROWS, NoCallInfo())
     else
@@ -2415,11 +2415,11 @@ end
 
 const setglobal!_effects = Effects(EFFECTS_TOTAL; effect_free=ALWAYS_FALSE, nothrow=false, inaccessiblememonly=ALWAYS_FALSE)
 
-function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(v))
+function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(v))
     if isa(M, Const) && isa(s, Const)
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            exct = global_assignment_exct(interp, sv, bailed, GlobalRef(M, s), v)
+            exct = global_assignment_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
             return CallMeta(v, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), NoCallInfo())
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
@@ -2433,17 +2433,17 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     return CallMeta(v, Union{TypeError, ErrorException}, setglobal!_effects, NoCallInfo())
 end
 
-function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(order))
+function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(order))
     goe = global_order_exct(order, #=loading=#false, #=storing=#true)
-    cm = abstract_eval_setglobal!(interp, sv, bailed, M, s, v)
+    cm = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
     return merge_exct(cm, goe)
 end
 
-function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, argtypes::Vector{Any})
+function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) == 4
-        return abstract_eval_setglobal!(interp, sv, bailed, argtypes[2], argtypes[3], argtypes[4])
+        return abstract_eval_setglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4])
     elseif length(argtypes) == 5
-        return abstract_eval_setglobal!(interp, sv, bailed, argtypes[2], argtypes[3], argtypes[4], argtypes[5])
+        return abstract_eval_setglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4], argtypes[5])
     elseif !isvarargtype(argtypes[end]) || length(argtypes) > 6
         return CallMeta(Union{}, ArgumentError, EFFECTS_THROWS, NoCallInfo())
     else
@@ -2451,9 +2451,9 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     end
 end
 
-function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, argtypes::Vector{Any})
+function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (4, 5, 6)
-        cm = abstract_eval_setglobal!(interp, sv, bailed, argtypes[2], argtypes[3], argtypes[4])
+        cm = abstract_eval_setglobal!(interp, sv, saw_latestworld, argtypes[2], argtypes[3], argtypes[4])
         if length(argtypes) >= 5
             goe = global_order_exct(argtypes[5], #=loading=#true, #=storing=#true)
             cm = merge_exct(cm, goe)
@@ -2470,7 +2470,7 @@ function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntSta
     end
 end
 
-function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, argtypes::Vector{Any})
+function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (5, 6, 7)
         (M, s, x, v) = argtypes[2], argtypes[3], argtypes[4], argtypes[5]
 
@@ -2489,7 +2489,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
             sg = CallMeta(Any, exct, effects, NoCallInfo())
         else
-            sg = abstract_eval_setglobal!(interp, sv, bailed, M, s, v)
+            sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
         end
         if length(argtypes) >= 6
             goe = global_order_exct(argtypes[6], #=loading=#true, #=storing=#true)
@@ -2543,15 +2543,15 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.throw_methoderror
             return abstract_throw_methoderror(interp, argtypes, sv)
         elseif f === Core.getglobal
-            return Future(abstract_eval_getglobal(interp, sv, si.bailed, argtypes))
+            return Future(abstract_eval_getglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.setglobal!
-            return Future(abstract_eval_setglobal!(interp, sv, si.bailed, argtypes))
+            return Future(abstract_eval_setglobal!(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.setglobalonce!
-            return Future(abstract_eval_setglobalonce!(interp, sv, si.bailed, argtypes))
+            return Future(abstract_eval_setglobalonce!(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.replaceglobal!
-            return Future(abstract_eval_replaceglobal!(interp, sv, si.bailed, argtypes))
+            return Future(abstract_eval_replaceglobal!(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.getfield && argtypes_are_actually_getglobal(argtypes)
-            return Future(abstract_eval_getglobal(interp, sv, si.bailed, argtypes))
+            return Future(abstract_eval_getglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.isdefined && argtypes_are_actually_getglobal(argtypes)
             exct = Bottom
             if length(argtypes) == 4
@@ -2565,7 +2565,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
                     interp,
                     GlobalRef((argtypes[2]::Const).val::Module,
                               (argtypes[3]::Const).val::Symbol),
-                    si.bailed,
+                    si.saw_latestworld,
                     sv),
                 NoCallInfo()), exct))
         elseif f === Core.get_binding_type
@@ -2859,7 +2859,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
             return RTEffects(sv.ir.argtypes[e.n], Union{}, EFFECTS_TOTAL) # TODO frame_argtypes(sv)[e.n] and remove the assertion
         end
     elseif isa(e, GlobalRef)
-        return abstract_eval_globalref(interp, e, sstate.bailed, sv)
+        return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)
     end
     if isa(e, QuoteNode)
         e = e.value
@@ -2925,7 +2925,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::St
     if unused
         add_curr_ssaflag!(sv, IR_FLAG_UNUSED)
     end
-    si = StmtInfo(!unused, sstate.bailed)
+    si = StmtInfo(!unused, sstate.saw_latestworld)
     call = abstract_call(interp, arginfo, si, sv)::Future
     Future{Any}(call, interp, sv) do call, interp, sv
         # this only is needed for the side-effect, sequenced before any task tries to consume the return value,
@@ -3115,16 +3115,16 @@ function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, ssta
         end
         return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     end
-    return abstract_eval_isdefined(interp, sym, sstate.bailed, sv)
+    return abstract_eval_isdefined(interp, sym, sstate.saw_latestworld, sv)
 end
 
-function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym), bailed::Bool, sv::AbsIntState)
+function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym), saw_latestworld::Bool, sv::AbsIntState)
     rt = Bool
     effects = EFFECTS_TOTAL
     exct = Union{}
     isa(sym, Symbol) && (sym = GlobalRef(frame_module(sv), sym))
     if isa(sym, GlobalRef)
-        rte = abstract_eval_globalref(interp, sym, bailed, sv)
+        rte = abstract_eval_globalref(interp, sym, saw_latestworld, sv)
         if rte.exct == Union{}
             rt = Const(true)
         elseif rte.rt === Union{} && rte.exct === UndefVarError
@@ -3385,8 +3385,8 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
     return RTEffects(rt, UndefVarError, generic_getglobal_effects)
 end
 
-function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, bailed::Bool, sv::AbsIntState)
-    if bailed
+function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
+    if saw_latestworld
         return RTEffects(Any, Any, generic_getglobal_effects)
     end
     partition = abstract_eval_binding_partition!(interp, g, sv)
@@ -3401,8 +3401,8 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, bail
     return ret
 end
 
-function global_assignment_exct(interp::AbstractInterpreter, sv::AbsIntState, bailed::Bool, g::GlobalRef, @nospecialize(newty))
-    if bailed
+function global_assignment_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
+    if saw_latestworld
         return Union{ErrorException, TypeError}
     end
     partition = abstract_eval_binding_partition!(interp, g, sv)
@@ -3423,9 +3423,9 @@ function global_assignment_binding_exct(partition::Core.BindingPartition, @nospe
     return Union{}
 end
 
-function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, bailed::Bool, lhs::GlobalRef, @nospecialize(newty))
+function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, saw_latestworld::Bool, lhs::GlobalRef, @nospecialize(newty))
     effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_exct(interp, frame, bailed, lhs, ignorelimited(newty)) === Union{}
+    nothrow = global_assignment_exct(interp, frame, saw_latestworld, lhs, ignorelimited(newty)) === Union{}
     inaccessiblememonly = ALWAYS_FALSE
     if !nothrow
         sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
@@ -3617,8 +3617,8 @@ function handle_control_backedge!(interp::AbstractInterpreter, frame::InferenceS
     return nothing
 end
 
-function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::Int, vartable::VarTable, bailed::Bool)
-    frame.bb_bailed[bb] |= bailed
+function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::Int, vartable::VarTable, saw_latestworld::Bool)
+    frame.bb_saw_latestworld[bb] |= saw_latestworld
     bbtable = frame.bb_vartables[bb]
     if bbtable === nothing
         # if a basic block hasn't been analyzed yet,
@@ -3695,14 +3695,14 @@ function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct),
     end
 end
 
-function propagate_to_error_handler!(currstate::VarTable, currbailed::Bool, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
+function propagate_to_error_handler!(currstate::VarTable, currsaw_latestworld::Bool, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
     curr_hand = gethandler(frame)
     if curr_hand !== nothing
         enter = frame.src.code[curr_hand.enter_idx]::EnterNode
         exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
-        if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate, currbailed)
+        if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate, currsaw_latestworld)
             push!(frame.ip, exceptbb)
         end
     end
@@ -3720,10 +3720,10 @@ end
 struct CurrentState
     result::Future
     currstate::VarTable
-    currbailed::Bool
+    currsaw_latestworld::Bool
     bbstart::Int
     bbend::Int
-    CurrentState(result::Future, currstate::VarTable, currbailed::Bool, bbstart::Int, bbend::Int) = new(result, currstate, currbailed, bbstart, bbend)
+    CurrentState(result::Future, currstate::VarTable, currsaw_latestworld::Bool, bbstart::Int, bbend::Int) = new(result, currstate, currsaw_latestworld, bbstart, bbend)
     CurrentState() = new()
 end
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextresult::CurrentState)
@@ -3734,7 +3734,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
     states = frame.bb_vartables
-    bailed = frame.bb_bailed
+    saw_latestworld = frame.bb_saw_latestworld
     currbb = frame.currbb
     currpc = frame.currpc
 
@@ -3743,7 +3743,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         bbstart = nextresult.bbstart
         bbend = nextresult.bbend
         currstate = nextresult.currstate
-        currbailed = nextresult.currbailed
+        currsaw_latestworld = nextresult.currsaw_latestworld
         @goto injectresult
     end
 
@@ -3751,7 +3751,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
     end
     currstate = copy(states[currbb]::VarTable)
-    currbailed = bailed[currbb]
+    currsaw_latestworld = saw_latestworld[currbb]
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
@@ -3776,7 +3776,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
                     condslot = ssa_def_slot(condx, frame)
-                    condt = abstract_eval_value(interp, condx, StatementState(currstate, currbailed), frame)
+                    condt = abstract_eval_value(interp, condx, StatementState(currstate, currsaw_latestworld), frame)
                     if condt === Bottom
                         ssavaluetypes[currpc] = Bottom
                         empty!(frame.pclimitations)
@@ -3794,7 +3794,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
                         update_exc_bestguess!(interp, TypeError, frame)
-                        propagate_to_error_handler!(currstate, currbailed, frame, 𝕃ᵢ)
+                        propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
 
@@ -3844,7 +3844,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this else branch
                                 stoverwrite1!(elsestate, condition_object_change(currstate, condt, condslot, #=then_or_else=#false))
                             end
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate, currbailed)
+                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate, currsaw_latestworld)
                             then_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#true)
                             thenstate = currstate
                             if then_change !== nothing
@@ -3854,7 +3854,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                                 stoverwrite1!(thenstate, condition_object_change(currstate, condt, condslot, #=then_or_else=#true))
                             end
                         else
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate, currbailed)
+                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate, currsaw_latestworld)
                         end
                         if else_changed
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
@@ -3863,7 +3863,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         @goto fallthrough
                     end
                 elseif isa(stmt, ReturnNode)
-                    rt = abstract_eval_value(interp, stmt.val, StatementState(currstate, currbailed), frame)
+                    rt = abstract_eval_value(interp, stmt.val, StatementState(currstate, currsaw_latestworld), frame)
                     if update_bestguess!(interp, frame, currstate, rt)
                         update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
                             # no reason to revisit if that call-site doesn't affect the final result
@@ -3876,7 +3876,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     ssavaluetypes[currpc] = Any
                     add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if isdefined(stmt, :scope)
-                        scopet = abstract_eval_value(interp, stmt.scope, StatementState(currstate, currbailed), frame)
+                        scopet = abstract_eval_value(interp, stmt.scope, StatementState(currstate, currsaw_latestworld), frame)
                         handler = gethandler(frame, currpc + 1)::TryCatchFrame
                         @assert handler.scopet !== nothing
                         if !⊑(𝕃ᵢ, scopet, handler.scopet)
@@ -3910,7 +3910,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
                 # over the first and last iterations. By tmerging in the current old_rt, we ensure that
                 # we will not lose an intermediate value.
-                rt = abstract_eval_phi(interp, stmt, StatementState(currstate, currbailed), frame)
+                rt = abstract_eval_phi(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)
                 old_rt = frame.ssavaluetypes[currpc]
                 rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
             else
@@ -3920,7 +3920,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     stmt = stmt.args[2]
                 end
                 if !isa(stmt, Expr)
-                    (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, StatementState(currstate, currbailed), frame)
+                    (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)
                 else
                     hd = stmt.head
                     if hd === :method
@@ -3933,12 +3933,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             is_meta_expr(stmt)))
                         rt = Nothing
                     elseif hd === :latestworld
-                        currbailed = true
+                        currsaw_latestworld = true
                         rt = Nothing
                     else
-                        result = abstract_eval_statement_expr(interp, stmt, StatementState(currstate, currbailed), frame)::Future
+                        result = abstract_eval_statement_expr(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)::Future
                         if !isready(result) || !isempty(frame.tasks)
-                            return CurrentState(result, currstate, currbailed, bbstart, bbend)
+                            return CurrentState(result, currstate, currsaw_latestworld, bbstart, bbend)
                             @label injectresult
                             # reload local variables
                             stmt = frame.src.code[currpc]
@@ -3978,7 +3978,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     if isa(lhs, SlotNumber)
                         changes = StateUpdate(lhs, VarState(rt, false))
                     elseif isa(lhs, GlobalRef)
-                        handle_global_assignment!(interp, frame, currbailed, lhs, rt)
+                        handle_global_assignment!(interp, frame, currsaw_latestworld, lhs, rt)
                     else
                         merge_effects!(interp, frame, EFFECTS_UNKNOWN)
                     end
@@ -3990,7 +3990,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     # TODO: assert that these conditions match. For now, we assume the `nothrow` flag
                     # to be correct, but allow the exct to be an over-approximation.
                 end
-                propagate_to_error_handler!(currstate, currbailed, frame, 𝕃ᵢ)
+                propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
@@ -4026,7 +4026,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
 
         # Case 2: Directly branch to a different BB
         begin @label branch
-            if update_bbstate!(𝕃ᵢ, frame, nextbb, currstate, currbailed)
+            if update_bbstate!(𝕃ᵢ, frame, nextbb, currstate, currsaw_latestworld)
                 push!(W, nextbb)
             end
         end
