@@ -1773,10 +1773,10 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         return allconst ? Const(ty) : Type{ty}
     end
     if 1 < unionsplitcost(𝕃, argtypes) ≤ max_union_splitting
-        ⊔ = join(𝕃)
         rt = Bottom
         for split_argtypes = switchtupleunion(𝕃, argtypes)
-            rt = rt ⊔ _apply_type_tfunc(𝕃, headtype, split_argtypes)
+            this_rt = widenconst(_apply_type_tfunc(𝕃, headtype, split_argtypes))
+            rt = Union{rt, this_rt}
         end
         return rt
     end
