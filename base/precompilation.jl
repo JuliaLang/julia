@@ -576,15 +576,17 @@ function _precompilepkgs(pkgs::Vector{String},
 
     # find and guard against circular deps
     cycles = Vector{Base.PkgId}[]
-    # set of packages that depend on a cycle (either because they are
-    # a part of a cycle themselves or because they transitively depend
-    # on a package in some cycle)
-    circular_deps = Set{Base.PkgId}()
+    # For every scanned package, true if pkg found to be in a cycle
+    # or depends on packages in a cycle and false otherwise.
+    could_be_cycle = Dict{Base.PkgId, Bool}()
     # temporary stack for the SCC-like algorithm below
     stack = Base.PkgId[]
     function scan_pkg!(pkg, dmap)
-        (pkg in circular_deps) && return true
-        return scan_deps!(pkg, dmap)
+        if haskey(could_be_cycle, pkg)
+            return could_be_cycle[pkg]
+        else
+            return scan_deps!(pkg, dmap)
+        end
     end
     function scan_deps!(pkg, dmap)
         push!(stack, pkg)
@@ -598,7 +600,7 @@ function _precompilepkgs(pkgs::Vector{String},
                 end
             elseif scan_pkg!(dep, dmap)
                 # Reaches an existing cycle
-                push!(circular_deps, pkg)
+                could_be_cycle[pkg] = true
                 pop!(stack)
                 return true
             end
@@ -606,13 +608,20 @@ function _precompilepkgs(pkgs::Vector{String},
         pop!(stack)
         if cycle !== nothing
             push!(cycles, cycle)
-            push!(circular_deps, pkg)
+            could_be_cycle[pkg] = true
             return true
         end
+        could_be_cycle[pkg] = false
         return false
     end
+    # set of packages that depend on a cycle (either because they are
+    # a part of a cycle themselves or because they transitively depend
+    # on a package in some cycle)
+    circular_deps = Base.PkgId[]
     for pkg in keys(direct_deps)
-        if scan_pkg!(pkg, direct_deps)
+        @assert isempty(stack)
+	if scan_pkg!(pkg, direct_deps)
+            push!(circular_deps, pkg)
             for pkg_config in keys(was_processed)
                 # notify all to allow skipping
                 pkg_config[1] == pkg && notify(was_processed[pkg_config])
