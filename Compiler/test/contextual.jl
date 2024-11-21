@@ -3,6 +3,14 @@
 # N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
 using Test
 
+if !@isdefined(Compiler)
+    if Base.identify_package("Compiler") === nothing
+        import Base.Compiler: Compiler
+    else
+        import Compiler
+    end
+end
+
 # Cassette
 # ========
 
@@ -11,7 +19,8 @@ module MiniCassette
     # fancy features, but sufficient to exercise this code path in the compiler.
 
     using Core.IR
-    using Core.Compiler: retrieve_code_info, quoted, anymap
+    using ..Compiler
+    using ..Compiler: retrieve_code_info, quoted, anymap
     using Base.Meta: isexpr
 
     export Ctx, overdub
@@ -45,7 +54,7 @@ module MiniCassette
 
     function transform!(mi::MethodInstance, ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
         code = ci.code
-        di = Core.Compiler.DebugInfoStream(mi, ci.debuginfo, length(code))
+        di = Compiler.DebugInfoStream(mi, ci.debuginfo, length(code))
         ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+1:end]...]
         ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+1:end]...]
         # Insert one SSAValue for every argument statement
@@ -82,7 +91,7 @@ module MiniCassette
 
         tt = Tuple{f, args...}
         match = Base._which(tt; world)
-        mi = Core.Compiler.specialize_method(match)
+        mi = Base.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva
         src = retrieve_code_info(mi, world)

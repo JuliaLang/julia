@@ -276,7 +276,7 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-using Core.Compiler: is_declared_inline, is_declared_noinline
+using .Compiler: is_declared_inline, is_declared_noinline
 
 @testset "is_declared_[no]inline" begin
     @test is_declared_inline(only(methods(@inline x -> x)))
@@ -297,7 +297,7 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
     @test !is_declared_noinline(only(methods() do x x end))
 end
 
-using Core.Compiler: is_inlineable, set_inlineable!
+using .Compiler: is_inlineable, set_inlineable!
 
 @testset "basic set_inlineable! functionality" begin
     ci = code_typed1() do
@@ -345,8 +345,8 @@ struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
     NonIsBitsDimsUndef() = new()
 end
-@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
-@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+@test Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
+@test !Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
 
 # More nothrow modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
@@ -629,8 +629,8 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
-    cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
-    codeinst = Core.Compiler.get(cache, mi, nothing)
+    cache = Compiler.code_cache(Compiler.NativeInterpreter())
+    codeinst = Compiler.get(cache, mi, nothing)
     return isnothing(codeinst) ? nothing : codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
@@ -965,7 +965,7 @@ let # aggressive inlining of single, abstract method match
 end
 
 @inline isGoodType2(cnd, @nospecialize x::Type) =
-    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : _has_free_typevars)(x))
+    x !== Any && !(@noinline (cnd ? Compiler.isType : _has_free_typevars)(x))
 let # aggressive inlining of single, abstract method match (with constant-prop'ed)
     src = code_typed((Type, Any,)) do x, y
         isGoodType2(true, x), isGoodType2(true, y)
@@ -1203,7 +1203,7 @@ end
 end
 
 # Test that inlining doesn't accidentally delete a bad return_type call
-f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
+f_bad_return_type() = Compiler.return_type(+, 1, 2)
 @test_throws MethodError f_bad_return_type()
 
 # Test that inlining doesn't leave useless globalrefs around
@@ -1218,7 +1218,7 @@ end
 # Test that we can inline a finalizer for a struct that does not otherwise escape
 @noinline nothrow_side_effect(x) =
     Base.@assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
-@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
+@test Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
 
 mutable struct DoAllocNoEscape
     function DoAllocNoEscape()
@@ -1403,7 +1403,7 @@ init_finalization_count!() = FINALIZATION_COUNT[] = 0
 get_finalization_count() = FINALIZATION_COUNT[]
 @noinline add_finalization_count!(x) = FINALIZATION_COUNT[] += x
 @noinline Base.@assume_effects :nothrow safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
-@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
+@test Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
 
 mutable struct DoAllocWithField
     x::Int
@@ -1634,7 +1634,7 @@ end
             let effects = Base.infer_effects((Vector{T}, T)) do xs, x
                     $f(xs, x)
                 end
-                @test Core.Compiler.Core.Compiler.is_terminates(effects)
+                @test Compiler.Compiler.is_terminates(effects)
             end
             let src = code_typed1((Vector{T}, T, T)) do xs, x, y
                     $f(xs, x, y)
@@ -1651,7 +1651,7 @@ end
     end
 end
 
-using Core.Compiler: is_declared_inline, is_declared_noinline
+using .Compiler: is_declared_inline, is_declared_noinline
 
 # https://github.com/JuliaLang/julia/issues/45050
 @testset "propagate :meta annotations to keyword sorter methods" begin
@@ -1665,12 +1665,12 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
         @test is_declared_noinline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :none f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.is_no_constprop(only(methods(f)))
-        @test Core.Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_no_constprop(only(methods(f)))
+        @test Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
     let f(@nospecialize(A::Any); x::Int=1) = 2x
@@ -1683,19 +1683,19 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test is_declared_inline(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Compiler.is_aggressive_constprop(only(methods(f)))
         @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
 end
 
@@ -1766,7 +1766,7 @@ end
 
 # Test getfield modeling of Type{Ref{_A}} where _A
 let getfield_tfunc(@nospecialize xs...) =
-        Core.Compiler.getfield_tfunc(Core.Compiler.fallback_lattice, xs...)
+        Compiler.getfield_tfunc(Compiler.fallback_lattice, xs...)
     @test getfield_tfunc(Type, Core.Const(:parameters)) !== Union{}
     @test !isa(getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Const(:name)), Core.Const)
 end
@@ -1846,15 +1846,15 @@ end
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
 let i::Int, continue_::Bool
-    interp = Core.Compiler.NativeInterpreter()
+    interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
     ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="inlining", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(interp)
-    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    inlining = Compiler.InliningState(interp)
+    ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
     lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
@@ -1870,15 +1870,15 @@ end
 call_func_mul_int(a::Int, b::Int) = @noinline func_mul_int(a, b)
 multi_inlining2(a::Int, b::Int) = call_func_mul_int(a, b)
 let i::Int, continue_::Bool
-    interp = Core.Compiler.NativeInterpreter()
+    interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
     ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="inlining", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(interp)
-    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    inlining = Compiler.InliningState(interp)
+    ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
     lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
@@ -1915,30 +1915,30 @@ end
 
 # optimize away `NamedTuple`s used for handling `@nospecialize`d keyword-argument
 # https://github.com/JuliaLang/julia/pull/47059
-abstract type CallInfo end
-struct NewInstruction
+abstract type TestCallInfo end
+struct TestNewInstruction
     stmt::Any
     type::Any
-    info::CallInfo
+    info::TestCallInfo
     line::Int32
     flag::UInt8
-    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+    function TestNewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::TestCallInfo),
                             line::Int32, flag::UInt8)
         return new(stmt, type, info, line, flag)
     end
 end
 @nospecialize
-function NewInstruction(newinst::NewInstruction;
+function TestNewInstruction(newinst::TestNewInstruction;
     stmt=newinst.stmt,
     type=newinst.type,
-    info::CallInfo=newinst.info,
+    info::TestCallInfo=newinst.info,
     line::Int32=newinst.line,
     flag::UInt8=newinst.flag)
-    return NewInstruction(stmt, type, info, line, flag)
+    return TestNewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type, info
-        NewInstruction(newinst; stmt, type, info)
+let src = code_typed1((TestNewInstruction,Any,Any,TestCallInfo)) do newinst, stmt, type, info
+        TestNewInstruction(newinst; stmt, type, info)
     end
     @test count(issplatnew, src.code) == 0
     @test count(iscall((src,NamedTuple)), src.code) == 0
@@ -2122,8 +2122,8 @@ end
 
 # `compilesig_invokes` inlining option
 @newinterp NoCompileSigInvokes
-Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
-    Core.Compiler.OptimizationParams(; compilesig_invokes=false)
+Compiler.OptimizationParams(::NoCompileSigInvokes) =
+    Compiler.OptimizationParams(; compilesig_invokes=false)
 @noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
 # test the single dispatch candidate case
 let src = code_typed1((Type,)) do x
@@ -2207,7 +2207,7 @@ function issue53062(cond)
         return -1
     end
 end
-@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test !Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
 @test issue53062(false) == -1
 @test_throws MethodError issue53062(true)
 

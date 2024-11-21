@@ -6,6 +6,14 @@ using Random
 using InteractiveUtils
 using Libdl
 
+if !@isdefined(Compiler)
+    if Base.identify_package("Compiler") === nothing
+        import Base.Compiler: Compiler
+    else
+        import Compiler
+    end
+end
+
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
@@ -181,15 +189,15 @@ end
 breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ref{MutableStruct},), a)
 
 # Allocation with uninitialized field as gcroot
-mutable struct BadRef
+mutable struct BadRefMutableStruct
     x::MutableStruct
     y::MutableStruct
-    BadRef(x) = new(x)
+    BadRefMutableStruct(x) = new(x)
 end
-Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
-Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+Base.cconvert(::Type{Ptr{BadRefMutableStruct}}, a::MutableStruct) = BadRefMutableStruct(a)
+Base.unsafe_convert(::Type{Ptr{BadRefMutableStruct}}, ar::BadRefMutableStruct) = Ptr{BadRefMutableStruct}(pointer_from_objref(ar.x))
 
-breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRef},), a)
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRefMutableStruct},), a)
 
 struct PtrStruct
     a::Ptr{Cvoid}
@@ -372,10 +380,9 @@ mktemp() do f_22330, _
 end
 
 # Alias scope
-using Base.Experimental: @aliasscope, Const
 function foo31018!(a, b)
-    @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+    @Base.Experimental.aliasscope for i in eachindex(a, b)
+        a[i] = Base.Experimental.Const(b)[i]
     end
 end
 io = IOBuffer()
@@ -788,8 +795,8 @@ f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
 
 f48085(@nospecialize x...) = length(x)
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
 
 # Make sure that the bounds check is elided in tuple iteration
 @test !occursin("call void @", strip_debug_calls(get_llvm(iterate, Tuple{NTuple{4, Float64}, Int})))

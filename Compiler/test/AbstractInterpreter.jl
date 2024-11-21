@@ -1,7 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-const CC = Core.Compiler
+
+if !@isdefined(Compiler)
+    if Base.identify_package("Compiler") === nothing
+        import Base.Compiler: Compiler
+    else
+        import Compiler
+    end
+end
 
 include("irutils.jl")
 include("newinterp.jl")
@@ -9,13 +16,13 @@ include("newinterp.jl")
 # interpreter that performs abstract interpretation only
 # (semi-concrete interpretation should be disabled automatically)
 @newinterp AbsIntOnlyInterp1
-CC.may_optimize(::AbsIntOnlyInterp1) = false
+Compiler.may_optimize(::AbsIntOnlyInterp1) = false
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp1()) >: IO
 
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
-CC.may_optimize(::AbsIntOnlyInterp2) = false
-CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::CC.InferenceResult) = nothing
+Compiler.may_optimize(::AbsIntOnlyInterp2) = false
+Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -32,9 +39,9 @@ end
 
 @newinterp MTOverlayInterp
 @MethodTable OVERLAY_MT
-CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OVERLAY_MT)
+Compiler.method_table(interp::MTOverlayInterp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OVERLAY_MT)
 
-function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
+function Compiler.add_remark!(interp::MTOverlayInterp, ::Compiler.InferenceState, remark)
     if interp.meta !== nothing
         # Core.println(remark)
         push!(interp.meta, remark)
@@ -63,10 +70,10 @@ end |> only === Union{Float64,Nothing}
 # effect analysis should figure out that the overlayed method is used
 @test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
     strangesin(x)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Compiler.is_nonoverlayed
 
 # account for overlay possibility in unanalyzed matching method
 callstrange(::Float64) = strangesin(x)
@@ -74,20 +81,20 @@ callstrange(::Number) = Core.compilerbarrier(:type, nothing) # trigger inference
 callstrange(::Any) = 1.0
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
-    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
+    matches = Compiler.findall(Tuple{typeof(callstrange),Any}, Compiler.method_table(interp))
     @test matches !== nothing
-    @test Core.Compiler.length(matches) == 3
-    @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+    @test Compiler.length(matches) == 3
+    @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Compiler.is_nonoverlayed
     @test "Call inference reached maximally imprecise information: bailing on doing more abstract inference." in interp.meta
 end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x
     strangesin(x)
-end |> Core.Compiler.is_nonoverlayed
+end |> Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,)) do x
     @invoke strangesin(x::Float64)
-end |> Core.Compiler.is_nonoverlayed
+end |> Compiler.is_nonoverlayed
 
 # fallback to the internal method table
 @test Base.return_types((Int,); interp=MTOverlayInterp()) do x
@@ -152,14 +159,14 @@ gpu_factorial1(x::Int) = myfactorial(x, raise_on_gpu1)
 gpu_factorial2(x::Int) = myfactorial(x, raise_on_gpu2)
 gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 
-@test Base.infer_effects(cpu_factorial, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
-@test Base.infer_effects(gpu_factorial1, (Int,); interp=MTOverlayInterp()) |> !Core.Compiler.is_nonoverlayed
-@test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_consistent_overlay
+@test Base.infer_effects(cpu_factorial, (Int,); interp=MTOverlayInterp()) |> Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial1, (Int,); interp=MTOverlayInterp()) |> !Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Compiler.is_consistent_overlay
 let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
     # check if `@consistent_overlay` together works with `@assume_effects`
     # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
-    @test Core.Compiler.is_consistent_overlay(effects)
-    @test Core.Compiler.is_foldable(effects)
+    @test Compiler.is_consistent_overlay(effects)
+    @test Compiler.is_foldable(effects)
 end
 @test Base.infer_return_type(; interp=MTOverlayInterp()) do
     Val(gpu_factorial2(3))
@@ -172,11 +179,11 @@ end == Val{6}
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
 @MethodTable ISSUE_48097_MT
-CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_48097_MT)
-function CC.concrete_eval_eligible(interp::Issue48097Interp,
-    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
-    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
-        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+Compiler.method_table(interp::Issue48097Interp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), ISSUE_48097_MT)
+function Compiler.concrete_eval_eligible(interp::Issue48097Interp,
+    @nospecialize(f), result::Compiler.MethodCallResult, arginfo::Compiler.ArgInfo, sv::Compiler.AbsIntState)
+    ret = @invoke Compiler.concrete_eval_eligible(interp::Compiler.AbstractInterpreter,
+        f::Any, result::Compiler.MethodCallResult, arginfo::Compiler.ArgInfo, sv::Compiler.AbsIntState)
     if ret === :semi_concrete_eval
         # disable semi-concrete interpretation
         return :none
@@ -192,7 +199,7 @@ end
 # https://github.com/JuliaLang/julia/issues/52938
 @newinterp Issue52938Interp
 @MethodTable ISSUE_52938_MT
-CC.method_table(interp::Issue52938Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_52938_MT)
+Compiler.method_table(interp::Issue52938Interp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), ISSUE_52938_MT)
 inner52938(x, types::Type, args...; kwargs...) = x
 outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
 @test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2))
@@ -200,7 +207,7 @@ outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
 # https://github.com/JuliaGPU/CUDA.jl/issues/2241
 @newinterp Cuda2241Interp
 @MethodTable CUDA_2241_MT
-CC.method_table(interp::Cuda2241Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), CUDA_2241_MT)
+Compiler.method_table(interp::Cuda2241Interp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), CUDA_2241_MT)
 inner2241(f, types::Type, args...; kwargs...) = nothing
 function outer2241(f)
     @inline inner2241(f, Tuple{}; foo=Ref(42), bar=1)
@@ -217,7 +224,7 @@ const cuda_kernel_state = Ref{Any}()
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
 @MethodTable OVERLAY_SIN_MT
-CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OVERLAY_SIN_MT)
+Compiler.method_table(interp::OverlaySinInterp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), OVERLAY_SIN_MT)
 overlay_sin1(x) = error("Not supposed to be called.")
 @overlay OVERLAY_SIN_MT overlay_sin1(x) = cos(x)
 @overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
@@ -252,30 +259,30 @@ end
 # ===============
 
 using Core: SlotNumber, Argument
-using Core.Compiler: slot_id, tmerge_fast_path
-import .CC:
+using .Compiler: slot_id, tmerge_fast_path
+import .Compiler:
     AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice,
     widenlattice, is_valid_lattice_norec, typeinf_lattice, ipo_lattice, optimizer_lattice,
     widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn
 
 @newinterp TaintInterpreter
-struct TaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
+struct TaintLattice{PL<:AbstractLattice} <: Compiler.AbstractLattice
     parent::PL
 end
-CC.widenlattice(𝕃::TaintLattice) = 𝕃.parent
-CC.is_valid_lattice_norec(::TaintLattice, @nospecialize(elm)) = isa(elm, Taint)
+Compiler.widenlattice(𝕃::TaintLattice) = 𝕃.parent
+Compiler.is_valid_lattice_norec(::TaintLattice, @nospecialize(elm)) = isa(elm, Taint)
 
-struct InterTaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
+struct InterTaintLattice{PL<:AbstractLattice} <: Compiler.AbstractLattice
     parent::PL
 end
-CC.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
-CC.is_valid_lattice_norec(::InterTaintLattice, @nospecialize(elm)) = isa(elm, InterTaint)
+Compiler.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
+Compiler.is_valid_lattice_norec(::InterTaintLattice, @nospecialize(elm)) = isa(elm, InterTaint)
 
 const AnyTaintLattice{L} = Union{TaintLattice{L},InterTaintLattice{L}}
 
-CC.typeinf_lattice(::TaintInterpreter) = InferenceLattice(TaintLattice(BaseInferenceLattice.instance))
-CC.ipo_lattice(::TaintInterpreter) = InferenceLattice(InterTaintLattice(IPOResultLattice.instance))
-CC.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(SimpleInferenceLattice.instance)
+Compiler.typeinf_lattice(::TaintInterpreter) = InferenceLattice(TaintLattice(BaseInferenceLattice.instance))
+Compiler.ipo_lattice(::TaintInterpreter) = InferenceLattice(InterTaintLattice(IPOResultLattice.instance))
+Compiler.optimizer_lattice(::TaintInterpreter) = InterTaintLattice(SimpleInferenceLattice.instance)
 
 struct Taint
     typ
@@ -311,14 +318,14 @@ end
 
 const AnyTaint = Union{Taint, InterTaint}
 
-function CC.tmeet(𝕃::AnyTaintLattice, @nospecialize(v), @nospecialize(t::Type))
+function Compiler.tmeet(𝕃::AnyTaintLattice, @nospecialize(v), @nospecialize(t::Type))
     T = isa(𝕃, TaintLattice) ? Taint : InterTaint
     if isa(v, T)
         v = v.typ
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
-function CC.tmerge(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(typeb))
+function Compiler.tmerge(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(typeb))
     r = tmerge_fast_path(𝕃, typea, typeb)
     r !== nothing && return r
     # type-lattice for Taint
@@ -336,7 +343,7 @@ function CC.tmerge(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(ty
     end
     return tmerge(widenlattice(𝕃), typea, typeb)
 end
-function CC.:⊑(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(typeb))
+function Compiler.:⊑(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(typeb))
     T = isa(𝕃, TaintLattice) ? Taint : InterTaint
     if isa(typea, T)
         if isa(typeb, T)
@@ -349,39 +356,39 @@ function CC.:⊑(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(type
     end
     return ⊑(widenlattice(𝕃), typea, typeb)
 end
-CC.widenconst(taint::AnyTaint) = widenconst(taint.typ)
+Compiler.widenconst(taint::AnyTaint) = widenconst(taint.typ)
 
-function CC.abstract_eval_special_value(interp::TaintInterpreter,
-    @nospecialize(e), vtypes::CC.VarTable, sv::CC.InferenceState)
-    ret = @invoke CC.abstract_eval_special_value(interp::CC.AbstractInterpreter,
-        e::Any, vtypes::CC.VarTable, sv::CC.InferenceState)
+function Compiler.abstract_eval_special_value(interp::TaintInterpreter,
+    @nospecialize(e), sstate::Compiler.StatementState, sv::Compiler.InferenceState)
+    ret = @invoke Compiler.abstract_eval_special_value(interp::Compiler.AbstractInterpreter,
+        e::Any, sstate::Compiler.StatementState, sv::Compiler.InferenceState)
     if isa(e, SlotNumber) || isa(e, Argument)
         return Taint(ret, slot_id(e))
     end
     return ret
 end
 
-function CC.widenreturn(𝕃::InferenceLattice{<:InterTaintLattice}, @nospecialize(rt), @nospecialize(bestguess), nargs::Int, slottypes::Vector{Any}, changes::CC.VarTable)
+function Compiler.widenreturn(𝕃::InferenceLattice{<:InterTaintLattice}, @nospecialize(rt), @nospecialize(bestguess), nargs::Int, slottypes::Vector{Any}, changes::Compiler.VarTable)
     if isa(rt, Taint)
         return InterTaint(rt.typ, BitSet((id for id in rt.slots if id ≤ nargs)))
     end
-    return CC.widenreturn(widenlattice(𝕃), rt, bestguess, nargs, slottypes, changes)
+    return Compiler.widenreturn(widenlattice(𝕃), rt, bestguess, nargs, slottypes, changes)
 end
 
-@test CC.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
+@test Compiler.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
 
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())
 
 # External lattice without `Conditional`
 
-import .CC:
+import .Compiler:
     AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice,
     typeinf_lattice, ipo_lattice, optimizer_lattice
 
 @newinterp NonconditionalInterpreter
-CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
-CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
-CC.optimizer_lattice(::NonconditionalInterpreter) = PartialsLattice(ConstsLattice())
+Compiler.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+Compiler.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+Compiler.optimizer_lattice(::NonconditionalInterpreter) = PartialsLattice(ConstsLattice())
 
 @test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
     c = isa(x, Int) || isa(x, Float64)
@@ -398,34 +405,34 @@ end |> only === Any
 @newinterp NoinlineInterpreter
 noinline_modules(interp::NoinlineInterpreter) = interp.meta::Set{Module}
 
-import .CC: CallInfo
+import .Compiler: CallInfo
 
 struct NoinlineCallInfo <: CallInfo
     info::CallInfo # wrapped call
 end
-CC.add_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo) = CC.add_edges!(edges, info.info)
-CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
-CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
-CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
+Compiler.add_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo) = Compiler.add_edges!(edges, info.info)
+Compiler.nsplit_impl(info::NoinlineCallInfo) = Compiler.nsplit(info.info)
+Compiler.getsplit_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getsplit(info.info, idx)
+Compiler.getresult_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getresult(info.info, idx)
 
-function CC.abstract_call(interp::NoinlineInterpreter,
-    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
-    ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
-        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
-    return CC.Future{CC.CallMeta}(ret, interp, sv) do ret, interp, sv
+function Compiler.abstract_call(interp::NoinlineInterpreter,
+    arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+    ret = @invoke Compiler.abstract_call(interp::Compiler.AbstractInterpreter,
+        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+    return Compiler.Future{Compiler.CallMeta}(ret, interp, sv) do ret, interp, sv
         if sv.mod in noinline_modules(interp)
             (;rt, exct, effects, info) = ret
-            return CC.CallMeta(rt, exct, effects, NoinlineCallInfo(info))
+            return Compiler.CallMeta(rt, exct, effects, NoinlineCallInfo(info))
         end
         return ret
     end
 end
-function CC.src_inlining_policy(interp::NoinlineInterpreter,
+function Compiler.src_inlining_policy(interp::NoinlineInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
         return false
     end
-    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter,
+    return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter,
         src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
@@ -459,8 +466,8 @@ let NoinlineModule = Module()
 
     # it should work for cached results
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
-    mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
-    @test CC.haskey(CC.code_cache(interp), mi)
+    mi = Compiler.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
+    @test Compiler.haskey(Compiler.code_cache(interp), mi)
     let src = code_typed1(main_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
@@ -489,28 +496,28 @@ end
 
 @newinterp CustomDataInterp
 struct CustomDataInterpToken end
-CC.cache_owner(::CustomDataInterp) = CustomDataInterpToken()
+Compiler.cache_owner(::CustomDataInterp) = CustomDataInterpToken()
 struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function CC.transform_result_for_cache(interp::CustomDataInterp, result::CC.InferenceResult)
-    inferred_result = @invoke CC.transform_result_for_cache(
-        interp::CC.AbstractInterpreter, result::CC.InferenceResult)
+function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult)
+    inferred_result = @invoke Compiler.transform_result_for_cache(
+        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
     return CustomData(inferred_result)
 end
-function CC.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
-                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
+function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
+                            @nospecialize(info::Compiler.CallInfo), stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end
-    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                          info::CC.CallInfo, stmt_flag::UInt32)
+    return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter, src::Any,
+                                          info::Compiler.CallInfo, stmt_flag::UInt32)
 end
-CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
-    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
-CC.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
-    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
+Compiler.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
+    Compiler.retrieve_ir_for_inlining(cached_result, src.inferred)
+Compiler.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+    Compiler.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
 let src = code_typed((Int,); interp=CustomDataInterp()) do x
         return sin(x) + cos(x)
     end |> only |> first
