@@ -2,7 +2,14 @@ module EAUtils
 
 export code_escapes, @code_escapes, __clear_cache!
 
-const CC = Core.Compiler
+if !@isdefined(Compiler)
+    if Base.identify_package("Compiler") === nothing
+        import Base.Compiler: Compiler
+    else
+        import Compiler
+    end
+end
+
 using ..EscapeAnalysis
 const EA = EscapeAnalysis
 
@@ -10,19 +17,19 @@ const EA = EscapeAnalysis
 # -------------------
 
 # imports
-import .CC:
+import .Compiler:
     AbstractInterpreter, NativeInterpreter, WorldView, WorldRange, InferenceParams,
     OptimizationParams, get_world_counter, get_inference_cache, ipo_dataflow_analysis!
 # usings
 using Core:
     CodeInstance, MethodInstance, CodeInfo
-using .CC:
+using .Compiler:
     InferenceResult, InferenceState, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeState
 
 struct EAToken end
 
-# when working outside of Core.Compiler,
+# when working outside of CC,
 # cache entire escape state for later inspection and debugging
 struct EscapeCacheInfo
     argescapes::ArgEscapeCache
@@ -59,18 +66,18 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     end
 end
 
-CC.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
-CC.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
-CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
-CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
-CC.cache_owner(::EscapeAnalyzer) = EAToken()
-CC.get_escape_cache(interp::EscapeAnalyzer) = GetEscapeCache(interp)
+Compiler.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
+Compiler.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
+Compiler.get_inference_world(interp::EscapeAnalyzer) = interp.world
+Compiler.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
+Compiler.cache_owner(::EscapeAnalyzer) = EAToken()
+Compiler.get_escape_cache(interp::EscapeAnalyzer) = GetEscapeCache(interp)
 
-function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationState,
+function Compiler.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationState,
                                    ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized
     nargs = Int(opt.src.nargs)
-    𝕃ₒ = CC.optimizer_lattice(interp)
+    𝕃ₒ = Compiler.optimizer_lattice(interp)
     get_escape_cache = GetEscapeCache(interp)
     estate = try
         analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache)
@@ -82,11 +89,11 @@ function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::OptimizationStat
     end
     if caller.linfo === interp.entry_mi
         # return back the result
-        interp.result = EscapeResultForEntry(CC.copy(ir), estate, caller.linfo)
+        interp.result = EscapeResultForEntry(Compiler.copy(ir), estate, caller.linfo)
     end
     record_escapes!(interp, caller, estate, ir)
 
-    @invoke CC.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
+    @invoke Compiler.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
                                       ir::IRCode, caller::InferenceResult)
 end
 
@@ -94,7 +101,7 @@ function record_escapes!(interp::EscapeAnalyzer,
     caller::InferenceResult, estate::EscapeState, ir::IRCode)
     argescapes = ArgEscapeCache(estate)
     ecacheinfo = EscapeCacheInfo(argescapes, estate, ir)
-    return CC.stack_analysis_result!(caller, ecacheinfo)
+    return Compiler.stack_analysis_result!(caller, ecacheinfo)
 end
 
 struct GetEscapeCache
@@ -113,19 +120,19 @@ struct FailedAnalysis
     get_escape_cache::GetEscapeCache
 end
 
-function CC.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=CC.may_discard_trees(interp))
-    ecacheinfo = CC.traverse_analysis_results(state.result) do @nospecialize result
+function Compiler.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=Compiler.may_discard_trees(interp))
+    ecacheinfo = Compiler.traverse_analysis_results(state.result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
     ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[state.linfo] = ecacheinfo)
-    return @invoke CC.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
+    return @invoke Compiler.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
 end
 
 # printing
 # --------
 
 using Core: Argument, SSAValue
-using .CC: widenconst, singleton_type
+using .Compiler: widenconst, singleton_type
 
 function get_name_color(x::EscapeInfo, symbol::Bool = false)
     getname(x) = string(nameof(x))
@@ -323,7 +330,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       debuginfo::Symbol = :none)
     tt = Base.signature_type(f, types)
     match = Base._which(tt; world, raise=true)
-    mi = Core.Compiler.specialize_method(match)
+    mi = Compiler.specialize_method(match)
     return code_escapes(mi; world, debuginfo)
 end
 
@@ -331,7 +338,7 @@ function code_escapes(mi::MethodInstance;
                       world::UInt = get_world_counter(),
                       interp::EscapeAnalyzer=EscapeAnalyzer(world, GLOBAL_ESCAPE_CACHE; entry_mi=mi),
                       debuginfo::Symbol = :none)
-    frame = Core.Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
+    frame = Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
     isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
     slotnames = let src = frame.src
         src isa CodeInfo ? src.slotnames : nothing
@@ -357,7 +364,7 @@ Note that this version does not cache the analysis results.
 function code_escapes(ir::IRCode, nargs::Int;
                       world::UInt = get_world_counter(),
                       interp::AbstractInterpreter=EscapeAnalyzer(world, EscapeCache()))
-    estate = analyze_escapes(ir, nargs, CC.optimizer_lattice(interp), CC.get_escape_cache(interp))
+    estate = analyze_escapes(ir, nargs, Compiler.optimizer_lattice(interp), Compiler.get_escape_cache(interp))
     return EscapeResult(ir, estate) # return back the result
 end
 

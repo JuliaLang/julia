@@ -4,6 +4,14 @@
 using Test
 using Core.IR
 
+if !@isdefined(Compiler)
+    if Base.identify_package("Compiler") === nothing
+        import Base.Compiler: Compiler
+    else
+        import Compiler
+    end
+end
+
 # test that interpreter correctly handles PhiNodes (#29262)
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
@@ -23,7 +31,7 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false
@@ -64,7 +72,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
     m.args[1] = copy(src)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
     m.args[1] = copy(src)
@@ -103,7 +111,7 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false

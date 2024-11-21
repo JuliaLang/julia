@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: CFGReachability, DomTree, CFG, BasicBlock, StmtRange, dominates,
-                     bb_unreachable, kill_edge!
+include("irutils.jl")
 
-const CC = Core.Compiler
+using .Compiler: CFGReachability, DomTree, CFG, BasicBlock, StmtRange, dominates,
+                     bb_unreachable, kill_edge!
 
 function reachable(g::CFG, a::Int, b::Int; domtree=nothing)
     visited = BitVector(false for _ = 1:length(g.blocks))
@@ -83,7 +83,7 @@ function test_reachability(V, E; deletions = 2E ÷ 3, all_checks=false)
 
         if all_checks # checks for internal data structures - O(E^2)
 
-            # Nodes should be mutually reachable iff they are in the same SCC.
+            # Nodes should be mutually reachable iff they are in the same SCompiler.
             scc = reachability.scc
             reachable_nodes = BitSet(v for v = 1:V if !bb_unreachable(reachability, v))
             for i ∈ reachable_nodes
@@ -96,13 +96,13 @@ function test_reachability(V, E; deletions = 2E ÷ 3, all_checks=false)
             irreducible = reachability.irreducible
             for i ∈ reachable_nodes
                 in_nontrivial_scc = any(v != i && scc[v] == scc[i] for v = 1:V)
-                @test CC.getindex(irreducible, i) == in_nontrivial_scc
+                @test Compiler.getindex(irreducible, i) == in_nontrivial_scc
             end
         end
     end
 
     cfg = rand_cfg(V, E)
-    domtree = Core.Compiler.construct_domtree(cfg)
+    domtree = Compiler.construct_domtree(cfg)
     reachability = CFGReachability(cfg, domtree)
     check_reachability(reachability, cfg, domtree, all_checks)
 

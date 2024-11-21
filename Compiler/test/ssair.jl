@@ -1,11 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("irutils.jl")
+
 using Base.Meta
 using Core.IR
-const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
-
-include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -102,7 +101,7 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    insts = Compiler.InstructionStream([], [], Core.Compiler.CallInfo[], Int32[], UInt32[])
+    insts = Compiler.InstructionStream([], [], Compiler.CallInfo[], Int32[], UInt32[])
     di = Compiler.DebugInfoStream(insts.line)
     ir = Compiler.IRCode(insts, cfg, di, Any[], Expr[], Compiler.VarState[])
     compact = Compiler.IncrementalCompact(ir, true)
@@ -133,36 +132,36 @@ end
 let code = Any[
         # block 1
         Expr(:boundscheck),
-        Core.Compiler.GotoIfNot(SSAValue(1), 6),
+        Compiler.GotoIfNot(SSAValue(1), 6),
         # block 2
-        Expr(:call, GlobalRef(Base, :size), Core.Compiler.Argument(3)),
-        Core.Compiler.ReturnNode(),
+        Expr(:call, GlobalRef(Base, :size), Compiler.Argument(3)),
+        Compiler.ReturnNode(),
         # block 3
         Core.PhiNode(),
-        Core.Compiler.ReturnNode(),
+        Compiler.ReturnNode(),
         # block 4
         GlobalRef(Main, :something),
         GlobalRef(Main, :somethingelse),
         Expr(:call, Core.SSAValue(7), Core.SSAValue(8)),
-        Core.Compiler.GotoIfNot(Core.SSAValue(9), 12),
+        Compiler.GotoIfNot(Core.SSAValue(9), 12),
         # block 5
-        Core.Compiler.ReturnNode(Core.SSAValue(9)),
+        Compiler.ReturnNode(Core.SSAValue(9)),
         # block 6
-        Core.Compiler.ReturnNode(Core.SSAValue(9))
+        Compiler.ReturnNode(Core.SSAValue(9))
     ]
     ir = make_ircode(code)
-    ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # Test that the verifier doesn't choke on cglobals (which aren't linearized)
 let code = Any[
         Expr(:call, GlobalRef(Main, :cglobal),
                     Expr(:call, Core.tuple, :(:c)), Nothing),
-                    Core.Compiler.ReturnNode()
+                    Compiler.ReturnNode()
     ]
     ir = make_ircode(code)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
@@ -171,14 +170,14 @@ let code = Any[
         ReturnNode(SSAValue(1))
     ]
     ir = make_ircode(code; verify=false)
-    ir = Core.Compiler.compact!(ir, true)
-    @test_throws ["IR verification failed.", "Code location: "] Core.Compiler.verify_ir(ir, false)
+    ir = Compiler.compact!(ir, true)
+    @test_throws ["IR verification failed.", "Code location: "] Compiler.verify_ir(ir, false)
 end
 
 # Issue #29107
 let code = Any[
         # Block 1
-        Core.Compiler.GotoNode(6),
+        Compiler.GotoNode(6),
         # Block 2
         # The following phi node gets deleted because it only has one edge, so
         # the call to `something` is made to use the value of `something2()`,
@@ -188,12 +187,12 @@ let code = Any[
         Core.PhiNode(Int32[2], Any[Core.SSAValue(4)]),
         Expr(:call, :something, Core.SSAValue(2)),
         Expr(:call, :something2),
-        Core.Compiler.GotoNode(2),
+        Compiler.GotoNode(2),
         # Block 3
-        Core.Compiler.ReturnNode(1000)
+        Compiler.ReturnNode(1000)
     ]
     ir = make_ircode(code)
-    ir = Core.Compiler.compact!(ir, true)
+    ir = Compiler.compact!(ir, true)
     # Make sure that if there is a call to `something` (block 2 should be
     # removed entirely with working DCE), it doesn't use any SSA values that
     # come after it.
@@ -210,22 +209,22 @@ end
 # Make sure dead blocks that are removed are not still referenced in live phi nodes
 let code = Any[
         # Block 1
-        Core.Compiler.GotoNode(3),
+        Compiler.GotoNode(3),
         # Block 2 (no predecessors)
-        Core.Compiler.ReturnNode(3),
+        Compiler.ReturnNode(3),
         # Block 3
         Core.PhiNode(Int32[1, 2], Any[100, 200]),
-        Core.Compiler.ReturnNode(Core.SSAValue(3))
+        Compiler.ReturnNode(Core.SSAValue(3))
     ]
     ir = make_ircode(code; verify=false)
-    ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # issue #37919
 let ci = only(code_lowered(()->@isdefined(_not_def_37919_), ()))
-    ir = Core.Compiler.inflate_ir(ci)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    ir = Compiler.inflate_ir(ci)
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 let code = Any[
@@ -239,7 +238,7 @@ let code = Any[
     ]
     ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+    @test !Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
@@ -261,7 +260,7 @@ let code = Any[
     ]
     ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+    @test !Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
@@ -288,7 +287,7 @@ let code = Any[
     ]
     ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+    @test !Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
@@ -394,6 +393,14 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
 
 let # https://github.com/JuliaLang/julia/issues/42258
     code = """
+        if !@isdefined(Compiler)
+            if Base.identify_package("Compiler") === nothing
+                import Base.Compiler: Compiler
+            else
+                import Compiler
+            end
+        end
+
         function foo()
             a = @noinline rand(rand(0:10))
             if isempty(a)
@@ -405,7 +412,7 @@ let # https://github.com/JuliaLang/julia/issues/42258
         end
         code_typed(foo; optimize=true)
 
-        code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
+        code_typed(Compiler.setindex!, (Compiler.UseRef,Compiler.NewSSAValue); optimize=true)
         """
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
@@ -468,18 +475,18 @@ let
 
     function _test_userefs(@nospecialize stmt)
         ex = Expr(:call, :+, Core.SSAValue(3), 1)
-        urs = Core.Compiler.userefs(stmt)::Core.Compiler.UseRefIterator
-        it = Core.Compiler.iterate(urs)
+        urs = Compiler.userefs(stmt)::Compiler.UseRefIterator
+        it = Compiler.iterate(urs)
         while it !== nothing
-            ur = getfield(it, 1)::Core.Compiler.UseRef
+            ur = getfield(it, 1)::Compiler.UseRef
             op = getfield(it, 2)::Int
-            v1 = Core.Compiler.getindex(ur)
+            v1 = Compiler.getindex(ur)
             # set to dummy expression and then back to itself to test `_useref_setindex!`
-            v2 = Core.Compiler.setindex!(ur, ex)
+            v2 = Compiler.setindex!(ur, ex)
             test_useref(v2, ex, op)
-            Core.Compiler.setindex!(ur, v1)
-            @test Core.Compiler.getindex(ur) === v1
-            it = Core.Compiler.iterate(urs, op)
+            Compiler.setindex!(ur, v1)
+            @test Compiler.getindex(ur) === v1
+            it = Compiler.iterate(urs, op)
         end
     end
 
@@ -531,25 +538,25 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # domination analysis
-    domtree = Core.Compiler.construct_domtree(ir)
-    @test Core.Compiler.dominates(domtree, 1, 2)
-    @test Core.Compiler.dominates(domtree, 1, 3)
-    @test Core.Compiler.dominates(domtree, 1, 4)
+    domtree = Compiler.construct_domtree(ir)
+    @test Compiler.dominates(domtree, 1, 2)
+    @test Compiler.dominates(domtree, 1, 3)
+    @test Compiler.dominates(domtree, 1, 4)
     for i = 2:4
         for j = 1:4
             i == j && continue
-            @test !Core.Compiler.dominates(domtree, i, j)
+            @test !Compiler.dominates(domtree, i, j)
         end
     end
     # post domination analysis
-    post_domtree = Core.Compiler.construct_postdomtree(ir)
-    @test Core.Compiler.postdominates(post_domtree, 4, 1)
-    @test Core.Compiler.postdominates(post_domtree, 4, 2)
-    @test Core.Compiler.postdominates(post_domtree, 4, 3)
+    post_domtree = Compiler.construct_postdomtree(ir)
+    @test Compiler.postdominates(post_domtree, 4, 1)
+    @test Compiler.postdominates(post_domtree, 4, 2)
+    @test Compiler.postdominates(post_domtree, 4, 3)
     for i = 1:3
         for j = 1:4
             i == j && continue
-            @test !Core.Compiler.postdominates(post_domtree, i, j)
+            @test !Compiler.postdominates(post_domtree, i, j)
         end
     end
 end
@@ -568,20 +575,20 @@ end
     @test Meta.isexpr(add_stmt[:stmt], :call) && add_stmt[:stmt].args[3] == 42
 
     # replace the addition with a slightly different one
-    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
-    node = Core.Compiler.insert_node!(ir, 1, inst)
-    Core.Compiler.setindex!(add_stmt, node, :stmt)
+    inst = Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
+    node = Compiler.insert_node!(ir, 1, inst)
+    Compiler.setindex!(add_stmt, node, :stmt)
 
     # perform compaction (not by calling compact! because with DCE the bug doesn't trigger)
-    compact = Core.Compiler.IncrementalCompact(ir)
-    state = Core.Compiler.iterate(compact)
+    compact = Compiler.IncrementalCompact(ir)
+    state = Compiler.iterate(compact)
     while state !== nothing
-        state = Core.Compiler.iterate(compact, state[2])
+        state = Compiler.iterate(compact, state[2])
     end
-    ir = Core.Compiler.complete(compact)
+    ir = Compiler.complete(compact)
 
     # test that the inserted node was compacted
-    @test Core.Compiler.length(ir.new_nodes) == 0
+    @test Compiler.length(ir.new_nodes) == 0
 
     # test that we performed copy propagation, but that the undef node was trimmed
     @test length(ir.stmts) == instructions
@@ -593,7 +600,7 @@ end
 # =======================
 
 import Core: SSAValue
-import Core.Compiler: NewInstruction, insert_node!
+import .Compiler: NewInstruction, insert_node!
 
 # insert_node! for pending node
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
@@ -607,7 +614,7 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
     newssa = insert_node!(ir, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
     newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
 
-    ir = Core.Compiler.compact!(ir)
+    ir = Compiler.compact!(ir)
     @test length(ir.stmts) == nstmts + 2
     @test Meta.isexpr(ir.stmts[invoke_idx][:stmt], :invoke)
     call1 = ir.stmts[invoke_idx+1][:stmt]
@@ -622,28 +629,28 @@ end
 let code = Any[
         # block 1
         #= %1: =# Expr(:boundscheck),
-        #= %2: =# Core.Compiler.GotoIfNot(SSAValue(1), 4),
+        #= %2: =# Compiler.GotoIfNot(SSAValue(1), 4),
         # block 2
         #= %3: =# Expr(:call, println, Argument(1)),
         # block 3
         #= %4: =# Core.PhiNode(),
-        #= %5: =# Core.Compiler.ReturnNode(),
+        #= %5: =# Compiler.ReturnNode(),
     ]
     ir = make_ircode(code)
 
     # Insert another call at end of "block 2"
-    compact = Core.Compiler.IncrementalCompact(ir)
+    compact = Compiler.IncrementalCompact(ir)
     new_inst = NewInstruction(Expr(:call, println, Argument(1)), Nothing)
     insert_node!(compact, SSAValue(3), new_inst, #= attach_after =# true)
 
     # Complete iteration
-    x = Core.Compiler.iterate(compact)
+    x = Compiler.iterate(compact)
     while x !== nothing
-        x = Core.Compiler.iterate(compact, x[2])
+        x = Compiler.iterate(compact, x[2])
     end
-    ir = Core.Compiler.complete(compact)
+    ir = Compiler.complete(compact)
 
-    @test Core.Compiler.verify_ir(ir) === nothing
+    @test Compiler.verify_ir(ir) === nothing
 end
 
 # compact constant PiNode
@@ -652,7 +659,7 @@ let code = Any[
         ReturnNode(SSAValue(1))
     ]
     ir = make_ircode(code)
-    ir = Core.Compiler.compact!(ir)
+    ir = Compiler.compact!(ir)
     @test fully_eliminated(ir)
 end
 
@@ -666,13 +673,13 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
     invoke_ssa = SSAValue(invoke_idx)
 
     # effect-ful node
-    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+    let compact = Compiler.IncrementalCompact(Compiler.copy(ir))
         insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
-        state = Core.Compiler.iterate(compact)
+        state = Compiler.iterate(compact)
         while state !== nothing
-            state = Core.Compiler.iterate(compact, state[2])
+            state = Compiler.iterate(compact, state[2])
         end
-        ir = Core.Compiler.finish(compact)
+        ir = Compiler.finish(compact)
         new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
         new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(stmt)
@@ -683,15 +690,15 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
     end
 
     # effect-free node
-    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+    let compact = Compiler.IncrementalCompact(Compiler.copy(ir))
         insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, GlobalRef(Base, :add_int), invoke_ssa, invoke_ssa), Int), #=attach_after=#true)
-        state = Core.Compiler.iterate(compact)
+        state = Compiler.iterate(compact)
         while state !== nothing
-            state = Core.Compiler.iterate(compact, state[2])
+            state = Compiler.iterate(compact, state[2])
         end
-        ir = Core.Compiler.finish(compact)
+        ir = Compiler.finish(compact)
 
-        ir = Core.Compiler.finish(compact)
+        ir = Compiler.finish(compact)
         new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
         new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
