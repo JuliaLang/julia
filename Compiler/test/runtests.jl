@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 using Test, Compiler
-using InteractiveUtils
+using InteractiveUtils: @activate
 @activate Compiler
 
 for file in readlines(joinpath(@__DIR__, "testgroups"))
