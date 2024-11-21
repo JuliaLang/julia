@@ -913,15 +913,20 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             jl_profile_lock_acquired(lock);
             return;
         }
-        if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking
+            int8_t gc_state;
+            if (safepoint)
+                gc_state = jl_gc_safe_enter(self->ptls);
             uv_mutex_lock(&tls_lock);
             if (jl_atomic_load_relaxed(&lock->owner))
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
+            if (safepoint)
+                jl_gc_safe_leave(self->ptls, gc_state);
+        }
+        else if (safepoint) {
+            jl_gc_safepoint_(self->ptls);
         }
         jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);
