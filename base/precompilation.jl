@@ -364,6 +364,15 @@ end
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
+# name or parent → ext
+function full_name(ext_to_parent::Dict{PkgId, PkgId}, pkg::PkgId)
+    if haskey(ext_to_parent, pkg)
+        return string(ext_to_parent[pkg].name, " → ", pkg.name)
+    else
+        return pkg.name
+    end
+end
+
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -426,7 +435,7 @@ function _precompilepkgs(pkgs::Vector{String},
     ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
 
     function describe_pkg(pkg::PkgId, is_project_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
-        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
+        name = full_name(ext_to_parent, pkg)
         name = is_project_dep ? name : color_string(name, :light_black)
         if nconfigs > 1 && !isempty(flags)
             config_str = join(flags, " ")
@@ -566,34 +575,44 @@ function _precompilepkgs(pkgs::Vector{String},
     @debug "precompile: signalling initialized"
 
     # find and guard against circular deps
-    circular_deps = Base.PkgId[]
-    # Three states
-    # !haskey -> never visited
-    # true -> cannot be compiled due to a cycle (or not yet determined)
-    # false -> not depending on a cycle
-    could_be_cycle = Dict{Base.PkgId, Bool}()
+    cycles = Vector{Base.PkgId}[]
+    # set of packages that depend on a cycle (either because they are
+    # a part of a cycle themselves or because they transitively depend
+    # on a package in some cycle)
+    circular_deps = Set{Base.PkgId}()
+    # temporary stack for the SCC-like algorithm below
+    stack = Base.PkgId[]
     function scan_pkg!(pkg, dmap)
-        did_visit_dep = true
-        inpath = get!(could_be_cycle, pkg) do
-            did_visit_dep = false
-            return true
-        end
-        if did_visit_dep ? inpath : scan_deps!(pkg, dmap)
-            # Found a cycle. Delete this and all parents
-            return true
-        end
-        return false
+        (pkg in circular_deps) && return true
+        return scan_deps!(pkg, dmap)
     end
     function scan_deps!(pkg, dmap)
+        push!(stack, pkg)
+        cycle = nothing
         for dep in dmap[pkg]
-            scan_pkg!(dep, dmap) && return true
+            if dep in stack
+                # Created fresh cycle
+                cycle′ = stack[findlast(==(dep), stack):end]
+                if cycle === nothing || length(cycle′) < length(cycle)
+                    cycle = cycle′ # try to report smallest cycle possible
+                end
+            elseif scan_pkg!(dep, dmap)
+                # Reaches an existing cycle
+                push!(circular_deps, pkg)
+                pop!(stack)
+                return true
+            end
         end
-        could_be_cycle[pkg] = false
+        pop!(stack)
+        if cycle !== nothing
+            push!(cycles, cycle)
+            push!(circular_deps, pkg)
+            return true
+        end
         return false
     end
     for pkg in keys(direct_deps)
         if scan_pkg!(pkg, direct_deps)
-            push!(circular_deps, pkg)
             for pkg_config in keys(was_processed)
                 # notify all to allow skipping
                 pkg_config[1] == pkg && notify(was_processed[pkg_config])
@@ -601,12 +620,14 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        deps_list = ""
-        for pkg in circular_deps
-            name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
-            deps_list *= "  $name\n"
-        end
-        @warn """Circular dependency detected. Precompilation will be skipped for:\n$deps_list"""
+        deps_list = join((full_name(ext_to_parent, pkg) for pkg in circular_deps), "\n  ")
+        cycles_names = join((join((full_name(ext_to_parent, pkg) for pkg in cycle), " → ") * " ↩" for cycle in cycles), "\n  ")
+        @warn """
+        Circular dependency detected. Precompilation will be skipped for:
+          $deps_list
+        Cycles:
+          $cycles_names
+        """
     end
     @debug "precompile: circular dep check done"
 
@@ -1007,7 +1028,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         else
                             join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
                         end
-                        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
+                        name = full_name(ext_to_parent, pkg)
                         print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
                     end
                 end
