@@ -5013,13 +5013,15 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
 # to terminate the call.
 @newinterp RecurseInterpreter
-function Compiler.const_prop_rettype_heuristic(interp::RecurseInterpreter, result::Compiler.MethodCallResult,
-                                            si::Compiler.StmtInfo, sv::Compiler.AbsIntState, force::Bool)
+function Compiler.const_prop_rettype_heuristic(
+    interp::RecurseInterpreter, result::Compiler.MethodCallResult,
+    si::Compiler.StmtInfo, sv::Compiler.AbsIntState, force::Bool)
     if result.rt isa Compiler.LimitedAccuracy
         return force # allow forced constprop to recurse into unresolved cycles
     end
-    return @invoke Compiler.const_prop_rettype_heuristic(interp::Compiler.AbstractInterpreter, result::Compiler.MethodCallResult,
-                                                    si::Compiler.StmtInfo, sv::Compiler.AbsIntState, force::Bool)
+    return @invoke Compiler.const_prop_rettype_heuristic(
+        interp::Compiler.AbstractInterpreter, result::Compiler.MethodCallResult,
+        si::Compiler.StmtInfo, sv::Compiler.AbsIntState, force::Bool)
 end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
 Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
@@ -6091,9 +6093,7 @@ end === Union{}
 
 global swapglobal!_must_throw
 @newinterp SwapGlobalInterp
-let CC = Base.Compiler
-    CC.InferenceParams(::SwapGlobalInterp) = CC.InferenceParams(; assume_bindings_static=true)
-end
+Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
