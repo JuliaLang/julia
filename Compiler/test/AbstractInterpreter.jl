@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_AbstractInterpreter
+
 using Test
 
 include("irutils.jl")
@@ -534,3 +536,5 @@ let interp = DebugInterp()
     end
     @test found
 end
+
+end # module test_AbstractInterpreter

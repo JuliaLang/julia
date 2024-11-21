@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_compact
+
 using Test
 
 include("irutils.jl")
@@ -55,3 +57,5 @@ end
     verify_ir(new_ir)
     @test length(new_ir.cfg.blocks) == 1
 end
+
+end # module test_compact

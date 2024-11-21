@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_invalidation
+
 # setup
 # -----
 
@@ -283,3 +285,5 @@ begin take!(GLOBAL_BUFFER)
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
+
+end # module test_invalidation

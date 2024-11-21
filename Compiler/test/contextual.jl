@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_contextual
+
 # N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
 using Test
 include("setup_Compiler.jl")
@@ -124,3 +126,5 @@ f() = 2
 foo(i) = i+bar(Val(1))
 
 @test @inferred(overdub(Ctx(), foo, 1)) == 43
+
+end # module test_contextual

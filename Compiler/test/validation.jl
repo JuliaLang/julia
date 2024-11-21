@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_validation
+
 using Test, Core.IR
 
 include("setup_Compiler.jl")
@@ -139,3 +141,5 @@ end
     @test count(e.kind === Compiler.SLOTNAMES_NARGS_MISMATCH for e in errors) == 1
     @test count(e.kind === Compiler.SIGNATURE_NARGS_MISMATCH for e in errors) == 1
 end
+
+end # module test_validation

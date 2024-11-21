@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_effects
+
 using Test
 include("irutils.jl")
 
@@ -1384,3 +1386,5 @@ end |> Compiler.is_nothrow
 @test Base.infer_effects() do
     @ccall unsafecall()::Cvoid
 end == Compiler.EFFECTS_UNKNOWN
+
+end # module test_effects
