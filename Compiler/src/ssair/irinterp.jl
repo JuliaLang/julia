@@ -38,7 +38,7 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     mi_cache = WorldView(code_cache(interp), world)
     code = get(mi_cache, mi, nothing)
     code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
-    argtypes = collect_argtypes(interp, stmt.args[2:end], nothing, irsv)
+    argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     return concrete_eval_invoke(interp, code, argtypes, irsv)
 end
@@ -46,11 +46,11 @@ end
 abstract_eval_ssavalue(s::SSAValue, sv::IRInterpretationState) = abstract_eval_ssavalue(s, sv.ir)
 
 function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int, irsv::IRInterpretationState)
-    return abstract_eval_phi(interp, phi, nothing, irsv)
+    return abstract_eval_phi(interp, phi, StatementState(nothing, false), irsv)
 end
 
-function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
-    si = StmtInfo(true) # TODO better job here?
+function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, irsv::IRInterpretationState)
+    si = StmtInfo(true, sstate.saw_latestworld) # TODO better job here?
     call = abstract_call(interp, arginfo, si, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
@@ -147,7 +147,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
             head === :static_parameter || head === :isdefined || head === :boundscheck)
             @assert isempty(irsv.tasks) # TODO: this whole function needs to be converted to a stackless design to be a valid AbsIntState, but this should work here for now
-            result = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
+            result = abstract_eval_statement_expr(interp, stmt, StatementState(nothing, false), irsv)
             reverse!(irsv.tasks)
             while true
                 if length(irsv.callstack) > irsv.frameid
@@ -302,7 +302,7 @@ populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
 function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irsv::IRInterpretationState)
     isexpr(stmt, :call) || return false
     @inbounds for i = 2:length(stmt.args)
-        argtype = abstract_eval_value(interp, stmt.args[i], nothing, irsv)
+        argtype = abstract_eval_value(interp, stmt.args[i], StatementState(nothing, false), irsv)
         is_const_argtype(argtype) || return false
     end
     return true

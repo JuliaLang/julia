@@ -467,10 +467,18 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 macro eval(mod, ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 
 # use `@eval` here to directly form `:new` expressions avoid implicit `convert`s

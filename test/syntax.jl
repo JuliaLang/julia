@@ -553,7 +553,14 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-2].args[3]
+let code = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code
+    local src
+    for i = length(code):-1:1
+        if Meta.isexpr(code[i], :method)
+            src = code[i].args[3]
+            break
+        end
+    end
     @test Core.Compiler.is_declared_inline(src)
 end
 
@@ -578,6 +585,7 @@ let thismodule = @__MODULE__,
     @test isa(ex, Expr)
     @test !isdefined(M16096, :foo16096)
     local_foo16096 = Core.eval(@__MODULE__, ex)
+    Core.@latestworld
     @test local_foo16096(2.0) == 1
     @test !@isdefined foo16096
     @test !@isdefined it
@@ -3102,6 +3110,7 @@ end
     ex = Expr(:block)
     ex.args = fill!(Vector{Any}(undef, 700000), 1)
     f = eval(Expr(:function, :(), ex))
+    @Core.latestworld
     @test f() == 1
     ex = Expr(:vcat)
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
@@ -4010,3 +4019,17 @@ end
 @test f45494() === (0,)
 
 @test_throws "\"esc(...)\" used outside of macro expansion" eval(esc(:(const x=1)))
+
+# Inner function declaration world age
+function create_inner_f_no_methods()
+    function inner_f end
+end
+@test isa(create_inner_f_no_methods(), Function)
+@test length(methods(create_inner_f_no_methods())) == 0
+
+function create_inner_f_one_method()
+    inner_f() = 1
+end
+@test isa(create_inner_f_no_methods(), Function)
+@test length(methods(create_inner_f_no_methods())) == 0
+@test Base.invoke_in_world(first(methods(create_inner_f_one_method)).primary_world, create_inner_f_one_method()) == 1
