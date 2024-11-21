@@ -508,6 +508,7 @@ include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
+include("util.jl")
 
 include("initdefs.jl")
 Filesystem.__postinit__()
@@ -524,7 +525,6 @@ include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
 
@@ -605,7 +605,7 @@ function __init__()
     empty!(explicit_loaded_modules)
     empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     for (mod, key) in module_keys
-        loaded_precompiles[key => module_build_id(mod)] = mod
+        push!(get!(Vector{Module}, loaded_precompiles, key), mod)
     end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])

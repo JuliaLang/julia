@@ -152,6 +152,7 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+const UnitUpperOrUnitLowerTriangular{T,S} = Union{UnitUpperTriangular{T,S}, UnitLowerTriangular{T,S}}
 
 uppertriangular(M) = UpperTriangular(M)
 lowertriangular(M) = LowerTriangular(M)
@@ -219,6 +220,16 @@ function Matrix{T}(A::UnitUpperTriangular) where T
         B[i,i] = oneunit(T)
     end
     B
+end
+
+function full(A::Union{UpperTriangular,LowerTriangular})
+    return _triangularize(A)(parent(A))
+end
+function full(A::UnitUpperOrUnitLowerTriangular)
+    isupper = A isa UnitUpperTriangular
+    Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
+    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    return Ap
 end
 
 function full!(A::LowerTriangular)
@@ -553,6 +564,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     return A
 end
 
+_triangularize(::UpperOrUnitUpperTriangular) = triu
+_triangularize(::LowerOrUnitLowerTriangular) = tril
+
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 @inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
@@ -812,7 +826,8 @@ function +(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .+ B
     LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
 end
-+(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) + copyto!(similar(parent(B)), B)
++(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) + full(B)
++(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) + copyto!(similar(parent(B), size(B)), B)
 
 function -(A::UpperTriangular, B::UpperTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
@@ -846,7 +861,8 @@ function -(A::UnitLowerTriangular, B::UnitLowerTriangular)
     (parent(A) isa StridedMatrix || parent(B) isa StridedMatrix) && return A .- B
     LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 end
--(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
+-(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) = full(A) - full(B)
+-(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A), size(A)), A) - copyto!(similar(parent(B), size(B)), B)
 
 # use broadcasting if the parents are strided, where we loop only over the triangular part
 for op in (:+, :-)
@@ -903,9 +919,20 @@ _trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractTriangular) =
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
     generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-lmul!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _trimul!(B, A, B)
-rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
-
+function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _trimul!(B, uppertriangular(A), B)
+    else
+        _trimul!(B, lowertriangular(A), B)
+    end
+end
+function rmul!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _trimul!(A, A, uppertriangular(B))
+    else
+        _trimul!(A, A, lowertriangular(B))
+    end
+end
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
@@ -941,8 +968,20 @@ _ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
     generic_mattridiv!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-ldiv!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _ldiv!(B, A, B)
-rdiv!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _rdiv!(A, A, B)
+function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _ldiv!(B, uppertriangular(A), B)
+    else
+        _ldiv!(B, lowertriangular(A), B)
+    end
+end
+function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _rdiv!(A, A, uppertriangular(B))
+    else
+        _rdiv!(A, A, lowertriangular(B))
+    end
+end
 
 # preserve triangular structure in in-place multiplication/division
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
@@ -2052,6 +2091,11 @@ end
 # SIAM J. Sci. Comput., 34(4), (2012) C153–C169. doi: 10.1137/110852553
 # Algorithm 5.1
 Base.@propagate_inbounds function _sqrt_pow_diag_block_2x2!(A, A0, s)
+    if iszero(s)
+        A[1,1] -= 1
+        A[2,2] -= 1
+        return A
+    end
     _sqrt_real_2x2!(A, A0)
     if isone(s)
         A[1,1] -= 1

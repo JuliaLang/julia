@@ -1107,4 +1107,22 @@ end
     end
 end
 
+@testset "issue #56085" begin
+    struct Thing
+        data::Float64
+    end
+
+    Base.zero(::Type{Thing}) = Thing(0.)
+    Base.zero(::Thing)       = Thing(0.)
+    Base.one(::Type{Thing})  = Thing(1.)
+    Base.one(::Thing)        = Thing(1.)
+    Base.:+(t1::Thing, t::Thing...) = +(getfield.((t1, t...), :data)...)
+    Base.:*(t1::Thing, t::Thing...) = *(getfield.((t1, t...), :data)...)
+
+    M = Float64[1 2; 3 4]
+    A = Thing.(M)
+
+    @test A * A ≈ M * M
+end
+
 end # module TestMatmul

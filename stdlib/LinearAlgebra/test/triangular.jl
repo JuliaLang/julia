@@ -25,6 +25,12 @@ debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
@@ -1076,6 +1082,62 @@ end
             end
         end
     end
+end
+
+@testset "addition/subtraction of mixed triangular" begin
+    for A in (Hermitian(rand(4, 4)), Diagonal(rand(5)))
+        for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            B = T(A)
+            M = Matrix(B)
+            R = B - B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M - M'
+            R = B + B'
+            if A isa Diagonal
+                @test R isa Diagonal
+            end
+            @test R == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
+    end
+    @testset "unfilled parent" begin
+        @testset for T in (UpperTriangular, LowerTriangular,
+                UnitUpperTriangular, UnitLowerTriangular)
+            F = Matrix{BigFloat}(undef, 2, 2)
+            B = T(F)
+            isupper = B isa Union{UpperTriangular, UnitUpperTriangular}
+            B[1+!isupper, 1+isupper] = 2
+            if !(B isa Union{UnitUpperTriangular, UnitLowerTriangular})
+                B[1,1] = B[2,2] = 3
+            end
+            M = Matrix(B)
+            # These are broken, as triu/tril don't work with
+            # unfilled adjoint matrices
+            # See https://github.com/JuliaLang/julia/pull/55312
+            @test_broken B - B' == M - M'
+            @test_broken B + B' == M + M'
+            @test B - copy(B') == M - M'
+            @test B + copy(B') == M + M'
+            C = MyTriangular(B)
+            @test C - C' == M - M'
+            @test C + C' == M + M'
+        end
+    end
+end
+
+@testset "log_quasitriu with internal scaling s=0 (issue #54833)" begin
+    M = [0.9949357359852791 -0.015567763143324862 -0.09091193493947397 -0.03994428739762443 0.07338356301650806;
+    0.011813655598647289 0.9968988574699793 -0.06204555000202496 0.04694097614450692 0.09028834462782365;
+    0.092737943594701 0.059546719185135925 0.9935850721633324 0.025348893985651405 -0.018530261590167685;
+    0.0369187299165628 -0.04903571106913449 -0.025962938675946543 0.9977767446862031 0.12901494726320517;
+    0.0 0.0 0.0 0.0 1.0]
+
+    @test exp(log(M)) ≈ M
 end
 
 end # module TestTriangular

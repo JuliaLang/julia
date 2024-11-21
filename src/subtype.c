@@ -2408,28 +2408,56 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
         return y;
     if (y == (jl_value_t*)jl_any_type && !jl_is_typevar(x))
         return x;
-    // band-aid for #46736
-    if (obviously_egal(x, y))
+    // band-aid for #46736 #56040
+    if (obviously_in_union(x, y))
+        return y;
+    if (obviously_in_union(y, x))
         return x;
 
+    jl_varbinding_t *vars = NULL;
+    jl_varbinding_t *bbprev = NULL;
+    jl_varbinding_t *xb = jl_is_typevar(x) ? lookup(e, (jl_tvar_t *)x) : NULL;
+    jl_varbinding_t *yb = jl_is_typevar(y) ? lookup(e, (jl_tvar_t *)y) : NULL;
+    int simple_x = !jl_has_free_typevars(!jl_is_typevar(x) ? x : xb ? xb->ub : ((jl_tvar_t *)x)->ub);
+    int simple_y = !jl_has_free_typevars(!jl_is_typevar(y) ? y : yb ? yb->ub : ((jl_tvar_t *)y)->ub);
+    if (simple_x && simple_y && !(xb && yb)) {
+        vars = e->vars;
+        e->vars = xb ? xb : yb;
+        if (e->vars != NULL) {
+            bbprev = e->vars->prev;
+            e->vars->prev = NULL;
+        }
+    }
     jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
     int savedepth = e->invdepth;
     e->invdepth = depth;
     jl_value_t *res = intersect_all(x, y, e);
     e->invdepth = savedepth;
     pop_unionstate(&e->Runions, &oldRunions);
+    if (bbprev) e->vars->prev = bbprev;
+    if (vars) e->vars = vars;
     return res;
 }
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    if (param == 2 || (!jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u))) {
+    // band-aid for #56040
+    if (!jl_is_uniontype(x) && obviously_in_union((jl_value_t *)u, x))
+        return x;
+    int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
+    if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;
         JL_GC_PUSH2(&a, &b);
+        jl_varbinding_t *vars = NULL;
+        if (no_free) {
+            vars = e->vars;
+            e->vars = NULL;
+        }
         jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
         a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
         b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
         pop_unionstate(&e->Runions, &oldRunions);
+        if (vars) e->vars = vars;
         jl_value_t *i = simple_join(a,b);
         JL_GC_POP();
         return i;
@@ -4127,9 +4155,13 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
     is[0] = intersect(x, y, e, 0); // root
-    if (is[0] != jl_bottom_type)
+    if (is[0] == jl_bottom_type) {
+        restore_env(e, &se, 1);
+    }
+    else if (!e->emptiness_only && has_next_union_state(e, 1)) {
         niter = merge_env(e, &me, &se, niter);
-    restore_env(e, &se, 1);
+        restore_env(e, &se, 1);
+    }
     while (next_union_state(e, 1)) {
         if (e->emptiness_only && is[0] != jl_bottom_type)
             break;
@@ -4137,9 +4169,16 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         e->Runions.more = 0;
 
         is[1] = intersect(x, y, e, 0);
-        if (is[1] != jl_bottom_type)
+        if (is[1] == jl_bottom_type) {
+            restore_env(e, &se, 1);
+        }
+        else if (niter > 0 || (!e->emptiness_only && has_next_union_state(e, 1))) {
             niter = merge_env(e, &me, &se, niter);
-        restore_env(e, &se, 1);
+            restore_env(e, &se, 1);
+        }
+        else {
+            assert(is[0] == jl_bottom_type);
+        }
         if (is[0] == jl_bottom_type)
             is[0] = is[1];
         else if (is[1] != jl_bottom_type) {
@@ -4602,12 +4641,12 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_value_t *n = jl_unwrap_vararg_num(type);
         if (widen2ub == 0)
             widen2ub = !(n && jl_is_long(n)) || jl_unbox_long(n) > 1;
-        jl_value_t *newt;
-        JL_GC_PUSH2(&newt, &n);
-        newt = insert_nondiagonal(t, troot, widen2ub);
-        if (t != newt)
+        jl_value_t *newt = insert_nondiagonal(t, troot, widen2ub);
+        if (t != newt) {
+            JL_GC_PUSH1(&newt);
             type = (jl_value_t *)jl_wrap_vararg(newt, n, 0, 0);
-        JL_GC_POP();
+            JL_GC_POP();
+        }
     }
     else if (jl_is_datatype(type)) {
         if (jl_is_tuple_type(type)) {
@@ -4644,7 +4683,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
     jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
-    jl_value_t *nt;
+    jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
         nt = widen_diagonal(t, (jl_unionall_t *)u->body, &vb);

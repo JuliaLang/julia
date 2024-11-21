@@ -1224,6 +1224,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1234,6 +1235,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1270,6 +1272,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
+                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
             end
         end,
 

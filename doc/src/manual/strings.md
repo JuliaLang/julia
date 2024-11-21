@@ -1230,7 +1230,7 @@ to keep the string annotations.
 
 ```jldoctest
 julia> str = Base.AnnotatedString("hello there",
-               [(1:5, :word => :greeting), (7:11, :label => 1)])
+               [(1:5, :word, :greeting), (7:11, :label, 1)])
 "hello there"
 
 julia> length(str)
@@ -1242,7 +1242,7 @@ julia> lpad(str, 14)
 julia> typeof(lpad(str, 7))
 Base.AnnotatedString{String}
 
-julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face => :magenta)])
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face, :magenta)])
 " julia"
 
 julia> Base.annotatedstring(str, str2)

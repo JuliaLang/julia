@@ -673,6 +673,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
     trampoline->addFnAttr("julia.mv.alias");
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
     alias->eraseFromParent();
 
     uint32_t id;
@@ -754,7 +755,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
     if (F->isDeclaration()) {
         auto extern_decl = extern_relocs.find(F);
         assert(extern_decl != extern_relocs.end() && "Missing extern relocation slot!");
-        return {(uint32_t)-1, extern_decl->second};
+        return {UINT32_MAX, extern_decl->second};
     }
     else {
         auto id = get_func_id(F);

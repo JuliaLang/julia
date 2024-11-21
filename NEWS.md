@@ -37,6 +37,10 @@ Language changes
   omit the default user depot ([#51448]).
 * Precompilation cache files are now relocatable and their validity is now verified through
   a content hash of their source files instead of their `mtime` ([#49866]).
+* Extensions may now depend on other extensions, if their triggers include all triggers of any
+  extension they wish to depend upon (+ at least one other trigger). Ext-to-ext dependencies
+  that don't meet this requirement are now blocked from using `Base.get_extension` during pre-
+  compilation, to prevent extension cycles [#55557].
 
 Compiler/Runtime improvements
 -----------------------------
@@ -138,6 +142,17 @@ Standard library changes
   potential for silently incorrect results for `Stateful` iterators is addressed by deleting the
   `length(::Stateful)` method. The last type parameter of `Stateful` is gone, too. Issue: ([#47790]),
   PR: ([#51747]).
+
+#### Package Manager
+
+* It is now possible to specify "sources" for packages in a `[sources]` section in Project.toml.
+  This can be used to add non-registered normal or test dependencies.
+* Pkg now obeys `[compat]` bounds for `julia` and raises an error if the version of the running Julia binary is incompatible with the bounds in `Project.toml`.
+  Pkg has always obeyed this compat when working with Registry packages. This change affects mostly local packages
+* `pkg> add` and `Pkg.add` will now add compat entries for new direct dependencies if the active environment is a
+  package (has a `name` and `uuid` entry).
+* Dependencies can now be directly added as weak deps or extras via the `pkg> add --weak/extra Foo` or
+  `Pkg.add("Foo", target=:weakdeps/:extras)` forms.
 
 #### StyledStrings
 

@@ -28,7 +28,7 @@ mutable struct Regex <: AbstractPattern
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = String(pattern)
+        pattern = String(pattern)::String
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0

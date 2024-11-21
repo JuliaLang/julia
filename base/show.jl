@@ -72,13 +72,13 @@ ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
 textwidth(::ANSIDelimiter) = 0
 
 # An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
-struct ANSIIterator
-    captures::RegexMatchIterator
+struct ANSIIterator{S}
+    captures::RegexMatchIterator{S}
 end
 ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
 
-IteratorSize(::Type{ANSIIterator}) = SizeUnknown()
-eltype(::Type{ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
+IteratorSize(::Type{<:ANSIIterator}) = SizeUnknown()
+eltype(::Type{<:ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
 function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
     m_st === nothing && return nothing
     m, (j, new_m_st) = m_st
@@ -324,8 +324,11 @@ end
 
 convert(::Type{IOContext}, io::IOContext) = io
 convert(::Type{IOContext}, io::IO) = IOContext(io, ioproperties(io))::IOContext
+convert(::Type{IOContext{IO_t}}, io::IOContext{IO_t}) where {IO_t} = io
+convert(::Type{IOContext{IO_t}}, io::IO) where {IO_t} = IOContext{IO_t}(io, ioproperties(io))::IOContext{IO_t}
 
 IOContext(io::IO) = convert(IOContext, io)
+IOContext{IO_t}(io::IO) where {IO_t} = convert(IOContext{IO_t}, io)
 
 function IOContext(io::IO, KV::Pair)
     d = ioproperties(io)
@@ -673,7 +676,7 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
         has_typevar(v.lb, p) && return false
         has_typevar(v.ub, p) && return false
     end
-    for i = 1:length(env)
+    for i = eachindex(env)
         i == skip && continue
         has_typevar(env[i], p) && return false
     end
@@ -1180,7 +1183,7 @@ end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
     first = true
-    for i in 1:length(syms)
+    for i in eachindex(syms)
         if !first
             print(io, ", ")
         end
@@ -2369,7 +2372,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = 1:length(ex.args)
+            for i = eachindex(ex.args)
                 if i > 1
                     # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
                     if !(i == 2 && ex.args[1] isa LineNumberNode)
@@ -2608,7 +2611,7 @@ end
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
+        sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
@@ -2887,7 +2890,7 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     print(io, "SimpleVector")
     if n > 0
-        for i = 1:length(x)
+        for i in eachindex(x)
             println(io)
             print(io, indent, "  ", i, ": ")
             if isassigned(x,i)
@@ -2997,7 +3000,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)
-        for idx in 1:length(fields)
+        for idx in eachindex(fields)
             println(io)
             print(io, indent, "  ", fields[idx])
             if isassigned(fieldtypes, idx)
