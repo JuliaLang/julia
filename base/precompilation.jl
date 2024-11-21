@@ -425,9 +425,9 @@ function _precompilepkgs(pkgs::Vector{String},
     # inverse map of `parent_to_ext` above (ext → parent)
     ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
 
-    function describe_pkg(pkg::PkgId, is_direct_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
+    function describe_pkg(pkg::PkgId, is_project_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
         name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
-        name = is_direct_dep ? name : color_string(name, :light_black)
+        name = is_project_dep ? name : color_string(name, :light_black)
         if nconfigs > 1 && !isempty(flags)
             config_str = join(flags, " ")
             name *= color_string(" `$config_str`", :light_black)
