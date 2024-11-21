@@ -1947,7 +1947,7 @@ end
     return ans
 end
 @nospecs apply_type_tfunc(𝕃::AbstractLattice, headtypetype, args...) =
-    apply_type_tfunc(𝕃, pushfirst!(collect(Any, args), headtypetype))
+    apply_type_tfunc(𝕃, Any[i == 0 ? headtypetype : args[i] for i in 0:length(args)])
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
