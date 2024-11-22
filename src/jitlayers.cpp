@@ -1490,6 +1490,7 @@ namespace {
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
                     //Run the optimization
+                    //errs() << M;
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
                 }

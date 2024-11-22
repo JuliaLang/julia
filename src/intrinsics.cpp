@@ -475,12 +475,15 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     unsigned alignment = julia_alignment(jt);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     if (!x.inline_roots.empty()) {
+        assert(jl_is_datatype(x.typ));
         assert(x.typ == jt);
-        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
-        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
-        p = combined;
-        ai = combined_ai;
+        if (((jl_datatype_t*)x.typ)->layout->first_ptr >= 0) {
+            AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+            auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+            recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+            p = combined;
+            ai = combined_ai;
+        }
     }
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
@@ -500,11 +503,15 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
 
     if (!x.inline_roots.empty()) {
-        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
-        return;
+        assert(jl_is_datatype(x.typ));
+        assert(jl_is_concrete_type(x.typ));
+        if (((jl_datatype_t*)x.typ)->layout->first_ptr >= 0) {
+            recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+            return;
+        }
     }
 
-    if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
+    if (x.inline_roots.empty() && !x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
@@ -514,6 +521,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     }
 
     Value *src = data_pointer(ctx, x);
+    assert(src);
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
 }
