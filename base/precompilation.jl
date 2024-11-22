@@ -373,6 +373,38 @@ function full_name(ext_to_parent::Dict{PkgId, String}, pkg::PkgId)
     end
 end
 
+function excluded_circular_deps_explanation(circular_deps, cycles)
+    outer_deps = copy(circular_deps)
+    cycles_names = ""
+    for cycle in cycles
+        filter!(!in(cycle), outer_deps)
+        cycle_str = ""
+        for (i, pkg) in enumerate(cycle)
+            j = max(0, i - 1)
+            if i == 1
+                line = " ┌ "
+            elseif i < length(cycle)
+                line = " │ " * " " ^j
+            else
+                line = " └" * "─" ^j * " "
+            end
+            line = color_string(line, :light_black) * full_name(ext_to_parent, pkg) * "\n"
+            cycle_str *= line
+        end
+        cycles_names *= cycle_str
+    end
+    plural1 = length(cycles) > 1 ? "these cycles" : "this cycle"
+    plural2 = length(cycles) > 1 ? "cycles" : "cycle"
+    msg = """Circular dependency detected.
+    Precompilation will be skipped for dependencies in $plural1:
+    $cycles_names"""
+    if !isempty(outer_deps)
+        msg *= "Precompilation will also be skipped for the following, which depend on the above $plural2:\n"
+        msg *= join(("  " * full_name(ext_to_parent, pkg) for pkg in outer_deps), "\n")
+    end
+    return msg
+end
+
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -629,36 +661,7 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        outer_deps = copy(circular_deps)
-        cycles_names = ""
-        for cycle in cycles
-            filter!(!in(cycle), outer_deps)
-            cycle_str = ""
-            for (i, pkg) in enumerate(cycle)
-                j = max(0, i - 1)
-                if i == 1
-                    line = " ┌ "
-                elseif i < length(cycle)
-                    line = " │ " * " " ^j
-                else
-                    line = " └" * "─" ^j * " "
-                end
-                line = color_string(line, :light_black) * full_name(ext_to_parent, pkg) * "\n"
-                cycle_str *= line
-            end
-            cycles_names *= cycle_str
-        end
-        plural1 = length(cycles) > 1 ? "these cycles" : "this cycle"
-        plural2 = length(outer_deps) > 1 ? "have" : "has"
-        plural3 = length(cycles) > 1 ? "cycles" : "cycle"
-        msg = """Circular dependency detected.
-        Precompilation will be skipped for dependencies in $plural1:
-        $cycles_names"""
-        if !isempty(outer_deps)
-            msg *= "Precompilation will also be skipped for the following, which depend on the above $plural3:\n"
-            msg *= join(("  " * full_name(exts, pkg) for pkg in outer_deps), "\n")
-        end
-        @warn msg
+        @warn excluded_circular_deps_explanation(circular_deps, cycles)
     end
     @debug "precompile: circular dep check done"
 
