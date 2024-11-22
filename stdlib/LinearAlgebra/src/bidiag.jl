@@ -248,6 +248,18 @@ function svd(M::Bidiagonal; kw...)
     svd!(copy(M), kw...)
 end
 
+###################
+#     opnorm      #
+###################
+
+function _opnorm1Inf(B::Bidiagonal, p)
+    size(B, 1) == 1 && return norm(first(B.dv))
+    case = xor(p == 1, istriu(B))
+    normd1, normdend = norm(first(B.dv)), norm(last(B.dv))
+    normd1, normdend = case ? (zero(normd1), normdend) : (normd1, zero(normdend))
+    return max(mapreduce(t -> sum(norm, t), max, zip(view(B.dv, (1:length(B.ev)) .+ !case), B.ev)), normdend)
+end
+
 ####################
 # Generic routines #
 ####################

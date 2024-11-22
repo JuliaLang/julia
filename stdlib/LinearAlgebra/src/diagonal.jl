@@ -1038,6 +1038,18 @@ end
 *(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
 *(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
 
+_opnorm1(A::Diagonal) = maximum(norm(x) for x in A.diag)
+_opnormInf(A::Diagonal) = maximum(norm(x) for x in A.diag)
+_opnorm12Inf(A::Diagonal, p) = maximum(opnorm(x, p) for x in A.diag)
+
+function opnorm(A::Diagonal, p::Real=2)
+    if p == 1 || p == Inf || p == 2
+        return _opnorm12Inf(A, p)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+    end
+end
+
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
