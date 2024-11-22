@@ -1032,6 +1032,21 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_gc_wb(bpart, val);
 }
 
+void jl_invalidate_binding_refs(jl_globalref_t *ref, size_t new_world)
+{
+    static jl_value_t *invalidate_code_for_globalref = NULL;
+    if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
+        invalidate_code_for_globalref = jl_get_global(jl_base_module, jl_symbol("invalidate_code_for_globalref!"));
+    if (!invalidate_code_for_globalref)
+        jl_error("Binding invalidation is not permitted during bootstrap.");
+    if (jl_generating_output())
+        jl_error("Binding invalidation is not permitted during image generation.");
+    jl_value_t *boxed_world = jl_box_ulong(new_world);
+    JL_GC_PUSH1(&boxed_world);
+    jl_call2((jl_function_t*)invalidate_code_for_globalref, (jl_value_t*)ref, boxed_world);
+    JL_GC_POP();
+}
+
 extern jl_mutex_t world_counter_lock;
 JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
 {
@@ -1046,9 +1061,11 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
 
     JL_LOCK(&world_counter_lock);
     jl_task_t *ct = jl_current_task;
+    size_t last_world = ct->world_age;
     size_t new_max_world = jl_atomic_load_acquire(&jl_world_counter);
-    // TODO: Trigger invalidation here
-    (void)ct;
+    ct->world_age = jl_typeinf_world;
+    jl_invalidate_binding_refs(gr, new_max_world);
+    ct->world_age = last_world;
     jl_atomic_store_release(&bpart->max_world, new_max_world);
     jl_atomic_store_release(&jl_world_counter, new_max_world + 1);
     JL_UNLOCK(&world_counter_lock);
@@ -1332,6 +1349,11 @@ JL_DLLEXPORT void jl_add_to_module_init_list(jl_value_t *mod)
     if (jl_module_init_order == NULL)
         jl_module_init_order = jl_alloc_vec_any(0);
     jl_array_ptr_1d_push(jl_module_init_order, mod);
+}
+
+JL_DLLEXPORT jl_svec_t *jl_module_get_bindings(jl_module_t *m)
+{
+    return jl_atomic_load_relaxed(&m->bindings);
 }
 
 JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)
