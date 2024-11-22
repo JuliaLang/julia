@@ -89,7 +89,7 @@
         {
             "name": "LinearAlgebra.jl",
             "SPDXID": "SPDXRef-JuliaLinearAlgebra",
-            "downloadLocation": "git+https://github.com/Julia/LinearAlgera.jl.git",
+            "downloadLocation": "git+https://github.com/JuliaLang/LinearAlgebra.jl.git",
             "filesAnalyzed": false,
             "homepage": "https://juliastats.org",
             "sourceInfo": "The git hash of the version in use can be found in the file stdlib/LinearAlgebra.version",
