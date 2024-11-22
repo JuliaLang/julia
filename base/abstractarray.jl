@@ -1012,14 +1012,19 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         end
         y = iterate(src, y[2])
     end
-    i = Int(dstart)
-    while i <= dmax && y !== nothing
-        val, st = y
-        @inbounds dest[i] = val
-        y = iterate(src, st)
-        i += 1
+    if y === nothing
+        throw(ArgumentError(LazyString(
+            "source has fewer elements than required, ",
+            "expected at least ",sstart," got ", sstart-1)))
     end
-    i <= dmax && throw(BoundsError(dest, i))
+    val, st = y
+    i = Int(dstart)
+    @inbounds dest[i] = val
+    for val in Iterators.take(Iterators.rest(src, st), n-1)
+        i += 1
+        @inbounds dest[i] = val
+    end
+    i < dmax && throw(BoundsError(dest, i))
     return dest
 end
 
@@ -1584,7 +1589,7 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()

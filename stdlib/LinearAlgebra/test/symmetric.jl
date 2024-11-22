@@ -1167,4 +1167,15 @@ end
     @test a*H == H
 end
 
+@testset "trigonometric functions for Integer matrices" begin
+    A = diagm(0=>1:4, 1=>1:3, -1=>1:3)
+    for B in (Symmetric(A), Symmetric(complex.(A)))
+        SC = @inferred(sincos(B))
+        @test SC[1] ≈ sin(B)
+        @test SC[2] ≈ cos(B)
+        @test cos(A) ≈ real(exp(im*A))
+        @test sin(A) ≈ imag(exp(im*A))
+    end
+end
+
 end # module TestSymmetric

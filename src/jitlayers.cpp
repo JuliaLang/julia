@@ -278,6 +278,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         // But it must be consistent with the following invokenames lookup, which is protected by the engine_lock
         uint8_t specsigflags;
         void *fptr;
+        void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT; // not a safepoint (or deadlock) in this file due to 0 parameter
         jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
         //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
         if (invoke == jl_fptr_args_addr) {
@@ -697,13 +698,13 @@ static void recursive_compile_graph(
 // and adds the result to the jitlayers
 // (and the shadow module),
 // and generates code for it
-static jl_callptr_t _jl_compile_codeinst(
+static void _jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src)
 {
     recursive_compile_graph(codeinst, src);
     jl_compile_codeinst_now(codeinst);
-    return jl_atomic_load_acquire(&codeinst->invoke);
+    assert(jl_is_compiled_codeinst(codeinst));
 }
 
 
@@ -819,7 +820,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 int jl_compile_codeinst_impl(jl_code_instance_t *ci)
 {
     int newly_compiled = 0;
-    if (jl_atomic_load_relaxed(&ci->invoke) == NULL) {
+    if (!jl_is_compiled_codeinst(ci)) {
         ++SpecFPtrCount;
         uint64_t start = jl_typeinf_timing_begin();
         _jl_compile_codeinst(ci, NULL);
@@ -862,7 +863,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     if (src) {
         // TODO: first prepare recursive_compile_graph(unspec, src) before taking this lock to avoid recursion?
         JL_LOCK(&jitlock); // TODO: use a better lock
-        if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
+        if (!jl_is_compiled_codeinst(unspec)) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
             jl_debuginfo_t *debuginfo = src->debuginfo;

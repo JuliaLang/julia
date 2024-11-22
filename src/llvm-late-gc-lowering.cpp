@@ -1820,7 +1820,7 @@ JL_USED_FUNC static void dumpColorAssignments(const State &S, const ArrayRef<int
     }
 }
 
-SmallVector<int, 0> LateLowerGCFrame::ColorRoots(const State &S) {
+std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S) {
     SmallVector<int, 0> Colors;
     Colors.resize(S.MaxPtrNumber + 1, -1);
     PEOIterator Ordering(S.Neighbors);
@@ -1862,7 +1862,7 @@ SmallVector<int, 0> LateLowerGCFrame::ColorRoots(const State &S) {
         NewColor += PreAssignedColors;
         Colors[ActiveElement] = NewColor;
     }
-    return Colors;
+    return {Colors, PreAssignedColors};
 }
 
 // Size of T is assumed to be `sizeof(void*)`
@@ -2292,8 +2292,21 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
+void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
+                                         ArrayRef<int> Colors, Value *GCFrame,
+                                         Instruction *InsertBefore) {
+    // Get the slot address.
+    auto slotAddress = CallInst::Create(
+        getOrDeclare(jl_intrinsics::getGCFrameSlot),
+        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+    // Reset the slot to NULL.
+    Value *Val = ConstantPointerNull::get(T_prjlvalue);
+    new StoreInst(Val, slotAddress, InsertBefore);
+}
+
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
-                                          ArrayRef<int> Colors, Value *GCFrame)
+                                          ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame)
 {
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
@@ -2306,6 +2319,15 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         for(auto rit = BBS.Safepoints.rbegin();
               rit != BBS.Safepoints.rend(); ++rit ) {
             const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
+            // reset slots which are no longer alive
+            for (int Idx : *LastLive) {
+                if (Idx >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
+                    PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
+                      S.ReverseSafepointNumbering[*rit]);
+                }
+            }
+            // store values which are alive in this safepoint but
+            // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
@@ -2317,7 +2339,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
     }
 }
 
-void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S,
+void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S,
                                                 std::map<Value *, std::pair<int, int>>) {
     auto F = S.F;
     auto T_int32 = Type::getInt32Ty(F->getContext());
@@ -2439,7 +2461,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
         pushGcframe->setArgOperand(1, NRoots);
 
         // Insert GC frame stores
-        PlaceGCFrameStores(S, AllocaSlot - 2, Colors, gcframe);
+        PlaceGCFrameStores(S, AllocaSlot - 2, Colors, PreAssignedColors, gcframe);
         // Insert GCFrame pops
         for (auto &BB : *F) {
             if (isa<ReturnInst>(BB.getTerminator())) {
@@ -2464,9 +2486,9 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     State S = LocalScan(F);
     ComputeLiveness(S);
-    SmallVector<int, 0> Colors = ColorRoots(S);
+    auto Colors = ColorRoots(S);
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-    PlaceRootsAndUpdateCalls(Colors, S, CallFrames);
+    PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
     CleanupIR(F, &S, CFGModified);
     return true;
 }

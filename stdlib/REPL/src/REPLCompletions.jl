@@ -5,7 +5,10 @@ module REPLCompletions
 export completions, shell_completions, bslash_completions, completion_text
 
 using Core: Const
-const CC = Core.Compiler
+# We want to insulate the REPLCompletion module from any changes the user may
+# make to the compiler, since it runs by default and the system becomes unusable
+# if it breaks.
+const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
 using Base.Filesystem: _readdirx
@@ -627,7 +630,7 @@ end
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
 
 # aggressive global binding resolution within `repl_frame`
-function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
+function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if isdefined_globalref(g)
@@ -635,7 +638,7 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
         end
         return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
     end
-    return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
+    return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)
 end
 

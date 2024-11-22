@@ -188,7 +188,7 @@ end
 function full(A::UnitUpperOrUnitLowerTriangular)
     isupper = A isa UnitUpperTriangular
     Ap = _triangularize(A)(parent(A), isupper ? 1 : -1)
-    Ap[diagind(Ap, IndexStyle(Ap))] = @view A[diagind(A, IndexStyle(A))]
+    diagview(Ap) .= diagview(A)
     return Ap
 end
 
@@ -348,25 +348,29 @@ Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
     return _istril(A, k)
 end
+# additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
 @inline function _istril(A::LowerTriangular, k)
     P = parent(A)
     for j in max(firstindex(P,2), k + 2):lastindex(P,2)
-        all(iszero, @view(P[j:min(j - k - 1, end), j])) || return false
+        _iszero(@view P[max(j, begin):min(j - k - 1, end), j]) || return false
     end
     return true
 end
+
 Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
 end
+# additional indirection to dispatch to optimized method for banded parents (defined in special.jl)
 @inline function _istriu(A::UpperTriangular, k)
     P = parent(A)
     m = size(A, 1)
     for j in firstindex(P,2):min(m + k - 1, lastindex(P,2))
-        all(iszero, @view(P[max(begin, j - k + 1):j, j])) || return false
+        _iszero(@view P[max(begin, j - k + 1):min(j, end), j]) || return false
     end
     return true
 end
+
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
 istriu(A::Adjoint, k::Integer=0) = istril(A.parent, -k)
@@ -400,12 +404,12 @@ function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
         return UpperTriangular(A.data)
     elseif k == 0
         fill!(A.data, zero(T))
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return UpperTriangular(A.data)
     else
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return UpperTriangular(tril!(A.data,k))
@@ -413,7 +417,7 @@ function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
 end
 
 function triu!(A::UnitUpperTriangular, k::Integer=0)
-    for i in diagind(A.data)
+    for i in diagind(A.data, IndexStyle(A.data))
         A.data[i] = oneunit(eltype(A))
     end
     return triu!(UpperTriangular(A.data), k)
@@ -448,12 +452,12 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
         return LowerTriangular(A.data)
     elseif k == 0
         fill!(A.data, zero(T))
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return LowerTriangular(A.data)
     else
-        for i in diagind(A)
+        for i in diagind(A.data, IndexStyle(A.data))
             A.data[i] = oneunit(T)
         end
         return LowerTriangular(triu!(A.data, k))
@@ -461,7 +465,7 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
 end
 
 function tril!(A::UnitLowerTriangular, k::Integer=0)
-    for i in diagind(A.data)
+    for i in diagind(A.data, IndexStyle(A.data))
         A.data[i] = oneunit(eltype(A))
     end
     return tril!(LowerTriangular(A.data), k)
@@ -628,6 +632,36 @@ end
     end
     return dest
 end
+
+Base.@constprop :aggressive function copytrito_triangular!(Bdata, Adata, uplo, uplomatch, sz)
+    if uplomatch
+        copytrito!(Bdata, Adata, uplo)
+    else
+        BLAS.chkuplo(uplo)
+        LAPACK.lacpy_size_check(size(Bdata), sz)
+        # only the diagonal is copied in this case
+        copyto!(diagview(Bdata), diagview(Adata))
+    end
+    return Bdata
+end
+
+function copytrito!(B::UpperTriangular, A::UpperTriangular, uplo::AbstractChar)
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'U', (m, m < n ? m : n))
+    return B
+end
+function copytrito!(B::LowerTriangular, A::LowerTriangular, uplo::AbstractChar)
+    m,n = size(A)
+    copytrito_triangular!(B.data, A.data, uplo, uplo == 'L', (n < m ? n : m, n))
+    return B
+end
+
+uppertridata(A) = A
+lowertridata(A) = A
+# we restrict these specializations only to strided matrices to avoid cases where an UpperTriangular type
+# doesn't share its indexing with the parent
+uppertridata(A::UpperTriangular{<:Any, <:StridedMatrix}) = parent(A)
+lowertridata(A::LowerTriangular{<:Any, <:StridedMatrix}) = parent(A)
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
@@ -2041,7 +2075,7 @@ function _find_params_log_quasitriu!(A)
 
     # Find s0, the smallest s such that the ρ(triu(A)^(1/2^s) - I) ≤ theta[tmax], where ρ(X)
     # is the spectral radius of X
-    d = complex.(@view(A[diagind(A)]))
+    d = complex.(diagview(A))
     dm1 = d .- 1
     s = 0
     while norm(dm1, Inf) > theta[tmax] && s < maxsqrt

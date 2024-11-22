@@ -2,15 +2,21 @@
 
 module CoreDocs
 
-import ..esc, ..push!, ..getindex, ..unsafe_load, ..Csize_t, ..@nospecialize
+import Core: @nospecialize, SimpleVector
 
-@nospecialize # don't specialize on any arguments of the methods declared herein
+struct DocLinkedList
+    doc::SimpleVector
+    next::DocLinkedList
+    DocLinkedList() = new()
+    DocLinkedList(doc::SimpleVector, next::DocLinkedList) = new(doc, next)
+end
 
+global DOCS = DocLinkedList()
 function doc!(source::LineNumberNode, mod::Module, str, ex)
-    push!(DOCS, Core.svec(mod, ex, str, source.file, source.line))
+    global DOCS
+    DOCS = DocLinkedList(Core.svec(mod, ex, str, source.file, source.line), DOCS)
     nothing
 end
-const DOCS = Array{Core.SimpleVector,1}()
 
 isexpr(x, h::Symbol) = isa(x, Expr) && x.head === h
 
@@ -25,9 +31,9 @@ function docm(source::LineNumberNode, mod::Module, str, x)
     else
         out = Expr(:block, x, out)
     end
-    return esc(out)
+    return Expr(:escape, out)
 end
 docm(source::LineNumberNode, mod::Module, x) =
-    isexpr(x, :->) ? docm(source, mod, x.args[1], x.args[2].args[2]) : error("invalid '@doc'.")
+    (isa(x, Expr) && x.head === :->) ? docm(source, mod, x.args[1], x.args[2].args[2]) : error("invalid '@doc'.")
 
 end
