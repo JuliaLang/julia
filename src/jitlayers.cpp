@@ -170,6 +170,53 @@ void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
     }
 }
 
+// convert local roots into global roots, if they are needed
+static void jl_optimize_roots(jl_codegen_params_t &params, jl_method_instance_t *mi, Module &M)
+{
+    JL_GC_PROMISE_ROOTED(params.temporary_roots); // rooted by caller
+    if (jl_array_dim0(params.temporary_roots) == 0)
+        return;
+    jl_method_t *m = mi->def.method;
+    if (jl_is_method(m))
+        // the method might have a root for this already; use it if so
+        JL_LOCK(&m->writelock);
+    for (size_t i = 0; i < jl_array_dim0(params.temporary_roots); i++) {
+        jl_value_t *val = jl_array_ptr_ref(params.temporary_roots, i);
+        auto ref = params.global_targets.find((void*)val);
+        if (ref == params.global_targets.end())
+            continue;
+        auto get_global_root = [val, m]() {
+            if (jl_is_globally_rooted(val))
+                return val;
+            if (jl_is_method(m) && m->roots) {
+                size_t j, len = jl_array_dim0(m->roots);
+                for (j = 0; j < len; j++) {
+                    jl_value_t *mval = jl_array_ptr_ref(m->roots, j);
+                    if (jl_egal(mval, val)) {
+                        return mval;
+                    }
+                }
+            }
+            return jl_as_global_root(val, 1);
+        };
+        jl_value_t *mval = get_global_root();
+        if (mval != val) {
+            GlobalVariable *GV = ref->second;
+            params.global_targets.erase(ref);
+            auto mref = params.global_targets.find((void*)mval);
+            if (mref != params.global_targets.end()) {
+                GV->replaceAllUsesWith(mref->second);
+                GV->eraseFromParent();
+            }
+            else {
+                params.global_targets[(void*)mval] = GV;
+            }
+        }
+    }
+    if (jl_is_method(m))
+        JL_UNLOCK(&m->writelock);
+}
+
 void jl_jit_globals(std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
 {
     for (auto &global : globals) {
@@ -648,9 +695,16 @@ static void jl_emit_codeinst_to_jit(
     params.debug_level = jl_options.debug_level;
     orc::ThreadSafeModule result_m =
         jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.DL, params.TargetTriple);
+    params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH1(&params.temporary_roots);
     jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
-    if (!result_m)
+    if (!result_m) {
+        JL_GC_POP();
         return;
+    }
+    jl_optimize_roots(params, codeinst->def, *result_m.getModuleUnlocked()); // contains safepoints
+    params.temporary_roots = nullptr;
+    JL_GC_POP();
     { // drop lock before acquiring engine_lock
         auto release = std::move(params.tsctx_lock);
     }
@@ -683,8 +737,10 @@ static void recursive_compile_graph(
     while (!workqueue.empty()) {
         auto this_code = workqueue.pop_back_val();
         if (Seen.insert(this_code).second) {
-            if (this_code != codeinst)
+            if (this_code != codeinst) {
+                JL_GC_PROMISE_ROOTED(this_code); // rooted transitively from following edges from original argument
                 jl_emit_codeinst_to_jit(this_code, nullptr); // contains safepoints
+            }
             jl_unique_gcsafe_lock lock(engine_lock);
             auto edges = complete_graph.find(this_code);
             if (edges != complete_graph.end()) {

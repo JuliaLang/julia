@@ -3410,27 +3410,20 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 // ---- Get Element Pointer (GEP) instructions within the GC frame ----
 
-static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
+static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val)
 {
-    if (jl_is_globally_rooted(val))
-        return val;
-    jl_method_t *m = ctx.linfo->def.method;
-    if (!jl_options.strip_ir && jl_is_method(m)) {
-        // the method might have a root for this already; use it if so
-        JL_LOCK(&m->writelock);
-        if (m->roots) {
-            size_t i, len = jl_array_dim0(m->roots);
-            for (i = 0; i < len; i++) {
-                jl_value_t *mval = jl_array_ptr_ref(m->roots, i);
-                if (mval == val || jl_egal(mval, val)) {
-                    JL_UNLOCK(&m->writelock);
-                    return mval;
-                }
-            }
+    if (!jl_is_globally_rooted(val)) {
+        jl_array_t *roots = ctx.temporary_roots;
+        for (size_t i = 0; i < jl_array_dim0(roots); i++) {
+            if (jl_array_ptr_ref(roots, i) == val)
+                return;
         }
-        JL_UNLOCK(&m->writelock);
+        jl_array_ptr_1d_push(roots, val);
     }
-    return jl_as_global_root(val, 1);
+}
+static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
+{
+    jl_temporary_root(ctx.emission_context, val);
 }
 
 // --- generating function calls ---
@@ -5060,7 +5053,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_value_t *ty = static_apply_type(ctx, argv, nargs + 1);
             if (ty != NULL) {
                 JL_GC_PUSH1(&ty);
-                ty = jl_ensure_rooted(ctx, ty);
+                jl_temporary_root(ctx, ty);
                 JL_GC_POP();
                 *ret = mark_julia_const(ctx, ty);
                 return true;
@@ -6785,7 +6778,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             val = jl_fieldref_noalloc(expr, 0);
         // Toplevel exprs are rooted but because codegen assumes this is constant, it removes the write barriers for this code.
         // This means we have to globally root the value here. (The other option would be to change how we optimize toplevel code)
-        val = jl_ensure_rooted(ctx, val);
+        jl_temporary_root(ctx, val);
         return mark_julia_const(ctx, val);
     }
 
@@ -7905,7 +7898,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         return jl_cgval_t();
     }
     if (rt != declrt && rt != (jl_value_t*)jl_any_type)
-        rt = jl_ensure_rooted(ctx, rt);
+        jl_temporary_root(ctx, rt);
 
     function_sig_t sig("cfunction", lrt, rt, retboxed, argt, unionall_env, false, CallingConv::C, false, &ctx.emission_context);
     assert(sig.fargt.size() + sig.sret == sig.fargt_sig.size());
@@ -7975,12 +7968,12 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         if (closure_types) {
             assert(ctx.spvals_ptr);
             size_t n = jl_array_nrows(closure_types);
-            jl_svec_t *fill_i = jl_alloc_svec_uninit(n);
+            fill = jl_alloc_svec_uninit(n);
             for (size_t i = 0; i < n; i++) {
-                jl_svecset(fill_i, i, jl_array_ptr_ref(closure_types, i));
+                jl_svecset(fill, i, jl_array_ptr_ref(closure_types, i));
             }
-            JL_GC_PUSH1(&fill_i);
-            fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill_i);
+            JL_GC_PUSH1(&fill);
+            jl_temporary_root(ctx, (jl_value_t*)fill);
             JL_GC_POP();
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
@@ -10105,7 +10098,6 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
     }
     return declarations;
 }
-
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &m,
