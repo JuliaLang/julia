@@ -652,10 +652,10 @@ function _precompilepkgs(pkgs::Vector{String},
         plural2 = length(outer_deps) > 1 ? "have" : "has"
         plural3 = length(cycles) > 1 ? "cycles" : "cycle"
         msg = """Circular dependency detected.
-        Precompilation will be skipped for dependencies all in $plural1:
+        Precompilation will be skipped for dependencies in $plural1:
         $cycles_names"""
         if !isempty(outer_deps)
-            msg *= "Precompilation will also be skipped for the following, which $plural2 depdenencies in the $plural3:\n"
+            msg *= "Precompilation will also be skipped for the following, which depend on the above $plural3:\n"
             msg *= join(("  " * full_name(exts, pkg) for pkg in outer_deps), "\n")
         end
         @warn msg
