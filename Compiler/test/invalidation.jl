@@ -3,6 +3,7 @@
 # setup
 # -----
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
