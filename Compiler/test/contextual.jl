@@ -2,14 +2,7 @@
 
 # N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
 using Test
-
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+include("setup_Compiler.jl")
 
 # Cassette
 # ========

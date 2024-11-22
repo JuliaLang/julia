@@ -1857,7 +1857,7 @@ let i::Int, continue_::Bool
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
     @test (continue_ = length(lins) == 2) # :multi_inlining1 -> :func_mul_int
     if continue_
         def1 = lins[1].method
@@ -1881,7 +1881,7 @@ let i::Int, continue_::Bool
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
     @test_broken (continue_ = length(lins) == 3) # see TODO in `ir_inline_linetable!`
     if continue_
         def1 = lins[1].method

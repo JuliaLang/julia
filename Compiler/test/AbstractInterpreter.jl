@@ -2,14 +2,6 @@
 
 using Test
 
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
-
 include("irutils.jl")
 include("newinterp.jl")
 

@@ -1,12 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+include("setup_Compiler.jl")
 
 using Core.IR
 using .Compiler: IRCode, IncrementalCompact, singleton_type, VarState
@@ -68,7 +62,7 @@ macro fully_eliminated(ex0...)
 end
 
 let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
+    @assert isexpr(m, :thunk)
     orig_src = m.args[1]::CodeInfo
     global function make_codeinfo(code::Vector{Any};
                                   ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
