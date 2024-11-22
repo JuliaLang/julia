@@ -2,13 +2,7 @@
 
 using Test, Core.IR
 
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+include("setup_Compiler.jl")
 
 function f22938(a, b, x...)
     nothing

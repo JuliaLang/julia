@@ -1,12 +1,6 @@
-using Test
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+include("setup_Compiler.jl")
 
 @testset "CachedMethodTable" begin
     # cache result should be separated per `limit` and `sig`

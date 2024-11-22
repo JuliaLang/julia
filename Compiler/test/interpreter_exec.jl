@@ -1,16 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests that interpreter matches codegen
+include("setup_Compiler.jl")
+
 using Test
 using Core.IR
-
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
 
 # test that interpreter correctly handles PhiNodes (#29262)
 let m = Meta.@lower 1 + 1

@@ -1,10 +1,8 @@
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+using Test
+
+include("irutils.jl")
 
 using .Compiler: IncrementalCompact, insert_node_here!, finish,
     NewInstruction, verify_ir, ReturnNode, SSAValue

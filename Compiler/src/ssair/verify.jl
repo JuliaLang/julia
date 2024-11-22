@@ -104,7 +104,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         error_args = Any["IR verification failed."]
         if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
             # ensure we use I/O that does not yield, as this gets called during compilation
-            firstline = invokelatest(Core.Main.Base.IRShow.debuginfo_firstline, ir.debuginfo)
+            firstline = invokelatest(IRShow.debuginfo_firstline, ir.debuginfo)
         else
             firstline = nothing
         end

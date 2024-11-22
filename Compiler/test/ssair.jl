@@ -2,8 +2,8 @@
 
 include("irutils.jl")
 
-using Base.Meta
-using Core.IR
+using Test
+
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
@@ -393,13 +393,7 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
 
 let # https://github.com/JuliaLang/julia/issues/42258
     code = """
-        if !@isdefined(Compiler)
-            if Base.identify_package("Compiler") === nothing
-                import Base.Compiler: Compiler
-            else
-                import Compiler
-            end
-        end
+        using Base: Compiler
 
         function foo()
             a = @noinline rand(rand(0:10))

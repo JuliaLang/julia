@@ -104,7 +104,7 @@ begin
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee, (Any,))
-        @test Compiler.Effects(effects) == Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`
@@ -171,7 +171,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
         @test rt === Int
         effects = Base.infer_effects(pr48932_callee_inferable, (Any,))
-        @test Compiler.Effects(effects) == Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:
@@ -233,7 +233,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee_inlined, (Any,))
-        @test Compiler.Effects(effects) == Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on `pr48932_caller_inlined` and `pr48932_callee_inlined`

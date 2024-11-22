@@ -2,13 +2,7 @@ module EAUtils
 
 export code_escapes, @code_escapes, __clear_cache!
 
-if !@isdefined(Compiler)
-    if Base.identify_package("Compiler") === nothing
-        import Base.Compiler: Compiler
-    else
-        import Compiler
-    end
-end
+include("setup_Compiler.jl")
 
 using ..EscapeAnalysis
 const EA = EscapeAnalysis
@@ -267,22 +261,22 @@ end
 
 function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
     io = IOContext(io, :displaysize=>displaysize(io))
-    used = Base.IRShow.stmts_used(io, ir)
+    used = Compiler.IRShow.stmts_used(io, ir)
     if source
         line_info_preprinter = function (io::IO, indent::String, idx::Int)
-            r = Base.IRShow.inline_linfo_printer(ir)(io, indent, idx)
+            r = Compiler.IRShow.inline_linfo_printer(ir)(io, indent, idx)
             idx ≠ 0 && preprint(io, idx)
             return r
         end
     else
-        line_info_preprinter = Base.IRShow.lineinfo_disabled
+        line_info_preprinter = Compiler.IRShow.lineinfo_disabled
     end
-    line_info_postprinter = Base.IRShow.default_expr_type_printer
+    line_info_postprinter = Compiler.IRShow.default_expr_type_printer
     preprint(io)
     bb_idx_prev = bb_idx = 1
     for idx = 1:length(ir.stmts)
         preprint(io, idx)
-        bb_idx = Base.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, ir.sptypes, used, ir.cfg, bb_idx)
+        bb_idx = Compiler.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, ir.sptypes, used, ir.cfg, bb_idx)
         postprint(io, idx, bb_idx != bb_idx_prev)
         bb_idx_prev = bb_idx
     end
