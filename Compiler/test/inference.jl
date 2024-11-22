@@ -825,7 +825,7 @@ end
 
 # Issue 19641
 foo19641() = let a = 1.0
-    Base.Compiler.return_type(x -> x + a, Tuple{Float64})
+    Base._return_type(x -> x + a, Tuple{Float64})
 end
 @inferred foo19641()
 
@@ -979,15 +979,15 @@ test_no_apply(::Any) = true
 
 # issue #20033
 # check return_type_tfunc for calls where no method matches
-bcast_eltype_20033(f, A) = Base.Compiler.return_type(f, Tuple{eltype(A)})
+bcast_eltype_20033(f, A) = Base._return_type(f, Tuple{eltype(A)})
 err20033(x::Float64...) = prod(x)
 @test bcast_eltype_20033(err20033, [1]) === Union{}
 @test Base.return_types(bcast_eltype_20033, (typeof(err20033), Vector{Int},)) == Any[Type{Union{}}]
 # return_type on builtins
-@test Base.Compiler.return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
+@test Base._return_type(tuple, Tuple{Int,Int8,Int}) === Tuple{Int,Int8,Int}
 
 # issue #21088
-@test Base.Compiler.return_type(typeof, Tuple{Int}) == Type{Int}
+@test Base._return_type(typeof, Tuple{Int}) == Type{Int}
 
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
@@ -2237,7 +2237,7 @@ end
     end |> only == Int
     # the `fargs = nothing` edge case
     @test Base.return_types((Any,)) do a
-        Base.Compiler.return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
+        Base._return_type(invoke, Tuple{typeof(ispositive), Type{Tuple{Any}}, Any})
     end |> only == Type{Bool}
 
     # `InterConditional` handling: `abstract_call_opaque_closure`
@@ -3326,8 +3326,8 @@ _rttf_test(::Int16) = 0
 _rttf_test(::Int32) = 0
 _rttf_test(::Int64) = 0
 _rttf_test(::Int128) = 0
-_call_rttf_test() = Base.Compiler.return_type(_rttf_test, Tuple{Any})
-@test Base.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
+_call_rttf_test() = Base._return_type(_rttf_test, Tuple{Any})
+@test Base._return_type(_rttf_test, Tuple{Any}) === Int
 @test _call_rttf_test() === Int
 
 f_with_Type_arg(::Type{T}) where {T} = T
@@ -4790,7 +4790,7 @@ end
 # at top level.
 @test let
     Base.Experimental.@force_compile
-    Base.Compiler.return_type(+, NTuple{2, Rational})
+    Base._return_type(+, NTuple{2, Rational})
 end == Rational
 
 # vararg-tuple comparison within `Compiler.PartialStruct`
@@ -5188,9 +5188,9 @@ end |> only === Tuple{Int,Symbol}
     end
 end) == Type{Nothing}
 
-# Test that Base.Compiler.return_type inference works for the 1-arg version
+# Test that Base._return_type inference works for the 1-arg version
 @test Base.return_types() do
-    Base.Compiler.return_type(Tuple{typeof(+), Int, Int})
+    Base._return_type(Tuple{typeof(+), Int, Int})
 end |> only == Type{Int}
 
 # Test that NamedTuple abstract iteration works for PartialStruct/Const

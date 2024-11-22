@@ -294,7 +294,6 @@ function isready end
 
 include(strcat(DATAROOT, "julia/Compiler/src/Compiler.jl"))
 
-
 const _return_type = Compiler.return_type
 
 # Enable compiler
