@@ -381,7 +381,9 @@ function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Di
         cycle_str = ""
         for (i, pkg) in enumerate(cycle)
             j = max(0, i - 1)
-            if i == 1
+            if length(cycle) == 1
+                line = " ─ "
+            elseif i == 1
                 line = " ┌ "
             elseif i < length(cycle)
                 line = " │ " * " " ^j
