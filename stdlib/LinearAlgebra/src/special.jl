@@ -32,6 +32,12 @@ Diagonal(A::SymTridiagonal) = Diagonal(_diagview(A))
 Bidiagonal(A::SymTridiagonal{<:Number}) =
     iszero(A.ev) ? Bidiagonal(A.dv, A.ev, :U) :
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+function Bidiagonal(A::SymTridiagonal)
+    dv = view(A, diagind(A, IndexStyle(A)))
+    ev = view(A, diagind(A, 1, IndexStyle(A)))
+    iszero(A.ev) ? Bidiagonal(dv, ev, :U) :
+        throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+end
 Tridiagonal(A::SymTridiagonal{<:Number}) =
     Tridiagonal(A.ev, A.dv, A.ev)
 
@@ -143,6 +149,8 @@ function \(B::Bidiagonal, H::UpperHessenberg)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
+oftype_unalias(d, A) = Base.unalias(A, oftype(d, A))
+
 # specialized +/- for structured matrices. If these are removed, it falls
 # back to broadcasting which has ~2-10x speed regressions.
 # For the other structure matrix pairs, broadcasting works well.
@@ -155,24 +163,24 @@ end
 
 @commutative function (+)(A::Bidiagonal, B::Diagonal)
     newdv = A.dv + B.diag
-    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+    Bidiagonal(newdv, oftype_unalias(newdv, A.ev), A.uplo)
 end
 
 function (-)(A::Bidiagonal, B::Diagonal)
     newdv = A.dv - B.diag
-    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+    Bidiagonal(newdv, oftype_unalias(newdv, A.ev), A.uplo)
 end
 
 function (-)(A::Diagonal, B::Bidiagonal)
     newdv = A.diag - B.dv
-    Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
+    Bidiagonal(newdv, oftype(newdv, -B.ev), B.uplo)
 end
 
 # Return a SymTridiagonal if the elements of `newdv` are
 # statically known to be symmetric. Return a Tridiagonal otherwise
 function _symtri_or_tri(dl, d, du)
-    new_du = oftype(d, du)
-    new_dl = oftype(d, dl)
+    new_du = oftype_unalias(d, du)
+    new_dl = oftype_unalias(d, dl)
     if symmetric_type(eltype(d)) == eltype(d)
         SymTridiagonal(d, new_du)
     else
@@ -210,62 +218,76 @@ end
 
 @commutative function (+)(A::Diagonal, B::Tridiagonal)
     newdv = A.diag + B.d
-    Tridiagonal(typeof(newdv)(B.dl), newdv, typeof(newdv)(B.du))
+    Tridiagonal(oftype_unalias(newdv, B.dl), newdv, oftype_unalias(newdv, B.du))
 end
 
 function (-)(A::Diagonal, B::Tridiagonal)
     newdv = A.diag - B.d
-    Tridiagonal(typeof(newdv)(-B.dl), newdv, typeof(newdv)(-B.du))
+    Tridiagonal(oftype(newdv, -B.dl), newdv, oftype(newdv, -B.du))
 end
 
 function (-)(A::Tridiagonal, B::Diagonal)
     newdv = A.d - B.diag
-    Tridiagonal(typeof(newdv)(A.dl), newdv, typeof(newdv)(A.du))
+    Tridiagonal(oftype_unalias(newdv, A.dl), newdv, oftype_unalias(newdv, A.du))
 end
 
 @commutative function (+)(A::Bidiagonal, B::Tridiagonal)
     newdv = A.dv + B.d
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.dl), newdv, A.ev+B.du) : (A.ev+B.dl, newdv, typeof(newdv)(B.du)))...)
+    dl, d, du = A.uplo == 'U' ? (oftype_unalias(newdv, B.dl), newdv, A.ev+B.du) : (A.ev+B.dl, newdv, oftype_unalias(newdv, B.du))
+    Tridiagonal(dl, d, du)
 end
 
 function (-)(A::Bidiagonal, B::Tridiagonal)
     newdv = A.dv - B.d
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.dl), newdv, A.ev-B.du) : (A.ev-B.dl, newdv, typeof(newdv)(-B.du)))...)
+    dl, d, du = A.uplo == 'U' ? (oftype(newdv, -B.dl), newdv, A.ev-B.du) :
+                                (A.ev-B.dl, newdv, oftype(newdv, -B.du))
+    Tridiagonal(dl, d, du)
 end
 
 function (-)(A::Tridiagonal, B::Bidiagonal)
     newdv = A.d - B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.dl), newdv, A.du-B.ev) : (A.dl-B.ev, newdv, typeof(newdv)(A.du)))...)
+    dl, d, du = B.uplo == 'U' ? (oftype_unalias(newdv, A.dl), newdv, A.du-B.ev) :
+                                (A.dl-B.ev, newdv, oftype_unalias(newdv, A.du))
+    Tridiagonal(dl, d, du)
 end
 
 @commutative function (+)(A::Bidiagonal, B::SymTridiagonal)
     newdv = A.dv + _diagview(B)
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(_evview_transposed(B)), newdv, A.ev+_evview(B)) : (A.ev+_evview_transposed(B), newdv, typeof(newdv)(_evview(B))))...)
+    dl, d, du = A.uplo == 'U' ?
+                    (oftype_unalias(newdv, _evview_transposed(B)), newdv, oftype(newdv, A.ev+_evview(B))) :
+                    (oftype(newdv, A.ev+_evview_transposed(B)), newdv, oftype_unalias(newdv, _evview(B)))
+    Tridiagonal(dl, d, du)
 end
 
 function (-)(A::Bidiagonal, B::SymTridiagonal)
     newdv = A.dv - _diagview(B)
-    Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview_transposed(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview_transposed(B), newdv, typeof(newdv)(-_evview(B))))...)
+    dl, d, du = A.uplo == 'U' ?
+                    (oftype(newdv, -_evview_transposed(B)), newdv, oftype(newdv, A.ev-_evview(B))) :
+                    (oftype(newdv, A.ev-_evview_transposed(B)), newdv, oftype(newdv, -_evview(B)))
+    Tridiagonal(dl, d, du)
 end
 
 function (-)(A::SymTridiagonal, B::Bidiagonal)
     newdv = _diagview(A) - B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview_transposed(A)), newdv, _evview(A)-B.ev) : (_evview_transposed(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
+    dl, d, du = B.uplo == 'U' ?
+                    (oftype_unalias(newdv, _evview_transposed(A)), newdv, oftype(newdv, _evview(A)-B.ev)) :
+                    (oftype(newdv, _evview_transposed(A)-B.ev), newdv, oftype_unalias(newdv, _evview(A)))
+    Tridiagonal(dl, d, du)
 end
 
 @commutative function (+)(A::Tridiagonal, B::UniformScaling)
     newd = A.d .+ Ref(B)
-    Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
+    Tridiagonal(oftype_unalias(newd, A.dl), newd, oftype_unalias(newd, A.du))
 end
 
 @commutative function (+)(A::SymTridiagonal, B::UniformScaling)
-    newdv = A.dv .+ Ref(B)
-    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+    newdv = _diagview(A) .+ Ref(B)
+    SymTridiagonal(newdv, oftype_unalias(newdv, A.ev))
 end
 
 @commutative function (+)(A::Bidiagonal, B::UniformScaling)
     newdv = A.dv .+ Ref(B)
-    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+    Bidiagonal(newdv, oftype_unalias(newdv, A.ev), A.uplo)
 end
 
 @commutative function (+)(A::Diagonal, B::UniformScaling)
@@ -276,15 +298,15 @@ end
 # no need to define reversed order
 function (-)(A::UniformScaling, B::Tridiagonal)
     d = Ref(A) .- B.d
-    Tridiagonal(convert(typeof(d), -B.dl), d, convert(typeof(d), -B.du))
+    Tridiagonal(oftype(d, -B.dl), d, oftype(d, -B.du))
 end
 function (-)(A::UniformScaling, B::SymTridiagonal)
-    dv = Ref(A) .- B.dv
-    SymTridiagonal(dv, convert(typeof(dv), -_evview(B)))
+    dv = Ref(A) .- _diagview(B)
+    SymTridiagonal(dv, oftype(dv, -B.ev))
 end
 function (-)(A::UniformScaling, B::Bidiagonal)
     dv = Ref(A) .- B.dv
-    Bidiagonal(dv, convert(typeof(dv), -B.ev), B.uplo)
+    Bidiagonal(dv, oftype(dv, -B.ev), B.uplo)
 end
 function (-)(A::UniformScaling, B::Diagonal)
     Diagonal(Ref(A) .- B.diag)

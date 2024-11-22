@@ -213,7 +213,7 @@ zeroslike(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatr
     if b.band == 0
         @inbounds r = D.diag[b.index]
     else
-        r = diagzero(D, Tuple(_cartinds(b))...)
+        r = diagzero(D, b)
     end
     r
 end

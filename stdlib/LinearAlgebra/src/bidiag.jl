@@ -142,7 +142,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, i::Int, j::Int) where T
+@inline function getindex(A::Bidiagonal, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
@@ -153,7 +153,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
+@inline function getindex(A::Bidiagonal, b::BandIndex)
     @boundscheck checkbounds(A, b)
     if b.band == 0
         return @inbounds A.dv[b.index]
@@ -161,7 +161,7 @@ end
         # we explicitly compare the possible bands as b.band may be constant-propagated
         return @inbounds A.ev[b.index]
     else
-        return diagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, b)
     end
 end
 
