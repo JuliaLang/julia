@@ -655,7 +655,7 @@ function _precompilepkgs(pkgs::Vector{String},
     circular_deps = Base.PkgId[]
     for pkg in keys(direct_deps)
         @assert isempty(stack)
-	if scan_pkg!(pkg, direct_deps)
+        if scan_pkg!(pkg, direct_deps)
             push!(circular_deps, pkg)
             for pkg_config in keys(was_processed)
                 # notify all to allow skipping
