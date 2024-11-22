@@ -365,15 +365,15 @@ const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
 # name or parent → ext
-function full_name(ext_to_parent::Dict{PkgId, String}, pkg::PkgId)
+function full_name(ext_to_parent::Dict{PkgId, PkgId}, pkg::PkgId)
     if haskey(ext_to_parent, pkg)
-        return string(ext_to_parent[pkg], " → ", pkg.name)
+        return string(ext_to_parent[pkg].name, " → ", pkg.name)
     else
         return pkg.name
     end
 end
 
-function excluded_circular_deps_explanation(circular_deps, cycles)
+function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Dict{PkgId, PkgId}, circular_deps, cycles)
     outer_deps = copy(circular_deps)
     cycles_names = ""
     for cycle in cycles
@@ -388,7 +388,8 @@ function excluded_circular_deps_explanation(circular_deps, cycles)
             else
                 line = " └" * "─" ^j * " "
             end
-            line = color_string(line, :light_black) * full_name(ext_to_parent, pkg) * "\n"
+            hascolor = get(io, :color, false)::Bool
+            line = _color_string(line, :light_black, hascolor) * full_name(ext_to_parent, pkg) * "\n"
             cycle_str *= line
         end
         cycles_names *= cycle_str
@@ -661,7 +662,7 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        @warn excluded_circular_deps_explanation(circular_deps, cycles)
+        @warn excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles)
     end
     @debug "precompile: circular dep check done"
 
