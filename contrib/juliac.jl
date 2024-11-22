@@ -79,7 +79,7 @@ open(initsrc_path, "w") do io
               """)
 end
 
-static_call_graph_arg() = isnothing(trim) ?  `` : `--trim=$(trim)`
+static_call_graph_arg() = isnothing(trim) ?  `` : `--experimental --trim=$(trim)`
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 verbose && println("Running: $cmd")
 if !success(pipeline(cmd; stdout, stderr))
