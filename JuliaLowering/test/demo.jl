@@ -570,6 +570,63 @@ struct S9{T}
 end
 """
 
+# Default positional args with missing arg names
+src = """
+function f(::Int, y=1, z=2)
+    (y, z)
+end
+"""
+
+# Default positional args with placeholders
+src = """
+function f(_::Int, x=1)
+    x
+end
+"""
+
+# Positional args and type parameters with transitive dependencies
+# Bug in flisp lowering - see https://github.com/JuliaLang/julia/issues/49275
+src = """
+function f(x, y::S=[1], z) where {T, S<:AbstractVector{T}}
+    (x, y, z, T)
+end
+"""
+
+# Default positional args before trailing slurp are allowed
+src = """
+function f(x=1, ys...)
+    ys
+end
+"""
+
+# Default positional args after a slurp is an error
+src = """
+function f(x=1, ys..., z=2)
+    ys
+end
+"""
+
+# Positional arg with slurp and default
+src = """
+function f(x=1, ys...="hi")
+    ys
+end
+"""
+
+# Positional arg with slurp and splat
+src = """
+function f(x=1, ys...=(1,2)...)
+    ys
+end
+"""
+
+# TODO: fix this - it's interpreted in a bizarre way as a kw call.
+# src = """
+# function f(x=y=1)
+#     x
+# end
+# """
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
