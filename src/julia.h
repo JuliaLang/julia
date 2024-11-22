@@ -486,6 +486,12 @@ typedef struct _jl_code_instance_t {
     } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
 
+typedef struct _jl_abi_overwrite_t {
+    JL_DATA_TYPE
+    jl_value_t *abi;
+    jl_value_t *owner;
+} jl_abi_overwrite_t;
+
 // all values are callable as Functions
 typedef jl_value_t jl_function_t;
 
@@ -942,6 +948,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_fielderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_abioverwrite_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_readonlymemory_exception JL_GLOBALLY_ROOTED;

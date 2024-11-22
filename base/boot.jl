@@ -447,6 +447,12 @@ struct InitError <: WrappedException
     error
 end
 
+struct ABIOverwrite
+    abi::Type
+    owner
+    ABIOverwrite(@nospecialize(abi::Type), @nospecialize(owner)) = new(abi, owner)
+end
+
 struct PrecompilableError <: Exception end
 
 String(s::String) = s  # no constructor yet

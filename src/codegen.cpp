@@ -3046,9 +3046,8 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, jl_value_t *rettype,
     return false; // jlcall sig won't require any box allocations
 }
 
-static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
+static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
 {
-    jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
         if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
@@ -3058,7 +3057,7 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
                 needsparams = true;
         }
     }
-    return std::make_pair(uses_specsig(sig, needsparams, rettype, prefer_specsig), needsparams);
+    return std::make_pair(uses_specsig(abi, needsparams, rettype, prefer_specsig), needsparams);
 }
 
 
@@ -4373,6 +4372,7 @@ static jl_llvm_functions_t
         orc::ThreadSafeModule &TSM,
         jl_method_instance_t *lam,
         jl_code_info_t *src,
+        jl_value_t *abi,
         jl_value_t *rettype,
         jl_codegen_params_t &params);
 
@@ -5490,6 +5490,14 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     return emit_invoke(ctx, lival, argv, nargs, rt);
 }
 
+static jl_value_t *get_ci_abi(jl_code_instance_t *ci)
+{
+    if (ci->owner && jl_typeof(ci->owner) == (jl_value_t*)jl_abioverwrite_type)
+        return ((jl_abi_overwrite_t*)ci->owner)->abi;
+    return ci->def->specTypes;
+}
+
+
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt)
 {
     ++EmittedInvokes;
@@ -5533,7 +5541,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 }
                 else if (invoke != jl_fptr_sparam_addr) {
                     bool specsig, needsparams;
-                    std::tie(specsig, needsparams) = uses_specsig(mi, codeinst->rettype, ctx.params->prefer_specsig);
+                    std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
@@ -8364,13 +8372,13 @@ get_specsig_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *rt, jl
 }
 
 /* aka Core.Compiler.tuple_tfunc */
-static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
+static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq)
 {
-    size_t nvargs = jl_nparams(lam->specTypes)-nreq;
+    size_t nvargs = jl_nparams(sig)-nreq;
     jl_svec_t *tupargs = jl_alloc_svec(nvargs);
     JL_GC_PUSH1(&tupargs);
-    for (size_t i = nreq; i < jl_nparams(lam->specTypes); ++i) {
-        jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+    for (size_t i = nreq; i < jl_nparams(sig); ++i) {
+        jl_value_t *argType = jl_nth_slot_type(sig, i);
         // n.b. specTypes is required to be a datatype by construction for specsig
         if (is_uniquerep_Type(argType))
             argType = jl_typeof(jl_tparam0(argType));
@@ -8410,6 +8418,7 @@ static jl_llvm_functions_t
         orc::ThreadSafeModule &TSM,
         jl_method_instance_t *lam,
         jl_code_info_t *src,
+        jl_value_t *abi,
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
@@ -8490,7 +8499,7 @@ static jl_llvm_functions_t
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_nrows(src->ssavaluetypes);
     size_t vinfoslen = jl_array_dim0(src->slotflags);
     ctx.slots.resize(vinfoslen, jl_varinfo_t(ctx.builder.getContext()));
-    assert(lam->specTypes); // the specTypes field should always be assigned
+    assert(abi); // the specTypes field should always be assigned
 
 
     // create SAvalue locations for SSAValue objects
@@ -8499,7 +8508,7 @@ static jl_llvm_functions_t
     ctx.ssavalue_usecount.assign(n_ssavalues, 0);
 
     bool specsig, needsparams;
-    std::tie(specsig, needsparams) = uses_specsig(lam, jlrettype, params.params->prefer_specsig);
+    std::tie(specsig, needsparams) = uses_specsig(abi, lam, jlrettype, params.params->prefer_specsig);
 
     // step 3. some variable analysis
     size_t i;
@@ -8509,7 +8518,7 @@ static jl_llvm_functions_t
         jl_sym_t *argname = slot_symbol(ctx, i);
         if (argname == jl_unused_sym)
             continue;
-        jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
+        jl_value_t *ty = jl_nth_slot_type(abi, i);
         // TODO: jl_nth_slot_type should call jl_rewrap_unionall
         //  specTypes is required to be a datatype by construction for specsig, but maybe not otherwise
         // OpaqueClosure implicitly loads the env
@@ -8527,7 +8536,7 @@ static jl_llvm_functions_t
     if (va && ctx.vaSlot != -1) {
         jl_varinfo_t &varinfo = ctx.slots[ctx.vaSlot];
         varinfo.isArgument = true;
-        vatyp = specsig ? compute_va_type(lam, nreq) : (jl_tuple_type);
+        vatyp = specsig ? compute_va_type(abi, nreq) : (jl_tuple_type);
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, vatyp);
     }
 
@@ -8579,7 +8588,7 @@ static jl_llvm_functions_t
                     ArgNames[i] = name;
             }
         }
-        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes,
+        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, abi,
                                           jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg),
                                           ArgNames, nreq);
         f = cast<Function>(returninfo.decl.getCallee());
@@ -8613,7 +8622,7 @@ static jl_llvm_functions_t
         std::string wrapName;
         raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
-        size_t nparams = jl_nparams(lam->specTypes);
+        size_t nparams = jl_nparams(abi);
         gen_invoke_wrapper(lam, jlrettype, returninfo, nparams, retarg, ctx.is_opaque_closure, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
         // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>
@@ -8633,10 +8642,10 @@ static jl_llvm_functions_t
         declarations.functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
     }
 
-    if (ctx.emission_context.debug_level >= 2 && lam->def.method && jl_is_method(lam->def.method) && lam->specTypes != (jl_value_t*)jl_emptytuple_type) {
+    if (ctx.emission_context.debug_level >= 2 && lam->def.method && jl_is_method(lam->def.method) && abi != (jl_value_t*)jl_emptytuple_type) {
         ios_t sigbuf;
         ios_mem(&sigbuf, 0);
-        jl_static_show_func_sig((JL_STREAM*) &sigbuf, (jl_value_t*)lam->specTypes);
+        jl_static_show_func_sig((JL_STREAM*) &sigbuf, (jl_value_t*)abi);
         f->addFnAttr("julia.fsig", StringRef(sigbuf.buf, sigbuf.size));
         ios_close(&sigbuf);
     }
@@ -8693,7 +8702,7 @@ static jl_llvm_functions_t
         else if (!specsig)
             subrty = debugcache.jl_di_func_sig;
         else
-            subrty = get_specsig_di(ctx, debugcache, jlrettype, lam->specTypes, dbuilder);
+            subrty = get_specsig_di(ctx, debugcache, jlrettype, abi, dbuilder);
         SP = dbuilder.createFunction(nullptr
                                      ,dbgFuncName      // Name
                                      ,f->getName()     // LinkageName
@@ -9024,7 +9033,7 @@ static jl_llvm_functions_t
                 nullptr, nullptr, /*isboxed*/true, AtomicOrdering::NotAtomic, false, sizeof(void*));
         }
         else {
-            jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+            jl_value_t *argType = jl_nth_slot_type(abi, i);
             // TODO: jl_nth_slot_type should call jl_rewrap_unionall?
             //  specTypes is required to be a datatype by construction for specsig, but maybe not otherwise
             bool isboxed = deserves_argbox(argType);
@@ -9098,10 +9107,10 @@ static jl_llvm_functions_t
             assert(vi.boxroot == NULL);
         }
         else if (specsig) {
-            ctx.nvargs = jl_nparams(lam->specTypes) - nreq;
+            ctx.nvargs = jl_nparams(abi) - nreq;
             SmallVector<jl_cgval_t, 0> vargs(ctx.nvargs);
-            for (size_t i = nreq; i < jl_nparams(lam->specTypes); ++i) {
-                jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+            for (size_t i = nreq; i < jl_nparams(abi); ++i) {
+                jl_value_t *argType = jl_nth_slot_type(abi, i);
                 // n.b. specTypes is required to be a datatype by construction for specsig
                 bool isboxed = deserves_argbox(argType);
                 Type *llvmArgType = isboxed ?  ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, argType);
@@ -10036,6 +10045,7 @@ jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &m,
         jl_method_instance_t *li,
         jl_code_info_t *src,
+        jl_value_t *abi,
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
@@ -10044,8 +10054,10 @@ jl_llvm_functions_t jl_emit_code(
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
+    if (!abi)
+        abi = li->specTypes;
     JL_TRY {
-        decls = emit_function(m, li, src, src->rettype, params);
+        decls = emit_function(m, li, src, abi, src->rettype, params);
         auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
         if (stream) {
             jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
@@ -10136,7 +10148,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         }
     }
     assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
-    jl_llvm_functions_t decls = jl_emit_code(m, codeinst->def, src, params);
+    jl_llvm_functions_t decls = jl_emit_code(m, codeinst->def, src, get_ci_abi(codeinst), params);
 
     const std::string &specf = decls.specFunctionObject;
     const std::string &f = decls.functionObject;
