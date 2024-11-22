@@ -1098,3 +1098,28 @@ end
     @test Base.mightalias(permutedims(V1), V1)
     @test Base.mightalias(permutedims(V1), permutedims(V1))
 end
+
+@testset "copyto! with linearly indexed views" begin
+    @testset "FastContiguousSubArray" begin
+        A = rand(4)
+        vA = view(A, :)
+        B = zeros(4)
+        vB = view(B, :)
+        for y in (B, vB), x in (A, vA)
+            y .= 0
+            copyto!(y, x)
+            @test y == x
+        end
+    end
+    @testset "FastSubArray" begin
+        A = rand(4)
+        vA = @view A[1:2:end]
+        B = zeros(4)
+        vB = @view B[1:2:end]
+        @test copyto!(vB, vA) == vA
+        B .= 0
+        @test copyto!(B, vA)[axes(vA,1)] == vA
+        B .= 0
+        @test copyto!(vB, 1, A, 1, 2) == view(A, 1:2)
+    end
+end

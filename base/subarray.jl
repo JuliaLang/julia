@@ -348,6 +348,10 @@ FastContiguousSubArray{T,N,P,I<:Union{Tuple{AbstractUnitRange, Vararg{Any}},
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
 @inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
 
+# we may forward the 5-term copyto! for contiguous linearly indexed views to the corresponding parents
+# this lets us access optimized copyto! implementations for the parent
+_unwrap_view(A::FastContiguousSubArray, Astart) = parent(A), A.offset1 + Astart
+
 """
 An internal type representing arrays stored contiguously in memory.
 """

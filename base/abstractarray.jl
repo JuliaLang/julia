@@ -1076,25 +1076,23 @@ function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyl
     copyto_unaliased!(deststyle, dest, srcstyle, src′)
 end
 
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+function copyto_unaliased!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
+    @_propagate_inbounds_meta
+    copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+end
+function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
+    @boundscheck (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
         throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            # Single-index implementation
-            @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
-            end
-        else
-            # Dual-index implementation
-            i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
-            end
+        # IndexStyle(src) is IndexCartesian, as the linear indexing case is handled separately
+        # Dual-index implementation
+        i = idf - 1
+        @inbounds for a in src
+            dest[i+=1] = a
         end
     else
         iterdest, itersrc = eachindex(dest), eachindex(src)
@@ -1123,15 +1121,40 @@ function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstar
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
+# we add an extra level of indirection to forward the copy
+# to the parent for contiguous linear views
 function copyto!(dest::AbstractArray, dstart::Integer,
+        src::AbstractArray, sstart::Integer, n::Integer)
+    @_propagate_inbounds_meta
+    # check if the arrays are views that may be unwrapped
+    # if yes, try to use the copyto! implementation for the parents
+    # if no, then fall back to the default implementation that loops over the arrays
+    __copyto!(dest, _unwrap_view(dest, dstart)..., src,  _unwrap_view(src, sstart)..., n)
+end
+# if the array A is not a view, there's nothig to unwrap
+_unwrap_view(A, ind) = A, ind
+# fallback method if the arrays aren't views, in which case there's nothing to unwrap
+function __copyto!(dest::A, ::A, dstart, src::B, ::B, sstart, n) where {A,B}
+    @_propagate_inbounds_meta
+    _copyto!(dest, dstart, src, sstart, n)
+end
+# try copying to the parents if there is at least one contiguous view
+function __copyto!(_, destp, dstart, _, srcp, sstart, n)
+    @_propagate_inbounds_meta
+    copyto!(destp, dstart, srcp, sstart, n)
+end
+
+function _copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
+    @boundscheck begin
+        (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
+        (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
+    end
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
         dest[dstart+i] = src′[sstart+i]
