@@ -137,8 +137,28 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
         argv[i-1] = eval_value(args[i], s);
     jl_value_t *c = args[0];
     assert(jl_is_code_instance(c) || jl_is_method_instance(c));
-    jl_method_instance_t *meth = jl_is_method_instance(c) ? (jl_method_instance_t*)c : ((jl_code_instance_t*)c)->def;
-    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
+    jl_value_t *result = NULL;
+    if (jl_is_code_instance(c)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
+               jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
+
+        } else {
+            if (codeinst->owner != jl_nothing) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst->def);
+        }
+    } else {
+        result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
+    }
     JL_GC_POP();
     return result;
 }
@@ -729,7 +749,11 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
             jl_code_instance_t *uninferred = jl_cached_uninferred(cache, world);
             if (!uninferred) {
                 assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi, world, &uninferred);
+                ret = jl_code_for_staged(mi, world, &uninferred);
+                if (jl_is_code_instance(ret)) {
+                    jl_mi_cache_insert(mi, (jl_code_instance_t*)ret);
+                    return (jl_value_t*)ret;
+                }
             }
             ret = (jl_value_t*)uninferred;
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);

@@ -731,7 +731,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, j
 
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t world, jl_code_instance_t **cache)
+JL_DLLEXPORT jl_value_t *jl_code_for_staged(jl_method_instance_t *mi, size_t world, jl_code_instance_t **cache)
 {
     jl_code_instance_t *cache_ci = jl_atomic_load_relaxed(&mi->cache);
     jl_code_instance_t *uninferred_ci = jl_cached_uninferred(cache_ci, world);
@@ -753,6 +753,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     assert(generator != NULL);
     assert(jl_is_method(def));
     jl_code_info_t *func = NULL;
+    jl_value_t *ret = NULL;
     jl_value_t *ex = NULL;
     jl_value_t *kind = NULL;
     jl_code_info_t *uninferred = NULL;
@@ -774,7 +775,16 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         ex = jl_call_staged(def, generator, world, mi->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
         // do some post-processing
-        if (jl_is_code_info(ex)) {
+        if (jl_is_code_instance(ex)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)ex;
+            if (ci->owner != jl_nothing)
+                jl_error("CodeInstance returned from generator must have owner == nothing");
+            if (ci->next)
+                jl_error("CodeInstance returned from generator must not be in the cache");
+            ret = ex;
+            goto done;
+        }
+        else if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
             jl_resolve_globals_in_ir(stmts, def->module, mi->sparam_vals, 1);
@@ -865,6 +875,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
                 *cache = cached_ci;
         }
 
+        ret = (jl_value_t*)func;
+done:
         ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ct->world_age = last_age;
@@ -875,7 +887,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         jl_rethrow();
     }
     JL_GC_POP();
-    return func;
+    return ret;
 }
 
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)

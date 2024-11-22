@@ -114,12 +114,12 @@ end
 function call_get_staged(mi::MethodInstance, world::UInt, cache_ci::RefValue{CodeInstance})
     token = @_gc_preserve_begin cache_ci
     cache_ci_ptr = pointer_from_objref(cache_ci)
-    src = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{CodeInstance}), mi, world, cache_ci_ptr)
+    src = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{CodeInstance}), mi, world, cache_ci_ptr)
     @_gc_preserve_end token
     return src
 end
 function call_get_staged(mi::MethodInstance, world::UInt, ::Nothing)
-    return ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
+    return ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
 end
 
 function get_cached_uninferred(mi::MethodInstance, world::UInt)

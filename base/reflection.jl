@@ -31,7 +31,11 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
+                if isa(code, CodeInstance)
+                    error("Generator `@generated` method ", m, " ",
+                          "returned an optimized result")
+                end
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
