@@ -1553,7 +1553,7 @@ The default sorting algorithm.
 This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
 equal). It makes an effort to be fast for most inputs.
 
-The algorithms used by `DEFAULT_STABLE` are an implementation detail. See the extended help
+The algorithms used by `DEFAULT_STABLE` are an implementation detail. See the docstring
 of `Base.Sort.DefaultStable` for the current dispatch system.
 """
 const DEFAULT_STABLE = DefaultStable()
