@@ -89,9 +89,7 @@ function _irrational_to_rational_at_current_rounding_mode(::Type{T}, x::Abstract
         p += 32
     end
 end
-function _irrational_to_rational(
-    ::Type{T}, x::AbstractIrrational,
-) where {T <: Integer}
+function _irrational_to_rational(::Type{T}, x::AbstractIrrational) where {T <: Integer}
     f = let x = x
         () -> _irrational_to_rational_at_current_rounding_mode(T, x)
     end
