@@ -61,7 +61,11 @@ Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A,
 
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
-    ntuple(d->s[perm[d]], Val(N))
+    if s === nothing
+        return nothing
+    else
+        return ntuple(d->s[perm[d]], Val(N))
+    end
 end
 Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
 
