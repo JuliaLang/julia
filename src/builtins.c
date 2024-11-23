@@ -1587,6 +1587,28 @@ JL_CALLABLE(jl_f_invoke)
         if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
             jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));
         return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
+    } else if (jl_is_code_instance(argtypes)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        if (jl_tuple1_isa(args[0], &args[2], nargs - 2, (jl_datatype_t*)codeinst->def->specTypes)) {
+            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 2));
+        }
+        if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
+            jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
+            jl_error("invoke: CodeInstance not valid for this world");
+        }
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            return invoke(args[0], &args[2], nargs - 2, codeinst);
+        } else {
+            if (codeinst->owner != jl_nothing || !jl_is_method(codeinst->def->def.value)) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            return jl_gf_invoke_by_method(codeinst->def->def.method, args[0], &args[2], nargs - 1);
+        }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
         jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);

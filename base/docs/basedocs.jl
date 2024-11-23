@@ -2031,6 +2031,7 @@ applicable
 """
     invoke(f, argtypes::Type, args...; kwargs...)
     invoke(f, argtypes::Method, args...; kwargs...)
+    invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
@@ -2055,6 +2056,22 @@ Note in particular that the specified `Method` may be entirely unreachable from 
 (or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
 If the method is part of the ordinary method table, this call behaves similar
 to `invoke(f, method.sig, args...)`.
+
+!!! compat "Julia 1.12"
+    Passing a `Method` requires Julia 1.12.
+
+# Passing a `CodeInstance` instead of a signature
+The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
+The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
+`invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
+parent MethodInstance or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a CodeInstance whose behavior does not match the constraints
+specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
+by external compilers), it may be an error to invoke them after passing through precompilation.
+This is an advanced interface intended for use with external compiler plugins.
+
+!!! compat "Julia 1.12"
+    Passing a `CodeInstance` requires Julia 1.12.
 
 # Examples
 ```jldoctest

@@ -269,6 +269,17 @@ add_edges_impl(edges::Vector{Any}, info::UnionSplitApplyCallInfo) =
     for split in info.infos; add_edges!(edges, split); end
 
 """
+    info::InvokeCICallInfo
+
+Represents a resolved call to `Core.invoke` targeting a `Core.CodeInstance`
+"""
+struct InvokeCICallInfo <: CallInfo
+    edge::CodeInstance
+end
+add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
+    add_one_edge!(edges, info.edge)
+
+"""
     info::InvokeCallInfo
 
 Represents a resolved call to `Core.invoke`, carrying the `info.match::MethodMatch` of
