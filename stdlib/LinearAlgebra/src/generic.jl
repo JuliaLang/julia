@@ -1209,8 +1209,11 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         return lu(A) \ B
+    elseif m > n # (overdetermined) use pivoted QR
+        return qr(A, ColumnNorm()) \ B
+    else # m < n (underdetermined) use LQ = pivoted QR of A'
+        return qr(A', ColumnNorm())' \ B
     end
-    return qr(A, ColumnNorm()) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
