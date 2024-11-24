@@ -3462,8 +3462,11 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
+    idxs1 = eachindex(LinearIndices(As[1]))
+    @boundscheck begin
+        idxs1 = intersect(map(eachindex ∘ LinearIndices, As)...)
+        checkbounds(dest, idxs1)
+    end
     for i = idxs1
         @inbounds I = ith_all(i, As)
         val = f(I...)
