@@ -2125,7 +2125,7 @@ JuliaOJIT::JuliaOJIT()
     #endif
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
-#if JL_LLVM_VERSION < 190000
+#if JL_LLVM_VERSION < 200000
 #ifdef _COMPILER_ASAN_ENABLED_
     // this is a hack to work around a bad assertion:
     //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
@@ -2181,7 +2181,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     // even though that shouldn't be the case and might be unwise
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
         ES.reportError(Obj.takeError());
+#endif
         errs() << "Failed to add module to JIT!\n";
         errs() << "Dumping failing module\n" << M << "\n";
         return;
@@ -2189,7 +2191,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     { auto release = std::move(Lock); }
     auto Err = JuliaOJIT::addObjectFile(JD, std::move(*Obj));
     if (Err) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
         ES.reportError(std::move(Err));
+#endif
         errs() << "Failed to add objectfile to JIT!\n";
         abort();
     }
