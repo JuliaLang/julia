@@ -80,7 +80,6 @@ A symbol representing the architecture of the build configuration.
 """
 const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
-
 """
     Sys.KERNEL::Symbol
 
@@ -512,6 +511,19 @@ Predicate for testing if the OS is a derivative of Microsoft Windows NT.
 See documentation in [Handling Operating System Variation](@ref).
 """
 iswindows(os::Symbol) = (os === :Windows || os === :NT)
+
+"""
+    Sys.isWSL([os])
+
+Predicate for testing if the OS is the Windows subsystem for Linux (version 2 or the original),
+running under a derivative of Microsoft Windows NT.
+See documentation in [Handling Operating System Variation](@ref).
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+# https://superuser.com/questions/1749781/how-can-i-check-if-the-environment-is-wsl-from-a-shell-script       
+iswindows(os::Symbol) = ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
 
 """
     Sys.isapple([os])
