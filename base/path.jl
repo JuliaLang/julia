@@ -655,7 +655,7 @@ function uripath end
 else
     function uripath(path::String)
         localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
-        host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
+        host = if Sys.isWSL()
             distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
             "wsl\$/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
         else
