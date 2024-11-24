@@ -523,6 +523,8 @@ Base.@constprop :aggressive function _symm_hemm_generic!(C, tA, tB, A, B, alpha,
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
 end
 
+generic_matmatmul!(C, A, B, alpha, beta) = generic_matmatmul!(C, wrapper_char(A), wrapper_char(B), A, B, alpha, beta)
+
 # legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
         _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
@@ -969,7 +971,7 @@ end
 # aggressive const prop makes mixed eltype mul!(C, A, B) invoke _generic_matmatmul! directly
 # legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul = MulAddMul()) =
-    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add.alpha, _add.beta)
+    generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, alpha::Number, beta::Number) =
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), alpha, beta)
 
