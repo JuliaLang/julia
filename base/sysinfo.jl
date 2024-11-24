@@ -523,7 +523,7 @@ See documentation in [Handling Operating System Variation](@ref).
     This function requires at least Julia 1.12.
 """
 # https://superuser.com/questions/1749781/how-can-i-check-if-the-environment-is-wsl-from-a-shell-script       
-iswindows(os::Symbol) = ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
+isWSL(os::Symbol) = ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
 
 """
     Sys.isapple([os])
