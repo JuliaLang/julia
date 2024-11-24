@@ -151,7 +151,7 @@ number of singular values.
 
 `alg` specifies which algorithm and LAPACK method to use for SVD:
 - `alg = DivideAndConquer()` (default): Calls `LAPACK.gesdd!`.
-- `alg = QRIteration()`: Calls `LAPACK.gesvd!` (typically slower but more accurate) .
+- `alg = LinearAlgebra.QRIteration()`: Calls `LAPACK.gesvd!` (typically slower but more accurate) .
 
 !!! compat "Julia 1.3"
     The `alg` keyword argument requires Julia 1.3 or later.
