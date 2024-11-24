@@ -4,8 +4,7 @@ export code_escapes, @code_escapes, __clear_cache!
 
 include("setup_Compiler.jl")
 
-using ..EscapeAnalysis
-const EA = EscapeAnalysis
+using .Compiler: EscapeAnalysis as EA
 
 # AbstractInterpreter
 # -------------------
