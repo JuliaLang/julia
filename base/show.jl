@@ -443,7 +443,7 @@ function show_circular(io::IOContext, @nospecialize(x))
     for (k, v) in io.dict
         if k === :SHOWN_SET
             if v === x
-                print(io, "#= circular reference @-$d =#")
+                printstyled(io, "#= circular reference @-$d =#"; color = :yellow)
                 return true
             end
             d += 1

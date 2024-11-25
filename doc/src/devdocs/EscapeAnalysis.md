@@ -20,7 +20,8 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 defines the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
-using Base.Compiler: EscapeAnalysis # or `using Compiler: EscapeAnalysis` to use the stdlib version
+# InteractiveUtils.@activate Compiler # to use the stdlib version of the Compiler
+
 let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
     include(normpath(JULIA_DIR, "Compiler", "test", "EAUtils.jl"))
     using .EAUtils
