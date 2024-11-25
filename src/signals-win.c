@@ -256,7 +256,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         case EXCEPTION_ACCESS_VIOLATION:
             if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                jl_set_gc_and_wait();
+                jl_set_gc_and_wait(ct);
                 // Do not raise sigint on worker thread
                 if (ptls->tid != 0)
                     return EXCEPTION_CONTINUE_EXECUTION;

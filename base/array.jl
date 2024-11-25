@@ -616,11 +616,9 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
-end
 
 ## copying iterators to containers
 
@@ -769,28 +767,15 @@ end
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                T = ($I).f
-            else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
-            end
-            promote_typejoin_union(T)
+macro default_eltype(itr)
+    I = esc(itr)
+    return quote
+        if $I isa Generator && ($I).f isa Type
+            T = ($I).f
+        else
+            T = Base._return_type(_iterator_upper_bound, Tuple{typeof($I)})
         end
-    end
-else
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
-            else
-                Any
-            end
-        end
+        promote_typejoin_union(T)
     end
 end
 
@@ -1660,6 +1645,7 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 ```
 """
 function popat!(a::Vector, i::Integer)
+    @_propagate_inbounds_meta
     x = a[i]
     _deleteat!(a, i, 1)
     x
@@ -2453,19 +2439,28 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
-findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
-    1 <= p.x <= r.stop ? p.x : nothing
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where {T<:Integer} =
+    1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
-findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
-    first(r) <= p.x <= last(r) ? firstindex(r) + Int(p.x - first(r)) : nothing
+findfirst(::typeof(iszero), ::OneTo) = nothing
+findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+    first(r) <= p.x <= last(r) || return nothing
+    i1 = first(keys(r))
+    return i1 + oftype(i1, p.x - first(r))
+end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))::S
+    d = p.x - first(r)
     iszero(d % step(r)) || return nothing
-    return d ÷ step(r) + 1
+    return convert(keytype(r), d ÷ step(r) + 1)
 end
+
+findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
+findfirst(::typeof(isone), r::AbstractRange) = findfirst(==(one(first(r))), r)
 
 """
     findprev(A, i)
@@ -2636,6 +2631,17 @@ end
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
+
+# for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
+function findlast(p::Union{Fix2{typeof(isequal),<:Integer},Fix2{typeof(==),<:Integer},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer})
+    findfirst(p, r)
+end
+
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::StepRange{T,S}) where {T,S}
+    findfirst(p, r)
+end
 
 """
     findall(f::Function, A)
