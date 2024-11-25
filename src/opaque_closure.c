@@ -53,7 +53,8 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     jl_method_instance_t *mi = NULL;
     if (source->source) {
         mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
-    } else {
+    }
+    else {
         mi = (jl_method_instance_t *)jl_atomic_load_relaxed(&source->specializations);
         if (!jl_subtype(sigtype, mi->specTypes)) {
             jl_error("sigtype mismatch in optimized opaque closure");
@@ -116,7 +117,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         // OC wrapper methods are not world dependent and have no edges or other info
         ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke))
-            jl_compile_codeinst(ci);
+            jl_compile_codeinst(ci); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible)
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
     }
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);

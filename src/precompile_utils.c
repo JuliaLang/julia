@@ -278,7 +278,8 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         }
     }
     void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
-                                         jl_atomic_load_acquire(&jl_world_counter));
+                                         jl_atomic_load_acquire(&jl_world_counter),
+                                         NULL);
     JL_GC_POP();
     return native_code;
 }
@@ -389,7 +390,7 @@ static void *jl_precompile_trimmed(size_t world)
     jl_cgparams_t params = jl_default_cgparams;
     params.trim = jl_options.trim;
     void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
-                                         world);
+                                         world, NULL);
     JL_GC_POP();
     return native_code;
 }

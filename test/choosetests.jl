@@ -48,10 +48,11 @@ const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 function test_path(test)
     t = split(test, '/')
     if t[1] in STDLIBS
+        pkgdir = abspath(Base.find_package(String(t[1])), "..", "..")
         if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
+            return joinpath(pkgdir, "test", t[2])
         else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
+            return joinpath(pkgdir, "test", "runtests")
         end
     elseif t[1] == "Compiler"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)

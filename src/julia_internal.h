@@ -677,7 +677,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *di, jl_svec_t *edges);
 JL_DLLEXPORT jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
-JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile);
 JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world, size_t min_valid, size_t max_valid, int mt_cache);
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner);
@@ -1133,7 +1133,7 @@ void jl_safepoint_init(void);
 // before calling this function. If the calling thread is to run the GC,
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
-int jl_safepoint_start_gc(void);
+int jl_safepoint_start_gc(jl_task_t *ct);
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
 // the `mprotect` may not be removed if there's pending SIGINT) and wake
@@ -1143,8 +1143,8 @@ void jl_safepoint_end_gc(void);
 // Wait for the GC to finish
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
-void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT;
-void jl_safepoint_wait_thread_resume(void) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT;
+void jl_safepoint_wait_thread_resume(jl_task_t *ct) JL_NOTSAFEPOINT;
 int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -1170,7 +1170,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-void jl_set_gc_and_wait(void); // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct); // n.b. not used on _OS_DARWIN_
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
@@ -1657,7 +1657,7 @@ void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_rehash(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, size_t newsz);
 JL_DLLEXPORT ssize_t jl_idset_peek_bp(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
-jl_value_t *jl_idset_get(jl_genericmemory_t *keys JL_PROPAGATES_ROOT, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_idset_get(jl_genericmemory_t *keys JL_PROPAGATES_ROOT, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_key(jl_genericmemory_t *keys, jl_value_t *key, ssize_t *newidx);
 JL_DLLEXPORT jl_genericmemory_t *jl_idset_put_idx(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, ssize_t idx);
 JL_DLLEXPORT ssize_t jl_idset_pop(jl_genericmemory_t *keys, jl_genericmemory_t *idxs, jl_value_t *key) JL_NOTSAFEPOINT;
@@ -1946,7 +1946,8 @@ JL_DLLIMPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char emit_mc, const cha
 JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);
 
-JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache, size_t world);
+typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
+JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache, size_t world, jl_codeinstance_lookup_t lookup);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s, jl_emission_params_t *params);

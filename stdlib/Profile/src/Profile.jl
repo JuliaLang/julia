@@ -43,6 +43,8 @@ using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
+const slash = Sys.iswindows() ? "\\" : "/"
+
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
 
@@ -537,7 +539,7 @@ function flatten(data::Vector, lidict::LineInfoDict)
 end
 
 const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
-const COMPILER_DIR = "././../usr/share/julia/Compiler/"
+const COMPILER_DIR = "../usr/share/julia/Compiler/"
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
@@ -554,8 +556,8 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         elseif startswith(path_norm, lib_dir)
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
-        elseif startswith(path, COMPILER_DIR)
-            remainder = only(split(path, COMPILER_DIR, keepempty=false))
+        elseif contains(path, COMPILER_DIR)
+            remainder = split(path, COMPILER_DIR, keepempty=false)[end]
             possible_compiler_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder))
             return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
@@ -572,7 +574,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
                         project_file = joinpath(root, proj)
                         if Base.isfile_casesensitive(project_file)
                             pkgid = Base.project_file_name_uuid(project_file, "")
-                            isempty(pkgid.name) && return path # bad Project file
+                            isempty(pkgid.name) && return path, "", path # bad Project file
                             # return the joined the module name prefix and path suffix
                             _short_path = path[nextind(path, sizeof(root)):end]
                             return path, string("@", pkgid.name), _short_path
@@ -944,8 +946,8 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             Base.printstyled(io, pkgname, color=pkgcolor)
             file_trunc = ltruncate(file, max(1, wfile))
             wpad = wfile - textwidth(pkgname)
-            if !isempty(pkgname) && !startswith(file_trunc, "/")
-                Base.print(io, "/")
+            if !isempty(pkgname) && !startswith(file_trunc, slash)
+                Base.print(io, slash)
                 wpad -= 1
             end
             if isempty(path)
@@ -1048,8 +1050,8 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
                 remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
                 linenum = li.line == -1 ? "?" : string(li.line)
-                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
-                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                _slash = (!isempty(pkgname) && !startswith(remaining_path, slash)) ? slash : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$(_slash)$remaining_path:$linenum"
                 rich_file = if isempty(path)
                     styled_path
                 else
