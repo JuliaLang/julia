@@ -1068,7 +1068,10 @@ end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
-    mi = first(args)::MethodInstance
+    mi = first(args)
+    if !(mi isa MethodInstance)
+        mi = (mi::CodeInstance).def # COMBAK get escape info directly from CI instead?
+    end
     first_idx, last_idx = 2, length(args)
     add_liveness_changes!(astate, pc, args, first_idx, last_idx)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available

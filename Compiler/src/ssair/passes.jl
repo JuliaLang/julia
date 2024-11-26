@@ -1302,7 +1302,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # at the end of the intrinsic. Detect that here.
                 if length(stmt.args) == 4 && stmt.args[4] === nothing
                     # constant case
-                elseif length(stmt.args) == 5 && stmt.args[4] isa Bool && stmt.args[5] isa MethodInstance
+                elseif length(stmt.args) == 5 && stmt.args[4] isa Bool && stmt.args[5] isa Core.CodeInstance
                     # inlining case
                 else
                     continue
@@ -1522,9 +1522,9 @@ end
 # NOTE we resolve the inlining source here as we don't want to serialize `Core.Compiler`
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
-    mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
+    code::CodeInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(code_cache(inlining), mi, nothing)
+    mi = code.def
     et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1671,11 +1671,11 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         if inline === nothing
             # No code in the function - Nothing to do
         else
-            mi = finalizer_stmt.args[5]::MethodInstance
-            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
+            ci = finalizer_stmt.args[5]::CodeInstance
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, ci, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                newinst = add_flag(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flag)
+                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Nothing), flag)
                 insert_node!(ir, loc, newinst, attach_after)
             end
         end

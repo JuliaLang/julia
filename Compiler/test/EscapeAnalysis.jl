@@ -1,15 +1,10 @@
 module test_EA
 
-global use_core_compiler::Bool = true
+include("irutils.jl")
 
-if use_core_compiler
-    const EscapeAnalysis = Core.Compiler.EscapeAnalysis
-else
-    include(normpath(Sys.BINDIR, "..", "..", "Compiler", "src", "ssair", "EscapeAnalysis.jl"))
-end
+const EscapeAnalysis = Compiler.EscapeAnalysis
 
 include("EAUtils.jl")
-include("irutils.jl")
 
 using Test, .EscapeAnalysis, .EAUtils
 using .EscapeAnalysis: ignore_argescape

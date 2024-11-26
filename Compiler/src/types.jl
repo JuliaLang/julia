@@ -41,6 +41,7 @@ struct StmtInfo
     need thus not be computed.
     """
     used::Bool
+    saw_latestworld::Bool
 end
 
 struct SpecInfo
