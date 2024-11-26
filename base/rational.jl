@@ -124,9 +124,9 @@ function //(x::Number, y::Complex{<:Integer})
     scaled_a = real_y // m
     scaled_b = imag_y // m
     denom =  (scaled_a^2 + scaled_b^2)
-    real_part = (x * (((real_y//denom)//m)//m))
-    imag_part = (-x * (((imag_y// denom)//m)//m))
-    ans = (real_part + imag_part * im)
+    real_part = ((((real_y//denom)//m)//m))
+    imag_part = ((((imag_y// denom)//m)//m))
+    ans = (x*real_part - x*imag_part * im)
     return ans
 end
 
