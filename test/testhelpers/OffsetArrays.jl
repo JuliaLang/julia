@@ -571,17 +571,6 @@ Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))
 
-Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(Array{typeof(v)}, inds), v)
-Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), zero(T))
-Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), one(T))
-Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), true)
-Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), false)
-
 Base.zero(A::OffsetArray) = parent_call(zero, A)
 Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)
 
@@ -820,17 +809,6 @@ end
 centered(A::AbstractArray, cp::Dims=center(A)) = OffsetArray(A, .-cp)
 
 centered(A::AbstractArray, i::CartesianIndex) = centered(A, Tuple(i))
-
-# we may pass the searchsorted* functions to the parent, and wrap the offset
-for f in [:searchsortedfirst, :searchsortedlast, :searchsorted]
-    _safe_f = Symbol("_safe_" * String(f))
-    @eval function $_safe_f(v::OffsetArray, x, ilo, ihi, o::Base.Ordering)
-        offset = firstindex(v) - firstindex(parent(v))
-        $f(parent(v), x, ilo - offset, ihi - offset, o) .+ offset
-    end
-    @eval Base.$f(v::OffsetVector, x, ilo::T, ihi::T, o::Base.Ordering) where T<:Integer =
-        $_safe_f(v, x, ilo, ihi, o)
-end
 
 ##
 # Deprecations

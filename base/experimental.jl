@@ -458,6 +458,29 @@ without adding them to the global method table.
 :@MethodTable
 
 """
+    Base.Experimental.make_io_thread()
+
+Create a new thread that will run the Julia IO loop. This can potentially reduce the latency of some
+IO operations as they no longer depend on the main thread to run it. This does mean that code that uses
+this as implicit synchronization needs to be checked for correctness.
+"""
+function make_io_thread()
+    tid = UInt[0]
+    threadwork = @cfunction function(arg::Ptr{Cvoid})
+            current_task().donenotify = Base.ThreadSynchronizer() #TODO: Should this happen by default in adopt thread?
+            Base.errormonitor(current_task()) # this may not go particularly well if the IO loop is dead, but try anyways
+            @ccall jl_set_io_loop_tid((Threads.threadid() - 1)::Int16)::Cvoid
+            wait() # spin uv_run as long as needed
+            nothing
+        end Cvoid (Ptr{Cvoid},)
+    err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+    err == 0 || Base.uv_error("uv_thread_create", err)
+    @ccall uv_thread_detach(tid::Ptr{UInt})::Cint
+    err == 0 || Base.uv_error("uv_thread_detach", err)
+    # n.b. this does not wait for the thread to start or to take ownership of the event loop
+end
+
+"""
     Base.Experimental.entrypoint(f, argtypes::Tuple)
 
 Mark a method for inclusion when the `--trim` option is specified.

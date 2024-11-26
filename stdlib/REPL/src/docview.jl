@@ -473,7 +473,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)

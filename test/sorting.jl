@@ -596,6 +596,26 @@ end
     @test searchsortedfirst(o, 1.5) == 0
     @test searchsortedlast(o, 0) == firstindex(o) - 1
     @test searchsortedlast(o, 1.5) == -1
+
+    # Issue #56457
+    o2 = OffsetArray([2,2,3], typemax(Int)-3);
+    @test searchsorted(o2, 2) == firstindex(o2):firstindex(o2)+1
+
+    struct IdentityVector <: AbstractVector{Int}
+        lo::Int
+        hi::Int
+    end
+    function Base.getindex(s::IdentityVector, i::Int)
+        s.lo <= i <= s.hi || throw(BoundsError(s, i))
+        i
+    end
+    Base.axes(s::IdentityVector) = (s.lo:s.hi,)
+    Base.size(s::IdentityVector) = length.(axes(s))
+
+    o3 = IdentityVector(typemin(Int), typemin(Int)+5)
+    @test searchsortedfirst(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsortedlast(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsorted(o3, typemin(Int)+2) === typemin(Int)+2:typemin(Int)+2
 end
 
 function adaptive_sort_test(v; trusted=InsertionSort, kw...)
@@ -980,9 +1000,10 @@ end
 end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
-    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 10 > @allocations sort(v)
-    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    let v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+        @test 10 > @allocations sort(v)
+        @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    end
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end

@@ -95,6 +95,9 @@ for options in ((format=:tree, C=true),
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin
@@ -199,6 +202,24 @@ end
         nothing
     end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
+end
+
+import InteractiveUtils
+
+@testset "Module short names" begin
+    Profile.clear()
+    @profile InteractiveUtils.peakflops()
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
 end
 
 # Profile deadlocking in compilation (debuginfo registration)

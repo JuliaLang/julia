@@ -531,6 +531,4 @@ end
 
 # BEGIN 1.12 deprecations
 
-@deprecate stat(fd::Integer) stat(RawFD(fd))
-
 # END 1.12 deprecations
