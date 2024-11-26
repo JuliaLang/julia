@@ -1759,13 +1759,13 @@ julia> v
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
-function sort(x::NTuple{N,T};
+function sort(x::NTuple{<:Any,T};
               alg::Algorithm=defalg(x),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              scratch::Union{Vector{T}, Nothing}=nothing) where {N,T}
+              scratch::Union{Vector{T}, Nothing}=nothing) where T
     _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
 end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
