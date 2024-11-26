@@ -915,4 +915,17 @@ end
     @test exp(log(M)) ≈ M
 end
 
+@testset "(l/r)mul! and (l/r)div! for non-contiguous matrices" begin
+    U = UpperTriangular(reshape(collect(3:27.0),5,5))
+    B = float.(collect(reshape(1:100, 10,10)))
+    B2 = copy(B); B2v = view(B2, 1:2:9, 1:5); B2vc = copy(B2v)
+    @test lmul!(U, B2v) == lmul!(U, B2vc)
+    B2 = copy(B); B2v = view(B2, 1:2:9, 1:5); B2vc = copy(B2v)
+    @test rmul!(B2v, U) == rmul!(B2vc, U)
+    B2 = copy(B); B2v = view(B2, 1:2:9, 1:5); B2vc = copy(B2v)
+    @test ldiv!(U, B2v) ≈ ldiv!(U, B2vc)
+    B2 = copy(B); B2v = view(B2, 1:2:9, 1:5); B2vc = copy(B2v)
+    @test rdiv!(B2v, U) ≈ rdiv!(B2vc, U)
+end
+
 end # module TestTriangular
