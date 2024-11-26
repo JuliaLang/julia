@@ -306,6 +306,11 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 // GC Statistics
 // ========================================================================= //
 
+JL_DLLEXPORT const char* jl_active_gc_impl(void) {
+    const char* mmtk_version = get_mmtk_version();
+    return mmtk_version;
+}
+
 int64_t last_gc_total_bytes = 0;
 int64_t last_live_bytes = 0; // live_bytes at last collection
 int64_t live_bytes = 0;

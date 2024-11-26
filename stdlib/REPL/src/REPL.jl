@@ -1771,6 +1771,8 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    gc_version = unsafe_string(ccall(:jl_active_gc_impl, Ptr{UInt8}, ()))
+
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1784,7 +1786,7 @@ function banner(io::IO = stdout; short = false)
 
         if short
             print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date) $(gc_version)
              $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
             """)
         else
@@ -1795,14 +1797,14 @@ function banner(io::IO = stdout; short = false)
               $(jl)| | | | | | |/ _` |$(tx)  |
               $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-            $(jl)|__/$(tx)                   |
+            $(jl)|__/$(tx)                   |  $(gc_version)
 
             """)
         end
     else
         if short
             print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
+              o  |  Version $(VERSION)$(commit_date) $(gc_version)
              o o |  $(commit_string)
             """)
         else
@@ -1814,7 +1816,7 @@ function banner(io::IO = stdout; short = false)
               | | | | | | |/ _` |  |
               | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
              _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-            |__/                   |
+            |__/                   |  $(gc_version)
 
             """)
         end

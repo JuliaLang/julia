@@ -2605,8 +2605,7 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
             if (auto *CI = dyn_cast<CallInst>(*it)) {
                 *CFGModified = true;
 
-                Value *callee = CI->getCalledOperand();
-                assert(callee == GCAllocBytes);
+                assert(CI->getCalledOperand() == GCAllocBytes);
 
                 auto newI = lowerGCAllocBytesLate(CI, F);
                 if (newI != CI) {

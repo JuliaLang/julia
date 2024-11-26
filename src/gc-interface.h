@@ -98,6 +98,8 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
+// Returns the version of which GC implementation is being used according to the list of supported GCs
+JL_DLLEXPORT const char* jl_active_gc_impl(void);
 
 // ========================================================================= //
 // Metrics
