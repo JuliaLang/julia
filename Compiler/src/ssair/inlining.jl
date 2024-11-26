@@ -1557,7 +1557,7 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOp
     info isa ConstCallInfo && (info = info.call)
     info isa MethodMatchInfo || return nothing
     length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
+    match = info.query.results[1]::MethodMatch
     match.fully_covers || return nothing
     edge = info.edges[1]
     edge === nothing && return nothing

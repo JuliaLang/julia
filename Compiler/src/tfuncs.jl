@@ -3087,7 +3087,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
-        vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
+        vinfo = MethodMatchInfo(MethodLookupQuery(vresults, argtype_by_index(argtypes, typeidx), types), mt, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)
         vinfo = InvokeCallInfo(nothing, match, nothing, types)
