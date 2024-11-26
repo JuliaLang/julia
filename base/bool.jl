@@ -184,3 +184,5 @@ end
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)
+
+Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))

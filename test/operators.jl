@@ -2,7 +2,7 @@
 
 using Random: randstring
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1

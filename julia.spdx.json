@@ -87,6 +87,18 @@
             "summary": "ArgTools provides tools for creating consistent, flexible APIs that work with various kinds of function arguments."
         },
         {
+            "name": "LinearAlgebra.jl",
+            "SPDXID": "SPDXRef-JuliaLinearAlgebra",
+            "downloadLocation": "git+https://github.com/JuliaLang/LinearAlgebra.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://juliastats.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/LinearAlgebra.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2024: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "Development repository for the LinearAlgebra standard library (stdlib) that ships with Julia."
+        },
+        {
             "name": "Tar.jl",
             "SPDXID": "SPDXRef-JuliaTar",
             "downloadLocation": "git+https://github.com/JuliaIO/Tar.jl.git",

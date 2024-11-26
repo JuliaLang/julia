@@ -437,7 +437,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // responsibility, so need to make sure thread 0 will take care
                     // of us.
                     if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        wakeup_thread(ct, 0);
+                        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
+
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);
