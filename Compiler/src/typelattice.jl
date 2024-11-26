@@ -667,7 +667,7 @@ end
         elseif length(vals) == 1
             return vals[1]
         end
-        return Core._ConstSet(typ, vals)
+        return Core.ConstSet(typ, vals)
     end
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
@@ -794,6 +794,15 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vecto
     return Core._PartialStruct(typ, fields)
 end
 
+function Core.ConstSet(@nospecialize(typ), vals::Vector{Any})
+    set = IdSet()
+    for v in vals
+        push!(set, v)
+    end
+    vals = collect(set)
+    return Core._ConstSet(typ, vals)
+end
+    
 function Core.ConstSet(lattice::AbstractLattice,
                        @nospecialize(a::Union{Core.Const, Core.ConstSet}),
                        @nospecialize(b::Union{Core.Const, Core.ConstSet}))
@@ -820,10 +829,5 @@ function Core.ConstSet(lattice::AbstractLattice,
         typb = widenconst(b)
     end
 
-    set = IdSet()
-    for v in vals
-        push!(set, v)
-    end
-    vals = collect(set)
-    return Core._ConstSet(tmerge(lattice, typa, typb), vals)
+    return Core.ConstSet(tmerge(lattice, typa, typb), vals)
 end
