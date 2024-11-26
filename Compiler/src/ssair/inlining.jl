@@ -560,6 +560,9 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 end
             else
                 argtypes = case.argtypes
+                if isempty(argtypes) # TODO: Fix the case where this is Any[]
+                    continue
+                end
                 for i = 1:nparams
                     argex = argexprs[i]
                     tT, sT = argtypes[i], argextype(argex, compact)
