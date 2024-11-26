@@ -1131,14 +1131,15 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     # if no, then fall back to the default implementation that loops over the arrays
     __copyto!(dest, _unwrap_view(dest, dstart)..., src,  _unwrap_view(src, sstart)..., n)
 end
-# if the array A is not a view, there's nothig to unwrap
+# `_unwrap_view` potentially unwraps a SubArray and shifts the index `ind` by the linear offset of the view
+# If the array `A` is not a view, there's nothing to unwrap
 _unwrap_view(A, ind) = A, ind
-# fallback method if the arrays aren't views, in which case there's nothing to unwrap
+# fallback method if neither array is a SubArray, in which case we loop over them
 function __copyto!(dest::A, ::A, dstart, src::B, ::B, sstart, n) where {A,B}
     @_propagate_inbounds_meta
     _copyto!(dest, dstart, src, sstart, n)
 end
-# try copying to the parents if there is at least one contiguous view
+# Forward the copy to the parent if there is any contiguous, linearly indexed view
 function __copyto!(_, destp, dstart, _, srcp, sstart, n)
     @_propagate_inbounds_meta
     copyto!(destp, dstart, srcp, sstart, n)
