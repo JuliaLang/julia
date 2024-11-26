@@ -696,9 +696,9 @@ end
         typea === typeb && return typea
 
         # Uncomment to activate ConstSet formation
-        # if !isa(typea, PartialTypeVar) && !isa(typeb, PartialTypeVar)
-        #     return ConstSet(lattice, typea, typeb)
-        # end
+        if !isa(typea, PartialTypeVar) && !isa(typeb, PartialTypeVar)
+            return ConstSet(lattice, typea, typeb)
+        end
     end
     wl = widenlattice(lattice)
     acp && (typea = widenlattice(wl, typea))
