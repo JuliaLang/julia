@@ -1078,7 +1078,7 @@ end
 
 function copyto_unaliased!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
     @_propagate_inbounds_meta
-    copyto!(dest, firstindex(dest), src, firstindex(src), length(src))
+    copyto!(dest, first(LinearIndices(dest)), src, first(LinearIndices(src)), length(src))
 end
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
     isempty(src) && return dest
