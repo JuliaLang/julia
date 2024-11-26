@@ -121,8 +121,8 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         end
         inferred_result = nothing
         relocatability = 0x1
-        const_flag = is_result_constabi_eligible(result)
-        if !can_discard_trees || (is_cached(caller) && !const_flag)
+        (; rettype, exctype, rettype_const, const_flags) = ResultForCache(result)
+        if !can_discard_trees || (is_cached(caller) && iszero(const_flags & 0x1))
             inferred_result = transform_result_for_cache(interp, result)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             relocatability = 0x0
@@ -145,9 +145,13 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
-            ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, relocatability, di, edges)
+        min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
+        ipo_effects = encode_effects(result.ipo_effects)
+        ccall(:jl_update_codeinst, Cvoid, (
+            Any, Any, Any, Any, Any, Int32, UInt, UInt,
+            UInt32, Any, UInt8, Any, Any),
+            ci, inferred_result, rettype, exctype, rettype_const, const_flags, min_world, max_world,
+            ipo_effects, result.analysis_results, relocatability, di, edges)
         engine_reject(interp, ci)
     end
     return nothing
@@ -451,38 +455,15 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
 
     # finish populating inference results into the CodeInstance if possible, and maybe cache that globally for use elsewhere
     if isdefined(result, :ci)
-        result_type = result.result
-        result_type isa LimitedAccuracy && (result_type = result_type.typ)
-        @assert !(result_type === nothing)
-        if isa(result_type, Const)
-            rettype_const = result_type.val
-            const_flags = is_result_constabi_eligible(result) ? 0x3 : 0x2
-        elseif isa(result_type, PartialOpaque)
-            rettype_const = result_type
-            const_flags = 0x2
-        elseif isconstType(result_type)
-            rettype_const = result_type.parameters[1]
-            const_flags = 0x2
-        elseif isa(result_type, PartialStruct)
-            rettype_const = result_type.fields
-            const_flags = 0x2
-        elseif isa(result_type, InterConditional)
-            rettype_const = result_type
-            const_flags = 0x2
-        elseif isa(result_type, InterMustAlias)
-            rettype_const = result_type
-            const_flags = 0x2
-        else
-            rettype_const = nothing
-            const_flags = 0x0
-        end
-        relocatability = 0x0
+        (; rettype, exctype, rettype_const, const_flags) = ResultForCache(result)
         di = nothing
         edges = empty_edges # `edges` will be updated within `finish!`
         ci = result.ci
-        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-            ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
-            first(result.valid_worlds), last(result.valid_worlds),
+        min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
+        ccall(:jl_fill_codeinst, Cvoid, (
+            Any, Any, Any, Any, Int32, UInt, UInt,
+            UInt32, Any, Any, Any),
+            ci, rettype, exctype, rettype_const, const_flags, min_world, max_world,
             encode_effects(result.ipo_effects), result.analysis_results, di, edges)
         if is_cached(me)
             cached_result = cache_result!(me.interp, result, ci)
@@ -492,6 +473,46 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         end
     end
     nothing
+end
+
+struct ResultForCache
+    rettype
+    exctype
+    rettype_const
+    const_flags::UInt8
+    ResultForCache(rettype, exctype, rettype_const, const_flags::UInt8) = (
+        @nospecialize rettype exctype rettype_const;
+        new(rettype, exctype, rettype_const, const_flags))
+end
+@inline function ResultForCache(result::InferenceResult)
+    result_type = result.result
+    result_type isa LimitedAccuracy && (result_type = result_type.typ)
+    @assert !(result_type === nothing)
+    rettype = widenconst(result_type)
+    exctype = widenconst(result.exc_result)
+    if isa(result_type, Const)
+        rettype_const = result_type.val
+        const_flags = is_result_constabi_eligible(result) ? 0x3 : 0x2
+    elseif isa(result_type, PartialOpaque)
+        rettype_const = result_type
+        const_flags = 0x2
+    elseif isconstType(result_type)
+        rettype_const = result_type.parameters[1]
+        const_flags = 0x2
+    elseif isa(result_type, PartialStruct)
+        rettype_const = result_type.fields
+        const_flags = 0x2
+    elseif isa(result_type, InterConditional)
+        rettype_const = result_type
+        const_flags = 0x2
+    elseif isa(result_type, InterMustAlias)
+        rettype_const = result_type
+        const_flags = 0x2
+    else
+        rettype_const = nothing
+        const_flags = 0x0
+    end
+    return ResultForCache(rettype, exctype, rettype_const, const_flags)
 end
 
 # record the backedges
@@ -1000,7 +1021,7 @@ function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
     end
     (; result) = frame
     opt = OptimizationState(frame, interp)
-    ir = run_passes_ipo_safe(opt.src, opt, optimize_until)
+    ir = run_passes_ipo_safe(interp, opt, result; optimize_until)
     rt = widenconst(ignorelimited(result.result))
     return ir, rt
 end
@@ -1025,6 +1046,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
             src = ir_to_codeinf!(opt)
+            src.rettype = widenconst(result.result)
         end
         result.src = frame.src = src
     end

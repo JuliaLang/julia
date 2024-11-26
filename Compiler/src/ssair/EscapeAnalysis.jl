@@ -24,10 +24,10 @@ using Base:       # Base definitions
     isempty, length, max, min, missing, println, push!, pushfirst!,
     !, !==, &, *, +, -, :, <, <<, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using ..Compiler: # Compiler specific definitions
-    AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
+    @show, AbstractLattice, Compiler, IRCode, IR_FLAG_NOTHROW,
     argextype, fieldcount_noerror, has_flag, intrinsic_nothrow, is_meta_expr_head,
     is_identity_free_argtype, isexpr, setfield!_nothrow, singleton_type, try_compute_field,
-    try_compute_fieldidx, widenconst
+    try_compute_fieldidx, widenconst, ⊑
 
 function include(x::String)
     if !isdefined(Base, :end_base_include)

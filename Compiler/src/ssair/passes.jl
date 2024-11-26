@@ -989,9 +989,10 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
     lifted_leaves === nothing && return
 
     result_t = Union{}
+    ⊔ = join(𝕃ₒ)
     for v in values(lifted_leaves)
         v === nothing && return
-        result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+        result_t = result_t ⊔ argextype(v.val, compact)
     end
 
     (lifted_val, nest) = perform_lifting!(compact,
@@ -1001,8 +1002,12 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
     compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
     finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
-            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        stmttype = tuple_tfunc(𝕃ₒ, Any[result_t])
+        inst = compact[SSAValue(idx)]
+        ⋤ = strictneqpartialorder(𝕃ₒ)
+        if stmttype ⋤ inst[:type]
+            inst[:type] = stmttype
+            add_flag!(inst, IR_FLAG_REFINED)
         end
     end
 
@@ -1440,19 +1445,23 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         lifted_leaves, any_undef = lifted_result
 
         result_t = Union{}
+        ⊔ = join(𝕃ₒ)
         for v in values(lifted_leaves)
             v === nothing && continue
-            result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+            result_t = result_t ⊔ argextype(v.val, compact)
         end
 
         (lifted_val, nest) = perform_lifting!(compact,
             visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
 
         should_delete_node = false
-        line = compact[SSAValue(idx)][:line]
-        if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+        inst = compact[SSAValue(idx)]
+        line = inst[:line]
+        ⋤ = strictneqpartialorder(𝕃ₒ)
+        if lifted_val !== nothing && result_t ⋤ inst[:type]
             compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+            inst[:type] = result_t
+            add_flag!(inst, IR_FLAG_REFINED)
         elseif lifted_val === nothing || isa(lifted_val.val, AnySSAValue)
             # Save some work in a later compaction, by inserting this into the renamer now,
             # but only do this if we didn't set the REFINED flag, to save work for irinterp
@@ -1855,9 +1864,15 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 for use in du.uses
                     if use.kind === :getfield
                         inst = ir[SSAValue(use.idx)]
-                        inst[:stmt] = compute_value_for_use(ir, domtree, allblocks,
+                        newvalue = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        add_flag!(inst, IR_FLAG_REFINED)
+                        inst[:stmt] = newvalue
+                        newvaluetyp = argextype(newvalue, ir)
+                        ⋤ = strictneqpartialorder(𝕃ₒ)
+                        if newvaluetyp ⋤ inst[:type]
+                            inst[:type] = newvaluetyp
+                            add_flag!(inst, IR_FLAG_REFINED)
+                        end
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
@@ -1878,11 +1893,12 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
                 for b in phiblocks
                     n = ir[phinodes[b]][:stmt]::PhiNode
                     result_t = Bottom
+                    ⊔ = join(𝕃ₒ)
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
                         v = compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, p)
                         push!(n.values, v)
-                        result_t = tmerge(𝕃ₒ, result_t, argextype(v, ir))
+                        result_t = result_t ⊔ argextype(v, ir)
                     end
                     ir[phinodes[b]][:type] = result_t
                 end
