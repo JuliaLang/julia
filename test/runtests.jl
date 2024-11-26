@@ -3,7 +3,9 @@
 using Test
 using Distributed
 using Dates
-import REPL
+if !Sys.iswindows() && isa(stdin, Base.TTY)
+    import REPL
+end
 using Printf: @sprintf
 using Base: Experimental
 

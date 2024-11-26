@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+import Base.Compiler: Compiler
 
 include("precompile_utils.jl")
 
@@ -15,6 +16,7 @@ precompile_test_harness() do load_path
         import SimpleModule: basic_caller, basic_callee
 
         module Custom
+            import Base.Compiler: Compiler
             include($newinterp_path)
             @newinterp PrecompileInterpreter
         end
@@ -36,7 +38,7 @@ precompile_test_harness() do load_path
 
     @eval let
         using TestAbsIntPrecompile1
-        cache_owner = Core.Compiler.cache_owner(
+        cache_owner = Compiler.cache_owner(
             TestAbsIntPrecompile1.Custom.PrecompileInterpreter())
         let m = only(methods(TestAbsIntPrecompile1.basic_callee))
             mi = only(Base.specializations(m))

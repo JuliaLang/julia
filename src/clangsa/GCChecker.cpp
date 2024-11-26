@@ -779,21 +779,27 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const S
 
 static bool isMutexLock(StringRef name) {
     return name == "uv_mutex_lock" ||
-           //name == "uv_mutex_trylock" ||
+           name == "uv_mutex_trylock" ||
            name == "pthread_mutex_lock" ||
-           //name == "pthread_mutex_trylock" ||
+           name == "pthread_mutex_trylock" ||
+           name == "__gthread_mutex_lock" ||
+           name == "__gthread_mutex_trylock" ||
+           name == "__gthread_recursive_mutex_lock" ||
+           name == "__gthread_recursive_mutex_trylock" ||
            name == "pthread_spin_lock" ||
-           //name == "pthread_spin_trylock" ||
+           name == "pthread_spin_trylock" ||
            name == "uv_rwlock_rdlock" ||
-           //name == "uv_rwlock_tryrdlock" ||
+           name == "uv_rwlock_tryrdlock" ||
            name == "uv_rwlock_wrlock" ||
-           //name == "uv_rwlock_trywrlock" ||
+           name == "uv_rwlock_trywrlock" ||
            false;
 }
 
 static bool isMutexUnlock(StringRef name) {
     return name == "uv_mutex_unlock" ||
            name == "pthread_mutex_unlock" ||
+           name == "__gthread_mutex_unlock" ||
+           name == "__gthread_recursive_mutex_unlock" ||
            name == "pthread_spin_unlock" ||
            name == "uv_rwlock_rdunlock" ||
            name == "uv_rwlock_wrunlock" ||

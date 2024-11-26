@@ -49,14 +49,15 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     if !fully_covering(info)
         # add legacy-style missing backedge info also
         exists = false
-        for i in 1:length(edges)
-            if edges[i] === info.mt && edges[i+1] == info.atype
+        for i in 2:length(edges)
+            if edges[i] === info.mt && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
-            push!(edges, info.mt, info.atype)
+            push!(edges, info.atype)
+            push!(edges, info.mt)
         end
     end
     nmatches = length(info.results)
@@ -98,22 +99,27 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     nothing
 end
 function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
-    for i in 1:length(edges)
+    i = 1
+    while i <= length(edges)
         edgeᵢ = edges[i]
+        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
-        edgeᵢ isa MethodInstance || continue
+        edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
             return # found existing covered edge
         end
+        i += 1
     end
     push!(edges, edge)
     nothing
 end
 function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
-    for i in 1:length(edges)
+    i = 1
+    while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
+        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
-        edgeᵢ isa MethodInstance || continue
+        edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
             if edgeᵢ_orig isa MethodInstance
                 # found edge we can upgrade
@@ -123,6 +129,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
                 return
             end
         end
+        i += 1
     end
     push!(edges, edge)
     nothing
@@ -296,7 +303,8 @@ function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::Union{
             end
         end
     end
-    push!(edges, atype, edge)
+    push!(edges, atype)
+    push!(edges, edge)
     nothing
 end
 function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::CodeInstance)
@@ -317,9 +325,60 @@ function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), edge::CodeIn
             end
         end
     end
-    push!(edges, atype, edge)
+    push!(edges, atype)
+    push!(edges, edge)
     nothing
 end
+
+function add_inlining_edge!(edges::Vector{Any}, edge::MethodInstance)
+    # check if we already have an edge to this code
+    i = 1
+    while i <= length(edges)
+        edgeᵢ = edges[i]
+        if edgeᵢ isa Method && edgeᵢ === edge.def
+            # found edge we can upgrade
+            edges[i] = edge
+            return
+        end
+        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
+        if edgeᵢ isa MethodInstance && edgeᵢ === edge
+            return # found existing covered edge
+        end
+        i += 1
+    end
+    # add_invoke_edge alone
+    push!(edges, (edge.def::Method).sig)
+    push!(edges, edge)
+    nothing
+end
+function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
+    # check if we already have an edge to this code
+    i = 1
+    while i <= length(edges)
+        edgeᵢ = edges[i]
+        if edgeᵢ isa Method && edgeᵢ === edge.def.def
+            # found edge we can upgrade
+            edges[i] = edge
+            return
+        end
+        if edgeᵢ isa MethodInstance && edgeᵢ === edge.def
+            # found edge we can upgrade
+            edges[i] = edge
+            return
+        end
+        if edgeᵢ isa CodeInstance && edgeᵢ.def === edge.def
+            # found existing edge
+            # XXX compare `CodeInstance` identify?
+            return
+        end
+        i += 1
+    end
+    # add_invoke_edge alone
+    push!(edges, (edge.def.def::Method).sig)
+    push!(edges, edge)
+    nothing
+end
+
 
 """
     info::OpaqueClosureCallInfo
