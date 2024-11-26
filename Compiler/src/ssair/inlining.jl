@@ -566,10 +566,25 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 for i = 1:nparams
                     argex = argexprs[i]
                     tT, sT = argtypes[i], argextype(argex, compact)
+                    aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
+                    if !(aft <: mft)
+                        # Generate isa check
+                        isa_expr = Expr(:call, isa, argex, mft)
+                        isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argex, compact), Const(mft))
+                        ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
+                        if cond === true
+                            cond = ssa
+                        else
+                            and_expr = Expr(:call, and_int, cond, ssa)
+                            and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
+                            cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+                        end
+                    end
+
                     if isa(tT, Const) && isa(sT, ConstSet)
                         # Generate egal check
                         egal_expr = Expr(:call, ===, argex, tT)
-                        egal_type = egal_tfunc(optimizer_lattice(interp), argextype(argexprs[i], compact), tT)
+                        egal_type = egal_tfunc(optimizer_lattice(interp), argextype(argex, compact), tT)
                         ssa = insert_node_here!(compact, NewInstruction(egal_expr, egal_type, line))
                         if cond === true
                             cond = ssa
