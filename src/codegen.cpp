@@ -8773,6 +8773,21 @@ static jl_llvm_functions_t
             ctx.spvals_ptr = &*AI++;
         }
     }
+    int64_t PPID = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    auto PPTy = FunctionType::get(ctx.builder.getVoidTy(),
+            {ctx.builder.getInt64Ty(),
+             ctx.builder.getInt32Ty(),
+             ctx.builder.getPtrTy(),
+             ctx.builder.getInt32Ty()}, true);
+
+    auto *PPFn = Intrinsic::getDeclaration(b0->getModule(),Intrinsic::experimental_patchpoint_void);
+    auto patchpoint = ctx.builder.CreateCall(PPTy, PPFn,
+                        {ctx.builder.getInt64(PPID), // id
+                         ctx.builder.getInt32(0), // nbytes
+                         Constant::getNullValue(ctx.builder.getPtrTy()),
+                         ctx.builder.getInt32(0)});
+    patchpoint->setCallingConv(CallingConv::AnyReg);
+
     // step 6. set up GC frame
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
