@@ -1167,10 +1167,13 @@ end
             r = _getfield_tfunc_const(sv, name)
             r !== nothing && return r
         end
-        typ =  _getfield_tfunc(widenlattice(𝕃), widenconst(s00), name, setfield)
+        typ = _getfield_tfunc(widenlattice(𝕃), widenconst(s00), name, setfield)
+	s00 = widenconst(s00)
+        if !isconcretetype(s00)
+            return typ
+	end
         vals = Any[]
-        
-        for n in fieldnames(widenconst(s00))
+        for n in fieldnames(s00)
             r = _getfield_tfunc_const(sv, Const(n))
             if r === nothing
                 return typ
