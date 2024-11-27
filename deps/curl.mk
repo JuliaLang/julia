@@ -35,14 +35,18 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
-CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
-	--without-gnutls --without-libidn2 --without-librtmp \
-	--without-libpsl --without-libgsasl --without-fish-functions-dir \
-	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
-	--without-gssapi --without-brotli
+CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
+        --without-gnutls						\
+        --without-libidn2 --without-librtmp				\
+        --without-nss --without-libpsl					\
+        --disable-ares --disable-manual					\
+        --disable-ldap --disable-ldaps --without-zsh-functions-dir	\
+        --disable-static --without-libgsasl				\
+        --without-brotli
 # A few things we actually enable
-CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
-	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
+CURL_CONFIGURE_FLAGS +=											\
+        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}	\
+        --enable-versioned-symbols
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
