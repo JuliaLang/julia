@@ -5,7 +5,7 @@
 #define JL_THREADS_H
 
 #ifndef MMTK_GC
-#include "gc-tls.h"
+#include "gc-tls-stock.h"
 #else
 #include "gc-tls-mmtk.h"
 #endif

@@ -44,23 +44,34 @@ ifeq ($(OS),FreeBSD)
 FLAGS += -I$(LOCALBASE)/include
 endif
 
+# GC source code. It depends on which GC implementation to use.
+GC_SRCS := gc-common gc-stacks gc-alloc-profiler gc-heap-snapshot
+ifeq ($(WITH_MMTK), 1)
+GC_SRCS += gc-mmtk
+else
+GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
+endif
+
 SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
-	threading scheduler stackwalk gc-common gc-stock gc-mmtk gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler \
-	method jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine
+	threading scheduler stackwalk \
+	method jlapi signal-handling safepoint timing subtype rtutils \
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	$(GC_SRCS)
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
+GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
-	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-ptls \
-	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
+	llvm-pass-helpers llvm-ptls \
+	llvm-lower-handlers llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api \
+	$(GC_CODEGEN_SRCS)
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -107,7 +118,12 @@ ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
 endif
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls.h gc-tls-common.h gc-tls-mmtk.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
+ifeq ($(WITH_MMTK), 1)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h)
+else
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h)
+endif
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif

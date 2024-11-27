@@ -1,5 +1,3 @@
-#ifdef MMTK_GC
-
 #include "gc-common.h"
 #include "mmtkMutator.h"
 #include "gc-mmtk.h"
@@ -1199,5 +1197,3 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 #ifdef __cplusplus
 }
 #endif
-
-#endif // MMTK_GC

@@ -5,8 +5,6 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
-#ifndef MMTK_GC
-
 #ifndef JL_GC_H
 #define JL_GC_H
 
@@ -727,6 +725,3 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
 #endif
 
 #endif
-
-
-#endif // !MMTK_GC
