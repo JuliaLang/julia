@@ -355,7 +355,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
-        pop!(need_to_handle_undef_sparam, which(which(sort, Tuple{Tuple{}})))
+        pop!(need_to_handle_undef_sparam, which(which(sort, Tuple{Tuple{}}))) # https://github.com/JuliaLang/julia/issues/56698
         @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
