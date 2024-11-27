@@ -851,6 +851,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // generate a temporary module that contains our IR
     std::unique_ptr<Module> Mod;
+    bool shouldDiscardValueNames = ctx.builder.getContext().shouldDiscardValueNames();
     Function *f;
     if (entry == NULL) {
         // we only have function IR, which we should put in a function
@@ -878,7 +879,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                   << jl_string_data(ir) << "\n}";
 
         SMDiagnostic Err = SMDiagnostic();
+        ctx.builder.getContext().setDiscardValueNames(false);
         Mod = parseAssemblyString(ir_stream.str(), Err, ctx.builder.getContext());
+        ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
 
         // backwards compatibility: support for IR with integer pointers
         if (!Mod) {
@@ -911,8 +914,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                              << jl_string_data(ir) << "\n}";
 
             SMDiagnostic Err = SMDiagnostic();
-            Mod =
-                parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(false);
+            Mod = parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
         }
 
         if (!Mod) {
@@ -932,7 +936,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
         if (jl_is_string(ir)) {
             SMDiagnostic Err = SMDiagnostic();
+            ctx.builder.getContext().setDiscardValueNames(false);
             Mod = parseAssemblyString(jl_string_data(ir), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
             if (!Mod) {
                 std::string message = "Failed to parse LLVM assembly: \n";
                 raw_string_ostream stream(message);

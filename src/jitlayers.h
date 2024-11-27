@@ -259,7 +259,6 @@ struct jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging_mode;
-    int debug_level;
     bool use_swiftcc = true;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
       : tsctx(std::move(ctx)),
