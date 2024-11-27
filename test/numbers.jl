@@ -840,6 +840,8 @@ end
         end
         @testset "$T" begin
             for value in values
+                # https://github.com/JuliaLang/julia/pull/53677#discussion_r1534044582
+                # Use eval to explicitly show expressions when they fail
                 @eval begin
                     @test ispositive($value) === ($value > 0)
                     @test ispositive(-$value) === (-$value > 0)
