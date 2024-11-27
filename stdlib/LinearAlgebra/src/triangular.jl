@@ -830,7 +830,7 @@ function generic_trimatmul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function,
     end
 end
 function generic_mattrimul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(A,1) == 1
+    if stride(C,1) == stride(B,1) == 1
         BLAS.trmm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
     else # incompatible with LAPACK
         @invoke generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
@@ -845,7 +845,7 @@ function generic_trimatdiv!(C::StridedVecOrMat{T}, uploc, isunitc, tfun::Functio
     end
 end
 function generic_mattridiv!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
-    if stride(C,1) == stride(A,1) == 1
+    if stride(C,1) == stride(B,1) == 1
         BLAS.trsm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
     else # incompatible with LAPACK
         @invoke generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
