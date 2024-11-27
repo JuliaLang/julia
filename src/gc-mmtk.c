@@ -946,8 +946,6 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     return v;
 }
 
-
-
 // allocation wrappers that track allocation and let collection run
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
