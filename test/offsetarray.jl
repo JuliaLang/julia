@@ -922,6 +922,6 @@ end
 
     B = reshape(A0, -10:-9, 9:10)
     @test isa(B, OffsetArray{Int,2})
-    @test parent(B) === A0
+    @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end
