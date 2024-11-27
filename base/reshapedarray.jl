@@ -136,43 +136,41 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = resh
         " may have at most one omitted dimension specified by `Colon()`")))
 @noinline throw2(lenA, dims) = throw(DimensionMismatch(string("array size ", lenA,
     " must be divisible by the product of the new dimensions ", dims)))
-if Int == Int64
-    const ReshapeIntTypes = Union{Int8, Int16, Int32, Int64}
-else
-    const ReshapeIntTypes = Union{Int8, Int16, Int32}
-end
-@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{ReshapeIntTypes, Colon}}})
-    dims = map(x -> x isa Colon ? x : Int(x), _dims)
-    pre = _before_colon(dims...)::Tuple{Vararg{Int}}
-    post = _after_colon(dims...)
-    _any_colon(post...) && throw1(dims)
-    post::Tuple{Vararg{Int}}
-    len = length(A)
-    sz, is_exact = if iszero(len)
-        (0, true)
-    else
-        let pr = Core.checked_dims(pre..., post...)  # safe product
-            if iszero(pr)
-                throw2(len, dims)
-            end
-            (quo, rem) = divrem(len, pr)
-            (Int(quo), iszero(rem))
-        end
-    end::Tuple{Int,Bool}
-    is_exact || throw2(len, dims)
-    (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
-end
-@inline function _reshape_uncolon(A, dims::Tuple{Vararg{Union{Integer, Colon}}})
+
+@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{Integer, Colon}}})
+    # promote the dims to `Int` at least
+    dims = map(x -> x isa Colon ? x : promote_type(typeof(x), Int)(x), _dims)
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
     len = length(A)
+    _reshape_uncolon_computesize(len, dims, pre, post)
+end
+@inline function _reshape_uncolon_computesize(len::Int, dims, pre::Tuple{Vararg{Int}}, post::Tuple{Vararg{Int}})
+    sz = if iszero(len)
+        0
+    else
+        let pr = Core.checked_dims(pre..., post...)  # safe product
+            quo = _reshape_uncolon_computesize_nonempty(len, dims, pr)
+            convert(Int, quo)
+        end
+    end
+    (pre..., sz, post...)
+end
+@inline function _reshape_uncolon_computesize(len, dims, pre, post)
     pr = prod((pre..., post...))
+    sz = if iszero(len)
+        promote(len, pr)[1] # zero of the correct type
+    else
+        _reshape_uncolon_computesize_nonempty(len, dims, pr)
+    end
+    (pre..., sz, post...)
+end
+@inline function _reshape_uncolon_computesize_nonempty(len, dims, pr)
     iszero(pr) && throw2(len, dims)
     (quo, rem) = divrem(len, pr)
-    sz, is_exact = quo, iszero(rem)
-    is_exact || throw2(len, dims)
-    (pre..., sz, post...)
+    iszero(rem) || throw2(len, dims)
+    quo
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
