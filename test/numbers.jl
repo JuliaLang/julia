@@ -831,7 +831,7 @@ end
     @test cmp(isless, NaN, NaN) == 0
 end
 @testset "ispositive/isnegative" begin
-        for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+    for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
         values = T[zero(T), one(T)]
         if T <: AbstractFloat
             push!(values, Inf, NaN) # also check Infs and NaNs
