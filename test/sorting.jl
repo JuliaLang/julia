@@ -931,8 +931,8 @@ end
 
     # Tuple extensions (custom alg)
     @test_throws MethodError sort((1,2,3), alg=MyFirstAlg())
-    Base.Sort._sort(v::NTuple, ::MyFirstAlg, o::Base.Order.Ordering, kw) = "hi!"
-    @test sort((1,2,3), alg=MyFirstAlg()) == "hi!"
+    Base.Sort._sort(v::NTuple, ::MyFirstAlg, o::Base.Order.Ordering, kw) = (17,2,9)
+    @test sort((1,2,3), alg=MyFirstAlg()) == (17,2,9)
 
     struct TupleFoo
         x::Int
