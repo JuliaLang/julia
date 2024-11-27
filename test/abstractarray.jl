@@ -2,8 +2,19 @@
 
 using Random, LinearAlgebra
 
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
+
+isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
+using .Main.StructArrays
+
+isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
+using .Main.FillArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -84,6 +95,7 @@ end
     @test checkbounds(Bool, A, 1:60) == true
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
+    @test checkbounds(Bool, A, 2, 2, 2, 10:9) == true
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
     @test checkbounds(Bool, A, 1:5, 1:4) == false
     @test checkbounds(Bool, A, 1:5, 1:12) == false
@@ -104,6 +116,7 @@ end
     @test checkbounds(Bool, A, trues(5), trues(13)) == false
     @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
+    @test checkbounds(Bool, A, trues(5, 4, 3, 1)) == true # issue 45867
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == false
@@ -111,7 +124,9 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
-    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5), trues(4, 3, 1)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(3, 2)) == false
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
     @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
@@ -134,6 +149,10 @@ end
     @test checkbounds(Bool, A, [CartesianIndex((6, 4))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 5))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 1))]) == true
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 2))]) == false
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((4, 3)), CartesianIndex((4,))])
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((1,)), 1])
 end
 
 @testset "index conversion" begin
@@ -316,6 +335,22 @@ end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
+
+    @testset "show" begin
+        A = zeros(2,3)
+        for B in (A, view(A, Base.IdentityUnitRange(2:4)))
+            l = LinearIndices(B)
+            s = sprint(show, l)
+            @test s == "LinearIndices($(axes(B)))"
+        end
+    end
+end
+
+@testset "copy for LinearIndices/CartesianIndices" begin
+    C = CartesianIndices((1:2, 1:4))
+    @test copy(C) === C
+    L = LinearIndices((1:2, 1:4))
+    @test copy(L) === L
 end
 
 # token type on which to dispatch testing methods in order to avoid potential
@@ -487,6 +522,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
+            let
+                masks1 = (mask,)
+                @test only(@inferred(to_indices(A, masks1))) isa Base.LogicalIndex{Int}
+                if IndexStyle(B) isa IndexCartesian
+                    @test only(@inferred(to_indices(B, masks1))) === Base.LogicalIndex(mask)
+                end
+            end
             @test B[mask] == A[mask] == B[findall(mask)] == A[findall(mask)] == LinearIndices(mask)[findall(mask)]
             @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[findall(mask)]
             mask1 = bitrand(size(A, 1))
@@ -496,10 +538,15 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
 
             if ndims(B) > 1
+                slice = ntuple(Returns(:), ndims(B)-1)
                 maskfront = bitrand(shape[1:end-1])
-                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
-                @test B[maskfront,1] == Bslice[maskfront]
+                Bslicefront = B[slice..., 1]
+                @test B[maskfront, 1] == Bslicefront[maskfront]
                 @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+                maskend = bitrand(shape[2:end])
+                Bsliceend = B[1, slice...]
+                @test B[1 ,maskend] == Bsliceend[maskend]
+                @test size(B[1:1, maskend]) == (1, sum(maskend))
             end
         end
     end
@@ -522,12 +569,24 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    @test !isassigned(B)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    # Bool isn't a valid index
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))...)
+    @test_throws ArgumentError isassigned(B, true)
+    @test_throws ArgumentError isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
@@ -799,9 +858,8 @@ Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
 
-@testset "mapping over scalars and empty arguments:" begin
+@testset "mapping over scalars" begin
     @test map(sin, 1) === sin(1)
-    @test map(()->1234) === 1234
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
@@ -999,6 +1057,16 @@ end
     @test isempty(v)
     @test isempty(v2::Vector{Int})
     @test isempty(v3::Vector{Float64})
+
+    S = StructArrays.StructArray{Complex{Int}}((v, v))
+    for T in (Complex{Int}, ComplexF64)
+        S0 = empty(S, T)
+        @test S0 isa StructArrays.StructArray{T}
+        @test length(S0) == 0
+    end
+    S0 = empty(S, String)
+    @test S0 isa Vector{String}
+    @test length(S0) == 0
 end
 
 @testset "CartesianIndices" begin
@@ -1165,7 +1233,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1224,6 +1292,9 @@ Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S
             end
         end
     end
+    # constant propagation in the PermutedDimsArray constructor
+    X = @inferred (A -> PermutedDimsArray(A, (2,3,1)))(A)
+    @test @inferred((X -> PermutedDimsArray(X, (3,1,2)))(X)) == A
 end
 
 @testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
@@ -1343,6 +1414,8 @@ end
 Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
 Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
 
+push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int, @nospecialize(y)) = push!(v, (; x, y))
+
 @testset "push! and pushfirst!" begin
     a_orig = [1]
     tpa = TestPushArray{Int, 2}(a_orig)
@@ -1352,6 +1425,11 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
+        # After optimization, all `push!` and `convert` calls should have been inlined
+        @test all((x)->!iscall((src, push!))(x) && !iscall((src, convert))(x), src.code)
+    end
 end
 
 mutable struct SimpleArray{T} <: AbstractVector{T}
@@ -1374,6 +1452,31 @@ using .Main.OffsetArrays
         @test_throws Exception f(a, args...)
         @test a == orig
     end
+end
+
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin
@@ -1724,6 +1827,9 @@ end
     @test_throws ArgumentError stack([1:3, 4:6]; dims=3)
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
 
+    @test stack(["hello", "world"]) isa Matrix{Char}
+    @test_throws DimensionMismatch stack(["hello", "world!"])  # had a bug in error printing
+
     # Empty
     @test_throws ArgumentError stack(())
     @test_throws ArgumentError stack([])
@@ -1779,7 +1885,7 @@ end
 end
 
 module IRUtils
-    include("compiler/irutils.jl")
+    include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 end
 
 function check_pointer_strides(A::AbstractArray)
@@ -1793,6 +1899,24 @@ function check_pointer_strides(A::AbstractArray)
         A[i] === Base.unsafe_load(pointer(A, i)) || return false
     end
     return true
+end
+
+@testset "colonful `reshape`, #54245" begin
+    @test reshape([], (0, :)) isa Matrix
+    @test_throws DimensionMismatch reshape([7], (0, :))
+    let b = prevpow(2, typemax(Int))
+        @test iszero(b*b)
+        @test_throws ArgumentError reshape([7], (b, :, b))
+        @test reshape([], (b, :, b)) isa Array{<:Any, 3}
+    end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
 end
 
 @testset "strides for ReshapedArray" begin
@@ -1875,13 +1999,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
@@ -1899,4 +2027,162 @@ f45952(x) = [x;;]
     A = zeros(2,2)
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
+
+@testset "repeat for FillArrays" begin
+    f = FillArrays.Fill(3, (4,))
+    @test repeat(f, 2) === FillArrays.Fill(3, (8,))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 3))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === repeat(f, 3, 2) === FillArrays.Fill(3, (12,2))
+    f = FillArrays.Fill(3, (4, 2))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 6))
+    @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
+end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+
+
+    @test zero(Union{Float64, Missing}[missing]) == [0.0]
+    struct CustomNumber <: Number
+        val::Float64
+    end
+    Base.zero(::Type{CustomNumber}) = CustomNumber(0.0)
+    @test zero([CustomNumber(5.0)]) == [CustomNumber(0.0)]
+    @test zero(Union{CustomNumber, Missing}[missing]) == [CustomNumber(0.0)]
+    @test zero(Vector{Union{CustomNumber, Missing}}(undef, 1)) == [CustomNumber(0.0)]
+end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end
+
+@testset "IndexStyles in copyto!" begin
+    A = rand(3,2)
+    B = zeros(size(A))
+    colons = ntuple(_->:, ndims(B))
+    # Ensure that the AbstractArray methods are hit
+    # by using views instead of Arrays
+    @testset "IndexLinear - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, colons...), A)
+        @test B == A
+    end
+    @testset "IndexLinear - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, colons...), view(A, axes(A)...))
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), A)
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), view(A, axes(A)...))
+        @test B == A
+    end
+end
+
+@testset "reshape for offset arrays" begin
+    p = Base.IdentityUnitRange(3:4)
+    r = reshape(p, :, 1)
+    @test r[eachindex(r)] == UnitRange(p)
+    @test collect(r) == r
+
+    struct ZeroBasedArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+        a :: A
+        function ZeroBasedArray(a::AbstractArray)
+            Base.require_one_based_indexing(a)
+            new{eltype(a), ndims(a), typeof(a)}(a)
+        end
+    end
+    Base.parent(z::ZeroBasedArray) = z.a
+    Base.size(z::ZeroBasedArray) = size(parent(z))
+    Base.axes(z::ZeroBasedArray) = map(x -> Base.IdentityUnitRange(0:x - 1), size(parent(z)))
+    Base.getindex(z::ZeroBasedArray{<:Any, N}, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...]
+    Base.setindex!(z::ZeroBasedArray{<:Any, N}, val, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...] = val
+
+    z = ZeroBasedArray(collect(1:4))
+    r2 = reshape(z, :, 1)
+    @test r2[CartesianIndices(r2)] == r2[LinearIndices(r2)]
+    r2[firstindex(r2)] = 34
+    @test z[0] == 34
+    r2[eachindex(r2)] = r2 .* 2
+    for (i, j) in zip(eachindex(r2), eachindex(z))
+        @test r2[i] == z[j]
+    end
+end
+
+@testset "zero for arbitrary axes" begin
+    r = SizedArrays.SOneTo(2)
+    s = Base.OneTo(2)
+    _to_oneto(x::Integer) = Base.OneTo(2)
+    _to_oneto(x::Union{Base.OneTo, SizedArrays.SOneTo}) = x
+    for (f, v) in ((zeros, 0), (ones, 1), ((x...)->fill(3,x...),3))
+        for ax in ((r,r), (s, r), (2, r))
+            A = f(ax...)
+            @test axes(A) == map(_to_oneto, ax)
+            if all(x -> x isa SizedArrays.SOneTo, ax)
+                @test A isa SizedArrays.SizedArray && parent(A) isa Array
+            else
+                @test A isa Array
+            end
+            @test all(==(v), A)
+        end
+    end
+end
+
+@testset "one" begin
+    @test one([1 2; 3 4]) == [1 0; 0 1]
+    @test one([1 2; 3 4]) isa Matrix{Int}
+
+    struct Mat <: AbstractMatrix{Int}
+        p::Matrix{Int}
+    end
+    Base.size(m::Mat) = size(m.p)
+    Base.IndexStyle(::Type{<:Mat}) = IndexLinear()
+    Base.getindex(m::Mat, i::Int) = m.p[i]
+    Base.setindex!(m::Mat, v, i::Int) = m.p[i] = v
+    Base.similar(::Mat, ::Type{Int}, size::NTuple{2,Int}) = Mat(Matrix{Int}(undef, size))
+
+    @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
+    @test one(Mat([1 2; 3 4])) isa Mat
+end
+
+@testset "copyto! with non-AbstractArray src" begin
+    A = zeros(4)
+    x = (i for i in axes(A,1))
+    copyto!(A, 1, x, 1, length(A))
+    @test A == axes(A,1)
+    A .= 0
+    copyto!(A, 1, x, 1, 2)
+    @test A[1:2] == first(x,2)
+    @test iszero(A[3:end])
+    A .= 0
+    copyto!(A, 1, x, 1)
+    @test A == axes(A,1)
 end

@@ -3,6 +3,7 @@
 module ScopedValues
 
 export ScopedValue, with, @with
+public get
 
 """
     ScopedValue(x)
@@ -19,6 +20,8 @@ Dynamic scopes are propagated across tasks.
 # Examples
 
 ```jldoctest
+julia> using Base.ScopedValues;
+
 julia> const sval = ScopedValue(1);
 
 julia> sval[]
@@ -38,7 +41,9 @@ julia> sval[]
     implementation is available from the package ScopedValues.jl.
 """
 mutable struct ScopedValue{T}
-    const has_default::Bool
+    # NOTE this struct must be defined as mutable one since it's used as a key of
+    #      `ScopeStorage` dictionary and thus needs object identity
+    const has_default::Bool # this field is necessary since isbitstype `default` field may be initialized with undefined value
     const default::T
     ScopedValue{T}() where T = new(false)
     ScopedValue{T}(val) where T = new{T}(true, val)
@@ -50,15 +55,37 @@ Base.eltype(::ScopedValue{T}) where {T} = T
 """
     isassigned(val::ScopedValue)
 
-Test if the ScopedValue has a default value.
+Test whether a `ScopedValue` has an assigned value.
+
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedValues.get`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(1); b = ScopedValue{Int}();
+
+julia> isassigned(a)
+true
+
+julia> isassigned(b)
+false
+```
 """
-Base.isassigned(val::ScopedValue) = val.has_default
+function Base.isassigned(val::ScopedValue)
+    val.has_default && return true
+    scope = Core.current_scope()::Union{Scope, Nothing}
+    scope === nothing && return false
+    return haskey((scope::Scope).values, val)
+end
 
 const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
 
 struct Scope
     values::ScopeStorage
 end
+
+Scope(scope::Scope) = scope
 
 function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where T
     val = convert(T, value)
@@ -68,20 +95,16 @@ function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where 
     return Scope(ScopeStorage(parent.values, key=>val))
 end
 
-function Scope(scope, pairs::Pair{<:ScopedValue}...)
-    for pair in pairs
-        scope = Scope(scope, pair...)
-    end
-    return scope::Scope
+function Scope(scope, pair::Pair{<:ScopedValue})
+    return Scope(scope, pair...)
+end
+
+function Scope(scope, pair1::Pair{<:ScopedValue}, pair2::Pair{<:ScopedValue}, pairs::Pair{<:ScopedValue}...)
+    # Unroll this loop through recursion to make sure that
+    # our compiler optimization support works
+    return Scope(Scope(scope, pair1...), pair2, pairs...)
 end
 Scope(::Nothing) = nothing
-
-"""
-    current_scope()::Union{Nothing, Scope}
-
-Return the current dynamic scope.
-"""
-current_scope() = current_task().scope::Union{Nothing, Scope}
 
 function Base.show(io::IO, scope::Scope)
     print(io, Scope, "(")
@@ -109,16 +132,30 @@ const novalue = NoValue()
 If the scoped value isn't set and doesn't have a default value,
 return `nothing`. Otherwise returns `Some{T}` with the current
 value.
+
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(42); b = ScopedValue{Int}();
+
+julia> ScopedValues.get(a)
+Some(42)
+
+julia> isnothing(ScopedValues.get(b))
+true
+```
 """
 function get(val::ScopedValue{T}) where {T}
-    # Inline current_scope to avoid doing the type assertion twice.
-    scope = current_task().scope
+    scope = Core.current_scope()::Union{Scope, Nothing}
     if scope === nothing
-        isassigned(val) && return Some{T}(val.default)
+        val.has_default && return Some{T}(val.default)
         return nothing
     end
     scope = scope::Scope
-    if isassigned(val)
+    if val.has_default
         return Some{T}(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
@@ -147,30 +184,32 @@ function Base.show(io::IO, val::ScopedValue)
 end
 
 """
-    with(f, (var::ScopedValue{T} => val::T)...)
+    @with (var::ScopedValue{T} => val)... expr
 
-Execute `f` in a new scope with `var` set to `val`.
-"""
-function with(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
-    @nospecialize
-    ct = Base.current_task()
-    current_scope = ct.scope::Union{Nothing, Scope}
-    ct.scope = Scope(current_scope, pair, rest...)
-    try
-        return f()
-    finally
-        ct.scope = current_scope
-    end
-end
+Macro version of `with`. The expression `@with var=>val expr` evaluates `expr` in a
+new dynamic scope with `var` set to `val`. `val` will be converted to type `T`.
+`@with var=>val expr` is equivalent to `with(var=>val) do expr end`, but `@with`
+avoids creating a closure.
 
-with(@nospecialize(f)) = f()
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
 
-"""
-    @with vars... expr
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
 
-Macro version of `with(f, vars...)` but with `expr` instead of `f` function.
-This is similar to using [`with`](@ref) with a `do` block, but avoids creating
-a closure.
+julia> const a = ScopedValue(1);
+
+julia> f(x) = a[] + x;
+
+julia> @with a=>2 f(10)
+12
+
+julia> @with a=>3 begin
+           x = 100
+           f(x)
+       end
+103
+```
 """
 macro with(exprs...)
     if length(exprs) > 1
@@ -182,18 +221,53 @@ macro with(exprs...)
     else
         error("@with expects at least one argument")
     end
-    for expr in exprs
-        if expr.head !== :call || first(expr.args) !== :(=>)
-            error("@with expects arguments of the form `A => 2` got $expr")
-        end
-    end
     exprs = map(esc, exprs)
-    quote
-        ct = $(Base.current_task)()
-        current_scope = ct.scope::$(Union{Nothing, Scope})
-        ct.scope = $(Scope)(current_scope, $(exprs...))
-        $(Expr(:tryfinally, esc(ex), :(ct.scope = current_scope)))
-    end
+    Expr(:tryfinally, esc(ex), nothing, :(Scope(Core.current_scope()::Union{Nothing, Scope}, $(exprs...))))
 end
+
+"""
+    with(f, (var::ScopedValue{T} => val)...)
+
+Execute `f` in a new dynamic scope with `var` set to `val`. `val` will be converted
+to type `T`.
+
+See also: [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(1);
+
+julia> f(x) = a[] + x;
+
+julia> f(10)
+11
+
+julia> with(a=>2) do
+           f(10)
+       end
+12
+
+julia> f(10)
+11
+
+julia> b = ScopedValue(2);
+
+julia> g(x) = a[] + b[] + x;
+
+julia> with(a=>10, b=>20) do
+           g(30)
+       end
+60
+
+julia> with(() -> a[] * b[], a=>3, b=>4)
+12
+```
+"""
+function with(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
+    @with(pair, rest..., f())
+end
+with(@nospecialize(f)) = f()
 
 end # module ScopedValues

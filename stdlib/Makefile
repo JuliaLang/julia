@@ -39,22 +39,21 @@ install-$$($(1)_JLL_NAME)_jll: get-$$($(1)_JLL_NAME)_jll
 endef
 $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
-
 STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
-          Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
+          Future InteractiveUtils Libdl LibGit2 Logging \
           Markdown Mmap Printf Profile Random REPL Serialization \
           SharedArrays Sockets Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LazyArtifacts LibCURL DelimitedFiles Downloads ArgTools \
-              Tar NetworkOptions SuiteSparse SparseArrays StyledStrings SHA Distributed
+              Tar NetworkOptions SuiteSparse SparseArrays StyledStrings SHA Distributed \
+              JuliaSyntaxHighlighting LinearAlgebra
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 
 ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
 $(error ERROR duplicated STDLIBS in list)
 endif
-
 
 # Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
 $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))

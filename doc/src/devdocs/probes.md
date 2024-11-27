@@ -137,8 +137,8 @@ fib(x) = x <= 1 ? 1 : fib(x-1) + fib(x-2)
 beaver = @spawn begin
     while true
         fib(30)
-        # This safepoint is necessary until #41616, since otherwise this
-        # loop will never yield to GC.
+        # A manual safepoint is necessary since otherwise this loop
+        # may never yield to GC.
         GC.safepoint()
     end
 end
@@ -188,7 +188,7 @@ Julia session and get the PID and REPL's task address:
    _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
- _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org release
 |__/                   |
 
 1> getpid()
@@ -206,7 +206,7 @@ Now we can start `bpftrace` and have it monitor `rt__new__task` for *only* this 
 
 And if we spawn a single task:
 
-`@async 1+1`
+`Threads.@spawn 1+1`
 
 we see this task being created:
 
@@ -215,8 +215,8 @@ we see this task being created:
 However, if we spawn a bunch of tasks from that newly-spawned task:
 
 ```julia
-@async for i in 1:10
-   @async 1+1
+Threads.@spawn for i in 1:10
+   Threads.@spawn 1+1
 end
 ```
 
@@ -264,7 +264,7 @@ We can see this problem illustrated with `bpftrace` quite easily. First, in one 
    _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
- _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org release
 |__/                   |
 
 1> getpid()

@@ -8,14 +8,14 @@ function GitRebase(repo::GitRepo, branch::GitAnnotated, upstream::GitAnnotated;
     @check ccall((:git_rebase_init, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Cvoid}, Ptr{RebaseOptions}),
-                   rebase_ptr_ptr, repo.ptr, branch.ptr, upstream.ptr,
-                   onto === nothing ? C_NULL : onto.ptr, Ref(opts))
+                   rebase_ptr_ptr, repo, branch, upstream,
+                   onto === nothing ? C_NULL : onto, Ref(opts))
     return GitRebase(repo, rebase_ptr_ptr[])
 end
 
 function count(rb::GitRebase)
     ensure_initialized()
-    return ccall((:git_rebase_operation_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
+    return ccall((:git_rebase_operation_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), rb)
 end
 
 """
@@ -28,7 +28,7 @@ has not yet been called or iteration over `rb` has not yet begun), return
 """
 function current(rb::GitRebase)
     ensure_initialized()
-    return ccall((:git_rebase_operation_current, libgit2), Csize_t, (Ptr{Cvoid},), rb.ptr)
+    return ccall((:git_rebase_operation_current, libgit2), Csize_t, (Ptr{Cvoid},), rb)
 end
 
 function Base.getindex(rb::GitRebase, i::Integer)
@@ -80,7 +80,7 @@ function commit(rb::GitRebase, sig::GitSignature)
     try
         @check ccall((:git_rebase_commit, libgit2), Error.Code,
                      (Ptr{GitHash}, Ptr{Cvoid}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
-                      oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+                      oid_ptr, rb, C_NULL, sig, C_NULL, C_NULL)
     catch err
         # TODO: return current HEAD instead
         err isa GitError && err.code === Error.EAPPLIED && return nothing
@@ -101,7 +101,7 @@ rebase had completed), and `-1` for other errors.
 function abort(rb::GitRebase)
     ensure_initialized()
     return ccall((:git_rebase_abort, libgit2), Csize_t,
-                      (Ptr{Cvoid},), rb.ptr)
+                      (Ptr{Cvoid},), rb)
 end
 
 """
@@ -115,5 +115,5 @@ function finish(rb::GitRebase, sig::GitSignature)
     ensure_initialized()
     return ccall((:git_rebase_finish, libgit2), Csize_t,
                   (Ptr{Cvoid}, Ptr{SignatureStruct}),
-                   rb.ptr, sig.ptr)
+                   rb, sig)
 end

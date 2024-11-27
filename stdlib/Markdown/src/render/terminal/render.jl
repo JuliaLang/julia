@@ -13,120 +13,157 @@ function term(io::IO, content::Vector, cols)
     term(io, content[end], cols)
 end
 
-term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
+function term(io::IO, md::MD, columns = cols(io))
+    md = insert_hlines(md)
+    return term(io, md.content, columns)
+end
 
 function term(io::IO, md::Paragraph, columns)
-    print(io, ' '^margin)
-    print_wrapped(io, width = columns-2margin, pre = ' '^margin) do io
-        terminline(io, md.content)
+    lines = wraplines(annotprint(terminline, md.content), columns-2margin)
+    for (i, line) in enumerate(lines)
+        print(io, ' '^margin, line)
+        i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, md::BlockQuote, columns)
-    s = sprint(term, md.content, columns - 10; context=io)
-    lines = split(rstrip(s), '\n')
-    print(io, ' '^margin, '│', lines[1])
-    for i = 2:length(lines)
-        print(io, '\n', ' '^margin, '│', lines[i])
+    content = annotprint(term, md.content, columns - 10)
+    lines = wraplines(rstrip(content), columns - 10)
+    for (i, line) in enumerate(lines)
+        print(io, ' '^margin, '│', line)
+        i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, md::Admonition, columns)
-    col = :default
-    # If the types below are modified, the page manual/documentation.md must be updated accordingly.
-    if md.category == "danger"
-        col = Base.error_color()
-    elseif md.category == "warning"
-        col = Base.warn_color()
-    elseif md.category in ("info", "note")
-        col = Base.info_color()
-    elseif md.category == "tip"
-        col = :green
+    accent = if md.category == "danger"
+        :error
+    elseif md.category in ("warning", "info", "note", "tip")
+        Symbol(md.category)
+    elseif md.category == "compat"
+        :bright_cyan
+    elseif md.category == "todo"
+        :magenta
+    else
+        :default
     end
-    printstyled(io, ' '^margin, "│ "; color=col, bold=true)
-    printstyled(io, isempty(md.title) ? md.category : md.title; color=col, bold=true)
-    printstyled(io, '\n', ' '^margin, '│', '\n'; color=col, bold=true)
-    s = sprint(term, md.content, columns - 10; context=io)
-    lines = split(rstrip(s), '\n')
-    for i in eachindex(lines)
-        printstyled(io, ' '^margin, '│'; color=col, bold=true)
-        print(io, lines[i])
-        i < lastindex(lines) && println(io)
+    title = if isempty(md.title) md.category else md.title end
+    print(io, ' '^margin, styled"{$accent,markdown_admonition:│ $title}",
+          '\n', ' '^margin, styled"{$accent,markdown_admonition:│}", '\n')
+    content = annotprint(term, md.content, columns - 10)
+    lines = split(rstrip(content), '\n')
+    for (i, line) in enumerate(lines)
+        print(io, ' '^margin, styled"{$accent,markdown_admonition:│}", line)
+        i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
     print(io, ' '^margin, "│ ")
-    printstyled(io, "[^$(f.id)]", bold=true)
+    print(io, styled"{markdown_footnote:[^$(f.id)]}")
     println(io, '\n', ' '^margin, '│')
-    s = sprint(term, f.text, columns - 10; context=io)
-    lines = split(rstrip(s), '\n')
-    for i in eachindex(lines)
-        print(io, ' '^margin, '│', lines[i])
-        i < lastindex(lines) && println(io)
+    content = annotprint(term, f.text, columns - 10)
+    lines = split(rstrip(content), '\n')
+    for (i, line) in enumerate(lines)
+        print(io, ' '^margin, '│', line)
+        i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
-        print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+3),
-                          i = 2margin+2) do io
-            term(io, point, columns - 10)
+        bullet = isordered(md) ? "$(i + md.ordered - 1)." : "• "
+        print(io, ' '^2margin, styled"{markdown_list:$bullet} ")
+        content = annotprint(term, point, columns - 10)
+        lines = split(rstrip(content), '\n')
+        for (l, line) in enumerate(lines)
+            l > 1 && print(io, ' '^(2margin+3))
+            print(io, lstrip(line))
+            l < length(lines) && println(io)
         end
-        i < lastindex(md.items) && print(io, '\n', '\n')
-    end
-end
-
-function _term_header(io::IO, md, char, columns)
-    text = terminline_string(io, md.text)
-    with_output_color(:bold, io) do io
-        pre = ' '^margin
-        print(io, pre)
-        line_no, lastline_width = print_wrapped(io, text,
-                                                width=columns - 4margin; pre)
-        line_width = min(lastline_width, columns)
-        if line_no > 1
-            line_width = max(line_width, div(columns, 3)+length(pre))
-        end
-        header_width = max(0, line_width-length(pre))
-        char != ' ' && header_width > 0 && print(io, '\n', ' '^(margin), char^header_width)
+        i < length(md.items) && print(io, '\n'^(1 + md.loose))
     end
 end
 
 const _header_underlines = collect("≡=–-⋅ ")
 # TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
-function term(io::IO, md::Header{l}, columns) where l
+function term(io::AnnotIO, md::Header{l}, columns) where l
+    face = Symbol("markdown_h$l")
     underline = _header_underlines[l]
-    _term_header(io, md, underline, columns)
+    pre = ' '^margin
+    local line_width
+    with_output_annotations(io, :face => face) do io
+        headline = annotprint(terminline, md.text)
+        lines = wraplines(headline, columns - 4margin)
+        for (i, line) in enumerate(lines)
+            print(io, pre, line)
+            i < length(lines) && println(io)
+        end
+        line_width = if length(lines) == 1
+            min(textwidth(lines[end]), columns)
+        elseif length(lines) > 1
+            max(textwidth(lines[end]), div(columns, 3)+length(pre))
+        else
+            0
+        end
+    end
+    header_width = max(0, line_width)
+    if underline != ' ' && header_width > 0
+        print(io, '\n', ' '^(margin))
+        with_output_annotations(io -> print(io, underline^header_width), io, :face => face)
+    end
 end
 
 function term(io::IO, md::Code, columns)
-    with_output_color(:cyan, io) do io
-        L = lines(md.code)
-        for i in eachindex(L)
-            print(io, ' '^margin, L[i])
-            i < lastindex(L) && println(io)
+    code = if md.language == "julia"
+        highlight(md.code)
+    elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
+        hl = AnnotatedString(md.code)
+        for (; match) in eachmatch(r"(?:^|\n)julia>", hl)
+            StyledStrings.face!(match, :markdown_julia_prompt)
+            afterprompt = match.offset + ncodeunits(match) + 1
+            _, exprend = Meta.parse(md.code, afterprompt, raise = false)
+            highlight!(hl[afterprompt:prevind(md.code, exprend)])
+            if (nextspace = findnext(' ', md.code, exprend)) |> !isnothing
+                nextword = hl[exprend:prevind(hl, nextspace)]
+                if nextword == "ERROR:"
+                    StyledStrings.face!(nextword, :error)
+                end
+            end
         end
+        hl
+    elseif md.language == "styled"
+        styled(md.code)
+    else
+        styled"{markdown_code:$(md.code)}"
+    end
+    lines = split(code, '\n')
+    for (i, line) in enumerate(lines)
+        print(io, ' '^margin, line)
+        i < length(lines) && println(io)
     end
 end
 
 function term(io::IO, tex::LaTeX, columns)
-    printstyled(io, ' '^margin, tex.formula, color=:magenta)
+    print(io, ' '^margin, styled"{markdown_latex:$(tex.formula)}")
 end
 
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
 
 function term(io::IO, br::HorizontalRule, columns)
-   print(io, ' '^margin, '─'^(columns - 2margin))
+    print(io, ' '^margin, styled"{markdown_hrule:$('─'^(columns - 2margin))}")
+end
+
+function term(io::IO, md::MarkdownElement, columns)
+    a = IOContext(AnnotatedIOBuffer(), io)
+    term(a, md, columns)
+    print(io, read(seekstart(a.io), AnnotatedString))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
-
-terminline_string(io::IO, md) = sprint(terminline, md; context=io)
 
 terminline(io::IO, content...) = terminline(io, collect(content))
 
@@ -140,12 +177,12 @@ function terminline(io::IO, md::AbstractString)
     print(io, replace(md, r"[\s\t\n]+" => ' '))
 end
 
-function terminline(io::IO, md::Bold)
-    with_output_color(terminline, :bold, io, md.text)
+function terminline(io::AnnotIO, md::Bold)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => :bold)
 end
 
-function terminline(io::IO, md::Italic)
-    with_output_color(terminline, :underline, io, md.text)
+function terminline(io::AnnotIO, md::Italic)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => :italic)
 end
 
 function terminline(io::IO, md::LineBreak)
@@ -156,20 +193,36 @@ function terminline(io::IO, md::Image)
     terminline(io, "(Image: $(md.alt))")
 end
 
-terminline(io::IO, f::Footnote) = with_output_color(terminline, :bold, io, "[^$(f.id)]")
+function terminline(io::IO, f::Footnote)
+    print(io, styled"{markdown_footnote:[^$(f.id)]}")
+end
 
-function terminline(io::IO, md::Link)
-    url = !Base.startswith(md.url, "@ref") ? " ($(md.url))" : ""
-    text = terminline_string(io, md.text)
-    terminline(io, text, url)
+function terminline(io::AnnotIO, md::Link)
+    annots = if occursin(r"^(https?|file)://", md.url)
+        (:face => :markdown_link, :link => md.url)
+    else
+        (:face => :markdown_link,)
+    end
+    with_output_annotations(io -> terminline(io, md.text), io, annots...)
 end
 
 function terminline(io::IO, code::Code)
-    printstyled(io, code.code, color=:cyan)
+    body = if code.language == "styled"
+        styled(code.code)
+    else
+        code.code
+    end
+    print(io, styled"{markdown_inlinecode:$body}")
 end
 
 function terminline(io::IO, tex::LaTeX)
-    printstyled(io, tex.formula, color=:magenta)
+    print(io, styled"{markdown_latex:$(tex.formula)}")
+end
+
+function terminline(io::IO, md::MarkdownElement)
+    a = IOContext(AnnotatedIOBuffer(), io)
+    terminline(a, md)
+    print(io, read(seekstart(a.io), AnnotatedString))
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

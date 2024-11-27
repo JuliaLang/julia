@@ -31,7 +31,7 @@ export
     IPv4,
     IPv6
 
-import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
+import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
     notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
@@ -107,6 +107,8 @@ if OS_HANDLE != RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
 
+Base.fd(sock::TCPSocket) = Base._fd(sock)
+
 
 mutable struct TCPServer <: LibuvServer
     handle::Ptr{Cvoid}
@@ -138,6 +140,8 @@ function TCPServer(; delay=true)
     iolock_end()
     return tcp
 end
+
+Base.fd(server::TCPServer) = Base._fd(server)
 
 """
     accept(server[, client])
@@ -198,6 +202,8 @@ function UDPSocket()
 end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
+
+Base.fd(sock::UDPSocket) = Base._fd(sock)
 
 function _uv_hook_close(sock::UDPSocket)
     lock(sock.cond)
@@ -450,7 +456,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -567,7 +573,11 @@ end
 """
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
-Enables or disables Nagle's algorithm on a given TCP server or socket.
+Nagle's algorithm batches multiple small TCP packets into larger
+ones. This can improve throughput but worsen latency. Nagle's algorithm
+is enabled by default. This function sets whether Nagle's algorithm is
+active on a given TCP server or socket. The opposite option is called
+`TCP_NODELAY` in other languages.
 
 !!! compat "Julia 1.3"
     This function requires Julia 1.3 or later.

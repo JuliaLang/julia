@@ -25,6 +25,7 @@ typedef struct {
     ios_t *s;
     // method we're compressing for
     jl_method_t *method;
+    jl_svec_t *edges;
     jl_ptls_t ptls;
     uint8_t relocatability;
 } jl_ircode_state;
@@ -72,7 +73,7 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
 {
     jl_array_t *rs = s->method->roots;
     int i, l = jl_array_nrows(rs);
-    if (jl_is_symbol(v) || jl_is_concrete_type(v)) {
+    if (jl_is_symbol(v) || jl_is_concrete_type(v)) { // TODO: or more generally, any ptr-egal value
         for (i = 0; i < l; i++) {
             if (jl_array_ptr_ref(rs, i) == v)
                 return tagged_root(rr, s, i);
@@ -82,6 +83,12 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
         for (i = 0; i < l; i++) {
             if (jl_egal(jl_array_ptr_ref(rs, i), v))
                 return tagged_root(rr, s, i);
+        }
+    }
+    for (size_t i = 0; i < jl_svec_len(s->edges); i++) {
+        if (jl_svecref(s->edges, i) == v) {
+            rr->index = i;
+            return;
         }
     }
     jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
@@ -102,11 +109,24 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
 
 static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
-    rle_reference rr;
+    rle_reference rr = {.key = -1, .index = -1};
 
+    if (jl_is_string(v))
+        v = jl_as_global_root(v, 1);
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);
+    if (rr.key == -1) {
+        if (id <= UINT8_MAX) {
+            write_uint8(s->s, TAG_EDGE);
+            write_uint8(s->s, id);
+        }
+        else {
+            write_uint8(s->s, TAG_LONG_EDGE);
+            write_uint32(s->s, id);
+        }
+        return;
+    }
     if (rr.key) {
         write_uint8(s->s, TAG_RELOC_METHODROOT);
         write_uint64(s->s, rr.key);
@@ -155,7 +175,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
     }
     else {
         ios_write(s->s, (char*)mem->ptr + offset * layout->size, len * layout->size);
-        if (jl_genericmemory_isbitsunion(mem))
+        if (layout->flags.arrayelem_isunion)
             ios_write(s->s, jl_genericmemory_typetagdata(mem) + offset, len);
     }
 }
@@ -320,6 +340,11 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         jl_encode_value(s, jl_get_nth_field(v, 0));
         jl_encode_value(s, jl_get_nth_field(v, 1));
     }
+    else if (jl_is_enternode(v)) {
+        write_uint8(s->s, TAG_ENTERNODE);
+        jl_encode_value(s, jl_get_nth_field(v, 0));
+        jl_encode_value(s, jl_get_nth_field(v, 1));
+    }
     else if (jl_is_argument(v)) {
         write_uint8(s->s, TAG_ARGUMENT);
         jl_encode_value(s, jl_get_nth_field(v, 0));
@@ -360,11 +385,6 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         write_uint8(s->s, TAG_UINT8);
         write_int8(s->s, *(int8_t*)jl_data_ptr(v));
     }
-    else if (jl_typetagis(v, jl_lineinfonode_type)) {
-        write_uint8(s->s, TAG_LINEINFO);
-        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++)
-            jl_encode_value(s, jl_get_nth_field(v, i));
-    }
     else if (((jl_datatype_t*)jl_typeof(v))->instance == v) {
         write_uint8(s->s, TAG_SINGLETON);
         jl_encode_value(s, jl_typeof(v));
@@ -392,7 +412,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (layout->flags.arrayelem_isunion || layout->size == 0)
             offset = (uintptr_t)ar->ref.ptr_or_offset;
         else
-            offset = (char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr;
+            offset = ((char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr) / layout->size;
         jl_encode_memory_slice(s, ar->ref.mem, offset, l);
     }
     else if (as_literal && jl_is_genericmemory(v)) {
@@ -455,16 +475,18 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds, uint8_t has_fcall,
-                                            uint8_t nospecializeinfer, uint8_t inlining, uint8_t constprop)
+static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
+                                            uint8_t nospecializeinfer, uint8_t isva,
+                                            uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod)
 {
     jl_code_info_flags_t flags;
-    flags.bits.inferred = inferred;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
     flags.bits.nospecializeinfer = nospecializeinfer;
+    flags.bits.isva = isva;
     flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
+    flags.bits.nargsmatchesmethod = nargsmatchesmethod;
     return flags;
 }
 
@@ -660,7 +682,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 {
     assert(!ios_eof(s->s));
     jl_value_t *v;
-    size_t i, n;
+    size_t n;
     uint64_t key;
     uint8_t tag = read_uint8(s->s);
     if (tag > LAST_TAG)
@@ -685,6 +707,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
+    case TAG_EDGE:
+        return jl_svecref(s->edges, read_uint8(s->s));
+    case TAG_LONG_EDGE:
+        return jl_svecref(s->edges, read_uint32(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -719,6 +745,11 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         v = jl_new_struct_uninit(jl_gotoifnot_type);
         set_nth_field(jl_gotoifnot_type, v, 0, jl_decode_value(s), 0);
         set_nth_field(jl_gotoifnot_type, v, 1, jl_decode_value(s), 0);
+        return v;
+    case TAG_ENTERNODE:
+        v = jl_new_struct_uninit(jl_enternode_type);
+        set_nth_field(jl_enternode_type, v, 0, jl_decode_value(s), 0);
+        set_nth_field(jl_enternode_type, v, 1, jl_decode_value(s), 0);
         return v;
     case TAG_ARGUMENT:
         v = jl_new_struct_uninit(jl_argument_type);
@@ -771,13 +802,6 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         v = jl_alloc_string(n);
         ios_readall(s->s, jl_string_data(v), n);
         return v;
-    case TAG_LINEINFO:
-        v = jl_new_struct_uninit(jl_lineinfonode_type);
-        for (i = 0; i < jl_datatype_nfields(jl_lineinfonode_type); i++) {
-            //size_t offs = jl_field_offset(jl_lineinfonode_type, i);
-            set_nth_field(jl_lineinfonode_type, v, i, jl_decode_value(s), 0);
-        }
-        return v;
     default:
         assert(tag == TAG_GENERAL || tag == TAG_SHORT_GENERAL);
         return jl_decode_value_any(s, tag);
@@ -788,7 +812,41 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 typedef jl_value_t jl_string_t; // for local expressibility
 
-#define IR_DATASIZE_FLAGS         sizeof(uint8_t)
+static size_t codelocs_parseheader(jl_string_t *cl, int *line_offset, int *line_bytes, int *to_bytes) JL_NOTSAFEPOINT
+{
+    if (jl_string_len(cl) == 0) {
+        *line_offset = *line_bytes = *to_bytes = 0;
+        return 0;
+    }
+    int32_t header[3];
+    memcpy(&header, (char*)jl_string_data(cl), sizeof(header));
+    *line_offset = header[0];
+    if (header[1] < 255)
+        *line_bytes = 1;
+    else if (header[1] < 65535)
+        *line_bytes = 2;
+    else
+        *line_bytes = 4;
+    if (header[2] == 0)
+        *to_bytes = 0;
+    else if (header[2] < 255)
+        *to_bytes = 1;
+    else if (header[2] < 65535)
+        *to_bytes = 2;
+    else
+        *to_bytes = 4;
+    assert(jl_string_len(cl) >= sizeof(header) + *line_bytes);
+    return (jl_string_len(cl) - sizeof(header) - *line_bytes) / (*line_bytes + *to_bytes * 2); // compute nstmts
+}
+#ifndef NDEBUG
+static int codelocs_nstmts(jl_string_t *cl) JL_NOTSAFEPOINT
+{
+    int line_offset, line_bytes, to_bytes;
+    return codelocs_parseheader(cl, &line_offset, &line_bytes, &to_bytes);
+}
+#endif
+
+#define IR_DATASIZE_FLAGS         sizeof(uint16_t)
 #define IR_DATASIZE_PURITY        sizeof(uint16_t)
 #define IR_DATASIZE_INLINING_COST sizeof(uint16_t)
 #define IR_DATASIZE_NSLOTS        sizeof(int32_t)
@@ -800,12 +858,26 @@ typedef enum {
     ir_offset_slotflags     = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY + IR_DATASIZE_INLINING_COST + IR_DATASIZE_NSLOTS
 } ir_offset;
 
+// static_assert is technically a declaration, so shenanigans are required to
+// open an inline declaration context. `sizeof` is the traditional way to do this,
+// but this pattern is illegal in C++, which some compilers warn about, so use
+// `offsetof` instead.
+#define declaration_context(what) (void)offsetof(struct{what; int dummy_;}, dummy_)
+
+// Checks (at compile time) that sizeof(data) == macro_size
+#define checked_size(data, macro_size) \
+    (declaration_context(static_assert(sizeof(data) == macro_size, #macro_size " does not match written size")), data)
+
 JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS, AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
+    int isdef = code == NULL;
+    if (isdef)
+        code = (jl_code_info_t*)m->source;
     assert(jl_is_method(m));
     assert(jl_is_code_info(code));
+    assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
     ios_t dest;
     ios_mem(&dest, 0);
     int en = jl_gc_enable(0); // Might GC
@@ -815,41 +887,43 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m->roots = jl_alloc_vec_any(0);
         jl_gc_wb(m, m->roots);
     }
+    jl_value_t *edges = code->edges;
     jl_ircode_state s = {
         &dest,
         m,
+        (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
         jl_current_task->ptls,
         1
     };
 
-    jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
-                                                 code->nospecializeinfer, code->inlining, code->constprop);
-    write_uint8(s.s, flags.packed);
-    static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
-    write_uint16(s.s, code->purity.bits);
-    static_assert(sizeof(code->purity.bits) == IR_DATASIZE_PURITY, "ir_datasize_purity is mismatched with the actual size");
-    write_uint16(s.s, code->inlining_cost);
-    static_assert(sizeof(code->inlining_cost) == IR_DATASIZE_INLINING_COST, "ir_datasize_inlining_cost is mismatched with the actual size");
+    uint8_t nargsmatchesmethod = code->nargs == m->nargs;
+    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
+                                                 code->nospecializeinfer, code->isva,
+                                                 code->inlining, code->constprop,
+                                                 nargsmatchesmethod);
+    write_uint16(s.s, checked_size(flags.packed, IR_DATASIZE_FLAGS));
+    write_uint16(s.s, checked_size(code->purity.bits, IR_DATASIZE_PURITY));
+    write_uint16(s.s, checked_size(code->inlining_cost, IR_DATASIZE_INLINING_COST));
 
-    int32_t nslots = jl_array_nrows(code->slotflags);
+    size_t nslots = jl_array_nrows(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
-    write_int32(s.s, nslots);
-    static_assert(sizeof(nslots) == IR_DATASIZE_NSLOTS, "ir_datasize_nslots is mismatched with the actual size");
+    write_int32(s.s, checked_size((int32_t)nslots, IR_DATASIZE_NSLOTS));
     ios_write(s.s, jl_array_data(code->slotflags, const char), nslots);
 
     // N.B.: The layout of everything before this point is explicitly referenced
     // by the various jl_ir_ accessors. Make sure to adjust those if you change
     // the data layout.
+    if (!nargsmatchesmethod) {
+        size_t nargs = code->nargs;
+        assert(nargs < INT32_MAX);
+        write_int32(s.s, (int32_t)nargs);
+    }
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < 5; i++) {
         int copy = 1;
-        if (i == 1) { // skip codelocs
-            assert(jl_field_offset(jl_code_info_type, i) == offsetof(jl_code_info_t, codelocs));
+        if (i == 1) { // skip debuginfo
+            assert(jl_field_offset(jl_code_info_type, i) == offsetof(jl_code_info_t, debuginfo));
             continue;
-        }
-        if (i == 4) { // don't copy contents of method_for_inference_limit_heuristics field
-            assert(jl_field_offset(jl_code_info_type, i) == offsetof(jl_code_info_t, method_for_inference_limit_heuristics));
-            copy = 0;
         }
         jl_encode_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
@@ -859,27 +933,13 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     if (m->is_for_opaque_closure)
         jl_encode_value_(&s, code->slottypes, 1);
 
+    // Slotnames. For regular methods, we require that m->slot_syms matches the
+    // CodeInfo's slotnames, so we do not need to save it here.
     if (m->generator)
         // can't optimize generated functions
         jl_encode_value_(&s, (jl_value_t*)jl_compress_argnames(code->slotnames), 1);
     else
         jl_encode_value(&s, jl_nothing);
-
-    size_t nstmt = jl_array_nrows(code->code);
-    assert(nstmt == jl_array_nrows(code->codelocs));
-    if (jl_array_nrows(code->linetable) < 256) {
-        for (i = 0; i < nstmt; i++) {
-            write_uint8(s.s, jl_array_data(code->codelocs, int32_t)[i]);
-        }
-    }
-    else if (jl_array_nrows(code->linetable) < 65536) {
-        for (i = 0; i < nstmt; i++) {
-            write_uint16(s.s, jl_array_data(code->codelocs, int32_t)[i]);
-        }
-    }
-    else {
-        ios_write(s.s, (char*)jl_array_data(code->codelocs, int32_t), nstmt * sizeof(int32_t));
-    }
 
     write_uint8(s.s, s.relocatability);
 
@@ -914,28 +974,36 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_ircode_state s = {
         &src,
         m,
+        metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
         1
     };
 
     jl_code_info_t *code = jl_new_code_info_uninit();
     jl_code_info_flags_t flags;
-    flags.packed = read_uint8(s.s);
+    flags.packed = read_uint16(s.s);
     code->inlining = flags.bits.inlining;
     code->constprop = flags.bits.constprop;
-    code->inferred = flags.bits.inferred;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
+    code->isva = flags.bits.isva;
     code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
-    size_t nslots = read_int32(&src);
+
+    size_t nslots = read_int32(s.s);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
 
-    for (i = 0; i < 6; i++) {
-        if (i == 1)  // skip codelocs
+    if (flags.bits.nargsmatchesmethod) {
+        code->nargs = m->nargs;
+    } else {
+        code->nargs = read_int32(s.s);
+    }
+
+    for (i = 0; i < 5; i++) {
+        if (i == 1)  // skip debuginfo
             continue;
         assert(jl_field_isptr(jl_code_info_type, i));
         jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
@@ -949,48 +1017,34 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         slotnames = m->slot_syms;
     code->slotnames = jl_uncompress_argnames(slotnames);
 
-    size_t nstmt = jl_array_nrows(code->code);
-    code->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nstmt);
-    if (jl_array_nrows(code->linetable) < 256) {
-        for (i = 0; i < nstmt; i++) {
-            jl_array_data(code->codelocs, int32_t)[i] = read_uint8(s.s);
-        }
-    }
-    else if (jl_array_nrows(code->linetable) < 65536) {
-        for (i = 0; i < nstmt; i++) {
-            jl_array_data(code->codelocs, int32_t)[i] = read_uint16(s.s);
-        }
-    }
-    else {
-        ios_readall(s.s, (char*)jl_array_data(code->codelocs, int32_t), nstmt * sizeof(int32_t));
-    }
+    if (metadata)
+        code->debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
+    else
+        code->debuginfo = m->debuginfo;
+    assert(code->debuginfo);
+    assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
 
     (void) read_uint8(s.s);   // relocatability
-
+    assert(!ios_eof(s.s));
     assert(ios_getc(s.s) == -1);
+
     ios_close(s.s);
     JL_GC_PUSH1(&code);
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
     if (metadata) {
-        code->min_world = metadata->min_world;
-        code->max_world = metadata->max_world;
-        code->rettype = metadata->rettype;
         code->parent = metadata->def;
+        jl_gc_wb(code, code->parent);
+        code->rettype = metadata->rettype;
+        jl_gc_wb(code, code->rettype);
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
+        code->edges = (jl_value_t*)s.edges;
+        jl_gc_wb(code, s.edges);
     }
 
     return code;
-}
-
-JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_string_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->inferred;
-    assert(jl_is_string(data));
-    jl_code_info_flags_t flags;
-    flags.packed = jl_string_data(data)[ir_offset_flags];
-    return flags.bits.inferred;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_string_t *data)
@@ -1115,6 +1169,244 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
     return jl_nothing;
 }
 
+// codelocs are compressed as follows:
+// The input vector is a NTuple{3,UInt32} (struct jl_codeloc_t)
+// The vector is scanned for min and max of the values for each element
+// The output is then allocated to hold (min-line, max-line, max-at) first, then line - min (in the smallest space), then the remainder (in the smallest space)
+static inline struct jl_codeloc_t unpack_codeloc(jl_string_t *cl, size_t pc, int line_offset, int line_bytes, int to_bytes) JL_NOTSAFEPOINT
+{
+    const char *ptr = jl_string_data(cl) + sizeof(int32_t[3]);
+    if (pc == 0)
+        to_bytes = 0;
+    else
+        ptr += line_bytes + (pc - 1) * (line_bytes + to_bytes * 2);
+    uint8_t int8;
+    uint16_t int16;
+    uint32_t int32;
+    struct jl_codeloc_t codeloc;
+    switch (line_bytes) {
+    case 0:
+        codeloc.line = 0;
+        break;
+    case 1:
+        memcpy(&int8, ptr, 1);
+        codeloc.line = int8;
+        break;
+    case 2:
+        memcpy(&int16, ptr, 2);
+        codeloc.line = int16;
+        break;
+    case 4:
+        memcpy(&int32, ptr, 4);
+        codeloc.line = int32;
+        break;
+    }
+    if (codeloc.line > 0)
+        codeloc.line += line_offset - 1;
+    ptr += line_bytes;
+    switch (to_bytes) {
+    case 0:
+        codeloc.to = 0;
+        break;
+    case 1:
+        memcpy(&int8, ptr, 1);
+        codeloc.to = int8;
+        break;
+    case 2:
+        memcpy(&int16, ptr, 2);
+        codeloc.to = int16;
+        break;
+    case 4:
+        memcpy(&int32, ptr, 4);
+        codeloc.to = int32;
+        break;
+    }
+    ptr += to_bytes;
+    switch (to_bytes) {
+    case 0:
+        codeloc.pc = 0;
+        break;
+    case 1:
+        memcpy(&int8, ptr, 1);
+        codeloc.pc = int8;
+        break;
+    case 2:
+        memcpy(&int16, ptr, 2);
+        codeloc.pc = int16;
+        break;
+    case 3:
+        memcpy(&int32, ptr, 4);
+        codeloc.pc = int32;
+        break;
+    }
+    ptr += to_bytes;
+    return codeloc;
+}
+
+
+static const struct jl_codeloc_t badloc = {-1, 0, 0};
+
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_string_t *cl, size_t pc) JL_NOTSAFEPOINT
+{
+    assert(jl_is_string(cl));
+    int line_offset, line_bytes, to_bytes;
+    size_t nstmts = codelocs_parseheader(cl, &line_offset, &line_bytes, &to_bytes);
+    if (pc > nstmts)
+        return badloc;
+    return unpack_codeloc(cl, pc, line_offset, line_bytes, to_bytes);
+}
+
+static int allzero(jl_value_t *codelocs) JL_NOTSAFEPOINT
+{
+    int32_t *p = jl_array_data(codelocs,int32_t);
+    int32_t *pend = p + jl_array_nrows(codelocs);
+    do {
+        if (*p)
+            return 0;
+    } while (++p < pend);
+    return 1;
+}
+
+JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts) // firstline+Vector{Int32} => Memory{UInt8}
+{
+    assert(jl_typeis(codelocs, jl_array_int32_type));
+    if (jl_array_nrows(codelocs) == 0)
+        nstmts = 0;
+    assert(nstmts * 3 == jl_array_nrows(codelocs));
+    if (allzero(codelocs))
+        return jl_an_empty_string;
+    struct jl_codeloc_t codeloc, min, max;
+    size_t i;
+    min.line = min.to = min.pc = firstline <= 0 ? INT32_MAX : firstline;
+    max.line = max.to = max.pc = 0;
+    for (i = 0; i < nstmts; i++) {
+        memcpy(&codeloc, jl_array_data(codelocs,int32_t) + 3 * i, sizeof(codeloc));
+#define SETMIN(x) if (codeloc.x < min.x) min.x = codeloc.x
+#define SETMAX(x) if (codeloc.x > max.x) max.x = codeloc.x
+        if (codeloc.line > 0)
+            SETMIN(line);
+        SETMAX(line);
+        SETMIN(to);
+        SETMAX(to);
+        SETMIN(pc);
+        SETMAX(pc);
+#undef SETMIN
+#undef SETMAX
+    }
+    int32_t header[3];
+    header[0] = min.line > max.line ? 0 : min.line;
+    header[1] = min.line > max.line ? 0 : max.line - min.line;
+    header[2] = max.to > max.pc ? max.to : max.pc;
+    size_t line_bytes;
+    if (header[1] < 255)
+        line_bytes = 1;
+    else if (header[1] < 65535)
+        line_bytes = 2;
+    else
+        line_bytes = 4;
+    size_t to_bytes;
+    if (header[2] == 0)
+        to_bytes = 0;
+    else if (header[2] < 255)
+        to_bytes = 1;
+    else if (header[2] < 65535)
+        to_bytes = 2;
+    else
+        to_bytes = 4;
+    jl_string_t *cl = jl_alloc_string(sizeof(header) + line_bytes + nstmts * (line_bytes + to_bytes * 2));
+    // store header structure
+    memcpy(jl_string_data(cl), &header, sizeof(header));
+    // pack bytes
+    char *ptr = jl_string_data(cl) + sizeof(header);
+    uint8_t int8;
+    uint16_t int16;
+    uint32_t int32;
+    { // store firstline value
+        int8 = int16 = int32 = firstline > 0 ? firstline - header[0] + 1 : 0;
+        switch (line_bytes) {
+        case 0:
+            break;
+        case 1:
+            memcpy(ptr, &int8, 1);
+            break;
+        case 2:
+            memcpy(ptr, &int16, 2);
+            break;
+        case 4:
+            memcpy(ptr, &int32, 4);
+            break;
+        }
+        ptr += line_bytes;
+    }
+    for (i = 0; i < nstmts; i++) {
+        memcpy(&codeloc, jl_array_data(codelocs,int32_t) + 3 * i, sizeof(codeloc));
+        int8 = int16 = int32 = codeloc.line > 0 ? codeloc.line - header[0] + 1 : 0;
+        switch (line_bytes) {
+        case 0:
+            break;
+        case 1:
+            memcpy(ptr, &int8, 1);
+            break;
+        case 2:
+            memcpy(ptr, &int16, 2);
+            break;
+        case 4:
+            memcpy(ptr, &int32, 4);
+            break;
+        }
+        ptr += line_bytes;
+        int8 = int16 = int32 = codeloc.to;
+        switch (to_bytes) {
+        case 0:
+            break;
+        case 1:
+            memcpy(ptr, &int8, 1);
+            break;
+        case 2:
+            memcpy(ptr, &int16, 2);
+            break;
+        case 4:
+            memcpy(ptr, &int32, 4);
+            break;
+        }
+        ptr += to_bytes;
+        int8 = int16 = int32 = codeloc.pc;
+        switch (to_bytes) {
+        case 0:
+            break;
+        case 1:
+            memcpy(ptr, &int8, 1);
+            break;
+        case 2:
+            memcpy(ptr, &int16, 2);
+            break;
+        case 4:
+            memcpy(ptr, &int32, 4);
+            break;
+        }
+        ptr += to_bytes;
+    }
+    return cl;
+}
+
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_string_t *cl, size_t nstmts) // Memory{UInt8} => Vector{Int32}
+{
+    assert(jl_is_string(cl));
+    int line_offset, line_bytes, to_bytes;
+    size_t nlocs = codelocs_parseheader(cl, &line_offset, &line_bytes, &to_bytes);
+    assert(nlocs == 0 || nlocs == nstmts);
+    jl_value_t *codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nstmts * 3);
+    size_t i;
+    for (i = 0; i < nlocs; i++) {
+        struct jl_codeloc_t codeloc = unpack_codeloc(cl, i + 1, line_offset, line_bytes, to_bytes);;
+        memcpy(jl_array_data(codelocs,int32_t) + i * 3, &codeloc, sizeof(codeloc));
+    }
+    if (nlocs == 0) {
+        memset(jl_array_data(codelocs,int32_t), 0, nstmts * sizeof(struct jl_codeloc_t));
+    }
+    return codelocs;
+}
+
 void jl_init_serializer(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -1193,7 +1485,6 @@ void jl_init_serializer(void)
     deser_tag[TAG_INT32] = (jl_value_t*)jl_int32_type;
     deser_tag[TAG_INT64] = (jl_value_t*)jl_int64_type;
     deser_tag[TAG_UINT8] = (jl_value_t*)jl_uint8_type;
-    deser_tag[TAG_LINEINFO] = (jl_value_t*)jl_lineinfonode_type;
     deser_tag[TAG_UNIONALL] = (jl_value_t*)jl_unionall_type;
     deser_tag[TAG_GOTONODE] = (jl_value_t*)jl_gotonode_type;
     deser_tag[TAG_QUOTENODE] = (jl_value_t*)jl_quotenode_type;

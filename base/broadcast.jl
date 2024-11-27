@@ -196,14 +196,18 @@ const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a && bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
 const oror = OrOr()
 broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{<:Any,Axes,F,Args}) where {NewStyle,Axes,F,Args} =
@@ -222,12 +226,12 @@ end
 ## Allocating the output container
 Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
     similar(BitArray, dims)
 # In cases of conflict we fall back on Array
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
 
@@ -338,13 +342,14 @@ function flatten(bc::Broadcasted)
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(bc)
     # build a tuple of functions `makeargs`. Its elements take
-    # the whole "flat" argument list and and generate the appropriate
+    # the whole "flat" argument list and generate the appropriate
     # input arguments for the broadcasted function `f`, e.g.,
     #          makeargs[1] = ((w, x, y, z)) -> w
     #          makeargs[2] = ((w, x, y, z)) -> g(x, y)
     #          makeargs[3] = ((w, x, y, z)) -> z
     makeargs = make_makeargs(bc.args)
     f = Base.maybeconstructor(bc.f)
+    # TODO: consider specializing on args... if performance problems emerge:
     newf = (args...) -> (@inline; f(prepare_args(makeargs, args)...))
     return Broadcasted(bc.style, newf, args, bc.axes)
 end
@@ -517,10 +522,10 @@ function _bcs(shape::Tuple, newshape::Tuple)
     return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
-_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $b"))))
-_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $(length(b))")))
+_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size; got a dimension with lengths ", a, " and ", b)))))
+_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size; got a dimension with lengths ", a, " and ", length(b)))))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $(length(a)) and $(length(b))")))
+_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : _bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size: a has axes ", a, " and b has axes ", b)))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
@@ -571,15 +576,15 @@ an `Int`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
     tuples may be created by `newindexer(argument)`.
 """
-Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = to_index(_newindex(axes(arg), I.I))
+Base.@propagate_inbounds newindex(arg, I::Integer) = to_index(_newindex(axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
-@inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
+@inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
 @inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
 @inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
@@ -599,18 +604,14 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
+@inline function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
+    I = to_index(Base.IteratorsMD.flatten(Is))
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(
-    bc::Broadcasted,
-    i1::Union{Integer,CartesianIndex},
-    i2::Union{Integer,CartesianIndex},
-    I::Union{Integer,CartesianIndex}...,
-) =
-    bc[CartesianIndex((i1, i2, I...))]
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
+to_index(::Tuple{}) = CartesianIndex()
+to_index(Is::Tuple{Any}) = Is[1]
+to_index(Is::Tuple) = CartesianIndex(Is)
 
 @inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
@@ -750,6 +751,7 @@ The resulting container type is established by the following rules:
  - All other combinations of arguments default to returning an `Array`, but
    custom container types can define their own implementation and promotion-like
    rules to customize the result when they appear as arguments.
+ - The element type is determined in the same manner as in [`collect`](@ref).
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -974,53 +976,42 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
     return dest
 end
 
-# Performance optimization: for BitVector outputs, we cache the result
-# in a 64-bit register before writing into memory (to bypass LSQ)
-@inline function copyto!(dest::BitVector, bc::Broadcasted{Nothing})
-    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
-    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
-    destc = dest.chunks
-    bcp = preprocess(dest, bc)
-    length(bcp) <= 0 && return dest
-    len = Base.num_bit_chunks(Int(length(bcp)))
-    @inbounds for i = 0:(len - 2)
-        z = UInt64(0)
-        for j = 0:63
-           z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
-        end
-        destc[i + 1] = z
-    end
-    @inbounds let i = len - 1
-        z = UInt64(0)
-        for j = 0:((length(bcp) - 1) & 63)
-             z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
-        end
-        destc[i + 1] = z
-    end
-    return dest
-end
-
 # Performance optimization: for BitArray outputs, we cache the result
-# in a "small" Vector{Bool}, and then copy in chunks into the output
+# in a 64-bit register before writing into memory (to bypass LSQ)
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
-    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
-    tmp = Vector{Bool}(undef, bitcache_size)
-    destc = dest.chunks
-    cind = 1
+    ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
-    @inbounds for P in Iterators.partition(eachindex(bc′), bitcache_size)
-        ind = 1
-        @simd for I in P
-            tmp[ind] = bc′[I]
-            ind += 1
+    ax = axes(bc′)
+    ax1, out = ax[1], CartesianIndices(tail(ax))
+    destc, indc = dest.chunks, 0
+    bitst, remain = 0, UInt64(0)
+    for I in out
+        i = first(ax1) - 1
+        if ndims(bc) == 1 || bitst >= 64 - length(ax1)
+            if ndims(bc) > 1 && bitst != 0
+                @inbounds @simd for j = bitst:63
+                    remain |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                end
+                @inbounds destc[indc+=1] = remain
+                bitst, remain = 0, UInt64(0)
+            end
+            while i <= last(ax1) - 64
+                z = UInt64(0)
+                @inbounds @simd for j = 0:63
+                    z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                end
+                @inbounds destc[indc+=1] = z
+            end
         end
-        @simd for i in ind:bitcache_size
-            tmp[i] = false
+        @inbounds @simd for j = i+1:last(ax1)
+            remain |= UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
+            bitst += 1
         end
-        dumpbitcache(destc, cind, tmp)
-        cind += bitcache_chunks
+    end
+    @inbounds if bitst != 0
+        destc[indc+=1] = remain
     end
     return dest
 end
@@ -1072,7 +1063,7 @@ end
 
 
 @noinline throwdm(axdest, axsrc) =
-    throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
+    throw(DimensionMismatch(LazyString("destination axes ", axdest, " are not compatible with source axes ", axsrc)))
 
 function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
     # Function barrier that makes the copying to newdest type stable

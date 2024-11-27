@@ -1215,3 +1215,9 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+@testset "issue #55266" begin
+    for T in (Float16, Float32, Float64)
+        @test isapprox(atanh(1+im*floatmin(T)), Complex{T}(atanh(1+im*big(floatmin(T)))))
+    end
+end

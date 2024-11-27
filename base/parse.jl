@@ -251,8 +251,9 @@ function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = n
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
-    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
-                                 base===nothing ? 0 : check_valid_base(base), true))
+    v = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
+    v === nothing && error("should not happoen")
+    convert(T, v)
 end
 tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
@@ -385,7 +386,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...)
     return result
 end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
-    throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
+    throw(ArgumentError(LazyString("cannot parse ", repr(s[startpos:endpos]), " as ", T)))
 
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)

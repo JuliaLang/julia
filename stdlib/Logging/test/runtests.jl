@@ -6,6 +6,10 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
+# see "custom log macro" testset
+CustomLog = LogLevel(-500)
+macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., esc(CustomLog), exs...) end
+
 @testset "Logging" begin
 
 @testset "Core" begin
@@ -47,6 +51,15 @@ end
         end
     end
     @test String(take!(buf)) == ""
+
+    # Check that the AnnotatedString path works too
+    with_logger(logger) do
+        @info Base.AnnotatedString("test")
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
@@ -272,7 +285,25 @@ end
             AboveMaxLevel === Logging.AboveMaxLevel
         end
         """)
-    @test m.run()
+    @test invokelatest(m.run)
+end
+
+@testset "custom log macro" begin
+    @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, CustomLog)
+
+    with_logger(logger) do
+        @customlog "a"
+    end
+    @test occursin("LogLevel(-500): a", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test isempty(undoc)
 end
 
 end

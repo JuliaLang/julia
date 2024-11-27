@@ -92,7 +92,7 @@ The corresponding global `jl_datatype_t` objects are created by [`jl_init_types`
 
 The garbage collector uses several bits from the metadata portion of the `jl_typetag_t` to track
 each object in the system. Further details about this algorithm can be found in the comments of
-the [garbage collector implementation in `gc.c`](https://github.com/JuliaLang/julia/blob/master/src/gc.c).
+the [garbage collector implementation in `gc-stock.c`](https://github.com/JuliaLang/julia/blob/master/src/gc-stock.c).
 
 ## Object allocation
 
@@ -179,7 +179,7 @@ jl_value_t *newstruct(jl_value_t *type);
 jl_value_t *newobj(jl_value_t *type, size_t nfields);
 ```
 
-And at the lowest level, memory is getting allocated by a call to the garbage collector (in `gc.c`),
+And at the lowest level, memory is getting allocated by a call to the garbage collector (in `gc-stock.c`),
 then tagged with its type:
 
 ```c

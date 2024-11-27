@@ -96,10 +96,3 @@ JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
 {
     return jl_svec_len(t);
 }
-
-JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
-{
-    jl_value_t *v = jl_svecref(t, (size_t)i);
-    assert(v != NULL);
-    return v;
-}

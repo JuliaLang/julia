@@ -140,9 +140,9 @@ end
     end
     @test length(logger.logs) == 1
     record = logger.logs[1]
-    @test record._module == nothing
-    @test record.file == nothing
-    @test record.line == nothing
+    @test record._module === nothing
+    @test record.file === nothing
+    @test record.line === nothing
 end
 
 # PR #28209

@@ -52,11 +52,54 @@ using Test
     @test_throws OverflowError Int8(-128)//Int8(-1)
     @test_throws OverflowError Int8(-1)//Int8(-128)
     @test Int8(-128)//Int8(-2) == 64
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(-128) === Rational{Int8}(1)
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(0) === Rational{Int8}(-1, 0)
+    @test Rational{Int8}(0) / Rational{Int8}(-128) === Rational{Int8}(0, 1)
 
     @test_throws InexactError Rational(UInt(1), typemin(Int32))
     @test iszero(Rational{Int}(UInt(0), 1))
     @test Rational{BigInt}(UInt(1), Int(-1)) == -1
-    @test_broken Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+    @test Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+
+    @testset "Rational{T} constructor with concrete T" begin
+        test_types = [Bool, Int8, Int64, Int128, UInt8, UInt64, UInt128, BigInt]
+        test_values = Any[
+            Any[zero(T) for T in test_types];
+            Any[one(T) for T in test_types];
+            big(-1);
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128)) for j in [-3:-1; -128:-126;]
+            ));
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128, UInt8, UInt64, UInt128)) for j in [2:3; 126:127;]
+            ));
+            Any[typemax(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemax(T)-one(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemin(T) for T in (Int64, Int128)];
+            Any[typemin(T)+one(T) for T in (Int64, Int128)];
+        ]
+        for x in test_values, y in test_values
+            local big_r = iszero(x) && iszero(y) ? nothing : big(x) // big(y)
+            for T in test_types
+                if iszero(x) && iszero(y)
+                    @test_throws Exception Rational{T}(x, y)
+                elseif Base.hastypemax(T)
+                    local T_range = typemin(T):typemax(T)
+                    if numerator(big_r) ∈ T_range && denominator(big_r) ∈ T_range
+                        @test big_r == Rational{T}(x, y)
+                        @test Rational{T} == typeof(Rational{T}(x, y))
+                    else
+                        @test_throws Exception Rational{T}(x, y)
+                    end
+                else
+                    @test big_r == Rational{T}(x, y)
+                    @test Rational{T} == typeof(Rational{T}(x, y))
+                end
+            end
+        end
+    end
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -542,6 +585,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
+    @test rationalize(pi) === rationalize(BigFloat(pi))
 end
 
 @testset "issue #12536" begin
@@ -611,7 +655,7 @@ end
         @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
         @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
         @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
-        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(1), T(0))
+        @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(0), T(0))
 
         if T <: Signed
             @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
@@ -656,6 +700,22 @@ end
         @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
         @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
     end
+end
+
+@testset "gcdx for 1 and 3+ arguments" begin
+    # one-argument
+    @test gcdx(7) == (7, 1)
+    @test gcdx(-7) == (7, -1)
+    @test gcdx(1//4) == (1//4, 1)
+
+    # 3+ arguments
+    @test gcdx(2//3) == gcdx(2//3) == (2//3, 1)
+    @test gcdx(15, 12, 20) == (1, 7, -7, -1)
+    @test gcdx(60//4, 60//5, 60//3) == (1//1, 7, -7, -1)
+    abcd = (105, 1638, 2145, 3185)
+    d, uvwp... = gcdx(abcd...)
+    @test d == sum(abcd .* uvwp) # u*a + v*b + w*c + p*d == gcd(a, b, c, d)
+    @test (@inferred gcdx(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) isa NTuple{11, Int}
 end
 
 @testset "Binary operations with Integer" begin
@@ -720,6 +780,19 @@ end
 
 @testset "Rational{T} with non-concrete T (issue #41222)" begin
     @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+    @test @inferred(Rational{Unsigned}(2,3)) isa Rational{Unsigned}
+    @test @inferred(Rational{Signed}(2,3)) isa Rational{Signed}
+    @test_throws InexactError Rational{Unsigned}(-1,1)
+    @test_throws InexactError Rational{Unsigned}(-1)
+    @test Rational{Unsigned}(Int8(-128), Int8(-128)) === Rational{Unsigned}(0x01, 0x01)
+    @test Rational{Unsigned}(Int8(-128), Int8(-1)) === Rational{Unsigned}(0x80, 0x01)
+    @test Rational{Unsigned}(Int8(0), Int8(-128)) === Rational{Unsigned}(0x00, 0x01)
+    # Numerator and denominator should have the same type.
+    @test Rational{Integer}(0x02) === Rational{Integer}(0x02, 0x01)
+    @test Rational{Integer}(Int16(3)) === Rational{Integer}(Int16(3), Int16(1))
+    @test Rational{Integer}(0x01,-1) === Rational{Integer}(-1, 1)
+    @test Rational{Integer}(-1, 0x01) === Rational{Integer}(-1, 1)
+    @test_throws InexactError Rational{Integer}(Int8(-1), UInt8(1))
 end
 
 @testset "issue #41489" begin
@@ -743,4 +816,21 @@ end
     @assert Float64(precise_next) == nextfloat(0.1)
     @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
+end
+
+@testset "complex numerator, denominator" begin
+    z = complex(3*3, 2*3*5)
+    @test z === numerator(z) === numerator(z // 2) === numerator(z // 5)
+    @test complex(3, 2*5) === numerator(z // 3)
+    @test isone(denominator(z))
+    @test 2 === denominator(z // 2)
+    @test 1 === denominator(z // 3)
+    @test 5 === denominator(z // 5)
+    for den ∈ 1:10
+        q = z // den
+        @test q === (numerator(q)//denominator(q))
+    end
+    @testset "do not overflow silently" begin
+        @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
+    end
 end

@@ -3,11 +3,10 @@
 module LineEdit
 
 import ..REPL
-using REPL: AbstractREPL, Options
+using ..REPL: AbstractREPL, Options
 
 using ..Terminals
-import ..Terminals: raw!, width, height, cmove, getX,
-                       getY, clear_line, beep
+import ..Terminals: raw!, width, height, clear_line, beep
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -67,6 +66,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 mutable struct MIState
     interface::ModalInterface
     active_module::Module
+    previous_active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -76,9 +76,10 @@ mutable struct MIState
     key_repeats::Int
     last_action::Symbol
     current_action::Symbol
+    async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -165,7 +166,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -180,11 +181,11 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = String[], "", true
 
 # complete_line can be specialized for only two arguments, when the active module
 # doesn't matter (e.g. Pkg does this)
-complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
+complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false) = complete_line(c, s; hint)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -381,23 +382,33 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+
+    completions, partial, should_complete = try
+        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+    catch
+        @debug "error completing line for hint" exception=current_exceptions()
+        return clear_hint(st)
+    end
+    isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
-        if length(completions) == 1
-            hint = only(completions)[sizeof(partial)+1:end]
-            if !isempty(hint) # completion on a complete name returns itself so check that there's something to hint
+        singlecompletion = length(completions) == 1
+        p = singlecompletion ? completions[1] : common_prefix(completions)
+        if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
+            # The completion `p` and the input `partial` may not share the same initial
+            # characters, for instance when completing to subscripts or superscripts.
+            # So, in general, make sure that the hint starts at the correct position by
+            # incrementing its starting position by as many characters as the input.
+            startind = 1 # index of p from which to start providing the hint
+            maxind = ncodeunits(p)
+            for _ in partial
+                startind = nextind(p, startind)
+                startind > maxind && break
+            end
+            if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
+                hint = p[startind:end]
                 st.hint = hint
                 return true
-            end
-        elseif length(completions) > 1
-            p = common_prefix(completions)
-            if p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
-                hint = p[sizeof(partial)+1:end]
-                if !isempty(hint)
-                    st.hint = hint
-                    return true
-                end
             end
         end
     end
@@ -413,8 +424,8 @@ function clear_hint(s::ModeState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int, mod::Module)
-    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod; hint)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -476,14 +487,12 @@ prompt_string(f::Function) = Base.invokelatest(f)
 function maybe_show_hint(s::PromptState)
     isa(s.hint, String) || return nothing
     # The hint being "" then nothing is used to first clear a previous hint, then skip printing the hint
-    # the clear line cannot be printed each time because it breaks column movement
     if isempty(s.hint)
-        print(terminal(s), "\e[0K") # clear remainder of line which had a hint
         s.hint = nothing
     else
         Base.printstyled(terminal(s), s.hint, color=:light_black)
         cmove_left(terminal(s), textwidth(s.hint))
-        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time if still empty
+        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time the screen is refreshed
     end
     return nothing
 end
@@ -493,8 +502,13 @@ function refresh_multi_line(s::PromptState; kw...)
         close(s.refresh_wait)
         s.refresh_wait = nothing
     end
+    if s.hint isa String
+        # clear remainder of line which is unknown here if it had a hint before unbeknownst to refresh_multi_line
+        # the clear line cannot be printed each time because it would break column movement
+        print(terminal(s), "\e[0K")
+    end
     r = refresh_multi_line(terminal(s), s; kw...)
-    maybe_show_hint(s)
+    maybe_show_hint(s) # now maybe write the hint back to the screen
     return r
 end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
@@ -734,7 +748,26 @@ function edit_move_right(buf::IOBuffer)
     end
     return false
 end
-edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) ? refresh_line(s) : false
+function edit_move_right(m::MIState)
+    s = state(m)
+    buf = s.input_buffer
+    if edit_move_right(s.input_buffer)
+        refresh_line(s)
+        return true
+    else
+        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+            # Replace word by completion
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            refresh_line(state(s))
+            return true
+        else
+            return false
+        end
+    end
+end
 
 function edit_move_word_right(s::PromptState)
     if !eof(s.input_buffer)
@@ -809,9 +842,9 @@ end
 # returns the removed portion as a String
 function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigid_mark::Bool=true)
     A, B = first(r), last(r)
-    A >= B && isempty(ins) && return String(ins)
+    A >= B && isempty(ins) && return ins
     buf = buffer(s)
-    pos = position(buf)
+    pos = position(buf) # n.b. position(), etc, are 0-indexed
     adjust_pos = true
     if A <= pos < B
         seek(buf, A)
@@ -820,18 +853,29 @@ function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigi
     else
         adjust_pos = false
     end
-    if A < buf.mark  < B || A == buf.mark == B
-        # rigid_mark is used only if the mark is strictly "inside"
-        # the region, or the region is empty and the mark is at the boundary
-        buf.mark = rigid_mark ? A : A + sizeof(ins)
-    elseif buf.mark >= B
-        buf.mark += sizeof(ins) - B + A
+    mark = buf.mark
+    if mark != -1
+        if A < mark < B || A == mark == B
+            # rigid_mark is used only if the mark is strictly "inside"
+            # the region, or the region is empty and the mark is at the boundary
+            mark = rigid_mark ? A : A + sizeof(ins)
+        elseif mark >= B
+            mark += sizeof(ins) - B + A
+        end
+        buf.mark = -1
     end
-    ensureroom(buf, B) # handle !buf.reinit from take!
-    ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
-    buf.size = buf.size + sizeof(ins) - B + A
-    adjust_pos && seek(buf, position(buf) + sizeof(ins))
-    return String(copy(ret))
+    # Implement ret = splice!(buf.data, A+1:B, codeunits(ins)) for a stream
+    pos = position(buf)
+    seek(buf, A)
+    ret = read(buf, A >= B ? 0 : B - A)
+    trail = read(buf)
+    seek(buf, A)
+    write(buf, ins)
+    write(buf, trail)
+    truncate(buf, position(buf))
+    seek(buf, pos + (adjust_pos ? sizeof(ins) : 0))
+    buf.mark = mark
+    return String(ret)
 end
 
 edit_splice!(s::MIState, ins::AbstractString) = edit_splice!(s, region(s), ins)
@@ -1475,9 +1519,9 @@ current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
 function activate_module(s::MIState)
     word = current_word_with_dots(s);
-    mod = if isempty(word)
-        edit_insert(s, ' ') # makes the `edit_clear` below actually update the prompt
-        Main
+    empty = isempty(word)
+    mod = if empty
+        s.previous_active_module
     else
         try
             Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
@@ -1485,9 +1529,15 @@ function activate_module(s::MIState)
             nothing
         end
     end
-    if !(mod isa Module)
+    if !(mod isa Module) || mod == Base.active_module()
         beep(s)
         return
+    end
+    empty && edit_insert(s, ' ') # makes the `edit_clear` below actually update the prompt
+    if Base.active_module() == Main || mod == Main
+        # At least one needs to be Main. Disallows toggling between two non-Main modules because it's
+        # otherwise hard to get back to Main
+        s.previous_active_module = Base.active_module()
     end
     REPL.activate(mod)
     edit_clear(s)
@@ -2124,8 +2174,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats, mod::Module)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
+function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2284,7 +2334,7 @@ keymap_data(state, ::Union{HistoryPrompt, PrefixHistoryPrompt}) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 
-on_enter(s::PromptState) = s.p.on_enter(s)
+on_enter(s::MIState) = state(s).p.on_enter(s)
 
 move_input_start(s::BufferLike) = (seek(buffer(s), 0); nothing)
 move_input_end(buf::IOBuffer) = (seekend(buf); nothing)
@@ -2797,44 +2847,61 @@ keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
+    l = Base.ReentrantLock()
+    t1 = Threads.@spawn :interactive while true
+        wait(s.async_channel)
+        status = @lock l begin
+            fcn = take!(s.async_channel)
+            fcn(s)
+        end
+        status ∈ (:ok, :ignore) || break
+    end
     raw!(term, true)
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
         old_state = mode(s)
-        while true
-            kmap = keymap(s, prompt)
-            fcn = match_input(kmap, s)
-            kdata = keymap_data(s, prompt)
-            s.current_action = :unknown # if the to-be-run action doesn't update this field,
-                                        # :unknown will be recorded in the last_action field
-            local status
-            # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
-            # try/catch block
-            try
-                status = fcn(s, kdata)
-            catch e
-                @error "Error in the keymap" exception=e,catch_backtrace()
-                # try to cleanup and get `s` back to its original state before returning
-                transition(s, :reset)
-                transition(s, old_state)
-                status = :done
-            end
-            status !== :ignore && (s.last_action = s.current_action)
-            if status === :abort
-                s.aborted = true
-                return buffer(s), false, false
-            elseif status === :done
-                return buffer(s), true, false
-            elseif status === :suspend
-                if Sys.isunix()
-                    return buffer(s), true, true
+        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # and we want to not block typing when the repl task thread is busy
+        t2 = Threads.@spawn :interactive while true
+            eof(term) || peek(term) # wait before locking but don't consume
+            @lock l begin
+                kmap = keymap(s, prompt)
+                fcn = match_input(kmap, s)
+                kdata = keymap_data(s, prompt)
+                s.current_action = :unknown # if the to-be-run action doesn't update this field,
+                                            # :unknown will be recorded in the last_action field
+                local status
+                # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
+                # try/catch block
+                try
+                    status = fcn(s, kdata)
+                catch e
+                    @error "Error in the keymap" exception=e,catch_backtrace()
+                    # try to cleanup and get `s` back to its original state before returning
+                    transition(s, :reset)
+                    transition(s, old_state)
+                    status = :done
                 end
-            else
-                @assert status ∈ (:ok, :ignore)
+                status !== :ignore && (s.last_action = s.current_action)
+                if status === :abort
+                    s.aborted = true
+                    return buffer(s), false, false
+                elseif status === :done
+                    return buffer(s), true, false
+                elseif status === :suspend
+                    if Sys.isunix()
+                        return buffer(s), true, true
+                    end
+                else
+                    @assert status ∈ (:ok, :ignore)
+                end
             end
         end
+        return fetch(t2)
     finally
+        put!(s.async_channel, Returns(:done))
+        wait(t1)
         raw!(term, false) && disable_bracketed_paste(term)
     end
     # unreachable

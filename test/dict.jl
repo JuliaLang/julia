@@ -8,7 +8,7 @@ using Random
     @test isequal(p,10=>20)
     @test iterate(p)[1] == 10
     @test iterate(p, iterate(p)[2])[1] == 20
-    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) === nothing
     @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
     @test Base.indexed_iterate(p, 1, nothing) == (10,2)
@@ -162,6 +162,30 @@ end
 
     # issue #39117
     @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
+
+    @testset "issue #33147" begin
+        expected = try; Base._throw_dict_kv_error(); catch e; e; end
+        @test_throws expected Dict(i for i in 1:2)
+        @test_throws expected Dict(nothing for i in 1:2)
+        @test_throws expected Dict(() for i in 1:2)
+        @test_throws expected Dict((i, i, i) for i in 1:2)
+        @test_throws expected Dict(nothing)
+        @test_throws expected Dict((1,))
+        @test_throws expected Dict(1:2)
+        @test_throws expected Dict(((),))
+        @test_throws expected IdDict(((),))
+        @test_throws expected WeakKeyDict(((),))
+        @test_throws expected IdDict(nothing)
+        @test_throws expected WeakKeyDict(nothing)
+        @test Dict(1:0) isa Dict
+        @test Dict(()) isa Dict
+        try
+            Dict(i => error("$i") for i in 1:3)
+        catch ex
+            @test ex isa ErrorException
+            @test length(Base.current_exceptions()) == 1
+        end
+    end
 end
 
 @testset "empty tuple ctor" begin
@@ -659,9 +683,9 @@ end
     @inferred setindex!(d, -1, 10)
     @test d[10] == -1
     @test 1 == @inferred d[1]
-    @test get(d, -111, nothing) == nothing
+    @test get(d, -111, nothing) === nothing
     @test 1 == @inferred get(d, 1, 1)
-    @test pop!(d, -111, nothing) == nothing
+    @test pop!(d, -111, nothing) === nothing
     @test 1 == @inferred pop!(d, 1)
 
     # get! and delete!
@@ -1025,7 +1049,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    (@noinline d -> d[big"1" + 1] = 1)(d26939)
     GC.gc() # primarily to make sure this doesn't segfault
     @test count(d26939) == 0
     @test length(d26939.ht) == 1
@@ -1107,6 +1131,9 @@ import Base.PersistentDict
         @test hs.hash == hsr.hash
         @test hs.depth == hsr.depth
         @test hs.shift == hsr.shift
+
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.init_hamt, (Type{Vector{Any}},Type{Int},Vector{Any},Int)))
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.HAMT{Vector{Any},Int}, (Pair{Vector{Any},Int},)))
     end
     @testset "basics" begin
         dict = PersistentDict{Int, Int}()
@@ -1483,9 +1510,9 @@ end
 for T in (Int, Float64, String, Symbol)
     @testset let T=T
         @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Dict{T,Any}, T)))
-        @test_broken Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+        @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
-        @test_broken Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+        @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end
 end
 
@@ -1515,4 +1542,25 @@ let d = Dict()
     d[1] = 'a'
     d[1.0] = 'b'
     @test only(d) === Pair{Any,Any}(1.0, 'b')
+end
+
+@testset "UnionAll `keytype` and `valtype` (issue #53115)" begin
+    K = Int8
+    V = Int16
+    dicts = (
+        AbstractDict, IdDict, Dict, WeakKeyDict, Base.ImmutableDict,
+        Base.PersistentDict, Iterators.Pairs
+    )
+
+    @testset "D: $D" for D ∈ dicts
+        @test_throws MethodError keytype(D)
+        @test_throws MethodError keytype(D{<:Any,V})
+        @test                    keytype(D{K      }) == K
+        @test                    keytype(D{K,    V}) == K
+
+        @test_throws MethodError valtype(D)
+        @test                    valtype(D{<:Any,V}) == V
+        @test_throws MethodError valtype(D{K      })
+        @test                    valtype(D{K,    V}) == V
+    end
 end
