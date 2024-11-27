@@ -1660,6 +1660,42 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     return sub;
 }
 
+static int equal_var(jl_tvar_t *v, jl_value_t *x, jl_stenv_t *e)
+{
+    assert(e->Loffset == 0);
+    // Theoretically bounds change would be merged for union inputs.
+    // But intersection is not happy as splitting helps to avoid circular env.
+    assert(!e->intersection || !jl_is_uniontype(x));
+    jl_varbinding_t *vb = lookup(e, v);
+    if (e->intersection && vb != NULL && vb->lb == vb->ub && jl_is_typevar(vb->lb))
+        return equal_var((jl_tvar_t *)vb->lb, x, e);
+    record_var_occurrence(vb, e, 2);
+    if (vb == NULL)
+        return e->ignore_free || (
+            local_forall_exists_subtype(x, v->lb, e, 2, !jl_has_free_typevars(x)) &&
+            local_forall_exists_subtype(v->ub, x, e, 0, 0));
+    if (!vb->right)
+        return local_forall_exists_subtype(x, vb->lb, e, 2, !jl_has_free_typevars(x)) &&
+               local_forall_exists_subtype(vb->ub, x, e, 0, 0);
+    if (vb->lb == x)
+        return var_lt(v, x, e, 0);
+    if (!subtype_ccheck(x, vb->ub, e))
+        return 0;
+    jl_value_t *lb = simple_join(vb->lb, x);
+    JL_GC_PUSH1(&lb);
+    if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, v, e))
+        vb->lb = lb;
+    JL_GC_POP();
+    if (vb->ub == x)
+        return 1;
+    if (!subtype_ccheck(vb->lb, x, e))
+        return 0;
+    // skip `simple_meet` here as we have proven `x <: vb->ub`
+    if (!e->intersection || !reachable_var(x, v, e))
+        vb->ub = x;
+    return 1;
+}
+
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
@@ -1688,6 +1724,12 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             return forall_exists_equal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a, e) &&
                    forall_exists_equal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b, e);
         }
+    }
+
+    if (e->Loffset == 0 && jl_is_typevar(y) && jl_is_type(x) && (!e->intersection || !jl_is_uniontype(x))) {
+        // Fastpath for Type == TypeVar.
+        // Avoid duplicated `<:` check between adjacent `var_gt` and `var_lt`
+        return equal_var((jl_tvar_t *)y, x, e);
     }
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
