@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef MMTK_GC
 #include "gc-common.h"
 #include "gc-stock.h"
 #include "gc-alloc-profiler.h"
@@ -4000,5 +3999,3 @@ JL_DLLEXPORT const char* jl_active_gc_impl(void) {
 #ifdef __cplusplus
 }
 #endif
-
-#endif // !MMTK_GC

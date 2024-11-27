@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef MMTK_GC
 #include "gc-common.h"
 #include "gc-stock.h"
 #include "julia.h"
@@ -1130,5 +1129,3 @@ void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect
 #ifdef __cplusplus
 }
 #endif
-
-#endif // !MMTK_GC

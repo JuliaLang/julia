@@ -1,5 +1,3 @@
-#ifdef MMTK_GC
-
 #include <stddef.h>
 #include <stdint.h>
 
@@ -29,5 +27,3 @@ JL_EXTENSION typedef struct _bigval_t {
 #ifdef __cplusplus
 }
 #endif
-
-#endif // MMTK_GC
