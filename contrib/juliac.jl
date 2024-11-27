@@ -9,6 +9,7 @@ outname = nothing
 file = nothing
 add_ccallables = false
 verbose = false
+output_llvm = nothing
 
 help = findfirst(x->x == "--help", ARGS)
 if help !== nothing
@@ -18,6 +19,7 @@ if help !== nothing
         --trim=<no,safe,unsafe,unsafe-warn>  Only output code statically determined to be reachable
         --compile-ccallable  Include all methods marked `@ccallable` in output
         --verbose            Request verbose output
+        --output-llvm=<opt,unopt>  Output LLVM bitcode
         """)
     exit(0)
 end
@@ -42,6 +44,17 @@ let i = 1
             global add_ccallables = true
         elseif arg == "--verbose"
             global verbose = true
+        elseif startswith(arg, "--output-llvm")
+            arg = split(arg, '=')
+            if length(arg) == 1
+                global output_llvm = "--output-bc"
+            elseif arg[2] == "opt"
+                global output_llvm = "--output-bc"
+            elseif arg[2] == "unopt"
+                global output_llvm = "--output-unopt-bc"
+            else
+                error("Invalid argument to --output-llvm")
+            end
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -65,7 +78,6 @@ tmpdir = mktempdir(cleanup=false)
 initsrc_path = joinpath(tmpdir, "init.c")
 init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
-bc_path = joinpath(tmpdir, "img-bc.a")
 
 open(initsrc_path, "w") do io
     print(io, """
@@ -80,6 +92,17 @@ open(initsrc_path, "w") do io
 end
 
 static_call_graph_arg() = isnothing(trim) ?  `` : `--trim=$(trim)`
+
+if !isnothing(output_llvm)
+    cmd = addenv(`$cmd --project=$(Base.active_project()) $output_llvm $(outname * ".a") --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    verbose && println("Running: $cmd")
+    if !success(pipeline(cmd; stdout, stderr))
+        println(stderr, "\nFailed to compile $file")
+        exit(1)
+    end
+    exit(0)
+end
+
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 verbose && println("Running: $cmd")
 if !success(pipeline(cmd; stdout, stderr))
@@ -100,11 +123,11 @@ end
 julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
 try
     if output_type == "--output-lib"
-        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  $(julia_libs)`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`)
     elseif output_type == "--output-sysimage"
         run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`)
     else
-        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`)
+        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $(julia_libs)`)
     end
 catch
     println("\nCompilation failed.")
