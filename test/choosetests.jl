@@ -15,7 +15,7 @@ const TESTNAMES = [
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
-        "file", "read", "version", "namedtuple",
+        "file", "read", "version", "namedtuple", "typedomainnumbers",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
