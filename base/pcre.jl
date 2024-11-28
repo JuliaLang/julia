@@ -29,7 +29,7 @@ THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 PCRE_COMPILE_LOCK = nothing
 
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
-_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+_mth() = Base.Threads.maxthreadid()
 
 function get_local_match_context()
     tid = _tid()
