@@ -91,7 +91,7 @@ julia> evalpoly(2, (1, 2, 3))
 17
 ```
 """
-function evalpoly(x, p::Tuple)
+function evalpoly(x, p::Tuple{Any, Vararg})
     if @generated
         N = length(p.parameters::Core.SimpleVector)
         ex = :(p[end])
@@ -119,7 +119,7 @@ function _evalpoly(x, p)
     ex
 end
 
-function evalpoly(z::Complex, p::Tuple)
+function evalpoly(z::Complex, p::Tuple{Any, Any, Vararg})
     if @generated
         N = length(p.parameters)
         a = :(p[end])
@@ -145,9 +145,9 @@ function evalpoly(z::Complex, p::Tuple)
     end
 end
 
-evalpoly(z::Complex, p::Tuple{}) = zero(z)
-
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
+
+evalpoly(z::Complex, p::Tuple{}) = zero(z)
 
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
