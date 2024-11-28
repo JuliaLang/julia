@@ -724,6 +724,14 @@ end
     @test evalpoly(1+im, [2,]) == 2
 end
 
+@testset "evalpoly no coefficients" begin
+    for x in (1,1.0,1.0+1.0im)
+        for p in ((),[])
+            @test evalpoly(x,p) == zero(x)
+        end
+    end
+end
+
 @testset "cis" begin
     for z in (1.234, 1.234 + 5.678im)
         @test cis(z) ≈ exp(im*z)

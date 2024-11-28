@@ -104,11 +104,14 @@ function evalpoly(x, p::Tuple)
     end
 end
 
+evalpoly(x, p::Tuple{}) = zero(x)
+
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
     Base.require_one_based_indexing(p)
     N = length(p)
+    N == 0 && return zero(x)
     ex = p[end]
     for i in N-1:-1:1
         ex = muladd(x, ex, p[i])
@@ -141,15 +144,18 @@ function evalpoly(z::Complex, p::Tuple)
         _evalpoly(z, p)
     end
 end
-evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
+evalpoly(z::Complex, p::Tuple{}) = zero(z)
+
+evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
     Base.require_one_based_indexing(p)
-    length(p) == 1 && return p[1]
     N = length(p)
+    N == 0 && return zero(z)
+    N == 1 && return p[1]
     a = p[end]
     b = p[end-1]
 
