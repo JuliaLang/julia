@@ -45,11 +45,11 @@ function __init__()
     LIBPATH[] = dirname(libssl_path)
     push!(LIBPATH_list, LIBPATH[])
 
-    # If not already done, set the environment variable `SSL_CERT_FILE` when necessary.
-    cert_loc = ca_roots()
-    if cert_loc isa String
-        get!(ENV, "SSL_CERT_FILE", cert_loc)
-    end
+    #TODO # If not already done, set the environment variable `SSL_CERT_FILE` when necessary.
+    #TODO cert_loc = ca_roots()
+    #TODO if cert_loc isa String
+    #TODO     get!(ENV, "SSL_CERT_FILE", cert_loc)
+    #TODO end
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
