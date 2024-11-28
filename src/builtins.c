@@ -931,20 +931,25 @@ JL_CALLABLE(jl_f__call_in_world_total)
 
 // tuples ---------------------------------------------------------------------
 
-JL_CALLABLE(jl_f_tuple)
+static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
 {
     size_t i;
-    if (nargs == 0)
-        return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(a1, args, nargs, 0);
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_task_t *ct = jl_current_task;
     jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
-        set_nth_field(tt, jv, i, args[i], 0);
+        set_nth_field(tt, jv, i, i == 0 ? a1 : args[i - 1], 0);
     return jv;
+}
+
+JL_CALLABLE(jl_f_tuple)
+{
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptytuple;
+    return arg_tuple(args[0], &args[1], nargs);
 }
 
 JL_CALLABLE(jl_f_svec)
@@ -1577,14 +1582,17 @@ JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
-    if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
-        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
+    if (jl_is_method(argtypes)) {
+        jl_method_t *m = (jl_method_t*)argtypes;
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
+            jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));
+        return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
+    }
+    if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
+        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(NULL, &args[2], nargs - 2));
-    jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
-    JL_GC_POP();
-    return res;
+    return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
 // Expr constructor for internal use ------------------------------------------
