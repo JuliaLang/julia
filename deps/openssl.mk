@@ -16,7 +16,11 @@ else
 OPENSSL_TARGET := mingw
 endif
 else ifeq ($(OS),FreeBSD)
+ifeq ($(ARCH),aarch64)
+OPENSSL_TARGET := BSD-aarch64
+else
 OPENSSL_TARGET := BSD-x86_64
+endif
 else ifeq ($(OS),Linux)
 ifeq ($(ARCH),x86_64)
 OPENSSL_TARGET := linux-x86_64
