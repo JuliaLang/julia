@@ -3400,9 +3400,9 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    for (i,j) in zip(eachindex(dest),eachindex(A))
-        val = f(@inbounds A[j])
-        @inbounds dest[i] = val
+    inds = LinearIndices(A)
+    for i = inds
+        dest[i] = f(A[i])
     end
     return dest
 end
@@ -3445,10 +3445,10 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        @inbounds a, b = A[j], B[k]
-        val = f(a, b)
-        @inbounds dest[i] = val
+    inds = intersect(eachindex(LinearIndices(A)), eachindex(LinearIndices(B)))
+    @boundscheck checkbounds(dest, inds)
+    for i = inds
+        dest[i] = f(A[i], B[i])
     end
     return dest
 end
@@ -3462,15 +3462,10 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = eachindex(LinearIndices(As[1]))
-    @boundscheck begin
-        idxs1 = intersect(map(eachindex ∘ LinearIndices, As)...)
-        checkbounds(dest, idxs1)
-    end
-    for i = idxs1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
-        @inbounds dest[i] = val
+    inds = mapreduce(eachindex ∘ LinearIndices, intersect, As)
+    @boundscheck checkbounds(dest, inds)
+    for i = inds
+        dest[i] = f(ith_all(i, As)...)
     end
     return dest
 end
