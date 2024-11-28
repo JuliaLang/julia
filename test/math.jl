@@ -715,6 +715,8 @@ end
         @test evalpoly(x, (p1, p2, p3)) == evpm
         @test evalpoly(x, [p1, p2, p3]) == evpm
     end
+    @test evalpoly(1.0f0, ()) === 0.0f0 # issue #56699
+    @test @inferred(evalpoly(1.0f0, [2])) === 2.0f0 # type-stability
 end
 
 @testset "evalpoly complex" begin
@@ -726,6 +728,8 @@ end
     end
     @test evalpoly(1+im, (2,)) == 2
     @test evalpoly(1+im, [2,]) == 2
+    @test evalpoly(1.0f0+im, ()) === 0.0f0+0im # issue #56699
+    @test @inferred(evalpoly(1.0f0+im, [2])) === 2.0f0+0im # type-stability
 end
 
 @testset "cis" begin
