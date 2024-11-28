@@ -2897,10 +2897,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     int en = jl_gc_enable(0);
     if (native_functions) {
-        jl_get_llvm_gvs(native_functions, &gvars);
-        jl_get_llvm_external_fns(native_functions, &external_fns);
-        if (jl_options.trim)
-            jl_get_llvm_mis(native_functions, &MIs);
+        size_t num_gvars, num_external_fns;
+        jl_get_llvm_gvs(native_functions, &num_gvars, NULL);
+        arraylist_grow(&gvars, num_gvars);
+        jl_get_llvm_gvs(native_functions, &num_gvars, gvars.items);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
+        arraylist_grow(&external_fns, num_external_fns);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns,
+                                 (jl_code_instance_t *)external_fns.items);
+        if (jl_options.trim) {
+            size_t num_mis;
+            jl_get_llvm_mis(native_functions, &num_mis, NULL);
+            arraylist_grow(&MIs, num_mis);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t *)MIs.items);
+        }
     }
     if (jl_options.trim) {
         jl_rebuild_methtables(&MIs, &new_methtables);
