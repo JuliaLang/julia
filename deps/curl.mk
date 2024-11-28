@@ -56,7 +56,8 @@ ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
 CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
-else CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
+else
+CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
