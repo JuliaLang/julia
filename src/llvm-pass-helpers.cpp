@@ -252,6 +252,8 @@ namespace jl_well_known {
     static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
+    static const char *GC_PRESERVE_BEGIN_HOOK_NAME = XSTR(jl_gc_preserve_begin_hook);
+    static const char *GC_PRESERVE_END_HOOK_NAME = XSTR(jl_gc_preserve_end_hook);
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -320,4 +322,50 @@ namespace jl_well_known {
             allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
             return addGCAllocAttributes(allocTypedFunc);
         });
+
+    const WellKnownFunctionDescription GCPreserveBeginHook(
+        GC_PRESERVE_BEGIN_HOOK_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(ctx),
+                    { T_size },
+                    true),
+                Function::ExternalLinkage,
+                GC_PRESERVE_BEGIN_HOOK_NAME);
+
+#if JL_LLVM_VERSION >= 160000
+            func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
+            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
+            return func;
+        });
+
+    const WellKnownFunctionDescription GCPreserveEndHook(
+        GC_PRESERVE_END_HOOK_NAME,
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto func = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(ctx),
+                    {  },
+                    false),
+                Function::ExternalLinkage,
+                GC_PRESERVE_END_HOOK_NAME);
+#if JL_LLVM_VERSION >= 160000
+            func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
+            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
+            return func;
+        });
+}
+
+void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info)
+{
+    if (debug_info >= 2 && !llvm::isa<llvm::Constant>(V)) {
+        V->setName(Name);
+    }
 }
