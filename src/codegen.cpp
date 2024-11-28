@@ -1985,7 +1985,7 @@ public:
 
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
-    Value *world_age_at_entry = NULL; // Not valid to use in toplevel code
+    Value *world_age_at_entry = NULL;
 
     bool use_cache = false;
     bool external_linkage = false;
@@ -2115,6 +2115,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
 static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
+static Value *get_tls_world_age(jl_codectx_t &ctx);
 static Value *get_scope_field(jl_codectx_t &ctx);
 static Value *get_tls_world_age_field(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
@@ -7044,11 +7045,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, (jl_tupletype_t*)env_t, argt_typ, ub.constant);
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
-                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                    bool not_toplevel = (ctx.linfo && jl_is_method(ctx.linfo->def.method));
-                    Instruction *I = not_toplevel ? cast<Instruction>(ctx.world_age_at_entry) :
-                                     ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr);
-                    jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
+                    jl_cgval_t world_age = mark_julia_type(ctx, get_tls_world_age(ctx), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
                         fptr = mark_julia_type(ctx, specF, false, jl_voidpointer_type);
@@ -7205,6 +7202,25 @@ static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
     return emit_ptrgep(ctx, ct, offsetof(jl_task_t, world_age), "world_age");
+}
+
+// Get the value of the world age of the current task
+static Value *get_tls_world_age(jl_codectx_t &ctx)
+{
+    if (ctx.world_age_at_entry)
+        return ctx.world_age_at_entry;
+    IRBuilderBase::InsertPointGuard IP(ctx.builder);
+    bool toplevel = !jl_is_method(ctx.linfo->def.method);
+    if (!toplevel) {
+        ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
+        ctx.builder.SetCurrentDebugLocation(ctx.topalloca->getStableDebugLoc());
+    }
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    auto *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr);
+    ai.decorateInst(world);
+    if (!toplevel)
+        ctx.world_age_at_entry = world;
+    return world;
 }
 
 static Value *get_scope_field(jl_codectx_t &ctx)
@@ -7524,9 +7540,8 @@ static Function* gen_cfun_wrapper(
 
     auto world_age_field = get_tls_world_age_field(ctx);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-    Value *last_age = ai.decorateInst(
+    ctx.world_age_at_entry = ai.decorateInst(
             ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
-    ctx.world_age_at_entry = last_age;
     Value *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
         prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
@@ -7808,7 +7823,7 @@ static Function* gen_cfun_wrapper(
         r = NULL;
     }
 
-    ctx.builder.CreateStore(last_age, world_age_field);
+    ctx.builder.CreateStore(ctx.world_age_at_entry, world_age_field);
     ctx.builder.CreateRet(r);
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
@@ -8418,7 +8433,6 @@ static jl_llvm_functions_t
     ctx.source = src;
 
     std::map<int, BasicBlock*> labels;
-    bool toplevel = false;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.name = TSM.getModuleUnlocked()->getModuleIdentifier().data();
@@ -8438,7 +8452,6 @@ static jl_llvm_functions_t
         if (vn != jl_unused_sym)
             ctx.vaSlot = ctx.nargs - 1;
     }
-    toplevel = !jl_is_method(lam->def.method);
     ctx.rettype = jlrettype;
     ctx.funcName = ctx.name;
     ctx.spvals_ptr = NULL;
@@ -8776,12 +8789,12 @@ static jl_llvm_functions_t
     // step 6. set up GC frame
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
-    auto world_age_field = get_tls_world_age_field(ctx);
-    { // scope
+    Value *world_age_field = NULL;
+    if (ctx.is_opaque_closure) {
+        world_age_field = get_tls_world_age_field(ctx);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
                    ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
-        ctx.world_age_at_entry = last_age; // Load world age for use in get_tls_world_age
     }
 
     // step 7. allocate local variables slots
@@ -9005,6 +9018,7 @@ static jl_llvm_functions_t
             Value *worldaddr = emit_ptrgep(ctx, oc_this, offsetof(jl_opaque_closure_t, world));
             jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                 nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
+            assert(ctx.world_age_at_entry == nullptr);
             ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
             emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr);
 
@@ -9282,19 +9296,11 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
-    // step 11a. For top-level code, load the world age
-    if (toplevel && !ctx.is_opaque_closure) {
-        LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-        world->setOrdering(AtomicOrdering::Acquire);
-        ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
-    }
-
-    // step 11b. Emit the entry safepoint
+    // step 11a. Emit the entry safepoint
     if (JL_FEAT_TEST(ctx, safepoint_on_entry))
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11c. Do codegen in control flow order
+    // step 11b. Do codegen in control flow order
     SmallVector<int, 0> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
@@ -9966,8 +9972,7 @@ static jl_llvm_functions_t
         Instruction *root = cast_or_null<Instruction>(ctx.slots[ctx.vaSlot].boxroot);
         if (root) {
             bool have_real_use = false;
-            for (Use &U : root->uses()) {
-                User *RU = U.getUser();
+            for (User *RU : root->users()) {
                 if (StoreInst *SRU = dyn_cast<StoreInst>(RU)) {
                     assert(isa<ConstantPointerNull>(SRU->getValueOperand()) || SRU->getValueOperand() == restTuple);
                     (void)SRU;
@@ -9986,19 +9991,19 @@ static jl_llvm_functions_t
                 }
             }
             if (!have_real_use) {
-                Instruction *use = NULL;
-                for (Use &U : root->uses()) {
-                    if (use) // erase after the iterator moves on
-                        use->eraseFromParent();
-                    User *RU = U.getUser();
-                    use = cast<Instruction>(RU);
+                for (User *RU : make_early_inc_range(root->users())) {
+                    // This is safe because it checked above that each User is known and has at most one Use of root
+                    cast<Instruction>(RU)->eraseFromParent();
                 }
-                if (use)
-                    use->eraseFromParent();
                 root->eraseFromParent();
                 restTuple->eraseFromParent();
             }
         }
+    }
+
+    if (ctx.topalloca->use_empty()) {
+        ctx.topalloca->eraseFromParent();
+        ctx.topalloca = nullptr;
     }
 
     // link the dependent llvmcall modules, but switch their function's linkage to internal
