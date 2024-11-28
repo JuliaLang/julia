@@ -1816,7 +1816,34 @@ function f53521()
         end
     end
 end
-@test code_typed(f53521)[1][2] === Nothing
+let (ir,rt) = only(Base.code_ircode(f53521, ()))
+    @test rt == Nothing
+    Compiler.verify_ir(ir)
+    Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+end
+
+Base.@assume_effects :foldable Base.@constprop :aggressive function f53521(x::Int, ::Int)
+    VALUE = ScopedValue(x)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                local v
+                try
+                    v = sin(VALUE[])
+                catch
+                    v = nothing
+                end
+                return v
+            end
+        end
+    end
+end
+let (ir,rt) = only(Base.code_ircode((Int,)) do y
+        f53521(1, y)
+    end)
+    @test rt == Union{Nothing,Float64}
+end
 
 # Test that adce_pass! sets Refined on PhiNode values
 let code = Any[

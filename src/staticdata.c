@@ -89,6 +89,7 @@ External links:
 #include "julia_assert.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
+size_t jl_require_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -2577,6 +2578,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
@@ -2678,7 +2680,6 @@ jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 extern jl_mutex_t world_counter_lock;
-extern size_t jl_require_world;
 
 jl_mutex_t precompile_field_replace_lock;
 jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
@@ -4044,16 +4045,30 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Insert method extensions and handle edges
+            int new_methods = jl_array_nrows(extext_methods) > 0;
+            if (!new_methods) {
+                size_t i, l = jl_array_nrows(internal_methods);
+                for (i = 0; i < l; i++) {
+                    jl_value_t *obj = jl_array_ptr_ref(internal_methods, i);
+                    if (jl_is_method(obj)) {
+                        new_methods = 1;
+                        break;
+                    }
+                }
+            }
             JL_LOCK(&world_counter_lock);
-              // allocate a world for the new methods, and insert them there, invalidating content as needed
-            size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-            jl_activate_methods(extext_methods, internal_methods, world);
-              // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
-              // allow users to start running in this updated world
-            jl_atomic_store_release(&jl_world_counter, world);
-              // now permit more methods to be added again
+            // allocate a world for the new methods, and insert them there, invalidating content as needed
+            size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+            if (new_methods)
+                world += 1;
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
+            // allow users to start running in this updated world
+            if (new_methods)
+                jl_atomic_store_release(&jl_world_counter, world);
+            // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
-              // but one of those immediate users is going to be our cache insertions
+            // but one of those immediate users is going to be our cache insertions
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis); // restore existing caches (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);

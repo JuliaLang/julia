@@ -2030,20 +2030,31 @@ applicable
 
 """
     invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Method, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
+implementation of a more specific method of the same function). However, because this means
+the runtime must do more work, `invoke` is generally also slower--sometimes significantly
+so--than doing normal dispatch with a regular call.
 
-Be careful when using `invoke` for functions that you don't write.  What definition is used
+Be careful when using `invoke` for functions that you don't write. What definition is used
 for given `argtypes` is an implementation detail unless the function is explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
 visible if you use `invoke`.
+
+# Passing a `Method` instead of a signature
+The `argtypes` argument may be a `Method`, in which case the ordinary method table lookup is
+bypassed entirely and the given method is invoked directly. Needing this feature is uncommon.
+Note in particular that the specified `Method` may be entirely unreachable from ordinary dispatch
+(or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
+If the method is part of the ordinary method table, this call behaves similar
+to `invoke(f, method.sig, args...)`.
 
 # Examples
 ```jldoctest

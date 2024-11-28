@@ -856,8 +856,7 @@ end
 
 struct InvokeCall
     types     # ::Type
-    lookupsig # ::Type
-    InvokeCall(@nospecialize(types), @nospecialize(lookupsig)) = new(types, lookupsig)
+    InvokeCall(@nospecialize(types)) = new(types)
 end
 
 struct ConstCallResult
@@ -2218,26 +2217,38 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
     ft === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
-    isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-    unwrapped = unwrap_unionall(types)
-    types === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-    if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
-        return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+    types = argtype_by_index(argtypes, 3)
+    if types isa Const && types.val isa Method
+        method = types.val::Method
+        types = method # argument value
+        lookupsig = method.sig # edge kind
+        argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
+        nargtype = typeintersect(lookupsig, argtype)
+        nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+        nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+    else
+        widenconst(types) >: Method && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
+        isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        unwrapped = unwrap_unionall(types)
+        types === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
+            return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+        end
+        argtype = argtypes_to_type(argtype_tail(argtypes, 4))
+        nargtype = typeintersect(types, argtype)
+        nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+        nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+        isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+        ft = ft::DataType
+        lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+        nargtype = Tuple{ft, nargtype.parameters...}
+        argtype = Tuple{ft, argtype.parameters...}
+        matched, valid_worlds = findsup(lookupsig, method_table(interp))
+        matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        update_valid_age!(sv, valid_worlds)
+        method = matched.method
     end
-    argtype = argtypes_to_type(argtype_tail(argtypes, 4))
-    nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-    nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
-    isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-    ft = ft::DataType
-    lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
-    nargtype = Tuple{ft, nargtype.parameters...}
-    argtype = Tuple{ft, argtype.parameters...}
-    matched, valid_worlds = findsup(lookupsig, method_table(interp))
-    matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-    update_valid_age!(sv, valid_worlds)
-    method = matched.method
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
@@ -2245,7 +2256,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
-    invokecall = InvokeCall(types, lookupsig)
+    invokecall = InvokeCall(types)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
         local ft′ = ft′_box.contents

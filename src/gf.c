@@ -24,6 +24,7 @@
 extern "C" {
 #endif
 
+_Atomic(int) allow_new_worlds = 1;
 JL_DLLEXPORT _Atomic(size_t) jl_world_counter = 1; // uses atomic acquire/release
 jl_mutex_t world_counter_lock;
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
@@ -1819,38 +1820,42 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller)
 {
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        return;
     if (invokesig == jl_nothing)
         invokesig = NULL;      // julia uses `nothing` but C uses NULL (#undef)
     assert(jl_is_method_instance(callee));
     assert(jl_is_code_instance(caller));
     assert(invokesig == NULL || jl_is_type(invokesig));
     JL_LOCK(&callee->def.method->writelock);
-    int found = 0;
-    // TODO: use jl_cache_type_(invokesig) like cache_method does to save memory
-    if (!callee->backedges) {
-        // lazy-init the backedges array
-        callee->backedges = jl_alloc_vec_any(0);
-        jl_gc_wb(callee, callee->backedges);
-    }
-    else {
-        size_t i = 0, l = jl_array_nrows(callee->backedges);
-        for (i = 0; i < l; i++) {
-            // optimized version of while (i < l) i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
-            jl_value_t *mi = jl_array_ptr_ref(callee->backedges, i);
-            if (mi != (jl_value_t*)caller)
-                continue;
-            jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(callee->backedges, i - 1) : NULL;
-            if (invokeTypes && jl_is_method_instance(invokeTypes))
-                invokeTypes = NULL;
-            if ((invokesig == NULL && invokeTypes == NULL) ||
-                (invokesig && invokeTypes && jl_types_equal(invokesig, invokeTypes))) {
-                found = 1;
-                break;
+    if (jl_atomic_load_relaxed(&allow_new_worlds)) {
+        int found = 0;
+        // TODO: use jl_cache_type_(invokesig) like cache_method does to save memory
+        if (!callee->backedges) {
+            // lazy-init the backedges array
+            callee->backedges = jl_alloc_vec_any(0);
+            jl_gc_wb(callee, callee->backedges);
+        }
+        else {
+            size_t i = 0, l = jl_array_nrows(callee->backedges);
+            for (i = 0; i < l; i++) {
+                // optimized version of while (i < l) i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
+                jl_value_t *mi = jl_array_ptr_ref(callee->backedges, i);
+                if (mi != (jl_value_t*)caller)
+                    continue;
+                jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(callee->backedges, i - 1) : NULL;
+                if (invokeTypes && jl_is_method_instance(invokeTypes))
+                    invokeTypes = NULL;
+                if ((invokesig == NULL && invokeTypes == NULL) ||
+                    (invokesig && invokeTypes && jl_types_equal(invokesig, invokeTypes))) {
+                    found = 1;
+                    break;
+                }
             }
         }
+        if (!found)
+            push_edge(callee->backedges, invokesig, caller);
     }
-    if (!found)
-        push_edge(callee->backedges, invokesig, caller);
     JL_UNLOCK(&callee->def.method->writelock);
 }
 
@@ -1858,37 +1863,41 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_code_instance_t *caller)
 {
     assert(jl_is_code_instance(caller));
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        return;
     JL_LOCK(&mt->writelock);
-    if (!mt->backedges) {
-        // lazy-init the backedges array
-        mt->backedges = jl_alloc_vec_any(2);
-        jl_gc_wb(mt, mt->backedges);
-        jl_array_ptr_set(mt->backedges, 0, typ);
-        jl_array_ptr_set(mt->backedges, 1, caller);
-    }
-    else {
-        // check if the edge is already present and avoid adding a duplicate
-        size_t i, l = jl_array_nrows(mt->backedges);
-        for (i = 1; i < l; i += 2) {
-            if (jl_array_ptr_ref(mt->backedges, i) == (jl_value_t*)caller) {
-                if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
-                    JL_UNLOCK(&mt->writelock);
-                    return;
+    if (jl_atomic_load_relaxed(&allow_new_worlds)) {
+        if (!mt->backedges) {
+            // lazy-init the backedges array
+            mt->backedges = jl_alloc_vec_any(2);
+            jl_gc_wb(mt, mt->backedges);
+            jl_array_ptr_set(mt->backedges, 0, typ);
+            jl_array_ptr_set(mt->backedges, 1, caller);
+        }
+        else {
+            // check if the edge is already present and avoid adding a duplicate
+            size_t i, l = jl_array_nrows(mt->backedges);
+            for (i = 1; i < l; i += 2) {
+                if (jl_array_ptr_ref(mt->backedges, i) == (jl_value_t*)caller) {
+                    if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
+                        JL_UNLOCK(&mt->writelock);
+                        return;
+                    }
                 }
             }
-        }
-        // reuse an already cached instance of this type, if possible
-        // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
-        for (i = 1; i < l; i += 2) {
-            if (jl_array_ptr_ref(mt->backedges, i) != (jl_value_t*)caller) {
-                if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
-                    typ = jl_array_ptr_ref(mt->backedges, i - 1);
-                    break;
+            // reuse an already cached instance of this type, if possible
+            // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
+            for (i = 1; i < l; i += 2) {
+                if (jl_array_ptr_ref(mt->backedges, i) != (jl_value_t*)caller) {
+                    if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
+                        typ = jl_array_ptr_ref(mt->backedges, i - 1);
+                        break;
+                    }
                 }
             }
+            jl_array_ptr_1d_push(mt->backedges, typ);
+            jl_array_ptr_1d_push(mt->backedges, (jl_value_t*)caller);
         }
-        jl_array_ptr_1d_push(mt->backedges, typ);
-        jl_array_ptr_1d_push(mt->backedges, (jl_value_t*)caller);
     }
     JL_UNLOCK(&mt->writelock);
 }
@@ -2024,10 +2033,55 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_method_t *replaced
     }
 }
 
+static int erase_method_backedges(jl_typemap_entry_t *def, void *closure)
+{
+    jl_method_t *method = def->func.method;
+    JL_LOCK(&method->writelock);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+    if (jl_is_svec(specializations)) {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if ((jl_value_t*)mi != jl_nothing) {
+                mi->backedges = NULL;
+            }
+        }
+    }
+    else {
+        jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
+        mi->backedges = NULL;
+    }
+    JL_UNLOCK(&method->writelock);
+    return 1;
+}
+
+static int erase_all_backedges(jl_methtable_t *mt, void *env)
+{
+    // removes all method caches
+    // this might not be entirely safe (GC or MT), thus we only do it very early in bootstrapping
+    JL_LOCK(&mt->writelock);
+    mt->backedges = NULL;
+    JL_UNLOCK(&mt->writelock);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), erase_method_backedges, env);
+    return 1;
+}
+
+JL_DLLEXPORT void jl_disable_new_worlds(void)
+{
+    if (jl_generating_output())
+        jl_error("Disabling Method changes is not possible when generating output.");
+    JL_LOCK(&world_counter_lock);
+    jl_atomic_store_relaxed(&allow_new_worlds, 0);
+    JL_UNLOCK(&world_counter_lock);
+    jl_foreach_reachable_mtable(erase_all_backedges, (void*)NULL);
+}
+
 JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *method)
 {
     jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&world_counter_lock);
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        jl_error("Method changes have been disabled via a call to disable_new_worlds.");
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
     size_t world = jl_atomic_load_relaxed(&jl_world_counter);
@@ -2341,6 +2395,8 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_typemap_entry_t *newentry = jl_method_table_add(mt, method, simpletype);
     JL_GC_PUSH1(&newentry);
     JL_LOCK(&world_counter_lock);
+    if (!jl_atomic_load_relaxed(&allow_new_worlds))
+        jl_error("Method changes have been disabled via a call to disable_new_worlds.");
     size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_atomic_store_relaxed(&method->primary_world, world);
     jl_atomic_store_relaxed(&method->deleted_world, ~(size_t)0);
