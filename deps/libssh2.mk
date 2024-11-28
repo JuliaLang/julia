@@ -4,8 +4,8 @@ LIBSSH2_GIT_URL := https://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
@@ -21,7 +21,7 @@ ifeq ($(BUILD_OS),WINNT)
 LIBSSH2_OPTS += -G"MSYS Makefiles"
 endif
 else
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
@@ -33,14 +33,6 @@ LIBSSH2_OPTS += -DBUILD_TESTING=OFF
 endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
-
-$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
-	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls-size_t.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
-	$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
