@@ -5,3 +5,4 @@
 NETWORKOPTIONS_BRANCH = eschnett/openssl
 NETWORKOPTIONS_SHA1 = 908a46623c3af09f9a2929bd40b5b2398cf87903
 NETWORKOPTIONS_GIT_URL := https://github.com/eschnett/NetworkOptions.jl.git
+NETWORKOPTIONS_TAR_URL = https://api.github.com/repos/eschnett/NetworkOptions.jl/tarball/$1
