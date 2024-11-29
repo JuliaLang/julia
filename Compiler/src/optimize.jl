@@ -1408,16 +1408,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
-        if ex.args[1] isa GlobalRef
-            cost = UNKNOWN_CALL_COST
-        else
-            cost = 0
-        end
-        a = ex.args[2]
-        if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params))
-        end
-        return cost
+        return statement_cost(ex.args[2], -1, src, sptypes, params)
     elseif head === :copyast
         return 100
     end

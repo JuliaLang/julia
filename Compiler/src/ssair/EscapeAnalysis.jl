@@ -642,13 +642,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     escape_invoke!(astate, pc, stmt.args)
                 elseif head === :new || head === :splatnew
                     escape_new!(astate, pc, stmt.args)
-                elseif head === :(=)
-                    lhs, rhs = stmt.args
-                    if isa(lhs, GlobalRef) # global store
-                        add_escape_change!(astate, rhs, ⊤)
-                    else
-                        unexpected_assignment!(ir, pc)
-                    end
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
@@ -979,11 +972,6 @@ function escape_unanalyzable_obj!(astate::AnalysisState, @nospecialize(obj), obj
     objinfo = EscapeInfo(objinfo, true)
     add_escape_change!(astate, obj, objinfo)
     return objinfo
-end
-
-@noinline function unexpected_assignment!(ir::IRCode, pc::Int)
-    @eval Main (ir = $ir; pc = $pc)
-    error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
 is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
