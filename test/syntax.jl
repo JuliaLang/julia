@@ -4033,3 +4033,11 @@ end
 @test isa(create_inner_f_no_methods(), Function)
 @test length(methods(create_inner_f_no_methods())) == 0
 @test Base.invoke_in_world(first(methods(create_inner_f_one_method)).primary_world, create_inner_f_one_method()) == 1
+
+# Issue 56711 - Scope of signature hoisting
+function fs56711()
+    f(lhs::Integer) = 1
+    f(lhs::Integer, rhs::(local x_should_not_be_defined=Integer; x_should_not_be_defined)) = 2
+    return f
+end
+@test !@isdefined(x_should_not_be_defined)

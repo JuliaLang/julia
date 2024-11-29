@@ -4279,6 +4279,7 @@ f(x) = yt(x)
                    (if (or exists (and short (pair? alldefs)))
                        `(toplevel-butfirst
                          (null)
+                         ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                          ,@sp-inits
                          ,@mk-method
                          (latestworld))
