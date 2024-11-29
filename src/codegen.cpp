@@ -167,7 +167,7 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
     // is not checking that setName is only called for non-folded instructions (e.g. folded bitcasts
     // and 0-byte geps), which can result in information loss on the renamed instruction.
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level >= 2 && !isa<Constant>(V)) {
+    if (!isa<Constant>(V)) {
         V->setName(Name);
     }
 }
@@ -175,23 +175,21 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 void maybeSetName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 {
     // To be used when we may get an Instruction or something that is not an instruction i.e Constants/Arguments
-    if (params.debug_level >= 2 && isa<Instruction>(V)) {
+    if (isa<Instruction>(V))
         V->setName(Name);
-    }
 }
 
 void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level >= 2 && !isa<Constant>(V)) {
+    if (!params.getContext().shouldDiscardValueNames() && !isa<Constant>(V))
         V->setName(Twine(GetName()));
-    }
 }
 
 void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<StringRef()> GetObjName, jl_datatype_t *jt, unsigned idx, const Twine &suffix)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
-    if (params.debug_level >= 2 && !isa<Constant>(V)) {
+    if (!params.getContext().shouldDiscardValueNames() && !isa<Constant>(V)) {
         if (jl_is_tuple_type(jt)){
             V->setName(Twine(GetObjName()) + "[" + Twine(idx + 1) + "]"+ suffix);
             return;
@@ -8327,7 +8325,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         if (f == NULL) {
             f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
             jl_init_function(f, ctx.emission_context.TargetTriple);
-            if (ctx.emission_context.debug_level >= 2) {
+            if (ctx.emission_context.params->debug_info_level >= 2) {
                 ios_t sigbuf;
                 ios_mem(&sigbuf, 0);
                 jl_static_show_func_sig((JL_STREAM*) &sigbuf, sig);
@@ -8435,7 +8433,7 @@ static jl_llvm_functions_t
     std::map<int, BasicBlock*> labels;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
-    ctx.name = TSM.getModuleUnlocked()->getModuleIdentifier().data();
+    ctx.name = name_from_method_instance(lam);
     size_t nreq = src->nargs;
     int va = src->isva;
     ctx.nargs = nreq;
@@ -8488,7 +8486,7 @@ static jl_llvm_functions_t
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), ctx.file.str().c_str(), toplineno);
 
-    bool debug_enabled = ctx.emission_context.debug_level != 0;
+    bool debug_enabled = ctx.emission_context.params->debug_info_level != 0;
     if (dbgFuncName.empty()) // Should never happen anymore?
         debug_enabled = false;
 
@@ -8564,7 +8562,6 @@ static jl_llvm_functions_t
     // allocate Function declarations and wrapper objects
     //Safe because params holds ctx lock
     Module *M = TSM.getModuleUnlocked();
-    M->addModuleFlag(Module::Warning, "julia.debug_level", ctx.emission_context.debug_level);
     jl_debugcache_t debugcache;
     debugcache.initialize(M);
     jl_returninfo_t returninfo = {};
@@ -8572,7 +8569,7 @@ static jl_llvm_functions_t
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
         SmallVector<const char*,0> ArgNames(0);
-        if (ctx.emission_context.debug_level >= 2) {
+        if (!M->getContext().shouldDiscardValueNames()) {
             ArgNames.resize(ctx.nargs, "");
             for (int i = 0; i < ctx.nargs; i++) {
                 jl_sym_t *argname = slot_symbol(ctx, i);
@@ -8639,7 +8636,7 @@ static jl_llvm_functions_t
         declarations.functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
     }
 
-    if (ctx.emission_context.debug_level >= 2 && lam->def.method && jl_is_method(lam->def.method) && lam->specTypes != (jl_value_t*)jl_emptytuple_type) {
+    if (!params.getContext().shouldDiscardValueNames() && ctx.emission_context.params->debug_info_level >= 2 && lam->def.method && jl_is_method(lam->def.method) && lam->specTypes != (jl_value_t*)jl_emptytuple_type) {
         ios_t sigbuf;
         ios_mem(&sigbuf, 0);
         jl_static_show_func_sig((JL_STREAM*) &sigbuf, (jl_value_t*)lam->specTypes);
@@ -8694,7 +8691,7 @@ static jl_llvm_functions_t
     if (debug_enabled) {
         topfile = dbuilder.createFile(ctx.file, ".");
         DISubroutineType *subrty;
-        if (ctx.emission_context.debug_level <= 1)
+        if (ctx.emission_context.params->debug_info_level <= 1)
             subrty = debugcache.jl_di_func_null_sig;
         else if (!specsig)
             subrty = debugcache.jl_di_func_sig;
@@ -8715,7 +8712,7 @@ static jl_llvm_functions_t
                                      );
         topdebugloc = DILocation::get(ctx.builder.getContext(), toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
-        if (ctx.emission_context.debug_level >= 2) {
+        if (ctx.emission_context.params->debug_info_level >= 2) {
             const bool AlwaysPreserve = true;
             // Go over all arguments and local variables and initialize their debug information
             for (i = 0; i < nreq; i++) {
@@ -10161,7 +10158,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             if (// keep code when keeping everything
                 !(JL_DELETE_NON_INLINEABLE) ||
                 // aggressively keep code when debugging level >= 2
-                // note that this uses the global jl_options.debug_level, not the local emission_ctx.debug_level
+                // note that this uses the global jl_options.debug_level, not the local emission_ctx.debug_info_level
                 jl_options.debug_level > 1) {
                 // update the stored code
                 if (inferred != (jl_value_t*)src) {

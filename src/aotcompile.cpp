@@ -593,9 +593,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     });
     egal_set method_roots;
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
+    if (!llvmmod)
+        params.getContext().setDiscardValueNames(true);
     params.params = cgparams;
     params.imaging_mode = imaging;
-    params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH3(&params.temporary_roots, &method_roots.list, &method_roots.keyset);
@@ -1719,6 +1720,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         for (unsigned i = 0; i < threads; i++) {
             std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
+                ctx.setDiscardValueNames(true);
                 #if JL_LLVM_VERSION < 170000
                 SetOpaquePointer(ctx);
                 #endif
@@ -1930,6 +1932,7 @@ void jl_dump_native_impl(void *native_code,
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
+        Context.setDiscardValueNames(true);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif
@@ -2077,6 +2080,7 @@ void jl_dump_native_impl(void *native_code,
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
+        Context.setDiscardValueNames(true);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif
@@ -2278,7 +2282,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
         // output.imaging = true;
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
         // To get correct names in the IR this needs to be at least 2
-        output.debug_level = params.debug_info_level;
         output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
         JL_GC_PUSH1(&output.temporary_roots);
         auto decls = jl_emit_code(m, mi, src, output);
