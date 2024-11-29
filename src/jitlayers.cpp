@@ -690,9 +690,9 @@ static void jl_emit_codeinst_to_jit(
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
     // emit the code in LLVM IR form to the new context
     jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
+    params.getContext().setDiscardValueNames(true);
     params.cache = true;
     params.imaging_mode = imaging_default();
-    params.debug_level = jl_options.debug_level;
     orc::ThreadSafeModule result_m =
         jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.DL, params.TargetTriple);
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -795,9 +795,10 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         Module *M = into->getModuleUnlocked();
         jl_codegen_params_t params(into->getContext(), M->getDataLayout(), Triple(M->getTargetTriple()));
         params.imaging_mode = imaging_default();
-        params.debug_level = jl_options.debug_level;
-        if (pparams == NULL)
+        if (pparams == NULL) {
+            M->getContext().setDiscardValueNames(true);
             pparams = &params;
+        }
         assert(pparams->tsctx.getContext() == into->getContext().getContext());
         const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
         if (!sysimg) {

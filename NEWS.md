@@ -119,6 +119,7 @@ New library features
 * `Base.require_one_based_indexing` and `Base.has_offset_axes` are now public ([#56196])
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 * `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
+* `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
 
 Standard library changes
 ------------------------
