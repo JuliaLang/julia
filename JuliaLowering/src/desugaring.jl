@@ -1452,11 +1452,20 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
         arg_names = SyntaxList(ctx)
         arg_types = SyntaxList(ctx)
+        body_stmts = SyntaxList(ctx)
         first_default = 0
         arg_defaults = SyntaxList(ctx)
         for (i,arg) in enumerate(args)
             info = match_function_arg(arg)
             aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
+            if kind(aname) == K"tuple"
+                # Argument destructuring
+                n = new_mutable_var(ctx, aname, "destructured_arg_$i"; kind=:argument)
+                # TODO: Tag these destructured locals somehow so we can trigger
+                # the "function argument name not unique" error if they're repeated?
+                push!(body_stmts, @ast ctx aname [K"local" [K"=" aname n]])
+                aname = n
+            end
             push!(arg_names, aname)
             atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
             @assert !info.is_nospecialize # TODO
@@ -1527,16 +1536,20 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         pushfirst!(arg_names, farg_name)
         pushfirst!(arg_types, farg_type)
 
-        body = rewrite_body(ex[2])
         if !isnothing(return_type)
             ret_var = ssavar(ctx, return_type, "return_type")
-            body = @ast ctx body [
-                K"block"
-                [K"=" ret_var return_type]
-                body
-            ]
+            push!(body_stmts, @ast ctx return_type [K"=" ret_var return_type])
         else
             ret_var = nothing
+        end
+
+        body = rewrite_body(ex[2])
+        if !isempty(body_stmts)
+            body = @ast ctx body [
+                K"block"
+                body_stmts...
+                body
+            ]
         end
 
         method_table_val = nothing # TODO: method overlays

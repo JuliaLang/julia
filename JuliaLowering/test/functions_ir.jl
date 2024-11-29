@@ -636,6 +636,83 @@ end
 13  (return %₁)
 
 ########################################
+# Trivial function argument destructuring
+function f(x, (y,z), w)
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂ core.Any core.Any core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   (call top.indexed_iterate slot₃/destructured_arg_2 1)
+    2   (= slot₆/y (call core.getfield %₁ 1))
+    3   (= slot₅/iterstate (call core.getfield %₁ 2))
+    4   slot₅/iterstate
+    5   (call top.indexed_iterate slot₃/destructured_arg_2 2 %₄)
+    6   (= slot₇/z (call core.getfield %₅ 1))
+    7   (return core.nothing)
+7   (return %₁)
+
+########################################
+# Function argument destructuring combined with splats, types and and defaults
+function f((x,)::T...=rhs)
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   TestMod.rhs
+    2   (call slot₁/#self# %₁)
+    3   (return %₂)
+7   (call core.Typeof %₁)
+8   TestMod.T
+9   (call core.apply_type core.Vararg %₈)
+10  (call core.svec %₇ %₉)
+11  (call core.svec)
+12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
+13  --- method core.nothing %₁₂
+    1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
+    2   (= slot₃/x (call core.getfield %₁ 1))
+    3   (return core.nothing)
+14  (return %₁)
+
+########################################
+# Broken: the following repeated destructured args should probably be an error
+# but they're just normal locals so it's a bit hard to trigger.
+function f((x,), (x,))
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂ core.Any core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
+    2   (= slot₄/x (call core.getfield %₁ 1))
+    3   (call top.indexed_iterate slot₃/destructured_arg_2 1)
+    4   (= slot₄/x (call core.getfield %₃ 1))
+    5   (return core.nothing)
+7   (return %₁)
+
+########################################
+# Error: Function argument destructuring conflicting with a global decl
+function f((x,))
+    global x
+end
+#---------------------
+LoweringError:
+function f((x,))
+#           ╙ ── Variable `x` declared both local and global
+    global x
+end
+
+########################################
 # Binding docs to functions
 """
 some docs

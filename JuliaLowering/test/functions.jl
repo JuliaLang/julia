@@ -187,4 +187,14 @@ end
 """) == ((1,2),
          (10,20))
 
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_destructure(x, (y,z)::Tuple{Int,Int}, (w,)...=(4,)...)
+        (x,y,z,w)
+    end
+
+    f_destructure(1, (2,3))
+end
+""") == (1,2,3,4)
+
 end
