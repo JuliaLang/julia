@@ -148,7 +148,7 @@ end
 function _evalpoly(z::Complex, p)
     Base.require_one_based_indexing(p)
     N = length(p)
-    @inbounds p0 = N == 0 ? reduce_empty_iter(+, p) : p[N]
+    p0 = iszero(N) ? reduce_empty_iter(+, p) : @inbounds p[N]
     N <= 1 && return oftype(one(z) * p0, p0)
     a = p0
     @inbounds b = p[N-1]
