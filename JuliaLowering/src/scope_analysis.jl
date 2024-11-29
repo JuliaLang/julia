@@ -45,7 +45,9 @@ struct NameKey
 end
 
 #-------------------------------------------------------------------------------
-function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, ex)
+_insert_if_not_present!(dict, key, val) = get!(dict, key, val)
+
+function _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
@@ -57,19 +59,23 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
             k in KSet"scope_block lambda module toplevel"
         return
     elseif k == K"local" || k == K"local_def"
-        get!(locals, NameKey(ex[1]), ex)
+        if (meta = get(ex, :meta, nothing); !isnothing(meta) && get(meta, :is_destructured_arg, false))
+            push!(destructured_args, ex[1])
+        else
+            _insert_if_not_present!(locals, NameKey(ex[1]), ex)
+        end
     elseif k == K"global"
-        get!(globals, NameKey(ex[1]), ex)
+        _insert_if_not_present!(globals, NameKey(ex[1]), ex)
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
         if !(kind(v) in KSet"BindingId globalref Placeholder")
-            get!(assignments, NameKey(v), v)
+            _insert_if_not_present!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, ex[2])
+        _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex[2])
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, e)
+            _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
         end
     end
 end
@@ -82,12 +88,13 @@ function find_scope_vars(ex)
     ExT = typeof(ex)
     assignments = Dict{NameKey,ExT}()
     locals = Dict{NameKey,ExT}()
+    destructured_args = Vector{ExT}()
     globals = Dict{NameKey,ExT}()
     used_names = Set{NameKey}()
     used_bindings = Set{IdTag}()
     alias_bindings = Vector{Pair{NameKey,IdTag}}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, alias_bindings, e)
+        _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -97,7 +104,7 @@ function find_scope_vars(ex)
     used_names = sort(collect(used_names))
     used_bindings = sort(collect(used_bindings))
 
-    return assignments, locals, globals, used_names, used_bindings, alias_bindings
+    return assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings
 end
 
 function Base.isless(a::NameKey, b::NameKey)
@@ -196,6 +203,27 @@ function init_binding(ctx, varkey::NameKey, kind::Symbol, is_ambiguous_local=fal
     id
 end
 
+# Add lambda arguments and static parameters
+function add_lambda_args(ctx, var_ids, args, args_kind)
+    for arg in args
+        ka = kind(arg)
+        if ka == K"Identifier"
+            varkey = NameKey(arg)
+            if haskey(var_ids, varkey)
+                vk = lookup_binding(ctx, var_ids[varkey]).kind
+                _is_arg(k) = k == :argument || k == :local
+                msg = _is_arg(vk) && _is_arg(args_kind) ? "function argument name not unique"         :
+                      vk == :static_parameter && args_kind == :static_parameter ? "function static parameter name not unique" :
+                      "static parameter name not distinct from function argument"
+                throw(LoweringError(arg, msg))
+            end
+            var_ids[varkey] = init_binding(ctx, varkey, args_kind)
+        elseif ka != K"BindingId" && ka != K"Placeholder"
+            throw(LoweringError(arg, "Unexpected lambda arg kind"))
+        end
+    end
+end
+
 # Analyze identifier usage within a scope, adding all newly discovered
 # identifiers to ctx.bindings and returning a lookup table from identifier
 # names to their variable IDs
@@ -206,42 +234,22 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     in_toplevel_thunk = is_toplevel_global_scope ||
         (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
-    assignments, locals, globals, used, used_bindings, alias_bindings = find_scope_vars(ex)
+    assignments, locals, destructured_args, globals,
+        used, used_bindings, alias_bindings = find_scope_vars(ex)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
     var_ids = Dict{NameKey,IdTag}()
 
-    # Add lambda arguments and static parameters
-    function add_lambda_args(args, var_kind)
-        for arg in args
-            ka = kind(arg)
-            if ka == K"Identifier"
-                varkey = NameKey(arg)
-                if haskey(var_ids, varkey)
-                    vk = lookup_binding(ctx, var_ids[varkey]).kind
-                    msg = vk == :argument         && var_kind == vk ? "function argument name not unique"         :
-                          vk == :static_parameter && var_kind == vk ? "function static parameter name not unique" :
-                          "static parameter name not distinct from function argument"
-                    throw(LoweringError(arg, msg))
-                end
-                var_ids[varkey] = init_binding(ctx, varkey, var_kind)
-            elseif ka != K"BindingId" && ka != K"Placeholder"
-                throw(LoweringError(a, "Unexpected lambda arg kind"))
-            end
-        end
-    end
     if !isnothing(lambda_args)
-        add_lambda_args(lambda_args, :argument)
-        add_lambda_args(lambda_static_parameters, :static_parameter)
+        add_lambda_args(ctx, var_ids, lambda_args, :argument)
+        add_lambda_args(ctx, var_ids, lambda_static_parameters, :static_parameter)
+        add_lambda_args(ctx, var_ids, destructured_args, :local)
     end
 
-    global_keys = Set(first(g) for g in globals)
     # Add explicit locals
     for (varkey,e) in locals
-        if varkey in global_keys
-            throw(LoweringError(e, "Variable `$(varkey.name)` declared both local and global"))
-        elseif haskey(var_ids, varkey)
+        if haskey(var_ids, varkey)
             vk = lookup_binding(ctx, var_ids[varkey]).kind
             if vk === :argument && is_outer_lambda_scope
                 throw(LoweringError(e, "local variable name `$(varkey.name)` conflicts with an argument"))
@@ -258,7 +266,9 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     for (varkey,e) in globals
         if haskey(var_ids, varkey)
             vk = lookup_binding(ctx, var_ids[varkey]).kind
-            if vk === :argument && is_outer_lambda_scope
+            if vk === :local
+                throw(LoweringError(e, "Variable `$(varkey.name)` declared both local and global"))
+            elseif vk === :argument && is_outer_lambda_scope
                 throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with an argument"))
             elseif vk === :static_parameter
                 throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with a static parameter"))

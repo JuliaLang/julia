@@ -1171,24 +1171,30 @@ end
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 #   and return (x, (y, z))
-function strip_decls!(ctx, stmts, declkind, declkind2, ex)
+function strip_decls!(ctx, stmts, declkind, declkind2, declmeta, ex)
     k = kind(ex)
     if k == K"Identifier"
-        push!(stmts, makenode(ctx, ex, declkind, ex))
+        if !isnothing(declmeta)
+            push!(stmts, makenode(ctx, ex, declkind, ex; meta=declmeta))
+        else
+            push!(stmts, makenode(ctx, ex, declkind, ex))
+        end
         if !isnothing(declkind2)
             push!(stmts, makenode(ctx, ex, declkind2, ex))
         end
+        ex
+    elseif k == K"Placeholder"
         ex
     elseif k == K"::"
         @chk numchildren(ex) == 2
         name = ex[1]
         @chk kind(name) == K"Identifier"
         push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
-        strip_decls!(ctx, stmts, declkind, declkind2, ex[1])
+        strip_decls!(ctx, stmts, declkind, declkind2, declmeta, ex[1])
     elseif k == K"tuple" || k == K"parameters"
         cs = SyntaxList(ctx)
         for e in children(ex)
-            push!(cs, strip_decls!(ctx, stmts, declkind, declkind2, e))
+            push!(cs, strip_decls!(ctx, stmts, declkind, declkind2, declmeta, e))
         end
         makenode(ctx, ex, k, cs)
     end
@@ -1199,6 +1205,7 @@ end
 # global x::T = 1   ==> (block (global x) (decl x T) (x = 1))
 function expand_decls(ctx, ex)
     declkind = kind(ex)
+    declmeta = get(ex, :meta, nothing)
     if numchildren(ex) == 1 && kind(ex[1]) ∈ KSet"const global local"
         declkind2 = kind(ex[1])
         bindings = children(ex[1])
@@ -1211,13 +1218,13 @@ function expand_decls(ctx, ex)
         kb = kind(binding)
         if is_prec_assignment(kb)
             @chk numchildren(binding) == 2
-            lhs = strip_decls!(ctx, stmts, declkind, declkind2, binding[1])
+            lhs = strip_decls!(ctx, stmts, declkind, declkind2, declmeta, binding[1])
             push!(stmts, @ast ctx binding [kb lhs binding[2]])
         elseif is_sym_decl(binding)
             if declkind == K"const" || declkind2 == K"const"
                 throw(LoweringError(ex, "expected assignment after `const`"))
             end
-            strip_decls!(ctx, stmts, declkind, declkind2, binding)
+            strip_decls!(ctx, stmts, declkind, declkind2, declmeta, binding)
         else
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
@@ -1461,9 +1468,8 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             if kind(aname) == K"tuple"
                 # Argument destructuring
                 n = new_mutable_var(ctx, aname, "destructured_arg_$i"; kind=:argument)
-                # TODO: Tag these destructured locals somehow so we can trigger
-                # the "function argument name not unique" error if they're repeated?
-                push!(body_stmts, @ast ctx aname [K"local" [K"=" aname n]])
+                push!(body_stmts, @ast ctx aname [K"local"(meta=CompileHints(:is_destructured_arg, true))
+                                                  [K"=" aname n]])
                 aname = n
             end
             push!(arg_names, aname)
@@ -2624,7 +2630,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             # Don't recurse when already simplified - `local x`, etc
             ex
         else
-            expand_forms_2(ctx, expand_decls(ctx, ex)) # FIXME
+            expand_forms_2(ctx, expand_decls(ctx, ex))
         end
     elseif k == K"where"
         expand_forms_2(ctx, expand_wheres(ctx, ex))

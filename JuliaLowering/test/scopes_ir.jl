@@ -92,3 +92,176 @@ end
     6   (return %₂)
 7   (return %₁)
 
+########################################
+# Error: Duplicate function argument names
+function f(x, x)
+end
+#---------------------
+LoweringError:
+function f(x, x)
+#             ╙ ── function argument name not unique
+end
+
+########################################
+# Error: Duplicate function argument with destructured arg
+function f(x, (x,))
+end
+#---------------------
+LoweringError:
+function f(x, (x,))
+#              ╙ ── function argument name not unique
+end
+
+########################################
+# Error: Static parameter name not unique
+function f() where T where T
+end
+#---------------------
+LoweringError:
+function f() where T where T
+#                  ╙ ── function static parameter name not unique
+end
+
+########################################
+# Error: static parameter colliding with argument names
+function f(x::x) where x
+end
+#---------------------
+LoweringError:
+function f(x::x) where x
+#                      ╙ ── static parameter name not distinct from function argument
+end
+
+########################################
+# Error: duplicate destructure args
+function f((x,), (x,))
+end
+#---------------------
+LoweringError:
+function f((x,), (x,))
+#                 ╙ ── function argument name not unique
+end
+
+########################################
+# Error: Conflicting local and global decls
+let
+    local x
+    global x
+end
+#---------------------
+LoweringError:
+let
+    local x
+    global x
+#   └──────┘ ── Variable `x` declared both local and global
+end
+
+########################################
+# Error: Conflicting argument and local
+function f(x)
+    local x
+end
+#---------------------
+LoweringError:
+function f(x)
+    local x
+#   └─────┘ ── local variable name `x` conflicts with an argument
+end
+
+########################################
+# Error: Conflicting argument and global
+function f(x)
+    global x
+end
+#---------------------
+LoweringError:
+function f(x)
+    global x
+#   └──────┘ ── global variable name `x` conflicts with an argument
+end
+
+########################################
+# Error: Conflicting destructured argument and global
+# TODO: The error could probably be a bit better here
+function f((x,))
+    global x
+end
+#---------------------
+LoweringError:
+function f((x,))
+    global x
+#   └──────┘ ── Variable `x` declared both local and global
+end
+
+########################################
+# Error: Conflicting static parameter and local
+function f() where T
+    local T
+end
+#---------------------
+LoweringError:
+function f() where T
+    local T
+#   └─────┘ ── local variable name `T` conflicts with a static parameter
+end
+
+########################################
+# Error: Conflicting static parameter and global
+function f() where T
+    global T
+end
+#---------------------
+LoweringError:
+function f() where T
+    global T
+#   └──────┘ ── global variable name `T` conflicts with a static parameter
+end
+
+########################################
+# Error: Conflicting static parameter and local in nested scope
+function f() where T
+    let
+        local T
+    end
+end
+#---------------------
+LoweringError:
+function f() where T
+    let
+        local T
+#       └─────┘ ── local variable name `T` conflicts with a static parameter
+    end
+end
+
+########################################
+# Error: Conflicting static parameter and global in nested scope
+function f() where T
+    let
+        global T
+    end
+end
+#---------------------
+LoweringError:
+function f() where T
+    let
+        global T
+#       └──────┘ ── global variable name `T` conflicts with a static parameter
+    end
+end
+
+########################################
+# Error: Conflicting static parameter and implicit local
+function f() where T
+    let
+        T = rhs
+    end
+end
+#---------------------
+LoweringError:
+function f() where T
+    let
+        T = rhs
+#       ╙ ── local variable name `T` conflicts with a static parameter
+    end
+end
+

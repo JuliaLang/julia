@@ -14,6 +14,13 @@ struct ScopeLayer
     is_macro_expansion::Bool # FIXME
 end
 
+# Type for `meta` attribute, to replace `Expr(:meta)`.
+# It's unclear how much flexibility we need here - is a dict good, or could we
+# just use a struct? Likely this will be sparse. Alternatively we could just
+# use individual attributes but those aren't easy to add on an ad-hoc basis in
+# the middle of a pass.
+const CompileHints = Base.ImmutableDict{Symbol,Any}
+
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings
@@ -250,7 +257,8 @@ function expand_forms_1(mod::Module, ex::SyntaxTree)
     graph = ensure_attributes(syntax_graph(ex),
                               var_id=IdTag,
                               scope_layer=LayerId,
-                              __macro_ctx__=Nothing)
+                              __macro_ctx__=Nothing,
+                              meta=CompileHints)
     layers = ScopeLayer[ScopeLayer(1, mod, false)]
     ctx = MacroExpansionContext(graph, Bindings(), layers, layers[1])
     ex2 = expand_forms_1(ctx, reparent(ctx, ex))

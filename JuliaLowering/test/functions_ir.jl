@@ -148,36 +148,6 @@ end
 14  (return %₄)
 
 ########################################
-# Error: Duplicate function argument names
-function f(x, x)
-end
-#---------------------
-LoweringError:
-function f(x, x)
-#             ╙ ── function argument name not unique
-end
-
-########################################
-# Error: Static parameter name not unique
-function f() where T where T
-end
-#---------------------
-LoweringError:
-function f() where T where T
-#                  ╙ ── function static parameter name not unique
-end
-
-########################################
-# Error: static parameter colliding with argument names
-function f(x::x) where x
-end
-#---------------------
-LoweringError:
-function f(x::x) where x
-#                      ╙ ── static parameter name not distinct from function argument
-end
-
-########################################
 # Return types
 function f(x)::Int
     if x
@@ -682,9 +652,8 @@ end
 14  (return %₁)
 
 ########################################
-# Broken: the following repeated destructured args should probably be an error
-# but they're just normal locals so it's a bit hard to trigger.
-function f((x,), (x,))
+# Duplicate destructured placeholders ok
+function f((_,), (_,))
 end
 #---------------------
 1   (method :f)
@@ -694,23 +663,11 @@ end
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
 6   --- method core.nothing %₅
     1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
-    2   (= slot₄/x (call core.getfield %₁ 1))
+    2   (call core.getfield %₁ 1)
     3   (call top.indexed_iterate slot₃/destructured_arg_2 1)
-    4   (= slot₄/x (call core.getfield %₃ 1))
+    4   (call core.getfield %₃ 1)
     5   (return core.nothing)
 7   (return %₁)
-
-########################################
-# Error: Function argument destructuring conflicting with a global decl
-function f((x,))
-    global x
-end
-#---------------------
-LoweringError:
-function f((x,))
-#           ╙ ── Variable `x` declared both local and global
-    global x
-end
 
 ########################################
 # Binding docs to functions
