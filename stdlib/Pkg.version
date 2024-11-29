@@ -1,4 +1,8 @@
-PKG_BRANCH = master
-PKG_SHA1 = 7b759d7f0af56c5ad01f2289bbad71284a556970
-PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
-PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
+# PKG_BRANCH = master
+# PKG_SHA1 = 7b759d7f0af56c5ad01f2289bbad71284a556970
+# PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
+# PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
+PKG_BRANCH = eschnett/openssl
+PKG_SHA1 = b1c1e1913165cdbb6f03a525b2346e61f7527056
+PKG_GIT_URL := https://github.com/eschnett/Pkg.jl.git
+PKG_TAR_URL = https://api.github.com/repos/eschnett/Pkg.jl/tarball/$1

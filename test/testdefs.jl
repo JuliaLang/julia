@@ -54,9 +54,7 @@ function runtests(name, path, isolate=true; seed=nothing)
                 )
                 error(msg)
             end
-            # TODO
-            # OpenSSL sets this environment variable; ignore it
-            if delete!(copy(ENV), "SSL_CERT_FILE") != original_env
+            if copy(ENV) != original_env
                 throw_error_str = get(ENV, "JULIA_TEST_CHECK_MUTATED_ENV", "true")
                 throw_error_b = parse(Bool, throw_error_str)
                 if throw_error_b
