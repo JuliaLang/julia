@@ -65,7 +65,14 @@ RT_LLVMLINK :=
 CG_LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
+# Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
+ifeq ($(WITH_MMTK), 1)
+FLAGS += -I$(MMTK_API_INC)
+GC_CODEGEN_SRCS += llvm-late-gc-lowering-mmtk
+else
+GC_CODEGEN_SRCS += llvm-late-gc-lowering-stock
+endif
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls \
 	llvm-lower-handlers llvm-propagate-addrspaces \
