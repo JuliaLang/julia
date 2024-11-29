@@ -1,4 +1,7 @@
-NETWORKOPTIONS_BRANCH = master
-NETWORKOPTIONS_SHA1 = 8eec5cb0acec4591e6db3c017f7499426cd8e352
-NETWORKOPTIONS_GIT_URL := https://github.com/JuliaLang/NetworkOptions.jl.git
-NETWORKOPTIONS_TAR_URL = https://api.github.com/repos/JuliaLang/NetworkOptions.jl/tarball/$1
+# NETWORKOPTIONS_BRANCH = master
+# NETWORKOPTIONS_SHA1 = 8eec5cb0acec4591e6db3c017f7499426cd8e352
+# NETWORKOPTIONS_GIT_URL := https://github.com/JuliaLang/NetworkOptions.jl.git
+# NETWORKOPTIONS_TAR_URL = https://api.github.com/repos/JuliaLang/NetworkOptions.jl/tarball/$1
+NETWORKOPTIONS_BRANCH = eschnett/openssl
+NETWORKOPTIONS_SHA1 = 908a46623c3af09f9a2929bd40b5b2398cf87903
+NETWORKOPTIONS_GIT_URL := https://github.com/eschnett/NetworkOptions.jl.git
