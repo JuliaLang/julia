@@ -100,6 +100,8 @@ LLD.v18.1.7+3.x86_64-linux-musl-cxx11-llvm_version+18.tar.gz/md5/0dd14af342467ea
 LLD.v18.1.7+3.x86_64-linux-musl-cxx11-llvm_version+18.tar.gz/sha512/918f2c66898f828414009fa6ee273da5bd654e4b787ebb4d703f0be27e388b46870d68bd58c4f45638d276c61c1bfe2f3c67fbf34dfb5578158d072f82d927de
 LLD.v18.1.7+3.x86_64-unknown-freebsd-llvm_version+18.asserts.tar.gz/md5/d1862068a670d4c04887513b914e11a8
 LLD.v18.1.7+3.x86_64-unknown-freebsd-llvm_version+18.asserts.tar.gz/sha512/c5a91657667394e468e71d9c07df0c71918d63d094d2598875f75cf3830d8502e70f59fba59b07a2d1e0551f58d0487521c856e68e4122fd6a6f7ebd1c7c0f58
+LLD.v18.1.7+3.x86_64-unknown-freebsd-llvm_version+18.tar.gz/md5/8dc0ec01029765dbfdd28d63bea8cfca
+LLD.v18.1.7+3.x86_64-unknown-freebsd-llvm_version+18.tar.gz/sha512/234e9db1177003a074c6ca7236c589424b4617d1a359f5f9e2ba6095a7f317d62ac731319b4b4513c523e80c15b82c99ff0fc9df5f76fad452955492e9935b1d
 LLD.v18.1.7+3.x86_64-w64-mingw32-cxx03-llvm_version+18.asserts.tar.gz/md5/7beb510d766ac1e16017aa6924e88659
 LLD.v18.1.7+3.x86_64-w64-mingw32-cxx03-llvm_version+18.asserts.tar.gz/sha512/bd18b733a6b2fbbeef7f8af2f13dade0330a525c83b4faed5a5d2507007be2f2f7be70f99d05524fa94ae1dca524be64adbb9dc87485477f62109f44cbae95fe
 LLD.v18.1.7+3.x86_64-w64-mingw32-cxx03-llvm_version+18.tar.gz/md5/9ecca76cea81cd1d0fd3470778145371
