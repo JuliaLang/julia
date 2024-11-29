@@ -105,14 +105,17 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-function //(x::Number, y::Complex)
-    if(iszero(abs2(y)))
+function //(x::Number, y::Complex{T}) where T
+    if T <: Integer
+        return invoke(//, Tuple{Number, Complex{<:Integer}}, x, y)
+    end
+    if iszero(abs2(y))
         throw(DivideError())
     end
-    if(iszero((x//abs2(y))) )
+    if iszero((x // abs2(y)))
         return 0//1 + 0//1*im
     end
-    return (x//abs2(y))*conj(y)
+    return (x // abs2(y)) * conj(y)
 end
 function //(x::Number, y::Complex{<:Integer})
     real_y = real(y)
