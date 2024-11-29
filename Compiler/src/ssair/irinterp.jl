@@ -44,6 +44,7 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     end
     argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
+    (argtypes, _) = argtypes
     return concrete_eval_invoke(interp, code, argtypes, irsv)
 end
 
@@ -308,7 +309,8 @@ populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
 function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irsv::IRInterpretationState)
     isexpr(stmt, :call) || return false
     @inbounds for i = 2:length(stmt.args)
-        argtype = abstract_eval_value(interp, stmt.args[i], StatementState(nothing, false), irsv)
+        # Discard exct - IRCode semantics require this to be Bottom
+        (argtype, _) = abstract_eval_value(interp, stmt.args[i], StatementState(nothing, false), irsv)
         is_const_argtype(argtype) || return false
     end
     return true

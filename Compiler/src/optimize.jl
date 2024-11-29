@@ -163,12 +163,14 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     unreachable::BitSet
     bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
+    valid_worlds::WorldRange
 end
 function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
     inlining = InliningState(sv, interp)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
-                             sv.unreachable, sv.bb_vartables, sv.insert_coverage)
+                             sv.unreachable, sv.bb_vartables, sv.insert_coverage,
+                             sv.world.valid_worlds)
 end
 function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -200,7 +202,8 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
             for slot = 1:nslots
         ])
     end
-    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false,
+        WorldRange(get_inference_world(interp), get_inference_world(interp)))
 end
 function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)
@@ -1175,30 +1178,51 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     nstmts = length(code)
     ssachangemap = labelchangemap = blockchangemap = nothing
     prevloc = 0
+
+    function insert_statement_here!(@nospecialize(new_stmt), @nospecialize(new_typ); after=false)
+        insert_idx = after ? idx + 1 : idx
+        insert!(code, insert_idx, new_stmt)
+        splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
+        insert!(ssavaluetypes, insert_idx, new_typ)
+        insert!(stmtinfo, insert_idx, NoCallInfo())
+        insert!(ssaflags, insert_idx, IR_FLAG_NULL)
+        if ssachangemap === nothing
+            ssachangemap = fill(0, nstmts)
+        end
+        if labelchangemap === nothing
+            labelchangemap = fill(0, nstmts)
+        end
+        ssachangemap[after ? oldidx + 1 : oldidx] += 1
+        if oldidx < length(labelchangemap)
+            labelchangemap[oldidx + 1] += 1
+        end
+        if blockchangemap === nothing
+            blockchangemap = fill(0, length(sv.cfg.blocks))
+        end
+        blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
+        idx += 1
+    end
+
     while idx <= length(code)
         if sv.insert_coverage && changed_lineinfo(ci.debuginfo, oldidx, prevloc)
             # insert a side-effect instruction before the current instruction in the same basic block
-            insert!(code, idx, Expr(:code_coverage_effect))
-            splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
-            insert!(ssavaluetypes, idx, Nothing)
-            insert!(stmtinfo, idx, NoCallInfo())
-            insert!(ssaflags, idx, IR_FLAG_NULL)
-            if ssachangemap === nothing
-                ssachangemap = fill(0, nstmts)
-            end
-            if labelchangemap === nothing
-                labelchangemap = fill(0, nstmts)
-            end
-            ssachangemap[oldidx] += 1
-            if oldidx < length(labelchangemap)
-                labelchangemap[oldidx + 1] += 1
-            end
-            if blockchangemap === nothing
-                blockchangemap = fill(0, length(sv.cfg.blocks))
-            end
-            blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
-            idx += 1
+            insert_statement_here!(Expr(:code_coverage_effect), Nothing)
             prevloc = oldidx
+        end
+        stmt = code[idx]
+        # Move out any GlobalRefs that may throw into statement position to satisfy IRCode invariants
+        updated_any = false
+        if !isa(stmt, GlobalRef) && !isexpr(stmt, :isdefined)
+            urs = userefs(stmt)
+            for ur in urs
+                arg = ur[]
+                if isa(arg, GlobalRef) && !is_global_nothrow_const_in_all_worlds(arg, sv.valid_worlds)
+                    ur[] = NewSSAValue(idx)
+                    insert_statement_here!(arg, abstract_eval_globalref_type(arg, sv.valid_worlds))
+                    updated_any = true
+                end
+            end
+            updated_any && (code[idx] = urs[])
         end
         if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable) && !isa(code[idx], PhiNode)
             # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
@@ -1233,26 +1257,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ssaflags[block_end] = IR_FLAG_NOTHROW
                     idx += block_end - idx
                 else
-                    insert!(code, idx + 1, ReturnNode())
-                    splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
-                    insert!(ssavaluetypes, idx + 1, Union{})
-                    insert!(stmtinfo, idx + 1, NoCallInfo())
-                    insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
-                    if ssachangemap === nothing
-                        ssachangemap = fill(0, nstmts)
-                    end
-                    if labelchangemap === nothing
-                        labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
-                    end
-                    if oldidx < length(ssachangemap)
-                        ssachangemap[oldidx + 1] += 1
-                        sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
-                    end
-                    if blockchangemap === nothing
-                        blockchangemap = fill(0, length(sv.cfg.blocks))
-                    end
-                    blockchangemap[block] += 1
-                    idx += 1
+                    insert_statement_here!(ReturnNode(), Union{}; after=true)
                 end
                 oldidx = last(sv.cfg.blocks[block].stmts)
             end
@@ -1500,6 +1505,8 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             cond = el.cond
             if isa(cond, SSAValue)
                 cond = SSAValue(cond.id + ssachangemap[cond.id])
+            elseif isa(cond, NewSSAValue)
+                cond = SSAValue(cond.id)
             end
             was_deleted = labelchangemap[el.dest] == typemin(Int)
             body[i] = was_deleted ? cond : GotoIfNot(cond, el.dest + labelchangemap[el.dest])
@@ -1508,6 +1515,8 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                 val = el.val
                 if isa(val, SSAValue)
                     body[i] = ReturnNode(SSAValue(val.id + ssachangemap[val.id]))
+                elseif isa(val, NewSSAValue)
+                    body[i] = ReturnNode(SSAValue(val.id))
                 end
             end
         elseif isa(el, SSAValue)
@@ -1527,6 +1536,7 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     if isa(val, SSAValue)
                         values[i] = SSAValue(val.id + ssachangemap[val.id])
                     end
+                    @assert !isa(val, NewSSAValue)
                     i += 1
                 end
             end
@@ -1538,8 +1548,14 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     @assert !isdefined(el, :scope)
                     body[i] = nothing
                 else
-                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
-                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
+                    if isdefined(el, :scope)
+                        if isa(el.scope, SSAValue)
+                            body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
+                        elseif isa(el.scope, NewSSAValue)
+                            body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id))
+                        else
+                            body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                        end
                     else
                         body[i] = EnterNode(el, tgt + labelchangemap[tgt])
                     end
@@ -1555,10 +1571,13 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     el = args[i]
                     if isa(el, SSAValue)
                         args[i] = SSAValue(el.id + ssachangemap[el.id])
+                    elseif isa(el, NewSSAValue)
+                        args[i] = SSAValue(el.id)
                     end
                 end
             end
         end
+        #@assert !isa(el, NewSSAValue)
     end
 end
 

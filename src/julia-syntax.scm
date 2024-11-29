@@ -4356,7 +4356,7 @@ f(x) = yt(x)
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
-      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
+      (globalref? e)
       (and (pair? e)
            (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
@@ -4534,6 +4534,8 @@ f(x) = yt(x)
                (or (memq aval (lam:args lam))
                    (let ((vi (get vinfo-table aval #f)))
                      (and vi (vinfo:never-undef vi)))))))
+    (define (valid-cond-argument? aval)
+      (and (not (globalref? aval)) (valid-body-ir-argument? aval)))
     (define (single-assign-var? aval)
       (and (symbol? aval) ; Arguments are always sa
            (or (memq aval (lam:args lam))
@@ -4577,7 +4579,7 @@ f(x) = yt(x)
       (let ((cnd (or (compile ex break-labels #t #f)
                      ;; TODO: condition exprs that don't yield a value?
                      '(null))))
-        (if (valid-body-ir-argument? cnd) cnd
+        (if (valid-cond-argument? cnd) cnd
             (let ((tmp (make-ssavalue)))
               (emit `(= ,tmp ,cnd))
               tmp))))
