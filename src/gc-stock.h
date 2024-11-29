@@ -19,6 +19,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "threading.h"
+#include "gc-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,27 +84,6 @@ typedef struct _jl_gc_chunk_t {
 // layout for big (>2k) objects
 
 extern uintptr_t gc_bigval_sentinel_tag;
-
-JL_EXTENSION typedef struct _bigval_t {
-    struct _bigval_t *next;
-    struct _bigval_t *prev;
-    size_t sz;
-#ifdef _P64 // Add padding so that the value is 64-byte aligned
-    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
-    void *_padding[8 - 4];
-#else
-    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
-    void *_padding[16 - 4];
-#endif
-    //struct jl_taggedvalue_t <>;
-    union {
-        uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
-    };
-    // must be 64-byte aligned here, in 32 & 64 bit modes
-} bigval_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {

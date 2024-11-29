@@ -1,6 +1,5 @@
 #include "gc-common.h"
 #include "mmtkMutator.h"
-#include "gc-mmtk.h"
 #include "threading.h"
 
 // File exists in the binding
