@@ -110,7 +110,7 @@ evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 function _evalpoly(x, p)
     Base.require_one_based_indexing(p)
     N = length(p)
-    @inbounds p0 = N == 0 ? reduce_empty_iter(+, p) : p[N]
+    p0 = iszero(N) ? reduce_empty_iter(+, p) : @inbounds p[N]
     s = oftype(one(x) * p0, p0)
     for i in N-1:-1:1
         s = muladd(x, s, @inbounds p[i])
