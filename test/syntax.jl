@@ -3713,7 +3713,7 @@ end
 module Foreign54607
     # Syntactic, not dynamic
     try_to_create_binding1() = (Foreign54607.foo = 2)
-    # GlobalRef is allowed for same-module assignment
+    # GlobalRef is allowed for same-module assignment and declares the binding
     @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo2)) = 2)
     function global_create_binding()
         global bar
@@ -3728,7 +3728,7 @@ module Foreign54607
 end
 @test_throws ErrorException (Foreign54607.foo = 1)
 @test_throws ErrorException Foreign54607.try_to_create_binding1()
-@test_throws ErrorException Foreign54607.try_to_create_binding2()
+Foreign54607.try_to_create_binding2()
 function assign_in_foreign_module()
     (Foreign54607.foo = 1)
     nothing
@@ -3744,6 +3744,7 @@ Foreign54607.global_create_binding()
 @test isdefined(Foreign54607, :baz)
 @test isdefined(Foreign54607, :compiled_assign)
 @test isdefined(Foreign54607, :gr_assign)
+@test isdefined(Foreign54607, :foo2)
 Foreign54607.bar = 8
 @test Foreign54607.bar == 8
 begin
