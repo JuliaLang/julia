@@ -1759,13 +1759,15 @@ julia> v
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
-function sort(x::NTuple{<:Any,T};
+function sort(x::NTuple;
               alg::Algorithm=defalg(x),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              scratch::Union{Vector{T}, Nothing}=nothing) where T
+              scratch::Union{Vector, Nothing}=nothing)
+    # Can't do this check with type parameters because of https://github.com/JuliaLang/julia/issues/56698
+    scratch === nothing || x isa NTuple{<:Any, eltype(scratch)} || throw(ArgumentError("scratch's eltype can't accommodate all the input elements"))
     _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
 end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
