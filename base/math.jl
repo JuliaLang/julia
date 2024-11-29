@@ -160,7 +160,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        @inbounds b = muladd(-s, ai, p[i])
+        b = muladd(-s, ai, @inbounds p[i])
     end
     ai = a
     muladd(ai, z, b)
