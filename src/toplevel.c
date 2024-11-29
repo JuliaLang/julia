@@ -496,7 +496,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
-size_t jl_require_world = ~(size_t)0;
+extern size_t jl_require_world;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
@@ -1050,10 +1050,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-        // Don't infer blocks containing e.g. method definitions, since it's probably not
-        // worthwhile and also unsound (see #24316).
-        // TODO: This is still not correct since an `eval` can happen elsewhere, but it
-        // helps in common cases.
+        // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {

@@ -851,6 +851,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // generate a temporary module that contains our IR
     std::unique_ptr<Module> Mod;
+    bool shouldDiscardValueNames = ctx.builder.getContext().shouldDiscardValueNames();
     Function *f;
     if (entry == NULL) {
         // we only have function IR, which we should put in a function
@@ -878,7 +879,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                   << jl_string_data(ir) << "\n}";
 
         SMDiagnostic Err = SMDiagnostic();
+        ctx.builder.getContext().setDiscardValueNames(false);
         Mod = parseAssemblyString(ir_stream.str(), Err, ctx.builder.getContext());
+        ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
 
         // backwards compatibility: support for IR with integer pointers
         if (!Mod) {
@@ -911,8 +914,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                              << jl_string_data(ir) << "\n}";
 
             SMDiagnostic Err = SMDiagnostic();
-            Mod =
-                parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(false);
+            Mod = parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
         }
 
         if (!Mod) {
@@ -932,7 +936,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
         if (jl_is_string(ir)) {
             SMDiagnostic Err = SMDiagnostic();
+            ctx.builder.getContext().setDiscardValueNames(false);
             Mod = parseAssemblyString(jl_string_data(ir), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
             if (!Mod) {
                 std::string message = "Failed to parse LLVM assembly: \n";
                 raw_string_ostream stream(message);
@@ -1712,18 +1718,12 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func(jl_get_tls_world_age)) {
-        bool toplevel = !(ctx.linfo && jl_is_method(ctx.linfo->def.method));
-        if (!toplevel) { // top level code does not see a stable world age during execution
-            ++CCALL_STAT(jl_get_tls_world_age);
-            assert(lrt == ctx.types().T_size);
-            assert(!isVa && !llvmcall && nccallargs == 0);
-            JL_GC_POP();
-            Instruction *world_age = cast<Instruction>(ctx.world_age_at_entry);
-            setName(ctx.emission_context, world_age, "task_world_age");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            ai.decorateInst(world_age);
-            return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
-        }
+        ++CCALL_STAT(jl_get_tls_world_age);
+        assert(lrt == ctx.types().T_size);
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        Value *world_age = get_tls_world_age(ctx);
+        return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_get_world_counter)) {
         ++CCALL_STAT(jl_get_world_counter);

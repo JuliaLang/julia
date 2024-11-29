@@ -249,8 +249,10 @@ function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedM
         return backedge
     elseif isa(stmt, EnterNode)
         dest = stmt.catch_dest
-        @assert dest > bb
-        push!(bb_ip, dest)
+        if dest ≠ 0
+            @assert dest > bb
+            push!(bb_ip, dest)
+        end
         push!(bb_ip, bb+1)
         return false
     else

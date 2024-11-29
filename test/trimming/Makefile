@@ -33,7 +33,7 @@ LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal
 release: hello$(EXE)
 
 hello.o: $(SRCDIR)/hello.jl $(BUILDSCRIPT)
-	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
+	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
 
 init.o: $(SRCDIR)/init.c
 	$(CC) -c -o $@ $< $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
