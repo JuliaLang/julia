@@ -368,9 +368,7 @@ private:
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
-#ifdef MMTK_GC
     Value* lowerGCAllocBytesLate(CallInst *target, Function &F);
-#endif
 };
 
 // The final GC lowering pass. This pass lowers platform-agnostic GC
