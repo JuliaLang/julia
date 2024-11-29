@@ -105,31 +105,22 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-function //(x::Number, y::Complex{T}) where T
-    if T <: Integer
-        return invoke(//, Tuple{Number, Complex{<:Integer}}, x, y)
-    end
-    if iszero(abs2(y))
-        throw(DivideError())
-    end
+function //(x::Number, y::Complex)
     if iszero((x // abs2(y)))
         return 0//1 + 0//1*im
     end
-    return (x // abs2(y)) * conj(y)
-end
-function //(x::Number, y::Complex{<:Integer})
     real_y = real(y)
     imag_y = imag(y)
-    m=max(abs(real_y),abs(imag_y))
-    if(m==0)
+    m = max(abs(real_y), abs(imag_y))
+    if m == 0
         throw(DivideError())
     end
     scaled_a = real_y // m
     scaled_b = imag_y // m
-    denom =  (scaled_a^2 + scaled_b^2)
-    real_part = ((((real_y//denom)//m)//m))
-    imag_part = ((((imag_y// denom)//m)//m))
-    ans = (x*real_part - x*imag_part * im)
+    denom = (scaled_a^2 + scaled_b^2)
+    real_part = ((((real_y // denom) // m) // m))
+    imag_part = ((((imag_y // denom) // m) // m))
+    ans = (x * real_part - x * imag_part * im)
     return ans
 end
 
