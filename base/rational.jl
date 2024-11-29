@@ -105,8 +105,15 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
-
+function //(x::Number, y::Complex)
+    if(iszero(abs2(y)))
+        throw(DivideError())
+    end
+    if(iszero((x//abs2(y))) )
+        return 0//1 + 0//1*im
+    end
+    return (x//abs2(y))*conj(y)
+end
 
 //(X::AbstractArray, y::Number) = X .// y
 
