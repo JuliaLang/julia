@@ -229,7 +229,7 @@ end
     if isa(t, Const)
         # don't consider mutable values useful constants
         val = t.val
-        return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
+        return isa(val, Symbol) || isa(val, Type) || isa(val, Method) || !ismutable(val)
     end
     isa(t, PartialTypeVar) && return false # this isn't forwardable
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)

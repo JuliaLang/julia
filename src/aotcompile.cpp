@@ -95,33 +95,55 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
     }
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_mis_impl(void *native_code, arraylist_t* MIs)
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
 {
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    auto map = data->jl_fvar_map;
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &map = desc->jl_fvar_map;
+
+    if (data == NULL) {
+        *num_elements = map.size();
+        return;
+    }
+
+    assert(*num_elements == map.size());
+    size_t i = 0;
     for (auto &ci : map) {
-        jl_method_instance_t *mi = ci.first->def;
-        arraylist_push(MIs, mi);
+        data[i++] = ci.first->def;
     }
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_impl(void *native_code,
+                                                          size_t *num_elements, void **data)
 {
     // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    arraylist_grow(gvs, data->jl_value_to_llvm.size());
-    memcpy(gvs->items, data->jl_value_to_llvm.data(), gvs->len * sizeof(void*));
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &value_map = desc->jl_value_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = value_map.size();
+        return;
+    }
+
+    assert(*num_elements == value_map.size());
+    memcpy(data, value_map.data(), *num_elements * sizeof(void *));
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_external_fns_impl(void *native_code,
+                                                                   size_t *num_elements,
+                                                                   jl_code_instance_t *data)
 {
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    arraylist_grow(external_fns, data->jl_external_to_llvm.size());
-    memcpy(external_fns->items, data->jl_external_to_llvm.data(),
-        external_fns->len * sizeof(jl_code_instance_t*));
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &external_map = desc->jl_external_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = external_map.size();
+        return;
+    }
+
+    assert(*num_elements == external_map.size());
+    memcpy((void *)data, (const void *)external_map.data(),
+           *num_elements * sizeof(jl_code_instance_t *));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -571,9 +593,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     });
     egal_set method_roots;
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
+    if (!llvmmod)
+        params.getContext().setDiscardValueNames(true);
     params.params = cgparams;
     params.imaging_mode = imaging;
-    params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH3(&params.temporary_roots, &method_roots.list, &method_roots.keyset);
@@ -1697,6 +1720,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         for (unsigned i = 0; i < threads; i++) {
             std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
+                ctx.setDiscardValueNames(true);
                 #if JL_LLVM_VERSION < 170000
                 SetOpaquePointer(ctx);
                 #endif
@@ -1908,6 +1932,7 @@ void jl_dump_native_impl(void *native_code,
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
+        Context.setDiscardValueNames(true);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif
@@ -2055,6 +2080,7 @@ void jl_dump_native_impl(void *native_code,
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
+        Context.setDiscardValueNames(true);
         #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
         #endif
@@ -2256,7 +2282,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
         // output.imaging = true;
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
         // To get correct names in the IR this needs to be at least 2
-        output.debug_level = params.debug_info_level;
         output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
         JL_GC_PUSH1(&output.temporary_roots);
         auto decls = jl_emit_code(m, mi, src, output);

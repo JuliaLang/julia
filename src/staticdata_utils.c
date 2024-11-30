@@ -704,10 +704,12 @@ static void jl_add_methods(jl_array_t *external)
     }
 }
 
-static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world)
+extern _Atomic(int) allow_new_worlds;
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world, const char *pkgname)
 {
     size_t i, l = jl_array_nrows(internal);
     for (i = 0; i < l; i++) {
+        // allow_new_worlds doesn't matter here, since we aren't actually changing anything external
         jl_value_t *obj = jl_array_ptr_ref(internal, i);
         if (jl_typetagis(obj, jl_typemap_entry_type)) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
@@ -735,11 +737,17 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         }
     }
     l = jl_array_nrows(external);
-    for (i = 0; i < l; i++) {
-        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-        jl_methtable_t *mt = jl_method_get_table(entry->func.method);
-        assert((jl_value_t*)mt != jl_nothing);
-        jl_method_table_activate(mt, entry);
+    if (l) {
+        if (!jl_atomic_load_relaxed(&allow_new_worlds)) {
+            jl_printf(JL_STDERR, "WARNING: Method changes for %s have been disabled via a call to disable_new_worlds.\n", pkgname);
+            return;
+        }
+        for (i = 0; i < l; i++) {
+            jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+            jl_methtable_t *mt = jl_method_get_table(entry->func.method);
+            assert((jl_value_t*)mt != jl_nothing);
+            jl_method_table_activate(mt, entry);
+        }
     }
 }
 
@@ -864,71 +872,80 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
     size_t depth = stack->len;
     *bp = (char*)HT_NOTFOUND + depth;
     JL_TIMING(VERIFY_IMAGE, VERIFY_Methods);
-    jl_value_t *loctag = NULL;
-    jl_value_t *sig = NULL;
-    jl_value_t *matches = NULL;
-    JL_GC_PUSH3(&loctag, &matches, &sig);
     jl_svec_t *callees = jl_atomic_load_relaxed(&codeinst->edges);
     assert(jl_is_svec((jl_value_t*)callees));
     // verify current edges
-    for (size_t j = 0; j < jl_svec_len(callees); ) {
-        jl_value_t *edge = jl_svecref(callees, j);
-        size_t min_valid2;
-        size_t max_valid2;
-        assert(!jl_is_method(edge)); // `Method`-edge isn't allowed for the optimized one-edge format
-        if (jl_is_code_instance(edge))
-            edge = (jl_value_t*)((jl_code_instance_t*)edge)->def;
-        if (jl_is_method_instance(edge)) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)edge;
-            sig = jl_type_intersection(mi->def.method->sig, (jl_value_t*)mi->specTypes); // TODO: ??
-            verify_call(sig, callees, j, 1, world, &min_valid2, &max_valid2, &matches);
-            sig = NULL;
-            j += 1;
-        }
-        else if (jl_is_long(edge)) {
-            jl_value_t *sig = jl_svecref(callees, j + 1);
-            size_t nedges = jl_unbox_long(edge);
-            verify_call(sig, callees, j + 2, nedges, world, &min_valid2, &max_valid2, &matches);
-            j += 2 + nedges;
-            edge = sig;
-        }
-        else {
-            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(callees, j + 1);
-            jl_method_t *meth;
-            if (jl_is_mtable(callee)) {
-                // skip the legacy edge (missing backedge)
-                j += 2;
-                continue;
+    if (callees == jl_emptysvec) {
+        // quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
+    }
+    else if (*maxworld == jl_require_world) {
+        // if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
+        *minworld = *maxworld;
+    }
+    else {
+        jl_value_t *loctag = NULL;
+        jl_value_t *sig = NULL;
+        jl_value_t *matches = NULL;
+        JL_GC_PUSH3(&loctag, &matches, &sig);
+        for (size_t j = 0; j < jl_svec_len(callees); ) {
+            jl_value_t *edge = jl_svecref(callees, j);
+            size_t min_valid2;
+            size_t max_valid2;
+            assert(!jl_is_method(edge)); // `Method`-edge isn't allowed for the optimized one-edge format
+            if (jl_is_code_instance(edge))
+                edge = (jl_value_t*)((jl_code_instance_t*)edge)->def;
+            if (jl_is_method_instance(edge)) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)edge;
+                sig = jl_type_intersection(mi->def.method->sig, (jl_value_t*)mi->specTypes); // TODO: ??
+                verify_call(sig, callees, j, 1, world, &min_valid2, &max_valid2, &matches);
+                sig = NULL;
+                j += 1;
             }
-            if (jl_is_code_instance(callee))
-                callee = ((jl_code_instance_t*)callee)->def;
-            if (jl_is_method_instance(callee)) {
-                meth = callee->def.method;
+            else if (jl_is_long(edge)) {
+                jl_value_t *sig = jl_svecref(callees, j + 1);
+                size_t nedges = jl_unbox_long(edge);
+                verify_call(sig, callees, j + 2, nedges, world, &min_valid2, &max_valid2, &matches);
+                j += 2 + nedges;
+                edge = sig;
             }
             else {
-                assert(jl_is_method(callee));
-                meth = (jl_method_t*)callee;
+                jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(callees, j + 1);
+                jl_method_t *meth;
+                if (jl_is_mtable(callee)) {
+                    // skip the legacy edge (missing backedge)
+                    j += 2;
+                    continue;
+                }
+                if (jl_is_code_instance(callee))
+                    callee = ((jl_code_instance_t*)callee)->def;
+                if (jl_is_method_instance(callee)) {
+                    meth = callee->def.method;
+                }
+                else {
+                    assert(jl_is_method(callee));
+                    meth = (jl_method_t*)callee;
+                }
+                verify_invokesig(edge, meth, world, &min_valid2, &max_valid2);
+                j += 2;
             }
-            verify_invokesig(edge, meth, world, &min_valid2, &max_valid2);
-            j += 2;
+            if (*minworld < min_valid2)
+                *minworld = min_valid2;
+            if (*maxworld > max_valid2)
+                *maxworld = max_valid2;
+            if (max_valid2 != ~(size_t)0 && _jl_debug_method_invalidation) {
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, edge);
+                loctag = jl_cstr_to_string("insert_backedges_callee");
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)codeinst);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, matches);
+            }
+            //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)edge);
+            //ios_puts(max_valid2 == ~(size_t)0 ? "valid\n" : "INVALID\n", ios_stderr);
+            if (max_valid2 == 0 && !_jl_debug_method_invalidation)
+                break;
         }
-        if (*minworld < min_valid2)
-            *minworld = min_valid2;
-        if (*maxworld > max_valid2)
-            *maxworld = max_valid2;
-        if (max_valid2 != ~(size_t)0 && _jl_debug_method_invalidation) {
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, edge);
-            loctag = jl_cstr_to_string("insert_backedges_callee");
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)codeinst);
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, matches);
-        }
-        //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)edge);
-        //ios_puts(max_valid2 == ~(size_t)0 ? "valid\n" : "INVALID\n", ios_stderr);
-        if (max_valid2 == 0 && !_jl_debug_method_invalidation)
-            break;
+        JL_GC_POP();
     }
-    JL_GC_POP();
     // verify recursive edges (if valid, or debugging)
     size_t cycle = depth;
     jl_code_instance_t *cause = codeinst;
@@ -979,6 +996,7 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
         assert(*bp == (char*)HT_NOTFOUND + stack->len + 1);
         *bp = HT_NOTFOUND;
         if (_jl_debug_method_invalidation && *maxworld < current_world) {
+            jl_value_t *loctag;
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)child);
             loctag = jl_cstr_to_string("verify_methods");
             JL_GC_PUSH1(&loctag);

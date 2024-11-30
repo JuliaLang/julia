@@ -8352,3 +8352,10 @@ macro define_call(sym)
 end
 @test eval(Expr(:toplevel, :(@define_call(f_macro_defined1)))) == 1
 @test @define_call(f_macro_defined2) == 1
+
+let m = which(+, (Int, Int))
+    @eval f56692(i) = invoke(+, $m, i, 4)
+    global g56692() = f56692(5) == 9 ? "true" : false
+end
+@test @inferred(f56692(3)) == 7
+@test @inferred(g56692()) == "true"
