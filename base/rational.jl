@@ -106,8 +106,8 @@ end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 function //(x::Number, y::Complex)
-    if iszero((x // abs2(y)))
-        return complex(x // abs2(y))
+    if isinf(y)
+        return complex(x*0)
     end
     real_y = real(y)
     imag_y = imag(y)
