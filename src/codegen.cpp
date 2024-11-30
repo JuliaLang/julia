@@ -81,6 +81,10 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
+#ifdef USE_ITTAPI
+#include "ittapi/ittnotify.h"
+#endif
+
 using namespace llvm;
 
 static bool jl_fpo_disabled(const Triple &TT) {
@@ -10427,8 +10431,16 @@ extern "C" void jl_init_llvm(void)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
 #if defined(JL_USE_INTEL_JITEVENTS)
-    if (jit_profiling && atoi(jit_profiling)) {
-        jl_using_intel_jitevents = 1;
+    if (jit_profiling) {
+        if (atoi(jit_profiling)) {
+            jl_using_intel_jitevents = 1;
+        }
+    } else {
+#ifdef USE_ITTAPI
+        __itt_collection_state state = __itt_get_collection_state();
+        jl_using_intel_jitevents = state == __itt_collection_init_successful ||
+                                   state == __itt_collection_collector_exists;
+#endif
     }
 #endif
 
