@@ -59,7 +59,7 @@ function _find_scope_vars!(assignments, locals, destructured_args, globals, used
             k in KSet"scope_block lambda module toplevel"
         return
     elseif k == K"local" || k == K"local_def"
-        if (meta = get(ex, :meta, nothing); !isnothing(meta) && get(meta, :is_destructured_arg, false))
+        if getmeta(ex, :is_destructured_arg, false)
             push!(destructured_args, ex[1])
         else
             _insert_if_not_present!(locals, NameKey(ex[1]), ex)
@@ -189,13 +189,11 @@ function var_kind(ctx, varkey::NameKey, exclude_toplevel_globals=false)
     isnothing(id) ? nothing : lookup_binding(ctx, id).kind
 end
 
-function init_binding(ctx, varkey::NameKey, kind::Symbol, is_ambiguous_local=false)
+function init_binding(ctx, varkey::NameKey, kind::Symbol; kws...)
     id = kind === :global ? get(ctx.global_vars, varkey, nothing) : nothing
     if isnothing(id)
         mod = kind === :global ? ctx.scope_layers[varkey.layer].mod : nothing
-        id = new_binding(ctx.bindings,
-                         BindingInfo(varkey.name, kind;
-                                     mod=mod, is_ambiguous_local=is_ambiguous_local))
+        id = new_binding(ctx.bindings, BindingInfo(varkey.name, kind; mod=mod, kws...))
     end
     if kind === :global
         ctx.global_vars[varkey] = id
@@ -217,7 +215,8 @@ function add_lambda_args(ctx, var_ids, args, args_kind)
                       "static parameter name not distinct from function argument"
                 throw(LoweringError(arg, msg))
             end
-            var_ids[varkey] = init_binding(ctx, varkey, args_kind)
+            var_ids[varkey] = init_binding(ctx, varkey, args_kind;
+                                           is_nospecialize=getmeta(arg, :nospecialize, false))
         elseif ka != K"BindingId" && ka != K"Placeholder"
             throw(LoweringError(arg, "Unexpected lambda arg kind"))
         end
@@ -334,7 +333,8 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
                     end
                 end
             end
-            var_ids[varkey] = init_binding(ctx, varkey, :local, is_ambiguous_local)
+            var_ids[varkey] = init_binding(ctx, varkey, :local;
+                                           is_ambiguous_local=is_ambiguous_local)
         end
     end
 

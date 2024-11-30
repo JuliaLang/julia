@@ -200,4 +200,17 @@ begin
 end
 """) == (1,2,3,4)
 
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_nospecialize(u, v, @nospecialize(x), y, @nospecialize(z))
+        (u, v, x, y, z)
+    end
+
+    f_nospecialize(1,2,3,4,5)
+end
+""") == (1,2,3,4,5)
+# We dig into the internal of `Method` here to check which slots have been
+# flagged as nospecialize.
+@test only(methods(test_mod.f_nospecialize)).nospecialize == 0b10100
+
 end

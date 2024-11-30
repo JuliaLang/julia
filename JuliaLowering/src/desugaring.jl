@@ -1237,7 +1237,6 @@ function match_function_arg(full_ex)
     type = nothing
     default = nothing
     is_slurp = false
-    is_nospecialize = false
     ex = full_ex
     while true
         k = kind(ex)
@@ -1258,10 +1257,6 @@ function match_function_arg(full_ex)
             @chk numchildren(ex) == 1
             is_slurp = true
             ex = ex[1]
-        elseif k == K"meta"
-            @chk ex[1].name_val == "nospecialize"
-            is_nospecialize = true
-            ex = ex[2]
         elseif k == K"="
             if !isnothing(default)
                 throw(full_ex, "multiple defaults provided with `=` in function argument")
@@ -1275,8 +1270,7 @@ function match_function_arg(full_ex)
     return (name=name,
             type=type,
             default=default,
-            is_slurp=is_slurp,
-            is_nospecialize=is_nospecialize)
+            is_slurp=is_slurp)
 end
 
 # Expand `where` clause(s) of a function into (typevar_names, typevar_stmts) where
@@ -1467,9 +1461,13 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
             if kind(aname) == K"tuple"
                 # Argument destructuring
-                n = new_mutable_var(ctx, aname, "destructured_arg_$i"; kind=:argument)
-                push!(body_stmts, @ast ctx aname [K"local"(meta=CompileHints(:is_destructured_arg, true))
-                                                  [K"=" aname n]])
+                is_nospecialize = getmeta(arg, :nospecialize, false)
+                n = new_mutable_var(ctx, aname, "destructured_arg_$i";
+                                    kind=:argument, is_nospecialize=is_nospecialize)
+                push!(body_stmts, @ast ctx aname [
+                    K"local"(meta=CompileHints(:is_destructured_arg, true))
+                    [K"=" aname n]
+                ])
                 aname = n
             end
             push!(arg_names, aname)

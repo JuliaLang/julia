@@ -14,13 +14,6 @@ struct ScopeLayer
     is_macro_expansion::Bool # FIXME
 end
 
-# Type for `meta` attribute, to replace `Expr(:meta)`.
-# It's unclear how much flexibility we need here - is a dict good, or could we
-# just use a struct? Likely this will be sparse. Alternatively we could just
-# use individual attributes but those aren't easy to add on an ad-hoc basis in
-# the middle of a pass.
-const CompileHints = Base.ImmutableDict{Symbol,Any}
-
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings

@@ -141,12 +141,12 @@ function read_ir_test_cases(filename)
      [match_ir_test_case(s) for s in split(cases_str, r"####*") if strip(s) != ""])
 end
 
-function format_ir_for_test(mod, input, expect_error=false)
+function format_ir_for_test(mod, description, input, expect_error=false)
     ex = parsestmt(SyntaxTree, input)
     try
         x = JuliaLowering.lower(mod, ex)
         if expect_error
-            error("Expected a lowering error in test case")
+            error("Expected a lowering error in test case \"$description\"")
         end
         ir = strip(sprint(JuliaLowering.print_ir, x))
         return replace(ir, string(mod)=>"TestMod")
@@ -164,7 +164,7 @@ function test_ir_cases(filename::AbstractString)
     test_mod = Module(:TestMod)
     Base.include_string(test_mod, preamble)
     for (expect_error, description, input, ref) in cases
-        output = format_ir_for_test(test_mod, input, expect_error)
+        output = format_ir_for_test(test_mod, description, input, expect_error)
         @testset "$description" begin
             if output != ref
                 # Do additional error dumping, as @test will not format errors in a nice way
@@ -192,7 +192,7 @@ function refresh_ir_test_cases(filename, pattern=nothing)
     end
     for (expect_error, description, input, ref) in cases
         if isnothing(pattern) || occursin(pattern, description)
-            ir = format_ir_for_test(test_mod, input, expect_error)
+            ir = format_ir_for_test(test_mod, description, input, expect_error)
             if ir != ref
                 @info "Refreshing test case $(repr(description)) in $filename"
             end

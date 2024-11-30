@@ -670,6 +670,20 @@ end
 7   (return %₁)
 
 ########################################
+# Functions with @nospecialize argument metadata
+function f(@nospecialize(x))
+end
+#---------------------
+1   (method :f)
+2   (call core.Typeof %₁)
+3   (call core.svec %₂ core.Any)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
+6   --- method core.nothing %₅
+    1   (return core.nothing)
+7   (return %₁)
+
+########################################
 # Binding docs to functions
 """
 some docs

@@ -77,7 +77,7 @@ function print_ir(io::IO, ex, indent="")
         if kind(e) == K"method" && numchildren(e) == 3
             println(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
             @assert kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
-            print_ir(io, e[3], "    ")
+            print_ir(io, e[3], indent*"    ")
         else
             code = string(e)
             println(io, indent, lno, " ", code)

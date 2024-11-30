@@ -51,44 +51,45 @@ function _compress_debuginfo(info)
     Core.DebugInfo(Symbol(filename), nothing, edges, codelocs)
 end
 
-function ir_debug_info(ex)
-    code = children(ex)
-
+function ir_debug_info_state(ex)
     e1 = first(flattened_provenance(ex))
     topfile = filename(e1)
+    [(topfile, [], Vector{Int32}())]
+end
 
-    current_codelocs_stack = [(topfile, [], Vector{Int32}())]
-    for i in 1:length(code)
-        locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(code[i])]
-        for j in 1:max(length(locstk), length(current_codelocs_stack))
-            if j > length(locstk) || (length(current_codelocs_stack) >= j &&
-                                      current_codelocs_stack[j][1] != locstk[j][1])
-                while length(current_codelocs_stack) >= j
-                    info = pop!(current_codelocs_stack)
-                    push!(last(current_codelocs_stack)[2], info)
-                end
-            end
-            if j > length(locstk)
-                break
-            elseif j > length(current_codelocs_stack)
-                push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
+function add_ir_debug_info!(current_codelocs_stack, stmt)
+    locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
+    for j in 1:max(length(locstk), length(current_codelocs_stack))
+        if j > length(locstk) || (length(current_codelocs_stack) >= j &&
+                                  current_codelocs_stack[j][1] != locstk[j][1])
+            while length(current_codelocs_stack) >= j
+                info = pop!(current_codelocs_stack)
+                push!(last(current_codelocs_stack)[2], info)
             end
         end
-        for (j, (file,line)) in enumerate(locstk)
-            fn, edges, codelocs = current_codelocs_stack[j]
-            @assert fn == file
-            if j < length(locstk)
-                edge_index = length(edges) + 1
-                edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
-            else
-                edge_index = 0
-                edge_codeloc_index = 0
-            end
-            push!(codelocs, line)
-            push!(codelocs, edge_index)
-            push!(codelocs, edge_codeloc_index)
+        if j > length(locstk)
+            break
+        elseif j > length(current_codelocs_stack)
+            push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
         end
     end
+    for (j, (file,line)) in enumerate(locstk)
+        fn, edges, codelocs = current_codelocs_stack[j]
+        @assert fn == file
+        if j < length(locstk)
+            edge_index = length(edges) + 1
+            edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
+        else
+            edge_index = 0
+            edge_codeloc_index = 0
+        end
+        push!(codelocs, line)
+        push!(codelocs, edge_index)
+        push!(codelocs, edge_codeloc_index)
+    end
+end
+
+function finish_ir_debug_info!(current_codelocs_stack)
     while length(current_codelocs_stack) > 1
         info = pop!(current_codelocs_stack)
         push!(last(current_codelocs_stack)[2], info)
@@ -101,15 +102,9 @@ end
 # Julia runtime
 function to_code_info(ex, mod, funcname, slots)
     input_code = children(ex)
-    code = Any[to_lowered_expr(mod, ex) for ex in input_code]
+    stmts = Any[]
 
-    debuginfo = ir_debug_info(ex)
-
-    # TODO: Set ssaflags based on call site annotations:
-    # - @inbounds annotations
-    # - call site @inline / @noinline
-    # - call site @assume_effects
-    ssaflags = zeros(UInt32, length(code))
+    current_codelocs_stack = ir_debug_info_state(ex)
 
     nargs = sum((s.kind==:argument for s in slots), init=0)
     slotnames = Vector{Symbol}(undef, length(slots))
@@ -122,9 +117,28 @@ function to_code_info(ex, mod, funcname, slots)
         if ni > 0
             name = "$name@$ni"
         end
-        slotnames[i] = Symbol(name)
+        sname = Symbol(name)
+        slotnames[i] = sname
         slotflags[i] = 0x00  # FIXME!!
+        if slot.is_nospecialize
+            add_ir_debug_info!(current_codelocs_stack, ex)
+            push!(stmts, Expr(:meta, :nospecialize, Core.SlotNumber(i)))
+        end
     end
+
+    prefix_len = length(stmts)
+    for stmt in children(ex)
+        push!(stmts, to_lowered_expr(mod, stmt, prefix_len))
+        add_ir_debug_info!(current_codelocs_stack, stmt)
+    end
+
+    debuginfo = finish_ir_debug_info!(current_codelocs_stack)
+
+    # TODO: Set ssaflags based on call site annotations:
+    # - @inbounds annotations
+    # - call site @inline / @noinline
+    # - call site @assume_effects
+    ssaflags = zeros(UInt32, length(stmts))
 
     # TODO: Set true for @propagate_inbounds
     propagate_inbounds  = false
@@ -141,7 +155,7 @@ function to_code_info(ex, mod, funcname, slots)
 
     # The following CodeInfo fields always get their default values for
     # uninferred code.
-    ssavaluetypes      = length(code) # Why does the runtime code do this?
+    ssavaluetypes      = length(stmts) # Why does the runtime code do this?
     slottypes          = nothing
     parent             = nothing
     method_for_inference_limit_heuristics = nothing
@@ -152,7 +166,7 @@ function to_code_info(ex, mod, funcname, slots)
     inlining_cost       = 0xffff
 
     _CodeInfo(
-        code,
+        stmts,
         debuginfo,
         ssavaluetypes,
         ssaflags,
@@ -176,7 +190,7 @@ function to_code_info(ex, mod, funcname, slots)
     )
 end
 
-function to_lowered_expr(mod, ex)
+function to_lowered_expr(mod, ex, prefix_len=0)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -203,9 +217,9 @@ function to_lowered_expr(mod, ex)
     elseif k == K"static_parameter"
         Expr(:static_parameter, ex.var_id)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id)
+        Core.SSAValue(ex.var_id + prefix_len)
     elseif k == K"return"
-        Core.ReturnNode(to_lowered_expr(mod, ex[1]))
+        Core.ReturnNode(to_lowered_expr(mod, ex[1], prefix_len))
     elseif is_quoted(k)
         if k == K"inert"
             ex[1]
@@ -227,14 +241,14 @@ function to_lowered_expr(mod, ex)
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, ex[1]), ex[2].id)
+        Core.GotoIfNot(to_lowered_expr(mod, ex[1], prefix_len), ex[2].id)
     elseif k == K"enter"
         catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, to_lowered_expr(ex[2]))
+            Core.EnterNode(catch_idx, to_lowered_expr(mod, ex[2], prefix_len))
     elseif k == K"method"
-        cs = map(e->to_lowered_expr(mod, e), children(ex))
+        cs = map(e->to_lowered_expr(mod, e, prefix_len), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
         Expr(:method, c1, cs[2:end]...)
@@ -258,7 +272,7 @@ function to_lowered_expr(mod, ex)
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
         end
-        Expr(head, map(e->to_lowered_expr(mod, e), children(ex))...)
+        Expr(head, map(e->to_lowered_expr(mod, e, prefix_len), children(ex))...)
     end
 end
 

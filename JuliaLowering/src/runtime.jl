@@ -259,6 +259,24 @@ end
 # JuliaLowering.include() or something, then we'll be in the fun little
 # world of bootstrapping but it shouldn't be too painful :)
 
+function _apply_nospecialize(ctx, ex)
+    k = kind(ex)
+    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
+        setmeta(ex; nospecialize=true)
+    elseif k == K"..." || k == K"::" || k == K"="
+        if k == K"::" && numchildren(ex) == 1
+            ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
+        end
+        mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
+    else
+        throw(LoweringError(ex, "Invalid function argument"))
+    end
+end
+
+function Base.var"@nospecialize"(__context__::MacroContext, ex)
+    _apply_nospecialize(__context__, ex)
+end
+
 function Base.var"@atomic"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
     @ast __context__ __context__.macrocall [K"atomic" ex]

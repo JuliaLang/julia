@@ -914,6 +914,7 @@ end
 struct Slot
     name::String
     kind::Symbol
+    is_nospecialize::Bool
     # <- todo: flags here etc
 end
 
@@ -929,13 +930,13 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument))
+            push!(slots, Slot(arg.name_val, :argument, false))
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
             info = lookup_binding(ctx.bindings, id)
             @assert info.kind == :local || info.kind == :argument
-            push!(slots, Slot(info.name, :argument))
+            push!(slots, Slot(info.name, :argument, info.is_nospecialize))
             slot_rewrites[id] = length(slots)
         end
     end
@@ -943,7 +944,7 @@ function compile_lambda(outer_ctx, ex)
     for id in sort(collect(ex.lambda_locals))
         info = lookup_binding(ctx.bindings, id)
         @assert info.kind == :local
-        push!(slots, Slot(info.name, :local))
+        push!(slots, Slot(info.name, :local, false))
         slot_rewrites[id] = length(slots)
     end
     for (i,arg) in enumerate(children(static_parameters))
