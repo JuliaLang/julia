@@ -847,7 +847,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_vararg_t") ||
                    Name.ends_with_insensitive("jl_opaque_closure_t") ||
                    Name.ends_with_insensitive("jl_globalref_t") ||
-                   // Probably not technically true for these, but let's allow it
+                   // Probably not technically true for these, but let's allow it as a root
+                   Name.ends_with_insensitive("jl_ircode_state") ||
                    Name.ends_with_insensitive("typemap_intersection_env") ||
                    Name.ends_with_insensitive("interpreter_state") ||
                    Name.ends_with_insensitive("jl_typeenv_t") ||
