@@ -118,7 +118,8 @@ function _evalpoly(x, p)
     return s
 end
 
-function evalpoly(z::Complex, p::Tuple)
+# Goertzel-like algorithm from Knuth, TAOCP vol. 2, section 4.6.4:
+function evalpoly(z::Complex, p::Tuple{Any, Any, Vararg})
     if @generated
         N = length(p.parameters)
         a = :(p[end])
@@ -143,10 +144,6 @@ function evalpoly(z::Complex, p::Tuple)
         _evalpoly(z, p)
     end
 end
-evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
-evalpoly(z::Complex, ::Tuple{}) = zero(one(z)) # dimensionless zero, i.e. 0 * z^0
-
-evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
     Base.require_one_based_indexing(p)
