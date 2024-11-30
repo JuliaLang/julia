@@ -110,8 +110,7 @@ New library features
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `escape_string` takes additional keyword arguments `ascii=true` (to escape all
   non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
-  for u/U escapes, e.g. for C compatibility) [#55099]).
-* `filter` can now act on a `NamedTuple` ([#50795]).
+  for u/U escapes, e.g. for C compatibility) ([#55099]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
