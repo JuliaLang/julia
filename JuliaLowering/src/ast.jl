@@ -226,7 +226,6 @@ end
 # Convenience functions to create leaf nodes referring to identifiers within
 # the Core and Top modules.
 core_ref(ctx, ex, name) = makeleaf(ctx, ex, K"core", name)
-Any_type(ctx, ex) = core_ref(ctx, ex, "Any")
 svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
 nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
 

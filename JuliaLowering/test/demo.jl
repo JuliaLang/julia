@@ -45,36 +45,11 @@ baremodule M
 
     using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
     using JuliaSyntax
+    using JuliaLowering: @inert, @label, @goto, @islocal
+    using Base: @locals
 
     macro K_str(str)
         JuliaSyntax.Kind(str)
-    end
-
-    function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == K"quote"
-        @ast __context__ ex [K"inert" ex]
-    end
-
-    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == K"Identifier"
-        @ast __context__ ex ex=>K"symbolic_label"
-    end
-
-    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == K"Identifier"
-        @ast __context__ ex ex=>K"symbolic_goto"
-    end
-
-    function var"@islocal"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == K"Identifier"
-        @ast __context__ ex [K"extension"
-            "islocal"::K"Symbol"
-            ex
-        ]
-    end
-
-    function var"@locals"(__context__::JuliaLowering.MacroContext)
-        @ast __context__ __context__.macroname [K"extension" "locals"::K"Symbol"]
     end
 
     # JuliaLowering.include(M, "demo_include.jl")

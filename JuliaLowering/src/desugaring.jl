@@ -1473,8 +1473,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 aname = n
             end
             push!(arg_names, aname)
-            atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
-            @assert !info.is_nospecialize # TODO
+            atype = !isnothing(info.type) ? info.type : @ast ctx arg "Any"::K"core"
             if info.is_slurp
                 if i != length(args)
                     throw(LoweringError(arg, "`...` may only be used for the last function argument"))
@@ -1628,7 +1627,7 @@ function expand_macro_def(ctx, ex)
         [K"call"(sig)
             _make_macro_name(ctx, name)
             [K"::"
-                adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), 
+                adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"),
                             kind(name) == K"." ? name[1] : name)
                 MacroContext::K"Value"
             ]

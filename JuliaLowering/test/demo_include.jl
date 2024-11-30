@@ -4,11 +4,11 @@ macro __MODULE__()
 end
 
 macro __FILE__()
-    JuliaLowering.filename(__context__.macroname)
+    JuliaLowering.filename(__context__.macrocall)
 end
 
 macro __LINE__()
-    JuliaLowering.source_location(__context__.macroname)[1]
+    JuliaLowering.source_location(__context__.macrocall)[1]
 end
 
 # Macro with local variables

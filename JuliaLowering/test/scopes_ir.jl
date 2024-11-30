@@ -1,17 +1,5 @@
-using JuliaLowering
-using JuliaLowering: kind, @chk, @ast, @K_str
-
-function var"@islocal"(__context__::JuliaLowering.MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"extension"
-        "islocal"::K"Symbol"
-        ex
-    ]
-end
-
-function var"@locals"(__context__::JuliaLowering.MacroContext)
-    @ast __context__ __context__.macroname [K"extension" "locals"::K"Symbol"]
-end
+using JuliaLowering: @islocal
+using Base: @locals
 
 #*******************************************************************************
 ########################################
@@ -264,4 +252,16 @@ function f() where T
 #       ╙ ── local variable name `T` conflicts with a static parameter
     end
 end
+
+########################################
+# @isdefined with defined variables
+let x = 1
+    @isdefined x
+    @isdefined y
+end
+#---------------------
+1   1
+2   (= slot₁/x %₁)
+3   (isdefined TestMod.y)
+4   (return %₃)
 

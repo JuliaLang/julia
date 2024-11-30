@@ -1,17 +1,3 @@
-using JuliaLowering: JuliaLowering, @ast, @chk
-using JuliaSyntax
-
-function var"@label"(__context__::JuliaLowering.MacroContext, ex)
-    @chk kind(ex) == JuliaSyntax.K"Identifier"
-    @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
-end
-
-function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
-    @chk kind(ex) == JuliaSyntax.K"Identifier"
-    @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
-end
-
-#*******************************************************************************
 ########################################
 # Basic branching tail && value
 begin

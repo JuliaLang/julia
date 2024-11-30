@@ -1,13 +1,3 @@
-using JuliaLowering: JuliaLowering, @ast, @chk
-using JuliaSyntax
-
-function var"@atomic"(__context__::JuliaLowering.MacroContext, ex)
-    @chk kind(ex) == JuliaSyntax.K"Identifier" || kind(ex) == JuliaSyntax.K"::" (ex,
-                                                        "Expected identifier or declaration")
-    @ast __context__ ex [K"atomic" ex]
-end
-
-#*******************************************************************************
 ########################################
 # where expression without type bounds
 A where X

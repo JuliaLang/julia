@@ -73,7 +73,7 @@ end
 #--------------------------------------------------
 struct MacroContext <: AbstractLoweringContext
     graph::SyntaxGraph
-    macroname::SyntaxTree
+    macrocall::SyntaxTree
     scope_layer::ScopeLayer
 end
 
@@ -99,7 +99,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     print(io, "MacroExpansionError")
     ctx = exc.context
     if !isnothing(ctx)
-        print(io, " while expanding ", ctx.macroname,
+        print(io, " while expanding ", ctx.macrocall[1],
               " in module ", ctx.scope_layer.mod)
     end
     print(io, ":\n")
@@ -147,7 +147,7 @@ function expand_macro(ctx, ex)
     # arguments to the macro call.
     macro_args = [set_scope_layer(ctx, e, ctx.current_layer.id, false)
                   for e in children(ex)[2:end]]
-    mctx = MacroContext(ctx.graph, macname, ctx.current_layer)
+    mctx = MacroContext(ctx.graph, ex, ctx.current_layer)
     expanded = try
         # TODO: Allow invoking old-style macros for compat
         invokelatest(macfunc, mctx, macro_args...)

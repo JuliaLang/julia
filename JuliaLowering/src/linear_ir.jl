@@ -844,7 +844,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
             binfo = lookup_binding(ctx, id)
             if !isnothing(new_id)
                 sk = binfo.kind == :local || binfo.kind == :argument ? K"slot"             :
-                     binfo.kind == :static_parameter                   ? K"static_parameter" :
+                     binfo.kind == :static_parameter                 ? K"static_parameter" :
                      throw(LoweringError(ex, "Found unexpected binding of kind $(binfo.kind)"))
                 makeleaf(ctx, ex, sk; var_id=new_id)
             else

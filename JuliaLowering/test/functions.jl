@@ -27,6 +27,9 @@ begin
         values(kws)
     end
 
+    # Note this definition generates an arguably-spurious warning when run via
+    # `Pkg.test()` due to the use of `--warn-override=true` in the test
+    # harness.
     function kwtest()
         "non-kw version of kwtest"
     end
