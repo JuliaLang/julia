@@ -2,11 +2,11 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings
     mod::Module
-    lambda_locals::Set{IdTag}
+    lambda_bindings::LambdaBindings
 end
 
 function add_lambda_local!(ctx::ClosureConversionCtx, id)
-    push!(ctx.lambda_locals, id)
+    push!(ctx.lambda_bindings.locals, id)
 end
 
 # Convert `ex` to `type` by calling `convert(type, ex)` when necessary.
@@ -164,7 +164,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 children(ex)...
         ])
     elseif k == K"lambda"
-        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_locals)
+        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings)
         mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
     else
         mapchildren(e->_convert_closures(ctx, e), ctx, ex)
@@ -187,7 +187,7 @@ Invariants:
 """
 function convert_closures(ctx::ScopeResolutionContext, ex)
     @assert kind(ex) == K"lambda"
-    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_locals)
+    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings)
     ex1 = _convert_closures(ctx, ex)
     ctx, ex1
 end

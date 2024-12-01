@@ -595,11 +595,6 @@ function f(x=1, ys...=(1,2)...)
 end
 """
 
-src = """
-function f((x,), (x,))
-end
-"""
-
 # TODO: fix this - it's interpreted in a bizarre way as a kw call.
 # src = """
 # function f(x=y=1)

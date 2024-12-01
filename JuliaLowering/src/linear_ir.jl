@@ -84,7 +84,7 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     bindings::Bindings
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
-    lambda_locals::Set{IdTag}
+    lambda_bindings::LambdaBindings
     return_type::Union{Nothing, SyntaxTree{GraphType}}
     break_targets::Dict{String, JumpTarget{GraphType}}
     handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
@@ -95,12 +95,12 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     mod::Module
 end
 
-function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
+function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
     graph = syntax_graph(ctx)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
     GraphType = typeof(graph)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_locals, rett,
+                    is_toplevel_thunk, lambda_bindings, rett,
                     Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{GraphType}}(), Dict{String,JumpTarget{GraphType}}(),
                     Vector{JumpOrigin{GraphType}}(), ctx.mod)
@@ -399,7 +399,7 @@ function compile_conditional(ctx, ex, false_label)
 end
 
 function add_lambda_local!(ctx::LinearIRContext, id)
-    push!(ctx.lambda_locals, id)
+    push!(ctx.lambda_bindings.locals, id)
 end
 
 # Lowering of exception handling must ensure that
@@ -923,7 +923,7 @@ function compile_lambda(outer_ctx, ex)
     static_parameters = ex[2]
     ret_var = numchildren(ex) == 4 ? ex[4] : nothing
     # TODO: Add assignments for reassigned arguments to body using lambda_args
-    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, ex.lambda_locals, ret_var)
+    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, ex.lambda_bindings, ret_var)
     compile_body(ctx, ex[3])
     slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
@@ -941,7 +941,7 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for id in sort(collect(ex.lambda_locals))
+    for id in sort(collect(ex.lambda_bindings.locals))
         info = lookup_binding(ctx.bindings, id)
         @assert info.kind == :local
         push!(slots, Slot(info.name, :local, false))
@@ -980,7 +980,7 @@ function linearize_ir(ctx, ex)
     # required to call reparent() ...
     GraphType = typeof(graph)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
-                           Ref(0), false, Set{IdTag}(), nothing,
+                           Ref(0), false, LambdaBindings(), nothing,
                            Dict{String,JumpTarget{typeof(graph)}}(),
                            SyntaxList(graph), SyntaxList(graph),
                            Vector{FinallyHandler{GraphType}}(),

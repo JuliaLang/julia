@@ -123,6 +123,21 @@ function NameKey(ex::SyntaxTree)
     NameKey(ex.name_val, get(ex, :scope_layer, _lowering_internal_layer))
 end
 
+struct CaptureInfo
+    is_read::Bool
+    is_assigned::Bool
+    is_called::Bool
+end
+
+struct LambdaBindings
+    # Local bindings within the lambda
+    locals::Set{IdTag}
+    captures::Dict{IdTag,CaptureInfo}
+end
+
+LambdaBindings() = LambdaBindings(Set{IdTag}(), Dict{IdTag,CaptureInfo}())
+
+
 struct ScopeInfo
     # True if scope is the global top level scope
     is_toplevel_global_scope::Bool
@@ -136,8 +151,8 @@ struct ScopeInfo
     # parent scope
     # TODO: Rename to `locals` or local_bindings?
     var_ids::Dict{NameKey,IdTag}
-    # Variables used by the enclosing lambda
-    lambda_locals::Set{IdTag}
+    # Bindings used by the enclosing lambda
+    lambda_bindings::LambdaBindings
 end
 
 struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
@@ -157,7 +172,7 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
 end
 
 function ScopeResolutionContext(ctx)
-    graph = ensure_attributes(ctx.graph, lambda_locals=Set{IdTag})
+    graph = ensure_attributes(ctx.graph, lambda_bindings=LambdaBindings)
     ScopeResolutionContext(graph,
                            ctx.bindings,
                            ctx.mod,
@@ -345,17 +360,17 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         end
     end
 
-    lambda_locals = is_outer_lambda_scope ? Set{IdTag}() : parentscope.lambda_locals
+    lambda_bindings = is_outer_lambda_scope ? LambdaBindings() : parentscope.lambda_bindings
     for id in values(var_ids)
         vk = var_kind(ctx, id)
         if vk === :local
-            push!(lambda_locals, id)
+            push!(lambda_bindings.locals, id)
         end
     end
     for id in used_bindings
         info = lookup_binding(ctx, id)
         if !info.is_ssa && info.kind == :local
-            push!(lambda_locals, id)
+            push!(lambda_bindings.locals, id)
         end
     end
 
@@ -369,7 +384,7 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     end
 
     return ScopeInfo(is_toplevel_global_scope, in_toplevel_thunk, is_soft_scope,
-                     is_hard_scope, var_ids, lambda_locals)
+                     is_hard_scope, var_ids, lambda_bindings)
 end
 
 # Do some things which are better done after converting to BindingId.
@@ -433,7 +448,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         ret_var = numchildren(ex) == 4 ? _resolve_scopes(ctx, ex[4]) : nothing
         pop!(ctx.scope_stack)
 
-        @ast ctx ex [K"lambda"(lambda_locals=scope.lambda_locals,
+        @ast ctx ex [K"lambda"(lambda_bindings=scope.lambda_bindings,
                                is_toplevel_thunk=is_toplevel_thunk)
             arg_bindings
             sparm_bindings
