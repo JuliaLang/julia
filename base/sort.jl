@@ -1767,7 +1767,7 @@ function sort(x::NTuple;
               order::Ordering=Forward,
               scratch::Union{Vector, Nothing}=nothing)
     # Can't do this check with type parameters because of https://github.com/JuliaLang/julia/issues/56698
-    scratch === nothing || x isa NTuple{<:Any, eltype(scratch)} || throw(ArgumentError("scratch's eltype can't accommodate all the input elements"))
+    scratch === nothing || eltype(x) == eltype(scratch) || throw(ArgumentError("scratch has the wrong eltype"))
     _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
 end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
