@@ -532,8 +532,8 @@ iscntrl(c::AbstractChar) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
     ispunct(c::AbstractChar) -> Bool
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
-character whose category code begins with 'P'.
-
+character whose category code begins with 'P'.\n
+*Note*: This behavior is different from the ispunct function in C which checks for printable characters that are not alphanumeric or whitespace, based on the ASCII.
 # Examples
 ```jldoctest
 julia> ispunct('α')
