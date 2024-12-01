@@ -536,6 +536,7 @@ character whose category code begins with 'P'.
 
 !!! note
     This behavior is different from the `ispunct` function in C.
+
 # Examples
 ```jldoctest
 julia> ispunct('α')
