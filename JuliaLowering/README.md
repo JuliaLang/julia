@@ -26,30 +26,14 @@ This work is intended to
 
 ## Trying it out
 
-Note this is a very early work in progress; most things probably don't work!
+Note this is a work in progress; many types of syntax are not yet handled.
 
-1. You need a 1.12-DEV build of Julia: At least 1.12.0-DEV.512; commit `263928f9ad4` currently works. Note that JuliaLowering relies on Julia internals and may be broken on the latest Julia dev version from time to time. (In fact it is currently broken on the latest `1.12-DEV`.)
+1. You need a 1.12-DEV build of Julia: At least 1.12.0-DEV.512. Commit `263928f9ad4` is currentl known to work. Note that JuliaLowering relies on Julia internals and may be broken on the latest Julia dev version from time to time. (In fact it is currently broken on the latest `1.12-DEV`.)
 2. Check out the main branch of [JuliaSyntax](https://github.com/JuliaLang/JuliaSyntax.jl)
 3. Get the latest version of [JuliaSyntaxFormatter](https://github.com/c42f/JuliaSyntaxFormatter.jl)
 4. Run the demo `include("test/demo.jl")`
 
-# Design Notes
-
-Lowering has five symbolic simplification passes:
-
-1. Macro expansion - expanding user-defined syntactic constructs by running the
-   user's macros. This pass also includes a small amount of other symbolic
-   simplification.
-2. Syntax desugaring - simplifying Julia's rich surface syntax down to a small
-   number of syntactic forms.
-3. Scope analysis - analyzing identifier names used in the code to discover
-   local variables, closure captures, and associate global variables to the
-   appropriate module. Transform all names (kind `K"Identifier"`) into binding
-   IDs (kind `K"BindingId"`) which can be looked up in a table of bindings.
-4. Closure conversion - convert closures to types and deal with captured
-   variables efficiently where possible.
-5. Flattening to linear IR - convert code in hierarchical tree form to a
-   flat array of statements; convert control flow into gotos.
+# Design notes
 
 ## Syntax trees
 
@@ -189,9 +173,7 @@ M.@outer()
 # @ foo.jl:1
 ```
 
-## Hygiene
-
-### Problems with Hygiene in Julia's exiting macro system
+## Problems with Hygiene in Julia's exiting macro system
 
 To write correct hygienic macros in Julia (as of 2024), macro authors must use
 `esc()` on any any syntax passed to the macro so that passed identifiers escape
@@ -214,6 +196,37 @@ The requirement to use `esc()` stems from Julia's pervasive use of the simple
 symbols. For example, a macro call `@foo x` gets passed the  symbol `:x`
 which is just a name without any information attached to indicate that it came
 from the scope where `@foo` was called.
+
+### Hygiene References
+
+* [Toward Fearless Macros](https://lambdaland.org/posts/2023-10-17_fearless_macros) -
+  a blog post by Ashton Wiersdorf
+* [Towards the Essence of Hygiene](https://michaeldadams.org/papers/hygiene/hygiene-2015-popl-authors-copy.pdf) - a paper by Michael Adams
+* [Bindings as sets of scopes](https://www-old.cs.utah.edu/plt/scope-sets/) - a description of Racket's scope set mechanism by Matthew Flatt
+
+# Overview of lowering passes
+
+JuliaLowering uses six symbolic transformation passes:
+
+1. Macro expansion - expanding user-defined syntactic constructs by running the
+   user's macros. This pass also includes a small amount of other symbolic
+   simplification.
+2. Syntax desugaring - simplifying Julia's rich surface syntax down to a small
+   number of syntactic forms.
+3. Scope analysis - analyzing identifier names used in the code to discover
+   local variables, closure captures, and associate global variables to the
+   appropriate module. Transform all names (kind `K"Identifier"`) into binding
+   IDs (kind `K"BindingId"`) which can be looked up in a table of bindings.
+4. Closure conversion - convert closures to types and deal with captured
+   variables efficiently where possible.
+5. Flattening to untyped IR - convert code in hierarchical tree form to a
+   flat array of statements; convert control flow into gotos.
+6. Convert untyped IR to `CodeInfo` form for integration with the Julia runtime.
+
+## Pass 1: Macro expansion
+
+This pass expands macros and quoted syntax, and does some very light conversion
+of a few syntax `Kind`s in preparation for syntax desugaring.
 
 ### Hygiene in JuliaLowering
 
@@ -246,14 +259,104 @@ discussed in Adams' paper:
 
 TODO: Write more here...
 
-#### References
+## Pass 2: Syntax desugaring
 
-* [Toward Fearless Macros](https://lambdaland.org/posts/2023-10-17_fearless_macros) -
-  a blog post by Ashton Wiersdorf
-* [Towards the Essence of Hygiene](https://michaeldadams.org/papers/hygiene/hygiene-2015-popl-authors-copy.pdf) - a paper by Michael Adams
-* [Bindings as sets of scopes](https://www-old.cs.utah.edu/plt/scope-sets/) - a description of Racket's scope set mechanism by Matthew Flatt
+This pass recursively converts many special surface syntax forms to a smaller
+set of syntax `Kind`s, following the AST's hierarchical tree structure. Some
+such as `K"scope_block"` are internal to lowering and removed during later
+passes. See `kinds.jl` for a list of these internal forms.
 
-## Lowering of exception handlers
+This pass is implemented in `desugaring.jl`. It's quite large because Julia has
+many special syntax features.
+
+## Pass 3: Scope analysis / binding resolution
+
+This pass replaces variables with bindings of kind `K"BindingId"`,
+disambiguating variables when the same name is used in different scopes. It
+also fills in the list of non-global bindings within each lambda and metadata
+about such bindings as will be used later during closure conversion.
+
+Scopes are documented in the Juila documentation on
+[Scope of Variables](https://docs.julialang.org/en/v1/manual/variables-and-scoping/)
+
+During scope resolution, we maintain a stack of `ScopeInfo` data structures.
+
+When a new `lambda` or `scope_block` is discovered, we create a new `ScopeInfo` by
+1. Find all identifiers bound or used within a scope. New *bindings* may be
+   introduced by one of the `local`, `global` keywords, implicitly by
+   assignment, as function arguments to a `lambda`, or as type arguments in a
+   method ("static parameters"). Identifiers are *used* when they are
+   referenced.
+2. Infer which bindings are newly introduced local or global variables (and
+   thus require a distinct identity from names already in the stack)
+3. Assign a `BindingId` (unique integer) to each new binding
+
+We then push this `ScopeInfo` onto the stack and traverse the expressions
+within the scope translating each `K"Identifier"` into the associated
+`K"BindingId"`. While we're doing this we also resolve some special forms like
+`islocal` by making use of the scope stack.
+
+The detailed rules for whether assignment introduces a new variable depend on
+the `scope_block`'s `scope_type` attribute when we are processing top-level
+code.
+* `scope_type == :hard` (as for bindings inside a `let` block) means an
+  assignment always introduces a new binding
+* `scope_type == :neutral` - inherit soft or hard scope from the parent scope.
+* `scope_type == :soft` - assignments are to globals if the variable
+  exists in global module scope. Soft scope doesn't have surface syntax and is
+  introduced for top-level code by REPL-like environments.
+
+## Pass 4: Closure conversion / lower bindings
+
+The main goal of this pass is closure conversion, but it's also used for
+lowering typed bindings and global assignments. Roughly, this is passes 3 and 4
+in the original `julia-syntax.scm`. In JuliaLowering it also comes in two steps:
+
+The first step (part of `scope_resolution.jl`) is to compute metadata related
+to bindings, both per-binding and per-binding-per-closure-scope.
+
+Properties which are computed per-binding which can help with symbolic
+optimizations include:
+* Type is declared (`x::T` syntax in a statement): type conversions must be
+  inserted at every assignment of `x`.
+* Never undefined: value is always assigned to the binding before being read
+  hence this binding doesn't require the use of `Core.NewvarNode`.
+* Single assignment: (TODO how is this defined, what is it for and does it go
+  here or below?)
+
+Properties of non-globals which are computed per-binding-per-closure include:
+* Read: the value of the binding is used.
+* Write: the binding is asssigned to. Such bindings often need to become
+  `Core.Box` so their value can be shared between the defining scope and the
+  closure body.
+* Captured: Bindings defined outside the closure which are either Read or Write
+  within the closure are "captured" and need to be one of the closure's fields.
+* Called: the binding is called as a function, ie, `x()`. (TODO - what is this
+  for?)
+
+The second step uses this metadata to
+* Convert closures into `struct` types
+* Lower bindings captured by closures into references to boxes as necessary
+* Deal with typed bindings (`K"decl"`) and their assignments
+* Lower const and non-const global assignments
+* TODO: probably more here.
+
+## Pass 5: Convert to untyped IR
+
+This pass is implemented in `linear_ir.jl`.
+
+### Untyped IR (JuliaLowering form)
+
+JuliaLowering's untyped IR is very close to the runtime's `CodeInfo` form (see
+below), but is more concretely typed as `JuliaLowering.SyntaxTree`.
+
+Metadata is generally represented differently:
+* The statements retain full code provenance information as `SyntaxTree`
+  objects. See `kinds.jl` for a list of which `Kind`s occur in the output IR
+  but not in surface syntax.
+* The list of slots is `Vector{Slot}`, including `@nospecialize` metadata
+
+### Lowering of exception handlers
 
 Exception handling involves a careful interplay between lowering and the Julia
 runtime. The forms `enter`, `leave` and `pop_exception` dynamically modify the
@@ -300,7 +403,7 @@ exception-related state restoration which need to happen. Note also that the
 "handler state restoration" actually includes several pieces of runtime state
 including GC flags - see `jl_eh_restore_state` in the runtime for that.
 
-### Lowering finally code paths
+#### Lowering finally code paths
 
 When lowering `finally` blocks we want to emit the user's finally code once but
 multiple code paths may traverse the finally block. For example, consider the
@@ -344,130 +447,33 @@ multiple `return`s create multiple tags rather than assigning to a single
 variable. Collapsing these into a single case might be worth considering? But
 also might be worse for type inference in some cases?)
 
-## Untyped IR
+## Pass 6: Convert IR to `CodeInfo` representation
 
-Julia's untyped IR as held in the `CodeInfo` data structure is an array of
-statements of type `Expr` with a small number of allowed forms. The IR obeys
-certain invariants which are checked by the downstream code in
+This pass convert's JuliaLowering's internal representation of untyped IR into
+a form the Julia runtime understands. This is a necessary decoupling which
+separates the development of JuliaLowering.jl from the evolution of the Julia
+runtime itself.
+
+### Untyped IR (`CodeInfo` form)
+
+The final lowered IR is expressed as `CodeInfo` objects which are a sequence of
+`code` statments containing
+* Literals
+* Restricted forms of `Expr` (with semantics different from surface syntax,
+  even for the same `head`! for example the arguments to `Expr(:call)` in IR
+  must be "simple" and aren't evaluated in order)
+* `Core.SlotNumber` 
+* Other special forms from `Core` like `Core.ReturnNode`, `Core.EnterNode`, etc.
+* `Core.SSAValue`, indexing any value generated from a statement in the `code`
+  array.
+* Etc (todo)
+
+The IR obeys certain invariants which are checked by the downstream code in
 base/compiler/validation.jl.
 
-## Scope resolution
+See also https://docs.julialang.org/en/v1/devdocs/ast/#Lowered-form
 
-Scopes are documented in the Juila documentation on
-[Scope of Variables](https://docs.julialang.org/en/v1/manual/variables-and-scoping/)
-
-The scope resolution pass disambiguates variables which have the same name in
-different scopes and fills in the list of local variables within each lambda.
-
-During scope resolution, we maintain a stack of `ScopeInfo` data structures.
-
-When a new `lambda` or `scope_block` is discovered, we create a new `ScopeInfo` by
-1. Find all identifiers bound or used within a scope. New *bindings* may be
-   introduced by one of the `local`, `global` keywords, implicitly by
-   assignment, as function arguments to a `lambda`, or as type arguments in a
-   method ("static parameters"). Identifiers are *used* when they are
-   referenced.
-2. Infer which bindings are newly introduced local or global variables (and
-   thus require a distinct identity from names already in the stack)
-3. Assign a `BindingId` (unique integer) to each new binding
-
-We then push this `ScopeInfo` onto the stack and traverse the expressions
-within the scope translating each `K"Identifier"` into the associated
-`K"BindingId"`. While we're doing this we also resolve some special forms like
-`islocal` by making use of the scope stack.
-
-The detailed rules for whether assignment introduces a new variable depend on
-the `scope_block`'s `scope_type` attribute when we are processing top-level
-code.
-* `scope_type == :hard` (as for bindings inside a `let` block) means an
-  assignment always introduces a new binding
-* `scope_type == :neutral` - inherit soft or hard scope from the parent scope.
-* `scope_type == :soft` - assignments are to globals if the variable
-  exists in global module scope. Soft scope doesn't have surface syntax and is
-  introduced for top-level code by REPL-like environments.
-
-## Julia's existing lowering implementation
-
-### How does macro expansion work?
-
-`macroexpand(m::Module, x)` calls `jl_macroexpand` in ast.c:
-
-```
-jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
-{
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_world_counter, 0);
-    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
-    return expr;
-}
-```
-
-First we copy the AST here. This is mostly a trivial deep copy of `Expr`s and
-shallow copy of their non-`Expr` children, except for when they contain
-embedded `CodeInfo/phi/phic` nodes which are also deep copied.
-
-Second we expand macros recursively by calling 
-
-`jl_expand_macros(expr, inmodule, macroctx, onelevel, world, throw_load_error)`
-
-This relies on state indexed by `inmodule` and `world`, which gives it some
-funny properties:
-* `module` expressions can't be expanded: macro expansion depends on macro
-  lookup within the module, but we can't do that without `eval`.
-
-Expansion proceeds from the outermost to innermost macros. So macros see any
-macro calls or quasiquote (`quote/$`) in their children as unexpanded forms.
-
-Things which are expanded:
-* `quote` is expanded using flisp code in `julia-bq-macro`
-  - symbol / ssavalue -> `QuoteNode` (inert)
-  - atom -> itself
-  - at depth zero, `$` expands to its content
-  - Expressions `x` without `$` expand to `(copyast (inert x))`
-  - Other expressions containing a `$` expand to a call to `_expr` with all the
-    args mapped through `julia-bq-expand-`. Roughly!
-  - Special handling exists for multi-splatting arguments as in `quote quote $$(x...) end end`
-* `macrocall` proceeds with
-  - Expand with `jl_invoke_julia_macro`
-    - Call `eval` on the macro name (!!) to get the macro function. Look up
-      the method.
-    - Set up arguments for the macro calling convention 
-    - Wraps errors in macro invocation in `LoadError`
-    - Returns the expression, as well as the module at
-      which that method of that macro was defined and `LineNumberNode` where
-      the macro was invoked in the source.
-  - Deep copy the AST
-  - Recursively expand child macros in the context of the module where the
-    macrocall method was defined
-  - Wrap the result in `(hygienic-scope ,result ,newctx.m ,lineinfo)` (except
-    for special case optimizations)
-* `hygenic-scope` expands `args[1]` with `jl_expand_macros`, with the module
-  of expansion set to `args[2]`.  Ie, it's the `Expr` representation of the
-  module and expression arguments to `macroexpand`. The way this returns
-  either `hygenic-scope` or unwraps is a bit confusing.
-* "`do` macrocalls" have their own special handling because the macrocall is
-  the child of the `do`. This seems like a mess!!
-
-
-### Intermediate forms used in lowering
-
-* `local-def` - flisp code explains this as
-  - "a local that we know has an assignment that dominates all usages"
-  - "local declaration of a defined variable"
-
-There's also this comment in https://github.com/JuliaLang/julia/issues/22314:
-
-> mark the [...] variable as local-def, which would prevent it from getting Core.Boxed during the closure conversion it'll be detected as known-SSA
-
-But maybe that's confusing. It seems like `local-def` is a local which lowering
-asserts is "always defined" / "definitely initialized before use". But it's not
-necessarily single-assign, so not SSA.
-
-### Lowered IR
-
-See https://docs.julialang.org/en/v1/devdocs/ast/#Lowered-form
-
-#### CodeInfo
+CodeInfo layout (as of early 1.12-DEV):
 
 ```julia
 mutable struct CodeInfo
@@ -502,7 +508,7 @@ mutable struct CodeInfo
 end
 ```
 
-### Notes on toplevel-only forms and eval-related functions
+## Notes on toplevel-only forms and eval-related functions
 
 In the current Julia runtime,
 
