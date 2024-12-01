@@ -2301,16 +2301,6 @@ typedef struct _jl_task_t {
 
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
-    // threadpool id
-    int8_t threadpoolid;
-    // Reentrancy bits
-    // Bit 0: 1 if we are currently running inference/codegen
-    // Bit 1-2: 0-3 counter of how many times we've reentered inference
-    // Bit 3: 1 if we are writing the image and inference is illegal
-    uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
@@ -2325,6 +2315,13 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved thread state
     jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+    // threadpool id
+    int8_t threadpoolid;
+    // Reentrancy bits
+    // Bit 0: 1 if we are currently running inference/codegen
+    // Bit 1-2: 0-3 counter of how many times we've reentered inference
+    // Bit 3: 1 if we are writing the image and inference is illegal
+    uint8_t reentrant_timing;
 } jl_task_t;
 
 #define JL_TASK_STATE_RUNNABLE 0
