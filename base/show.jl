@@ -2824,7 +2824,7 @@ end
 Compiler.include(Compiler.IRShow, "ssair/show.jl") # define `show` for the compiler types
 const IRShow = Compiler.IRShow # an alias for compatibility
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:none)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
