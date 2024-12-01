@@ -14,7 +14,7 @@ public
     AsyncCondition,
     CodeUnits,
     Event,
-    Fix,
+    fix,
     Fix1,
     Fix2,
     Generator,
