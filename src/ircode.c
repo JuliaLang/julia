@@ -21,7 +21,7 @@ extern "C" {
 #define TAG_DATATYPE            4
 #define TAG_SLOTNUMBER          5
 #define TAG_SVEC                6
-// #define TAG_UNUSED           7
+#define TAG_NEARBYSSAVALUE      7
 #define TAG_NULL                8
 #define TAG_EXPR                9
 #define TAG_PHINODE            10
@@ -82,6 +82,7 @@ extern "C" {
 
 typedef struct {
     ios_t *s;
+    size_t ssaid;
     // method we're compressing for
     jl_method_t *method;
     jl_svec_t *edges;
@@ -306,6 +307,10 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
             jl_encode_value(s, jl_globalref_mod(v));
             jl_encode_value(s, jl_globalref_name(v));
         }
+    }
+    else if (jl_is_ssavalue(v) && s->ssaid - ((jl_ssavalue_t*)v)->id < 256) {
+        write_uint8(s->s, TAG_NEARBYSSAVALUE);
+        write_uint8(s->s, s->ssaid - ((jl_ssavalue_t*)v)->id);
     }
     else if (jl_is_ssavalue(v) && ((jl_ssavalue_t*)v)->id < 256 && ((jl_ssavalue_t*)v)->id >= 0) {
         write_uint8(s->s, TAG_SSAVALUE);
@@ -807,6 +812,9 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
     case TAG_SSAVALUE:
         v = jl_box_ssavalue(read_uint8(s->s));
         return v;
+    case TAG_NEARBYSSAVALUE:
+        v = jl_box_ssavalue(s->ssaid - read_uint8(s->s));
+        return v;
     case TAG_LONG_SSAVALUE:
         v = jl_box_ssavalue(read_uint16(s->s));
         return v;
@@ -1014,6 +1022,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_value_t *edges = code->edges;
     jl_ircode_state s = {
         &dest,
+        0,
         m,
         (!isdef && jl_is_svec(edges)) ? (jl_svec_t*)edges : jl_emptysvec,
         jl_current_task->ptls,
@@ -1043,7 +1052,13 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         write_int32(s.s, (int32_t)nargs);
     }
 
-    jl_encode_value_(&s, (jl_value_t*)code->code, 1);
+    size_t i, l = jl_array_dim0(code->code);
+    write_uint64(s.s, l);
+    for (i = 0; i < l; i++) {
+        s.ssaid = i;
+        jl_encode_value(&s, jl_array_ptr_ref(code->code, i));
+    }
+    s.ssaid = 0;
     jl_encode_value_(&s, (jl_value_t*)code->ssavaluetypes, 1);
     jl_encode_value_(&s, (jl_value_t*)code->ssaflags, 1);
 
@@ -1092,6 +1107,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     src.size = jl_string_len(data);
     jl_ircode_state s = {
         &src,
+        0,
         m,
         metadata == NULL ? NULL : jl_atomic_load_relaxed(&metadata->edges),
         jl_current_task->ptls,
@@ -1123,8 +1139,14 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         code->nargs = read_int32(s.s);
     }
 
-    code->code = (jl_array_t*)jl_decode_value(&s);
+    size_t i, n = read_uint64(s.s);
+    code->code = jl_alloc_array_1d(jl_array_any_type, n);
     jl_gc_wb(code, code->code);
+    for (i = 0; i < n; i++) {
+        s.ssaid = i;
+        jl_array_ptr_set(code->code, i, jl_decode_value(&s));
+    }
+    s.ssaid = 0;
     code->ssavaluetypes = jl_decode_value(&s);
     jl_gc_wb(code, code->ssavaluetypes);
     code->ssaflags = (jl_array_t*)jl_decode_value(&s);
