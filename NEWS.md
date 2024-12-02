@@ -55,11 +55,11 @@ Command-line option changes
 ---------------------------
 
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
-  This `main` function should be declared using `@main` to indicate that it is an entry point.
+  This `main` function should be declared using `@main` to indicate that it is an entry point. ([#52103])
 * Enabling or disabling color text in Julia can now be controlled with the
   [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
   variables. These variables are also honored by Julia's build system ([#53742], [#56346]).
-* `--project=@temp` starts Julia with a temporary environment.
+* `--project=@temp` starts Julia with a temporary environment. ([#51149])
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
 * `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
@@ -72,7 +72,7 @@ Multi-threading changes
   a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
   the first time it is called, and then always return the same result value of type `T`
   every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
-  similar usage with threads or tasks. ([#TBD])
+  similar usage with threads or tasks. ([#55793])
 
 Build system changes
 --------------------
@@ -86,32 +86,15 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
-* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------
 
-* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
-* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
-* `replace(string, pattern...)` now supports an optional `IO` argument to
-  write the output to a stream rather than returning a string ([#48625]).
-* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
-* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
-* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
-  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
-  no longer required there for correctness to avoid data races ([#52461]).
-* After a process exits, `closewrite` will no longer be automatically called on
-  the stream passed to it. Call `wait` on the process instead to ensure the
-  content is fully written, then call `closewrite` manually to avoid
-  data-races. Or use the callback form of `open` to have all that handled
-  automatically.
-* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `escape_string` takes additional keyword arguments `ascii=true` (to escape all
   non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
-  for u/U escapes, e.g. for C compatibility) [#55099]).
-* `filter` can now act on a `NamedTuple` ([#50795]).
+  for u/U escapes, e.g. for C compatibility) ([#55099]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
@@ -133,7 +116,7 @@ Standard library changes
 
 * A new standard library for applying syntax highlighting to Julia code, this
   uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
+  that creates an `AnnotatedString` with syntax highlighting applied. ([#51810])
 
 #### Package Manager
 
