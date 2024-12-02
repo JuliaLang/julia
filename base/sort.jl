@@ -1759,15 +1759,22 @@ julia> v
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
-function sort(x::NTuple;
+function sort(x::Tuple{};
               alg::Algorithm=defalg(x),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
               scratch::Union{Vector, Nothing}=nothing)
-    # Can't do this check with type parameters because of https://github.com/JuliaLang/julia/issues/56698
-    scratch === nothing || eltype(x) == eltype(scratch) || throw(ArgumentError("scratch has the wrong eltype"))
+    x
+end
+function sort(x::Tuple{T, Vararg{T}};
+              alg::Algorithm=defalg(x),
+              lt=isless,
+              by=identity,
+              rev::Union{Bool,Nothing}=nothing,
+              order::Ordering=Forward,
+              scratch::Union{Vector{T}, Nothing}=nothing) where {T}
     _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
 end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
