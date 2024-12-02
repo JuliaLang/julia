@@ -57,7 +57,7 @@ like [`string`](@ref) but preserves any annotations present in the arguments.
 
 ```julia-repl
 julia> AnnotatedString("this is an example annotated string",
-                    [(1:18, :A => 1), (12:28, :B => 2), (18:35, :C => 3)])
+                    [(1:18, :A, 1), (12:28, :B, 2), (18:35, :C, 3)])
 "this is an example annotated string"
 ```
 """
@@ -88,7 +88,7 @@ AnnotatedChar(s::S, annotations::Vector{$Annotation})
 # Examples
 
 ```julia-repl
-julia> AnnotatedChar('j', :label => 1)
+julia> AnnotatedChar('j', (:label, 1))
 'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
 """
@@ -236,7 +236,7 @@ See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
 julia> annotatedstring("now a AnnotatedString")
 "now a AnnotatedString"
 
-julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label => 1)]), ", and unannotated")
+julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and unannotated")
 "annotated, and unannotated"
 ```
 """
@@ -344,7 +344,7 @@ end
     annotate!(str::AnnotatedString, [range::UnitRange{Int}], label::Symbol, value)
     annotate!(str::SubString{AnnotatedString}, [range::UnitRange{Int}], label::Symbol, value)
 
-Annotate a `range` of `str` (or the entire string) with a labeled value (`label` => `value`).
+Annotate a `range` of `str` (or the entire string) with a labeled value `(label, value)`.
 To remove existing `label` annotations, use a value of `nothing`.
 
 The order in which annotations are applied to `str` is semantically meaningful,
@@ -365,7 +365,7 @@ annotate!(s::SubString{<:AnnotatedString}, label::Symbol, @nospecialize(val::Any
 """
     annotate!(char::AnnotatedChar, label::Symbol, value::Any)
 
-Annotate `char` with the pair `label => value`.
+Annotate `char` with the labeled value `(label, value)`.
 """
 annotate!(c::AnnotatedChar, label::Symbol, @nospecialize(val::Any)) =
     (push!(c.annotations, Annotation((; label, val))); c)
