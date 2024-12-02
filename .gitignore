@@ -48,3 +48,6 @@ repo_key
 
 # Buildkite: Ignore any agent keys (public or private) we have stored
 agent_key*
+
+# Per-directory settings used by the file explorer Dolphin
+.directory
