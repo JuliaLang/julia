@@ -198,9 +198,11 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
-                    msg::Union{String,Nothing}=nothing)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, sched_time_avg=0,
+                    newline=false; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    wall_time_sched_perc = sched_time_avg / (elapsedtime / 1e9)
+    sched_thresh = 0.1
     str = sprint() do io
         if msg isa String
             print(io, msg, ": ")
@@ -208,7 +210,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -225,15 +227,21 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        if lock_conflicts > 0
+        if wall_time_sched_perc > sched_thresh
             if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*wall_time_sched_perc), 2), "% scheduling time")
+        end
+        if lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh
                 print(io, ", ")
             end
             plural = lock_conflicts == 1 ? "" : "s"
             print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -287,7 +295,9 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc), compiling
 new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+where a [`ReentrantLock`](@ref) had to wait are shown as a count. If the time spent on
+scheduling tasks (not including sleeping/waiting) is more than 10% of the total time it
+is also shown as a percentage.
 
 Optionally provide a description string to print before the time report.
 
@@ -310,6 +320,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 
 !!! compat "Julia 1.11"
     The reporting of any lock conflicts was added in Julia 1.11.
+
+!!! compat "Julia 1.12"
+    The reporting of excessive scheduling time was added in Julia 1.12.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -348,7 +361,7 @@ macro time(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, ret.sched_time_avg, true; msg=_msg_str)
         ret.value
     end
 end
@@ -557,8 +570,9 @@ end
 
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
-counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
-where a [`ReentrantLock`](@ref) had to wait are shown as a count.
+counters, compilation time in seconds, with recompilation time in seconds, any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait as a count, and the average time spent on
+scheduling tasks (not including sleeping/waiting) across threads.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
@@ -598,34 +612,51 @@ julia> stats.recompile_time
 
 !!! compat "Julia 1.11"
     The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
+
+!!! compat "Julia 1.12"
+    The `sched_time_avg` field was added in Julia 1.11.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
-        Threads.lock_profiling(true)
-        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
-            lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
-            Threads.lock_profiling(false))
-        )
-        local diff = GC_Diff(gc_num(), stats)
-        (
-            value=val,
-            time=elapsedtime/1e9,
-            bytes=diff.allocd,
-            gctime=diff.total_time/1e9,
-            gcstats=diff,
-            lock_conflicts=lock_conflicts,
-            compile_time=compile_elapsedtimes[1]/1e9,
-            recompile_time=compile_elapsedtimes[2]/1e9
-        )
+        ScopedValues.@with task_times_per_thread => zeros(UInt, Threads.maxthreadid())  sleep_times_per_thread => zeros(UInt, Threads.maxthreadid()) begin
+            Experimental.@force_compile
+            Threads.lock_profiling(true)
+            local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
+            local stats = gc_num()
+            local elapsedtime = time_ns()
+            cumulative_compile_timing(true)
+            local compile_elapsedtimes = cumulative_compile_time_ns()
+            local val = @__tryfinally($(esc(ex)),
+                (elapsedtime = time_ns() - elapsedtime;
+                cumulative_compile_timing(false);
+                compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+                lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
+                Threads.lock_profiling(false))
+            )
+            local diff = GC_Diff(gc_num(), stats)
+            local sched_times = Int64[]
+            for i in 1:length(task_times_per_thread[])
+                # filter out zeros in task timers which can only happen if nothing was scheduled
+                if task_times_per_thread[][i] != 0
+                    # subtract task and sleep times from global elapsed time to get scheduling time per thread
+                    push!(sched_times, Int64(elapsedtime) - Int64(task_times_per_thread[][i]) - Int64(sleep_times_per_thread[][i]))
+                end
+            end
+            local sched_time_avg = isempty(sched_times) ? 0 : sum(sched_times) / length(sched_times)
+
+            (
+                value=val,
+                time=elapsedtime/1e9,
+                bytes=diff.allocd,
+                gctime=diff.total_time/1e9,
+                gcstats=diff,
+                lock_conflicts=lock_conflicts,
+                compile_time=compile_elapsedtimes[1]/1e9,
+                recompile_time=compile_elapsedtimes[2]/1e9,
+                sched_time_avg=sched_time_avg/1e9
+            )
+        end
     end
 end
 

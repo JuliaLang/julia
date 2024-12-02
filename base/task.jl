@@ -1096,7 +1096,18 @@ end
 
 function try_yieldto(undo)
     try
+        # when timing time spent in the scheduler we time the time spent in the task
+        # then subtract the elapsed time in `@timed` from the total time to get the scheduler time
+        t, ts = isassigned(task_times_per_thread) ? (time_ns(), task_times_per_thread[]) : (nothing, nothing)
         ccall(:jl_switch, Cvoid, ())
+        if ts !== nothing
+            t = time_ns() - t
+            tid = Threads.threadid()
+            if tid <= length(ts)
+                ts[tid] += t
+            end
+            # TODO: grow the array if needed i.e. if a thread is added within the `@timed` block
+        end
     catch
         undo(ccall(:jl_get_next_task, Ref{Task}, ()))
         rethrow()
@@ -1168,8 +1179,19 @@ end
 
 function wait()
     GC.safepoint()
-    W = workqueue_for(Threads.threadid())
+    tid = Threads.threadid()
+    W = workqueue_for(tid)
+    # optional sleep timing
+    t, ts = isassigned(sleep_times_per_thread) ? (time_ns(), sleep_times_per_thread[]) : (nothing, nothing)
     poptask(W)
+    if ts !== nothing # sleep timing is enabled
+        t = time_ns() - t
+        if tid <= length(ts)
+            ts[tid] += t
+        end
+        # TODO: grow the array if needed i.e. if a thread is added within the `@timed` block
+    end
+
     result = try_yieldto(ensure_rescheduled)
     process_events()
     # return when we come out of the queue
