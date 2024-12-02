@@ -155,6 +155,9 @@ end
     return false
 end
 
+# Used to decide whether to warn about slow lock contention
+slow_lock_warn::Int = -1 # seconds
+
 """
     lock(lock)
 
@@ -175,7 +178,16 @@ Each `lock` must be matched by an [`unlock`](@ref).
                     # it was unlocked, so try to lock it ourself
                     _trylock(rl, current_task()) && break
                 else # it was locked, so now wait for the release to notify us
+                    t = nothing
+                    if slow_lock_warn >= 0
+                        bt = backtrace()
+                        t = Timer(slow_lock_warn) do t
+                            @eval @warn("Taking longer than $(slow_lock_warn)s to get a lock",
+                                exception=(ErrorException("Lock contention warning"), $bt))
+                        end
+                    end
                     wait(c)
+                    t === nothing || close(t)
                 end
             end
         finally
