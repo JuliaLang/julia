@@ -272,4 +272,17 @@ function logging_enabled()
     ccall(:jl_is_gc_logging_enabled, Cint, ()) != 0
 end
 
+"""
+    GC.generational_mode(on::Bool)
+
+Enable or disable generational collections and object age promotion
+"""
+function generational_mode(on::Bool=true)
+    if on == false
+        gc() #Make sure all live object are old
+        gc()
+    end
+    ccall(:jl_gc_generational, Cvoid, (Cint,), on)
+end
+
 end # module GC

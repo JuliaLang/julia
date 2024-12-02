@@ -50,6 +50,7 @@ JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 // of objects.
 static _Atomic(int) support_conservative_marking = 0;
 
+static _Atomic(int) generational_mode = 1;
 /**
  * Note about GC synchronization:
  *
@@ -492,13 +493,19 @@ static bigval_t *sweep_list_of_young_bigvals(bigval_t *young) JL_NOTSAFEPOINT
     bigval_t *v = young->next; // skip the sentinel
     bigval_t *old = oldest_generation_of_bigvals;
     int sweep_full = current_sweep_full; // don't load the global in the hot loop
+    int should_promote = generational_mode;
     while (v != NULL) {
         bigval_t *nxt = v->next;
         int bits = v->bits.gc;
         int old_bits = bits;
         if (gc_marked(bits)) {
-            if (sweep_full || bits == GC_MARKED) {
-                bits = GC_OLD;
+            if ((sweep_full || bits == GC_MARKED)) {
+                if (should_promote) {
+                    bits = GC_OLD;
+                }
+                else {
+                    bits = GC_CLEAN;
+                }
                 last_node = v;
             }
             else { // `bits == GC_OLD_MARKED`
@@ -899,6 +906,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
         jl_taggedvalue_t **pfl_begin = NULL;
         // collect page profile
         jl_taggedvalue_t *v = v0;
+        int should_promote = generational_mode;
         if (page_profile_enabled) {
             while ((char*)v <= lim) {
                 int bits = v->bits.gc;
@@ -924,7 +932,16 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
             }
             else { // marked young or old
                 if (current_sweep_full || bits == GC_MARKED) { // old enough
-                    bits = v->bits.gc = GC_OLD; // promote
+                    if (should_promote) {
+                       bits = v->bits.gc = GC_OLD;
+                    }
+                    else {
+                        bits = v->bits.gc = (bits & ~GC_MARKED);
+                        has_young = 1;
+                    }
+                }
+                if (bits == GC_OLD) {
+                    prev_nold++;
                 }
                 prev_nold++;
                 has_marked |= gc_marked(bits);
@@ -3074,6 +3091,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         recollect = 1;
         gc_count_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
+    if (!generational_mode)
+        sweep_full = 0;
     if (sweep_full) {
         // these are the difference between the number of gc-perm bytes scanned
         // on the first collection after sweep_full, and the current scan
@@ -3906,6 +3925,10 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
         jl_atomic_store(&support_conservative_marking, 1);
         return result;
     }
+}
+
+JL_DLLEXPORT void jl_gc_generational(int on) {
+    jl_atomic_store(&generational_mode, on);
 }
 
 JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
