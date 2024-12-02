@@ -1389,7 +1389,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
         if isdefined(M, Base.Docs.META) && getfield(M, Base.Docs.META) !== nothing
             push!(Base.Docs.modules, M)
         end
-        if parentmodule(M) === M
+        if is_root_module(M)
             push!(loaded_modules_order, M)
             push!(get!(Vector{Module}, loaded_precompiles, pkg), M)
         end
@@ -1433,6 +1433,7 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    @assert modkey != precompilation_target
     run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
@@ -1562,7 +1563,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             push!(trigger_ids, trigger_id)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id) || (trigger_id == precompilation_target)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1575,6 +1576,7 @@ end
 loading_extension::Bool = false
 loadable_extensions::Union{Nothing,Vector{PkgId}} = nothing
 precompiling_extension::Bool = false
+precompilation_target::Union{Nothing,PkgId} = nothing
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -1585,9 +1587,14 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
-        errs = current_exceptions()
-        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
+        if JLOptions().incremental != 0
+            # during incremental precompilation, this should be fail-fast
+            rethrow()
+        else
+            errs = current_exceptions()
+            @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
+        end
         false
     finally
         global loading_extension = false
@@ -3081,6 +3088,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
+        Base.precompilation_target = $(_pkg_str(pkg))
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
         """)
@@ -3369,18 +3377,23 @@ function resolve_depot(inc::AbstractString)
     return :no_depot_found
 end
 
-
-function _parse_cache_header(f::IO, cachefile::AbstractString)
-    flags = read(f, UInt8)
-    modules = Vector{Pair{PkgId, UInt64}}()
+function read_module_list(f::IO, has_buildid_hi::Bool)
+    modules = Vector{Pair{PkgId, UInt128}}()
     while true
         n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
+        build_id_hi = UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
+        build_id = (build_id_hi | read(f, UInt64)) # build id (checksum + time - not a UUID)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
+    return modules
+end
+
+function _parse_cache_header(f::IO, cachefile::AbstractString)
+    flags = read(f, UInt8)
+    modules = read_module_list(f, false)
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
@@ -3439,16 +3452,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
-    required_modules = Vector{Pair{PkgId, UInt128}}()
-    while true
-        n = read(f, Int32)
-        n == 0 && break
-        sym = String(read(f, n)) # module name
-        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = UInt128(read(f, UInt64)) << 64
-        build_id |= read(f, UInt64)
-        push!(required_modules, PkgId(uuid, sym) => build_id)
-    end
+    required_modules = read_module_list(f, true)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
@@ -3843,9 +3847,9 @@ const compilecache_pidlock_stale_age = 10
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
-        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
+        cachefile = @invokelatest trymkpidlock_hook(f, pidfile; stale_age)
         if cachefile === false
-            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
+            pid, hostname, age = @invokelatest parse_pidfile_hook(pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
                 @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
@@ -3854,7 +3858,7 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
-            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
+            return @invokelatest mkpidlock_hook(Returns(nothing), pidfile; stale_age)
         end
         return cachefile
     else
@@ -3991,10 +3995,11 @@ end
             record_reason(reasons, "for different pkgid")
             return true
         end
-        id_build = (UInt128(checksum) << 64) | id.second
+        id_build = id.second
+        id_build = (UInt128(checksum) << 64) | (id_build % UInt64)
         if build_id != UInt128(0)
             if id_build != build_id
-                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it does not provide desired build_id ($((UUID(build_id))))"
+                @debug "Ignoring cache file $cachefile for $modkey ($(UUID(id_build))) since it does not provide desired build_id ($((UUID(build_id))))"
                 record_reason(reasons, "for different buildid")
                 return true
             end
@@ -4169,6 +4174,11 @@ function prepare_compiler_stub_image!()
     filter!(mod->mod !== Compiler, loaded_modules_order)
 end
 
+function expand_compiler_path(tup)
+    (tup[1], joinpath(Sys.BINDIR, DATAROOTDIR, tup[2]), tup[3:end]...)
+end
+compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
+
 """
     precompile(f, argtypes::Tuple{Vararg{Any}})
 
@@ -4189,7 +4199,7 @@ end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
 precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
-    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+    (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)

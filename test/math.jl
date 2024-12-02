@@ -23,44 +23,46 @@ has_fma = Dict(
 )
 
 @testset "clamp" begin
-    @test clamp(0, 1, 3) == 1
-    @test clamp(1, 1, 3) == 1
-    @test clamp(2, 1, 3) == 2
-    @test clamp(3, 1, 3) == 3
-    @test clamp(4, 1, 3) == 3
+    let
+        @test clamp(0, 1, 3) == 1
+        @test clamp(1, 1, 3) == 1
+        @test clamp(2, 1, 3) == 2
+        @test clamp(3, 1, 3) == 3
+        @test clamp(4, 1, 3) == 3
 
-    @test clamp(0.0, 1, 3) == 1.0
-    @test clamp(1.0, 1, 3) == 1.0
-    @test clamp(2.0, 1, 3) == 2.0
-    @test clamp(3.0, 1, 3) == 3.0
-    @test clamp(4.0, 1, 3) == 3.0
+        @test clamp(0.0, 1, 3) == 1.0
+        @test clamp(1.0, 1, 3) == 1.0
+        @test clamp(2.0, 1, 3) == 2.0
+        @test clamp(3.0, 1, 3) == 3.0
+        @test clamp(4.0, 1, 3) == 3.0
 
-    @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
-    @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+        @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+        @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
 
-    @test clamp(-200, Int8) === typemin(Int8)
-    @test clamp(100, Int8) === Int8(100)
-    @test clamp(200, Int8) === typemax(Int8)
+        @test clamp(-200, Int8) === typemin(Int8)
+        @test clamp(100, Int8) === Int8(100)
+        @test clamp(200, Int8) === typemax(Int8)
 
-    begin
-        x = [0.0, 1.0, 2.0, 3.0, 4.0]
-        clamp!(x, 1, 3)
-        @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+        begin
+            x = [0.0, 1.0, 2.0, 3.0, 4.0]
+            clamp!(x, 1, 3)
+            @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+        end
+
+        @test clamp(typemax(UInt64), Int64) === typemax(Int64)
+        @test clamp(typemin(Int), UInt64) === typemin(UInt64)
+        @test clamp(Int16(-1), UInt16) === UInt16(0)
+        @test clamp(-1, 2, UInt(0)) === UInt(2)
+        @test clamp(typemax(UInt16), Int16) === Int16(32767)
+
+        # clamp should not allocate a BigInt for typemax(Int16)
+        x = big(2) ^ 100
+        @test (@allocated clamp(x, Int16)) == 0
+
+        x = clamp(2.0, BigInt)
+        @test x isa BigInt
+        @test x == big(2)
     end
-
-    @test clamp(typemax(UInt64), Int64) === typemax(Int64)
-    @test clamp(typemin(Int), UInt64) === typemin(UInt64)
-    @test clamp(Int16(-1), UInt16) === UInt16(0)
-    @test clamp(-1, 2, UInt(0)) === UInt(2)
-    @test clamp(typemax(UInt16), Int16) === Int16(32767)
-
-    # clamp should not allocate a BigInt for typemax(Int16)
-    x = big(2) ^ 100
-    @test (@allocated clamp(x, Int16)) == 0
-
-    x = clamp(2.0, BigInt)
-    @test x isa BigInt
-    @test x == big(2)
 end
 
 @testset "constants" begin
@@ -1608,8 +1610,10 @@ function f44336()
     @inline hypot(as...)
 end
 @testset "Issue #44336" begin
-    f44336()
-    @test (@allocated f44336()) == 0
+    let
+        f44336()
+        @test (@allocated f44336()) == 0
+    end
 end
 
 @testset "constant-foldability of core math functions" begin

@@ -39,29 +39,35 @@ isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 
 copy(e::Expr) = exprarray(e.head, copy_exprargs(e.args))
+function copy(x::PhiNode)
+    values = x.values
+    nvalues = length(values)
+    new_values = Vector{Any}(undef, nvalues)
+    @inbounds for i = 1:nvalues
+        isassigned(values, i) || continue
+        new_values[i] = copy_exprs(values[i])
+    end
+    return PhiNode(copy(x.edges), new_values)
+end
+function copy(x::PhiCNode)
+    values = x.values
+    nvalues = length(values)
+    new_values = Vector{Any}(undef, nvalues)
+    @inbounds for i = 1:nvalues
+        isassigned(values, i) || continue
+        new_values[i] = copy_exprs(values[i])
+    end
+    return PhiCNode(new_values)
+end
 
 # copy parts of an AST that the compiler mutates
 function copy_exprs(@nospecialize(x))
     if isa(x, Expr)
         return copy(x)
     elseif isa(x, PhiNode)
-        values = x.values
-        nvalues = length(values)
-        new_values = Vector{Any}(undef, nvalues)
-        @inbounds for i = 1:nvalues
-            isassigned(values, i) || continue
-            new_values[i] = copy_exprs(values[i])
-        end
-        return PhiNode(copy(x.edges), new_values)
+        return copy(x)
     elseif isa(x, PhiCNode)
-        values = x.values
-        nvalues = length(values)
-        new_values = Vector{Any}(undef, nvalues)
-        @inbounds for i = 1:nvalues
-            isassigned(values, i) || continue
-            new_values[i] = copy_exprs(values[i])
-        end
-        return PhiCNode(new_values)
+        return copy(x)
     end
     return x
 end

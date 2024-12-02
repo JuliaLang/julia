@@ -819,9 +819,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
@@ -861,15 +861,18 @@ end
             end
         end
 
-        test_alg_rec(Base.DEFAULT_STABLE)
+        test_alg_rec(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS)
     end
 end
 
 @testset "show(::Algorithm)" begin
-    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
-    lines = split(string(Base.DEFAULT_STABLE), '\n')
+    @test eval(Meta.parse(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS))) === Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS
+    lines = split(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS), '\n')
     @test 10 < maximum(length, lines) < 100
     @test 1 < length(lines) < 30
+
+    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
+    @test string(Base.DEFAULT_STABLE) == "Base.Sort.DefaultStable()"
 end
 
 @testset "Extensibility" begin
@@ -968,9 +971,10 @@ end
 end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
-    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 10 > @allocations sort(v)
-    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    let v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+        @test 10 > @allocations sort(v)
+        @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    end
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end

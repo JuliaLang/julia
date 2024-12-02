@@ -209,6 +209,11 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+struct StatementState
+    vtypes::Union{VarTable,Nothing}
+    saw_latestworld::Bool
+end
+
 const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
 const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
@@ -260,6 +265,7 @@ mutable struct InferenceState
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
+    bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
     edges::Vector{Any}
     stmt_info::Vector{CallInfo}
@@ -320,6 +326,7 @@ mutable struct InferenceState
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
+        bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
@@ -367,7 +374,7 @@ mutable struct InferenceState
 
         this = new(
             mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -1032,17 +1039,15 @@ decode_statement_effects_override(sv::AbsIntState) =
     decode_statement_effects_override(get_curr_ssaflag(sv))
 
 struct InferenceLoopState
-    sig
     rt
     effects::Effects
-    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
-        new(sig, rt, effects)
+    function InferenceLoopState(@nospecialize(rt), effects::Effects)
+        new(rt, effects)
     end
 end
 
-bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::InferenceState) =
-    sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
-bail_out_toplevel_call(::AbstractInterpreter, ::InferenceLoopState, ::IRInterpretationState) = false
+bail_out_toplevel_call(::AbstractInterpreter, sv::InferenceState) = sv.restrict_abstract_call_sites
+bail_out_toplevel_call(::AbstractInterpreter, ::IRInterpretationState) = false
 
 bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
     state.rt === Any && !is_foldable(state.effects)

@@ -229,6 +229,7 @@ struct jl_codegen_params_t {
     // outputs
     jl_workqueue_t workqueue;
     std::map<void*, GlobalVariable*> global_targets;
+    jl_array_t *temporary_roots = nullptr;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
@@ -258,7 +259,6 @@ struct jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging_mode;
-    int debug_level;
     bool use_swiftcc = true;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
       : tsctx(std::move(ctx)),

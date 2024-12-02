@@ -2667,31 +2667,32 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C, D, E
-    A = [-10,0,3]
-    B = [-10.0,0.0,3.0]
-    C = [1,im,0]
+    let A, B, C, D, E # Suppress :latestworld to get good inference for the allocations test
+        A = [-10,0,3]
+        B = [-10.0,0.0,3.0]
+        C = [1,im,0]
 
-    @test sign.(A) == [-1,0,1]
-    @test sign.(B) == [-1,0,1]
-    @test typeof(sign.(A)) == Vector{Int}
-    @test typeof(sign.(B)) == Vector{Float64}
+        @test sign.(A) == [-1,0,1]
+        @test sign.(B) == [-1,0,1]
+        @test typeof(sign.(A)) == Vector{Int}
+        @test typeof(sign.(B)) == Vector{Float64}
 
-    @test conj(A) == A
-    @test conj!(copy(A)) == A
-    @test conj(B) == A
-    @test conj(C) == [1,-im,0]
-    @test typeof(conj(A)) == Vector{Int}
-    @test typeof(conj(B)) == Vector{Float64}
-    @test typeof(conj(C)) == Vector{Complex{Int}}
-    D = [C copy(C); copy(C) copy(C)]
-    @test conj(D) == conj!(copy(D))
-    E = [D, copy(D)]
-    @test conj(E) == conj!(copy(E))
-    @test (@allocations conj!(E)) == 0
+        @test conj(A) == A
+        @test conj!(copy(A)) == A
+        @test conj(B) == A
+        @test conj(C) == [1,-im,0]
+        @test typeof(conj(A)) == Vector{Int}
+        @test typeof(conj(B)) == Vector{Float64}
+        @test typeof(conj(C)) == Vector{Complex{Int}}
+        D = [C copy(C); copy(C) copy(C)]
+        @test conj(D) == conj!(copy(D))
+        E = [D, copy(D)]
+        @test conj(E) == conj!(copy(E))
+        @test (@allocations conj!(E)) == 0
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+        @test .~A == [9,-1,-4]
+        @test typeof(.~A) == Vector{Int}
+    end
 end
 
 # @inbounds is expression-like, returning its value; #15558

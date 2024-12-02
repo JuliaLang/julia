@@ -343,9 +343,9 @@ __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_fi
 
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
     if !isexpr(ast, :toplevel)
-        ast = __repl_entry_lower_with_loc(mod, ast, toplevel_file, toplevel_line)
+        ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
         check_for_missing_packages_and_run_hooks(ast)
-        return __repl_entry_eval_expanded_with_loc(mod, ast, toplevel_file, toplevel_line)
+        return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
     end
     local value=nothing
     for i = 1:length(ast.args)
