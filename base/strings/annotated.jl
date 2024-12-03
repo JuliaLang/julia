@@ -55,7 +55,7 @@ like [`string`](@ref) but preserves any annotations present in the arguments.
 
 # Examples
 
-```jldoctest; setup=:(using StyledStrings)
+```jldoctest; setup=:(using Base: AnnotatedString)
 julia> AnnotatedString("this is an example annotated string",
                     [(1:18, :A, 1), (12:28, :B, 2), (18:35, :C, 3)])
 "this is an example annotated string"
@@ -87,7 +87,7 @@ AnnotatedChar(s::S, annotations::Vector{$Annotation})
 
 # Examples
 
-```jldoctest; setup=:(using StyledStrings)
+```jldoctest; setup=:(using Base: AnnotatedChar)
 julia> AnnotatedChar('j', [(:label, 1)])
 'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
@@ -232,7 +232,7 @@ See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
 
 ## Examples
 
-```jldoctest; setup=:(using StyledStrings)
+```jldoctest; setup=:(using Base: annotatedstring)
 julia> annotatedstring("now a AnnotatedString")
 "now a AnnotatedString"
 
