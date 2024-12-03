@@ -549,7 +549,8 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
 
 static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
                                             uint8_t nospecializeinfer, uint8_t isva,
-                                            uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod)
+                                            uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod,
+                                            jl_array_t *ssaflags)
 {
     jl_code_info_flags_t flags;
     flags.bits.propagate_inbounds = propagate_inbounds;
@@ -559,6 +560,11 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
     flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
     flags.bits.nargsmatchesmethod = nargsmatchesmethod;
+    flags.bits.has_ssaflags = 0;
+    const uint32_t *ssaflag_data = jl_array_data(ssaflags, uint32_t);
+    for (size_t i = 0, l = jl_array_dim0(ssaflags); i < l; i++)
+        if (ssaflag_data[i])
+            flags.bits.has_ssaflags = 1;
     return flags;
 }
 
@@ -1033,7 +1039,8 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
                                                  code->nospecializeinfer, code->isva,
                                                  code->inlining, code->constprop,
-                                                 nargsmatchesmethod);
+                                                 nargsmatchesmethod,
+                                                 code->ssaflags);
     write_uint16(s.s, checked_size(flags.packed, IR_DATASIZE_FLAGS));
     write_uint16(s.s, checked_size(code->purity.bits, IR_DATASIZE_PURITY));
     write_uint16(s.s, checked_size(code->inlining_cost, IR_DATASIZE_INLINING_COST));
@@ -1060,7 +1067,11 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     }
     s.ssaid = 0;
     jl_encode_value_(&s, (jl_value_t*)code->ssavaluetypes, 1);
-    jl_encode_value_(&s, (jl_value_t*)code->ssaflags, 1);
+    assert(jl_typetagis(code->ssaflags, jl_array_uint32_type));
+    assert(jl_array_dim0(code->ssaflags) == l);
+    const uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
+    if (flags.bits.has_ssaflags)
+        ios_write(s.s, (const char*)ssaflags_data, l * sizeof(*ssaflags_data));
 
     // For opaque closure, also save the slottypes. We technically only need the first slot type,
     // but this is simpler for now. We may want to refactor where this gets stored in the future.
@@ -1139,18 +1150,23 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         code->nargs = read_int32(s.s);
     }
 
-    size_t i, n = read_uint64(s.s);
-    code->code = jl_alloc_array_1d(jl_array_any_type, n);
+    size_t i, l = read_uint64(s.s);
+    code->code = jl_alloc_array_1d(jl_array_any_type, l);
     jl_gc_wb(code, code->code);
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < l; i++) {
         s.ssaid = i;
         jl_array_ptr_set(code->code, i, jl_decode_value(&s));
     }
     s.ssaid = 0;
     code->ssavaluetypes = jl_decode_value(&s);
     jl_gc_wb(code, code->ssavaluetypes);
-    code->ssaflags = (jl_array_t*)jl_decode_value(&s);
+    code->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, l);
     jl_gc_wb(code, code->ssaflags);
+    uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
+    if (flags.bits.has_ssaflags)
+        ios_readall(s.s, (char*)ssaflags_data, l * sizeof(*ssaflags_data));
+    else
+        memset(ssaflags_data, 0, l * sizeof(*ssaflags_data));
 
     if (m->is_for_opaque_closure) {
         code->slottypes = jl_decode_value(&s);

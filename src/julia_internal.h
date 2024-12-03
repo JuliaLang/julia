@@ -651,6 +651,7 @@ typedef struct {
     uint16_t nargsmatchesmethod:1;
     uint16_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint16_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+    uint16_t has_ssaflags:1;
 } jl_code_info_flags_bitfield_t;
 
 typedef union {
