@@ -2288,15 +2288,14 @@ typedef struct _jl_task_t {
     uint16_t priority;
     // flag indicating whether or not to record timing metrics for this task
     uint8_t metrics_enabled;
-    // (alignas(8) is needed in the following fields to work around a GCC bug. See #56626.)
     // timestamp this task first entered the run queue
-    alignas(8) _Atomic(uint64_t) first_enqueued_at;
+    _Atomic(uint64_t) first_enqueued_at;
     // timestamp this task was most recently scheduled to run
-    alignas(8) _Atomic(uint64_t) last_started_running_at;
+    _Atomic(uint64_t) last_started_running_at;
     // time this task has spent running; updated when it yields or finishes.
-    alignas(8) _Atomic(uint64_t) cpu_time_ns;
+    _Atomic(uint64_t) cpu_time_ns;
     // timestamp this task finished (i.e. entered state DONE or FAILED).
-    alignas(8) _Atomic(uint64_t) finished_at;
+    _Atomic(uint64_t) finished_at;
 
 // hidden state:
     // cached floating point environment
