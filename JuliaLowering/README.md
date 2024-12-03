@@ -326,9 +326,7 @@ optimizations include:
 
 Properties of non-globals which are computed per-binding-per-closure include:
 * Read: the value of the binding is used.
-* Write: the binding is asssigned to. Such bindings often need to become
-  `Core.Box` so their value can be shared between the defining scope and the
-  closure body.
+* Write: the binding is asssigned to.
 * Captured: Bindings defined outside the closure which are either Read or Write
   within the closure are "captured" and need to be one of the closure's fields.
 * Called: the binding is called as a function, ie, `x()`. (TODO - what is this
