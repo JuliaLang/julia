@@ -214,6 +214,14 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 //              the allocated object. All objects stored in fields of this object
 //              must be either permanently allocated or have other roots.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
+// permanently allocates a symbol (jl_sym_t). The object needs to be word aligned,
+// and tagged with jl_sym_tag.
+// FIXME: Ideally we should merge this with jl_gc_permobj, as symbol is an object.
+// Currently there are a few differences between the two functions, and refactoring is needed.
+// 1. sz for this function includes the object header, and sz for jl_gc_permobj excludes the header size.
+// 2. align for this function is word align, and align for jl_gc_permobj depends on the allocation size.
+// 3. ty for this function is jl_symbol_tag << 4, and ty for jl_gc_permobj is a datatype pointer.
+struct _jl_value_t *jl_gc_permsymbol(size_t sz) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.

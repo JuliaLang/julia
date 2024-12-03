@@ -3940,6 +3940,15 @@ jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
     return jl_valueof(o);
 }
 
+jl_value_t *jl_gc_permsymbol(size_t sz) JL_NOTSAFEPOINT
+{
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc(sz, 0, sizeof(void*), 0);
+    jl_value_t *sym = jl_valueof(tag);
+    // set to old marked so that we won't look at it in the GC or write barrier.
+    jl_set_typetagof(sym, jl_symbol_tag, GC_OLD_MARKED);
+    return sym;
+}
+
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 {
     if (jl_is_initialized()) {

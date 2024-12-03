@@ -10,6 +10,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "gc-interface.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,12 +35,8 @@ static size_t symbol_nbytes(size_t len) JL_NOTSAFEPOINT
 
 static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
-    jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
-    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc(nb, 0, sizeof(void*), 0);
-    sym = (jl_sym_t*)jl_valueof(tag);
-    // set to old marked so that we won't look at it in the GC or write barrier.
-    jl_set_typetagof(sym, jl_symbol_tag, GC_OLD_MARKED);
+    jl_sym_t *sym = (jl_sym_t*)jl_gc_permsymbol(nb);
     jl_atomic_store_relaxed(&sym->left, NULL);
     jl_atomic_store_relaxed(&sym->right, NULL);
     sym->hash = hash_symbol(str, len);
