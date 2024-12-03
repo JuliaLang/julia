@@ -4050,13 +4050,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 end
                 effects === nothing || merge_override_effects!(interp, effects, frame)
                 if lhs !== nothing && rt !== Bottom
-                    if isa(lhs, SlotNumber)
-                        changes = StateUpdate(lhs, VarState(rt, false))
-                    elseif isa(lhs, GlobalRef)
-                        handle_global_assignment!(interp, frame, currsaw_latestworld, lhs, rt)
-                    else
-                        merge_effects!(interp, frame, EFFECTS_UNKNOWN)
-                    end
+                    changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
                 end
             end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
