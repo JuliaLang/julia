@@ -275,7 +275,7 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay; interval = 0)
+    Timer(callback::Function, delay; interval = 0, spawn::Bool=true)
 
 Create a timer that runs the function `callback` at each timer expiration.
 
@@ -284,6 +284,12 @@ seconds, and then repeating with the given `interval` in seconds. If `interval` 
 callback is only run once. The function `callback` is called with a single argument, the timer
 itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
 has already expired.
+
+If `spawn` is `false`, the created task will be marked as sticky, meaning that it will not be allowed
+to move thread, which will also prevent the task that created the timer from moving thread.
+
+!!! compat "Julia 1.12"
+    The `spawn` argument was introduced in Julia 1.12.
 
 # Examples
 
@@ -304,7 +310,7 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout; kwargs...)
+function Timer(cb::Function, timeout; spawn::Bool=true, kwargs...)
     timer = Timer(timeout; kwargs...)
     t = @task begin
         unpreserve_handle(timer)
@@ -319,6 +325,7 @@ function Timer(cb::Function, timeout; kwargs...)
             isopen(timer) || return
         end
     end
+    t.sticky = !spawn
     # here we are mimicking parts of _trywait, in coordination with task `t`
     preserve_handle(timer)
     @lock timer.cond begin
