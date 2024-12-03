@@ -546,6 +546,89 @@ end
 
 Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
 
+#--------------------------------------------------
+function _find_SyntaxTree_macro(ex, line)
+    @assert !is_leaf(ex)
+    for c in children(ex)
+        rng = byte_range(c)
+        firstline = JuliaSyntax.source_line(sourcefile(c), first(rng))
+        lastline = JuliaSyntax.source_line(sourcefile(c), last(rng))
+        if line < firstline || lastline < line
+            continue
+        end
+        # We're in the line range. Either
+        if firstline == line && kind(c) == K"macrocall" && begin
+                    name = c[1]
+                    if kind(name) == K"."
+                        name = name[2]
+                    end
+                    @assert kind(name) == K"MacroName"
+                    name.name_val == "@SyntaxTree"
+                end
+            # We find the node we're looking for. NB: Currently assuming a max
+            # of one @SyntaxTree invocation per line. Though we could relax
+            # this with more heuristic matching of the Expr-AST...
+            @assert numchildren(c) == 2
+            return c[2]
+        elseif !is_leaf(c)
+            # Recurse
+            ex1 = _find_SyntaxTree_macro(c, line)
+            if !isnothing(ex1)
+                return ex1
+            end
+        end
+    end
+    return nothing # Will get here if multiple children are on the same line.
+end
+
+"""
+Macro to construct quoted SyntaxTree literals (instead of quoted Expr literals)
+in normal Julia source code.
+
+Example:
+
+```julia
+tree1 = @SyntaxTree :(some_unique_identifier)
+tree2 = @SyntaxTree quote
+    x = 1
+    \$tree1 = x
+end
+```
+"""
+macro SyntaxTree(ex_old)
+    # The implementation here is hilarious and arguably very janky: we
+    # 1. Briefly check but throw away the Expr-AST
+    if !(Meta.isexpr(ex_old, :quote) || ex_old isa QuoteNode)
+        throw(ArgumentError("@SyntaxTree expects a `quote` block or `:`-quoted expression"))
+    end
+    # 2. Re-parse the current source file as SyntaxTree instead
+    fname = String(__source__.file)
+    if occursin(r"REPL\[\d+\]", fname)
+        # Assume we should look at last history entry in REPL
+        try
+            # Wow digging in like this is an awful hack but `@SyntaxTree` is
+            # already a hack so let's go for it I guess 😆
+            text = Base.active_repl.mistate.interface.modes[1].hist.history[end]
+            if !occursin("@SyntaxTree", text)
+                error("Text not found in last REPL history line")
+            end
+        catch
+            error("Text not found in REPL history")
+        end
+    else
+        text = read(fname, String)
+    end
+    full_ex = parseall(SyntaxTree, text)
+    # 3. Using the current file and line number, dig into the re-parsed tree and
+    # discover the piece of AST which should be returned.
+    ex = _find_SyntaxTree_macro(full_ex, __source__.line)
+    # 4. Do the first step of JuliaLowering's syntax lowering to get
+    # synax interpolations to work
+    _, ex1 = expand_forms_1(__module__, ex)
+    @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
+    esc(Expr(:call, interpolate_ast, ex1[2][1], map(Expr, ex1[3:end])...))
+end
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
