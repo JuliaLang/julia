@@ -54,8 +54,8 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
         # No definite size
         (isa(x, GenericMemory) || isa(x, String) || isa(x, SimpleVector)) &&
             return MAX_INLINE_CONST_SIZE + 1
-        if isa(x, Module) || isa(x, Method)
-            # We allow modules and methods, because we already assume they are externally
+        if isa(x, Module) || isa(x, Method) || isa(x, CodeInstance)
+            # We allow modules, methods and CodeInstance, because we already assume they are externally
             # rooted, so we count their contents as 0 size.
             return sizeof(Ptr{Cvoid})
         end
