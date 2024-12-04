@@ -73,20 +73,19 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 #endif
 #include "gc-interface.h"
 #include "julia_atomics.h"
-#include "julia_threads.h"
 #include "julia_assert.h"
+
+// the common fields are hidden before the pointer, but the following macro is
+// used to indicate which types below are subtypes of jl_value_t
+#define JL_DATA_TYPE
+typedef struct _jl_value_t jl_value_t;
+#include "julia_threads.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // core data types ------------------------------------------------------------
-
-// the common fields are hidden before the pointer, but the following macro is
-// used to indicate which types below are subtypes of jl_value_t
-#define JL_DATA_TYPE
-
-typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
@@ -478,9 +477,6 @@ typedef struct _jl_code_instance_t {
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
-
-// all values are callable as Functions
-typedef jl_value_t jl_function_t;
 
 typedef struct {
     JL_DATA_TYPE
@@ -2248,12 +2244,8 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 
 // tasks and exceptions -------------------------------------------------------
 
-typedef struct _jl_timing_block_t jl_timing_block_t;
-typedef struct _jl_timing_event_t jl_timing_event_t;
-typedef struct _jl_excstack_t jl_excstack_t;
-
 // info describing an exception handler
-typedef struct _jl_handler_t {
+struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
     jl_value_t *scope;
@@ -2263,62 +2255,7 @@ typedef struct _jl_handler_t {
     sig_atomic_t defer_signal;
     jl_timing_block_t *timing_stack;
     size_t world_age;
-} jl_handler_t;
-
-#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
-
-typedef struct _jl_task_t {
-    JL_DATA_TYPE
-    jl_value_t *next; // invasive linked list for scheduler
-    jl_value_t *queue; // invasive linked list for scheduler
-    jl_value_t *tls;
-    jl_value_t *donenotify;
-    jl_value_t *result;
-    jl_value_t *scope;
-    jl_function_t *start;
-    // 4 byte padding on 32-bit systems
-    // uint32_t padding0;
-    uint64_t rngState[JL_RNG_SIZE];
-    _Atomic(uint8_t) _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
-    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    // 1 byte padding
-    // uint8_t padding1;
-    // multiqueue priority
-    uint16_t priority;
-
-// hidden state:
-    // cached floating point environment
-    // only updated at task switch
-    fenv_t fenv;
-
-    // id of owning thread - does not need to be defined until the task runs
-    _Atomic(int16_t) tid;
-    // threadpool id
-    int8_t threadpoolid;
-    // Reentrancy bits
-    // Bit 0: 1 if we are currently running inference/codegen
-    // Bit 1-2: 0-3 counter of how many times we've reentered inference
-    // Bit 3: 1 if we are writing the image and inference is illegal
-    uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
-    // saved gc stack top for context switches
-    jl_gcframe_t *gcstack;
-    size_t world_age;
-    // quick lookup for current ptls
-    jl_ptls_t ptls; // == jl_all_tls_states[tid]
-#ifdef USE_TRACY
-    const char *name;
-#endif
-    // saved exception stack
-    jl_excstack_t *excstack;
-    // current exception handler
-    jl_handler_t *eh;
-    // saved thread state
-    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
-} jl_task_t;
+};
 
 #define JL_TASK_STATE_RUNNABLE 0
 #define JL_TASK_STATE_DONE     1

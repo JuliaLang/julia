@@ -92,6 +92,7 @@ typedef struct {
         _jl_ucontext_t *ctx;
         jl_stack_context_t *copy_ctx;
     };
+    void *activefp;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
     unsigned int copy_stack:31; // sizeof stack for copybuf
@@ -214,6 +215,68 @@ typedef struct _jl_tls_states_t {
 #endif
 } jl_tls_states_t;
 
+#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
+
+// all values are callable as Functions
+typedef jl_value_t jl_function_t;
+typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_timing_event_t jl_timing_event_t;
+typedef struct _jl_excstack_t jl_excstack_t;
+typedef struct _jl_handler_t jl_handler_t;
+
+typedef struct _jl_task_t {
+    JL_DATA_TYPE
+    jl_value_t *next; // invasive linked list for scheduler
+    jl_value_t *queue; // invasive linked list for scheduler
+    jl_value_t *tls;
+    jl_value_t *donenotify;
+    jl_value_t *result;
+    jl_value_t *scope;
+    jl_function_t *start;
+    // 4 byte padding on 32-bit systems
+    // uint32_t padding0;
+    uint64_t rngState[JL_RNG_SIZE];
+    _Atomic(uint8_t) _state;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
+    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
+    // 1 byte padding
+    // uint8_t padding1;
+    // multiqueue priority
+    uint16_t priority;
+
+// hidden state:
+    // cached floating point environment
+    // only updated at task switch
+    fenv_t fenv;
+
+    // id of owning thread - does not need to be defined until the task runs
+    _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
+    // Reentrancy bits
+    // Bit 0: 1 if we are currently running inference/codegen
+    // Bit 1-2: 0-3 counter of how many times we've reentered inference
+    // Bit 3: 1 if we are writing the image and inference is illegal
+    uint8_t reentrant_timing;
+    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
+    // uint16_t padding2_32;
+    // uint48_t padding2_64;
+    // current gc stack top
+    jl_gcframe_t *gcstack;
+    size_t world_age;
+    // quick lookup for current ptls
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
+#ifdef USE_TRACY
+    const char *name;
+#endif
+    // saved exception stack
+    jl_excstack_t *excstack;
+    // current exception handler
+    jl_handler_t *eh;
+    // saved thread state
+    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+} jl_task_t;
+
 JL_DLLEXPORT void *jl_get_ptls_states(void);
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
@@ -243,6 +306,18 @@ JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
+STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
+{
+#ifdef __GNUC__
+    return __builtin_frame_address(0);
+#else
+    void *dummy = NULL;
+    // The mask is to suppress the compiler warning about returning
+    // address of local variable
+    return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
+#endif
+}
+
 #ifdef __clang_gcanalyzer__
 // Note that the sigint safepoint can also trigger GC, albeit less likely
 void jl_gc_safepoint_(jl_ptls_t tls);
@@ -270,6 +345,9 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
 {
     assert(old_state != JL_GC_PARALLEL_COLLECTOR_THREAD);
     assert(old_state != JL_GC_CONCURRENT_COLLECTOR_THREAD);
+    if (__builtin_constant_p(state) ? state : // required if !old_state && state, otherwise optional
+        __builtin_constant_p(old_state) ? !old_state : 1)
+        jl_atomic_load_relaxed(&ptls->current_task)->ctx.activefp = (char*)jl_get_frame_addr();
     jl_atomic_store_release(&ptls->gc_state, state);
     if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);

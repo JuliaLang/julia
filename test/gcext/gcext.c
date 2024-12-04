@@ -479,8 +479,6 @@ static int stack_grows_down(void) {
 
 void task_scanner(jl_task_t *task, int root_task)
 {
-    int var_on_frame;
-
     // The task scanner is not necessary for liveness, as the
     // corresponding task stack is already part of the stack.
     // Its purpose is simply to test that the task scanner
@@ -491,23 +489,36 @@ void task_scanner(jl_task_t *task, int root_task)
     char *total_end_stack;
     jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
 
+    if (end_stack == 0)
+        return;
+
+    if (!(start_stack < end_stack) ||
+        !(total_start_stack < total_end_stack) ||
+        !(total_start_stack <= start_stack) ||
+        !(end_stack <= total_end_stack)) {
+        fputs("incorrect stack bounds\n", stderr);
+        fflush(stderr);
+        abort();
+    }
+
     // this is the live stack of a thread. Is it ours?
-    if (start_stack && task == (jl_task_t*)jl_get_current_task()) {
-        if (!(lt_ptr(start_stack, &var_on_frame) && lt_ptr(&var_on_frame, end_stack))) {
+    if (task == (jl_task_t*)jl_get_current_task()) {
+        void *var_on_frame = task->ctx.activefp + 1;
+        if (!(lt_ptr(start_stack, var_on_frame) && lt_ptr(var_on_frame, end_stack))) {
             // error, current stack frame must be on the live stack.
-            jl_error("stack frame not part of the current task");
+            fputs("stack frame not part of the current task\n", stderr);
+            fflush(stderr);
+            abort();
         }
     }
 
-    if (start_stack) {
-        void **start = (void **)start_stack;
-        void **end = (void **)end_stack;
-        while (start < end) {
-            void *p = *start++;
-            void *q = jl_gc_internal_obj_base_ptr(p);
-            if (q) {
-                jl_gc_mark_queue_obj(ptls, q);
-            }
+    void **start = (void **)start_stack;
+    void **end = (void **)end_stack;
+    while (start < end) {
+        void *p = *start++;
+        void *q = jl_gc_internal_obj_base_ptr(p);
+        if (q) {
+            jl_gc_mark_queue_obj(ptls, q);
         }
     }
 }
