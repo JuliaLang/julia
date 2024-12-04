@@ -1359,9 +1359,9 @@ end
             end_time = time_ns()
             wall_time_delta = end_time - start_time
             @test t.metrics_enabled
-            @test Base.Experimental.task_cpu_time_ns(t) > 0
+            @test Base.Experimental.task_running_time_ns(t) > 0
             @test Base.Experimental.task_wall_time_ns(t) > 0
-            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_cpu_time_ns(t)
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
             @test wall_time_delta > Base.Experimental.task_wall_time_ns(t)
         finally
             Base.Experimental.task_metrics(false)
@@ -1371,19 +1371,19 @@ end
         t = Threads.@spawn peakflops()
         wait(t)
         @test !t.metrics_enabled
-        @test isnothing(Base.Experimental.task_cpu_time_ns(t))
+        @test isnothing(Base.Experimental.task_running_time_ns(t))
         @test isnothing(Base.Experimental.task_wall_time_ns(t))
     end
     @testset "task not run" begin
         t1 = Task(() -> nothing)
         @test !t1.metrics_enabled
-        @test isnothing(Base.Experimental.task_cpu_time_ns(t1))
+        @test isnothing(Base.Experimental.task_running_time_ns(t1))
         @test isnothing(Base.Experimental.task_wall_time_ns(t1))
         try
             Base.Experimental.task_metrics(true)
             t2 = Task(() -> nothing)
             @test t2.metrics_enabled
-            @test Base.Experimental.task_cpu_time_ns(t2) == 0
+            @test Base.Experimental.task_running_time_ns(t2) == 0
             @test Base.Experimental.task_wall_time_ns(t2) == 0
         finally
             Base.Experimental.task_metrics(false)
@@ -1394,9 +1394,9 @@ end
             Base.Experimental.task_metrics(true)
             t = Threads.@spawn error("this task failed")
             @test_throws "this task failed" wait(t)
-            @test Base.Experimental.task_cpu_time_ns(t) > 0
+            @test Base.Experimental.task_running_time_ns(t) > 0
             @test Base.Experimental.task_wall_time_ns(t) > 0
-            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_cpu_time_ns(t)
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
         finally
             Base.Experimental.task_metrics(false)
         end
@@ -1411,15 +1411,15 @@ end
                 # directly yield to `t_inner` rather calling `schedule(t_inner)`
                 yield(t_inner)
                 wait(t_inner)
-                @test Base.Experimental.task_cpu_time_ns(t_inner) > 0
+                @test Base.Experimental.task_running_time_ns(t_inner) > 0
                 @test Base.Experimental.task_wall_time_ns(t_inner) > 0
-                @test Base.Experimental.task_wall_time_ns(t_inner) >= Base.Experimental.task_cpu_time_ns(t_inner)
+                @test Base.Experimental.task_wall_time_ns(t_inner) >= Base.Experimental.task_running_time_ns(t_inner)
             end
             wait(t_outer)
             delta = time_ns() - start
-            @test Base.Experimental.task_cpu_time_ns(t_outer) > 0
+            @test Base.Experimental.task_running_time_ns(t_outer) > 0
             @test Base.Experimental.task_wall_time_ns(t_outer) > 0
-            @test Base.Experimental.task_wall_time_ns(t_outer) >= Base.Experimental.task_cpu_time_ns(t_outer)
+            @test Base.Experimental.task_wall_time_ns(t_outer) >= Base.Experimental.task_running_time_ns(t_outer)
             @test Base.Experimental.task_wall_time_ns(t_outer) < delta
         finally
             Base.Experimental.task_metrics(false)
@@ -1432,7 +1432,7 @@ end
             schedule(t1) # MethodError
             yield()
             @assert istaskfailed(t1)
-            @test Base.Experimental.task_cpu_time_ns(t1) > 0
+            @test Base.Experimental.task_running_time_ns(t1) > 0
             @test Base.Experimental.task_wall_time_ns(t1) > 0
             foo(a, b) = a + b
             t2 = Task(() -> (peakflops(); foo(wait())))
@@ -1442,7 +1442,7 @@ end
             schedule(t2, 1)
             yield()
             @assert istaskfailed(t2)
-            @test Base.Experimental.task_cpu_time_ns(t2) > 0
+            @test Base.Experimental.task_running_time_ns(t2) > 0
             @test Base.Experimental.task_wall_time_ns(t2) > 0
         finally
             Base.Experimental.task_metrics(false)
@@ -1451,36 +1451,36 @@ end
     @testset "continuously update until task done" begin
         try
             Base.Experimental.task_metrics(true)
-            last_cpu_time = Ref(typemax(Int))
+            last_running_time = Ref(typemax(Int))
             last_wall_time = Ref(typemax(Int))
             t = Threads.@spawn begin
-                cpu_time = Base.Experimental.task_cpu_time_ns()
+                running_time = Base.Experimental.task_running_time_ns()
                 wall_time = Base.Experimental.task_wall_time_ns()
                 for _ in 1:5
                     x = time_ns()
                     while time_ns() < x + 100
                     end
-                    new_cpu_time = Base.Experimental.task_cpu_time_ns()
+                    new_running_time = Base.Experimental.task_running_time_ns()
                     new_wall_time = Base.Experimental.task_wall_time_ns()
-                    @test new_cpu_time > cpu_time
+                    @test new_running_time > running_time
                     @test new_wall_time > wall_time
-                    cpu_time = new_cpu_time
+                    running_time = new_running_time
                     wall_time = new_wall_time
                 end
-                last_cpu_time[] = cpu_time
+                last_running_time[] = running_time
                 last_wall_time[] = wall_time
             end
             wait(t)
-            final_cpu_time = Base.Experimental.task_cpu_time_ns(t)
+            final_running_time = Base.Experimental.task_running_time_ns(t)
             final_wall_time = Base.Experimental.task_wall_time_ns(t)
-            @test last_cpu_time[] < final_cpu_time
+            @test last_running_time[] < final_running_time
             @test last_wall_time[] < final_wall_time
             # ensure many more tasks are run to make sure the counters are
             # not being updated after a task is done e.g. only when a new task is found
             @sync for _ in 1:Threads.nthreads()
                 Threads.@spawn rand()
             end
-            @test final_cpu_time == Base.Experimental.task_cpu_time_ns(t)
+            @test final_running_time == Base.Experimental.task_running_time_ns(t)
             @test final_wall_time == Base.Experimental.task_wall_time_ns(t)
         finally
             Base.Experimental.task_metrics(false)
@@ -1508,7 +1508,7 @@ end
                     wait(task_i)
                     end_time_i = time_ns()
                     wall_time_delta_i = end_time_i - start_time_i
-                    cpu_times[$i] = cpu_time_i = Base.Experimental.task_cpu_time_ns(task_i)
+                    cpu_times[$i] = cpu_time_i = Base.Experimental.task_running_time_ns(task_i)
                     wall_times[$i] = wall_time_i = Base.Experimental.task_wall_time_ns(task_i)
                     # task should have recorded some cpu-time and some wall-time
                     @test cpu_time_i > 0

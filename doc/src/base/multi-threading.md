@@ -70,6 +70,6 @@ Base.Threads.SpinLock
 
 ```@docs
 Base.Experimental.task_metrics
-Base.Experimental.task_cpu_time_ns
+Base.Experimental.task_running_time_ns
 Base.Experimental.task_wall_time_ns
 ```

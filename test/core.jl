@@ -43,7 +43,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state, :cpu_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end

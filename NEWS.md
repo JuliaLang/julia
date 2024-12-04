@@ -20,7 +20,7 @@ New language features
 - New option `--task-metrics=yes` to enable the collection of per-task timing information,
   which can also be enabled/disabled at runtime with `Base.Experimental.task_metrics(::Bool)`. ([#56320])
   The available metrics are:
-  - scheduled CPU time for the task (`Base.Experimental.task_cpu_time_ns`), and
+  - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
 
 Language changes
