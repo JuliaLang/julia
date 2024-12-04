@@ -77,8 +77,8 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
     # the parentmodule in which the variable is defined
     to_warn_about = Dict{Module, Vector{Module}}()
     for m in modules
-        # only warn if exported or public TODO why did this used to check isbindingresolved?
-        if !Base.isexported(m, var) && !Base.ispublic(m, var)
+        # only warn if binding is resolved and exported or public 
+        if !Base.isbindingresolved(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
             continue
         end
         warned = true
@@ -109,7 +109,7 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
                 end
                 print(io, "\n    - Also $how_available $m")
                 if !isdefined(active_mod, Symbol(m))
-                    print(io, ", which would need to be imported in $active_mod")
+                    print(io, " (loaded but not imported in $active_mod)")
                 end
                 print(io, ".")
             end
