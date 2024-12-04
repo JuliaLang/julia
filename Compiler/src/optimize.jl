@@ -17,37 +17,41 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 const IR_FLAG_NULL        = zero(UInt32)
 # This statement is marked as @inbounds by user.
-# Ff replaced by inlining, any contained boundschecks may be removed.
+# If replaced by inlining, any contained boundschecks may be removed.
 const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 # This statement is marked as @inline by user
 const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE    = one(UInt32) << 2
+# This statement is proven :consistent
+const IR_FLAG_CONSISTENT  = one(UInt32) << 3
+# This statement is proven :effect_free
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 4
+# This statement is proven :nothrow
+const IR_FLAG_NOTHROW     = one(UInt32) << 5
+# This statement is proven :terminates_globally
+const IR_FLAG_TERMINATES  = one(UInt32) << 6
+#const IR_FLAG_TERMINATES_LOCALLY = one(UInt32) << 7
+#const IR_FLAG_NOTASKSTATE = one(UInt32) << 8
+#const IR_FLAG_INACCESSIBLEMEM = one(UInt32) << 9
+const IR_FLAG_NOUB        = one(UInt32) << 10
+#const IR_FLAG_NOUBINIB   = one(UInt32) << 11
+#const IR_FLAG_CONSISTENTOVERLAY = one(UInt32) << 12
+# This statement is :nortcall
+const IR_FLAG_NORTCALL = one(UInt32) << 13
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = one(UInt32) << 3
-# This statement is proven :consistent
-const IR_FLAG_CONSISTENT  = one(UInt32) << 4
-# This statement is proven :effect_free
-const IR_FLAG_EFFECT_FREE = one(UInt32) << 5
-# This statement is proven :nothrow
-const IR_FLAG_NOTHROW     = one(UInt32) << 6
-# This statement is proven :terminates
-const IR_FLAG_TERMINATES  = one(UInt32) << 7
-# This statement is proven :noub
-const IR_FLAG_NOUB        = one(UInt32) << 8
-# TODO: Both of these should eventually go away once
-# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = one(UInt32) << 9
-# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 10
-# This statement is :nortcall
-const IR_FLAG_NORTCALL    = one(UInt32) << 11
+const IR_FLAG_REFINED     = one(UInt32) << 16
 # This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
-const IR_FLAG_UNUSED      = one(UInt32) << 12
+const IR_FLAG_UNUSED      = one(UInt32) << 17
+# TODO: Both of these next two should eventually go away once
+# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_EFIIMO      = one(UInt32) << 18
+# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
 
-const NUM_IR_FLAGS = 13 # sync with julia.h
+const NUM_IR_FLAGS = 3 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
@@ -815,6 +819,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.nortcall = false
         end
     end
+    nothing
 end
 
 function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)

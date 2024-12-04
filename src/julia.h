@@ -279,7 +279,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 11
-#define NUM_IR_FLAGS 13
+#define NUM_IR_FLAGS 3
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -292,15 +292,8 @@ typedef struct _jl_code_info_t {
         // 1 << 0 = inbounds region
         // 1 << 1 = callsite inline region
         // 1 << 2 = callsite noinline region
-        // 1 << 3 = refined statement
-        // 1 << 4 = :consistent
-        // 1 << 5 = :effect_free
-        // 1 << 6 = :nothrow
-        // 1 << 7 = :terminates
-        // 1 << 8 = :noub
-        // 1 << 9 = :effect_free_if_inaccessiblememonly
-        // 1 << 10 = :inaccessiblemem_or_argmemonly
-        // 1 << 11-19 = callsite effects overrides
+        // 1 << 3-14 = purity
+        // 1 << 16+ = reserved for inference
     // miscellaneous data:
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags

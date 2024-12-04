@@ -413,6 +413,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
+    me.src.ssaflags = me.ssaflags
     me.src.min_world = first(me.world.valid_worlds)
     me.src.max_world = last(me.world.valid_worlds)
     istoplevel = !(me.linfo.def isa Method)
@@ -936,7 +937,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.slotflags = fill(0x00, nargs)
     tree.ssavaluetypes = 1
     tree.debuginfo = DebugInfo(mi)
-    tree.ssaflags = UInt32[0]
+    tree.ssaflags = [IR_FLAG_NULL]
     tree.rettype = Core.Typeof(val)
     tree.edges = Core.svec()
     set_inlineable!(tree, true)
