@@ -1071,10 +1071,10 @@ Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
     ct = current_task()
-    # [task] user_time -yield-> wait_time
-    record_running_time!(ct)
     t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
     t.result = x
@@ -1093,8 +1093,6 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
     ct = current_task()
-    # [task] user_time -yield-> wait_time
-    record_running_time!(ct)
     # TODO: these are legacy behaviors; these should perhaps be a scheduler
     # state error instead.
     if t._state === task_state_done
@@ -1102,6 +1100,8 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
     t.result = x
