@@ -40,7 +40,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Module containing macros used in the demo.
-baremodule M
+eval(JuliaLowering.@SyntaxTree :(baremodule M
     using Base
 
     using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
@@ -52,8 +52,118 @@ baremodule M
         JuliaSyntax.Kind(str)
     end
 
-    # JuliaLowering.include(M, "demo_include.jl")
-end
+    # Introspection
+    macro __MODULE__()
+        __context__.scope_layer.mod
+    end
+
+    macro __FILE__()
+        JuliaLowering.filename(__context__.macrocall)
+    end
+
+    macro __LINE__()
+        JuliaLowering.source_location(__context__.macrocall)[1]
+    end
+
+    # Macro with local variables
+    module A
+        another_global = "global in A"
+
+        macro bar(ex)
+            quote
+                x = "`x` in @bar"
+                (x, another_global, $ex)
+            end
+        end
+    end
+
+    someglobal = "global in module M"
+
+    # Macro with local variables
+    macro foo(ex)
+        quote
+            x = "`x` from @foo"
+            (x, someglobal, A.@bar $ex)
+            #(x, someglobal, $ex, A.@bar($ex), A.@bar(x))
+        end
+    end
+
+    macro set_a_global(val)
+        quote
+            global a_global = $val
+        end
+    end
+
+    macro set_global_in_parent(ex)
+        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
+        quote
+            $e1 = $ex
+        end
+    end
+
+    macro baz(ex)
+        quote
+            let $ex = 10
+                $ex
+            end
+        end
+    end
+
+    macro make_module()
+        :(module X
+              blah = 10
+          end)
+    end
+
+    macro return_a_value()
+        42
+    end
+
+    macro nested_return_a_value()
+        :(
+            @return_a_value
+        )
+    end
+
+    macro inner()
+        :(2)
+    end
+
+    macro outer()
+        :((1, @inner))
+    end
+
+    macro K_str(str)
+        JuliaSyntax.Kind(str[1].value)
+    end
+
+    # Recursive macro call
+    macro recursive(N)
+        Nval = if kind(N) == K"Integer" || kind(N) == K"Value"
+            N.value
+        end
+        if !(Nval isa Integer)
+            throw(MacroExpansionError(N, "argument must be an integer"))
+        end
+        if Nval < 1
+            return N
+        end
+        quote
+            x = $N
+            (@recursive($(Nval-1)), x)
+        end
+    end
+
+    xx = "xx in M"
+
+    macro test_inert_quote()
+        println(xx)
+        @inert quote
+            ($xx, xx)
+        end
+    end
+
+end))
 
 #-------------------------------------------------------------------------------
 # Demos of the prototype
@@ -488,10 +598,6 @@ src = """
 (; a=1, a=2)
 """
 
-function f(args...; kws...)
-    @info "" args kws
-end
-
 src = """
 begin
     kws = (c=3, d=4)
@@ -607,8 +713,7 @@ ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
 @info "Input code" formatsrc(ex)
 
-module MMM end
-in_mod = MMM
+in_mod = M
 # in_mod=Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
 @info "Macro expanded" ex_macroexpand formatsrc(ex_macroexpand, color_by=:scope_layer)
