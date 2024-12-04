@@ -510,7 +510,7 @@ disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
 
 Enable or disable the collection of per-task metrics.
 A `Task` created when `Base.Experimental.task_metrics(true)` is in effect will have
-[`Base.Experimental.task_cpu_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
+[`Base.Experimental.task_running_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
 timing information available.
 
 !!! note
@@ -526,7 +526,7 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_cpu_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
 This metric is only updated when `t` yields or completes unless `t` is the current task, in
@@ -543,14 +543,14 @@ See [`Base.Experimental.task_metrics`](@ref).
 !!! compat "Julia 1.12"
     This method was added in Julia 1.12.
 """
-function task_cpu_time_ns(t::Task=current_task())
+function task_running_time_ns(t::Task=current_task())
     t.metrics_enabled || return nothing
     if t == current_task()
         # These metrics fields can't update while we're running.
         # But since we're running we need to include the time since we last started running!
-        return t.cpu_time_ns + (time_ns() - t.last_started_running_at)
+        return t.running_time_ns + (time_ns() - t.last_started_running_at)
     else
-        return t.cpu_time_ns
+        return t.running_time_ns
     end
 end
 
@@ -560,7 +560,7 @@ end
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task first entered the run queue until the time at which it
 completed, or until the current time if the task has not yet completed.
-See also [`Base.Experimental.task_cpu_time_ns`](@ref).
+See also [`Base.Experimental.task_running_time_ns`](@ref).
 
 Returns `nothing` if task timings are not enabled.
 See [`Base.Experimental.task_metrics`](@ref).

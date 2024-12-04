@@ -1070,15 +1070,15 @@ immediately yields to `t` before calling the scheduler.
 Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    current = current_task()
+    ct = current_task()
     # [task] user_time -yield-> wait_time
-    record_cpu_time!(current)
-    t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    record_running_time!(ct)
+    t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
     t.result = x
-    enq_work(current)
+    enq_work(ct)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end
@@ -1092,8 +1092,9 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    ct = current_task()
     # [task] user_time -yield-> wait_time
-    record_cpu_time!(current_task())
+    record_running_time!(ct)
     # TODO: these are legacy behaviors; these should perhaps be a scheduler
     # state error instead.
     if t._state === task_state_done
@@ -1133,8 +1134,9 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
+    ct = current_task()
     # [task] user_time -yield-> wait_time
-    record_cpu_time!(current_task())
+    record_running_time!(ct)
     # [task] created -scheduled-unfairly-> wait_time
     maybe_record_enqueued!(t)
     t.result = exc
@@ -1189,8 +1191,9 @@ checktaskempty = Partr.multiq_check_empty
 end
 
 function wait()
+    ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
-    record_cpu_time!(current_task())
+    record_running_time!(ct)
     GC.safepoint()
     W = workqueue_for(Threads.threadid())
     poptask(W)
@@ -1206,10 +1209,10 @@ else
     pause() = ccall(:pause, Cvoid, ())
 end
 
-# update the `cpu_time_ns` field of `t` to include the time since it last started running.
-function record_cpu_time!(t::Task)
+# update the `running_time_ns` field of `t` to include the time since it last started running.
+function record_running_time!(t::Task)
     if t.metrics_enabled && !istaskdone(t)
-        @atomic :monotonic t.cpu_time_ns += time_ns() - t.last_started_running_at
+        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
     end
     return t
 end
