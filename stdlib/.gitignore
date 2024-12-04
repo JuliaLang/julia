@@ -3,6 +3,8 @@
 /DelimitedFiles
 /Pkg-*
 /Pkg
+SharedArrays-*
+SharedArrays
 /Statistics-*
 /Statistics
 /LibCURL-*

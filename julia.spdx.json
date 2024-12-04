@@ -51,6 +51,18 @@
             "summary": "Development repository for the Statistics standard library (stdlib) that ships with Julia."
         },
         {
+            "name": "SharedArrays.jl",
+            "SPDXID": "SPDXRef-JuliaSharedArrays",
+            "downloadLocation": "git+https://github.com/JuliaLang/SharedArrayss.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SharedArrays.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012-2016: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, Dahua Lin, Simon Byrne, Andreas Noack, Douglas Bates, John Myles White, Simon Kornblith, and other contributors.",
+            "summary": "Development repository for the SharedArrays standard library (stdlib) that ships with Julia."
+        },
+        {
             "name": "libCURL.jl",
             "SPDXID": "SPDXRef-JuliaCurl",
             "downloadLocation": "git+https://github.com/JuliaWeb/LibCURL.jl.git",

@@ -1,0 +1,4 @@
+SPARSEARRAYS_BRANCH = master
+SPARSEARRAYS_SHA1 = d83cd9c6b2a8212fcf1036e6bcd35b22187de787
+SPARSEARRAYS_GIT_URL := https://github.com/JuliaLang/SharedArrays.jl.git
+SPARSEARRAYS_TAR_URL = https://api.github.com/repos/JuliaLang/SharedArrays.jl/tarball/$1
