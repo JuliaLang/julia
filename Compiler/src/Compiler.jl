@@ -183,7 +183,7 @@ include("opaque_closure.jl")
 
 macro __SOURCE_FILE__()
     __source__.file === nothing && return nothing
-    return __source__.file::Symbol
+    return QuoteNode(__source__.file::Symbol)
 end
 
 module IRShow end
