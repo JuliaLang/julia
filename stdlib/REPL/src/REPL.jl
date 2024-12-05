@@ -55,7 +55,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    if scope !== Base 
+    if scope !== Base
         warned = _UndefVarError_warnfor(io, [Base], var)
 
         if !warned
@@ -73,11 +73,11 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
     active_mod = Base.active_module()
 
     warned = false
-    # collect modules which export or make public the variable by 
-    # the parentmodule in which the variable is defined
+    # collect modules which export or make public the variable by
+    # the module in which the variable is defined
     to_warn_about = Dict{Module, Vector{Module}}()
     for m in modules
-        # only warn if binding is resolved and exported or public 
+        # only warn if binding is resolved and exported or public
         if !Base.isbindingresolved(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
             continue
         end
@@ -89,19 +89,19 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
             continue
         end
 
-        parent_m = parentmodule(getproperty(m, var))
-        if !haskey(to_warn_about, parent_m)
-            to_warn_about[parent_m] = [m]
+        binding_m = Base.binding_module(m, var)
+        if !haskey(to_warn_about, binding_m)
+            to_warn_about[binding_m] = [m]
         else
-            push!(to_warn_about[parent_m], m)
+            push!(to_warn_about[binding_m], m)
         end
     end
 
     if !isempty(to_warn_about)
-        for (parent_m, modules) in pairs(to_warn_about)
-            print(io, "\nHint: a global variable of this name also exists in ", parent_m)
+        for (binding_m, modules) in pairs(to_warn_about)
+            print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
             for m in modules
-                m == parent_m && continue
+                m == binding_m && continue
                 how_available = if Base.isexported(m, var)
                     "exported by"
                 elseif Base.ispublic(m, var)
