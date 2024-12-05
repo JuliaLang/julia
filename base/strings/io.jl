@@ -250,7 +250,7 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the 2-argument `show(io, x)` function.
+Create a string representation of any value using the 2-argument `show(io, x)` function.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
