@@ -181,12 +181,26 @@ include("bootstrap.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
+macro __SOURCE_FILE__()
+    __source__.file === nothing && return nothing
+    return __source__.file::Symbol
+end
+
 module IRShow end
+function load_irshow!()
+    if isdefined(Base, :end_base_include)
+        # This code path is exclusively for Revise, which may want to re-run this
+        # after bootstrap.
+        include(IRShow, Base.joinpath(Base.dirname(Base.String(@__SOURCE_FILE__)), "ssair/show.jl"))
+    else
+        include(IRShow, "ssair/show.jl")
+    end
+end
 if !isdefined(Base, :end_base_include)
     # During bootstrap, skip including this file and defer it to base/show.jl to include later
 else
     # When this module is loaded as the standard library, include this file as usual
-    include(IRShow, "ssair/show.jl")
+    load_irshow!()
 end
 
 end # baremodule Compiler
