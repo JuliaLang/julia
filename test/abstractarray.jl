@@ -2186,3 +2186,23 @@ end
     copyto!(A, 1, x, 1)
     @test A == axes(A,1)
 end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+    a = [1 2 3; 4 5 6]
+    reshaped_arrays = (
+        reshape(a, 3, 2),
+        reshape(a, (3, 2)),
+        reshape(a, big(3), big(2)),
+        reshape(a, (big(3), big(2))),
+        reshape(a, :, big(2)),
+        reshape(a, (:, big(2))),
+        reshape(a, big(3), :),
+        reshape(a, (big(3), :)),
+    )
+    @test allequal(reshaped_arrays)
+    for b ∈ reshaped_arrays
+        @test b isa Matrix{Int}
+        @test b.ref === a.ref
+    end
+end
