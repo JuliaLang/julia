@@ -9,7 +9,8 @@ const Bottom = Union{}
 # Define minimal array interface here to help code used in macros:
 length(a::Array{T, 0}) where {T} = 1
 length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array) = getfield(getfield(getfield(a, :ref), :mem), :length)
+length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
+# other sizes are handled by generic prod definition for AbstractArray
 length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
@@ -183,11 +184,8 @@ end
 _nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
-    if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
-       _nameof(__module__) === :Base
-        return true
-    end
-    return false
+    return _nameof(__module__) === :Base ||
+      _nameof(ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module) === :Compiler
 end
 
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
@@ -337,7 +335,8 @@ macro _noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
 macro _notaskstate_meta()
@@ -468,10 +467,18 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 macro eval(mod, ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 
 # use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
@@ -1043,6 +1050,7 @@ call obsolete versions of a function `f`.
     Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
@@ -1077,6 +1085,7 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
@@ -1248,6 +1257,53 @@ that is whether it has an `iterate` method or not.
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
+
+"""
+    @world(sym, world)
+
+Resolve the binding `sym` in world `world`. See [`invoke_in_world`](@ref) for running
+arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the macro
+will error unless the binding is valid and has the same value across the entire world
+range.
+
+The `@world` macro is primarily used in the printing of bindings that are no longer
+available in the current world.
+
+## Example
+```
+julia> struct Foo; a::Int; end
+Foo
+
+julia> fold = Foo(1)
+
+julia> Int(Base.get_world_counter())
+26866
+
+julia> struct Foo; a::Int; b::Int end
+Foo
+
+julia> fold
+@world(Foo, 26866)(1)
+```
+
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+"""
+macro world(sym, world)
+    if isa(sym, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
+    elseif isa(sym, GlobalRef)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    elseif isa(sym, Expr) && sym.head === :(.) &&
+            length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
+    else
+        error("`@world` requires a symbol or GlobalRef")
+    end
+end
+
+_resolve_in_world(world::Integer, gr::GlobalRef) =
+    invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
 
 # Special constprop heuristics for various binary opes
 typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC

@@ -32,9 +32,9 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
-        (Core.MethodInstance, [:cache, :precompiled]),
+        (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -796,6 +796,34 @@ end
 @test foo21900 == 10
 @test bar21900 == 11
 
+let f = g -> x -> g(x)
+    @test f(Int)(1.0) === 1
+    @test @inferred(f(Int)) isa Function
+    @test fieldtype(typeof(f(Int)), 1) === Type{Int}
+    @test @inferred(f(Rational{Int})) isa Function
+    @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
+    @test_broken @inferred(f(Rational)) isa Function
+    @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}
+    @test_broken @inferred(f(Rational{Core.TypeVar(:T)})) isa Function
+    @test fieldtype(typeof(f(Rational{Core.TypeVar(:T)})), 1) === DataType
+end
+let f() = (T = Rational{Core.TypeVar(:T)}; () -> T)
+    @test f() isa Function
+    @test Base.infer_return_type(f()) == DataType
+    @test fieldtype(typeof(f()), 1) === DataType
+    t = f()()
+    @test t isa DataType
+    @test t.name.wrapper == Rational
+    @test length(t.parameters) == 1
+    @test t.parameters[1] isa Core.TypeVar
+end
+function issue23618(a::AbstractVector)
+    T = eltype(a)
+    b = Vector{T}()
+    return [Set{T}() for x in a]
+end
+@test Base.infer_return_type(issue23618, (Vector{Int},)) == Vector{Set{Int}}
+
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 
@@ -1183,7 +1211,7 @@ end
 
 # Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
 # so that users can define their own binding named `Module` in Main.
-@test !Base.isbindingresolved(Main, :Module)
+@test success(`$(Base.julia_cmd()) -e '@assert !Base.isbindingresolved(Main, :Module)'`)
 
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
@@ -2593,7 +2621,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test f8338(2) == 8
+    @test invokelatest(f8338, 2) == 8
 end
 
 # call overloading (#2403)
@@ -7641,7 +7669,7 @@ end
 end
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
 @test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
-@test @isdefined(X36104)
+@test !@isdefined(X36104)
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
@@ -8288,3 +8316,60 @@ end
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
 
 @test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2
+
+# Make sure that Core.Compiler has enough NamedTuple infrastructure
+# to properly give error messages for basic kwargs...
+Core.eval(Core.Compiler, quote issue50174(;a=1) = a end)
+@test_throws MethodError Core.Compiler.issue50174(;b=2)
+
+let s = mktemp() do path, io
+        xxx = 42
+        redirect_stdout(io) do
+            Base.@assume_effects :nothrow @show xxx
+        end
+        flush(io)
+        read(path, String)
+    end
+    @test strip(s) == "xxx = 42"
+end
+
+# `module` has an implicit world-age increment
+let foo = eval(Expr(:toplevel, :(module BarModuleInc; struct FooModuleInc; end; end), :(BarModuleInc.FooModuleInc())))
+    @Core.latestworld
+    @test foo == BarModuleInc.FooModuleInc()
+end
+
+let
+    eval(:(module BarModuleInc2; module BazModuleInc; struct FooModuleInc; end; end; const foo = BazModuleInc.FooModuleInc(); end))
+    @Core.latestworld
+    @test BarModuleInc2.foo == BarModuleInc2.BazModuleInc.FooModuleInc()
+end
+
+# `toplevel` has implicit world age increment between expansion and evaluation
+macro define_call(sym)
+    Core.eval(__module__, :($sym() = 1))
+    :($sym())
+end
+@test eval(Expr(:toplevel, :(@define_call(f_macro_defined1)))) == 1
+@test @define_call(f_macro_defined2) == 1
+
+# `invoke` of `Method`
+let m = which(+, (Int, Int))
+    @eval f56692(i) = invoke(+, $m, i, 4)
+    global g56692() = f56692(5) == 9 ? "true" : false
+end
+@test @inferred(f56692(3)) == 7
+@test @inferred(g56692()) == "true"
+
+# `invoke` of `CodeInstance`
+f_invalidate_me() = return 1
+f_invoke_me() = return f_invalidate_me()
+@test f_invoke_me() == 1
+const f_invoke_me_ci = Base.specialize_method(Base._which(Tuple{typeof(f_invoke_me)})).cache
+f_call_me() = invoke(f_invoke_me, f_invoke_me_ci)
+@test invoke(f_invoke_me, f_invoke_me_ci) == 1
+@test f_call_me() == 1
+@test_throws TypeError invoke(f_invoke_me, f_invoke_me_ci, 1)
+f_invalidate_me() = 2
+@test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
+@test_throws ErrorException f_call_me()

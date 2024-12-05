@@ -6,9 +6,6 @@
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include "threading.h"
-#ifdef __GLIBC__
-#include <malloc.h> // for malloc_trim
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +16,11 @@ extern "C" {
 // =========================================================================== //
 
 jl_gc_num_t gc_num = {0};
+
+JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
+{
+    return gc_num.total_time;
+}
 
 // =========================================================================== //
 // GC Callbacks
@@ -113,6 +115,37 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
         jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+}
+
+// =========================================================================== //
+// malloc wrappers, aligned allocation
+// =========================================================================== //
+
+#if defined(_OS_WINDOWS_)
+// helper function based partly on wine msvcrt80+ heap.c
+// but with several fixes to improve the correctness of the computation and remove unnecessary parameters
+#define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
+                               ~(sizeof(void *) - 1)))
+static size_t _aligned_msize(void *p)
+{
+    void *alloc_ptr = *(void**)SAVED_PTR(p);
+    return _msize(alloc_ptr) - ((char*)p - (char*)alloc_ptr);
+}
+#undef SAVED_PTR
+#endif
+
+size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_)
+    if (isaligned)
+        return _aligned_msize(p);
+    else
+        return _msize(p);
+#elif defined(_OS_DARWIN_)
+    return malloc_size(p);
+#else
+    return malloc_usable_size(p);
+#endif
 }
 
 // =========================================================================== //
@@ -486,8 +519,151 @@ int gc_n_threads;
 jl_ptls_t* gc_all_tls_states;
 
 // =========================================================================== //
+// Allocation
+// =========================================================================== //
+
+JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    return jl_gc_alloc(ptls, sz, ty);
+}
+
+JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_alloc(ptls, sz, NULL);
+}
+
+// allocator entry points
+
+JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    return jl_gc_alloc_(ptls, sz, ty);
+}
+
+// =========================================================================== //
+// Generic Memory
+// =========================================================================== //
+
+size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m))->layout;
+    size_t sz = layout->size * m->length;
+    if (layout->flags.arrayelem_isunion)
+        // account for isbits Union array selector bytes
+        sz += m->length;
+    return sz;
+}
+
+// tracking Memorys with malloc'd storage
+void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
+    // This is **NOT** a GC safe point.
+    mallocmemory_t *ma;
+    if (ptls->gc_tls_common.heap.mafreelist == NULL) {
+        ma = (mallocmemory_t*)malloc_s(sizeof(mallocmemory_t));
+    }
+    else {
+        ma = ptls->gc_tls_common.heap.mafreelist;
+        ptls->gc_tls_common.heap.mafreelist = ma->next;
+    }
+    ma->a = (jl_genericmemory_t*)((uintptr_t)m | !!isaligned);
+    ma->next = ptls->gc_tls_common.heap.mallocarrays;
+    ptls->gc_tls_common.heap.mallocarrays = ma;
+}
+
+// =========================================================================== //
+// GC Debug
+// =========================================================================== //
+
+int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
+{
+    int nf = (int)jl_datatype_nfields(vt);
+    for (int i = 1; i < nf; i++) {
+        if (slot < (void*)((char*)obj + jl_field_offset(vt, i)))
+            return i - 1;
+    }
+    return nf - 1;
+}
+
+int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
+{
+    char *slot = (char*)_slot;
+    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
+    char *start = NULL;
+    size_t len = 0;
+    size_t elsize = sizeof(void*);
+    if (vt == jl_module_type) {
+        jl_module_t *m = (jl_module_t*)obj;
+        start = (char*)m->usings.items;
+        len = module_usings_length(m);
+        elsize = sizeof(struct _jl_module_using);
+    }
+    else if (vt == jl_simplevector_type) {
+        start = (char*)jl_svec_data(obj);
+        len = jl_svec_len(obj);
+    }
+    if (slot < start || slot >= start + elsize * len)
+        return -1;
+    return (slot - start) / elsize;
+}
+
+// =========================================================================== //
+// GC Control
+// =========================================================================== //
+
+JL_DLLEXPORT uint32_t jl_get_gc_disable_counter(void) {
+    return jl_atomic_load_acquire(&jl_gc_disable_counter);
+}
+
+JL_DLLEXPORT int jl_gc_is_enabled(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return !ptls->disable_gc;
+}
+
+int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
+    return gc_logging_enabled;
+}
+
+
+// collector entry point and control
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint_(ptls);
+    }
+    return prev;
+}
+
+// =========================================================================== //
 // MISC
 // =========================================================================== //
+
+JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_new_weakref_th(ptls, value);
+}
 
 const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
 JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT

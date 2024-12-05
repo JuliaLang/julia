@@ -4,6 +4,8 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
+- New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
+  the entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
 - the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
@@ -35,6 +37,10 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - Trivial infinite loops (like `while true; end`) are no longer undefined
+   behavior. Infinite loops that actually do things (e.g. have side effects
+   or sleep) were never and are still not undefined behavior. ([#52999])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -49,16 +55,24 @@ Command-line option changes
 ---------------------------
 
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
-  This `main` function should be declared using `@main` to indicate that it is an entry point.
+  This `main` function should be declared using `@main` to indicate that it is an entry point. ([#52103])
 * Enabling or disabling color text in Julia can now be controlled with the
-[`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
-variables. ([#53742]).
-* `--project=@temp` starts Julia with a temporary environment.
+  [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
+  variables. These variables are also honored by Julia's build system ([#53742], [#56346]).
+* `--project=@temp` starts Julia with a temporary environment. ([#51149])
 * New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
   to compile, in ms. ([#54662])
+* `--trace-compile` now prints recompiled methods in yellow or with a trailing comment if color is not supported ([#55763])
+* New `--trace-dispatch` option to report methods that are dynamically dispatched ([#55848]).
 
 Multi-threading changes
 -----------------------
+
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#55793])
 
 Build system changes
 --------------------
@@ -72,37 +86,25 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
-* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------
 
-* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
-* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
-* `replace(string, pattern...)` now supports an optional `IO` argument to
-  write the output to a stream rather than returning a string ([#48625]).
-* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
-* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
-* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
-  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
-  no longer required there for correctness to avoid data races ([#52461]).
-* After a process exits, `closewrite` will no longer be automatically called on
-  the stream passed to it. Call `wait` on the process instead to ensure the
-  content is fully written, then call `closewrite` manually to avoid
-  data-races. Or use the callback form of `open` to have all that handled
-  automatically.
-* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `escape_string` takes additional keyword arguments `ascii=true` (to escape all
   non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
-  for u/U escapes, e.g. for C compatibility) [#55099]).
-* `filter` can now act on a `NamedTuple` ([#50795]).
+  for u/U escapes, e.g. for C compatibility) ([#55099]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 * `Lockable` is now exported ([#54595])
+* `Base.require_one_based_indexing` and `Base.has_offset_axes` are now public ([#56196])
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
+* `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
+* `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
+* `invoke` now supports passing a CodeInstance instead of a type, which can enable
+certain compiler plugin workflows ([#56660]).
 
 Standard library changes
 ------------------------
@@ -116,7 +118,7 @@ Standard library changes
 
 * A new standard library for applying syntax highlighting to Julia code, this
   uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
+  that creates an `AnnotatedString` with syntax highlighting applied. ([#51810])
 
 #### Package Manager
 
@@ -130,6 +132,13 @@ Standard library changes
   (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
 * The number of default BLAS threads now respects process affinity, instead of
   using total number of logical threads available on the system ([#55574]).
+* A new function `zeroslike` is added that is used to generate the zero elements for matrix-valued banded matrices.
+  Custom array types may specialize this function to return an appropriate result ([#55252]).
+* The matrix multiplication `A * B` calls `matprod_dest(A, B, T::Type)` to generate the destination.
+  This function is now public ([#55537]).
+* The function `haszero(T::Type)` is used to check if a type `T` has a unique zero element defined as `zero(T)`.
+  This is now public ([#56223]).
+* A new function `diagview` is added that returns a view into a specific band of an `AbstractMatrix` ([#56175]).
 
 #### Logging
 
@@ -155,6 +164,8 @@ Standard library changes
 - the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
   and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
   in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 
@@ -174,6 +185,10 @@ Standard library changes
 
 #### InteractiveUtils
 
+* New macros `@trace_compile` and `@trace_dispatch` for running an expression with
+  `--trace-compile=stderr --trace-compile-timing` and `--trace-dispatch=stderr` respectively enabled.
+  ([#55915])
+
 Deprecated or removed
 ---------------------
 
@@ -186,5 +201,7 @@ External dependencies
 
 Tooling Improvements
 --------------------
+
+- A wall-time profiler is now available for users who need a sampling profiler that captures tasks regardless of their scheduling or running state. This type of profiler enables profiling of I/O-heavy tasks and helps detect areas of heavy contention in the system ([#55889]).
 
 <!--- generated by NEWS-update.jl: -->

@@ -28,13 +28,7 @@ BOOTSTRAP_DEBUG_LEVEL ?= 0
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
 OPENBLAS_LIBNAMESUFFIX:=
-
-# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
-ifneq ($(OPENBLAS_TARGET_ARCH),)
 OPENBLAS_DYNAMIC_ARCH:=0
-else
-OPENBLAS_DYNAMIC_ARCH:=1
-endif
 OPENBLAS_USE_THREAD:=1
 
 # Flags for using libraries available on the system instead of building them.
@@ -118,6 +112,51 @@ SPACE:=$(eval) $(eval)
 export LC_ALL=C
 export LANG=C
 
+# Respect `FORCE_COLOR` environment variable: <https://force-color.org/>.
+ifndef FORCE_COLOR
+FORCE_COLOR := ""
+endif
+
+# Respect `NO_COLOR` environment variable: <https://no-color.org/>.
+ifndef NO_COLOR
+NO_COLOR := ""
+endif
+
+# When both `FORCE_COLOR` and `NO_COLOR` are defined, the former has precedence.
+ifneq ($(FORCE_COLOR), "")
+NO_COLOR = ""
+endif
+
+WARNCOLOR:="\033[33;1m"
+ENDCOLOR:="\033[0m"
+
+CCCOLOR:="\033[34m"
+LINKCOLOR:="\033[34;1m"
+PERLCOLOR:="\033[35m"
+FLISPCOLOR:="\033[32m"
+JULIACOLOR:="\033[32;1m"
+DTRACECOLOR:="\033[32;1m"
+
+SRCCOLOR:="\033[33m"
+BINCOLOR:="\033[37;1m"
+JULCOLOR:="\033[34;1m"
+
+ifneq ($(NO_COLOR), "")
+WARNCOLOR:=""
+ENDCOLOR:=""
+
+CCCOLOR:=""
+LINKCOLOR:=""
+PERLCOLOR:=""
+FLISPCOLOR:=""
+JULIACOLOR:=""
+DTRACECOLOR:=""
+
+SRCCOLOR:=""
+BINCOLOR:=""
+JULCOLOR:=""
+endif
+
 # We need python for things like BB triplet recognition and relative path computation.
 # We don't really care about version, generally, so just find something that works:
 PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo "{python|python3|python2} not found")"
@@ -140,7 +179,7 @@ ifeq ($(BUILDROOT),)
 ifeq ("$(origin O)", "command line")
   BUILDROOT := $(abspath $O)
   BUILDDIR := $(abspath $(BUILDROOT)/$(call rel_path,$(JULIAHOME),$(SRCDIR)))
-  $(info $(shell printf '\033[32;1mBuilding into $(BUILDROOT)\033[0m')) # use printf to expand the escape sequences
+  $(info $(shell printf '$(JULIACOLOR)Building into $(BUILDROOT)$(ENDCOLOR)')) # use printf to expand the escape sequences
 else
   BUILDROOT:=$(JULIAHOME)
 endif
@@ -938,17 +977,27 @@ endif
 
 #If nothing is set default to native unless we are cross-compiling
 ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
-ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+ifeq ($(ARCH),aarch64)
+# ARM recommends only setting MCPU for AArch64
 MCPU=native
+else ifneq (,$(findstring riscv64,$(ARCH)))
+# RISC-V doesn't have a native option
+$(error Building for RISC-V requires a specific MARCH to be set))
 else
 MARCH=native
 MTUNE=native
 endif
 endif
 
+# If we are running on x86 or x86_64, set certain options automatically
+ifeq (1,$(ISX86))
+OPENBLAS_DYNAMIC_ARCH:=1
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=POWER8
 BINARY:=64
 # GCC doesn't do -march= on ppc64le
@@ -995,6 +1044,9 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 DIST_ARCH:=arm
 endif
+ifneq (,$(findstring riscv64,$(ARCH)))
+DIST_ARCH:=riscv64
+endif
 
 JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
 endif
@@ -1002,16 +1054,20 @@ endif
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
-USE_BLAS64:=0
-OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
+BINARY:=32
 endif
 
 # If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
 ifneq (,$(findstring aarch64,$(ARCH)))
-OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_DYNAMIC_ARCH:=1
 OPENBLAS_TARGET_ARCH:=ARMV8
-USE_BLAS64:=1
+BINARY:=64
+endif
+
+# If we are running on riscv64, set certain options automatically
+ifneq (,$(findstring riscv64,$(ARCH)))
+OPENBLAS_DYNAMIC_ARCH:=1
 BINARY:=64
 endif
 
@@ -1020,7 +1076,11 @@ ifneq ($(MARCH),)
 CC += -march=$(MARCH)
 CXX += -march=$(MARCH)
 FC += -march=$(MARCH)
+# On RISC-V, don't forward the MARCH ISA string to JULIA_CPU_TARGET,
+# as it's always incompatible with LLVM's CPU target name parser.
+ifeq (,$(findstring riscv64,$(ARCH)))
 JULIA_CPU_TARGET ?= $(MARCH)
+endif
 endif
 
 # Set MCPU-specific flags
@@ -1750,23 +1810,9 @@ ifndef VERBOSE
 VERBOSE := 0
 endif
 
-WARNCOLOR:="\033[33;1m"
-ENDCOLOR:="\033[0m"
-
 ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
-
-CCCOLOR:="\033[34m"
-LINKCOLOR:="\033[34;1m"
-PERLCOLOR:="\033[35m"
-FLISPCOLOR:="\033[32m"
-JULIACOLOR:="\033[32;1m"
-DTRACECOLOR:="\033[32;1m"
-
-SRCCOLOR:="\033[33m"
-BINCOLOR:="\033[37;1m"
-JULCOLOR:="\033[34;1m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
@@ -1788,7 +1834,7 @@ PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
 
-endif
+endif # VERBOSE
 
 # Makefile debugging trick:
 # call print-VARIABLE to see the runtime value of any variable

@@ -125,7 +125,6 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
-unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::Type *DTy, llvm::IRBuilder<> &irbuilder);
 llvm::SmallVector<llvm::Value*, 0> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
 
 static inline void llvm_dump(llvm::Value *v)
@@ -187,45 +186,39 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *pgcstack)
+static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
 {
     using namespace llvm;
-    auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
+    auto i8 = builder.getInt8Ty();
     const int pgcstack_offset = offsetof(jl_task_t, gcstack);
-    return builder.CreateInBoundsGEP(
-            T_pjlvalue, pgcstack,
-            ConstantInt::get(T_size, -(pgcstack_offset / sizeof(void *))),
-            "current_task");
+    return builder.CreateConstInBoundsGEP1_32(i8, pgcstack, -pgcstack_offset, "current_task");
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *current_task, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
-    auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
+    auto i8 = builder.getInt8Ty();
+    auto T_ptr = builder.getPtrTy();
     const int ptls_offset = offsetof(jl_task_t, ptls);
-    llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, current_task,
-            ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
-            "ptls_field");
-    LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
-            pptls, Align(sizeof(void *)), "ptls_load");
+    llvm::Value *pptls = builder.CreateConstInBoundsGEP1_32(i8, current_task, ptls_offset, "ptls_field");
+    LoadInst *ptls_load = builder.CreateAlignedLoad(T_ptr, pptls, Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
     tbaa_decorate(tbaa, ptls_load);
     return ptls_load;
 }
 
 // Get signal page through current task.
-static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     // return builder.CreateCall(prepare_call(reuse_signal_page_func));
-    auto T_psize = T_size->getPointerTo();
-    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
-    llvm::Value *psafepoint = builder.CreateInBoundsGEP(
-            T_psize, ptls, ConstantInt::get(T_size, nthfield));
+    auto T_ptr = builder.getPtrTy();
+    auto i8 = builder.getInt8Ty();
+    int nthfield = offsetof(jl_tls_states_t, safepoint);
+    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield);
     LoadInst *ptls_load = builder.CreateAlignedLoad(
-            T_psize, psafepoint, Align(sizeof(void *)), "safepoint");
+            T_ptr, psafepoint, Align(sizeof(void *)), "safepoint");
     tbaa_decorate(tbaa, ptls_load);
     return ptls_load;
 }
@@ -239,7 +232,7 @@ static inline void emit_signal_fence(llvm::IRBuilder<> &builder)
 static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa, bool final = false)
 {
     using namespace llvm;
-    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, T_size, ptls, tbaa);
+    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, ptls, tbaa);
     emit_signal_fence(builder);
     Module *M = builder.GetInsertBlock()->getModule();
     LLVMContext &C = builder.getContext();
@@ -250,8 +243,7 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
     else {
         Function *F = M->getFunction("julia.safepoint");
         if (!F) {
-            auto T_psize = T_size->getPointerTo();
-            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_psize}, false);
+            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_size->getPointerTo()}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
 #if JL_LLVM_VERSION >= 160000
             F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
@@ -268,8 +260,8 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
 {
     using namespace llvm;
     Type *T_int8 = state->getType();
-    Constant *offset = ConstantInt::getSigned(builder.getInt32Ty(), offsetof(jl_tls_states_t, gc_state));
-    Value *gc_state = builder.CreateInBoundsGEP(T_int8, ptls, ArrayRef<Value*>(offset), "gc_state");
+    unsigned offset = offsetof(jl_tls_states_t, gc_state);
+    Value *gc_state = builder.CreateConstInBoundsGEP1_32(T_int8, ptls, offset, "gc_state");
     if (old_state == nullptr) {
         old_state = builder.CreateLoad(T_int8, gc_state);
         cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);

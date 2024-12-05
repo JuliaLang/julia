@@ -343,9 +343,7 @@ end
     @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
-#=
-# issue #7764
-let
+@testset "issue #7764" begin
     srep = repeat("Σβ",2)
     s="Σβ"
     ss=SubString(s,1,lastindex(s))
@@ -358,16 +356,15 @@ let
     @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
-    @test_throws BoundsError srep[8]
+    @test_throws StringIndexError srep[8]
 end
-=#
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
 
-# make sure substrings do not accept code unit if it is not start of codepoint
-let s = "x\u0302"
+@testset "make sure substrings do not accept code unit if it is not start of codepoint" begin
+    s = "x\u0302"
     @test s[1:2] == s
     @test_throws BoundsError s[0:3]
     @test_throws BoundsError s[1:4]
@@ -1076,8 +1073,8 @@ let s = "∀x∃y", u = codeunits(s)
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
 
-# issue #24388
-let v = unsafe_wrap(Vector{UInt8}, "abc")
+@testset "issue #24388" begin
+    v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
@@ -1093,6 +1090,17 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
+@testset "issue #54369" begin
+    v = Base.StringMemory(3)
+    v .= [0x41,0x42,0x43]
+    s = String(v)
+    @test s == "ABC"
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
+    @test s == "ABC"
+    @test v == [0x43,0x42,0x43]
+end
+
 # make sure length for identical String and AbstractString return the same value, PR #25533
 let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
                                    String(rand(rng, UInt8, 200))]
@@ -1105,8 +1113,8 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
     end
 end
 
-# conversion of SubString to the same type, issue #25525
-let x = SubString("ab", 1, 1)
+@testset "conversion of SubString to the same type, issue #25525" begin
+    x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
@@ -1159,6 +1167,9 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
+    apple_uint8 = Array{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
     Base.String(::tstStringType) = "Test"
     abstract_apple = tstStringType(apple_uint8)
     @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
@@ -1184,6 +1195,7 @@ end
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test lastindex(l) == lastindex("1+2")
     @test Base.infer_effects((Any,)) do a
         throw(lazy"a is $a")
     end |> Core.Compiler.is_foldable
@@ -1236,7 +1248,7 @@ end
     end
     @test_throws ArgumentError Symbol("a\0a")
 
-    @test Base._string_n_override == Core.Compiler.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+    @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin

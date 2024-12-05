@@ -26,6 +26,7 @@ const __internal_changes_list = (
     :miuninferredrm,
     :codeinfonargs,  # #54341
     :ocnopartial,
+    :printcodeinfocalls,
     # Add new change names above this line
 )
 
@@ -432,7 +433,8 @@ const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
 
 # the plan is to eventually overload getproperty to access entries of the dict
 @noinline function getproperty(x::Pairs, s::Symbol)
-    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    s == :data && depwarn("use values(kwargs) instead of kwargs.data", :getproperty, force=true)
+    s == :itr && depwarn("use keys(kwargs) instead of kwargs.itr", :getproperty, force=true)
     return getfield(x, s)
 end
 
@@ -528,7 +530,5 @@ end
 # END 1.11 deprecations
 
 # BEGIN 1.12 deprecations
-
-@deprecate stat(fd::Integer) stat(RawFD(fd))
 
 # END 1.12 deprecations

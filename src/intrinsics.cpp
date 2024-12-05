@@ -405,10 +405,11 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
-        AllocaInst *cast = emit_static_alloca(ctx, ty);
+        Align align = std::max(DL.getPrefTypeAlign(ty), DL.getPrefTypeAlign(to));
+        AllocaInst *cast = emit_static_alloca(ctx, ty, align);
         setName(ctx.emission_context, cast, "coercion");
-        ctx.builder.CreateStore(unboxed, cast);
-        unboxed = ctx.builder.CreateLoad(to, cast);
+        ctx.builder.CreateAlignedStore(unboxed, cast, align);
+        unboxed = ctx.builder.CreateAlignedLoad(to, cast, align);
     }
     else if (frompointer) {
         Type *INTT_to = INTT(to, DL);
@@ -440,14 +441,14 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         // up being dead code, and type inference knows that the other
         // branch's type is the only one that matters.
         if (type_is_ghost(to)) {
-            return NULL;
+            return nullptr;
         }
         CreateTrap(ctx.builder);
         return UndefValue::get(to); // type mismatch error
     }
 
-    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
-    if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
+    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;
+    if ((x.inline_roots.empty() && !x.ispointer()) || c != nullptr) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
@@ -472,28 +473,17 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     }
 
     unsigned alignment = julia_alignment(jt);
-    Type *ptype = to->getPointerTo();
-    if (p->getType() != ptype && isa<AllocaInst>(p)) {
-        // LLVM's mem2reg can't handle coercion if the load/store type does
-        // not match the type of the alloca. As such, it is better to
-        // perform the load using the alloca's type and then perform the
-        // appropriate coercion manually.
-        AllocaInst *AI = cast<AllocaInst>(p);
-        Type *AllocType = AI->getAllocatedType();
-        const DataLayout &DL = jl_Module->getDataLayout();
-        if (!AI->isArrayAllocation() &&
-                (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
-                (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
-                DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-            Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-            setName(ctx.emission_context, load, p->getName() + ".unbox");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-            return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
-        }
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    if (!x.inline_roots.empty()) {
+        assert(x.typ == jt);
+        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+        p = combined;
+        ai = combined_ai;
     }
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     return ai.decorateInst(load);
 }
 
@@ -507,18 +497,25 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
+    auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
+
+    if (!x.inline_roots.empty()) {
+        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+        return;
+    }
+
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
         store->setVolatile(isVolatile);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
-        ai.decorateInst(store);
+        dest_ai.decorateInst(store);
         return;
     }
 
     Value *src = data_pointer(ctx, x);
-    emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest), src, jl_aliasinfo_t::fromTBAA(ctx, x.tbaa), jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
+    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -692,10 +689,11 @@ static jl_cgval_t generic_cast(
             // understood that everything is implicitly rounded to 23 bits,
             // but if we start looking at more bits we need to actually do the
             // rounding first instead of carrying around incorrect low bits.
-            Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
+            Align align(julia_alignment((jl_value_t*)jlto));
+            Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType(), align);
             setName(ctx.emission_context, jlfloattemp_var, "rounding_slot");
-            ctx.builder.CreateStore(from, jlfloattemp_var);
-            from  = ctx.builder.CreateLoad(from->getType(), jlfloattemp_var, /*force this to load from the stack*/true);
+            ctx.builder.CreateAlignedStore(from, jlfloattemp_var, align);
+            from = ctx.builder.CreateAlignedLoad(from->getType(), jlfloattemp_var, align, /*force this to load from the stack*/true);
             setName(ctx.emission_context, from, "rounded");
         }
     }
@@ -767,7 +765,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerref_offset");
         Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
-        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1);
+        thePtr = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, thePtr, "pointerref_src");
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         emit_memcpy(ctx, strct, jl_aliasinfo_t::fromTBAA(ctx, tbaa), thePtr, jl_aliasinfo_t::fromTBAA(ctx, nullptr), size, Align(sizeof(jl_value_t*)), Align(align_nb));
@@ -830,10 +828,9 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, im1, "pointerset_idx");
 
-    Value *thePtr;
+    Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-        thePtr = emit_unbox(ctx, ctx.types().T_size->getPointerTo(), e, e.typ);
         auto gep = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         auto val = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), ctx.types().T_size);
@@ -842,13 +839,15 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
+    else if (!x.inline_roots.empty()) {
+        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
+    }
     else if (x.ispointer()) {
-        thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerset_offset");
-        auto gep = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1);
+        auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }
@@ -857,7 +856,6 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             typed_store(ctx, thePtr, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, true, false, false, false, false, false, nullptr, "atomic_pointerset", nullptr, nullptr);

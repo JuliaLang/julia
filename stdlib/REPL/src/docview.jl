@@ -81,7 +81,8 @@ function formatdoc(d::DocStr)
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    md = Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    assume_julia_code!(md)
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
@@ -93,6 +94,27 @@ function parsedoc(d::DocStr)
         d.object = md
     end
     d.object
+end
+
+"""
+    assume_julia_code!(doc::Markdown.MD) -> doc
+
+Assume that code blocks with no language specified are Julia code.
+"""
+function assume_julia_code!(doc::Markdown.MD)
+    assume_julia_code!(doc.content)
+    doc
+end
+
+function assume_julia_code!(blocks::Vector)
+    for (i, block) in enumerate(blocks)
+        if block isa Markdown.Code && block.language == ""
+            blocks[i] = Markdown.Code("julia", block.code)
+        elseif block isa Vector || block isa Markdown.MD
+            assume_julia_code!(block)
+        end
+    end
+    blocks
 end
 
 ## Trimming long help ("# Extended help")
@@ -451,7 +473,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
