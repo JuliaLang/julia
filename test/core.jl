@@ -2621,7 +2621,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test f8338(2) == 8
+    @test invokelatest(f8338, 2) == 8
 end
 
 # call overloading (#2403)
@@ -8332,3 +8332,44 @@ let s = mktemp() do path, io
     end
     @test strip(s) == "xxx = 42"
 end
+
+# `module` has an implicit world-age increment
+let foo = eval(Expr(:toplevel, :(module BarModuleInc; struct FooModuleInc; end; end), :(BarModuleInc.FooModuleInc())))
+    @Core.latestworld
+    @test foo == BarModuleInc.FooModuleInc()
+end
+
+let
+    eval(:(module BarModuleInc2; module BazModuleInc; struct FooModuleInc; end; end; const foo = BazModuleInc.FooModuleInc(); end))
+    @Core.latestworld
+    @test BarModuleInc2.foo == BarModuleInc2.BazModuleInc.FooModuleInc()
+end
+
+# `toplevel` has implicit world age increment between expansion and evaluation
+macro define_call(sym)
+    Core.eval(__module__, :($sym() = 1))
+    :($sym())
+end
+@test eval(Expr(:toplevel, :(@define_call(f_macro_defined1)))) == 1
+@test @define_call(f_macro_defined2) == 1
+
+# `invoke` of `Method`
+let m = which(+, (Int, Int))
+    @eval f56692(i) = invoke(+, $m, i, 4)
+    global g56692() = f56692(5) == 9 ? "true" : false
+end
+@test @inferred(f56692(3)) == 7
+@test @inferred(g56692()) == "true"
+
+# `invoke` of `CodeInstance`
+f_invalidate_me() = return 1
+f_invoke_me() = return f_invalidate_me()
+@test f_invoke_me() == 1
+const f_invoke_me_ci = Base.specialize_method(Base._which(Tuple{typeof(f_invoke_me)})).cache
+f_call_me() = invoke(f_invoke_me, f_invoke_me_ci)
+@test invoke(f_invoke_me, f_invoke_me_ci) == 1
+@test f_call_me() == 1
+@test_throws TypeError invoke(f_invoke_me, f_invoke_me_ci, 1)
+f_invalidate_me() = 2
+@test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
+@test_throws ErrorException f_call_me()

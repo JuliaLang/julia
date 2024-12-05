@@ -427,11 +427,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    // we also can't use jl_safepoint_wait_gc because that assumes we're in a task.
     jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    while (jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause();
-    }
+    // pass NULL as a special token to indicate we are running on an unmanaged task
+    jl_safepoint_wait_gc(NULL);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
@@ -915,15 +913,20 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             jl_profile_lock_acquired(lock);
             return;
         }
-        if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking
+            int8_t gc_state;
+            if (safepoint)
+                gc_state = jl_gc_safe_enter(self->ptls);
             uv_mutex_lock(&tls_lock);
             if (jl_atomic_load_relaxed(&lock->owner))
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
+            if (safepoint)
+                jl_gc_safe_leave(self->ptls, gc_state);
+        }
+        else if (safepoint) {
+            jl_gc_safepoint_(self->ptls);
         }
         jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);

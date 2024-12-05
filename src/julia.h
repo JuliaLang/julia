@@ -279,7 +279,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 11
-#define NUM_IR_FLAGS 13
+#define NUM_IR_FLAGS 3
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -292,15 +292,8 @@ typedef struct _jl_code_info_t {
         // 1 << 0 = inbounds region
         // 1 << 1 = callsite inline region
         // 1 << 2 = callsite noinline region
-        // 1 << 3 = refined statement
-        // 1 << 4 = :consistent
-        // 1 << 5 = :effect_free
-        // 1 << 6 = :nothrow
-        // 1 << 7 = :terminates
-        // 1 << 8 = :noub
-        // 1 << 9 = :effect_free_if_inaccessiblememonly
-        // 1 << 10 = :inaccessiblemem_or_argmemonly
-        // 1 << 11-19 = callsite effects overrides
+        // 1 << 3-14 = purity
+        // 1 << 16+ = reserved for inference
     // miscellaneous data:
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
@@ -2263,6 +2256,7 @@ typedef struct _jl_excstack_t jl_excstack_t;
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
+    jl_value_t *scope;
     struct _jl_handler_t *prev;
     int8_t gc_state;
     size_t locks_len;
@@ -2598,6 +2592,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_HANDLE_SIGNALS_ON 1
 #define JL_OPTIONS_HANDLE_SIGNALS_OFF 0
 
+#define JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES 1
+#define JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_NO 0
+
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES 1
 #define JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO 0
 
@@ -2646,8 +2643,6 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *) JL_NOTSAFEPOINT;
 // codegen interface ----------------------------------------------------------
 // The root propagation here doesn't have to be literal, but callers should
 // ensure that the return value outlives the MethodInstance
-typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
-    size_t min_world, size_t max_world);
 typedef struct {
     int track_allocations;  // can we track allocations?
     int code_coverage;      // can we measure coverage?
@@ -2663,8 +2658,6 @@ typedef struct {
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
     int trim; // can we emit dynamic dispatches?
-    // Cache access. Default: jl_rettype_inferred_native.
-    jl_codeinstance_lookup_t lookup;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

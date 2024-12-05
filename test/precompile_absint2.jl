@@ -15,30 +15,30 @@ precompile_test_harness() do load_path
         import SimpleModule: basic_caller, basic_callee
 
         module Custom
-            const CC = Core.Compiler
+            import Base.Compiler: Compiler
             include($newinterp_path)
             @newinterp PrecompileInterpreter
             struct CustomData
                 inferred
                 CustomData(@nospecialize inferred) = new(inferred)
             end
-            function CC.transform_result_for_cache(interp::PrecompileInterpreter, result::CC.InferenceResult)
-                inferred_result = @invoke CC.transform_result_for_cache(
-                    interp::CC.AbstractInterpreter, result::CC.InferenceResult)
+            function Compiler.transform_result_for_cache(interp::PrecompileInterpreter, result::Compiler.InferenceResult)
+                inferred_result = @invoke Compiler.transform_result_for_cache(
+                    interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
                 return CustomData(inferred_result)
             end
-            function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
-                                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
+            function Compiler.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                                            @nospecialize(info::Compiler.CallInfo), stmt_flag::UInt32)
                 if src isa CustomData
                     src = src.inferred
                 end
-                return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                                      info::CC.CallInfo, stmt_flag::UInt32)
+                return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter, src::Any,
+                                                      info::Compiler.CallInfo, stmt_flag::UInt32)
             end
-            CC.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
-                CC.retrieve_ir_for_inlining(cached_result, src.inferred)
-            CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
-                CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
+            Compiler.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
+                Compiler.retrieve_ir_for_inlining(cached_result, src.inferred)
+            Compiler.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+                Compiler.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
         end
 
         Base.return_types((Float64,)) do x

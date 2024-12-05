@@ -142,13 +142,13 @@ function repl_workload()
             # wait for the definitive prompt before start writing to the TTY
             check_errors(readuntil(output_copy, JULIA_PROMPT))
             write(debug_output, "\n#### REPL STARTED ####\n")
-            sleep(0.1)
+            sleep(0.01)
             check_errors(readavailable(output_copy))
             # Input our script
             precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
-                sleep(0.1)
+                sleep(0.01) # try to let a bit of output accumulate before reading again
                 curr += 1
                 # consume any other output
                 bytesavailable(output_copy) > 0 && check_errors(readavailable(output_copy))
@@ -168,7 +168,7 @@ function repl_workload()
                     occursin(PKG_PROMPT, strbuf) && break
                     occursin(SHELL_PROMPT, strbuf) && break
                     occursin(HELP_PROMPT, strbuf) && break
-                    sleep(0.1)
+                    sleep(0.01) # try to let a bit of output accumulate before reading again
                 end
                 notify(repl_init_event)
                 check_errors(strbuf)
@@ -187,37 +187,15 @@ function repl_workload()
     nothing
 end
 
-# Copied from PrecompileTools.jl
 let
-    function check_edges(node)
-        parentmi = node.mi_info.mi
-        for child in node.children
-            childmi = child.mi_info.mi
-            if !(isdefined(childmi, :backedges) && parentmi ∈ childmi.backedges)
-                precompile(childmi.specTypes)
-            end
-            check_edges(child)
-        end
-    end
-
     if Base.generating_output() && Base.JLOptions().use_pkgimages != 0
-        Core.Compiler.Timings.reset_timings()
-        Core.Compiler.__set_measure_typeinf(true)
-        try
-            repl_workload()
-        finally
-            Core.Compiler.__set_measure_typeinf(false)
-            Core.Compiler.Timings.close_current_timer()
-        end
-        roots = Core.Compiler.Timings._timings[1].children
-        for child in roots
-            precompile(child.mi_info.mi.specTypes)
-            check_edges(child)
-        end
+        repl_workload()
         precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
         precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
         precompile(Tuple{typeof(Base.:(==)), Char, String})
-        precompile(Tuple{typeof(Base.reseteof), Base.TTY})
+        #for child in copy(Base.newly_inferred)
+        #    precompile((child::Base.CodeInstance).def)
+        #end
     end
 end
 

@@ -54,4 +54,31 @@ module KeyValue
     function get end
 end
 
+# Compiler-recognized intrinsics for compiler plugins
+"""
+    module CompilerPlugins
+
+Implements a pair of functions `typeinf`/`typeinf_edge`. When the optimizer sees
+a call to `typeinf`, it has license to instead call `typeinf_edge`, supplying the
+current inference stack in `parent_frame` (but otherwise supplying the arguments
+to `typeinf`). typeinf_edge will return the `CodeInstance` that `typeinf` would
+have returned at runtime. The optimizer may perform a non-IPO replacement of
+the call to `typeinf` by the result of `typeinf_edge`. In addition, the IPO-safe
+fields of the `CodeInstance` may be propagated in IPO mode.
+"""
+module CompilerPlugins
+    """
+        typeinf(owner, mi, source_mode)::CodeInstance
+
+    Return a `CodeInstance` for the given `mi` whose valid results include at
+    the least current tls world and satisfies the requirements of `source_mode`.
+    """
+    function typeinf end
+
+    """
+        typeinf_edge(owner, mi, parent_frame, world, abi_mode)::CodeInstance
+    """
+    function typeinf_edge end
+end
+
 end

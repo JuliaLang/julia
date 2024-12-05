@@ -1475,21 +1475,15 @@ InitialOptimizations(next) = SubArrayOptimization(
             Small{10}(
                 IEEEFloatOptimization(
                     next)))))
+
 """
-    DEFAULT_STABLE
+    struct DefaultStable <: Algorithm end
 
-The default sorting algorithm.
+`DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
+algorithm should be used, but does not specify exactly which algorithm.
 
-This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
-equal). It makes an effort to be fast for most inputs.
-
-The algorithms used by `DEFAULT_STABLE` are an implementation detail. See extended help
-for the current dispatch system.
-
-# Extended Help
-
-`DEFAULT_STABLE` is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid
-of Radix, Insertion, Counting, Quick sorts.
+Currently, it is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of
+Radix, Insertion, Counting, Quick sorts.
 
 We begin with MissingOptimization because it has no runtime cost when it is not
 triggered and can enable other optimizations to be applied later. For example,
@@ -1549,7 +1543,39 @@ stage.
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
 otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
-const DEFAULT_STABLE = InitialOptimizations(
+struct DefaultStable <: Algorithm end
+
+"""
+    DEFAULT_STABLE
+
+The default sorting algorithm.
+
+This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
+equal). It makes an effort to be fast for most inputs.
+
+The algorithms used by `DEFAULT_STABLE` are an implementation detail. See the docstring
+of `Base.Sort.DefaultStable` for the current dispatch system.
+"""
+const DEFAULT_STABLE = DefaultStable()
+
+"""
+    DefaultUnstable <: Algorithm
+
+Like [`DefaultStable`](@ref), but does not guarantee stability.
+"""
+struct DefaultUnstable <: Algorithm end
+
+"""
+    DEFAULT_UNSTABLE
+
+An efficient sorting algorithm which may or may not be stable.
+
+The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
+the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
+"""
+const DEFAULT_UNSTABLE = DefaultUnstable()
+
+const _DEFAULT_ALGORITHMS_FOR_VECTORS = InitialOptimizations(
     IsUIntMappable(
         Small{40}(
             CheckSorted(
@@ -1560,15 +1586,10 @@ const DEFAULT_STABLE = InitialOptimizations(
                                 ScratchQuickSort())))))),
         StableCheckSorted(
             ScratchQuickSort())))
-"""
-    DEFAULT_UNSTABLE
 
-An efficient sorting algorithm.
+_sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw) =
+    _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
-The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
-the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
-"""
-const DEFAULT_UNSTABLE = DEFAULT_STABLE
 const SMALL_THRESHOLD  = 20
 
 function Base.show(io::IO, alg::Algorithm)

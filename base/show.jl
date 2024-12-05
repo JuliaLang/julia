@@ -443,7 +443,7 @@ function show_circular(io::IOContext, @nospecialize(x))
     for (k, v) in io.dict
         if k === :SHOWN_SET
             if v === x
-                print(io, "#= circular reference @-$d =#")
+                printstyled(io, "#= circular reference @-$d =#"; color = :yellow)
                 return true
             end
             d += 1
@@ -2821,7 +2821,7 @@ function show(io::IO, vm::Core.TypeofVararg)
     end
 end
 
-Compiler.include(Compiler.IRShow, "ssair/show.jl") # define `show` for the compiler types
+Compiler.load_irshow!()
 const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)

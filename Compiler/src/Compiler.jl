@@ -87,14 +87,14 @@ eval(m, x) = Core.eval(m, x)
 function include(x::String)
     if !isdefined(Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(Compiler, x)
 end
 
 function include(mod::Module, x::String)
     if !isdefined(Base, :end_base_include)
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(mod, x)
 end
@@ -137,9 +137,7 @@ if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
 end
 end
 
-if false
-    import Base: Base, @show
-else
+if !isdefined(Base, :end_base_include)
     macro show(ex...)
         blk = Expr(:block)
         for s in ex
@@ -149,6 +147,8 @@ else
         isempty(ex) || push!(blk.args, :value)
         blk
     end
+else
+    using Base: @show
 end
 
 include("cicache.jl")
@@ -181,12 +181,26 @@ include("bootstrap.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
+macro __SOURCE_FILE__()
+    __source__.file === nothing && return nothing
+    return QuoteNode(__source__.file::Symbol)
+end
+
 module IRShow end
+function load_irshow!()
+    if isdefined(Base, :end_base_include)
+        # This code path is exclusively for Revise, which may want to re-run this
+        # after bootstrap.
+        include(IRShow, Base.joinpath(Base.dirname(Base.String(@__SOURCE_FILE__)), "ssair/show.jl"))
+    else
+        include(IRShow, "ssair/show.jl")
+    end
+end
 if !isdefined(Base, :end_base_include)
     # During bootstrap, skip including this file and defer it to base/show.jl to include later
 else
     # When this module is loaded as the standard library, include this file as usual
-    include(IRShow, "ssair/show.jl")
+    load_irshow!()
 end
 
 end # baremodule Compiler

@@ -642,13 +642,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                     escape_invoke!(astate, pc, stmt.args)
                 elseif head === :new || head === :splatnew
                     escape_new!(astate, pc, stmt.args)
-                elseif head === :(=)
-                    lhs, rhs = stmt.args
-                    if isa(lhs, GlobalRef) # global store
-                        add_escape_change!(astate, rhs, ⊤)
-                    else
-                        unexpected_assignment!(ir, pc)
-                    end
                 elseif head === :foreigncall
                     escape_foreigncall!(astate, pc, stmt.args)
                 elseif head === :throw_undef_if_not # XXX when is this expression inserted ?
@@ -981,11 +974,6 @@ function escape_unanalyzable_obj!(astate::AnalysisState, @nospecialize(obj), obj
     return objinfo
 end
 
-@noinline function unexpected_assignment!(ir::IRCode, pc::Int)
-    @eval Main (ir = $ir; pc = $pc)
-    error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
-end
-
 is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
@@ -1068,7 +1056,10 @@ end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
-    mi = first(args)::MethodInstance
+    mi = first(args)
+    if !(mi isa MethodInstance)
+        mi = (mi::CodeInstance).def # COMBAK get escape info directly from CI instead?
+    end
     first_idx, last_idx = 2, length(args)
     add_liveness_changes!(astate, pc, args, first_idx, last_idx)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available

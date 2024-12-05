@@ -1563,6 +1563,13 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.10"
     Multiple `let` assignments are supported since Julia 1.10.
 
+# Special implicit world age increment for `@testset begin`
+
+World age inside `@testset begin` increments implicitly after every statement.
+This matches the behavior of ordinary toplevel code, but not that of ordinary
+`begin/end` blocks, i.e. with respect to world age, `@testset begin` behaves
+as if the body of the `begin/end` block was written at toplevel.
+
 ## Examples
 ```jldoctest
 julia> @testset let logi = log(im)
@@ -1657,6 +1664,21 @@ function testset_context(args, ex, source)
     return esc(ex)
 end
 
+function insert_toplevel_latestworld(@nospecialize(tests))
+    isa(tests, Expr) || return tests
+    (tests.head !== :block) && return tests
+    ret = Expr(:block)
+    for arg in tests.args
+        push!(ret.args, arg)
+        if isa(arg, LineNumberNode) ||
+          (isa(arg, Expr) && arg.head in (:latestworld, :var"latestworld-if-toplevel"))
+            continue
+        end
+        push!(ret.args, Expr(:var"latestworld-if-toplevel"))
+    end
+    return ret
+end
+
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1674,6 +1696,8 @@ function testset_beginend_call(args, tests, source)
     if testsettype === nothing
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
+
+    tests = insert_toplevel_latestworld(tests)
 
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
