@@ -399,7 +399,7 @@ function compile_conditional(ctx, ex, false_label)
 end
 
 function add_lambda_local!(ctx::LinearIRContext, id)
-    push!(ctx.lambda_bindings.locals, id)
+    init_lambda_binding(ctx.lambda_bindings, id)
 end
 
 # Lowering of exception handling must ensure that
@@ -941,11 +941,14 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for id in sort(collect(ex.lambda_bindings.locals))
-        info = lookup_binding(ctx.bindings, id)
-        @assert info.kind == :local
-        push!(slots, Slot(info.name, :local, false))
-        slot_rewrites[id] = length(slots)
+    for (id, lbinfo) in sort(collect(pairs(ex.lambda_bindings.bindings)), by=first)
+        if !lbinfo.is_captured
+            info = lookup_binding(ctx.bindings, id)
+            if info.kind == :local
+                push!(slots, Slot(info.name, :local, false))
+                slot_rewrites[id] = length(slots)
+            end
+        end
     end
     for (i,arg) in enumerate(children(static_parameters))
         @assert kind(arg) == K"BindingId"

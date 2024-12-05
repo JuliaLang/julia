@@ -6,7 +6,7 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
 end
 
 function add_lambda_local!(ctx::ClosureConversionCtx, id)
-    push!(ctx.lambda_bindings.locals, id)
+    init_lambda_binding(ctx.lambda_bindings, id)
 end
 
 # Convert `ex` to `type` by calling `convert(type, ex)` when necessary.
