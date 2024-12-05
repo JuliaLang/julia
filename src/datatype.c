@@ -19,23 +19,21 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
-static int is10digit(char c) JL_NOTSAFEPOINT
-{
-    return (c >= '0' && c <= '9');
-}
-
 static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
         return s;
-    char *end = strrchr(n, '#');
+    char *end = strchr(&n[1], '#');
+    // handle `#f...##...#...`
+    if (end != NULL && end[1] == '#')
+        end = strchr(&end[2], '#');
     int32_t len;
-    if (end == n || end == n+1)
+    if (end == NULL || end == n+1)
         len = strlen(n) - 1;
     else
         len = (end-n) - 1;  // extract `f` from `#f#...`
-    if (is10digit(n[1]))
+    if (isdigit(n[1]) || is_canonicalized_anonfn_typename(n))
         return _jl_symbol(n, len+1);
     return _jl_symbol(&n[1], len);
 }
@@ -685,14 +683,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     st->isidentityfree = isidentityfree;
     jl_maybe_allocate_singleton_instance(st);
     return;
-}
-
-static int is_anonfn_typename(char *name)
-{
-    if (name[0] != '#' || name[1] == '#')
-        return 0;
-    char *other = strrchr(name, '#');
-    return other > &name[1] && is10digit(other[1]);
 }
 
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
