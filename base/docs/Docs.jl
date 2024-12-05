@@ -178,6 +178,7 @@ docstr(object, data = Dict{Symbol,Any}()) = _docstr(object, data)
 _docstr(vec::Core.SimpleVector, data::Dict{Symbol,Any}) = DocStr(vec,            nothing, data)
 _docstr(str::AbstractString,    data::Dict{Symbol,Any}) = DocStr(Core.svec(str), nothing, data)
 _docstr(object,                 data::Dict{Symbol,Any}) = DocStr(Core.svec(),     object, data)
+_docstr(strs::Vector{DocStr},   data::Dict{Symbol,Any}) = error("Cannot apply multiple docstrings to a single object.")
 
 _docstr(doc::DocStr, data::Dict{Symbol,Any}) = (doc.data = merge(data, doc.data); doc)
 
@@ -563,33 +564,51 @@ isquotedmacrocall(@nospecialize x) =
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
-function _doc(binding::Binding, sig::Type = Union{})
+function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
     end
-    # Lookup first match for `binding` and `sig` in all modules of the docsystem.
+    results, groups = DocStr[], MultiDoc[]
+    # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
+            push!(groups, multidoc)
             for msig in multidoc.order
-                sig <: msig && return multidoc.docs[msig]
-            end
-            # if no matching signatures, return first
-            if !isempty(multidoc.docs)
-                return first(values(multidoc.docs))
+                sig <: msig && push!(results, multidoc.docs[msig])
             end
         end
     end
-    return nothing
+    if isempty(groups)
+        # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
+        # is an alias of some other `Binding`. When it is we then re-run `doc` with that
+        # `Binding`, otherwise we return nothing and the front end will decide what to
+        # display, usually a brief description of the binding.
+        alias = aliasof(binding)
+        alias == binding ? nothing : doc(alias, sig)
+    else
+        # There was at least one match for `binding` while searching. If there weren't any
+        # matches for `sig` then we concatenate *all* the docs from the matching `Binding`s.
+        if isempty(results)
+            for group in groups, each in group.order
+                push!(results, group.docs[each])
+            end
+        end
+        if length(results) == 1
+            return results[1]
+        else
+            return results
+        end
+    end
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-_doc(obj::UnionAll) = _doc(Base.unwrap_unionall(obj))
-_doc(object, sig::Type = Union{}) = _doc(aliasof(object, typeof(object)), sig)
-_doc(object, sig...)              = _doc(object, Tuple{sig...})
+doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
+doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
+doc(object, sig...)              = doc(object, Tuple{sig...})
 
 function simple_lookup_doc(ex)
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
@@ -599,14 +618,16 @@ function simple_lookup_doc(ex)
     if haskey(keywords, ex)
         return keywords[ex]
     elseif !isa(ex, Expr) && !isa(ex, Symbol)
-        return :($(_doc)($(typeof)($(esc(ex)))))
+        return :($(doc)($(typeof)($(esc(ex)))))
+    elseif isexpr(ex, :incomplete)
+        return nothing
     end
     binding = esc(bindingexpr(namify(ex)))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
-        :($(_doc)($binding, $sig))
+        :($(doc)($binding, $sig))
     else
-        :($(_doc)($binding))
+        :($(doc)($binding))
     end
 end
 
@@ -614,9 +635,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
-        # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        return invokelatest(REPL.lookup_doc, ex)
     else
         return simple_lookup_doc(ex)
     end
