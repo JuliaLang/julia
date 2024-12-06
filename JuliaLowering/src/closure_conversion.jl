@@ -3,6 +3,7 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     bindings::Bindings
     mod::Module
     lambda_bindings::LambdaBindings
+    toplevel_stmts::SyntaxList{GraphType}
 end
 
 function add_lambda_local!(ctx::ClosureConversionCtx, id)
@@ -164,11 +165,37 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 children(ex)...
         ])
     elseif k == K"lambda"
-        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings)
-        mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
+        closure_convert_lambda(ctx, ex)
     else
         mapchildren(e->_convert_closures(ctx, e), ctx, ex)
     end
+end
+
+function closure_convert_lambda(ctx, ex)
+    @assert kind(ex) == K"lambda"
+    body_stmts = SyntaxList(ctx)
+    toplevel_stmts = ex.is_toplevel_thunk ? body_stmts : ctx.toplevel_stmts
+    ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                                ex.lambda_bindings, toplevel_stmts)
+    lambda_children = SyntaxList(ctx)
+    push!(lambda_children, _convert_closures(ctx2, ex[1]))
+    push!(lambda_children, _convert_closures(ctx2, ex[2]))
+
+    # Convert body. This is done as a special case to allow inner calls to
+    # _convert_closures to also add to body_stmts in the case that
+    # ex.is_toplevel_thunk is true.
+    in_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
+    for e in in_body_stmts
+        push!(body_stmts, _convert_closures(ctx2, e))
+    end
+    push!(lambda_children, @ast ctx2 ex[3] [K"block" body_stmts...])
+
+    if numchildren(ex) > 3
+        @assert numchildren(ex) == 4
+        push!(lambda_children, _convert_closures(ctx2, ex[4]))
+    end
+
+    makenode(ctx, ex, ex, lambda_children)
 end
 
 
@@ -186,8 +213,7 @@ Invariants:
 * Any new binding IDs must be added to the enclosing lambda locals
 """
 function convert_closures(ctx::ScopeResolutionContext, ex)
-    @assert kind(ex) == K"lambda"
-    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings)
-    ex1 = _convert_closures(ctx, ex)
+    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings, SyntaxList(ctx))
+    ex1 = closure_convert_lambda(ctx, ex)
     ctx, ex1
 end
