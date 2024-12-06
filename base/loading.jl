@@ -2687,6 +2687,7 @@ function __require_prelocked(pkg::PkgId, env)
                             A dependency is already loaded with a different version than the version specified in the active environment.
                             $(repr("text/plain", pkg)) will be loaded directly and not precompiled.
                             There may be unexpected issues due to the dependency version mismatch.
+                            Use `pkg> status --manifest` to review the mismatched dependency versions.
                             """
                     else
                         @warn "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg)) directly." exception=loaded
