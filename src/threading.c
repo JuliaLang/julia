@@ -773,9 +773,9 @@ void jl_init_threading(void)
     }
     int16_t ngcthreads = jl_n_markthreads + jl_n_sweepthreads;
 
-#ifdef MMTK_GC
-    ngcthreads = 0;
-#endif
+    if (strstr(jl_gc_active_impl(), "MMTk")) {
+        ngcthreads = 0;
+    }
 
     jl_all_tls_states_size = nthreads + nthreadsi + ngcthreads;
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
