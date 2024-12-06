@@ -19,7 +19,7 @@ export GitError
             EUNMERGED       = Cint(-10), # merge in progress prevented op
             ENONFASTFORWARD = Cint(-11), # ref not fast-forwardable
             EINVALIDSPEC    = Cint(-12), # name / ref not in valid format
-            EMERGECONFLICT  = Cint(-13), # merge conflict prevented op
+            ECONFLICT       = Cint(-13), # Checkout conflicts prevented operation
             ELOCKED         = Cint(-14), # lock file prevented op
             EMODIFIED       = Cint(-15), # ref value does not match expected
             EAUTH           = Cint(-16), # authentication error
