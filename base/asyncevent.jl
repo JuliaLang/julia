@@ -285,8 +285,9 @@ callback is only run once. The function `callback` is called with a single argum
 itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
 has already expired.
 
-If `spawn` is `false`, the created task will be marked as sticky, meaning that it will not be allowed
-to move thread, which will also prevent the task that created the timer from moving thread.
+If `spawn` is `true`, the created task will be spawned, meaning that it will be allowed
+to move thread, which avoids the side-effect of forcing the parent task to get stuck to the thread
+it is on.
 
 !!! compat "Julia 1.12"
     The `spawn` argument was introduced in Julia 1.12.
