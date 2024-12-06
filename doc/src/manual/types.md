@@ -1591,24 +1591,25 @@ to adjust printing.
 
 Here is a brief summary of the different output functions in Julia and how they are related.
 Most new types should only need to define `show` methods, if anything,
-since the other functions described here (except `write`) all call `show` in the absence of a more specific method. 
+since the other functions mentioned here (except `write`) call `show` in the absence of a more specific method. 
 
-* The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is typically the format you might employ to input `x` into Julia.
+* The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is typically the format you would employ to input `x` into Julia.
 * The 3-argument [`show(io, mime, x)`](@ref) method performs verbose pretty-printing of `x`. Multiple 3-argument `show` methods can be defined for various MIME types to enable richer display of `x` in some interactive environments as discussed above. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`. 
 * [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks.
-* [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. This is the function used by the REPL to output the result of an evaluated expression. In the REPL, `display` calls `show(io, MIME"text/plain", x)`. In a notebook, like Jupyter or Pluto, it calls `show(io, MIME"html/plain", x)` (or even `show(io, MIME"<TODO:????IMAGE????>", x)` if `x` is representable as an image).
-* * [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
-
- TODO: <Explain or point to difference between "text/plain", MIME"text/plain", and ::MIME"text/plain">>
+* [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. This is the function used by the REPL to output the result of an evaluated expression. In the REPL, `display` calls `show(io, MIME"text/plain", x)`. In a notebook, like Jupyter or Pluto, `display` calls `show(io, MIME"text/html", x)` (or sometimes `show(io, MIME"image/<format>", x)` if `x` is representable as an image).
+* [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
  
 The frist argument to these functions, `io`, defines where the output should be written.
 In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).
 [`stdout`](@ref) directs output to the default display, typically the terminal window.
-The `io` argument for all the above functions defaults to `stdout` if that argument is omitted.
+The `io` argument for all the above functions defaults to `stdout` if it is omitted.
+It is also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper.
+For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`.
+And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.
 
-It is also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper. For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`. And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.
-
-The functions `string`, `annotatedstring`, and `repr` may be used to save values to a string (rather than output to `io`). These functions call either `show` or `print` as indicated below, so it is usually not necessary to define new methods for them. Note that [`convert(String, x)`](@ref) is purposely not defined so the user can be explicit about the string representation they desire.
+The functions `string`, `annotatedstring`, and `repr` may be used to save values to a string (rather than output to `io`).
+These functions call either `show` or `print` as indicated below, so it is usually not necessary to define new methods for them separately.
+Note that [`convert(String, x)`](@ref) is purposely not defined so the user can be explicit about the string representation they desire.
 
 * [`string(x)`](@ref) and [`annotatedstring(x)`](@ref) call [`print(io, x)`](@ref).
 * The 2-argument `repr("text/plain", x)` calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
