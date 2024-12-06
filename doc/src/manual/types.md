@@ -1598,8 +1598,8 @@ since the other functions mentioned here (except `write`) call `show` in the abs
 * [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks.
 * [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. This is the function used by the REPL to output the result of an evaluated expression. In the REPL, `display` calls `show(io, MIME"text/plain", x)`. In a notebook, like Jupyter or Pluto, `display` calls `show(io, MIME"text/html", x)` (or sometimes `show(io, MIME"image/<format>", x)` if `x` is representable as an image).
 * [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
- 
-The frist argument to these functions, `io`, defines where the output should be written.
+
+The first argument to these functions, `io`, defines where the output should be written.
 In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).
 [`stdout`](@ref) directs output to the default display, typically the terminal window.
 The `io` argument for all the above functions defaults to `stdout` if it is omitted.
