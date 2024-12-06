@@ -1591,10 +1591,10 @@ to adjust printing.
 
 Here is a brief summary of the different output functions in Julia and how they are related.
 Most new types should only need to define `show` methods, if anything,
-since the other functions mentioned here (except `write`) call `show` in the absence of a more specific method. 
+since the other functions mentioned here (except `write`) call `show` in the absence of a more specific method.
 
 * The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is typically the format you would employ to input `x` into Julia.
-* The 3-argument [`show(io, mime, x)`](@ref) method performs verbose pretty-printing of `x`. Multiple 3-argument `show` methods can be defined for various MIME types to enable richer display of `x` in some interactive environments as discussed above. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`. 
+* The 3-argument [`show(io, mime, x)`](@ref) method performs verbose pretty-printing of `x`. Multiple 3-argument `show` methods can be defined for various MIME types to enable richer display of `x` in some interactive environments as discussed above. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`.
 * [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks.
 * [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. This is the function used by the REPL to output the result of an evaluated expression. In the REPL, `display` calls `show(io, MIME"text/plain", x)`. In a notebook, like Jupyter or Pluto, `display` calls `show(io, MIME"text/html", x)` (or sometimes `show(io, MIME"image/<format>", x)` if `x` is representable as an image).
 * [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
