@@ -34,19 +34,11 @@ import Core.OptimizedGenerics.CompilerPlugins: typeinf, typeinf_edge
     Compiler.typeinf_edge(interp, mi.def, mi.specTypes, Core.svec(), parent_frame, false, false)
 end
 
-# TODO: This needs special compiler support to properly case split for multiple
-# method matches, etc.
-@noinline function mi_for_tt(tt, world=Base.tls_world_age())
-    interp = SplitCacheInterp(; world)
-    match, _ = Compiler.findsup(tt, Compiler.method_table(interp))
-    Base.specialize_method(match)
-end
-
 function with_new_compiler(f, args...)
-    tt = Base.signature_type(f, typeof(args))
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
     world = Base.tls_world_age()
     new_compiler_ci = Core.OptimizedGenerics.CompilerPlugins.typeinf(
-        SplitCacheOwner(), mi_for_tt(tt), Compiler.SOURCE_MODE_ABI
+        SplitCacheOwner(), mi, Compiler.SOURCE_MODE_ABI
     )
     invoke(f, new_compiler_ci, args...)
 end
