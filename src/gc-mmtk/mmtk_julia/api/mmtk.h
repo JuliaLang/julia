@@ -50,6 +50,7 @@ extern void mmtk_runtime_panic(void);
 extern void mmtk_unreachable(void);
 extern unsigned char mmtk_pin_object(void* obj);
 extern bool mmtk_is_pinned(void* obj);
+extern const char* get_mmtk_version(void);
 
 extern void mmtk_set_vm_space(void* addr, size_t size);
 extern void mmtk_immortal_region_post_alloc(void* addr, size_t size);

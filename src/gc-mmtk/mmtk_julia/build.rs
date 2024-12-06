@@ -67,4 +67,6 @@ fn main() {
     bindings
         .write_to_file("src/julia_types.rs")
         .expect("Couldn't write bindings!");
+
+    built::write_built_file().expect("Failed to acquire build-time information");
 }

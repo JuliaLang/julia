@@ -17,6 +17,7 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 
 pub mod active_plan;
 pub mod api;
+mod build_info;
 pub mod collection;
 pub mod object_model;
 pub mod reference_glue;
