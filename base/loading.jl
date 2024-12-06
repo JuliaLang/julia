@@ -2682,9 +2682,14 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    if !disable_serial_precompile
-                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
+                    if haskey(reasons, "wrong dep version loaded") # TODO: this is a bit of a hack as the dict is more of a debug thing
+                        @warn """
+                            A dependency is already loaded with a different version than the version specified in the active environment.
+                            $(repr("text/plain", pkg)) will be loaded directly and not precompiled.
+                            There may be unexpected issues due to the dependency version mismatch.
+                            """
+                    else
+                        @warn "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg)) directly." exception=loaded
                     end
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
