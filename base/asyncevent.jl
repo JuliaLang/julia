@@ -275,7 +275,7 @@ end
 
 # timer with repeated callback
 """
-    Timer(callback::Function, delay; interval = 0, spawn::Bool=true)
+    Timer(callback::Function, delay; interval = 0, spawn::Bool=false)
 
 Create a timer that runs the function `callback` at each timer expiration.
 
@@ -310,7 +310,7 @@ julia> begin
 3
 ```
 """
-function Timer(cb::Function, timeout; spawn::Bool=true, kwargs...)
+function Timer(cb::Function, timeout; spawn::Bool=false, kwargs...)
     timer = Timer(timeout; kwargs...)
     t = @task begin
         unpreserve_handle(timer)
