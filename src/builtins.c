@@ -1590,8 +1590,10 @@ JL_CALLABLE(jl_f_invoke)
     } else if (jl_is_code_instance(argtypes)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-        if (jl_tuple1_isa(args[0], &args[2], nargs - 2, (jl_datatype_t*)codeinst->def->specTypes)) {
-            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 2));
+        // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->specTypes) ||
+            (jl_is_method(codeinst->def->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->def.method->sig))) {
+            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
         }
         if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
             jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
@@ -1604,10 +1606,10 @@ JL_CALLABLE(jl_f_invoke)
         if (invoke) {
             return invoke(args[0], &args[2], nargs - 2, codeinst);
         } else {
-            if (codeinst->owner != jl_nothing || !jl_is_method(codeinst->def->def.value)) {
+            if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_gf_invoke_by_method(codeinst->def->def.method, args[0], &args[2], nargs - 1);
+            return jl_invoke(args[0], &args[2], nargs - 1, codeinst->def);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
