@@ -2064,8 +2064,8 @@ to `invoke(f, method.sig, args...)`.
 The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
 The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
 `invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
-parent MethodInstance or from a world age not included in the `min_world`/`max_world` range.
-It is undefined behavior to invoke a CodeInstance whose behavior does not match the constraints
+parent `MethodInstance` or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a `CodeInstance` whose behavior does not match the constraints
 specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
 by external compilers), it may be an error to invoke them after passing through precompilation.
 This is an advanced interface intended for use with external compiler plugins.
