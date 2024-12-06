@@ -2598,6 +2598,7 @@ end
 # Unused
 const PKG_PRECOMPILE_HOOK = Ref{Function}()
 disable_parallel_precompile::Bool = false
+disable_serial_precompile::Bool = true
 
 # Returns `nothing` or the new(ish) module
 function __require_prelocked(pkg::PkgId, env)
@@ -2660,25 +2661,31 @@ function __require_prelocked(pkg::PkgId, env)
                 # double-check the search now that we have lock
                 m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                 m isa Module && return m
-                triggers = get(EXT_PRIMED, pkg, nothing)
-                loadable_exts = nothing
-                if triggers !== nothing # extension
-                    loadable_exts = PkgId[]
-                    for (ext′, triggers′) in EXT_PRIMED
-                        if triggers′ ⊊ triggers
-                            push!(loadable_exts, ext′)
+                if disable_serial_precompile
+                    return PrecompilableError()
+                else
+                    triggers = get(EXT_PRIMED, pkg, nothing)
+                    loadable_exts = nothing
+                    if triggers !== nothing # extension
+                        loadable_exts = PkgId[]
+                        for (ext′, triggers′) in EXT_PRIMED
+                            if triggers′ ⊊ triggers
+                                push!(loadable_exts, ext′)
+                            end
                         end
                     end
+                    return compilecache(pkg, path; reasons, loadable_exts)
                 end
-                return compilecache(pkg, path; reasons, loadable_exts)
             end
             loaded isa Module && return loaded
             if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                    @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
+                    if !disable_serial_precompile
+                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
+                    end
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
                 end
