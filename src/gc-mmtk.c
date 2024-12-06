@@ -303,7 +303,7 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
 // GC Statistics
 // ========================================================================= //
 
-JL_DLLEXPORT const char* jl_active_gc_impl(void) {
+JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     const char* mmtk_version = get_mmtk_version();
     return mmtk_version;
 }

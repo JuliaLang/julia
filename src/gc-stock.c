@@ -3992,8 +3992,8 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     // Do nothing
 }
 
-JL_DLLEXPORT const char* jl_active_gc_impl(void) {
-    return "";
+JL_DLLEXPORT const char* jl_gc_active_impl(void) {
+    return "Built with stock GC";
 }
 
 #ifdef __cplusplus
