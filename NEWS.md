@@ -103,6 +103,7 @@ New library features
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 * `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
 * `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
+* `Timer` now has a `spawn` kwarg to allow spawning the timer task, to avoid the Task stickiness issue ([#56745])
 
 Standard library changes
 ------------------------
