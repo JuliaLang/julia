@@ -182,7 +182,7 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
-See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+See also: [`String`](@ref), [``](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -250,8 +250,8 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string representation of any value using the 2-argument `show(io, x)` function, 
-which aims to produce a string that is parseable Julia code, where possible. 
+Create a string representation of any value using the 2-argument `show(io, x)` function,
+which aims to produce a string that is parseable Julia code, where possible.
 i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
