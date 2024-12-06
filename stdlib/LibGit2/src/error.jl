@@ -43,7 +43,7 @@ export GitError
             EUNCHANGED      = Cint(-38), # There were no changes
             ENOTSUPPORTED   = Cint(-39), # An option is not supported
             EREADONLY       = Cint(-40), # The subject is read-only
-) 
+)
 
 @enum(Class, None,
              NoMemory,
