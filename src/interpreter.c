@@ -137,8 +137,28 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
         argv[i-1] = eval_value(args[i], s);
     jl_value_t *c = args[0];
     assert(jl_is_code_instance(c) || jl_is_method_instance(c));
-    jl_method_instance_t *meth = jl_is_method_instance(c) ? (jl_method_instance_t*)c : ((jl_code_instance_t*)c)->def;
-    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
+    jl_value_t *result = NULL;
+    if (jl_is_code_instance(c)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
+               jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
+
+        } else {
+            if (codeinst->owner != jl_nothing) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst->def);
+        }
+    } else {
+        result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
+    }
     JL_GC_POP();
     return result;
 }
@@ -569,25 +589,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[n - 1] = rhs;
                 }
                 else {
-                    jl_module_t *modu;
-                    jl_sym_t *sym;
-                    // Plain assignment is allowed to create bindings at
-                    // toplevel and only for the current module
-                    int alloc = toplevel;
-                    if (jl_is_globalref(lhs)) {
-                        modu = jl_globalref_mod(lhs);
-                        sym = jl_globalref_name(lhs);
-                        alloc &= modu == s->module;
-                    }
-                    else {
-                        assert(jl_is_symbol(lhs));
-                        modu = s->module;
-                        sym = (jl_sym_t*)lhs;
-                    }
-                    JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym, alloc);
-                    jl_checked_assignment(b, modu, sym, rhs);
-                    JL_GC_POP();
+                    // This is an unmodeled error. Our frontend only generates
+                    // legal `=` expressions, but since GlobalRef used to be legal
+                    // here, give a loud error in case any package is modifying
+                    // internals.
+                    jl_error("Invalid IR: Assignment LHS not a Slot");
                 }
             }
             else if (head == jl_leave_sym) {

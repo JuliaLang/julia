@@ -1163,9 +1163,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->hasStructRetAttr()) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
-                    #endif
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
@@ -1252,38 +1249,20 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee->getName() == "memcmp") {
                         continue;
                     }
-#if JL_LLVM_VERSION >= 160000
                     if (callee->getMemoryEffects().onlyReadsMemory() ||
                         callee->getMemoryEffects().onlyAccessesArgPointees()) {
                         continue;
                     }
-#else
-                    if (callee->hasFnAttribute(Attribute::ReadNone) ||
-                        callee->hasFnAttribute(Attribute::ReadOnly) ||
-                        callee->hasFnAttribute(Attribute::ArgMemOnly)) {
-                        continue;
-                    }
-#endif
                     if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
                         MaybeTrackDst(S, MI);
                     }
                 }
-#if JL_LLVM_VERSION >= 160000
                 if (isa<IntrinsicInst>(CI) ||
                     CI->getMemoryEffects().onlyAccessesArgPointees() ||
                     CI->getMemoryEffects().onlyReadsMemory()) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
-#else
-                if (isa<IntrinsicInst>(CI) ||
-                    CI->hasFnAttr(Attribute::ArgMemOnly) ||
-                    CI->hasFnAttr(Attribute::ReadNone)   ||
-                    CI->hasFnAttr(Attribute::ReadOnly)) {
-                    // Intrinsics are never safepoints.
-                    continue;
-                }
-#endif
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
