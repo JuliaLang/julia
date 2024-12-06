@@ -108,6 +108,9 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+// Notifies the GC that the given thread is about to yield for a GC. ctx is the ucontext for the thread
+// if it is already fetched by the caller, otherwise it is NULL.
+JL_DLLEXPORT void jl_gc_notify_thread_yield(jl_ptls_t ptls, void* ctx);
 
 // ========================================================================= //
 // Metrics
