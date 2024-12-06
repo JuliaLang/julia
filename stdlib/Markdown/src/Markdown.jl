@@ -124,13 +124,52 @@ import Base.Docs: catdoc
 catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
+    precompile(Tuple{typeof(Base.println), Markdown.MD})
+    precompile(Tuple{typeof(Base.println), Base.TTY, Markdown.MD})
+    precompile(Tuple{typeof(Base.print), Markdown.MD})
+    precompile(Tuple{typeof(Base.print), Base.TTY, Markdown.MD})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{1}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{2}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{3}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{4}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{5}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Header{6}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.Paragraph})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.BlockQuote})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Array{Any, 1}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, String})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Bold, String, Vararg{Any}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Italic, String})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Bold, String})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Bold})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, String, Array{Any, 1}, Vararg{Any}})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Italic})
+    precompile(Tuple{typeof(Markdown.footnote_link), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
+
+    precompile(Tuple{typeof(Base.sprint), Function, Array{Any, 1}})
+    precompile(Tuple{typeof(Base.println), Markdown.MD})
+    precompile(Tuple{typeof(Base.println), Base.TTY, Markdown.MD})
+    precompile(Tuple{typeof(Base.print), Base.TTY, String})
+    precompile(Tuple{typeof(Base.print), Base.TTY, Base.SubString{String}})
+    precompile(Tuple{typeof(Markdown.plain), Base.TTY, Markdown.List})
+    precompile(Tuple{typeof(Markdown.plaininline), Base.TTY, Markdown.Code, String, Vararg{String}})
+
+    precompile(Tuple{typeof(Markdown.linebreak), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
+    precompile(Tuple{typeof(Markdown.escapes), Base.GenericIOBuffer{GenericMemory{:not_atomic, UInt8, Core.AddrSpace{Core}(0x00)}}, Markdown.MD})
+
+    precompile(Tuple{typeof(Base.:(^)), String, Int64})  # Belongs elsewhere?
+
     # workload to reduce latency
-    md"""
+    println(devnull, md"""
     # H1
     ## H2
     ### H3
+    #### H4
+    ##### H5
+    ###### H6
     **bold text**
     *italicized text*
+    ***bold and italicized text***
     > blockquote
     1. First item
     2. Second item
@@ -138,10 +177,18 @@ if Base.generating_output()
     - First item
     - Second item
     - Third item
+        - Indented item
     `code`
     Horizontal Rule
     ---
-    """
+    **[Duck Duck Go](https://duckduckgo.com)**
+    <https://www.markdownguide.org>
+    <fake@example.com>
+    ![The San Juan Mountains are beautiful!](/assets/images/san-juan-mountains.jpg "San Juan Mountains")
+
+    H~2~O
+    X^2^
+    """)
 end
 
 end
