@@ -27,6 +27,11 @@ export GitError
             EAPPLIED        = Cint(-18), # patch/merge has already been applied
             EPEEL           = Cint(-19), # the requested peel operation is not possible
             EEOF            = Cint(-20), # unexpected EOF
+            EINVALID        = Cint(-21), # Invalid operation or input
+            EUNCOMMITTED    = Cint(-22), # Uncommitted changes in index prevented operation
+            EDIRECTORY      = Cint(-23), # The operation is not valid for a directory
+            EMERGECONFLICT  = Cint(-24), # A merge conflict exists and cannot continue
+
             PASSTHROUGH     = Cint(-30), # internal only
             ITEROVER        = Cint(-31), # signals end of iteration
             RETRY           = Cint(-32), # internal only
@@ -34,7 +39,11 @@ export GitError
             EINDEXDIRTY     = Cint(-34), # unsaved changes in the index would be overwritten
             EAPPLYFAIL      = Cint(-35), # patch application failed
             EOWNER          = Cint(-36), # the object is not owned by the current user
-            TIMEOUT         = Cint(-37)) # The operation timed out
+            TIMEOUT         = Cint(-37), # The operation timed out
+            EUNCHANGED      = Cint(-38), # There were no changes
+            ENOTSUPPORTED   = Cint(-39), # An option is not supported
+            EREADONLY       = Cint(-40), # The subject is read-only
+) 
 
 @enum(Class, None,
              NoMemory,
