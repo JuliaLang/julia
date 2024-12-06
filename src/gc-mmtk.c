@@ -282,6 +282,8 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     gc_num.total_time_to_safepoint += duration;
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+        // This thread will yield.
+        jl_gc_notify_thread_yield(ptls, NULL);
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         mmtk_block_thread_for_gc();
@@ -309,6 +311,19 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+}
+
+JL_DLLEXPORT void jl_gc_notify_thread_yield(jl_ptls_t ptls, void* ctx) {
+    if (ctx == NULL) {
+        // Save the context for the thread as it was running at the time of the call
+        int r = getcontext(&ptls->gc_tls.ctx_at_the_time_gc_started);
+        if (r == -1) {
+            jl_safe_printf("Failed to save context for conservative scanning\n");
+            abort();
+        }
+        return;
+    }
+    memcpy(&ptls->gc_tls.ctx_at_the_time_gc_started, ctx, sizeof(ucontext_t));
 }
 
 // ========================================================================= //
