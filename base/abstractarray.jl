@@ -2962,6 +2962,12 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
     _typed_stack(dims, T, S, IteratorSize(S), A)
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
     _typed_stack(dims, T, S, HasShape{1}(), A)
+
+function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S<:AbstractArray}
+    N = ndims(first(A))
+    _typed_stack(dims, T, S, HasShape{N}(), A)
+end
+
 function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
     if dims == N+1
         _typed_stack(:, T, S, A, (_vec_axis(A),))

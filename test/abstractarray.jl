@@ -1834,6 +1834,9 @@ end
     @test_throws ArgumentError stack(())
     @test_throws ArgumentError stack([])
     @test_throws ArgumentError stack(x for x in 1:3 if false)
+
+    # issue #56771
+    @test size(stack(AbstractArray[ones(1,2) for _=1:3]; dims=2)) == (1, 3, 2)
 end
 
 @testset "tests from PR 31644" begin
