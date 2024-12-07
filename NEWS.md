@@ -171,6 +171,7 @@ Standard library changes
   in the REPL will now issue a warning the first time occurs. ([#54872])
 - When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
   This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
+- Backslash completions now print the respective glyph or emoji next to each matching backslash shortcode. ([#54800])
 
 #### SuiteSparse
 
