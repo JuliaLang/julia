@@ -77,11 +77,7 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support
-
-ifeq ($(shell test $(LLVM_VER_MAJ) -ge 16 && echo true),true)
-RT_LLVM_LIBS += targetparser
-endif
+RT_LLVM_LIBS := support targetparser
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
