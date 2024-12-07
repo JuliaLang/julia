@@ -2206,3 +2206,44 @@ end
         @test b.ref === a.ref
     end
 end
+@testset "AbstractArrayMath" begin
+    @testset "IsReal" begin
+        A = [1, 2, 3, 4]
+        @test isreal(A) == true
+        B = [1.1, 2.2, 3.3, 4.4]
+        @test isreal(B) == true
+        C = [1, 2.2, 3]
+        @test isreal(C) == true
+        D = Real[]
+        @test isreal(D) == true
+        E = [1 + 1im, 2 - 2im]
+        @test isreal(E) == false
+        struct MyReal <: Real
+            value::Float64
+        end
+        Base.convert(::Type{Float64}, x::MyReal) = x.value
+        Base.promote_rule(::Type{Float64}, ::Type{MyReal}) = Float64
+        F = [MyReal(1.0), MyReal(2.0)]
+        @test isreal(F) == true
+        G = ["a", "b", "c"]
+        @test_throws MethodError isreal(G)
+    end
+
+    @testset "insertdims tests" begin
+        A = reshape(1:6, 2, 3)
+        B = insertdims(A, dims=(2,))
+        @test size(B) == (2, 1, 3)
+        @test B[:, 1, :] == A
+        C = insertdims(A, dims=(1, 3))
+        @test size(C) == (1, 2, 1, 3)
+        @test_throws ArgumentError insertdims(A, dims=(2, 2))
+        @test_throws ArgumentError insertdims(A, dims=(0,))
+        @test_throws ArgumentError insertdims(A, dims=(5,))
+        D = insertdims(A, dims=())
+        @test size(D) == size(A)
+        @test D == A
+        E = ones(2, 3, 4)
+        F = insertdims(E, dims=(2, 4, 6))
+        @test size(F) == (2, 1, 3, 1, 4, 1)
+    end
+end
