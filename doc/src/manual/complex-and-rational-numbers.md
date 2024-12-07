@@ -267,7 +267,7 @@ julia> a, b = 0, 0
 julia> float(a//b)
 ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
 Stacktrace:
-...
+[...]
 
 julia> a/b
 NaN
