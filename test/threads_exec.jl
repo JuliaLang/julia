@@ -3,6 +3,7 @@
 using Test
 using Base.Threads
 using Base.Threads: SpinLock, threadpoolsize
+using LinearAlgebra: peakflops
 
 # for cfunction_closure
 include("testenv.jl")
@@ -1312,4 +1313,227 @@ end
         end
     end
 end
+
+@testset "Base.Experimental.task_metrics" begin
+    t = Task(() -> nothing)
+    @test_throws "const field" t.metrics_enabled = true
+    is_task_metrics_enabled() = fetch(Threads.@spawn current_task().metrics_enabled)
+    @test !is_task_metrics_enabled()
+    try
+        @testset "once" begin
+            Base.Experimental.task_metrics(true)
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false)
+            @test !is_task_metrics_enabled()
+        end
+        @testset "multiple" begin
+            Base.Experimental.task_metrics(true)  # 1
+            Base.Experimental.task_metrics(true)  # 2
+            Base.Experimental.task_metrics(true)  # 3
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false) # 2
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false) # 1
+            @test is_task_metrics_enabled()
+            @sync for i in 1:5                    # 0 (not negative)
+                Threads.@spawn Base.Experimental.task_metrics(false)
+            end
+            @test !is_task_metrics_enabled()
+            Base.Experimental.task_metrics(true)  # 1
+            @test is_task_metrics_enabled()
+        end
+    finally
+        while is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false)
+        end
+    end
+end
+
+@testset "task time counters" begin
+    @testset "enabled" begin
+        try
+            Base.Experimental.task_metrics(true)
+            start_time = time_ns()
+            t = Threads.@spawn peakflops()
+            wait(t)
+            end_time = time_ns()
+            wall_time_delta = end_time - start_time
+            @test t.metrics_enabled
+            @test Base.Experimental.task_running_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
+            @test wall_time_delta > Base.Experimental.task_wall_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "disabled" begin
+        t = Threads.@spawn peakflops()
+        wait(t)
+        @test !t.metrics_enabled
+        @test isnothing(Base.Experimental.task_running_time_ns(t))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t))
+    end
+    @testset "task not run" begin
+        t1 = Task(() -> nothing)
+        @test !t1.metrics_enabled
+        @test isnothing(Base.Experimental.task_running_time_ns(t1))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t1))
+        try
+            Base.Experimental.task_metrics(true)
+            t2 = Task(() -> nothing)
+            @test t2.metrics_enabled
+            @test Base.Experimental.task_running_time_ns(t2) == 0
+            @test Base.Experimental.task_wall_time_ns(t2) == 0
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "task failure" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t = Threads.@spawn error("this task failed")
+            @test_throws "this task failed" wait(t)
+            @test Base.Experimental.task_running_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "direct yield(t)" begin
+        try
+            Base.Experimental.task_metrics(true)
+            start = time_ns()
+            t_outer = Threads.@spawn begin
+                t_inner = Task(() -> peakflops())
+                t_inner.sticky = false
+                # directly yield to `t_inner` rather calling `schedule(t_inner)`
+                yield(t_inner)
+                wait(t_inner)
+                @test Base.Experimental.task_running_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) >= Base.Experimental.task_running_time_ns(t_inner)
+            end
+            wait(t_outer)
+            delta = time_ns() - start
+            @test Base.Experimental.task_running_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) >= Base.Experimental.task_running_time_ns(t_outer)
+            @test Base.Experimental.task_wall_time_ns(t_outer) < delta
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "bad schedule" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t1 = Task((x) -> 1)
+            schedule(t1) # MethodError
+            yield()
+            @assert istaskfailed(t1)
+            @test Base.Experimental.task_running_time_ns(t1) > 0
+            @test Base.Experimental.task_wall_time_ns(t1) > 0
+            foo(a, b) = a + b
+            t2 = Task(() -> (peakflops(); foo(wait())))
+            schedule(t2)
+            yield()
+            @assert istaskstarted(t1) && !istaskdone(t2)
+            schedule(t2, 1)
+            yield()
+            @assert istaskfailed(t2)
+            @test Base.Experimental.task_running_time_ns(t2) > 0
+            @test Base.Experimental.task_wall_time_ns(t2) > 0
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "continuously update until task done" begin
+        try
+            Base.Experimental.task_metrics(true)
+            last_running_time = Ref(typemax(Int))
+            last_wall_time = Ref(typemax(Int))
+            t = Threads.@spawn begin
+                running_time = Base.Experimental.task_running_time_ns()
+                wall_time = Base.Experimental.task_wall_time_ns()
+                for _ in 1:5
+                    x = time_ns()
+                    while time_ns() < x + 100
+                    end
+                    new_running_time = Base.Experimental.task_running_time_ns()
+                    new_wall_time = Base.Experimental.task_wall_time_ns()
+                    @test new_running_time > running_time
+                    @test new_wall_time > wall_time
+                    running_time = new_running_time
+                    wall_time = new_wall_time
+                end
+                last_running_time[] = running_time
+                last_wall_time[] = wall_time
+            end
+            wait(t)
+            final_running_time = Base.Experimental.task_running_time_ns(t)
+            final_wall_time = Base.Experimental.task_wall_time_ns(t)
+            @test last_running_time[] < final_running_time
+            @test last_wall_time[] < final_wall_time
+            # ensure many more tasks are run to make sure the counters are
+            # not being updated after a task is done e.g. only when a new task is found
+            @sync for _ in 1:Threads.nthreads()
+                Threads.@spawn rand()
+            end
+            @test final_running_time == Base.Experimental.task_running_time_ns(t)
+            @test final_wall_time == Base.Experimental.task_wall_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+end
+
+@testset "task time counters: lots of spawns" begin
+    using Dates
+    try
+        Base.Experimental.task_metrics(true)
+        # create more tasks than we have threads.
+        # - all tasks must have: cpu time <= wall time
+        # - some tasks must have: cpu time < wall time
+        # - summing across all tasks we must have: total cpu time <= available cpu time
+        n_tasks = 2 * Threads.nthreads(:default)
+        cpu_times = Vector{UInt64}(undef, n_tasks)
+        wall_times = Vector{UInt64}(undef, n_tasks)
+        start_time = time_ns()
+        @sync begin
+            for i in 1:n_tasks
+                start_time_i = time_ns()
+                task_i = Threads.@spawn peakflops()
+                Threads.@spawn begin
+                    wait(task_i)
+                    end_time_i = time_ns()
+                    wall_time_delta_i = end_time_i - start_time_i
+                    cpu_times[$i] = cpu_time_i = Base.Experimental.task_running_time_ns(task_i)
+                    wall_times[$i] = wall_time_i = Base.Experimental.task_wall_time_ns(task_i)
+                    # task should have recorded some cpu-time and some wall-time
+                    @test cpu_time_i > 0
+                    @test wall_time_i > 0
+                    # task cpu-time cannot be greater than its wall-time
+                    @test wall_time_i >= cpu_time_i
+                    # task wall-time must be less than our manually measured wall-time
+                    # between calling `@spawn` and returning from `wait`.
+                    @test wall_time_delta_i > wall_time_i
+                end
+            end
+        end
+        end_time = time_ns()
+        wall_time_delta = (end_time - start_time)
+        available_cpu_time = wall_time_delta * Threads.nthreads(:default)
+        summed_cpu_time = sum(cpu_times)
+        # total CPU time from all tasks can't exceed what was actually available.
+        @test available_cpu_time > summed_cpu_time
+        # some tasks must have cpu-time less than their wall-time, because we had more tasks
+        # than threads.
+        summed_wall_time = sum(wall_times)
+        @test summed_wall_time > summed_cpu_time
+    finally
+        Base.Experimental.task_metrics(false)
+    end
+end
+
 end # main testset

@@ -363,14 +363,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
             isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
-                    if stmt.args[1] isa SSAValue
-                        @verify_error "SSAValue as assignment LHS"
-                        raise_error()
-                    end
-                    if stmt.args[2] isa GlobalRef
-                        # undefined GlobalRef as assignment RHS is OK
-                        continue
-                    end
+                    @verify_error "Assignment should have been removed during SSA conversion"
+                    raise_error()
                 elseif stmt.head === :isdefined
                     if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
                         @verify_error "malformed isdefined"

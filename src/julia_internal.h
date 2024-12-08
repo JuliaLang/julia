@@ -316,6 +316,9 @@ extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 
+// Global *atomic* integer controlling *process-wide* task timing.
+extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;
+
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
@@ -651,6 +654,7 @@ typedef struct {
     uint16_t nargsmatchesmethod:1;
     uint16_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint16_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+    uint16_t has_ssaflags:1;
 } jl_code_info_flags_bitfield_t;
 
 typedef union {

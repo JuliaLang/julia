@@ -267,6 +267,7 @@ mutable struct InferenceState
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
+    ssaflags::Vector{UInt32}
     edges::Vector{Any}
     stmt_info::Vector{CallInfo}
 
@@ -343,6 +344,7 @@ mutable struct InferenceState
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        ssaflags = copy(src.ssaflags)
 
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
@@ -374,7 +376,7 @@ mutable struct InferenceState
 
         this = new(
             mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -1004,25 +1006,22 @@ function callers_in_cycle(sv::InferenceState)
 end
 callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
 
-get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+get_curr_ssaflag(sv::InferenceState) = sv.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
-has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.src.ssaflags[sv.currpc], flag)
+has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.ssaflags[sv.currpc], flag)
 has_curr_ssaflag(sv::IRInterpretationState, flag::UInt32) = has_flag(sv.ir.stmts[sv.curridx][:flag], flag)
 
 function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
-    curr_flag = sv.src.ssaflags[sv.currpc]
-    sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
-end
-function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32=typemax(UInt32))
-    curr_flag = sv.ir.stmts[sv.curridx][:flag]
-    sv.ir.stmts[sv.curridx][:flag] = (curr_flag & ~mask) | flag
+    curr_flag = sv.ssaflags[sv.currpc]
+    sv.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
+    nothing
 end
 
-add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] |= flag
 add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] &= ~flag
 sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
@@ -1035,8 +1034,8 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
-decode_statement_effects_override(sv::AbsIntState) =
-    decode_statement_effects_override(get_curr_ssaflag(sv))
+decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
+decode_statement_effects_override(sv::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState
     rt

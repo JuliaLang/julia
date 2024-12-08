@@ -5,7 +5,15 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-activate_codegen!() = ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+function activate_codegen!()
+    ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+    Core.eval(Compiler, quote
+        let typeinf_world_age = Base.tls_world_age()
+            @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
+                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode)
+        end
+    end)
+end
 
 function bootstrap!()
     let time() = ccall(:jl_clock_now, Float64, ())
