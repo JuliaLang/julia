@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/Intrinsics.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -204,7 +205,17 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 }
                 // In general a load terminates a walk
                 break;
-            }
+            } else if (II->getIntrinsicID() == Intrinsic::vector_extract) {
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (hasLoadedTy(VTy->getElementType())) {
+                        // TODO: For now, only support constant index.
+                        auto IdxOp = cast<ConstantInt>(II->getOperand(1));
+                        fld_idx = IdxOp->getLimitedValue(INT_MAX);
+                        CurrentV = II->getOperand(0);
+                    }
+                }
+            } else
+                break;
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
             auto callee = CI->getCalledFunction();
@@ -518,6 +529,16 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         Numbers = NumberAll(S, IEI->getOperand(0));
         int ElNumber = Number(S, IEI->getOperand(1));
         Numbers[idx] = ElNumber;
+    } else if (auto * VII = dyn_cast<IntrinsicInst>(CurrentV)) {
+        if (VII->getIntrinsicID() == Intrinsic::vector_insert) {
+            Numbers = NumberAll(S, VII->getOperand(0));
+            int first_idx = cast<ConstantInt>(VII->getOperand(2))->getZExtValue();
+            SmallVector<int, 0> Numbers2 = NumberAll(S, VII->getOperand(1));
+            for (unsigned i = 0; i < Numbers2.size(); ++i) {
+                dbgs() << Numbers2[i] << " "<< first_idx + i << "\n";
+                Numbers[first_idx + i] = Numbers2[i];
+            }
+        }
     } else if (auto *IVI = dyn_cast<InsertValueInst>(CurrentV)) {
         Numbers = NumberAll(S, IVI->getAggregateOperand());
         auto Tracked = TrackCompositeType(IVI->getType());
@@ -1149,6 +1170,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 continue;
                             }
                         }
+                    }
+                    if (II->getIntrinsicID() == Intrinsic::vector_extract || II->getIntrinsicID() == Intrinsic::vector_insert) {
+                        // These are not real defs
+                        continue;
                     }
                 }
                 auto callee = CI->getCalledFunction();
