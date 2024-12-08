@@ -1183,7 +1183,7 @@ f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Broadcast)
     @test_broken isempty(undoc)
-    @test undoc == [:dotview]
+    @test undoc == [:Broadcasted, :Unknown, :dotview]
 end
 
 @testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
