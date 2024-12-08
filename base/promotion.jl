@@ -321,6 +321,7 @@ it for new types as appropriate.
 """
 function promote_rule end
 
+# add a level of indirection to avoid method ambiguities
 promote_rule(T::Type, S::Type) = _promote_rule(T, S)
 _promote_rule(::Type, ::Type) = Bottom
 _promote_rule(::Type{T}, ::Type{T}) where {T} = T
@@ -340,7 +341,7 @@ promote_result(::Type,::Type,::Type{Bottom},::Type{T}) where {T} = T
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # avoid recursion if the types don't change under promote_rule, and throw an informative error instead
 function _throw_promote_type_fail(A::Type, B::Type)
-    throw(ArgumentError(LazyString("promote_type(", A, ", ", B, ") failed as conflicting `promote_rule`s were ",
+    throw(ArgumentError(LazyString("`promote_type(", A, ", ", B, ")` failed as conflicting `promote_rule`s were ",
     "detected with either argument being a possible result.")))
 end
 promote_result(::Type{T},::Type{S},::Type{T},::Type{S}) where {T,S} = _throw_promote_type_fail(T, S)
