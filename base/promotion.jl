@@ -302,11 +302,6 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @inline
     # Try promote_rule in both orders. Typically only one is defined,
@@ -326,7 +321,9 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type, ::Type) = Bottom
+promote_rule(T::Type, S::Type) = _promote_rule(T, S)
+_promote_rule(::Type, ::Type) = Bottom
+_promote_rule(::Type{T}, ::Type{T}) where {T} = T
 # Define some methods to avoid needing to enumerate unrelated possibilities when presented
 # with Type{<:T}, and return a value in general accordance with the result given by promote_type
 promote_rule(::Type{Bottom}, slurp...) = Bottom
@@ -334,7 +331,21 @@ promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly n
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
+promote_result(::Type{T},::Type{T},::Type{T},::Type{T}) where {T} = T
+# If only one promote_rule is defined, use the definition directly
+promote_result(::Type,::Type,::Type{T},::Type{T}) where {T} = T
+promote_result(::Type,::Type,::Type{T},::Type{Bottom}) where {T} = T
+promote_result(::Type,::Type,::Type{Bottom},::Type{T}) where {T} = T
+# if multiple promote_rules are defined, try to promote the results
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+# avoid recursion if the types don't change under promote_rule, and throw an informative error instead
+function _throw_promote_type_fail(A::Type, B::Type)
+    throw(ArgumentError(LazyString("promote_type(", A, ", ", B, ") failed as conflicting `promote_rule`s were ",
+    "detected with either argument being a possible result.")))
+end
+promote_result(::Type{T},::Type{S},::Type{T},::Type{S}) where {T,S} = _throw_promote_type_fail(T, S)
+promote_result(::Type{T},::Type{S},::Type{S},::Type{T}) where {T,S} = _throw_promote_type_fail(T, S)
+
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
