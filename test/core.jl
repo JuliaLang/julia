@@ -8389,3 +8389,11 @@ f_call_me() = invoke(f_invoke_me, f_invoke_me_ci)
 f_invalidate_me() = 2
 @test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
 @test_throws ErrorException f_call_me()
+
+@testset "error with conflicting promote_rules" begin
+    struct PromoteA end
+    struct PromoteB end
+    Base.promote_rule(::Type{PromoteA}, ::Type{PromoteB}) = PromoteA
+    Base.promote_rule(::Type{PromoteB}, ::Type{PromoteA}) = PromoteB
+    @test_throws ArgumentError promote_type(PromoteA, PromoteB)
+end
