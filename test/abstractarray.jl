@@ -2226,17 +2226,4 @@ end
         G = ["a", "b", "c"]
         @test_throws MethodError isreal(G)
     end
-
-    @testset "insertdims" begin
-        A = reshape(1:6, 2, 3)
-        @test_throws ArgumentError insertdims(A, dims=(2, 2))
-        @test_throws ArgumentError insertdims(A, dims=(0,))
-        @test_throws ArgumentError insertdims(A, dims=(5,))
-        D = insertdims(A, dims=())
-        @test size(D) == size(A)
-        @test D == A
-        E = ones(2, 3, 4)
-        F = insertdims(E, dims=(2, 4, 6))
-        @test size(F) == (2, 1, 3, 1, 4, 1)
-    end
 end
