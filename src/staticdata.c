@@ -89,6 +89,7 @@ External links:
 #include "julia_assert.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
+size_t jl_require_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -587,6 +588,7 @@ typedef enum {
     JL_API_BOXED,
     JL_API_CONST,
     JL_API_WITH_PARAMETERS,
+    JL_API_OC_CALL,
     JL_API_INTERPRETED,
     JL_API_BUILTIN,
     JL_API_MAX
@@ -932,7 +934,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
         if (jl_genericmemory_how(m) == 3) {
-            jl_queue_for_serialization_(s, jl_genericmemory_data_owner_field(v), 1, immediate);
+            assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
         }
         else if (layout->flags.arrayelem_isboxed) {
             size_t i, l = m->length;
@@ -1472,17 +1474,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_genericmemory_t *m = (jl_genericmemory_t*)v;
             const jl_datatype_layout_t *layout = t->layout;
             size_t len = m->length;
-            if (jl_genericmemory_how(m) == 3 && jl_is_genericmemory(jl_genericmemory_data_owner_field(m))) {
-                jl_genericmemory_t *owner = (jl_genericmemory_t*)jl_genericmemory_data_owner_field(m);
-                size_t data = ((char*)m->ptr - (char*)owner->ptr); // relocation offset (bytes)
-                write_uint(f, len);
-                write_uint(f, data);
-                write_pointerfield(s, (jl_value_t*)owner);
-                // similar to record_memoryref, but the field is always an (offset) pointer
-                arraylist_push(&s->memowner_list, (void*)(reloc_offset + offsetof(jl_genericmemory_t, ptr))); // relocation location
-                arraylist_push(&s->memowner_list, NULL); // relocation target (ignored)
-            }
-            // else if (jl_genericmemory_how(m) == 3) {
+            // if (jl_genericmemory_how(m) == 3) {
             //     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
             //     write_uint(f, len);
             //     write_pointerfield(s, owner);
@@ -1491,7 +1483,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             //     assert(new_mem->ptr == NULL);
             //     new_mem->ptr = (void*)((char*)m->ptr - (char*)owner); // relocation offset
             // }
-            else {
+            // else
+            {
                 size_t datasize = len * layout->size;
                 size_t tot = datasize;
                 int isbitsunion = layout->flags.arrayelem_isunion;
@@ -1538,10 +1531,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                             ios_write(s->const_data, (char*)m->ptr, tot);
                         }
                     }
-                    if (len == 0) // TODO: should we have a zero-page, instead of writing each type's fragment separately?
+                    if (len == 0) { // TODO: should we have a zero-page, instead of writing each type's fragment separately?
                         write_padding(s->const_data, layout->size ? layout->size : isbitsunion);
-                    else if (jl_genericmemory_how(m) == 3 && jl_is_string(jl_genericmemory_data_owner_field(m)))
+                    }
+                    else if (jl_genericmemory_how(m) == 3) {
+                        assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
                         write_padding(s->const_data, 1);
+                    }
                 }
                 else {
                     // Pointer eltypes are encoded in the mutable data section
@@ -1803,6 +1799,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 else if (invokeptr_id == -2) {
                                     fptr_id = JL_API_WITH_PARAMETERS;
                                 }
+                                else if (invokeptr_id == -3) {
+                                    abort();
+                                }
+                                else if (invokeptr_id == -4) {
+                                    fptr_id = JL_API_OC_CALL;
+                                }
                                 else {
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
@@ -2039,10 +2041,14 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         case JL_API_BOXED:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
-            JL_FALLTHROUGH;
+            return (uintptr_t)NULL;
         case JL_API_WITH_PARAMETERS:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
+            return (uintptr_t)NULL;
+        case JL_API_OC_CALL:
+            if (s->image->fptrs.nptrs)
+                return (uintptr_t)jl_f_opaque_closure_call;
             return (uintptr_t)NULL;
         case JL_API_CONST:
             return (uintptr_t)jl_fptr_const_return;
@@ -2572,6 +2578,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
@@ -2673,7 +2680,6 @@ jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 extern jl_mutex_t world_counter_lock;
-extern size_t jl_require_world;
 
 jl_mutex_t precompile_field_replace_lock;
 jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
@@ -2891,10 +2897,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     int en = jl_gc_enable(0);
     if (native_functions) {
-        jl_get_llvm_gvs(native_functions, &gvars);
-        jl_get_llvm_external_fns(native_functions, &external_fns);
-        if (jl_options.trim)
-            jl_get_llvm_mis(native_functions, &MIs);
+        size_t num_gvars, num_external_fns;
+        jl_get_llvm_gvs(native_functions, &num_gvars, NULL);
+        arraylist_grow(&gvars, num_gvars);
+        jl_get_llvm_gvs(native_functions, &num_gvars, gvars.items);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
+        arraylist_grow(&external_fns, num_external_fns);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns,
+                                 (jl_code_instance_t *)external_fns.items);
+        if (jl_options.trim) {
+            size_t num_mis;
+            jl_get_llvm_mis(native_functions, &num_mis, NULL);
+            arraylist_grow(&MIs, num_mis);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t *)MIs.items);
+        }
     }
     if (jl_options.trim) {
         jl_rebuild_methtables(&MIs, &new_methtables);
@@ -3944,6 +3960,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         size_t len = jl_array_nrows(*restored);
         assert(len > 0);
         jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        // Ordinarily set during deserialization, but our compiler stub image,
+        // just returns a reference to the sysimage version, so we set it here.
+        topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
         arraylist_push(&jl_top_mods, (void*)topmod);
     }
@@ -4036,16 +4055,31 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Insert method extensions and handle edges
+            int new_methods = jl_array_nrows(extext_methods) > 0;
+            if (!new_methods) {
+                size_t i, l = jl_array_nrows(internal_methods);
+                for (i = 0; i < l; i++) {
+                    jl_value_t *obj = jl_array_ptr_ref(internal_methods, i);
+                    if (jl_is_method(obj)) {
+                        new_methods = 1;
+                        break;
+                    }
+                }
+            }
             JL_LOCK(&world_counter_lock);
-              // allocate a world for the new methods, and insert them there, invalidating content as needed
-            size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-            jl_activate_methods(extext_methods, internal_methods, world);
-              // allow users to start running in this updated world
-            jl_atomic_store_release(&jl_world_counter, world);
-              // but one of those immediate users is going to be our cache updates
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
-              // now permit more methods to be added again
+            // allocate a world for the new methods, and insert them there, invalidating content as needed
+            size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+            if (new_methods)
+                world += 1;
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
+            // allow users to start running in this updated world
+            if (new_methods)
+                jl_atomic_store_release(&jl_world_counter, world);
+            // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
+            // but one of those immediate users is going to be our cache insertions
+            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis); // restore existing caches (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);
             arraylist_free(&ccallable_list);

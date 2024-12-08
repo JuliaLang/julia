@@ -34,6 +34,9 @@
     @test str[3:4] == SubString(str, 3, 4)
     @test str[3:4] != SubString("me")
     @test SubString("me") != str[3:4]
+    @test Base.AnnotatedString(str[3:4]) == SubString(str, 3, 4)
+    @test repeat(SubString(str, 3, 4), 2) == repeat(Base.AnnotatedString(str[3:4]), 2)
+    @test reverse(SubString(str, 3, 4)) == reverse(Base.AnnotatedString(str[3:4]))
     @test Base.AnnotatedString(str[3:4]) ==
         Base.AnnotatedString("me", [(1:2, :thing, 0x01), (1:2, :all, 0x03)])
     @test Base.AnnotatedString(str[3:6]) ==

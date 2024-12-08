@@ -458,6 +458,29 @@ without adding them to the global method table.
 :@MethodTable
 
 """
+    Base.Experimental.make_io_thread()
+
+Create a new thread that will run the Julia IO loop. This can potentially reduce the latency of some
+IO operations as they no longer depend on the main thread to run it. This does mean that code that uses
+this as implicit synchronization needs to be checked for correctness.
+"""
+function make_io_thread()
+    tid = UInt[0]
+    threadwork = @cfunction function(arg::Ptr{Cvoid})
+            current_task().donenotify = Base.ThreadSynchronizer() #TODO: Should this happen by default in adopt thread?
+            Base.errormonitor(current_task()) # this may not go particularly well if the IO loop is dead, but try anyways
+            @ccall jl_set_io_loop_tid((Threads.threadid() - 1)::Int16)::Cvoid
+            wait() # spin uv_run as long as needed
+            nothing
+        end Cvoid (Ptr{Cvoid},)
+    err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+    err == 0 || Base.uv_error("uv_thread_create", err)
+    @ccall uv_thread_detach(tid::Ptr{UInt})::Cint
+    err == 0 || Base.uv_error("uv_thread_detach", err)
+    # n.b. this does not wait for the thread to start or to take ownership of the event loop
+end
+
+"""
     Base.Experimental.entrypoint(f, argtypes::Tuple)
 
 Mark a method for inclusion when the `--trim` option is specified.
@@ -471,4 +494,87 @@ function entrypoint(@nospecialize(argt::Type))
     nothing
 end
 
+"""
+    Base.Experimental.disable_new_worlds()
+
+Mark that no new worlds (methods additions, deletions, etc) are permitted to be created at
+any future time, allowing for lower latencies for some operations and slightly lower memory
+usage, by eliminating the tracking of those possible invalidation.
+"""
+disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
+
+### Task metrics
+
+"""
+    Base.Experimental.task_metrics(::Bool)
+
+Enable or disable the collection of per-task metrics.
+A `Task` created when `Base.Experimental.task_metrics(true)` is in effect will have
+[`Base.Experimental.task_running_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
+timing information available.
+
+!!! note
+    Task metrics can be enabled at start-up via the `--task-metrics=yes` command line option.
+"""
+function task_metrics(b::Bool)
+    if b
+        ccall(:jl_task_metrics_enable, Cvoid, ())
+    else
+        ccall(:jl_task_metrics_disable, Cvoid, ())
+    end
+    return nothing
 end
+
+"""
+    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` has spent running.
+This metric is only updated when `t` yields or completes unless `t` is the current task, in
+which it will be updated continuously.
+See also [`Base.Experimental.task_wall_time_ns`](@ref).
+
+Returns `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! note "This metric is from the Julia scheduler"
+    A task may be running on an OS thread that is descheduled by the OS
+    scheduler, this time still counts towards the metric.
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_running_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    if t == current_task()
+        # These metrics fields can't update while we're running.
+        # But since we're running we need to include the time since we last started running!
+        return t.running_time_ns + (time_ns() - t.last_started_running_at)
+    else
+        return t.running_time_ns
+    end
+end
+
+"""
+    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` was runnable.
+This is the time since the task first entered the run queue until the time at which it
+completed, or until the current time if the task has not yet completed.
+See also [`Base.Experimental.task_running_time_ns`](@ref).
+
+Returns `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_wall_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    start_at = t.first_enqueued_at
+    start_at == 0 && return UInt64(0)
+    end_at = t.finished_at
+    end_at == 0 && return time_ns() - start_at
+    return end_at - start_at
+end
+
+end # module

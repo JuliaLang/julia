@@ -248,8 +248,6 @@ for t1 in (Float16, Float32, Float64)
     end
 end
 
-Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
-
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
@@ -926,8 +924,8 @@ end
 """
     nextfloat(x::AbstractFloat)
 
-Return the smallest floating point number `y` of the same type as `x` such `x < y`. If no
-such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
+Return the smallest floating point number `y` of the same type as `x` such that `x < y`.
+If no such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 
 See also: [`prevfloat`](@ref), [`eps`](@ref), [`issubnormal`](@ref).
 """
@@ -944,8 +942,8 @@ prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 """
     prevfloat(x::AbstractFloat)
 
-Return the largest floating point number `y` of the same type as `x` such `y < x`. If no
-such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
+Return the largest floating point number `y` of the same type as `x` such that `y < x`.
+If no such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
 """
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 

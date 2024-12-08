@@ -49,6 +49,8 @@ JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
 
+JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled = 0;
+
 JL_DLLEXPORT void *jl_get_ptls_states(void)
 {
     // mostly deprecated: use current_task instead
@@ -401,15 +403,35 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
+static _Atomic(jl_function_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
+
+static void jl_init_task_lock(jl_task_t *ct)
+{
+    jl_function_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
+    if (done == NULL) {
+        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("init_task_lock"));
+        if (done != NULL)
+            jl_atomic_store_release(&init_task_lock_func, done);
+    }
+    if (done != NULL) {
+        jl_value_t *args[2] = {done, (jl_value_t*)ct};
+        JL_TRY {
+            jl_apply(args, 2);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_current_exception(ct), ct);
+        }
+    }
+}
+
+
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    // we also can't use jl_safepoint_wait_gc because that assumes we're in a task.
     jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    while (jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause();
-    }
+    // pass NULL as a special token to indicate we are running on an unmanaged task
+    jl_safepoint_wait_gc(NULL);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
@@ -423,6 +445,8 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    ct->world_age = jl_get_world_counter(); // root_task sets world_age to 1
+    jl_init_task_lock(ct);
     return &ct->gcstack;
 }
 
@@ -891,15 +915,20 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             jl_profile_lock_acquired(lock);
             return;
         }
-        if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking
+            int8_t gc_state;
+            if (safepoint)
+                gc_state = jl_gc_safe_enter(self->ptls);
             uv_mutex_lock(&tls_lock);
             if (jl_atomic_load_relaxed(&lock->owner))
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
+            if (safepoint)
+                jl_gc_safe_leave(self->ptls, gc_state);
+        }
+        else if (safepoint) {
+            jl_gc_safepoint_(self->ptls);
         }
         jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);
