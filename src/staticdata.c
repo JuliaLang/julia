@@ -769,6 +769,16 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
+           ((effects >> 6) & 0x01); // is_terminates(effects)
+}
+
+
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
@@ -908,8 +918,24 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
-        if (jl_atomic_load_relaxed(&ci->inferred) && !is_relocatable_ci(&relocatable_ext_cis, ci))
-            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
+                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+            else if (jl_is_method(ci->def->def.method) && // don't delete toplevel code
+                     ci->def->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (native_functions && // don't delete any code if making a ji file
+                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
+                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
+                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+            }
+        }
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
