@@ -2221,8 +2221,6 @@ end
         struct MyReal <: Real
             value::Float64
         end
-        Base.convert(::Type{Float64}, x::MyReal) = x.value
-        Base.promote_rule(::Type{Float64}, ::Type{MyReal}) = Float64
         F = [MyReal(1.0), MyReal(2.0)]
         @test isreal(F) == true
         G = ["a", "b", "c"]
