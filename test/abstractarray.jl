@@ -2227,7 +2227,7 @@ end
         @test_throws MethodError isreal(G)
     end
 
-    @testset "insertdims tests" begin
+    @testset "insertdims" begin
         A = reshape(1:6, 2, 3)
         B = insertdims(A, dims=(2,))
         @test size(B) == (2, 1, 3)
