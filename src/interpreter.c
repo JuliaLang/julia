@@ -893,10 +893,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->mi = NULL;
     s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }
