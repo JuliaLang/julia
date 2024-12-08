@@ -331,9 +331,11 @@ promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly n
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
+# if both the arguments are identical, or if both the orderings in promote_rule
+# are defined to return identical results, we may return the result directly
 promote_result(::Type{T},::Type{T},::Type{T},::Type{T}) where {T} = T
-# If only one promote_rule is defined, use the definition directly
 promote_result(::Type,::Type,::Type{T},::Type{T}) where {T} = T
+# If only one promote_rule is defined, use the definition directly
 promote_result(::Type,::Type,::Type{T},::Type{Bottom}) where {T} = T
 promote_result(::Type,::Type,::Type{Bottom},::Type{T}) where {T} = T
 # if multiple promote_rules are defined, try to promote the results
