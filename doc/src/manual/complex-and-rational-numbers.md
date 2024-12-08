@@ -254,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the two cases `a==0 && b==0` and `a==0 && b < 0`:
+of `a` and `b`, except when `a==0 && b <= 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;
