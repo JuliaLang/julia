@@ -181,6 +181,9 @@ end
                 "1, "          => :other
                 "1,\n"         => :other
                 "1, \n"        => :other
+                "f(1, "        => :other
+                "[x "          => :other
+                "( "           => :other
 
                 # Reference parser fails to detect incomplete exprs in this case
                 "(x for y"     => :other
