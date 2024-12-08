@@ -170,6 +170,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             end
         end
         parse!(stream; rule=options)
+        pos_before_trivia = last_byte(stream)
         if options === :statement
             bump_trivia(stream; skip_newlines=false)
             if peek(stream) == K"NewlineWs"
@@ -179,7 +180,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
 
         if any_error(stream)
             tree = build_tree(SyntaxNode, stream, first_line=lineno, filename=filename)
-            tag = _incomplete_tag(tree, lastindex(code))
+            tag = _incomplete_tag(tree, pos_before_trivia)
             if _has_v1_10_hooks
                 exc = ParseError(stream, filename=filename, first_line=lineno,
                                  incomplete_tag=tag)
