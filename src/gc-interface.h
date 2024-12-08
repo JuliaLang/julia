@@ -98,6 +98,8 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
+// Returns the version of which GC implementation is being used according to the list of supported GCs
+JL_DLLEXPORT const char* jl_active_gc_impl(void);
 
 // ========================================================================= //
 // Metrics
@@ -198,6 +200,11 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 //              the allocated object. All objects stored in fields of this object
 //              must be either permanently allocated or have other roots.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
+
+// This function notifies the GC about memory addresses that are set when loading the boot image.
+// The GC may use that information to, for instance, determine that such objects should
+// be treated as marked and belonged to the old generation in nursery collections.
+void jl_gc_notify_image_load(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers

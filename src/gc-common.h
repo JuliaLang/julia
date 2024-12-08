@@ -25,6 +25,31 @@ extern "C" {
 #endif
 
 // =========================================================================== //
+// GC Big objects
+// =========================================================================== //
+
+JL_EXTENSION typedef struct _bigval_t {
+    struct _bigval_t *next;
+    struct _bigval_t *prev;
+    size_t sz;
+#ifdef _P64 // Add padding so that the value is 64-byte aligned
+    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
+    void *_padding[8 - 4];
+#else
+    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
+    void *_padding[16 - 4];
+#endif
+    //struct jl_taggedvalue_t <>;
+    union {
+        uintptr_t header;
+        struct {
+            uintptr_t gc:2;
+        } bits;
+    };
+    // must be 64-byte aligned here, in 32 & 64 bit modes
+} bigval_t;
+
+// =========================================================================== //
 // GC Callbacks
 // =========================================================================== //
 
@@ -42,6 +67,14 @@ extern jl_gc_callback_list_t *gc_cblist_post_gc;
 extern jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 extern jl_gc_callback_list_t *gc_cblist_notify_external_free;
 extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
+
+
+// FIXME: These are specific to the Stock GC but being declared here
+// for now, instead of gc-stock.h. We might want to refactor the
+// code in gc-stacks.c that uses these
+extern _Atomic(int) gc_ptls_sweep_idx;
+extern _Atomic(int) gc_stack_free_idx;
+extern _Atomic(int) gc_n_threads_sweeping_stacks;
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
