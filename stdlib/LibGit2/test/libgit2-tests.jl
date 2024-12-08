@@ -1070,7 +1070,7 @@ mktempdir() do dir
 
                 # test workaround for git_tree_walk issue
                 # https://github.com/libgit2/libgit2/issues/4693
-                ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring),
+                ccall((:git_error_set_str, libgit2), Cvoid, (Cint, Cstring),
                       Cint(LibGit2.Error.Invalid), "previous error")
                 try
                     # file needs to exist in tree in order to trigger the stop walk condition
