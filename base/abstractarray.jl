@@ -693,8 +693,12 @@ end
     checkbounds(A, I...)
 
 Throw an error if the specified indices `I` are not in bounds for the given array `A`.
+
+!!! note
+    Custom types wishing to opt into bounds-checking should define
+    `checkbounds(::Type{Bool}, A::CustomType, I...)` instead of this method.
 """
-function checkbounds(A::AbstractArray, I...)
+function checkbounds(A, I...)
     @inline
     checkbounds(Bool, A, I...) || throw_boundserror(A, I)
     nothing
