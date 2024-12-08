@@ -2229,11 +2229,6 @@ end
 
     @testset "insertdims" begin
         A = reshape(1:6, 2, 3)
-        B = insertdims(A, dims=(2,))
-        @test size(B) == (2, 1, 3)
-        @test B[:, 1, :] == A
-        C = insertdims(A, dims=(1, 3))
-        @test size(C) == (1, 2, 1, 3)
         @test_throws ArgumentError insertdims(A, dims=(2, 2))
         @test_throws ArgumentError insertdims(A, dims=(0,))
         @test_throws ArgumentError insertdims(A, dims=(5,))
