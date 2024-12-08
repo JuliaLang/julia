@@ -2206,3 +2206,24 @@ end
         @test b.ref === a.ref
     end
 end
+@testset "AbstractArrayMath" begin
+    @testset "IsReal" begin
+        A = [1, 2, 3, 4]
+        @test isreal(A) == true
+        B = [1.1, 2.2, 3.3, 4.4]
+        @test isreal(B) == true
+        C = [1, 2.2, 3]
+        @test isreal(C) == true
+        D = Real[]
+        @test isreal(D) == true
+        E = [1 + 1im, 2 - 2im]
+        @test isreal(E) == false
+        struct MyReal <: Real
+            value::Float64
+        end
+        F = [MyReal(1.0), MyReal(2.0)]
+        @test isreal(F) == true
+        G = ["a", "b", "c"]
+        @test_throws MethodError isreal(G)
+    end
+end
