@@ -3494,7 +3494,7 @@ f31974(n::Int) = f31974(1:n)
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
 f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+@test Base.infer_return_type(f_overly_abstract_complex, Tuple{}) == Complex{Int}
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}
@@ -6125,3 +6125,18 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+# opt inf
+@test Base.infer_return_type((Vector{Any},)) do argtypes
+    box = Core.Box()
+    box.contents = argtypes
+    return length(box.contents)
+end == Int
+@test Base.infer_return_type((Vector{Any},)) do argtypes
+    local argtypesi
+    function cls()
+        argtypesi = @noinline copy(argtypes)
+        return length(argtypesi)
+    end
+    return @inline cls()
+end == Int

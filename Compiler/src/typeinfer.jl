@@ -1000,7 +1000,7 @@ function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
     end
     (; result) = frame
     opt = OptimizationState(frame, interp)
-    ir = run_passes_ipo_safe(opt.src, opt, optimize_until)
+    ir = run_passes_ipo_safe(interp, opt, result; optimize_until)
     rt = widenconst(ignorelimited(result.result))
     return ir, rt
 end
@@ -1025,6 +1025,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
             src = ir_to_codeinf!(opt)
+            src.rettype = widenconst(result.result)
         end
         result.src = frame.src = src
     end
