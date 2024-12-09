@@ -101,8 +101,8 @@ JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
 // NB: it should clearly identify the GC by including e.g. ‘stock’ or ‘mmtk’ as a substring.
 JL_DLLEXPORT const char* jl_gc_active_impl(void);
-// Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface since
-// each GC should implement this but this function will most likely not be used by other code in the runtime.
+// Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface as
+// each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
@@ -145,7 +145,6 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
 struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
-
 // Allocates small objects and increments Julia allocation counterst. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -205,7 +204,6 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 //              the allocated object. All objects stored in fields of this object
 //              must be either permanently allocated or have other roots.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
-
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.

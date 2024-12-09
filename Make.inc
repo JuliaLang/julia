@@ -80,9 +80,6 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# Use MMTk GC
-WITH_MMTK ?= 0
-
 # Enable DTrace support
 WITH_DTRACE := 0
 
@@ -832,7 +829,7 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 ifeq (${MMTK_JULIA_DIR},)
 $(error MMTK_JULIA_DIR must be set to use MMTk)
 endif
@@ -848,10 +845,8 @@ endif
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
-endif
-ifeq (${MMTK_PLAN},StickyImmix)
-JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
-JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
+else
+$(error "Unsupported MMTk plan: $(MMTK_PLAN)")
 endif
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = $(MMTK_DIR)/api
@@ -1863,7 +1858,7 @@ PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 PRINT_MMTK = printf '    %b %b\n' $(LINKCOLOR)MMTK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 endif
 
@@ -1876,7 +1871,7 @@ PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 PRINT_MMTK = echo '$(subst ','\'',$(1))'; $(1)
 endif
 

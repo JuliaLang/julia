@@ -46,7 +46,7 @@ endif
 
 # GC source code. It depends on which GC implementation to use.
 GC_SRCS := gc-common gc-stacks gc-alloc-profiler gc-heap-snapshot
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 GC_SRCS += gc-mmtk
 else
 GC_SRCS += gc-stock gc-debug gc-pages gc-page-profiler
@@ -67,7 +67,7 @@ CG_LLVMLINK :=
 ifeq ($(JULIACODEGEN),LLVM)
 # Currently these files are used by both GCs. But we should make the list specific to stock, and MMTk should have its own implementation.
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 FLAGS += -I$(MMTK_API_INC)
 GC_CODEGEN_SRCS += llvm-late-gc-lowering-mmtk
 else
@@ -122,7 +122,7 @@ UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
 endif
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h)
 else
 	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h)
@@ -250,7 +250,7 @@ $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 	mv $@.tmp $@
 
 # Compile files from the binding side and copy so file into lib folder
-ifeq ($(WITH_MMTK), 1)
+ifneq ($(MMTK_PLAN), )
 $(MMTK_LIB_DST): $(MMTK_LIB_SRC)
 	@$(call PRINT_MMTK, cp $< $@)
 endif

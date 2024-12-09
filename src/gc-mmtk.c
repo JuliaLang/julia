@@ -1,4 +1,5 @@
 #include "gc-common.h"
+#include "gc-tls-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
 
@@ -16,19 +17,6 @@ extern "C" {
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 extern const unsigned pool_sizes[];
 extern jl_mutex_t finalizers_lock;
-
-// FIXME: Does it make sense for MMTk to implement something similar
-// for now, just ignoring this.
-
-// Must be kept in sync with `base/timing.jl`
-#define FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL (0)
-#define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
-#define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
-#define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
-#define FULL_SWEEP_NUM_REASONS (4)
-
-// Table recording number of full GCs due to each reason
-JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 
 // FIXME: Should the values below be shared between both GC's?
 // Note that MMTk uses a hard max heap limit, which is set by default
