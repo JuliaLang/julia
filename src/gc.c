@@ -1266,6 +1266,84 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     gc_time_mallocd_memory_end();
 }
 
+JL_DLLEXPORT void jl_print_mallocd_arrays_stats(void)
+{
+    jl_safe_printf("===============================================\n");
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_acquire(&jl_all_tls_states);
+    size_t mallocd_arrays_counters[nthreads];
+    memset(mallocd_arrays_counters, 0, sizeof(mallocd_arrays_counters));
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 != NULL) {
+            mallocarray_t *ma = ptls2->heap.mallocarrays;
+            while (ma != NULL) {
+                mallocarray_t *nxt = ma->next;
+                mallocd_arrays_counters[t_i]++;
+                ma = nxt;
+            }
+        }
+    }
+    jl_safe_printf("Malloc'd arrays counters\n");
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_safe_printf("Thread %d: %zu\n", t_i, mallocd_arrays_counters[t_i]);
+    }
+}
+
+JL_DLLEXPORT void jl_print_big_obj_list_stats(void)
+{
+    jl_safe_printf("===============================================\n");
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_acquire(&jl_all_tls_states);
+    size_t big_obj_counters[nthreads];
+    memset(big_obj_counters, 0, sizeof(big_obj_counters));
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 != NULL) {
+            bigval_t *v = ptls2->heap.big_objects;
+            while (v != NULL) {
+                big_obj_counters[t_i]++;
+                v = v->next;
+            }
+        }
+    }
+    jl_safe_printf("Big object counters\n");
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_safe_printf("Thread %d: %zu\n", t_i, big_obj_counters[t_i]);
+    }
+    // Now print the counters for the big objects marked list
+    size_t big_obj_marked_counter = 0;
+    bigval_t *v = big_objects_marked;
+    while (v != NULL) {
+        big_obj_marked_counter++;
+        v = v->next;
+    }
+    jl_safe_printf("Big object marked list: %zu\n", big_obj_marked_counter);
+}
+
+JL_DLLEXPORT void jl_print_pages_stats(void)
+{
+    jl_safe_printf("===============================================\n");
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_acquire(&jl_all_tls_states);
+    size_t pages_counters[nthreads];
+    memset(pages_counters, 0, sizeof(pages_counters));
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_ptls_t ptls2 = all_tls_states[t_i];
+        if (ptls2 != NULL) {
+            jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+            while (pg != NULL) {
+                pages_counters[t_i]++;
+                pg = pg->next;
+            }
+        }
+    }
+    jl_safe_printf("Pages counters\n");
+    for (int t_i = 0; t_i < nthreads; t_i++) {
+        jl_safe_printf("Thread %d: %zu\n", t_i, pages_counters[t_i]);
+    }
+}
+
 // pool allocation
 STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *p, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
