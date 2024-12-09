@@ -509,6 +509,36 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
     return jl_atomic_load_relaxed(&jl_cumulative_recompile_time);
 }
 
+/**
+ * @brief Enable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_enable(void)
+{
+    // Increment the flag to allow reentrant callers.
+    jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
+}
+
+/**
+ * @brief Disable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_disable(void)
+{
+    // Prevent decrementing the counter below zero
+    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled);
+    while (enabled > 0) {
+        if (jl_atomic_cmpswap(&jl_task_metrics_enabled, &enabled, enabled-1))
+            break;
+    }
+}
+
+/**
+ * @brief Retrieve floating-point environment constants.
+ *
+ * Populates an array with constants related to the floating-point environment,
+ * such as rounding modes and exception flags.
+ *
+ * @param ret An array of integers to be populated with floating-point environment constants.
+ */
 JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
 {
     ret[0] = FE_INEXACT;
