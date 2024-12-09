@@ -25,10 +25,11 @@ using Base:       # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆,
     hasintersect
 using ..Compiler: # Compiler specific definitions
+    Compiler, @show, ⊑,
     AbstractLattice, Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
     argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
     is_meta_expr_head, is_identity_free_argtype, isexpr, println, setfield!_nothrow,
-    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, Compiler
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst
 
 function include(x::String)
     if !isdefined(Base, :end_base_include)
