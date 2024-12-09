@@ -702,6 +702,12 @@ let b = ['0':'9';'A':'Z';'a':'z']
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
 end
 
+@testset "`randstring` with $T" for T in (UInt8, UInt16, UInt32, Int8, Int16, Int32, UInt, Int)
+    # clamp it to a small value so that we don't allocate too much unnecessarily
+    n = clamp(rand(T), Int8) % T
+    @test randstring(n) isa String
+end
+
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
