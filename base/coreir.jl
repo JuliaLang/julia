@@ -12,6 +12,15 @@ The type representing a constant value.
 Core.Const
 
 """
+    struct ConstSet
+        vals::Vector{Any}
+    end
+
+The type representing a set of constant values
+"""
+Core.ConstSet
+
+"""
     struct PartialStruct
         typ
         fields::Vector{Any} # elements are other type lattice members

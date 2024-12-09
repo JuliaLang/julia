@@ -15,6 +15,11 @@ function iterate(result::MethodLookupResult, args...)
     return (match::MethodMatch, state)
 end
 getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
+struct MethodLookupQuery
+    results::MethodLookupResult
+    argtypes::Vector{Any}
+    atype
+end
 
 abstract type MethodTableView end
 
