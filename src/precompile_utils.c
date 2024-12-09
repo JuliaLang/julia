@@ -374,9 +374,8 @@ static void *jl_precompile_trimmed(size_t world)
     jl_value_t *ccallable = NULL;
     JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
-    while (1)
-    {
-        mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
+    for (size_t i = 0; i < jl_entrypoint_mis->len ; i++) {
+        mi = (jl_method_instance_t*)jl_entrypoint_mis->items[i];
         if (mi == NULL)
             break;
         assert(jl_is_method_instance(mi));
@@ -386,7 +385,6 @@ static void *jl_precompile_trimmed(size_t world)
         if (ccallable)
             jl_array_ptr_1d_push(m, ccallable);
     }
-
     jl_cgparams_t params = jl_default_cgparams;
     params.trim = jl_options.trim;
     void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
