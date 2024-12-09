@@ -382,6 +382,10 @@ end
     end
 end
 
+@testset "https://github.com/JuliaLang/julia/issues/56782" begin
+    @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
