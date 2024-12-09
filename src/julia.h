@@ -279,7 +279,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 11
-#define NUM_IR_FLAGS 13
+#define NUM_IR_FLAGS 3
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -292,15 +292,8 @@ typedef struct _jl_code_info_t {
         // 1 << 0 = inbounds region
         // 1 << 1 = callsite inline region
         // 1 << 2 = callsite noinline region
-        // 1 << 3 = refined statement
-        // 1 << 4 = :consistent
-        // 1 << 5 = :effect_free
-        // 1 << 6 = :nothrow
-        // 1 << 7 = :terminates
-        // 1 << 8 = :noub
-        // 1 << 9 = :effect_free_if_inaccessiblememonly
-        // 1 << 10 = :inaccessiblemem_or_argmemonly
-        // 1 << 11-19 = callsite effects overrides
+        // 1 << 3-14 = purity
+        // 1 << 16+ = reserved for inference
     // miscellaneous data:
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
@@ -2283,16 +2276,25 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *scope;
     jl_function_t *start;
-    // 4 byte padding on 32-bit systems
-    // uint32_t padding0;
-    uint64_t rngState[JL_RNG_SIZE];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
-    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    // 1 byte padding
-    // uint8_t padding1;
-    // multiqueue priority
     uint16_t priority;
+    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
+    uint8_t pad0[3];
+    // === 64 bytes (cache line)
+    uint64_t rngState[JL_RNG_SIZE];
+    // flag indicating whether or not to record timing metrics for this task
+    uint8_t metrics_enabled;
+    uint8_t pad1[3];
+    // timestamp this task first entered the run queue
+    _Atomic(uint64_t) first_enqueued_at;
+    // timestamp this task was most recently scheduled to run
+    _Atomic(uint64_t) last_started_running_at;
+    // time this task has spent running; updated when it yields or finishes.
+    _Atomic(uint64_t) running_time_ns;
+    // === 64 bytes (cache line)
+    // timestamp this task finished (i.e. entered state DONE or FAILED).
+    _Atomic(uint64_t) finished_at;
 
 // hidden state:
     // cached floating point environment
@@ -2618,6 +2620,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_TRIM_SAFE 1
 #define JL_TRIM_UNSAFE 2
 #define JL_TRIM_UNSAFE_WARN 3
+
+#define JL_OPTIONS_TASK_METRICS_OFF 0
+#define JL_OPTIONS_TASK_METRICS_ON 1
 
 // Version information
 #include <julia_version.h> // Generated file

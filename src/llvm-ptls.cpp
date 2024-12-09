@@ -9,11 +9,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Triple.h>
-#else
-#include <llvm/ADT/Triple.h>
-#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -67,11 +63,7 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-#if JL_LLVM_VERSION >= 160000
     pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
-#else
-    addFnAttr(pgcstack, Attribute::ReadNone);
-#endif
     addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
