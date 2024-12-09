@@ -1083,12 +1083,13 @@ end
 # test `flags_for_effects` and DCE
 # ================================
 
-let # effect-freeness computation for array allocation
+@testset "effect-freeness computation for array allocation" begin
 
     # should eliminate dead allocations
     good_dims = [1, 2, 3, 4, 10]
     Ns = [1, 2, 3, 4, 10]
-    for dim = good_dims, N = Ns
+    Ts = Any[Int, Union{Missing,Nothing}, Nothing, Any]
+    @testset "$dim, $N" for dim in good_dims, N in Ns
         Int64(dim)^N > typemax(Int) && continue
         dims = ntuple(i->dim, N)
         @test @eval fully_eliminated() do
@@ -1099,7 +1100,7 @@ let # effect-freeness computation for array allocation
 
     # shouldn't eliminate erroneous dead allocations
     bad_dims = [-1, typemax(Int)]
-    for dim in bad_dims, N in [1, 2, 3, 4, 10], T in Any[Int, Union{Missing,Nothing}, Nothing, Any]
+    @testset "$dim, $N, $T" for dim in bad_dims, N in Ns, T in Ts
         dims = ntuple(i->dim, N)
         @test @eval !fully_eliminated() do
             Array{$T,$N}(undef, $(dims...))

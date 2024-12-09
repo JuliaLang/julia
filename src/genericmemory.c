@@ -24,49 +24,51 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
     return (char*)m->ptr + m->length * layout->size;
 }
 
-#if defined(_P64) && defined(UINT128MAX)
-typedef __uint128_t wideint_t;
-#else
-typedef uint64_t wideint_t;
-#endif
-
 #define MAXINTVAL (((size_t)-1)>>1)
 
-jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+// ONLY USE FROM CODEGEN. It only partially initializes the mem
+JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
 {
-    jl_task_t *ct = jl_current_task;
-    char *data;
-    jl_genericmemory_t *m;
-    if (nel == 0) // zero-sized allocation optimization
-        return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
-    wideint_t prod = (wideint_t)nel * elsz;
-    if (isunion) {
-        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        prod += nel;
-    }
-    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
-    size_t tot = (size_t)prod + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
     int pooled = tot <= GC_MAX_SZCLASS;
+    char *data;
+    jl_genericmemory_t *m;
     if (!pooled) {
-        data = (char*)jl_gc_managed_malloc(prod);
+        data = (char*)jl_gc_managed_malloc(nbytes);
         tot = sizeof(jl_genericmemory_t) + sizeof(void*);
     }
-    m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tot, mtype);
+    m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
         data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned
-        jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
+        jl_gc_track_malloced_genericmemory(ptls, m, isaligned);
         jl_genericmemory_data_owner_field(m) = (jl_value_t*)m;
     }
-    m->length = nel;
+    // length set by codegen
     m->ptr = data;
+    return m;
+}
 
+jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+{
+    if (nel == 0) // zero-sized allocation optimization
+        return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
+    size_t nbytes;
+    int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        overflow |= __builtin_add_overflow(nel, nbytes, &nbytes);
+    }
+    if ((nel >= MAXINTVAL-1) || (nbytes >= MAXINTVAL-1) || overflow)
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
+    jl_task_t *ct = jl_current_task;
+    jl_genericmemory_t *m = jl_alloc_genericmemory_unchecked((jl_ptls_t) ct->ptls, nbytes, (jl_datatype_t*)mtype);
+    m->length = nel;
     if (zeroinit)
-        memset(data, 0, (size_t)prod);
+        memset((char*)m->ptr, 0, nbytes);
     return m;
 }
 
@@ -150,13 +152,14 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    wideint_t prod = (wideint_t)nel * elsz;
+    size_t nbytes;
+    int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        prod += nel;
+        overflow |= __builtin_add_overflow(nel, nbytes, &nbytes);
     }
-    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: too large for system address width");
+    if ((nel >= MAXINTVAL) || (nbytes >= MAXINTVAL) || overflow)
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
     int tsz = sizeof(jl_genericmemory_t) + sizeof(void*);
     m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, mtype);
     m->ptr = data;

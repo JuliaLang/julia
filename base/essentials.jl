@@ -382,8 +382,17 @@ default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+# bootstrap version for Memory{Any}
+#getindex(A::Memory{Any}, i::Int) = (@_noub_if_noinbounds_meta;
+#    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    if @_boundscheck
+        ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, A.length)) || throw_boundserror(A, (i,))
+    end
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
