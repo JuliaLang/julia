@@ -68,14 +68,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 extern jl_gc_callback_list_t *gc_cblist_notify_external_free;
 extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 
-
-// FIXME: These are specific to the Stock GC but being declared here
-// for now, instead of gc-stock.h. We might want to refactor the
-// code in gc-stacks.c that uses these
-extern _Atomic(int) gc_ptls_sweep_idx;
-extern _Atomic(int) gc_stack_free_idx;
-extern _Atomic(int) gc_n_threads_sweeping_stacks;
-
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
         for (jl_gc_callback_list_t *cb = list; \
@@ -225,5 +217,15 @@ extern jl_ptls_t* gc_all_tls_states;
 // =========================================================================== //
 
 extern int gc_logging_enabled;
+
+// =========================================================================== //
+// MISC
+// =========================================================================== //
+
+// number of stacks to always keep available per pool
+#define MIN_STACK_MAPPINGS_PER_POOL 5
+
+extern void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+extern void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
 
 #endif // JL_GC_COMMON_H

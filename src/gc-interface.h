@@ -101,6 +101,10 @@ JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
 // NB: it should clearly identify the GC by including e.g. ‘stock’ or ‘mmtk’ as a substring.
 JL_DLLEXPORT const char* jl_gc_active_impl(void);
+// Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface since
+// each GC should implement this but this function will most likely not be used by other code in the runtime.
+// It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
+JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics

@@ -709,6 +709,24 @@ JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
     jl_throw(jl_memory_exception);
 }
 
+// Sweeping mtarraylist_buffers:
+// These buffers are made unreachable via `mtarraylist_resizeto` from mtarraylist.c
+// and are freed at the end of GC via jl_gc_sweep_stack_pools_and_mtarraylist_buffers
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
+        if (ptls == NULL) {
+            continue;
+        }
+        small_arraylist_t *buffers = &ptls->lazily_freed_mtarraylist_buffers;
+        void *buf;
+        while ((buf = small_arraylist_pop(buffers)) != NULL) {
+            free(buf);
+        }
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

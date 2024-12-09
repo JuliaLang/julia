@@ -1019,22 +1019,102 @@ void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
     }
 }
 
-void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT
+extern const unsigned pool_sizes[];
+
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
 {
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls = gc_all_tls_states[i];
-        if (ptls == NULL) {
+    // Stack sweeping algorithm:
+    //    // deallocate stacks if we have too many sitting around unused
+    //    for (stk in halfof(free_stacks))
+    //        free_stack(stk, pool_sz);
+    //    // then sweep the task stacks
+    //    for (t in live_tasks)
+    //        if (!gc-marked(t))
+    //            stkbuf = t->stkbuf
+    //            bufsz = t->bufsz
+    //            if (stkbuf)
+    //                push(free_stacks[sz], stkbuf)
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, 1);
+    while (1) {
+        int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
+        if (i < 0)
+            break;
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
             continue;
+        assert(gc_n_threads);
+        // free half of stacks that remain unused since last sweep
+        if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
+            for (int p = 0; p < JL_N_STACK_POOLS; p++) {
+                small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
+                size_t n_to_free;
+                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                    n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
+                }
+                else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+                    n_to_free = al->len / 2;
+                    if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
+                        n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
+                }
+                else {
+                    n_to_free = 0;
+                }
+                for (int n = 0; n < n_to_free; n++) {
+                    void *stk = small_arraylist_pop(al);
+                    free_stack(stk, pool_sizes[p]);
+                }
+                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                    small_arraylist_free(al);
+                }
+            }
         }
-        small_arraylist_t *buffers = &ptls->lazily_freed_mtarraylist_buffers;
-        void *buf;
-        while ((buf = small_arraylist_pop(buffers)) != NULL) {
-            free(buf);
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+            small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
         }
+
+        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
+        size_t n = 0;
+        size_t ndel = 0;
+        size_t l = live_tasks->len;
+        void **lst = live_tasks->items;
+        if (l == 0)
+            continue;
+        while (1) {
+            jl_task_t *t = (jl_task_t*)lst[n];
+            assert(jl_is_task(t));
+            if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
+                if (t->ctx.stkbuf == NULL)
+                    ndel++; // jl_release_task_stack called
+                else
+                    n++;
+            }
+            else {
+                ndel++;
+                void *stkbuf = t->ctx.stkbuf;
+                size_t bufsz = t->ctx.bufsz;
+                if (stkbuf) {
+                    t->ctx.stkbuf = NULL;
+                    _jl_free_stack(ptls2, stkbuf, bufsz);
+                }
+#ifdef _COMPILER_TSAN_ENABLED_
+                if (t->ctx.tsan_state) {
+                    __tsan_destroy_fiber(t->ctx.tsan_state);
+                    t->ctx.tsan_state = NULL;
+                }
+#endif
+            }
+            if (n >= l - ndel)
+                break;
+            void *tmp = lst[n];
+            lst[n] = lst[n + ndel];
+            lst[n + ndel] = tmp;
+        }
+        live_tasks->len -= ndel;
     }
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, -1);
 }
 
-void sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     // initialize ptls index for parallel sweeping of stack pools
     assert(gc_n_threads);
@@ -3096,7 +3176,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         current_sweep_full = sweep_full;
         sweep_weak_refs();
         uint64_t stack_pool_time = jl_hrtime();
-        sweep_stack_pools_and_mtarraylist_buffers(ptls);
+        jl_gc_sweep_stack_pools_and_mtarraylist_buffers(ptls);
         stack_pool_time = jl_hrtime() - stack_pool_time;
         gc_num.total_stack_pool_sweep_time += stack_pool_time;
         gc_num.stack_pool_sweep_time = stack_pool_time;

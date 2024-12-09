@@ -15,7 +15,6 @@ extern "C" {
 
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 extern const unsigned pool_sizes[];
-extern void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz);
 extern jl_mutex_t finalizers_lock;
 
 // FIXME: Does it make sense for MMTk to implement something similar
@@ -155,6 +154,8 @@ void jl_init_thread_heap(struct _jl_tls_states_t *ptls) JL_NOTSAFEPOINT {
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
     arraylist_new(&ptls->finalizers, 0);
+    // Initialize `lazily_freed_mtarraylist_buffers`
+    small_arraylist_new(&ptls->lazily_freed_mtarraylist_buffers, 0);
     // Clear the malloc sz count
     jl_atomic_store_relaxed(&ptls->gc_tls.malloc_sz_since_last_poll, 0);
     // Create mutator
@@ -608,11 +609,6 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_malloced_memory(void) JL_NOTSAFEPOINT
     mmtk_close_mutator_iterator(iter);
 }
 
-
-
-// number of stacks to always keep available per pool - from gc-stacks.c
-#define MIN_STACK_MAPPINGS_PER_POOL 5
-
 #define jl_genericmemory_elsize(a) (((jl_datatype_t*)jl_typetagof(a))->layout->size)
 
 // if data is inlined inside the genericmemory object --- to->ptr needs to be updated when copying the array
@@ -725,6 +721,12 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
         }
         live_tasks->len -= ndel;
     }
+}
+
+JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    jl_gc_mmtk_sweep_stack_pools();
+    sweep_mtarraylist_buffers();
 }
 
 JL_DLLEXPORT void* jl_gc_get_stackbase(int16_t tid) {
