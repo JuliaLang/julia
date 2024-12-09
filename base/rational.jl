@@ -107,14 +107,14 @@ end
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 function //(x::Number, y::Complex)
     if isinf(y)
-        return complex(x*0)
+        return (x*(0//1)-x*(0//1)*im)
+    end
+    if iszero(y)
+        throw(DivideError())
     end
     real_y = real(y)
     imag_y = imag(y)
     m = max(abs(real_y), abs(imag_y))
-    if m == 0
-        throw(DivideError())
-    end
     scaled_a = real_y // m
     scaled_b = imag_y // m
     denom = (scaled_a^2 + scaled_b^2)
