@@ -25,6 +25,7 @@ for (T, c) in (
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
+        (Task, [:metrics_enabled]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -42,7 +43,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
-        (Task, [:_state])
+        (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -7434,6 +7435,7 @@ end
 @test isa(Core.eval(@__MODULE__, :(Bar31062(()))), Bar31062)
 @test precompile(identity, (Foo31062,))
 
+using Core: SSAValue
 ftype_eval = Ref(0)
 FieldTypeA = String
 FieldTypeE = UInt32
@@ -7457,27 +7459,41 @@ let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
 end
 @test ftype_eval[] == 1
 let code = code_lowered(FieldConvert)[1].code
-    local fc_global_ssa, sp1_ssa, apply_type_ssa, field_type_ssa,
-        field_type2_ssa, field_type4_ssa, field_type5_ssa,
-        slot_read_1, slot_read_2, slot_read_3, slot_read_4,
-        new_ssa
-    @test code[(fc_global_ssa = 1;)] == GlobalRef(@__MODULE__, :FieldConvert)
-    @test code[(sp1_ssa = 2;)] == Expr(:static_parameter, 1)
-    @test code[(apply_type_ssa = 3;)] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(fc_global_ssa), GlobalRef(@__MODULE__, :FieldTypeA), Core.SSAValue(sp1_ssa))
-    @test code[(field_type_ssa = 4;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 1)
-    @test code[10] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type_ssa), Core.SlotNumber(10)))
-    @test code[(slot_read_1 = 11;)] == Core.SlotNumber(10)
-    @test code[(field_type2_ssa = 12;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 2)
-    @test code[18] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type2_ssa), Core.SlotNumber(9)))
-    @test code[(slot_read_2 = 19;)] == Core.SlotNumber(9)
-    @test code[(field_type4_ssa = 20;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 4)
-    @test code[26] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type4_ssa), Core.SlotNumber(8)))
-    @test code[(slot_read_3 = 27;)] == Core.SlotNumber(8)
-    @test code[(field_type5_ssa = 28;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 5)
-    @test code[34] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type5_ssa), Core.SlotNumber(7)))
-    @test code[(slot_read_4 = 35;)] == Core.SlotNumber(7)
-    @test code[(new_ssa = 36;)] == Expr(:new, Core.SSAValue(apply_type_ssa), Core.SSAValue(slot_read_1), Core.SSAValue(slot_read_2), Core.SlotNumber(4), Core.SSAValue(slot_read_3), Core.SSAValue(slot_read_4))
-    @test code[37] == Core.ReturnNode(Core.SSAValue(new_ssa))
+    calls = Vector{Pair{SSAValue, Expr}}(undef, 0)
+    for i = 1:length(code)
+        expr = code[i]
+        if Meta.isexpr(expr, :call) || (Meta.isexpr(expr, :(=)) && Meta.isexpr(expr.args[2], :call))
+            push!(calls, SSAValue(i)=>expr)
+        end
+    end
+
+    function is_globalref(arg, gr)
+        while isa(arg, SSAValue)
+            arg = code[arg.id]
+        end
+        arg == gr
+    end
+
+    # calls[1]
+    @test all(is_globalref.(calls[1][2].args[1:3], (GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA))))
+
+    # calls[2]
+    @test all(is_globalref.(calls[2][2].args[1:1], (GlobalRef(Core, :fieldtype),)))
+    @test all(calls[2][2].args[2:3] .== (calls[1][1], 1))
+
+    # calls[3] - isa
+
+    # calls[4]
+    let calle = calls[4][2]
+        @test Meta.isexpr(calle, :(=))
+        call = calle.args[2]
+        @test is_globalref(call.args[1], GlobalRef(Base, :convert))
+        @test call.args[2] == calls[2][1]
+    end
+
+    # calls[5]
+    @test all(is_globalref.(calls[5][2].args[1:1], (GlobalRef(Core, :fieldtype),)))
+    @test all(calls[5][2].args[2:3] .== (calls[1][1], 2))
 end
 
 # Issue #32820
@@ -8155,7 +8171,7 @@ end
 @test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
 @test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
 
-# Test that a nothrow-globalref doesn't get outlined during lowering
+# Test that a the lowering of nothrow globalref
 module WellKnownGlobal
     global well_known = 1
 end
@@ -8164,7 +8180,7 @@ macro insert_global()
 end
 check_globalref_lowering() = @insert_global
 let src = code_lowered(check_globalref_lowering)[1]
-    @test length(src.code) == 2
+    @test length(src.code) == 4
 end
 
 # Test correctness of widen_diagonal
