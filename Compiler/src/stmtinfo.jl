@@ -33,40 +33,40 @@ optimizer, without having to re-consult the method table.
 This info is illegal on any statement that is not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
-    results::MethodLookupResult
+    query::MethodLookupQuery
     mt::MethodTable
-    atype
     fullmatch::Bool
     edges::Vector{Union{Nothing,CodeInstance}}
     function MethodMatchInfo(
-        results::MethodLookupResult, mt::MethodTable, @nospecialize(atype), fullmatch::Bool)
-        edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(results)), nothing)
-        return new(results, mt, atype, fullmatch, edges)
+        query::MethodLookupQuery, mt::MethodTable, fullmatch::Bool)
+        edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(query.results)), nothing)
+        return new(query, mt, fullmatch, edges)
     end
 end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
+    atype = info.query.atype
     if !fully_covering(info)
         # add legacy-style missing backedge info also
         exists = false
         for i in 2:length(edges)
-            if edges[i] === info.mt && edges[i-1] == info.atype
+            if edges[i] === info.mt && edges[i-1] == atype
                 exists = true
                 break
             end
         end
         if !exists
-            push!(edges, info.atype)
+            push!(edges, atype)
             push!(edges, info.mt)
         end
     end
-    nmatches = length(info.results)
+    nmatches = length(info.query.results)
     if nmatches == length(info.edges) == 1
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
         edge = info.edges[1]
-        m = info.results[1]
+        m = info.query.results[1]
         if edge === nothing
             mi = specialize_method(m) # don't allow `Method`-edge for this optimized format
             edge = mi
@@ -80,15 +80,15 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     end
     # add check for whether this lookup already existed in the edges list
     for i in 1:length(edges)
-        if edges[i] === nmatches && edges[i+1] == info.atype
+        if edges[i] === nmatches && edges[i+1] == atype
             # TODO: must also verify the CodeInstance match too
             return nothing
         end
     end
-    push!(edges, nmatches, info.atype)
+    push!(edges, nmatches, atype)
     for i = 1:nmatches
         edge = info.edges[i]
-        m = info.results[i]
+        m = info.query.results[i]
         if edge === nothing
             edge = mi_edge ? specialize_method(m) : m.method
         else
@@ -135,7 +135,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     nothing
 end
 nsplit_impl(info::MethodMatchInfo) = 1
-getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
+getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.query)
 getresult_impl(::MethodMatchInfo, ::Int) = nothing
 
 """
