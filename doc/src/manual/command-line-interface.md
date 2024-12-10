@@ -222,6 +222,10 @@ The following is a complete list of command-line switches available when launchi
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
 |`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|
 
+Options that have the form `--option={...}` can be specified either as `--option=value` or as `--option value`. For example, `julia --banner=no` is equivalent to `julia --banner no`. This is especially relevant for options that take a filename for output, because forgetting to specifying the argument for (say) `--trace-compile` will cause the option following it to be interpreted as the filename, possibly unintentionally overwriting it.
+
+Note that options of the form `--option[=...]` can **not** be specified as `--option value`, but only as `--option=value` (or simply `--option`, when no argument is provided).
+
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root
     directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
