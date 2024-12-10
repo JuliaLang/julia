@@ -61,7 +61,7 @@ extern void mmtk_object_reference_write_post(MMTk_Mutator mutator, const void* s
 extern void mmtk_object_reference_write_slow(MMTk_Mutator mutator, const void* src, const void* target);
 extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
-extern uintptr_t JULIA_MALLOC_BYTES;
+extern _Atomic(uintptr_t) JULIA_MALLOC_BYTES;
 
 /**
  * Misc

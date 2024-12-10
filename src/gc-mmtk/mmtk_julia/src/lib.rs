@@ -101,7 +101,7 @@ extern "C" {
     pub fn jl_throw_out_of_memory_error();
     pub fn jl_get_gc_disable_counter() -> u32;
     pub fn jl_gc_mmtk_sweep_malloced_memory();
-    pub fn jl_gc_mmtk_sweep_stack_pools();
+    pub fn jl_gc_sweep_stack_pools_and_mtarraylist_buffers();
     pub fn jl_hrtime() -> u64;
     pub fn jl_gc_update_stats(t: u64, mmtk_live_bytes: usize, is_nursery: bool);
     pub fn jl_gc_get_abi_structs_checksum_c() -> usize;
