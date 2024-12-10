@@ -367,6 +367,28 @@ using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 using SharedBytesT = StringSet<MaxAlignedAllocImpl<sizeof(StringSet<>::MapEntryTy)>>;
 
+enum class jl_debuginfo_emission_mode_t {
+
+    // Source-referenced debuginfo (standard behavior)
+    //
+    // Preserves and emits any debuginfo in the IR from Julia source.
+    julia_source = 0,
+
+    // Julia IR-referenced debuginfo
+    //
+    // Replaces all debuginfo with references to the Julia SSAIR itself (treating the IR code as
+    // the 'program source'). Emits a text copy of all emitted IR to 'dump_debugir_directory' so
+    // the IR source is available when using a debugger.
+    /* julia_ir, not supported (yet) */
+
+    // LLVM IR-referenced debuginfo
+    //
+    // Replaces all debuginfo with references to the LLVM IR itself (treating the LLVM IR as the
+    // 'program source'). Emits a text copy of all emitted IR to 'dump_debugir_directory' so the
+    // IR source is available when using a debugger.
+    llvm_ir,
+};
+
 class JuliaOJIT {
 private:
     // any verification the user wants to do when adding an OwningResource to the pool
@@ -582,8 +604,15 @@ public:
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
         return dump_llvm_opt_stream;
     }
+    std::string &get_dump_debugir_directory() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
+        return dump_debugir_directory;
+    }
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
+
+    jl_debuginfo_emission_mode_t &get_debuginfo_mode() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
+        return debuginfo_mode;
+    }
 
     // Note that this is a potential safepoint due to jl_get_library_ and jl_dlsym calls
     // but may be called from inside safe-regions due to jit compilation locks
@@ -610,6 +639,9 @@ private:
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
+    std::string      dump_debugir_directory;
+
+    jl_debuginfo_emission_mode_t debuginfo_mode;
 
     std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;

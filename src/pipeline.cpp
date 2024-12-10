@@ -20,6 +20,7 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
+#include <llvm/Transforms/Utils/InstructionNamer.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 
@@ -567,6 +568,8 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     }
+    // TODO: This should be conditionally enabled depending on the emission mode for the Execution engine
+    MPM.addPass(createModuleToFunctionPassAdaptor(InstructionNamerPass()));
     MPM.addPass(AfterCleanupMarkerPass());
 }
 

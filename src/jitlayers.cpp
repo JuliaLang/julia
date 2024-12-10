@@ -1314,6 +1314,39 @@ static void registerRTDyldJITObject(orc::MaterializationResponsibility &MR,
 #endif
 
 namespace {
+
+    static std::string createDebugIRName(Module const &M) JL_NOTSAFEPOINT {
+        std::string path = jl_ExecutionEngine->get_dump_debugir_directory();
+        if (!path.empty()) {
+            path += llvm::sys::path::get_separator();
+        }
+
+        std::string filename{};
+        for (auto &F : M.functions()) {
+            if (F.isDeclaration() || F.getName().starts_with("jfptr_"))
+                continue;
+
+            // Sanitize the filename by allowing only "[a-zA-Z0-9_\-\.]*"
+            filename = F.getName().str();
+            std::replace_if(std::begin(filename), std::end(filename),[](const char &ch) {
+                return !(std::isalnum(ch) || ch == '_' || ch == '-' || ch == '.');
+            }, '_');
+
+            break;
+        }
+
+        // If we couldn't find a name to use, just use some unique integer
+        if (filename.empty()) {
+            static _Atomic(uint64_t) counter{1};
+            filename = std::to_string(jl_atomic_fetch_add_relaxed(&counter, 1));
+        }
+
+        path += filename;
+        path += ".ll";
+
+        return path;
+    }
+
     static std::unique_ptr<TargetMachine> createTargetMachine() JL_NOTSAFEPOINT {
         TargetOptions options = TargetOptions();
 
@@ -1509,6 +1542,44 @@ namespace {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
                     //Run the optimization
                     (****PMs[PoolIdx]).run(M);
+
+                    bool debug_ir = jl_ExecutionEngine->get_debuginfo_mode() == jl_debuginfo_emission_mode_t::llvm_ir;
+                    bool dump_ir = !jl_ExecutionEngine->get_dump_debugir_directory().empty();
+                    if (!M.functions().empty() && (debug_ir || dump_ir)) {
+
+                        // Generate a debug filename for the emitted IR
+                        std::string debug_name = createDebugIRName(M);
+
+                        // If requested, rewrite all debuginfo to reference the LLVM IR itself
+                        std::unique_ptr<Module> displayM;
+                        if (debug_ir) {
+                            // displayM is the debug-stripped 'source' that the debuginfo now refers to
+                            displayM = debugir::createDebugInfo(M, "", debug_name);
+                        }
+
+                        // Emit the IR that was compiled
+                        if (dump_ir) {
+                            std::error_code EC;
+                            raw_fd_ostream OS_dbg(debug_name, EC, sys::fs::OF_Text);
+                            if (displayM) {
+                                displayM->print(OS_dbg, nullptr);
+                            } else {
+                                M.print(OS_dbg, nullptr);
+                            }
+
+                            // Emit the "instrumented" IR (unneeded unless you are debugging the debuginfo
+                            // or running the instrumented IR in isolation)
+                            if (0 && displayM) {
+                                // Replace ".ll" suffix with ".dbg.ll"
+                                debug_name.resize(debug_name.size() - 3);
+                                debug_name += ".dbg.ll";
+                                std::error_code EC;
+                                raw_fd_ostream OS_dbg(debug_name, EC, sys::fs::OF_Text);
+                                M.print(OS_dbg, nullptr);
+                            }
+                        }
+                    }
+
                     assert(!verifyLLVMIR(M));
                 }
 
@@ -1898,6 +1969,7 @@ JuliaOJIT::JuliaOJIT()
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ExternalJD(ES.createBareJITDylib("JuliaExternal")),
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
+    debuginfo_mode(jl_debuginfo_emission_mode_t::julia_source),
 #ifdef JL_USE_JITLINK
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
