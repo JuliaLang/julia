@@ -689,7 +689,7 @@ to the standard libraries before running the tests.
 If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
-The argument `julia_args` can be used to pass custom julia arguments to the test process.
+The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
 function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
