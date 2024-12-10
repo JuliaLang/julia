@@ -16,14 +16,14 @@ import .Compiler:
 # usings
 using Core.IR
 using .Compiler: InferenceResult, InferenceState, OptimizationState, IRCode
-using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeState
+using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeResult
 
 mutable struct EscapeAnalyzerCacheToken end
 global GLOBAL_EA_CACHE_TOKEN::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken()
 
-struct EscapeResultForEntry
+struct EscapeAnalysisResultForEntry
     ir::IRCode
-    estate::EscapeState
+    eresult::EscapeResult
     mi::MethodInstance
 end
 
@@ -34,7 +34,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const inf_cache::Vector{InferenceResult}
     const token::EscapeAnalyzerCacheToken
     const entry_mi::Union{Nothing,MethodInstance}
-    result::EscapeResultForEntry
+    result::EscapeAnalysisResultForEntry
     function EscapeAnalyzer(world::UInt, cache_token::EscapeAnalyzerCacheToken;
                             entry_mi::Union{Nothing,MethodInstance}=nothing)
         inf_params = InferenceParams()
@@ -55,9 +55,8 @@ function Compiler.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::Optimizati
                                          ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized
     nargs = Int(opt.src.nargs)
-    𝕃ₒ = Compiler.optimizer_lattice(interp)
-    estate = try
-        analyze_escapes(ir, nargs, 𝕃ₒ, GetEscapeCache())
+    eresult = try
+        analyze_escapes(ir, nargs, GetEscapeCache())
     catch err
         @error "error happened within EA, inspect `Main.failedanalysis`"
         failedanalysis = FailedAnalysis(caller, ir, nargs)
@@ -66,9 +65,9 @@ function Compiler.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::Optimizati
     end
     if caller.linfo === interp.entry_mi
         # return back the result
-        interp.result = EscapeResultForEntry(Compiler.copy(ir), estate, caller.linfo)
+        interp.result = EscapeAnalysisResultForEntry(Compiler.copy(ir), eresult, caller.linfo)
     end
-    record_escapes!(caller, estate, ir)
+    record_escapes!(caller, eresult, ir)
 
     @invoke Compiler.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
                                             ir::IRCode, caller::InferenceResult)
@@ -77,13 +76,13 @@ end
 # cache entire escape state for inspection and debugging
 struct EscapeCacheInfo
     argescapes::ArgEscapeCache
-    state::EscapeState # preserved just for debugging purpose
-    ir::IRCode         # preserved just for debugging purpose
+    eresult::EscapeResult # preserved just for debugging purpose
+    ir::IRCode            # preserved just for debugging purpose
 end
 
-function record_escapes!(caller::InferenceResult, estate::EscapeState, ir::IRCode)
-    argescapes = ArgEscapeCache(estate)
-    ecacheinfo = EscapeCacheInfo(argescapes, estate, ir)
+function record_escapes!(caller::InferenceResult, eresult::EscapeResult, ir::IRCode)
+    argescapes = ArgEscapeCache(eresult)
+    ecacheinfo = EscapeCacheInfo(argescapes, eresult, ir)
     return Compiler.stack_analysis_result!(caller, ecacheinfo)
 end
 
@@ -105,30 +104,29 @@ end
 # printing
 # --------
 
-using Core: Argument, SSAValue
 using .Compiler: widenconst, singleton_type
 
-function get_name_color(x::EscapeInfo, symbol::Bool = false)
+function get_name_color(x::Union{Nothing,EscapeInfo}, symbol::Bool = false)
     getname(x) = string(nameof(x))
-    if x === EA.⊥
-        name, color = (getname(EA.NotAnalyzed), "◌"), :plain
+    if x === nothing
+        name, color = ("NotAnalyzed", "◌"), :plain
     elseif EA.has_no_escape(EA.ignore_argescape(x))
         if EA.has_arg_escape(x)
-            name, color = (getname(EA.ArgEscape), "✓"), :cyan
+            name, color = ("ArgEscape", "✓"), :blue
         else
-            name, color = (getname(EA.NoEscape), "✓"), :green
+            name, color = ("NoEscape", "✓"), :green
         end
     elseif EA.has_all_escape(x)
-        name, color = (getname(EA.AllEscape), "X"), :red
+        name, color = ("AllEscape", "X"), :red
     elseif EA.has_return_escape(x)
-        name = (getname(EA.ReturnEscape), "↑")
+        name = ("ReturnEscape", "↑")
         color = EA.has_thrown_escape(x) ? :yellow : :blue
     else
         name = (nothing, "*")
         color = EA.has_thrown_escape(x) ? :yellow : :bold
     end
     name = symbol ? last(name) : first(name)
-    if name !== nothing && !isa(x.AliasInfo, Bool)
+    if name !== nothing && x !== nothing && isa(x.ObjectInfo, EA.HasIndexableFields)
         name = string(name, "′")
     end
     return name, color
@@ -180,45 +178,58 @@ function Base.show(io::IO, x::ArgEscapeInfo)
     printstyled(io, "ArgEscapeInfo(", sym, ")"; color)
 end
 
-struct EscapeResult
+struct EscapeAnalysisResult
     ir::IRCode
-    state::EscapeState
+    eresult::EscapeResult
     mi::Union{Nothing,MethodInstance}
     slotnames::Union{Nothing,Vector{Symbol}}
     source::Bool
     interp::Union{Nothing,EscapeAnalyzer}
-    function EscapeResult(ir::IRCode, state::EscapeState,
-                          mi::Union{Nothing,MethodInstance}=nothing,
-                          slotnames::Union{Nothing,Vector{Symbol}}=nothing,
-                          source::Bool=false,
-                          interp::Union{Nothing,EscapeAnalyzer}=nothing)
-        return new(ir, state, mi, slotnames, source, interp)
+    function EscapeAnalysisResult(ir::IRCode, eresult::EscapeResult,
+                                  mi::Union{Nothing,MethodInstance}=nothing,
+                                  slotnames::Union{Nothing,Vector{Symbol}}=nothing,
+                                  source::Bool=false,
+                                  interp::Union{Nothing,EscapeAnalyzer}=nothing)
+        return new(ir, eresult, mi, slotnames, source, interp)
     end
 end
-Base.show(io::IO, result::EscapeResult) = print_with_info(io, result)
-@eval Base.iterate(res::EscapeResult, state=1) =
-    return state > $(fieldcount(EscapeResult)) ? nothing : (getfield(res, state), state+1)
+Base.getindex(res::EscapeAnalysisResult, @nospecialize(x)) = res.eresult[x]
+EA.getaliases(res::EscapeAnalysisResult, args...) = EA.getaliases(res.eresult, args...)
+EA.isaliased(res::EscapeAnalysisResult, args...) = EA.isaliased(res.eresult, args...)
+EA.is_load_forwardable(res::EscapeAnalysisResult, pc::Int) = EA.is_load_forwardable(res.eresult, pc)
+@eval Base.iterate(res::EscapeAnalysisResult, s=1) =
+    return s > $(fieldcount(EscapeAnalysisResult)) ? nothing : (getfield(res, s), s+1)
 
-Base.show(io::IO, ecacheinfo::EscapeCacheInfo) = show(io, EscapeResult(ecacheinfo.ir, ecacheinfo.state))
+Base.show(io::IO, ecacheinfo::EscapeCacheInfo) = show(io, EscapeAnalysisResult(ecacheinfo.ir, ecacheinfo.eresult))
 
-# adapted from https://github.com/JuliaDebug/LoweredCodeUtils.jl/blob/4612349432447e868cf9285f647108f43bd0a11c/src/codeedges.jl#L881-L897
-function print_with_info(io::IO, result::EscapeResult)
-    (; ir, state, mi, slotnames, source) = result
+using Compiler: IRShow
+function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
+    (; ir, eresult, mi, slotnames, source) = result
+    if bb ≠ 0
+        bbstate = eresult.bbescapes[bb]
+        ssamemoryinfo = nothing
+    else
+        bbstate = eresult.retescape
+        ssamemoryinfo = eresult.ssamemoryinfo
+    end
+
+    io = IOContext(io, :displaysize=>displaysize(io))
+
     # print escape information on SSA values
-    function preprint(io::IO)
+    function print_header(io::IO)
         ft = ir.argtypes[1]
         f = singleton_type(ft)
         if f === nothing
             f = widenconst(ft)
         end
         print(io, f, '(')
-        for i in 1:state.nargs
-            arg = state[Argument(i)]
+        for i in 1:bbstate.nargs
+            arginfo = bbstate[Argument(i)]
             i == 1 && continue
-            c, color = get_name_color(arg, true)
+            c, color = get_name_color(arginfo, true)
             slot = isnothing(slotnames) ? "_$i" : slotnames[i]
             printstyled(io, c, ' ', slot, "::", ir.argtypes[i]; color)
-            i ≠ state.nargs && print(io, ", ")
+            i ≠ bbstate.nargs && print(io, ", ")
         end
         print(io, ')')
         if !isnothing(mi)
@@ -230,40 +241,57 @@ function print_with_info(io::IO, result::EscapeResult)
 
     # print escape information on SSA values
     # nd = ndigits(length(ssavalues))
-    function preprint(io::IO, idx::Int)
-        c, color = get_name_color(state[SSAValue(idx)], true)
+    function print_header(io::IO, idx::Int)
+        c, color = get_name_color(bbstate[SSAValue(idx)], true)
         # printstyled(io, lpad(idx, nd), ' ', c, ' '; color)
         printstyled(io, rpad(c, 2), ' '; color)
     end
 
-    print_with_info(preprint, (args...)->nothing, io, ir, source)
-end
+    lineprinter = IRShow.inline_linfo_printer(ir)
+    preprinter = function (@nospecialize(io::IO), linestart::String, idx::Int)
+        str = lineprinter(io, linestart, idx)
+        if idx ≠ 0
+            c, color = get_name_color(bbstate[SSAValue(idx)], true)
+            return str * sprint(;context=IOContext(io)) do @nospecialize io::IO
+                print(io, " ")
+                printstyled(io, rpad(c, 2); color)
+            end
+        end
+        return str
+    end
 
-function print_with_info(preprint, postprint, io::IO, ir::IRCode, source::Bool)
-    io = IOContext(io, :displaysize=>displaysize(io))
-    used = Compiler.IRShow.stmts_used(io, ir)
-    if source
-        line_info_preprinter = function (io::IO, indent::String, idx::Int)
-            r = Compiler.IRShow.inline_linfo_printer(ir)(io, indent, idx)
-            idx ≠ 0 && preprint(io, idx)
-            return r
+    _postprinter = IRShow.default_expr_type_printer
+    postprinter = if ssamemoryinfo !== nothing
+        function (io::IO; idx::Int, @nospecialize(kws...))
+            _postprinter(io; idx, kws...)
+            if haskey(ssamemoryinfo, idx)
+                memoryinfo = ssamemoryinfo[idx]
+                if memoryinfo === EA.ConflictedMemory()
+                    c, color = "*", :yellow
+                elseif memoryinfo === EA.UnknownMemory()
+                    c, color = "X", :red
+                elseif memoryinfo === EA.UninitializedMemory()
+                    c, color = "◌", :yellow
+                else
+                    c = sprint(context=IOContext(io)) do @nospecialize io::IO
+                        Base.show_unquoted(io, memoryinfo)
+                    end
+                    color = :cyan
+                end
+                printstyled(io, " (↦ "; color=:light_black)
+                printstyled(io, c; color)
+                printstyled(io, ")"; color=:light_black)
+            end
         end
     else
-        line_info_preprinter = Compiler.IRShow.lineinfo_disabled
+        _postprinter
     end
-    line_info_postprinter = Compiler.IRShow.default_expr_type_printer
-    preprint(io)
-    bb_idx_prev = bb_idx = 1
-    for idx = 1:length(ir.stmts)
-        preprint(io, idx)
-        bb_idx = Compiler.IRShow.show_ir_stmt(io, ir, idx, line_info_preprinter, line_info_postprinter, ir.sptypes, used, ir.cfg, bb_idx)
-        postprint(io, idx, bb_idx != bb_idx_prev)
-        bb_idx_prev = bb_idx
-    end
-    max_bb_idx_size = ndigits(length(ir.cfg.blocks))
-    line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
-    postprint(io)
-    return nothing
+
+    bb_color = :normal
+    irshow_config = IRShow.IRShowConfig(preprinter, postprinter; bb_color)
+
+    print_header(io)
+    IRShow.show_ir(io, ir, irshow_config)
 end
 
 # entries
@@ -284,8 +312,8 @@ macro code_escapes(ex0...)
 end
 
 """
-    code_escapes(f, argtypes=Tuple{}; [world::UInt], [debuginfo::Symbol]) -> result::EscapeResult
-    code_escapes(mi::MethodInstance; [world::UInt], [interp::EscapeAnalyzer], [debuginfo::Symbol]) -> result::EscapeResult
+    code_escapes(f, argtypes=Tuple{}; [world::UInt], [debuginfo::Symbol]) -> result::EscapeAnalysisResult
+    code_escapes(mi::MethodInstance; [world::UInt], [interp::EscapeAnalyzer], [debuginfo::Symbol]) -> result::EscapeAnalysisResult
 
 Runs the escape analysis on optimized IR of a generic function call with the given type signature,
 while caching the analysis results.
@@ -323,12 +351,12 @@ function code_escapes(mi::MethodInstance;
     slotnames = let src = frame.src
         src isa CodeInfo ? src.slotnames : nothing
     end
-    return EscapeResult(interp.result.ir, interp.result.estate, interp.result.mi,
-                        slotnames, debuginfo === :source, interp)
+    return EscapeAnalysisResult(interp.result.ir, interp.result.eresult, interp.result.mi,
+                                slotnames, debuginfo === :source, interp)
 end
 
 """
-    code_escapes(ir::IRCode, nargs::Int; [world::UInt], [interp::AbstractInterpreter]) -> result::EscapeResult
+    code_escapes(ir::IRCode, nargs::Int; [world::UInt], [interp::AbstractInterpreter]) -> result::EscapeAnalysisResult
 
 Runs the escape analysis on `ir::IRCode`.
 `ir` is supposed to be optimized already, specifically after inlining has been applied.
@@ -349,8 +377,8 @@ function code_escapes(ir::IRCode, nargs::Int;
                       world::UInt = get_world_counter(),
                       cache_token::EscapeAnalyzerCacheToken = GLOBAL_EA_CACHE_TOKEN,
                       interp::AbstractInterpreter=EscapeAnalyzer(world, cache_token))
-    estate = analyze_escapes(ir, nargs, Compiler.optimizer_lattice(interp), Compiler.get_escape_cache(interp))
-    return EscapeResult(ir, estate) # return back the result
+    eresult = analyze_escapes(ir, nargs, Compiler.get_escape_cache(interp))
+    return EscapeAnalysisResult(ir, eresult) # return back the result
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)

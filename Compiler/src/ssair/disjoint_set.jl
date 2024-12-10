@@ -3,7 +3,7 @@
 # under the MIT license: https://github.com/JuliaCollections/DataStructures.jl/blob/master/License.md
 
 # imports
-import Base: length, eltype, union!, push!
+import Base: ==, copy, eltype, length, push!, union!
 # usings
 using Base: OneTo, collect, zero, zeros, one, typemax
 
@@ -42,6 +42,11 @@ end
 IntDisjointSet(n::T) where {T<:Integer} = IntDisjointSet{T}(collect(OneTo(n)), zeros(T, n), n)
 IntDisjointSet{T}(n::Integer) where {T<:Integer} = IntDisjointSet{T}(collect(OneTo(T(n))), zeros(T, T(n)), T(n))
 length(s::IntDisjointSet) = length(s.parents)
+
+copy(s::IntDisjointSet) = IntDisjointSet(copy(s.parents), copy(s.ranks), s.ngroups)
+
+s1::IntDisjointSet == s2::IntDisjointSet =
+    s1.parents == s2.parents && s1.ranks == s2.ranks && s1.ngroups == s2.ngroups
 
 """
     num_groups(s::IntDisjointSet)

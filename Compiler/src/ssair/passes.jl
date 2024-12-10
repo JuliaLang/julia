@@ -1569,6 +1569,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 end
 
 is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
+is_nothrow(ir::IRCode, id::Int) = is_nothrow(ir, SSAValue(id))
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     worklist = Int[from_bb]
@@ -1730,16 +1731,19 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
             finalizer_useidx = find_finalizer_useidx(defuse)
             if finalizer_useidx isa Int
                 nargs = length(ir.argtypes) # COMBAK this might need to be `Int(opt.src.nargs)`
-                estate = EscapeAnalysis.analyze_escapes(ir, nargs, 𝕃ₒ, get_escape_cache(inlining.interp))
+                eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(inlining.interp))
                 # disable finalizer inlining when this allocation is aliased to somewhere,
                 # mostly likely to edges of `PhiNode`
-                hasaliases = EscapeAnalysis.getaliases(SSAValue(defidx), estate) !== nothing
-                einfo = estate[SSAValue(defidx)]
+                hasaliases = EscapeAnalysis.getaliases(eresult, SSAValue(defidx)) !== nothing
+                einfo = eresult[SSAValue(defidx)]
                 if !hasaliases && EscapeAnalysis.has_no_escape(einfo)
                     already = BitSet(use.idx for use in defuse.uses)
-                    for idx = einfo.Liveness
-                        if idx ∉ already
-                            push!(defuse.uses, SSAUse(:EALiveness, idx))
+                    Liveness = einfo.Liveness
+                    if Liveness isa EscapeAnalysis.PCLiveness
+                        for idx = Liveness.pcs
+                            if idx ∉ already
+                                push!(defuse.uses, SSAUse(:EALiveness, idx))
+                            end
                         end
                     end
                     finalizer_idx = defuse.uses[finalizer_useidx].idx
