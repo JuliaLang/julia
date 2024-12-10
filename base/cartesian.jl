@@ -257,6 +257,56 @@ macro nif(N, condition, operation...)
     ex
 end
 
+"""
+    nif(condition, expression, [else_expression,] ::Val{N}) where {N}
+
+Generate a sequence of `if ... elseif ... else ... end` statements.
+
+# Arguments
+- `condition`: A function that takes an integer between `1` and `N-1` and
+    returns a boolean condition.
+- `expression`: A function that takes an integer between `1` and `N` (or,
+    only up to `N-1`, if `else_expression` is provided) and is called if
+    the condition is true.
+- `else_expression`: (optional) A function that takes `N` as input
+    returns an expression to be evaluated if all conditions are false.
+- `N`: The number of conditions to check, passed as a `Val{N}` instance.
+
+This function is similar to the `@nif` macro but can be used in cases
+where `N` is not known at parse time.
+
+# Examples
+
+For example, here we find the first index of a positive element in a
+fixed-size tuple using `nif`:
+
+```jldoctest
+julia> x = (0, -1, 1, 0)
+(0, -1, 1, 0)
+
+julia> Base.Cartesian.nif(d -> x[d] > 0, d -> d, Val(4))
+3
+```
+"""
+@inline function nif(condition::F, expression::G, ::Val{N}) where {F,G,N}
+    nif(condition, expression, expression, Val(N))
+end
+@inline function nif(condition::F, expression::G, else_expression::H, ::Val{N}) where {F,G,H,N}
+    n = N::Int  # Can improve inference; see #54544
+    (n >= 0) || throw(ArgumentError(LazyString("if statement length should be ≥ 0, got ", n)))
+    if @generated
+        :(@nif $N d -> condition(d) d -> expression(d) d -> else_expression(d))
+    else
+        for d = 1:(n - 1)
+            if condition(d)
+                return expression(d)
+            end
+        end
+        return else_expression(n)
+    end
+end
+typeof(function nif end).name.max_methods = UInt8(2)
+
 ## Utilities
 
 # Simplify expressions like :(d->3:size(A,d)-3) given an explicit value for d
