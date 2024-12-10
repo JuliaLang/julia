@@ -368,12 +368,39 @@ struct ErrorException <: Exception
     msg::AbstractString
 end
 
+import .Intrinsics: ult_int
+struct Summarized
+    desc::Union{Nothing,String}
+    size::Union{Nothing, Tuple{Vararg{Int}}}
+    atype::Type
+    function Summarized(a)
+        # try to get a summary of `a` here now rather than capturing it for later inspection,
+        # in order to allow compiler analyses or optimization passes to assume the invariant
+        # that this `BoundsError` doesn't escape `a` when it is a certain primitive object
+        # that they can reason about
+        atype = typeof(a)
+        desc = nothing
+        size = nothing
+        if isa(a, Array)
+            size = a.size
+        elseif isa(a, GenericMemory)
+            size = (a.length,)
+        elseif isa(a, Tuple)
+            size = (nfields(a),)
+        elseif isdefined(Main, :Base)
+            desc = Main.Base.summary(a)::String
+        else
+            desc = "boostraping threw boundserror with unknown type. Please define Summarized on this type"
+        end
+        new(desc, size, atype)
+    end
+end
 struct BoundsError <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(@nospecialize(a)) = (@noinline; new(a))
-    BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
+    BoundsError(a) = new(Summarized(a))
+    BoundsError(a, i) = new(Summarized(a),i)
 end
 struct DivideError         <: Exception end
 struct OutOfMemoryError    <: Exception end
