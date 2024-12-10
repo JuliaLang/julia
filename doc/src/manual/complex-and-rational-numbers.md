@@ -261,6 +261,7 @@ julia> a = 1; b = 2;
 
 julia> isequal(float(a//b), a/b)
 true
+
 julia> a, b = 0, 0
 (0, 0)
 
