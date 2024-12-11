@@ -1675,6 +1675,15 @@ JL_CALLABLE(jl_f__typevar)
 }
 
 // genericmemory ---------------------------------------------------------------------
+JL_CALLABLE(jl_f_memorynew)
+{
+    JL_NARGS(memorynew, 2, 2);
+    jl_datatype_t *jl_genericmemory_type_type = jl_datatype_type;
+    JL_TYPECHK(memorynew, genericmemory_type, args[0]);
+    JL_TYPECHK(memorynew, long, args[1]);
+    size_t nel = jl_unbox_long(args[1]);
+    return (jl_value_t*)jl_alloc_genericmemory(args[0], nel);
+}
 
 JL_CALLABLE(jl_f_memoryref)
 {
@@ -2441,6 +2450,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
+    jl_builtin_memorynew = add_builtin_func("memorynew", jl_f_memorynew);
     jl_builtin_memoryref = add_builtin_func("memoryrefnew", jl_f_memoryref);
     jl_builtin_memoryrefoffset = add_builtin_func("memoryrefoffset", jl_f_memoryrefoffset);
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);

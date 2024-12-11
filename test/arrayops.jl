@@ -3295,3 +3295,44 @@ end
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
 end
+
+# some tests marked broken because CI runs with check-bounds=yes which impedes escape analysis
+@testset "Array/Memory escape analysis" begin
+    function no_allocate(T::Type{<:Union{Memory, Vector}})
+        v = T(undef, 2)
+        v[1] = 2
+        v[2] = 3
+        return v[1] + v[2]
+    end
+    function test_alloc(T; broken=false)
+        @test (@allocated no_allocate(T)) == 0 broken=broken
+    end
+    @testset "$T" for T in [Memory, Vector]
+        @testset "$ET" for ET in [Int, Union{Int, Float64}]
+            no_allocate(T{ET}) #compile
+            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+        end
+    end
+    function f() # this was causing a bug on an in progress version of #55913.
+        m = Memory{Float64}(undef, 4)
+        m .= 1.0
+        s = 0.0
+        for x ∈ m
+            s += x
+        end
+        s
+    end
+    @test f() === 4.0
+    function confuse_alias_analysis()
+       mem0 = Memory{Int}(undef, 1)
+       mem1 = Memory{Int}(undef, 1)
+       @inbounds mem0[1] = 3
+       for width in 1:2
+            @inbounds mem1[1] = mem0[1]
+            mem0 = mem1
+       end
+       mem0[1]
+    end
+    @test confuse_alias_analysis() == 3
+    @test_broken (@allocated confuse_alias_analysis()) == 0
+end

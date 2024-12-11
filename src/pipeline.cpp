@@ -527,6 +527,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
             if (O.getSpeedupLevel() >= 2) {
+                FPM.addPass(DSEPass());
                 FPM.addPass(GVNPass());
                 FPM.addPass(SCCPPass());
                 FPM.addPass(DCEPass());
