@@ -1216,7 +1216,6 @@ function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
     T
 end
 
-promote_typejoin(map(eltype, fieldtypes(I))...)
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
