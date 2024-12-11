@@ -123,7 +123,7 @@ julia> permutedims(A)
 ```
 And `permutedims` produces results that differ from `transpose`
 for matrices whose elements are themselves numeric matrices:
-```jldoctest; setup = :(using LinearAlgebra)
+```jldoctest
 julia> a = [1 2; 3 4];
 
 julia> b = [5 6; 7 8];
@@ -220,7 +220,7 @@ For vectors of numbers, `permutedims(v)` works much like `transpose(v)`
 except that the return type differs (it uses [`reshape`](@ref)
 rather than a `LinearAlgebra.Transpose` view, though both
 share memory with the original array `v`):
-```jldoctest; setup = :(using LinearAlgebra)
+```jldoctest
 julia> v = [1, 2, 3, 4]
 4-element Vector{Int64}:
  1
@@ -253,7 +253,7 @@ julia> v # shares memory with both p and r
 ```
 However, `permutedims` produces results that differ from `transpose`
 for vectors whose elements are themselves numeric matrices:
-```jldoctest; setup = :(using LinearAlgebra)
+```jldoctest
 julia> V = [[[1 2; 3 4]]; [[5 6; 7 8]]]
 2-element Vector{Matrix{Int64}}:
  [1 2; 3 4]
