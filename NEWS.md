@@ -110,6 +110,7 @@ New library features
 * `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
 * `invoke` now supports passing a CodeInstance instead of a type, which can enable
 certain compiler plugin workflows ([#56660]).
+* `sort` now supports `NTuple`s ([#54494])
 
 Standard library changes
 ------------------------
