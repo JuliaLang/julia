@@ -1202,7 +1202,21 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}} = promote_typejoin(map(eltype, fieldtypes(I))...)
+
+# For tuples, we statically know the element type of each index, so we can compute
+# this at compile time.
+Base.@assume_effects :foldable function eltype(
+    ::Type{Flatten{I}}
+) where {I<:Union{Tuple,NamedTuple}}
+    T = Union{}
+    for i in fieldtypes(I)
+        T = Base.promote_typejoin(T, eltype(i))
+        T === Any && return Any
+    end
+    T
+end
+
+promote_typejoin(map(eltype, fieldtypes(I))...)
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
