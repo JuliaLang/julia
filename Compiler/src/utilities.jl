@@ -149,6 +149,9 @@ end
 isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
+isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
+isa_compileable_sig(m::ABIOverride) = false
+
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """

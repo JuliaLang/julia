@@ -1580,6 +1580,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_type)
 #define jl_is_abioverride(v) jl_typetagis(v,jl_abioverride_type)
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
+#define jl_is_array_any(v)    jl_typetagis(v,jl_array_any_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 

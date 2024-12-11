@@ -343,8 +343,12 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 // if inference doesn't occur (or can't finish), returns NULL instead
 jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode)
 {
-    if (jl_typeinf_func == NULL)
-        return jl_method_inferred_with_abi(mi, world);
+    if (jl_typeinf_func == NULL) {
+        if (source_mode == SOURCE_MODE_ABI)
+            return jl_method_inferred_with_abi(mi, world);
+        else
+            return NULL;
+    }
     jl_task_t *ct = jl_current_task;
     if (ct->reentrant_timing & 0b1000) {
         // We must avoid attempting to re-enter inference here
@@ -366,6 +370,10 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     fargs[1] = (jl_value_t*)mi;
     fargs[2] = jl_box_ulong(world);
     fargs[3] = jl_box_uint8(source_mode);
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
 
     jl_timing_show_method_instance(mi, JL_TIMING_DEFAULT_BLOCK);
 #ifdef TRACE_INFERENCE
@@ -374,10 +382,6 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)mi->specTypes);
         jl_printf(JL_STDERR, "\n");
     }
-#endif
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
 #endif
     int last_pure = ct->ptls->in_pure_callback;
     ct->ptls->in_pure_callback = 0;
@@ -2745,6 +2749,25 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
+JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src)
+{
+    assert(jl_is_code_info(src));
+    jl_emit_codeinst_to_jit(codeinst, src);
+    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+    if (jl_generating_output() && jl_is_method(mi->def.method) && jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
+        jl_value_t *compressed = jl_compress_ir(mi->def.method, src);
+        // These should already be compatible (and should be an assert), but make sure of it anyways
+        if (jl_is_svec(src->edges)) {
+            jl_atomic_store_release(&codeinst->edges, (jl_svec_t*)src->edges);
+            jl_gc_wb(codeinst, src->edges);
+        }
+        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
+        jl_gc_wb(codeinst, src->debuginfo);
+        jl_atomic_store_release(&codeinst->inferred, compressed);
+        jl_gc_wb(codeinst, compressed);
+    }
+}
+
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
     // quick check if we already have a compiled result
@@ -2815,8 +2838,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             jl_method_instance_t *unspecmi = jl_atomic_load_relaxed(&def->unspecialized);
             if (unspecmi) {
                 jl_code_instance_t *unspec = jl_atomic_load_relaxed(&unspecmi->cache);
-                jl_callptr_t unspec_invoke = NULL;
-                if (unspec && (unspec_invoke = jl_atomic_load_acquire(&unspec->invoke))) {
+                if (unspec && jl_atomic_load_acquire(&unspec->invoke) != NULL) {
                     uint8_t specsigflags;
                     jl_callptr_t invoke;
                     void *fptr;
@@ -2886,7 +2908,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     }
 
     if (codeinst) {
-        if (jl_atomic_load_acquire(&codeinst->invoke) != NULL) {
+        if (jl_is_compiled_codeinst(codeinst)) {
             jl_typeinf_timing_end(start, is_recompile);
             // Already compiled - e.g. constabi, or compiled by a different thread while we were waiting.
             return codeinst;
@@ -2972,10 +2994,30 @@ jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t
 {
     jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
     if (invoke == &jl_fptr_wait_for_compiled) {
+        int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+        int last_errno = errno;
+#ifdef _OS_WINDOWS_
+        DWORD last_error = GetLastError();
+#endif
         jl_compile_codeinst(m);
+#ifdef _OS_WINDOWS_
+        SetLastError(last_error);
+#endif
+        errno = last_errno;
+        if (jl_options.malloc_log)
+            jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         invoke = jl_atomic_load_acquire(&m->invoke);
     }
     return invoke(f, args, nargs, m);
+}
+
+// test whether codeinst->invoke is usable already without further compilation needed
+JL_DLLEXPORT int jl_is_compiled_codeinst(jl_code_instance_t *codeinst)
+{
+    jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+    if (invoke == NULL || invoke == &jl_fptr_wait_for_compiled)
+        return 0;
+    return 1;
 }
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;

@@ -272,7 +272,7 @@ static void finish_params(Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOIN
     // the fiction that we don't know what loads from the global will return. Thus, we
     // need to emit a separate module for the globals before any functions are compiled,
     // to ensure that the globals are defined when they are compiled.
-    if (params.imaging_mode) {
+    if (jl_options.image_codegen) {
         if (!params.global_targets.empty()) {
             void **globalslots = new void*[params.global_targets.size()];
             void **slot = globalslots;
@@ -304,7 +304,8 @@ static void finish_params(Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOIN
 // look for something with an egal ABI that is already in the JIT
 static jl_code_instance_t *jl_method_compiled_egal(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    jl_method_instance_t *mi = ci->def;
+    jl_value_t *def = ci->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_value_t *owner = ci->owner;
     jl_value_t *rettype = ci->rettype;
     size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
@@ -316,6 +317,7 @@ static jl_code_instance_t *jl_method_compiled_egal(jl_code_instance_t *ci JL_PRO
             jl_atomic_load_relaxed(&codeinst->invoke) != NULL &&
             jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
             jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+            jl_egal(codeinst->def, def) &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {
             return codeinst;
@@ -501,15 +503,6 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
             complete_graph[callee].push_back(codeinst);
     }
     return params.workqueue.size();
-}
-
-// test whether codeinst->invoke is usable already without further compilation needed
-static bool jl_is_compiled_codeinst(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT
-{
-    auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-    if (invoke == nullptr || invoke == jl_fptr_wait_for_compiled_addr)
-        return false;
-    return true;
 }
 
 // move codeinst (and deps) from incompletemodules to emitted modules
@@ -732,10 +725,15 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
     }
 }
 
-static void jl_emit_codeinst_to_jit(
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_emit_codeinst_to_jit_impl(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src)
 {
+    if (jl_is_compiled_codeinst(codeinst))
+        return;
     { // lock scope
         jl_unique_gcsafe_lock lock(engine_lock);
         if (invokenames.count(codeinst) || jl_is_compiled_codeinst(codeinst))
@@ -746,7 +744,7 @@ static void jl_emit_codeinst_to_jit(
     jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.getContext().setDiscardValueNames(true);
     params.cache = true;
-    params.imaging_mode = imaging_default();
+    params.imaging_mode = 0;
     orc::ThreadSafeModule result_m =
         jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)), params.tsctx, params.DL, params.TargetTriple);
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -765,6 +763,24 @@ static void jl_emit_codeinst_to_jit(
     jl_unique_gcsafe_lock lock(engine_lock);
     if (invokenames.count(codeinst) || jl_is_compiled_codeinst(codeinst))
         return; // destroy everything
+    const std::string &specf = decls.specFunctionObject;
+    const std::string &f = decls.functionObject;
+    assert(!f.empty());
+    // Prepare debug info to receive this function
+    // record that this function name came from this linfo,
+    // so we can build a reverse mapping for debug-info.
+    bool toplevel = !jl_is_method(jl_get_ci_mi(codeinst)->def.method);
+    if (!toplevel) {
+        // don't remember toplevel thunks because
+        // they may not be rooted in the gc for the life of the program,
+        // and the runtime doesn't notify us when the code becomes unreachable :(
+        if (!specf.empty())
+            jl_add_code_in_flight(specf, codeinst, params.DL);
+        if (f != "jl_fptr_args" && f != "jl_fptr_sparam")
+            jl_add_code_in_flight(f, codeinst, params.DL);
+    }
+    jl_callptr_t expected = NULL;
+    jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected, jl_fptr_wait_for_compiled_addr);
     invokenames[codeinst] = std::move(decls);
     complete_emit(codeinst);
     params.tsctx_lock = params.tsctx.getLock(); // re-acquire lock
@@ -853,7 +869,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         jl_codegen_params_t params(into->getContext(), DL, TargetTriple);
         if (pparams == NULL) {
             params.cache = p == NULL;
-            params.imaging_mode = imaging_default();
+            params.imaging_mode = 0;
             params.tsctx.getContext()->setDiscardValueNames(true);
             pparams = &params;
         }
@@ -1425,7 +1441,7 @@ namespace {
 #endif
 #endif
         uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(imaging_default(), target_flags);
+        auto target = jl_get_llvm_target(jl_generating_output(), target_flags);
         auto &TheCPU = target.first;
         SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
         std::string errorstr;
