@@ -697,14 +697,12 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else if (sym.fptr != NULL) {
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
-        if (ctx.emission_context.imaging_mode)
-            jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else if (sym.f_name != NULL) {
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
-        else /*if (ctx.emission_context.imaging) */{
+        else {
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), sym.f_lib, NULL, sym.f_name, ctx.f);
         }
     } else {
@@ -2134,8 +2132,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         Type *funcptype = functype->getPointerTo(0);
         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
         setName(ctx.emission_context, llvmf, "ccall_fptr");
-        if (ctx.emission_context.imaging_mode)
-            jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
@@ -2152,7 +2148,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             ++DeferredCCallLookups;
             llvmf = runtime_sym_lookup(ctx, funcptype, NULL, symarg.lib_expr, symarg.f_name, ctx.f);
         }
-        else /*if (ctx.emission_context.imaging) */{
+        else {
             ++DeferredCCallLookups;
             // vararg requires musttail,
             // but musttail is incompatible with noreturn.

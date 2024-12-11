@@ -12,19 +12,23 @@ struct SecondArgConstOverride
     arg2::Int
 end
 
-world = Base.tls_world_age()
-mi = Base.specialize_method(only(Base._methods_by_ftype(Tuple{typeof(myplus), Int, Int}, -1, world)))
-interp = Compiler.NativeInterpreter(world)
-ci = Compiler.typeinf_ext(interp, mi, Compiler.SOURCE_MODE_FORCE_SOURCE)
-
 function is_known_call(@nospecialize(x), @nospecialize(func), src::Core.CodeInfo)
     isexpr(x, :call) || return false
     ft = Compiler.argextype(x.args[1], src, Compiler.VarState[])
     return Compiler.singleton_type(ft) === func
 end
 
+
 # Construct a CodeInstance with an ABI override
-new_ci = let new_source = copy(Base.uncompressed_ir(ci))
+let world = Base.tls_world_age()
+    # Get some inferred source code to give to the compiler
+    # Do not look at a CodeInstance here, since those fields are only valid to
+    # use while attached to a cache, and are thus invalid to make copies of
+    # (since you'd have to have made the copy to insert into the cache before
+    # making the original CodeInstance to copy from, which is obviously
+    # rather temporally-challenged)
+    new_source = only(code_typed(myplus, (Int, Int)))[1]
+    mi = new_source.parent
     ## Sanity check
     @assert length(new_source.code) == 2
     add = new_source.code[1]
@@ -37,15 +41,19 @@ new_ci = let new_source = copy(Base.uncompressed_ir(ci))
     resize!(new_source.slotnames, 2)
     resize!(new_source.slotflags, 2)
 
-    # Construct the CodeInstance
-    new_ci = Core.CodeInstance(Core.ABIOverride(Tuple{typeof(myplus), Int}, mi),
-        SecondArgConstOverride(1), ci.rettype, ci.exctype, nothing, new_source,
-        Int32(0), ci.min_world, ci.max_world, ci.ipo_purity_bits, nothing, ci.relocatability, ci.debuginfo, ci.edges)
+    # Construct the CodeInstance from the modified CodeInfo data
+    global new_ci = Core.CodeInstance(Core.ABIOverride(Tuple{typeof(myplus), Int}, mi),
+        #=owner=#SecondArgConstOverride(1), new_source.rettype, Any#=new_source.exctype is missing=#,
+        #=inferred_const=#nothing, #=code=#nothing, #=const_flags=#Int32(0),
+        new_source.min_world, new_source.max_world, #=new_source.ipo_purity_bits is missing=#UInt32(0),
+      #=analysis_results=#nothing, #=not relocatable?=#UInt8(0), new_source.debuginfo, new_source.edges)
 
     # Poke the CI into the global cache
+    # This isn't necessary, but does conveniently give it the mandatory permanent GC-root before calling `invoke`
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, new_ci)
 
-    new_ci
+    # Poke the source code into the JIT for it
+    ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), new_ci, new_source)
 end
 
 @test contains(repr(new_ci), "ABI Overridden")
