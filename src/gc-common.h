@@ -61,12 +61,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 // malloc wrappers, aligned allocation
 // =========================================================================== //
 
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
-
 #if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
