@@ -669,6 +669,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
+    fl_print(fl_ctx, ios_stderr, e);
+    ios_putc('\n', ios_stderr);
     jl_error("malformed tree");
 }
 
