@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_ssair
+
 include("irutils.jl")
 
 using Test
@@ -818,3 +820,5 @@ let cl = Int32[32, 1, 1, 1000, 240, 230]
     cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
     @test cl == cl2
 end
+
+end # module test_ssair
