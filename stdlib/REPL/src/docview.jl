@@ -416,10 +416,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
+        println(io)
         println(io, "---")
-        println(io)
         println(io, "_Package description from `$(basename(readme_path))`:_")
-        println(io)
         for line in first(readme_lines, nlines)
             println(io, line)
         end
