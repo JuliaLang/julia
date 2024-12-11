@@ -6,9 +6,6 @@
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include "threading.h"
-#ifdef __GLIBC__
-#include <malloc.h> // for malloc_trim
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +115,37 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
         jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+}
+
+// =========================================================================== //
+// malloc wrappers, aligned allocation
+// =========================================================================== //
+
+#if defined(_OS_WINDOWS_)
+// helper function based partly on wine msvcrt80+ heap.c
+// but with several fixes to improve the correctness of the computation and remove unnecessary parameters
+#define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
+                               ~(sizeof(void *) - 1)))
+static size_t _aligned_msize(void *p)
+{
+    void *alloc_ptr = *(void**)SAVED_PTR(p);
+    return _msize(alloc_ptr) - ((char*)p - (char*)alloc_ptr);
+}
+#undef SAVED_PTR
+#endif
+
+size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_)
+    if (isaligned)
+        return _aligned_msize(p);
+    else
+        return _msize(p);
+#elif defined(_OS_DARWIN_)
+    return malloc_size(p);
+#else
+    return malloc_usable_size(p);
+#endif
 }
 
 // =========================================================================== //
@@ -503,63 +531,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return jl_gc_alloc(ptls, sz, NULL);
-}
-
-// allocation wrappers that save the size of allocations, to allow using
-// jl_gc_counted_* functions with a libc-compatible API.
-
-JL_DLLEXPORT void *jl_malloc(size_t sz)
-{
-    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (p == NULL)
-        return NULL;
-    p[0] = sz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
-}
-
-//_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
-    size_t nmsz = nm*sz;
-    int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
-    if (p == NULL)
-        return NULL;
-    p[0] = nmsz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
-}
-
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
-    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
-        return NULL;
-    return _unchecked_calloc(nm, sz);
-}
-
-JL_DLLEXPORT void jl_free(void *p)
-{
-    if (p != NULL) {
-        int64_t *pp = (int64_t *)p - 2;
-        size_t sz = pp[0];
-        jl_gc_counted_free_with_size(pp, sz + JL_SMALL_BYTE_ALIGNMENT);
-    }
-}
-
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
-{
-    int64_t *pp;
-    size_t szold;
-    if (p == NULL) {
-        pp = NULL;
-        szold = 0;
-    }
-    else {
-        pp = (int64_t *)p - 2;
-        szold = pp[0] + JL_SMALL_BYTE_ALIGNMENT;
-    }
-    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (pnew == NULL)
-        return NULL;
-    pnew[0] = sz;
-    return (void *)(pnew + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
 }
 
 // allocator entry points

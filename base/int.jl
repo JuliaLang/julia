@@ -587,37 +587,32 @@ julia> bitstring(bitrotate(0b01110010, 8))
 bitrotate(x::T, k::Integer) where {T <: BitInteger} =
     (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
-# @doc isn't available when running in Core at this point.
-# Tuple syntax for documentation two function signatures at the same time
-# doesn't work either at this point.
-if nameof(@__MODULE__) === :Base
-    for fname in (:mod, :rem)
-        @eval @doc """
-            rem(x::Integer, T::Type{<:Integer}) -> T
-            mod(x::Integer, T::Type{<:Integer}) -> T
-            %(x::Integer, T::Type{<:Integer}) -> T
+for fname in (:mod, :rem)
+    @eval @doc """
+        rem(x::Integer, T::Type{<:Integer}) -> T
+        mod(x::Integer, T::Type{<:Integer}) -> T
+        %(x::Integer, T::Type{<:Integer}) -> T
 
-        Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
-        in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
-        If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
-        a conversion to `T`.
+    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+    If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
+    a conversion to `T`.
 
-        # Examples
-        ```jldoctest
-        julia> x = 129 % Int8
-        -127
+    # Examples
+    ```jldoctest
+    julia> x = 129 % Int8
+    -127
 
-        julia> typeof(x)
-        Int8
+    julia> typeof(x)
+    Int8
 
-        julia> x = 129 % BigInt
-        129
+    julia> x = 129 % BigInt
+    129
 
-        julia> typeof(x)
-        BigInt
-        ```
-        """ $fname(x::Integer, T::Type{<:Integer})
-    end
+    julia> typeof(x)
+    BigInt
+    ```
+    """ $fname(x::Integer, T::Type{<:Integer})
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x

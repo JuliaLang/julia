@@ -1100,7 +1100,7 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
 end
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
 
@@ -1116,6 +1116,9 @@ The returned iterator is stateful so when accessed repeatedly each access will
 resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
+
+!!! compat "Julia 1.12"
+    `pwd()` as the default directory was added in Julia 1.12.
 
 # Examples
 ```julia
@@ -1146,7 +1149,7 @@ julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+function walkdir(path = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
     function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)

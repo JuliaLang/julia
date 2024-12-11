@@ -60,11 +60,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    #if JL_LLVM_VERSION >= 170000
     Type *NewT = PointerType::get(T, AddressSpace::Derived);
-    #else
-    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
-    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -74,11 +70,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
-    #if JL_LLVM_VERSION >= 170000
     Type *NewT = PointerType::get(T, AddressSpace::Derived);
-    #else
-    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
-    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -397,7 +389,8 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 
 // --- emitting pointers directly into code ---
 
-
+static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val);
+static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
 static inline Constant *literal_static_pointer_val(const void *p, Type *T);
 
 static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
@@ -777,7 +770,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
             return getVoidTy(ctxt);
         Type *_struct_decl = NULL;
-        // TODO: we should probably make a temporary root for `jst` somewhere
+        if (ctx)
+            jl_temporary_root(*ctx, jt);
         // don't use pre-filled struct_decl for llvmcall (f16, etc. may be different)
         Type *&struct_decl = (ctx && !llvmcall ? ctx->llvmtypes[jst] : _struct_decl);
         if (struct_decl)
@@ -1008,54 +1002,6 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
 {
     if (sz == 0)
         return;
-    #if JL_LLVM_VERSION < 170000
-    // If the types are small and simple, use load and store directly.
-    // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
-    // that interferes with other optimizations.
-    // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
-    if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
-        // The size limit is arbitrary but since we mainly care about floating points and
-        // machine size vectors this should be enough.
-        const DataLayout &DL = jl_Module->getDataLayout();
-        auto srcty = cast<PointerType>(src->getType());
-        //TODO unsafe nonopaque pointer
-        auto srcel = srcty->getNonOpaquePointerElementType();
-        auto dstty = cast<PointerType>(dst->getType());
-        //TODO unsafe nonopaque pointer
-        auto dstel = dstty->getNonOpaquePointerElementType();
-        while (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
-            src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
-            srcel = srcel->getArrayElementType();
-            srcty = srcel->getPointerTo();
-        }
-        while (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
-            dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
-            dstel = dstel->getArrayElementType();
-            dstty = dstel->getPointerTo();
-        }
-
-        llvm::Type *directel = nullptr;
-        if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
-            directel = srcel;
-            dst = emit_bitcast(ctx, dst, srcty);
-        }
-        else if (dstel->isSized() && dstel->isSingleValueType() &&
-                DL.getTypeStoreSize(dstel) == sz) {
-            directel = dstel;
-            src = emit_bitcast(ctx, src, dstty);
-        }
-        if (directel) {
-            if (isa<Instruction>(src) && !src->hasName())
-                setName(ctx.emission_context, src, "memcpy_refined_src");
-            if (isa<Instruction>(dst) && !dst->hasName())
-                setName(ctx.emission_context, dst, "memcpy_refined_dst");
-            auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
-            dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, align_dst, is_volatile));
-            ++SkippedMemcpys;
-            return;
-        }
-    }
-    #endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
@@ -1938,7 +1884,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     // actual `isa` calls, this optimization should already have been performed upstream
     // anyway, but having this optimization in codegen might still be beneficial for
     // `typeassert`s if we can make it correct.
-    Optional<bool> known_isa;
+    std::optional<bool> known_isa;
     jl_value_t *intersected_type = type;
     if (x.constant)
         known_isa = jl_isa(x.constant, type);
@@ -3506,8 +3452,6 @@ static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction<TypeFn_t> *intr, 
     return Call;
 }
 
-static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val);
-
 static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
@@ -3540,7 +3484,9 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
             if (s) {
-                s = jl_ensure_rooted(ctx, s);
+                JL_GC_PUSH1(&s);
+                jl_temporary_root(ctx, s);
+                JL_GC_POP();
                 return track_pjlvalue(ctx, literal_pointer_val(ctx, s));
             }
         }
@@ -3784,11 +3730,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
-            #if JL_LLVM_VERSION >= 170000
             Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
-            #else
-            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
-            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3797,11 +3739,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
-            #if JL_LLVM_VERSION >= 170000
             Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
-            #else
-            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
-            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -4485,8 +4423,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->debug_info_kind == b->debug_info_kind) &&
            (a->safepoint_on_entry == b->safepoint_on_entry) &&
            (a->gcstack_arg == b->gcstack_arg) &&
-           (a->use_jlplt == b->use_jlplt) &&
-           (a->lookup == b->lookup);
+           (a->use_jlplt == b->use_jlplt);
 }
 #endif
 

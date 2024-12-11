@@ -175,15 +175,33 @@
 #end
 
 #mutable struct Task
-#    parent::Task
+#    next::Any
+#    queue::Any
 #    storage::Any
-#    state::Symbol
 #    donenotify::Any
 #    result::Any
-#    exception::Any
-#    backtrace::Any
 #    scope::Any
 #    code::Any
+#    @atomic _state::UInt8
+#    sticky::UInt8
+#    priority::UInt16
+#    @atomic _isexception::UInt8
+#    pad00::UInt8
+#    pad01::UInt8
+#    pad02::UInt8
+#    rngState0::UInt64
+#    rngState1::UInt64
+#    rngState2::UInt64
+#    rngState3::UInt64
+#    rngState4::UInt64
+#    const metrics_enabled::Bool
+#    pad10::UInt8
+#    pad11::UInt8
+#    pad12::UInt8
+#    @atomic first_enqueued_at::UInt64
+#    @atomic last_started_running_at::UInt64
+#    @atomic running_time_ns::UInt64
+#    @atomic finished_at::UInt64
 #end
 
 export
@@ -259,17 +277,20 @@ else
     const UInt = UInt32
 end
 
-function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+function iterate end
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
 Expr(@nospecialize args...) = _expr(args...)
+
+macro latestworld() Expr(:latestworld) end
 
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
@@ -454,9 +475,13 @@ Nothing() = nothing
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
-include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
+include(m::Module, fname::String) = (@noinline; ccall(:jl_load_, Any, (Any, Any), m, fname))
+eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e))
 
-eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+struct EvalInto <: Function
+    m::Module
+end
+(this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
 mutable struct Box
     contents::Any
@@ -508,7 +533,6 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
@@ -531,11 +555,11 @@ function CodeInstance(
     mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     effects::UInt32, @nospecialize(analysis_results),
-    relocatability::UInt8, edges::Union{DebugInfo,Nothing})
+    relocatability::UInt8, di::Union{DebugInfo,Nothing}, edges::SimpleVector)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
         mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
-        effects, analysis_results, relocatability, edges)
+        effects, analysis_results, relocatability, di, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
@@ -980,6 +1004,14 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+# During definition of struct type `B`, if an `A.B` expression refers to
+# the eventual global name of the struct, then return the partially-initialized
+# type object.
+# TODO: remove. This is a shim for backwards compatibility.
+function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecialize(t))
+    return x === mod ? t : getfield(x, name)
+end
 
 # Binding for the julia parser, called as
 #

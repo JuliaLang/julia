@@ -475,7 +475,6 @@ void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerP
     memcpy(pr, pa, onumbytes);
 }
 
-#if JL_LLVM_VERSION >= 170000
 extern "C" JL_DLLEXPORT
 unsigned countr_zero_8(uint8_t Val) {
     return countr_zero(Val);
@@ -495,27 +494,6 @@ extern "C" JL_DLLEXPORT
 unsigned countr_zero_64(uint64_t Val) {
     return countr_zero(Val);
 }
-#else
-extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_8(uint8_t Val) {
-    return countTrailingZeros(Val);
-}
-
-extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_16(uint16_t Val) {
-    return countTrailingZeros(Val);
-}
-
-extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_32(uint32_t Val) {
-    return countTrailingZeros(Val);
-}
-
-extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_64(uint64_t Val) {
-    return countTrailingZeros(Val);
-}
-#endif
 
 extern "C" JL_DLLEXPORT
 void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
@@ -545,7 +523,6 @@ void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integer
         memcpy(pr, pa, numbytes);
 }
 
-#if JL_LLVM_VERSION >= 170000
 extern "C" JL_DLLEXPORT
 unsigned LLVMPopcount(unsigned numbits, integerPart *pa) {
     CREATE(a)
@@ -575,34 +552,3 @@ unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countl_zero();
 }
-#else
-extern "C" JL_DLLEXPORT
-unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa) {
-    CREATE(a)
-    return a.countPopulation();
-}
-
-extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa) {
-    CREATE(a)
-    return a.countTrailingOnes();
-}
-
-extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa) {
-    CREATE(a)
-    return a.countTrailingZeros();
-}
-
-extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa) {
-    CREATE(a)
-    return a.countLeadingOnes();
-}
-
-extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa) {
-    CREATE(a)
-    return a.countLeadingZeros();
-}
-#endif
