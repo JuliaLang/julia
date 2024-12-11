@@ -11,7 +11,8 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, @_foldable_meta,
+    Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
@@ -1205,9 +1206,8 @@ eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 
 # For tuples, we statically know the element type of each index, so we can compute
 # this at compile time.
-Base.@assume_effects :foldable function eltype(
-    ::Type{Flatten{I}}
-) where {I<:Union{Tuple,NamedTuple}}
+function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+    @_foldable_meta
     T = Union{}
     for i in fieldtypes(I)
         T = Base.promote_typejoin(T, eltype(i))
