@@ -113,12 +113,12 @@ struct FailedAnalysis
     get_escape_cache::GetEscapeCache
 end
 
-function Compiler.finish!(interp::EscapeAnalyzer, state::InferenceState; can_discard_trees::Bool=Compiler.may_discard_trees(interp))
+function Compiler.finish!(interp::EscapeAnalyzer, state::InferenceState)
     ecacheinfo = Compiler.traverse_analysis_results(state.result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
     ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[state.linfo] = ecacheinfo)
-    return @invoke Compiler.finish!(interp::AbstractInterpreter, state::InferenceState; can_discard_trees)
+    return @invoke Compiler.finish!(interp::AbstractInterpreter, state::InferenceState)
 end
 
 # printing

@@ -275,9 +275,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
-                                         jl_atomic_load_acquire(&jl_world_counter),
-                                         NULL);
+    void *native_code = jl_create_native(m2, NULL, 0, external_linkage, jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
@@ -372,8 +370,7 @@ static void *jl_precompile_trimmed(size_t world)
     jl_value_t *ccallable = NULL;
     JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
-    while (1)
-    {
+    while (1) {
         mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
         if (mi == NULL)
             break;
@@ -385,10 +382,7 @@ static void *jl_precompile_trimmed(size_t world)
             jl_array_ptr_1d_push(m, ccallable);
     }
 
-    jl_cgparams_t params = jl_default_cgparams;
-    params.trim = jl_options.trim;
-    void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
-                                         world, NULL);
+    void *native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
     JL_GC_POP();
     return native_code;
 }

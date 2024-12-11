@@ -366,6 +366,7 @@ struct NativeInterpreter <: AbstractInterpreter
 
     # Cache of inference results for this particular interpreter
     inf_cache::Vector{InferenceResult}
+    codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -386,16 +387,8 @@ function NativeInterpreter(world::UInt = get_world_counter();
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
     inf_cache = Vector{InferenceResult}() # Initially empty cache
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
-end
-
-function NativeInterpreter(interp::NativeInterpreter;
-                           world::UInt = interp.world,
-                           method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
-                           inf_cache::Vector{InferenceResult} = interp.inf_cache,
-                           inf_params::InferenceParams = interp.inf_params,
-                           opt_params::OptimizationParams = interp.opt_params)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
+    codegen = IdDict{CodeInstance,CodeInfo}()
+    return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract

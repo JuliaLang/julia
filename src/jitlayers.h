@@ -78,10 +78,6 @@ void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-static inline bool imaging_default() JL_NOTSAFEPOINT {
-    return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
-}
-
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
@@ -265,7 +261,7 @@ struct jl_codegen_params_t {
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
         TargetTriple(std::move(triple)),
-        imaging_mode(imaging_default())
+        imaging_mode(1)
     {
         // LLVM's RISC-V back-end currently does not support the Swift calling convention
         if (TargetTriple.isRISCV())

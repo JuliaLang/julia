@@ -240,7 +240,6 @@
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
-    XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
@@ -517,6 +516,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
+    YY(jl_emit_codeinst_to_jit) \
     YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \

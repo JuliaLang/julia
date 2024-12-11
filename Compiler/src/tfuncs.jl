@@ -42,11 +42,10 @@ macro nospecs(ex)
         push!(names, arg)
     end
     @assert isexpr(body, :block)
-    if !isempty(names)
-        lin = first(body.args)::LineNumberNode
-        nospec = Expr(:macrocall, Symbol("@nospecialize"), lin, names...)
-        insert!(body.args, 2, nospec)
-    end
+    isempty(names) && throw(ArgumentError("no arguments for @nospec"))
+    lin = first(body.args)::LineNumberNode
+    nospec = Expr(:macrocall, GlobalRef(@__MODULE__, :var"@nospecialize"), lin, names...)
+    insert!(body.args, 2, nospec)
     return esc(ex)
 end
 
@@ -2112,7 +2111,7 @@ add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
     return true
 end
 
-@nospecs function memoryref_elemtype(@nospecialize mem)
+@nospecs function memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
         m0 = m
@@ -2128,7 +2127,7 @@ end
     return Any
 end
 
-@nospecs function _memoryref_elemtype(@nospecialize mem)
+@nospecs function _memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
         m0 = m
@@ -2163,7 +2162,7 @@ end
 end
 
 # whether getindex for the elements can potentially throw UndefRef
-function array_type_undefable(@nospecialize(arytype))
+@nospecs function array_type_undefable(arytype)
     arytype = unwrap_unionall(arytype)
     if isa(arytype, Union)
         return array_type_undefable(arytype.a) || array_type_undefable(arytype.b)
@@ -2244,7 +2243,7 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
-@nospecs function memorynew_nothrow(argtypes::Vector{Any})
+function memorynew_nothrow(argtypes::Vector{Any})
     if !(argtypes[1] isa Const && argtypes[2] isa Const)
         return false
     end
@@ -2260,6 +2259,7 @@ end
     overflows = checked_smul_int(len, elsz)[2]
     return !overflows
 end
+
 # Query whether the given builtin is guaranteed not to throw given the `argtypes`.
 # `argtypes` can be assumed not to contain varargs.
 function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
