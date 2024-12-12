@@ -131,7 +131,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     return oc;
 }
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source_, jl_value_t **env, size_t nenv, int do_compile)
 {
     jl_value_t *captures = jl_f_tuple(NULL, env, nenv);
