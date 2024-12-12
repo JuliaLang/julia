@@ -15,8 +15,6 @@ mutable struct MD
         new(content, meta)
 end
 
-public MD
-
 MD(xs...) = MD(vcat(xs...))
 
 function MD(cfg::Config, xs...)
@@ -97,6 +95,11 @@ end
 parse(stream::IO, block::MD; breaking = false) =
     parse(stream, block, config(block), breaking = breaking)
 
+"""
+    parse(stream::IO) -> MD
+
+Parse the content of `stream` as Julia-flavored Markdown text and return the corresponding `MD` object.
+"""
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])
     markdown = MD(flavor)
