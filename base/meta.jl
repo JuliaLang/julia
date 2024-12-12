@@ -363,10 +363,15 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         return x
     end
     if isa(x, Core.ReturnNode)
+       # Unreachable doesn't have val defined
+       if !isdefined(x, :val)
+          return x
+       else
         return Core.ReturnNode(
             _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
+       end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
