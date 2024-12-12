@@ -388,24 +388,18 @@ static void sweep_weak_refs(void)
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL) {
             size_t n = 0;
-            size_t ndel = 0;
+            size_t i = 0;
             size_t l = ptls2->gc_tls_common.heap.weak_refs.len;
             void **lst = ptls2->gc_tls_common.heap.weak_refs.items;
-            if (l == 0)
-                continue;
-            while (1) {
-                jl_weakref_t *wr = (jl_weakref_t*)lst[n];
-                if (gc_marked(jl_astaggedvalue(wr)->bits.gc))
+            // filter with preserving order
+            for (i = 0; i < l; i++) {
+                jl_weakref_t *wr = (jl_weakref_t*)lst[i];
+                if (gc_marked(jl_astaggedvalue(wr)->bits.gc)) {
+                    lst[n] = wr;
                     n++;
-                else
-                    ndel++;
-                if (n >= l - ndel)
-                    break;
-                void *tmp = lst[n];
-                lst[n] = lst[n + ndel];
-                lst[n + ndel] = tmp;
+                }
             }
-            ptls2->gc_tls_common.heap.weak_refs.len -= ndel;
+            ptls2->gc_tls_common.heap.weak_refs.len = n;
         }
     }
 }
