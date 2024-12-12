@@ -11,12 +11,12 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, @_foldable_meta,
-    Generator, IdDict,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    tuple_type_head, tuple_type_tail
 using Core: @doc
 
 using .Base:
@@ -1206,15 +1206,19 @@ eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 
 # For tuples, we statically know the element type of each index, so we can compute
 # this at compile time.
-function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
-    @_foldable_meta
-    T = Union{}
-    for i in fieldtypes(I)
-        T = Base.promote_typejoin(T, eltype(i))
-        T === Any && return Any
-    end
-    T
+eltype(::Type{Flatten{I}}) where {I<:Tuple} = _flatten_eltype(Union{}, I)
+
+function eltype(::Type{Flatten{I}}) where {I<:NamedTuple{<:Any, T}} where T
+    _flatten_eltype(Union{}, T)
 end
+
+function _flatten_eltype(T::Type, I::Type{<:Tuple})
+    T2 = promote_typejoin(T, eltype(tuple_type_head(I)))
+    T2 === Any && return Any
+    _flatten_eltype(T2, tuple_type_tail(I))
+end
+
+_flatten_eltype(T::Type, I::Type{Tuple{}}) = T
 
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
