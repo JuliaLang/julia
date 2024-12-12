@@ -185,23 +185,14 @@ function trylock end
     return _trylock(rl, ct)
 end
 @noinline function _trylock(rl::ReentrantLock, ct::Task)
-    state = @atomic :monotonic rl.havelock
-    while true
-        if state & LOCKED_BIT != 0
-            return false
-        end
-
-        GC.disable_finalizers()
-        result = (@atomicreplace :acquire :monotonic rl.havelock state => state | LOCKED_BIT)
-        if result.success
-            rl.reentrancy_cnt = 0x0000_0001
-            @atomic :release rl.locked_by = ct
-            return true
-        else
-            state = result.old
-        end
-        GC.enable_finalizers()
+    GC.disable_finalizers()
+    if (@atomicreplace :acquire rl.havelock 0x0 => LOCKED_BIT).success
+        rl.reentrancy_cnt = 0x0000_0001
+        @atomic :release rl.locked_by = ct
+        return true
     end
+    GC.enable_finalizers()
+    return false
 end
 
 """
