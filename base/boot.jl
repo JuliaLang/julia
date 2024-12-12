@@ -175,15 +175,33 @@
 #end
 
 #mutable struct Task
-#    parent::Task
+#    next::Any
+#    queue::Any
 #    storage::Any
-#    state::Symbol
 #    donenotify::Any
 #    result::Any
-#    exception::Any
-#    backtrace::Any
 #    scope::Any
 #    code::Any
+#    @atomic _state::UInt8
+#    sticky::UInt8
+#    priority::UInt16
+#    @atomic _isexception::UInt8
+#    pad00::UInt8
+#    pad01::UInt8
+#    pad02::UInt8
+#    rngState0::UInt64
+#    rngState1::UInt64
+#    rngState2::UInt64
+#    rngState3::UInt64
+#    rngState4::UInt64
+#    const metrics_enabled::Bool
+#    pad10::UInt8
+#    pad11::UInt8
+#    pad12::UInt8
+#    @atomic first_enqueued_at::UInt64
+#    @atomic last_started_running_at::UInt64
+#    @atomic running_time_ns::UInt64
+#    @atomic finished_at::UInt64
 #end
 
 export

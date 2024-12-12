@@ -247,4 +247,8 @@ end
     @test write(wrapio, Base.AnnotatedChar('a', [(:y, 2)])) == 1
     @test read(seekstart(aio), Base.AnnotatedString) ==
         Base.AnnotatedString("heya", [(1:3, :x, 1), (4:4, :y, 2)])
+    # show-ing an AnnotatedIOBuffer
+    aio = Base.AnnotatedIOBuffer()
+    write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
+    @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
 end

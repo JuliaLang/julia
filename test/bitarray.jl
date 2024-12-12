@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: findprevnot, findnextnot
-using Random, LinearAlgebra, Test
+using Random, Test, LinearAlgebra # Ideally, these tests should not depend on LinearAlgebra
 
 isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
 using .Main.SizedArrays
@@ -15,7 +15,6 @@ tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Test._check_bitarray_consistency(b)
 bitcheck(x) = true
-bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
 
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
@@ -33,6 +32,9 @@ macro check_bit_operation(ex)
     @assert Meta.isexpr(ex, :call)
     Expr(:call, :check_bitop_call, nothing, map(esc, ex.args)...)
 end
+
+bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
+
 
 let t0 = time_ns()
     global timesofar
@@ -1640,69 +1642,6 @@ timesofar("permutedims")
 end
 
 timesofar("cat")
-
-@testset "Linear algebra" begin
-    b1 = bitrand(v1)
-    b2 = bitrand(v1)
-    @check_bit_operation dot(b1, b2) Int
-
-    b1 = bitrand(n1, n2)
-    @test_throws ArgumentError tril(b1, -n1 - 2)
-    @test_throws ArgumentError tril(b1, n2)
-    @test_throws ArgumentError triu(b1, -n1)
-    @test_throws ArgumentError triu(b1, n2 + 2)
-    for k in (-n1 - 1):(n2 - 1)
-        @check_bit_operation tril(b1, k) BitMatrix
-    end
-    for k in (-n1 + 1):(n2 + 1)
-        @check_bit_operation triu(b1, k) BitMatrix
-    end
-
-    for sz = [(n1,n1), (n1,n2), (n2,n1)], (f,isf) = [(tril,istril), (triu,istriu)]
-        b1 = bitrand(sz...)
-        @check_bit_operation isf(b1) Bool
-        b1 = f(bitrand(sz...))
-        @check_bit_operation isf(b1) Bool
-    end
-
-    b1 = bitrand(n1,n1)
-    b1 .|= copy(b1')
-    @check_bit_operation issymmetric(b1) Bool
-    @check_bit_operation ishermitian(b1) Bool
-
-    b1 = bitrand(n1)
-    b2 = bitrand(n2)
-    @check_bit_operation kron(b1, b2) BitVector
-
-    b1 = bitrand(s1, s2)
-    b2 = bitrand(s3, s4)
-    @check_bit_operation kron(b1, b2) BitMatrix
-
-    b1 = bitrand(v1)
-    @check_bit_operation diff(b1) Vector{Int}
-
-    b1 = bitrand(n1, n2)
-    @check_bit_operation diff(b1, dims=1) Matrix{Int}
-    @check_bit_operation diff(b1, dims=2) Matrix{Int}
-
-    b1 = bitrand(n1, n1)
-    @test ((svdb1, svdb1A) = (svd(b1), svd(Array(b1)));
-            svdb1.U == svdb1A.U && svdb1.S == svdb1A.S && svdb1.V == svdb1A.V)
-    @test ((qrb1, qrb1A) = (qr(b1), qr(Array(b1)));
-            Matrix(qrb1.Q) == Matrix(qrb1A.Q) && qrb1.R == qrb1A.R)
-
-    b1 = bitrand(v1)
-    @check_bit_operation diagm(0 => b1) BitMatrix
-
-    b1 = bitrand(v1)
-    b2 = bitrand(v1)
-    @check_bit_operation diagm(-1 => b1, 1 => b2) BitMatrix
-
-    b1 = bitrand(n1, n1)
-    @check_bit_operation diag(b1)
-end
-
-timesofar("linalg")
 
 @testset "findmax, findmin" begin
     b1 = trues(0)

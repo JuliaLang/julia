@@ -3031,14 +3031,13 @@ end
 
 # issue #28279
 # ensure that lowering doesn't move these into statement position, which would require renumbering
-using Base: +, -
-function f28279(b::Bool)
+@eval function f28279(b::Bool)
     let i = 1
-        while i > b
-            i -= 1
+        while $(>)(i, b)
+            i = $(-)(i, 1)
         end
         if b end
-        return i + 1
+        return $(+)(i, 1)
     end
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
