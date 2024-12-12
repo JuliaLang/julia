@@ -108,7 +108,7 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
                     "made available as public by"
                 end
                 print(io, "\n    - Also $how_available $m")
-                if !isdefined(active_mod, Symbol(m))
+                if !isdefined(active_mod, nameof(m))
                     print(io, " (loaded but not imported in $active_mod)")
                 end
                 print(io, ".")
