@@ -865,7 +865,7 @@ function show_backtrace(io::IO, t::Vector)
         filtered = t
     else
         # t is a raw trace requiring lookup
-        if t isa Vector{<:Union{Base.InterpreterIP,Core.Compiler.InterpreterIP,Ptr{Cvoid}}}
+        if t isa Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}
             frametrace = stacktrace(t)
         else
             frametrace = t
