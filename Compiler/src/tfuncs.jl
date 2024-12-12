@@ -2244,6 +2244,22 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
+@nospecs function memorynew_nothrow(argtypes::Vector{Any})
+    if !(argtypes[1] isa Const && argtypes[2] isa Const)
+        return false
+    end
+    MemT = argtypes[1].val
+    if !(isconcretetype(MemT) && MemT <: GenericMemory)
+        return false
+    end
+    len = argtypes[2].val
+    if !(len isa Int && 0 <= len < typemax(Int))
+        return false
+    end
+    elsz = datatype_layoutsize(MemT)
+    overflows = checked_smul_int(len, elsz)[2]
+    return !overflows
+end
 # Query whether the given builtin is guaranteed not to throw given the `argtypes`.
 # `argtypes` can be assumed not to contain varargs.
 function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
@@ -2251,14 +2267,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     ⊑ = partialorder(𝕃)
     na = length(argtypes)
     if f === Core.memorynew
-        argtypes[1] isa Const && argtypes[2] isa Const || return false
-        MemT = argtypes[1].val
-        isconcretetype(MemT) && MemT <: GenericMemory || return false
-        len = argtypes[2].val
-        len isa Int && 0 <= len < typemax(Int) || return false
-        elsz = datatype_layoutsize(MemT)
-        checked_smul_int(len, elsz)[2] && return false
-        return true
+        return memorynew_nothrow(argtypes)
     elseif f === memoryrefnew
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset

@@ -1603,7 +1603,7 @@ static const auto &builtin_func_map() {
           { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
           { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
-          { jl_f_memorynew_addr, new JuliaFunction<>{XSTR(jl_f_memorynew), get_func_sig, get_func_attrs} },
+          { jl_f_memorynew_addr,          new JuliaFunction<>{XSTR(jl_f_memorynew), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefoffset_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefoffset), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefset_addr,       new JuliaFunction<>{XSTR(jl_f_memoryrefset), get_func_sig, get_func_attrs} },
