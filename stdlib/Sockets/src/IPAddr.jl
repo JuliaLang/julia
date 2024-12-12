@@ -293,6 +293,7 @@ end
 struct InetAddr{T<:IPAddr}
     host::T
     port::UInt16
+    scope_id::UInt32
 end
 
 """
@@ -306,7 +307,7 @@ julia> Sockets.InetAddr(ip"127.0.0.1", 8000)
 Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
 ```
 """
-InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+InetAddr(ip::IPAddr, port, scope_id=UInt32(0)) = InetAddr{typeof(ip)}(ip, port, scope_id)
 
 """
     InetAddr(str::AbstractString, port) -> InetAddr
@@ -323,11 +324,15 @@ julia> Sockets.InetAddr("127.0.0.1", 8000)
 Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
 ```
 """
-InetAddr(str::AbstractString, port) = InetAddr(parse(IPAddr, str), port)
+InetAddr(str::AbstractString, port, scope_id=UInt32(0)) = InetAddr(parse(IPAddr, str), port, scope_id)
 
 function show(io::IO, addr::InetAddr)
     show(io, typeof(addr))
     print(io, "(")
     show(io, addr.host)
-    print(io, ", ", Int(addr.port), ")")
+    print(io, ", ", Int(addr.port))
+    if addr.scope_id != 0
+        print(io, ", ", Int(addr.scope_id))
+    end
+    print(io, ")")
 end

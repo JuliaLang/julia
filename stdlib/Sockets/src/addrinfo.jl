@@ -201,8 +201,8 @@ function getnameinfo(address::Union{IPv4, IPv6})
     status = UV_EINVAL
     host_in = Ref(hton(address.host))
     iolock_begin()
-    status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Cint, Ptr{Cvoid}, Cint),
-                   eventloop(), req, host_in, port, flags, uvcb, address isa IPv6)
+    status = ccall(:jl_getnameinfo, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, UInt16, UInt32, Cint, Ptr{Cvoid}, Cint),
+                   eventloop(), req, host_in, 0, port, flags, uvcb, address isa IPv6)
     if status < 0
         Libc.free(req)
         if status == UV_EINVAL
