@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    tuple_type_head, tuple_type_tail
+    tuple_type_tail
 using Core: @doc
 
 using .Base:
@@ -1212,8 +1212,8 @@ function eltype(::Type{Flatten{I}}) where {I<:NamedTuple{<:Any, T}} where T
     _flatten_eltype(Union{}, T)
 end
 
-function _flatten_eltype(T::Type, I::Type{<:Tuple})
-    T2 = promote_typejoin(T, eltype(tuple_type_head(I)))
+function _flatten_eltype(T::Type, I::Type{<:Tuple{E, Vararg{Any}}}) where E
+    T2 = promote_typejoin(T, eltype(E))
     T2 === Any && return Any
     _flatten_eltype(T2, tuple_type_tail(I))
 end
