@@ -623,10 +623,9 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
     reset_thread_gc_counts();
 }
 
-static void jl_gc_free_memory(jl_value_t *v, int isaligned) JL_NOTSAFEPOINT
+static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
-    assert(jl_is_genericmemory(v));
-    jl_genericmemory_t *m = (jl_genericmemory_t*)v;
+    assert(jl_is_genericmemory(m));
     assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
@@ -648,25 +647,23 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            mallocmemory_t *ma = ptls2->gc_tls_common.heap.mallocarrays;
-            mallocmemory_t **pma = &ptls2->gc_tls_common.heap.mallocarrays;
-            while (ma != NULL) {
-                mallocmemory_t *nxt = ma->next;
-                jl_value_t *a = (jl_value_t*)((uintptr_t)ma->a & ~1);
-                int bits = jl_astaggedvalue(a)->bits.gc;
-                if (gc_marked(bits)) {
-                    pma = &ma->next;
+            size_t n = 0;
+            size_t l = ptls2->gc_tls_common.heap.mallocarrays.len;
+            void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
+            // filter without preserving order
+            while (n < l) {
+                jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
+                if (gc_marked(jl_astaggedvalue(m)->bits.gc)) {
+                    n++;
                 }
                 else {
-                    *pma = nxt;
-                    int isaligned = (uintptr_t)ma->a & 1;
-                    jl_gc_free_memory(a, isaligned);
-                    ma->next = ptls2->gc_tls_common.heap.mafreelist;
-                    ptls2->gc_tls_common.heap.mafreelist = ma;
+                    int isaligned = (uintptr_t)lst[n] & 1;
+                    jl_gc_free_memory(m, isaligned);
+                    l--;
+                    lst[n] = lst[l];
                 }
-                gc_time_count_mallocd_memory(bits);
-                ma = nxt;
             }
+            ptls2->gc_tls_common.heap.mallocarrays.len = l;
         }
     }
     gc_time_mallocd_memory_end();
@@ -3433,8 +3430,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     small_arraylist_new(&common_heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&common_heap->free_stacks[i], 0);
-    common_heap->mallocarrays = NULL;
-    common_heap->mafreelist = NULL;
+    small_arraylist_new(&common_heap->mallocarrays, 0);
     heap->young_generation_of_bigvals = (bigval_t*)calloc_s(sizeof(bigval_t)); // sentinel
     assert(gc_bigval_sentinel_tag != 0); // make sure the sentinel is initialized
     heap->young_generation_of_bigvals->header = gc_bigval_sentinel_tag;
