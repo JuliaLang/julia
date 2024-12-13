@@ -44,7 +44,7 @@ function github_paragraph(stream::IO, md::MD)
     for char in readeach(stream, Char)
         if char == '\n'
             eof(stream) && break
-            if blankline(stream) || parse(stream, md, breaking = true)
+            if blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, '\n')
