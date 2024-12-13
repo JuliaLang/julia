@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_inference
+
 using Test
 
 include("irutils.jl")
@@ -6125,3 +6127,5 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+end # test_inference

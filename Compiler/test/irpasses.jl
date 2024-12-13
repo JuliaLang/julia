@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_irpasses
+
 using Test
 using Base.Meta
 using Core.IR
@@ -2023,3 +2025,5 @@ let code = Any[
     ir = Compiler.domsort_ssa!(ir, domtree)
     Compiler.verify_ir(ir)
 end
+
+end # module test_irpasses

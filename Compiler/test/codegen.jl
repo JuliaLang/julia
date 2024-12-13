@@ -2,6 +2,8 @@
 
 # tests for codegen and optimizations
 
+module test_codegen
+
 using Random
 using InteractiveUtils
 using Libdl
@@ -1027,3 +1029,5 @@ for a in ((@noinline Ref{Int}(2)),
         @test ex === a
     end
 end
+
+end # test_codegen

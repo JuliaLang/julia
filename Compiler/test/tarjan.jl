@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_tarjan
+
 using Test
 
 include("irutils.jl")
@@ -167,3 +169,5 @@ end
     test_reachability(100, 150; all_checks=false)
     test_reachability(100, 1000; all_checks=false)
 end
+
+end # module test_tarjan

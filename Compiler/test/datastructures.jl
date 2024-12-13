@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module test_datastructures
+
+using Test
+
 include("setup_Compiler.jl")
 
 @testset "CachedMethodTable" begin
@@ -113,3 +117,5 @@ end
         end
     end
 end
+
+end # module test_datastructures
