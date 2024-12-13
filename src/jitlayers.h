@@ -260,7 +260,7 @@ struct jl_codegen_params_t {
     bool external_linkage = false;
     bool imaging_mode;
     bool use_swiftcc = true;
-    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
@@ -271,6 +271,8 @@ struct jl_codegen_params_t {
         if (TargetTriple.isRISCV())
             use_swiftcc = false;
     }
+    jl_codegen_params_t(jl_codegen_params_t &&) JL_NOTSAFEPOINT = default;
+    ~jl_codegen_params_t() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
 };
 
 jl_llvm_functions_t jl_emit_code(
@@ -299,8 +301,7 @@ void emit_specsig_to_fptr1(
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
         jl_codegen_params_t &params,
-        Function *target,
-        size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+        Function *target) JL_NOTSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
 

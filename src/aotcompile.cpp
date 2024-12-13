@@ -505,7 +505,7 @@ static void compile_workqueue(jl_codegen_params_t &params, egal_set &method_root
             size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
             // TODO: maybe this can be cached in codeinst->specfptr?
-            emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke, 0, 0);
+            emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke);
             preal_decl = ""; // no need to fixup the name
         }
         if (!preal_decl.empty()) {
