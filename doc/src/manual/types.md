@@ -1597,24 +1597,28 @@ in the absence of a more specific method.
 * [`show(io, x)`](@ref), with two arguments,
   is the default simple text representation of `x`.
   It is typically the format you would employ to input `x` into Julia.
+
 * [`show(io, mime, x)`](@ref), with three arguments,
   performs verbose pretty-printing of `x`.
   Multiple 3-argument `show` methods can be defined for various MIME types to enable
   richer display of `x` in some interactive environments as discussed above.
   By default (if no 3-argument method is defined for `typeof(x)`),
   it calls the 2-argument `show(io, x)`.
+
 * [`print(io, x)`](@ref) by default calls `show(io, x)`,
   but a few types have a distinct `print` format —
   most notably, when `x` is a string, `print` outputs the raw text
   whereas `show` outputs an escaped string enclosed in quotation marks.
   ([`println`](@ref) and [`printstyled`](@ref) both call [`print`](@ref),
   but add a newline or styling, respectively.)
+
 * [`display(x)`](@ref) tells the current environment to display `x`
   in whatever way it thinks best.
   This is the function used by the REPL to output the result of an evaluated expression.
   In the REPL, `display` calls `show(io, MIME"text/plain", x)`.
   In a notebook, like Jupyter or Pluto, `display` calls `show(io, MIME"text/html", x)`
   (or sometimes `show(io, MIME"image/<format>", x)` if `x` is representable as an image).
+
 * [`write(io, x)`](@ref), if it is defined
   (it generally has *no* default definition for new types),
   writes a "raw" binary representation of `x` to `io`,
@@ -1642,8 +1646,7 @@ Note that [`convert(String, x)`](@ref) is purposely not defined
 so the user can be explicit about the string representation they desire.
 
 * [`string(x)`](@ref) and [`annotatedstring(x)`](@ref) call [`print(io, x)`](@ref).
-* The 2-argument `repr("text/plain", x)`
-  calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
+* The 2-argument `repr("text/plain", x)` calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
 * The 1-argument [`repr(x)`](@ref) calls the 2-argument [`show(io, x)`](@ref).
 
 ## "Value types"
