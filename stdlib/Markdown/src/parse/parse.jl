@@ -96,9 +96,13 @@ _parse(stream::IO, block::MD; breaking = false) =
     _parse(stream, block, config(block), breaking = breaking)
 
 """
-    parse(stream::IO) -> MD
+    parse(stream::IO; flavor = Markdown.julia) -> MD
 
-Parse the content of `stream` as Julia-flavored Markdown text and return the corresponding `MD` object.
+Parse the content of `stream` as Markdown text and return the corresponding `MD` object.
+The optional argument `flavor` indicates the Markdown flavor that is used.
+It can be `julia` (default), `common` or `github`.
+
+See also [`Markdown.common`](@ref), [`Markdown.github`](@ref), [`Markdown.julia`](@ref).
 """
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])

@@ -35,7 +35,7 @@ include("render/terminal/render.jl")
 
 export @md_str, @doc_str
 
-public MD, parse
+public MD, parse, common, github, julia
 
 const MARKDOWN_FACES = [
     :markdown_header => Face(weight=:bold),
@@ -61,11 +61,14 @@ __init__() = foreach(addface!, MARKDOWN_FACES)
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 
 """
-    Markdown.parse(markdown::AbstractString) -> MD
+    Markdown.parse(markdown::AbstractString; flavor = Markdown.julia) -> MD
 
-Parse `markdown` as Julia-flavored Markdown text and return the corresponding `MD` object.
+Parse `markdown` as Markdown and return the corresponding `MD` object.
+The optional argument `flavor` indicates the Markdown flavor that is used.
+It can be `julia` (default), `common` or `github`.
 
-See also [`@md_str`](@ref).
+See also [`@md_str`](@ref),
+[`Markdown.common`](@ref), [`Markdown.github`](@ref), [`Markdown.julia`](@ref).
 """
 parse(markdown::AbstractString; flavor = julia) = parse(String(markdown), flavor = flavor)
 

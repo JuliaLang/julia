@@ -74,7 +74,7 @@ const flavors = Dict{Symbol, Config}()
 
 macro flavor(name, features)
     quote
-        const $(esc(name)) = config($(mapany(esc,features.args)...))
+        Core.@__doc__ const $(esc(name)) = config($(mapany(esc,features.args)...))
         flavors[$(Expr(:quote, name))] = $(esc(name))
     end
 end
