@@ -5484,62 +5484,70 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     result = mark_julia_const(ctx, codeinst->rettype_const);
                     handled = true;
                 }
-                else if (invoke != jl_fptr_sparam_addr) {
+                else {
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(mi, codeinst->rettype, ctx.params->prefer_specsig);
-                    std::string name;
-                    StringRef protoname;
-                    bool need_to_emit = true;
-                    bool cache_valid = ctx.use_cache || ctx.external_linkage;
-                    bool external = false;
+                    if (needsparams) {
+                        if (trim_may_error(ctx.params->trim))
+                            push_frames(ctx, ctx.linfo, mi);
+                        Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
+                        result = mark_julia_type(ctx, r, true, rt);
+                        handled = true;
+                    } else {
+                        std::string name;
+                        StringRef protoname;
+                        bool need_to_emit = true;
+                        bool cache_valid = ctx.use_cache || ctx.external_linkage;
+                        bool external = false;
 
-                    // Check if we already queued this up
-                    auto it = ctx.call_targets.find(codeinst);
-                    if (need_to_emit && it != ctx.call_targets.end()) {
-                        assert(it->second.specsig == specsig);
-                        protoname = it->second.decl->getName();
-                        need_to_emit = cache_valid = false;
-                    }
+                        // Check if we already queued this up
+                        auto it = ctx.call_targets.find(codeinst);
+                        if (need_to_emit && it != ctx.call_targets.end()) {
+                            assert(it->second.specsig == specsig);
+                            protoname = it->second.decl->getName();
+                            need_to_emit = cache_valid = false;
+                        }
 
-                    // Check if it is already compiled (either JIT or externally)
-                    if (need_to_emit && cache_valid) {
-                        // optimization: emit the correct name immediately, if we know it
-                        // TODO: use `emitted` map here too to try to consolidate names?
-                        uint8_t specsigflags;
-                        jl_callptr_t invoke;
-                        void *fptr;
-                        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
-                        if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr) {
-                            protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
-                            if (ctx.external_linkage) {
-                                // TODO: Add !specsig support to aotcompile.cpp
-                                // Check that the codeinst is containing native code
-                                if (specsig && (specsigflags & 0b100)) {
-                                    external = true;
+                        // Check if it is already compiled (either JIT or externally)
+                        if (need_to_emit && cache_valid) {
+                            // optimization: emit the correct name immediately, if we know it
+                            // TODO: use `emitted` map here too to try to consolidate names?
+                            uint8_t specsigflags;
+                            jl_callptr_t invoke;
+                            void *fptr;
+                            jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
+                            if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr) {
+                                protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
+                                if (ctx.external_linkage) {
+                                    // TODO: Add !specsig support to aotcompile.cpp
+                                    // Check that the codeinst is containing native code
+                                    if (specsig && (specsigflags & 0b100)) {
+                                        external = true;
+                                        need_to_emit = false;
+                                    }
+                                }
+                                else { // ctx.use_cache
                                     need_to_emit = false;
                                 }
                             }
-                            else { // ctx.use_cache
-                                need_to_emit = false;
-                            }
                         }
-                    }
-                    if (need_to_emit) {
-                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
-                        protoname = StringRef(name);
-                    }
-                    jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
-                    unsigned return_roots = 0;
-                    if (specsig)
-                        result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
-                    else
-                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt, age_ok);
-                    handled = true;
-                    if (need_to_emit) {
-                        Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
-                        ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, nullptr, specsig};
-                        if (trim_may_error(ctx.params->trim))
-                            push_frames(ctx, ctx.linfo, mi);
+                        if (need_to_emit) {
+                            raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+                            protoname = StringRef(name);
+                        }
+                        jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
+                        unsigned return_roots = 0;
+                        if (specsig)
+                            result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
+                        else
+                            result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt, age_ok);
+                        handled = true;
+                        if (need_to_emit) {
+                            Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
+                            ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, nullptr, specsig};
+                            if (trim_may_error(ctx.params->trim))
+                                push_frames(ctx, ctx.linfo, mi);
+                        }
                     }
                 }
             }
