@@ -794,6 +794,7 @@ backtrace()
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
         # These tests are currently broken (intermittently/non-determistically) on 32-bit Windows.
+        # https://github.com/JuliaLang/julia/issues/55900
         # Instead of skipping them entirely, we skip one, and we loosen the other.
 
         # Broken test: @test occursin("the above 2 lines are repeated 5000 more times", output[7])
