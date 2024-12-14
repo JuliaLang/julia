@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    tuple_type_tail
+    afoldl
 using Core: @doc
 
 using .Base:
@@ -1206,21 +1206,10 @@ eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 
 # For tuples, we statically know the element type of each index, so we can compute
 # this at compile time.
-eltype(::Type{Flatten{I}}) where {I<:Tuple} = _flatten_eltype(Union{}, I)
-
-function eltype(::Type{Flatten{I}}) where {I<:NamedTuple{<:Any, T}} where T
-    _flatten_eltype(Union{}, T)
+function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
 end
 
-function _flatten_eltype(T::Type, I::Type{<:Tuple{E, Vararg{Any}}}) where E
-    T2 = promote_typejoin(T, eltype(E))
-    T2 === Any && return Any
-    _flatten_eltype(T2, tuple_type_tail(I))
-end
-
-_flatten_eltype(T::Type, I::Type{Tuple{}}) = T
-
-eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
