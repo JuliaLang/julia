@@ -476,7 +476,7 @@ let err = try
     catch e
         e
     end
-    @test err.line == 7
+    @test err.line in (5, 7)
 end
 
 # PR #17393

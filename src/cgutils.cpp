@@ -2279,7 +2279,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         const jl_cgval_t argv[3] = { cmp, lhs, rhs };
         jl_cgval_t ret;
         if (modifyop) {
-            ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
+            ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, nullptr);
         }
         else {
             if (trim_may_error(ctx.params->trim)) {
@@ -4018,7 +4018,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
                 emit_lockstate_value(ctx, needlock, false);
             const jl_cgval_t argv[3] = { cmp, oldval, rhs };
             if (modifyop) {
-                rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
+                rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type, nullptr);
             }
             else {
                 if (trim_may_error(ctx.params->trim)) {
