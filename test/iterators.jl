@@ -515,6 +515,14 @@ end
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test eltype(flatten(([1, 2], [3.0, 4.0]))) == Real
 @test eltype(flatten((a = [1, 2], b = Int8[3, 4]))) == Signed
+@test eltype(flatten((Int[], Nothing[], Int[]))) == Union{Int, Nothing}
+@test eltype(flatten((String[],))) == String
+@test eltype(flatten((Int[], UInt[], Int8[],))) == Integer
+@test eltype(flatten((; a = Int[], b = Nothing[], c = Int[]))) == Union{Int, Nothing}
+@test eltype(flatten((; a = String[],))) == String
+@test eltype(flatten((; a = Int[], b = UInt[], c = Int8[],))) == Integer
+@test eltype(flatten(())) == Union{}
+@test eltype(flatten((;))) == Union{}
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
