@@ -1025,24 +1025,23 @@ end
     )
     simple_types = (Vector, NTuple, NamedTuple{X, Y} where {X, Y <: NTuple})
     example_type = Tuple{Bool, Int8, Vararg{Int16, 20}}
+    function test_foldability_inference(f, S::Type)
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S}))
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}}))
+    end
     @testset "concrete" begin
         @testset "f: $f" for f ∈ functions
             for U ∈ iterator_types_extra
-                S = U{example_type}
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S}))
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}}))
+                test_foldability_inference(f, U{example_type})
             end
         end
     end
     @testset "nonconcrete" begin
         @testset "f: $f" for f ∈ functions
             for V ∈ simple_types
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{V}))
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:V}}))
+                test_foldability_inference(f, V)
                 for U ∈ iterator_types
-                    S = U{<:V}
-                    @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S}))
-                    @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}}))
+                    test_foldability_inference(f, U{<:V})
                 end
             end
         end
