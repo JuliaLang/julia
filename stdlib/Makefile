@@ -18,7 +18,7 @@ DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
-       BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
+       BLASTRAMPOLINE OPENBLAS P7ZIP PCRE LIBSUITESPARSE ZLIB \
        LLVMUNWIND CSL UNWIND LLD
 
 # Initialize this with JLLs that aren't in "deps/$(LibName).version"
