@@ -179,7 +179,7 @@ to the Julia installation before proceeding.
 
 Using the project Properties dialog, go to `C/C++` | `General` and add `$(JULIA_DIR)\include\julia\` to the
 Additional Include Directories property. Then, go to the `Linker` | `General` section and add `$(JULIA_DIR)\lib`
-to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;libopenlibm.dll.a;`
+to the Additional Library Directories property. Finally, under `Linker` | `Input`, add `libjulia.dll.a;`
 to the list of libraries.
 
 At this point, the project should build and run.
