@@ -475,7 +475,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
             (;handlers, handler_at) = handler_info =
                 (handler_info === nothing ? HandlerInfo{Handler}(Handler[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
-            (bbs !== nothing) && (l = first(bbs[l].stmts))
+            (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
             push!(handlers, Handler(stmt, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
@@ -519,7 +519,7 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
-                (bbs !== nothing) && (l = first(bbs[l].stmts))
+                (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
