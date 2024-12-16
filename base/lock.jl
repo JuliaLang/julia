@@ -495,12 +495,12 @@ end
 This is similar to using [`acquire`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
 
-!!! compat
+!!! compat "Julia 1.12"
     `@acquire` was added in Julia 1.12
 """
 macro acquire(s, expr)
     quote
-        temp = $(esc(s))
+        local temp = $(esc(s))
         Base.acquire(temp)
         try
             $(esc(expr))
