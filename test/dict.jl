@@ -788,17 +788,12 @@ end
 end
 
 @testset "consistency of dict iteration order (issue #56841)" begin
-    d = Dict(randn() => randn() for _ = 1:100)
-    @test [k for (k,v) = d] ==
-        [k for k = keys(d)] ==
-        [k for (k,v) = pairs(d)] ==
-        collect(keys(d))
-    @test [v for (k,v) = d] ==
-        [v for v = values(d)] ==
-        [v for (k,v) = pairs(d)] ==
-        [d[k] for k = keys(d)] ==
-        collect(values(d))
-    @test [k => v for (k,v) = d] == collect(d) == collect(pairs(d))
+    dict = Dict(randn() => randn() for _ = 1:100)
+    foreach(zip(dict, keys(dict), values(dict), pairs(dict))) do (d, k, v, p)
+        @test d == p
+        @test first(d) == first(p) == k
+        @test last(d) == last(p) == v
+    end
 end
 
 @testset "generators, similar" begin
