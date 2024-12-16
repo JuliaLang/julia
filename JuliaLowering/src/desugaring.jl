@@ -1293,7 +1293,7 @@ function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
     end
 end
 
-function _method_def_expr(ctx, srcref, callex, func_self, method_table,
+function _method_def_expr(ctx, srcref, callex, method_table,
                           docs, typevar_names, arg_names, arg_types, ret_var, body)
     # metadata contains svec(types, sparms, location)
     @ast ctx srcref [K"block"
@@ -1319,14 +1319,7 @@ function _method_def_expr(ctx, srcref, callex, func_self, method_table,
                 ret_var  # might be `nothing` and hence removed
             ]
         ]
-        if !isnothing(docs)
-            [K"call"(docs)
-                bind_docs!::K"Value"
-                func_self
-                docs[1]
-                method_metadata
-            ]
-        end
+        [K"unnecessary" method_metadata]
     ]
 end
 
@@ -1367,7 +1360,7 @@ end
 # For example for `f(x, y=1, z=2)` we generate two additional methods
 # f(x) = f(x, 1, 2)
 # f(x, y) = f(x, y, 2)
-function _optional_positional_defs!(ctx, method_stmts, srcref, callex, func_self,
+function _optional_positional_defs!(ctx, method_stmts, srcref, callex,
                                     method_table, typevar_names, typevar_stmts,
                                     arg_names, arg_types, first_default, arg_defaults, ret_var)
     # Replace placeholder arguments with variables - we need to pass them to
@@ -1401,7 +1394,7 @@ function _optional_positional_defs!(ctx, method_stmts, srcref, callex, func_self
                                                    typevar_names, typevar_stmts)
         # TODO: Ensure we preserve @nospecialize metadata in args
         push!(method_stmts,
-              _method_def_expr(ctx, srcref, callex, func_self, method_table, nothing,
+              _method_def_expr(ctx, srcref, callex, method_table, nothing,
                                trimmed_typevar_names, trimmed_arg_names, trimmed_arg_types,
                                ret_var, body))
     end
@@ -1441,8 +1434,6 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     if kind(name) == K"call"
         callex = rewrite_call(name)
         # TODO
-        # nospecialize
-        # argument destructuring
         # dotop names
         # overlays
         static_parameters = SyntaxList(ctx)
@@ -1505,37 +1496,40 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             push!(arg_types, atype)
         end
 
-        func_self = ssavar(ctx, name, "func_self")
+        bare_func_name = nothing
+        doc_obj = nothing
+        farg_name = nothing
         if kind(name) == K"::"
+            # Add methods to an existing type
             if numchildren(name) == 1
                 # function (::T)() ...
-                farg_name = @ast ctx name "#self#"::K"Placeholder"
-                farg_type_ = name[1]
+                farg_type = name[1]
             else
                 # function (f::T)() ...
                 @chk numchildren(name) == 2
                 farg_name = name[1]
-                farg_type_ = name[2]
+                farg_type = name[2]
             end
-            func_self_val = farg_type_ # Here we treat the type itself as the function
-            farg_type = func_self
+            doc_obj = farg_type
         else
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
-            elseif is_identifier_like(name)
-                # function f() ...
-                func_self_val = @ast ctx name [K"method" name=>K"Symbol"]
-            else
-                # function A.B.f() ...
-                func_self_val = name
             end
-            farg_name = @ast ctx callex "#self#"::K"Placeholder"
-            farg_type = @ast ctx callex [K"call"
-                "Typeof"::K"core"
-                func_self
-            ]
+            if is_identifier_like(name)
+                # Add methods to a global `Function` object, or local closure
+                # type function f() ...
+                bare_func_name = name
+            else
+                # Add methods to an existing Function
+                # function A.B.f() ...
+            end
+            doc_obj = name # todo: can closures be documented?
+            farg_type = @ast ctx name [K"function_type" name]
         end
         # Add self argument
+        if isnothing(farg_name)
+            farg_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
+        end
         pushfirst!(arg_names, farg_name)
         pushfirst!(arg_types, farg_type)
 
@@ -1564,25 +1558,42 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         if !isempty(arg_defaults)
             # For self argument added above
             first_default += 1
-            _optional_positional_defs!(ctx, method_stmts, ex, callex, func_self,
+            _optional_positional_defs!(ctx, method_stmts, ex, callex,
                                        method_table, typevar_names, typevar_stmts,
                                        arg_names, arg_types, first_default, arg_defaults, ret_var)
         end
 
         # The method with all non-default arguments
         push!(method_stmts,
-              _method_def_expr(ctx, ex, callex, func_self, method_table, docs,
+              _method_def_expr(ctx, ex, callex, method_table, docs,
                                typevar_names, arg_names, arg_types, ret_var, body))
+        if !isnothing(docs)
+            method_stmts[end] = @ast ctx docs [K"block"
+                method_metadata := method_stmts[end]
+                @ast ctx docs [K"call"
+                    bind_docs!::K"Value"
+                    doc_obj
+                    docs[1]
+                    method_metadata
+                ]
+            ]
+        end
 
-        @ast ctx ex [K"scope_block"(scope_type=:hard)
-            [K"block"
-                typevar_stmts...
-                if !isnothing(method_table_val)
-                    [K"=" method_table method_table_val]
-                end
-                [K"=" func_self func_self_val]
-                method_stmts...
-                [K"unnecessary" func_self]
+        @ast ctx ex [K"block"
+            if !isnothing(bare_func_name)
+                [K"function_decl"(bare_func_name) bare_func_name]
+            end
+            [K"scope_block"(scope_type=:hard)
+                [K"method_defs"
+                    isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+                    [K"block"
+                        typevar_stmts...
+                        if !isnothing(method_table_val)
+                            [K"=" method_table method_table_val]
+                        end
+                        method_stmts...
+                    ]
+                ]
             ]
         ]
     elseif kind(name) == K"tuple"

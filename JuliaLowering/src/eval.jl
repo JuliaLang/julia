@@ -126,9 +126,9 @@ function to_code_info(ex, mod, funcname, slots)
         end
     end
 
-    prefix_len = length(stmts)
+    ssa_offset = length(stmts)
     for stmt in children(ex)
-        push!(stmts, to_lowered_expr(mod, stmt, prefix_len))
+        push!(stmts, to_lowered_expr(mod, stmt, ssa_offset))
         add_ir_debug_info!(current_codelocs_stack, stmt)
     end
 
@@ -190,7 +190,7 @@ function to_code_info(ex, mod, funcname, slots)
     )
 end
 
-function to_lowered_expr(mod, ex, prefix_len=0)
+function to_lowered_expr(mod, ex, ssa_offset=0)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -217,9 +217,9 @@ function to_lowered_expr(mod, ex, prefix_len=0)
     elseif k == K"static_parameter"
         Expr(:static_parameter, ex.var_id)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id + prefix_len)
+        Core.SSAValue(ex.var_id + ssa_offset)
     elseif k == K"return"
-        Core.ReturnNode(to_lowered_expr(mod, ex[1], prefix_len))
+        Core.ReturnNode(to_lowered_expr(mod, ex[1], ssa_offset))
     elseif is_quoted(k)
         if k == K"inert"
             ex[1]
@@ -241,17 +241,19 @@ function to_lowered_expr(mod, ex, prefix_len=0)
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, ex[1], prefix_len), ex[2].id)
+        Core.GotoIfNot(to_lowered_expr(mod, ex[1], ssa_offset), ex[2].id)
     elseif k == K"enter"
         catch_idx = ex[1].id
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
-            Core.EnterNode(catch_idx, to_lowered_expr(mod, ex[2], prefix_len))
+            Core.EnterNode(catch_idx, to_lowered_expr(mod, ex[2], ssa_offset))
     elseif k == K"method"
-        cs = map(e->to_lowered_expr(mod, e, prefix_len), children(ex))
+        cs = map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))
         # Ad-hoc unwrapping to satisfy `Expr(:method)` expectations
         c1 = cs[1] isa QuoteNode ? cs[1].value : cs[1]
         Expr(:method, c1, cs[2:end]...)
+    elseif k == K"newvar"
+        Core.NewvarNode(to_lowered_expr(mod, ex[1], ssa_offset))
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -272,7 +274,7 @@ function to_lowered_expr(mod, ex, prefix_len=0)
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
         end
-        Expr(head, map(e->to_lowered_expr(mod, e, prefix_len), children(ex))...)
+        Expr(head, map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))...)
     end
 end
 

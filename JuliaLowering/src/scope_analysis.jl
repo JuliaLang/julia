@@ -1,40 +1,4 @@
-# Lowering pass 3: analyze scopes (passes 2+3 in flisp code)
-
-#-------------------------------------------------------------------------------
-# AST traversal functions - useful for performing non-recursive AST traversals
-# function _schedule_traverse(stack, e)
-#     push!(stack, e)
-#     return nothing
-# end
-# function _schedule_traverse(stack, es::Union{Tuple,AbstractVector,Base.Generator})
-#     append!(stack, es)
-#     return nothing
-# end
-#
-# function traverse_ast(f, exs)
-#     todo = SyntaxList(first(exs).graph)
-#     append!(todo, exs)
-#     while !isempty(todo)
-#         f(pop!(todo), e->_schedule_traverse(todo, e))
-#     end
-# end
-#
-# function traverse_ast(f, ex::SyntaxTree)
-#     traverse_ast(f, (ex,))
-# end
-#
-# function find_in_ast(f, ex::SyntaxTree)
-#     todo = SyntaxList(ex._graph)
-#     push!(todo, ex)
-#     while !isempty(todo)
-#         e1 = pop!(todo)
-#         res = f(e1, e->_schedule_traverse(todo, e))
-#         if !isnothing(res)
-#             return res
-#         end
-#     end
-#     return nothing
-# end
+# Lowering pass 3: scope and variable analysis
 
 """
 Key to use when transforming names into bindings
@@ -42,6 +6,22 @@ Key to use when transforming names into bindings
 struct NameKey
     name::String
     layer::LayerId
+end
+
+function Base.isless(a::NameKey, b::NameKey)
+    (a.name, a.layer) < (b.name, b.layer)
+end
+
+# Identifiers produced by lowering will have the following layer by default.
+#
+# To make new mutable variables without colliding names, lowering can
+# - generate new var_id's directly (like the gensyms used by the old system)
+# - create additional layers, though this may be unnecessary
+const _lowering_internal_layer = -1
+
+function NameKey(ex::SyntaxTree)
+    @chk kind(ex) == K"Identifier"
+    NameKey(ex.name_val, get(ex, :scope_layer, _lowering_internal_layer))
 end
 
 #-------------------------------------------------------------------------------
@@ -66,13 +46,16 @@ function _find_scope_vars!(assignments, locals, destructured_args, globals, used
         end
     elseif k == K"global"
         _insert_if_not_present!(globals, NameKey(ex[1]), ex)
-    # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
         if !(kind(v) in KSet"BindingId globalref Placeholder")
             _insert_if_not_present!(assignments, NameKey(v), v)
         end
         _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex[2])
+    elseif k == K"function_decl"
+        v = ex[1]
+        @assert kind(v) == K"Identifier"
+        _insert_if_not_present!(assignments, NameKey(v), v)
     else
         for e in children(ex)
             _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
@@ -107,22 +90,6 @@ function find_scope_vars(ex)
     return assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings
 end
 
-function Base.isless(a::NameKey, b::NameKey)
-    (a.name, a.layer) < (b.name, b.layer)
-end
-
-# Identifiers produced by lowering will have the following layer by default.
-#
-# To make new mutable variables without colliding names, lowering can
-# - generate new var_id's directly (like the gensyms used by the old system)
-# - create additional layers, though this may be unnecessary
-const _lowering_internal_layer = -1
-
-function NameKey(ex::SyntaxTree)
-    @chk kind(ex) == K"Identifier"
-    NameKey(ex.name_val, get(ex, :scope_layer, _lowering_internal_layer))
-end
-
 # Metadata about how a binding is used within some enclosing lambda
 struct LambdaBindingInfo
     is_captured::Bool
@@ -148,8 +115,11 @@ end
 
 struct LambdaBindings
     # Bindings used within the lambda
+    self::IdTag
     bindings::Dict{IdTag,LambdaBindingInfo}
 end
+
+LambdaBindings(self::IdTag = 0) = LambdaBindings(self, Dict{IdTag,LambdaBindings}())
 
 function init_lambda_binding(binds::LambdaBindings, id; kws...)
     @assert !haskey(binds.bindings, id)
@@ -165,8 +135,11 @@ function update_lambda_binding!(ctx::AbstractLoweringContext, id; kws...)
     update_lambda_binding!(last(ctx.scope_stack).lambda_bindings, id; kws...)
 end
 
-LambdaBindings() = LambdaBindings(Dict{IdTag,LambdaBindings}())
+struct ClosureBindings
+    lambdas::Vector{LambdaBindings}
+end
 
+ClosureBindings() = ClosureBindings(Vector{LambdaBindings}())
 
 struct ScopeInfo
     # True if scope is the global top level scope
@@ -196,9 +169,12 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     alias_map::Dict{IdTag,IdTag}
     # Stack of name=>id mappings for each scope, innermost scope last.
     scope_stack::Vector{ScopeInfo}
+    method_def_stack::SyntaxList{GraphType}
     # Variables which were implicitly global due to being assigned to in top
     # level code
     implicit_toplevel_globals::Set{NameKey}
+    # 
+    closure_bindings::Dict{IdTag,ClosureBindings}
 end
 
 function ScopeResolutionContext(ctx)
@@ -210,7 +186,9 @@ function ScopeResolutionContext(ctx)
                            Dict{NameKey,IdTag}(),
                            Dict{IdTag,IdTag}(),
                            Vector{ScopeInfo}(),
-                           Set{NameKey}())
+                           SyntaxList(graph),
+                           Set{NameKey}(),
+                           Dict{IdTag,ClosureBindings}())
 end
 
 function lookup_var(ctx, varkey::NameKey, exclude_toplevel_globals=false)
@@ -340,7 +318,7 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         # a macro expansion
         for (varkey,e) in assignments
             vk = haskey(var_ids, varkey) ?
-                lookup_binding(ctx, var_ids[varkey]).kind :
+                 lookup_binding(ctx, var_ids[varkey]).kind :
                  var_kind(ctx, varkey, true)
             if vk === nothing
                 if ctx.scope_layers[varkey.layer].is_macro_expansion
@@ -399,7 +377,18 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     # enclosing lambda
     # * All non-globals are recorded (kind :local and :argument will later be turned into slots)
     # * Captured variables are detected and recorded
-    lambda_bindings = is_outer_lambda_scope ? LambdaBindings() : parentscope.lambda_bindings
+    lambda_bindings = if is_outer_lambda_scope
+        if isempty(lambda_args)
+            LambdaBindings()
+        else
+            selfarg = first(lambda_args)
+            selfid = kind(selfarg) == K"BindingId" ?
+                     selfarg.var_id : var_ids[NameKey(selfarg)]
+            LambdaBindings(selfid)
+        end
+    else
+        parentscope.lambda_bindings
+    end
 
     for id in values(var_ids)
         binfo = lookup_binding(ctx, id)
@@ -537,7 +526,21 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         ret_var = numchildren(ex) == 4 ? _resolve_scopes(ctx, ex[4]) : nothing
         pop!(ctx.scope_stack)
 
-        @ast ctx ex [K"lambda"(lambda_bindings=scope.lambda_bindings,
+        lambda_bindings = scope.lambda_bindings
+        if !is_toplevel_thunk
+            func_name = last(ctx.method_def_stack)
+            if kind(func_name) == K"BindingId"
+                func_name_id = func_name.var_id
+                if lookup_binding(ctx, func_name_id).kind == :local
+                    cbinds = get!(ctx.closure_bindings, func_name_id) do
+                        ClosureBindings()
+                    end
+                    push!(cbinds.lambdas, lambda_bindings)
+                end
+            end
+        end
+
+        @ast ctx ex [K"lambda"(lambda_bindings=lambda_bindings,
                                is_toplevel_thunk=is_toplevel_thunk)
             arg_bindings
             sparm_bindings
@@ -627,6 +630,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         else
             makeleaf(ctx, ex, K"TOMBSTONE")
         end
+    elseif k == K"method_defs"
+        push!(ctx.method_def_stack, _resolve_scopes(ctx, ex[1]))
+        ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
+        pop!(ctx.method_def_stack)
+        ex_mapped
     else
         ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
         maybe_update_bindings!(ctx, ex_mapped)
@@ -658,12 +666,8 @@ Names of kind `K"Identifier"` are transformed into binding identifiers of
 kind `K"BindingId"`. The associated `Bindings` table in the context records
 metadata about each binding.
 
-This pass also records the set of binding IDs are locals within the enclosing
-lambda form.
-
-TODO: This pass should also record information about variables used by closure
-conversion, find which variables are assigned or captured, and record variable
-type declarations.
+This pass also records the set of binding IDs used locally within the
+enclosing lambda form and information about variables captured by closures.
 """
 function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)

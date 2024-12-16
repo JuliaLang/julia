@@ -277,6 +277,12 @@ function new_mutable_var(ctx::AbstractLoweringContext, srcref, name; kind=:local
     var
 end
 
+function new_global_binding(ctx::AbstractLoweringContext, srcref, name, mod; kws...)
+    id = new_binding(ctx.bindings, BindingInfo(name, :global; is_internal=true, mod=mod, kws...))
+    nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
+    makeleaf(ctx, nameref, K"BindingId", var_id=id)
+end
+
 function alias_binding(ctx::AbstractLoweringContext, srcref)
     id = new_binding(ctx.bindings, BindingInfo("alias", :alias; is_internal=true))
     makeleaf(ctx, srcref, K"BindingId", var_id=id)

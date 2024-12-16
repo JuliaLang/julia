@@ -791,6 +791,14 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             ex
         end
+    elseif k == K"newvar"
+        @assert !needs_value
+        is_duplicate = !isempty(ctx.code) &&
+            (e = last(ctx.code); kind(e) == K"newvar" && e[1].var_id == ex[1].var_id)
+        if !is_duplicate
+            # TODO: also exclude deleted vars
+            emit(ctx, ex)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end

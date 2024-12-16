@@ -1,9 +1,30 @@
+struct ClosureInfo{GraphType}
+    # Global name of the type of the closure
+    type_name::SyntaxTree{GraphType}
+    # Names of fields as K"Symbol" nodes, in order
+    field_syms::SyntaxList{GraphType}
+    # Map from the original BindingId of closed-over vars to the index of the
+    # associated field in the closure type.
+    field_name_inds::Dict{IdTag,Int}
+end
+
 struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     graph::GraphType
     bindings::Bindings
     mod::Module
+    closure_bindings::Dict{IdTag,ClosureBindings}
+    closure_info::Union{Nothing,ClosureInfo{GraphType}}
     lambda_bindings::LambdaBindings
     toplevel_stmts::SyntaxList{GraphType}
+    closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
+end
+
+function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
+                              mod::Module, closure_bindings::Dict{IdTag,ClosureBindings},
+                              lambda_bindings::LambdaBindings) where {GraphType}
+    ClosureConversionCtx{GraphType}(
+        graph, bindings, mod, closure_bindings, nothing, lambda_bindings, SyntaxList(graph),
+        Dict{IdTag,ClosureInfo{GraphType}}())
 end
 
 function add_lambda_local!(ctx::ClosureConversionCtx, id)
@@ -132,11 +153,127 @@ function convert_assignment(ctx, ex)
     end
 end
 
+# Compute fields for a closure type, one field for each captured variable.
+function closure_type_fields(ctx, srcref, closure_binds)
+    capture_ids = Vector{IdTag}()
+    for lambda_bindings in closure_binds.lambdas
+        for (id, lbinfo) in lambda_bindings.bindings
+            if lbinfo.is_captured
+                push!(capture_ids, id)
+            end
+        end
+    end
+    # sort here to avoid depending on undefined Dict iteration order.
+    capture_ids = sort!(unique(capture_ids))
+    field_names = Dict{String,IdTag}()
+    for (i, id) in enumerate(capture_ids)
+        binfo = lookup_binding(ctx, id)
+        # We name each field of the closure after the variable which was closed
+        # over, for clarity. Adding a suffix can be necessary when collisions
+        # occur due to macro expansion and generated bindings
+        name0 = binfo.name
+        name = name0
+        i = 1
+        while haskey(field_names, name)
+            name = "$name0#$i"
+            i += 1
+        end
+        field_names[name] = id
+    end
+    field_syms = SyntaxList(ctx)
+    field_orig_bindings = Vector{IdTag}()
+    field_name_inds = Dict{IdTag,Int}()
+    for (name,id) in sort!(collect(field_names))
+        push!(field_syms, @ast ctx srcref name::K"Symbol")
+        push!(field_orig_bindings, id)
+        field_name_inds[id] = lastindex(field_syms)
+    end
+
+    return field_syms, field_orig_bindings, field_name_inds
+end
+
+# Return a thunk which creates a new type for a closure with `field_syms` named
+# fields. The new type will be named `name_str`, which must be unique.
+function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_syms)
+    # New closure types always belong to the module we're expanding into - they
+    # need to be serialized there during precompile.
+    mod = ctx.mod
+    type_binding = new_global_binding(ctx, srcref, name_str, mod)
+    type_ex = @ast ctx srcref [K"lambda"(is_toplevel_thunk=true, lambda_bindings=LambdaBindings())
+        [K"block"]
+        [K"block"]
+        [K"block"
+            [K"global" type_binding]
+            closure_type := [K"call"
+                "_structtype"::K"core"
+                mod::K"Value"
+                name_str::K"Symbol"
+                [K"call" "svec"::K"core"]
+                [K"call"
+                    "svec"::K"core"
+                    field_syms...
+                ]
+                [K"call" "svec"::K"core"]
+                false::K"Bool"
+                length(field_syms)::K"Integer"
+            ]
+            [K"call" "_setsuper!"::K"core" closure_type "Function"::K"core"]
+            # TODO: Need K"const_decl" or whatever when we upgrade to the latest Julia.
+            [K"const" type_binding]
+            [K"=" type_binding closure_type]
+            [K"call"
+                "_typebody!"::K"core"
+                closure_type
+                [K"call" "svec"::K"core" ["Box"::K"core" for _ in field_syms]...]
+            ]
+            "nothing"::K"core"
+        ]
+    ]
+    type_ex, type_binding
+end
+
 function _convert_closures(ctx::ClosureConversionCtx, ex)
     k = kind(ex)
     if k == K"BindingId"
-        # TODO: Captures etc
-        ex
+        id = ex.var_id
+        lbinfo = get(ctx.lambda_bindings.bindings, id, nothing)
+        if !isnothing(lbinfo) && lbinfo.is_captured
+            cinfo = ctx.closure_info
+            field_sym = cinfo.field_syms[cinfo.field_name_inds[id]]
+            undef_var = new_mutable_var(ctx, ex, lookup_binding(ctx, id).name)
+            @ast ctx ex [K"block"
+                box := [K"call"
+                    "getfield"::K"core"
+                    ctx.lambda_bindings.self::K"BindingId"
+                    field_sym
+                ]
+                # Lower in an UndefVar check to a similarly named variable
+                # (ref #20016) so that closure lowering Box introduction
+                # doesn't impact the error message and the compiler is expected
+                # to fold away the extraneous null check
+                #
+                # TODO: Ideally the runtime would rely on provenance info for
+                # this error and we can remove isdefined check.
+                [K"if" [K"call"
+                        "isdefined"::K"core"
+                        box
+                        "contents"::K"Symbol"
+                    ]
+                    "nothing"::K"core"
+                    [K"block"
+                         [K"newvar" undef_var]
+                         undef_var
+                    ]
+                ]
+                [K"call"
+                    "getfield"::K"core"
+                    box
+                    "contents"::K"Symbol"
+                ]
+            ]
+        else
+            ex
+        end
     elseif is_leaf(ex) || k == K"inert"
         ex
     elseif k == K"="
@@ -166,6 +303,74 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         ])
     elseif k == K"lambda"
         closure_convert_lambda(ctx, ex)
+    elseif k == K"function_decl"
+        func_name = ex[1]
+        @assert kind(func_name) == K"BindingId"
+        func_name_id = func_name.var_id
+        if haskey(ctx.closure_bindings, func_name_id)
+            closure_info = get(ctx.closure_infos, func_name_id, nothing)
+            needs_def = isnothing(closure_info)
+            if needs_def
+                # TODO: Names for closures without relying on gensym
+                name_str = string(gensym("closure"))
+                field_syms, field_orig_bindings, field_name_inds =
+                    closure_type_fields(ctx, ex, ctx.closure_bindings[func_name_id])
+                closure_type_def, closure_type =
+                    type_for_closure(ctx, ex, name_str, field_syms)
+                push!(ctx.toplevel_stmts, closure_type_def)
+                closure_info = ClosureInfo(closure_type, field_syms, field_name_inds)
+                ctx.closure_infos[func_name_id] = closure_info
+                init_closure_args = SyntaxList(ctx)
+                for id in field_orig_bindings
+                    # FIXME: This isn't actually correct: we need to convert
+                    # all outer references to boxes too!
+                    push!(init_closure_args, _convert_closures(ctx,
+                          @ast ctx ex [K"call" "Box"::K"core" id::K"BindingId"]))
+                end
+                @ast ctx ex [K"block"
+                    [K"=" func_name
+                        [K"new"
+                            closure_type
+                            init_closure_args...
+                        ]
+                    ]
+                    func_name
+                ]
+            else
+                func_name
+            end
+        else
+            # Single-arg K"method" has the side effect of creating a global
+            # binding for `func_name` if it doesn't exist.
+            @ast ctx ex [K"method" func_name]
+        end
+    elseif k == K"function_type"
+        func_name = ex[1]
+        @assert kind(func_name) == K"BindingId"
+        if lookup_binding(ctx, func_name.var_id).kind == :global
+            @ast ctx ex [K"call" "Typeof"::K"core" func_name]
+        else
+            ctx.closure_infos[func_name.var_id].type_name
+        end
+    elseif k == K"method_defs"
+        name = ex[1]
+        is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind == :local
+        cinfo = is_closure ? ctx.closure_infos[name.var_id] : nothing
+        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                                    ctx.closure_bindings, cinfo, ctx.lambda_bindings,
+                                    ctx.toplevel_stmts, ctx.closure_infos)
+        body = _convert_closures(ctx2, ex[2])
+        if is_closure
+            # Move methods to top level
+            # FIXME: Probably lots more work to do to make this correct
+            # Especially
+            # * Renumbering SSA vars
+            # * Ensuring that moved locals become slots in the top level thunk
+            push!(ctx.toplevel_stmts, body)
+            name
+        else
+            _convert_closures(ctx, body)
+        end
     else
         mapchildren(e->_convert_closures(ctx, e), ctx, ex)
     end
@@ -176,7 +381,8 @@ function closure_convert_lambda(ctx, ex)
     body_stmts = SyntaxList(ctx)
     toplevel_stmts = ex.is_toplevel_thunk ? body_stmts : ctx.toplevel_stmts
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                ex.lambda_bindings, toplevel_stmts)
+                                ctx.closure_bindings, ctx.closure_info, ex.lambda_bindings,
+                                toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     push!(lambda_children, _convert_closures(ctx2, ex[1]))
     push!(lambda_children, _convert_closures(ctx2, ex[2]))
@@ -213,7 +419,8 @@ Invariants:
 * Any new binding IDs must be added to the enclosing lambda locals
 """
 function convert_closures(ctx::ScopeResolutionContext, ex)
-    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_bindings, SyntaxList(ctx))
+    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                               ctx.closure_bindings, ex.lambda_bindings)
     ex1 = closure_convert_lambda(ctx, ex)
     ctx, ex1
 end
