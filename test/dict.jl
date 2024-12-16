@@ -787,6 +787,20 @@ end
           [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
 end
 
+@testset "consistency of iteration order" begin
+    d = Dict(randn() => randn() for _ = 1:100)
+    @test [k for (k,v) = d] ==
+        [k for k = keys(d)] ==
+        [k for (k,v) = pairs(d)] ==
+        collect(keys(d))
+    @test [v for (k,v) = d] ==
+        [v for v = values(d)] ==
+        [v for (k,v) = pairs(d)] ==
+        [d[k] for k = keys(d)] ==
+        collect(values(d))
+    @test [k => v for (k,v) = d] == collect(d) == collect(pairs(d))
+end
+
 @testset "generators, similar" begin
     d = Dict(:a=>"a")
     # TODO: restore when 0.7 deprecation is removed
