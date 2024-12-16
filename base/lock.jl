@@ -480,6 +480,37 @@ function acquire(f, s::Semaphore)
 end
 
 """
+    @acquire s::Semaphore expr
+
+Macro version of `Base.acquire(f, s::Semaphore)` but with `expr` instead of `f` function.
+Expands to:
+```julia
+Base.acquire(s)
+try
+    expr
+finally
+    Base.release(s)
+end
+```
+This is similar to using [`acquire`](@ref) with a `do` block, but avoids creating a closure
+and thus can improve the performance.
+
+!!! compat
+    `@acquire` was added in Julia 1.12
+"""
+macro acquire(s, expr)
+    quote
+        temp = $(esc(s))
+        Base.acquire(temp)
+        try
+            $(esc(expr))
+        finally
+            Base.release(temp)
+        end
+    end
+end
+
+"""
     release(s::Semaphore)
 
 Return one permit to the pool,
