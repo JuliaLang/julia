@@ -787,7 +787,7 @@ end
           [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
 end
 
-@testset "consistency of iteration order" begin
+@testset "consistency of dict iteration order (issue #56841)" begin
     d = Dict(randn() => randn() for _ = 1:100)
     @test [k for (k,v) = d] ==
         [k for k = keys(d)] ==
