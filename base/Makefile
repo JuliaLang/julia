@@ -225,11 +225,7 @@ $(build_depsbindir)/dsymutil$(EXE):
 
 # the following excludes: libuv.a, libutf8proc.a
 
-ifneq ($(USE_SYSTEM_LIBM),0)
-$(eval $(call symlink_system_library,LIBM,$(LIBMNAME)))
-else ifneq ($(USE_SYSTEM_OPENLIBM),0)
-$(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
-endif
+# $(eval $(call symlink_system_library,LIBM,$(LIBMNAME)))
 
 # On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
 # (-> libgfortran 5) on x86_64
