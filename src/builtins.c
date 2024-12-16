@@ -580,6 +580,14 @@ JL_CALLABLE(jl_f_throw)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_throw_methoderror)
+{
+    JL_NARGSV(throw_methoderror, 1);
+    size_t world = jl_get_tls_world_age();
+    jl_method_error(args[0], &args[1], nargs, world);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_ifelse)
 {
     JL_NARGS(ifelse, 3, 3);
@@ -923,20 +931,25 @@ JL_CALLABLE(jl_f__call_in_world_total)
 
 // tuples ---------------------------------------------------------------------
 
-JL_CALLABLE(jl_f_tuple)
+static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
 {
     size_t i;
-    if (nargs == 0)
-        return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(a1, args, nargs, 0);
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_task_t *ct = jl_current_task;
     jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
-        set_nth_field(tt, jv, i, args[i], 0);
+        set_nth_field(tt, jv, i, i == 0 ? a1 : args[i - 1], 0);
     return jv;
+}
+
+JL_CALLABLE(jl_f_tuple)
+{
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptytuple;
+    return arg_tuple(args[0], &args[1], nargs);
 }
 
 JL_CALLABLE(jl_f_svec)
@@ -1000,7 +1013,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     else {
         jl_value_t *ts[2] = {(jl_value_t*)jl_long_type, (jl_value_t*)jl_symbol_type};
         jl_value_t *t = jl_type_union(ts, 2);
-        jl_type_error("getfield", t, arg);
+        jl_type_error(name, t, arg);
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
@@ -1369,19 +1382,10 @@ JL_CALLABLE(jl_f_get_binding_type)
     jl_sym_t *var = (jl_sym_t*)args[1];
     JL_TYPECHK(get_binding_type, module, (jl_value_t*)mod);
     JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
-    jl_value_t *ty = jl_get_binding_type(mod, var);
-    if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-        if (b == NULL)
-            return (jl_value_t*)jl_any_type;
-        jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
-        if (b2 != b)
-            return (jl_value_t*)jl_any_type;
-        jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-        return jl_atomic_load_relaxed(&b->ty);
-    }
-    return ty;
+    jl_value_t *ret = jl_get_binding_type(mod, var);
+    if (ret == jl_nothing)
+        return (jl_value_t*)jl_any_type;
+    return ret;
 }
 
 JL_CALLABLE(jl_f_swapglobal)
@@ -1578,14 +1582,41 @@ JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
-    if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
-        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
+    if (jl_is_method(argtypes)) {
+        jl_method_t *m = (jl_method_t*)argtypes;
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
+            jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));
+        return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
+    } else if (jl_is_code_instance(argtypes)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->specTypes) ||
+            (jl_is_method(codeinst->def->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->def.method->sig))) {
+            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+        }
+        if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
+            jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
+            jl_error("invoke: CodeInstance not valid for this world");
+        }
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            return invoke(args[0], &args[2], nargs - 2, codeinst);
+        } else {
+            if (codeinst->owner != jl_nothing) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            return jl_invoke(args[0], &args[2], nargs - 1, codeinst->def);
+        }
+    }
+    if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
+        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(NULL, &args[2], nargs - 2));
-    jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
-    JL_GC_POP();
-    return res;
+    return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
 // Expr constructor for internal use ------------------------------------------
@@ -2084,6 +2115,12 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
         return references_name(((jl_uniontype_t*)p)->a, name, affects_layout, freevars) ||
                references_name(((jl_uniontype_t*)p)->b, name, affects_layout, freevars);
     }
+    if (jl_is_vararg(p)) {
+        jl_value_t *T = ((jl_vararg_t*)p)->T;
+        jl_value_t *N = ((jl_vararg_t*)p)->N;
+        return (T && references_name(T, name, affects_layout, freevars)) ||
+               (N && references_name(N, name, affects_layout, freevars));
+    }
     if (jl_is_typevar(p))
         return 0; // already checked by unionall, if applicable
     if (jl_is_datatype(p)) {
@@ -2200,6 +2237,9 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    // if tb recursively refers to itself in its supertype, assume that it refers to ta
+    // before checking whether the supertypes are equal
+    b = jl_substitute_datatype(b, dtb, dta);
     if (!jl_types_equal(a, b))
         goto no;
     JL_TRY {
@@ -2436,7 +2476,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
-    add_builtin_func("current_scope", jl_f_current_scope);
+    jl_builtin_current_scope = add_builtin_func("current_scope", jl_f_current_scope);
+    add_builtin_func("throw_methoderror", jl_f_throw_methoderror);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -2503,6 +2544,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("Binding", (jl_value_t*)jl_binding_type);
+    add_builtin("BindingPartition", (jl_value_t*)jl_binding_partition_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 

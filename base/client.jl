@@ -41,7 +41,6 @@ function repl_cmd(cmd, out)
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
-        new_oldpwd = pwd()
         if length(cmd.exec) > 2
             throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
@@ -52,11 +51,17 @@ function repl_cmd(cmd, out)
                 end
                 dir = ENV["OLDPWD"]
             end
-            cd(dir)
         else
-            cd()
+            dir = homedir()
         end
-        ENV["OLDPWD"] = new_oldpwd
+        try
+            ENV["OLDPWD"] = pwd()
+        catch ex
+            ex isa IOError || rethrow()
+            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+            delete!(ENV, "OLDPWD")
+        end
+        cd(dir)
         println(out, pwd())
     else
         @static if !Sys.iswindows()
@@ -292,12 +297,12 @@ function exec_options(opts)
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
         elseif cmd == 'm'
-            @eval Main import $(Symbol(arg)).main
+            entrypoint = push!(split(arg, "."), "main")
+            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !should_use_main_entrypoint()
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
             return false
-
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
@@ -339,11 +344,13 @@ function _global_julia_startup_file()
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
     BINDIR = Sys.BINDIR
     SYSCONFDIR = Base.SYSCONFDIR
+    p1 = nothing
     if !isempty(SYSCONFDIR)
         p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
         isfile(p1) && return p1
     end
     p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    p1 == p2 && return nothing # don't check the same path twice
     isfile(p2) && return p2
     return nothing
 end
@@ -415,7 +422,7 @@ function load_REPL()
     return nothing
 end
 
-global active_repl
+global active_repl::Any
 global active_repl_backend = nothing
 
 function run_fallback_repl(interactive::Bool)
@@ -550,7 +557,7 @@ function _start()
     try
         repl_was_requested = exec_options(JLOptions())
         if should_use_main_entrypoint() && !is_interactive
-            if Core.Compiler.generating_output()
+            if Base.generating_output()
                 precompile(Main.main, (typeof(ARGS),))
             else
                 ret = invokelatest(Main.main, ARGS)

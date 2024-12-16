@@ -97,8 +97,9 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, 
     if has_fast_linear_indexing(A) && lsiz > 16 && axes(A) === Aax
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         ibase = first(LinearIndices(A))-1
-        for i in eachindex(R) # TODO: add tests for this change
-            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+        for i in eachindex(R)
+            r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            @inbounds R[i] = r
             ibase += lsiz
         end
         return R
@@ -108,19 +109,20 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, 
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
-            @simd for i in Aax[1]
-                r = op(r, f(A[i, IA])) # this could also be done pairwise
+            @inbounds r = R[i1,IR]
+            @simd for i in axes(A, 1)
+                r = op(r, f(@inbounds(A[i, IA])))
             end
-            R[i1,IR] = r
+            @inbounds R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in Aax[1]
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+            @simd for i in axes(A, 1)
+                v = op(@inbounds(R[i,IR]), f(@inbounds(A[i,IA])))
+                @inbounds R[i,IR] = v
             end
         end
     end
@@ -1065,6 +1067,57 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
 end
 
 ##### findmin & findmax #####
+# The initial values of Rval are not used if the corresponding indices in Rind are 0.
+#
+function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
+    (isempty(Rval) || isempty(A)) && return Rval, Rind
+    lsiz = check_reducedims(Rval, A)
+    for i = 1:N
+        axes(Rval, i) == axes(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
+    end
+    # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
+    # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval))
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    ks = keys(A)
+    y = iterate(ks)
+    zi = zero(eltype(ks))
+    if reducedim1(Rval, A)
+        i1 = first(axes1(Rval))
+        for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            @inbounds tmpRv = Rval[i1,IR]
+            @inbounds tmpRi = Rind[i1,IR]
+            for i in axes(A,1)
+                k, kss = y::Tuple
+                tmpAv = f(@inbounds(A[i,IA]))
+                if tmpRi == zi || op(tmpRv, tmpAv)
+                    tmpRv = tmpAv
+                    tmpRi = k
+                end
+                y = iterate(ks, kss)
+            end
+            @inbounds Rval[i1,IR] = tmpRv
+            @inbounds Rind[i1,IR] = tmpRi
+        end
+    else
+        for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            for i in axes(A, 1)
+                k, kss = y::Tuple
+                tmpAv = f(@inbounds(A[i,IA]))
+                @inbounds tmpRv = Rval[i,IR]
+                @inbounds tmpRi = Rind[i,IR]
+                if tmpRi == zi || op(tmpRv, tmpAv)
+                    @inbounds Rval[i,IR] = tmpAv
+                    @inbounds Rind[i,IR] = k
+                end
+                y = iterate(ks, kss)
+            end
+        end
+    end
+    Rval, Rind
+end
 
 struct PairsArray{T,N,A} <: AbstractArray{T,N}
     array::A

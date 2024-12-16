@@ -90,7 +90,7 @@ function getalladdrinfo(host::String)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -223,7 +223,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -282,16 +282,14 @@ See also [`getipaddrs`](@ref).
 """
 function getipaddr(addr_type::Type{T}) where T<:IPAddr
     addrs = getipaddrs(addr_type)
+    isempty(addrs) && error("No networking interface available")
 
-    if length(addrs) == 0
-        error("No networking interface available")
-    end
-
-    # Prefer the first IPv4 address
+    # When `addr_type` is `IPAddr`, `addrs` contain IP addresses of all types
+    # In that case, we prefer to return the first IPv4
     i = something(findfirst(ip -> ip isa IPv4, addrs), 1)
     return addrs[i]
 end
-getipaddr() = getipaddr(IPv4)
+getipaddr() = getipaddr(IPAddr)
 
 
 """

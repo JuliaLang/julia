@@ -61,12 +61,7 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
-function String(v::Memory{UInt8})
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
-end
+String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
 function String(v::Vector{UInt8})
     #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
@@ -81,6 +76,12 @@ function String(v::Vector{UInt8})
     setfield!(v, :size, (0,))
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
+end
+
+"Create a string re-using the memory, if possible.
+Mutating or reading the memory after calling this function is undefined behaviour."
+function unsafe_takestring(m::Memory{UInt8})
+    isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end
 
 """
@@ -102,9 +103,11 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# This is `@assume_effects :total !:consistent @ccall jl_alloc_string(n::Csize_t)::Ref{String}`,
 # but the macro is not available at this time in bootstrap, so we write it manually.
-@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
+const _string_n_override = 0x04ee
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -115,10 +118,7 @@ String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Memory{UInt8}}, s::String) = ccall(:jl_string_to_genericmemory, Ref{Memory{UInt8}}, (Any,), s)
-function unsafe_wrap(::Type{Vector{UInt8}}, s::String)
-    mem = unsafe_wrap(Memory{UInt8}, s)
-    view(mem, eachindex(mem))
-end
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = wrap(Array, unsafe_wrap(Memory{UInt8}, s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
@@ -209,7 +209,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
@@ -571,9 +571,10 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)

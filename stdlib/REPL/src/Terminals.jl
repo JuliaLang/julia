@@ -97,6 +97,7 @@ abstract type UnixTerminal <: TextTerminal end
 pipe_reader(t::UnixTerminal) = t.in_stream::IO
 pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
+@nospecialize
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
 end
@@ -107,6 +108,7 @@ mutable struct TTYTerminal <: UnixTerminal
     out_stream::IO
     err_stream::IO
 end
+@specialize
 
 const CSI = "\x1b["
 
@@ -120,19 +122,17 @@ cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right
 
 if Sys.iswindows()
     function raw!(t::TTYTerminal,raw::Bool)
-        check_open(t.in_stream)
         if Base.ispty(t.in_stream)
             run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
                 t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) == 0
         end
     end
 else
     function raw!(t::TTYTerminal, raw::Bool)
-        check_open(t.in_stream)
-        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) == 0
     end
 end
 

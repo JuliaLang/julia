@@ -14,7 +14,7 @@
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORESCALAROPTIMIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERSCALAROPTIMIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREVECTORIZATION
-; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -force-vector-width=2 -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREINTRINSICLOWERING
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERINTRINSICLOWERING
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORECLEANUP
@@ -298,12 +298,12 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 ; COM: Loop simplification makes the exit condition obvious
 ; AFTERLOOPSIMPLIFICATION: L35.lr.ph:
-; AFTERLOOPSIMPLIFICATION-NEXT: add nuw nsw
+; AFTERLOOPSIMPLIFICATION: add nuw nsw
 
 ; COM: Scalar optimization removes the previous add from the preheader
-; AFTERSCALAROPTIMIZATION: L35.preheader:
+; AFTERSCALAROPTIMIZATION: L35.lr.ph:
 ; AFTERSCALAROPTIMIZATION-NOT: add nuw nsw
-; AFTERSCALAROPTIMIZATION-NEXT: br label %L35
+; AFTERSCALAROPTIMIZATION: br label %L35
 
 ; COM: Vectorization does stuff
 ; AFTERVECTORIZATION: vector.body
