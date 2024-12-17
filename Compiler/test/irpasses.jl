@@ -1716,6 +1716,12 @@ end
 @test scope_folding_opt() == 1
 @test_broken fully_eliminated(scope_folding)
 @test_broken fully_eliminated(scope_folding_opt)
+let ir = first(only(Base.code_ircode(scope_folding, ())))
+    @test Compiler.compute_trycatch(ir) isa Compiler.HandlerInfo
+end
+let ir = first(only(Base.code_ircode(scope_folding_opt, ())))
+    @test Compiler.compute_trycatch(ir) isa Compiler.HandlerInfo
+end
 
 # Function that happened to have lots of sroa that
 # happened to trigger a bad case in the renamer. We
