@@ -700,10 +700,9 @@ function _backtrace_print_repetition_closings!(io::IO, i, current_cycles, frame_
         frame_counter != end_line && break
 
         println(io)
-
         line_length = (max_nested_cycles - nactive_cycles) + ndigits_max + 2
         nactive_cycles -= 1
-        printstyled(io, " ", "│" ^ nactive_cycles, "└", "─" ^ (line_length); color = :light_black)
+        printstyled(io, " ", "│" ^ nactive_cycles, "╰", "─" ^ (line_length); color = :light_black)
         printstyled(io, " repeated $repetitions more time", repetitions > 1 ? "s" : ""; color = :light_black, italic = true)
 
         pop!(current_cycles)
@@ -793,7 +792,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
 
     # repeated section bracket line 1
     print(io, " ")
-    printstyled(io, "│" ^ (nactive_cycles - ncycle_starts); color = :light_black)
+    printstyled(io, "├" ^ (nactive_cycles - ncycle_starts); color = :light_black)
     printstyled(io, "┌" ^ ncycle_starts; color = :light_black)
 
     # frame number
@@ -806,7 +805,7 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
 
     # repeated section bracket line 2
     print(io, " ")
-    printstyled(io, "│" ^ (nactive_cycles); color = :light_black)
+    printstyled(io, "│" ^ nactive_cycles; color = :light_black)
 
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width = digit_align_width - 1)
