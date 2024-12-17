@@ -1861,6 +1861,8 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    @test Base.showarg(io, reshape(1:1), false) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin
