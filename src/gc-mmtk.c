@@ -162,7 +162,7 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) {
     // MMTk currently does not allow setting the heap size at runtime
 }
 
-inline void maybe_collect(jl_ptls_t ptls)
+STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 {
     // Just do a safe point for general maybe_collect
     jl_gc_safepoint_(ptls);
@@ -792,12 +792,12 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 #define MMTK_MIN_ALIGNMENT 4
 // MMTk assumes allocation size is aligned to min alignment.
-inline size_t mmtk_align_alloc_sz(size_t sz) JL_NOTSAFEPOINT
+STATIC_INLINE size_t mmtk_align_alloc_sz(size_t sz) JL_NOTSAFEPOINT
 {
     return (sz + MMTK_MIN_ALIGNMENT - 1) & ~(MMTK_MIN_ALIGNMENT - 1);
 }
 
-inline void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* cursor, uintptr_t limit, size_t size, size_t align, size_t offset, int allocator) {
+STATIC_INLINE void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* cursor, uintptr_t limit, size_t size, size_t align, size_t offset, int allocator) {
     intptr_t delta = (-offset - *cursor) & (align - 1);
     uintptr_t result = *cursor + (uintptr_t)delta;
 
@@ -809,7 +809,7 @@ inline void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* cursor, uin
     }
 }
 
-inline void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     ImmixAllocator* allocator = &mutator->allocators.immix[MMTK_DEFAULT_IMMIX_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
 }
@@ -818,17 +818,17 @@ inline void mmtk_immix_post_alloc_slow(MMTkMutatorContext* mutator, void* obj, s
     mmtk_post_alloc(mutator, obj, size, 0);
 }
 
-inline void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
+STATIC_INLINE void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
     // FIXME: for now, we do nothing
     // but when supporting moving, this is where we set the valid object (VO) bit
 }
 
-inline void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     BumpAllocator* allocator = &mutator->allocators.bump_pointer[MMTK_IMMORTAL_BUMP_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
-inline void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
+STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
     // FIXME: Similarly, for now, we do nothing
     // but when supporting moving, this is where we set the valid object (VO) bit
     // and log (old gen) bit
