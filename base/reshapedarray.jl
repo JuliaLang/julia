@@ -121,8 +121,7 @@ reshape
 
 # we collect the vararg indices and only define methods for tuples of indices
 reshape(parent::AbstractArray, dims::Union{Integer,Colon,AbstractUnitRange}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Integer}}) = reshape(parent, map(Int, dims))
-reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Integer}}) = _reshape(parent, map(Int, dims))
 
 # Allow missing dimensions with Colon():
 # convert axes to sizes using to_shape, and convert colons to sizes using _reshape_uncolon
