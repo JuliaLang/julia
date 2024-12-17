@@ -1,4 +1,5 @@
 extern crate bindgen;
+use std::path::Path;
 
 // Use bindgen to build Rust bindings for Julia
 
@@ -6,24 +7,42 @@ fn main() {
     // Use environment variable $JULIA_PATH that points to Julia folder
     let julia_dir_key = "JULIA_PATH";
     let mmtk_dir_key = "MMTK_JULIA_DIR";
+    let buildroot_dir_key = "JULIA_BUILDROOT";
 
     let (mmtk_dir, julia_dir) = match (std::env::var(mmtk_dir_key), std::env::var(julia_dir_key)) {
         (Ok(mmtk_val), Ok(julia_val)) => (mmtk_val, julia_val),
         _ => panic!("Must set {} and {}", julia_dir_key, mmtk_dir_key),
     };
 
+    // A build call from Julia's Makefile may build into a different directory
+    // e.g., via make O=/path-to-my-build/my-julia-build
+    // Check if JULIA_BUILD_ROOT is set and use it, otherwise, set it as the same dir as JULIA_PATH
+    let buildroot_dir = match std::env::var(buildroot_dir_key) {
+        Ok(buildroot_val) => buildroot_val,
+        _ => julia_dir.clone(),
+    };
+
     // running `make julia_version.h` in $JULIA_PATH/src to generate julia_version.h
-    std::process::Command::new("make")
-        .current_dir(format!("{}/src", julia_dir))
-        .args(["julia_version.h"])
-        .output()
-        .expect("failed to execute process");
+    if !Path::new(format!("{}/src/julia_version.h", buildroot_dir).as_str()).exists() {
+        std::process::Command::new("make")
+            .current_dir(format!("{}/src", julia_dir))
+            .env("BUILDDIR", buildroot_dir.clone())
+            .args(["julia_version.h"])
+            .output()
+            .expect("failed to execute process");
+    }
 
     // runing `make` in $JULIA_PATH/deps to generate $JULIA_PATH/usr/include, in particular libunwind.h
-    std::process::Command::new("make")
-        .current_dir(format!("{}/deps", julia_dir))
-        .output()
-        .expect("failed to execute process");
+    // skip this process if that path already exists since
+    // the .h files could have already beeen generated when building via Makefile
+    if !Path::new(format!("{}/usr/include", buildroot_dir).as_str()).exists() {
+        std::process::Command::new("make")
+            .current_dir(format!("{}/deps", julia_dir))
+            .env("BUILDDIR", buildroot_dir.clone())
+            .env("MMTK_PLAN", "None") // Make sure this call doesn't try to compile the binding again
+            .output()
+            .expect("failed to execute process");
+    }
 
     let bindings = bindgen::Builder::default()
         .header(format!("{}/src/julia.h", julia_dir))
@@ -36,7 +55,7 @@ fn main() {
         .clang_arg("-I")
         .clang_arg(format!("{}/src/support", julia_dir))
         .clang_arg("-I")
-        .clang_arg(format!("{}/usr/include", julia_dir))
+        .clang_arg(format!("{}/usr/include", buildroot_dir))
         // all types that we generate bindings from
         .allowlist_item("jl_datatype_layout_t")
         .allowlist_item("jl_ucontext_t")
