@@ -2393,8 +2393,10 @@ function cfg_simplify!(ir::IRCode)
                     end
                 elseif isa(terminator, EnterNode)
                     catchbb = terminator.catch_dest
-                    if bb_rename_succ[catchbb] == 0
-                        push!(worklist, catchbb)
+                    if catchbb ≠ 0
+                        if bb_rename_succ[catchbb] == 0
+                            push!(worklist, catchbb)
+                        end
                     end
                 elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
                     # No implicit fall through. Schedule from work list.

@@ -4279,6 +4279,7 @@ f(x) = yt(x)
                    (if (or exists (and short (pair? alldefs)))
                        `(toplevel-butfirst
                          (null)
+                         ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                          ,@sp-inits
                          ,@mk-method
                          (latestworld))
@@ -4355,7 +4356,6 @@ f(x) = yt(x)
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
-      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
            (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
@@ -4606,14 +4606,20 @@ f(x) = yt(x)
                                  (cdr cnd)
                                  (list cnd))))))
           tests))
+    (define (emit-assignment-or-setglobal lhs rhs)
+      (if (globalref? lhs)
+        (begin
+          (emit `(global ,lhs))
+          (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
+        (emit `(= ,lhs ,rhs))))
     (define (emit-assignment lhs rhs)
       (if rhs
           (if (valid-ir-rvalue? lhs rhs)
-              (emit `(= ,lhs ,rhs))
+              (emit-assignment-or-setglobal lhs rhs)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,rhs))
-                (emit `(= ,lhs ,rr))))
-          (emit `(= ,lhs (null)))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
+                (emit-assignment-or-setglobal lhs rr)))
+          (emit-assignment-or-setglobal lhs `(null))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
@@ -4692,7 +4698,7 @@ f(x) = yt(x)
                                        rhs (make-ssavalue))))
                            (if (not (eq? rr rhs))
                                (emit `(= ,rr ,rhs)))
-                           (emit `(= ,lhs ,rr))
+                           (emit-assignment-or-setglobal lhs rr)
                            (if tail (emit-return tail rr))
                            rr)
                          (emit-assignment lhs rhs))))))

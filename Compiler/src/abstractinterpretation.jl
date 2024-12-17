@@ -856,8 +856,7 @@ end
 
 struct InvokeCall
     types     # ::Type
-    lookupsig # ::Type
-    InvokeCall(@nospecialize(types), @nospecialize(lookupsig)) = new(types, lookupsig)
+    InvokeCall(@nospecialize(types)) = new(types)
 end
 
 struct ConstCallResult
@@ -2218,26 +2217,69 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
     ft === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
-    isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-    unwrapped = unwrap_unionall(types)
-    types === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
-    if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
-        return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+    types = argtype_by_index(argtypes, 3)
+    if types isa Const && types.val isa Union{Method, CodeInstance}
+        method_or_ci = types.val
+        if isa(method_or_ci, CodeInstance)
+            our_world = sv.world.this
+            argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
+            specsig = method_or_ci.def.specTypes
+            defdef = method_or_ci.def.def
+            exct = method_or_ci.exctype
+            if !hasintersect(argtype, specsig)
+                return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+            elseif !(argtype <: specsig) || (isa(defdef, Method) && !(argtype <: defdef.sig))
+                exct = Union{exct, TypeError}
+            end
+            callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
+            if !(our_world in callee_valid_range)
+                if our_world < first(callee_valid_range)
+                    update_valid_age!(sv, WorldRange(first(sv.world.valid_worlds), first(callee_valid_range)-1))
+                else
+                    update_valid_age!(sv, WorldRange(last(callee_valid_range)+1, last(sv.world.valid_worlds)))
+                end
+                return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
+            end
+            # TODO: When we add curing, we may want to assume this is nothrow
+            if (method_or_ci.owner === Nothing && method_ir_ci.def.def isa Method)
+                exct = Union{exct, ErrorException}
+            end
+            update_valid_age!(sv, callee_valid_range)
+            return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
+                InvokeCICallInfo(method_or_ci)))
+        else
+            method = method_or_ci::Method
+            types = method # argument value
+            lookupsig = method.sig # edge kind
+            argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
+            nargtype = typeintersect(lookupsig, argtype)
+            nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+            nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+            # Fall through to generic invoke handling
+        end
+    else
+        hasintersect(widenconst(types), Union{Method, CodeInstance}) && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
+        isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        unwrapped = unwrap_unionall(types)
+        types === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
+        if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
+            return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+        end
+        argtype = argtypes_to_type(argtype_tail(argtypes, 4))
+        nargtype = typeintersect(types, argtype)
+        nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+        nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+        isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+        ft = ft::DataType
+        lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+        nargtype = Tuple{ft, nargtype.parameters...}
+        argtype = Tuple{ft, argtype.parameters...}
+        matched, valid_worlds = findsup(lookupsig, method_table(interp))
+        matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        update_valid_age!(sv, valid_worlds)
+        method = matched.method
     end
-    argtype = argtypes_to_type(argtype_tail(argtypes, 4))
-    nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-    nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
-    isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-    ft = ft::DataType
-    lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
-    nargtype = Tuple{ft, nargtype.parameters...}
-    argtype = Tuple{ft, argtype.parameters...}
-    matched, valid_worlds = findsup(lookupsig, method_table(interp))
-    matched === nothing && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-    update_valid_age!(sv, valid_worlds)
-    method = matched.method
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]
     env = tienv[2]::SimpleVector
@@ -2245,7 +2287,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     ft′_box = Core.Box(ft′)
     lookupsig_box = Core.Box(lookupsig)
-    invokecall = InvokeCall(types, lookupsig)
+    invokecall = InvokeCall(types)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
         (; rt, exct, effects, edge, volatile_inf_result) = result
         local ft′ = ft′_box.contents
@@ -4009,13 +4051,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 end
                 effects === nothing || merge_override_effects!(interp, effects, frame)
                 if lhs !== nothing && rt !== Bottom
-                    if isa(lhs, SlotNumber)
-                        changes = StateUpdate(lhs, VarState(rt, false))
-                    elseif isa(lhs, GlobalRef)
-                        handle_global_assignment!(interp, frame, currsaw_latestworld, lhs, rt)
-                    else
-                        merge_effects!(interp, frame, EFFECTS_UNKNOWN)
-                    end
+                    changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
                 end
             end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
