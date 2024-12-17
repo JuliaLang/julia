@@ -2274,6 +2274,9 @@ end
         @test b isa Matrix{Int}
         @test b.ref === a.ref
     end
+    C = reshape(CartesianIndices((2,2)), big(4))
+    @test axes(C, 1) == 1:4
+    @test C == CartesianIndex.([(1,1), (2,1), (1,2), (2,2)])
 end
 @testset "AbstractArrayMath" begin
     @testset "IsReal" begin

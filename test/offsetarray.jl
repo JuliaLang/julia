@@ -848,6 +848,16 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+    R = reshape(zeros(6), 2, :)
+    @test R isa Matrix
+    @test axes(R) == (1:2, 1:3)
+    R = reshape(zeros(6,1), 2, :)
+    @test R isa Matrix
+    @test axes(R) == (1:2, 1:3)
+    R = reshape(zeros(6), 2:3, :)
+    @test axes(R) == (2:3, 1:3)
+    R = reshape(zeros(6,1), 2:3, :)
+    @test axes(R) == (2:3, 1:3)
 end
 
 @testset "stack" begin
