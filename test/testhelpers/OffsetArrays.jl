@@ -528,7 +528,6 @@ _similar_axes_or_length(A, T, ax::I, ::I) where {I} = similar(A, T, map(_indexle
 _similar_axes_or_length(AT, ax::I, ::I) where {I} = similar(AT, map(_indexlength, ax))
 
 # reshape accepts a single colon
-Base.reshape(A::AbstractArray, inds::OffsetAxis...) = reshape(A, inds)
 function Base.reshape(A::AbstractArray, inds::Tuple{Vararg{OffsetAxis}})
     AR = reshape(no_offset_view(A), map(_indexlength, inds))
     O = OffsetArray(AR, map(_offset, axes(AR), inds))

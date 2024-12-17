@@ -119,31 +119,31 @@ julia> reshape(1:6, 2, 3)
 """
 reshape
 
-reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
-reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
-reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
+# we collect the vararg indices and only define methods for tuples of indices
+reshape(parent::AbstractArray, dims::Union{Integer,Colon,AbstractUnitRange}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
-reshape(parent::AbstractVector, ::Colon) = parent
-reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
-reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Integer...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Integer,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+# convert axes to sizes using to_shape, and convert colons to sizes using _reshape_uncolon
+# We add a level of indirection to avoid method ambiguities in reshape
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,OneTo}}}) = _reshape_maybecolon(parent, dims)
+_reshape_maybecolon(parent::AbstractVector, ::Tuple{Colon}) = parent
+_reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,OneTo}}}) = reshape(parent, _reshape_uncolon(length(parent), to_shape(dims)))
 
-@noinline throw1(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
+@noinline _reshape_throwcolon(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
         " may have at most one omitted dimension specified by `Colon()`")))
-@noinline throw2(lenA, dims) = throw(DimensionMismatch(string("array size ", lenA,
+@noinline _reshape_throwsize(lenA, dims) = throw(DimensionMismatch(LazyString("array size ", lenA,
     " must be divisible by the product of the new dimensions ", dims)))
 
-@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{Integer, Colon}}})
+_reshape_uncolon(len, ::Tuple{Colon}) = len
+@inline function _reshape_uncolon(len, _dims::Tuple{Vararg{Union{Integer, Colon}}})
     # promote the dims to `Int` at least
     dims = map(x -> x isa Colon ? x : promote_type(typeof(x), Int)(x), _dims)
+    dims isa Tuple{Vararg{Integer}} && return dims
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
-    _any_colon(post...) && throw1(dims)
-    len = length(A)
+    _any_colon(post...) && _reshape_throwcolon(dims)
     _reshape_uncolon_computesize(len, dims, pre, post)
 end
 @inline function _reshape_uncolon_computesize(len::Int, dims, pre::Tuple{Vararg{Int}}, post::Tuple{Vararg{Int}})
@@ -167,9 +167,9 @@ end
     (pre..., sz, post...)
 end
 @inline function _reshape_uncolon_computesize_nonempty(len, dims, pr)
-    iszero(pr) && throw2(len, dims)
+    iszero(pr) && _reshape_throwsize(len, dims)
     (quo, rem) = divrem(len, pr)
-    iszero(rem) || throw2(len, dims)
+    iszero(rem) || _reshape_throwsize(len, dims)
     quo
 end
 @inline _any_colon() = false
@@ -177,8 +177,10 @@ end
 @inline _any_colon(dim::Any, tail...) = _any_colon(tail...)
 @inline _before_colon(dim::Any, tail...) = (dim, _before_colon(tail...)...)
 @inline _before_colon(dim::Colon, tail...) = ()
+@inline _before_colon() = ()
 @inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
+@inline _after_colon() = ()
 
 reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
 function reshape(parent::AbstractArray, ndims::Val{N}) where N
