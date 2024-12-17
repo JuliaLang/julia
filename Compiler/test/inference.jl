@@ -4436,7 +4436,7 @@ let x = Tuple{Int,Any}[
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
     (;handler_at, handlers) = Compiler.compute_trycatch(last.(x))
-    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
+    @test map(x->x[1] == 0 ? 0 : Compiler.get_enter_idx(handlers[x[1]]), handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y

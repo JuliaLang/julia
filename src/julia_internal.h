@@ -1195,7 +1195,7 @@ _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) J
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache);
+JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
