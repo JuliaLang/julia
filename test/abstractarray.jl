@@ -2209,6 +2209,10 @@ end
     @test axes(C, 1) == 1:4
     @test C == CartesianIndex.([(1,1), (2,1), (1,2), (2,2)])
 end
+@testset "reshape with OneTo and Colon" begin
+    @test reshape(1:3, Base.OneTo(1), :)    == reshape(1:3, 1, 3)
+    @test reshape(1:3, Base.OneTo(1), :, 1) == reshape(1:3, 1, 3, 1)
+end
 @testset "AbstractArrayMath" begin
     @testset "IsReal" begin
         A = [1, 2, 3, 4]
