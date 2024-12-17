@@ -144,6 +144,7 @@ function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{
     return dest
 end
 
+#fallback method when types don't match
 function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     @_terminates_locally_meta
     n == 0 && return dest
@@ -171,7 +172,10 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     return dest
 end
 
-copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
+function copy(a::T) where {T<:Memory}
+    newmem = T(undef, length(a))
+    unsafe_copyto!(newmem, 1, a, 1, length(a))
+end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
