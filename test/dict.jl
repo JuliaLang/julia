@@ -789,10 +789,8 @@ end
 
 @testset "consistency of dict iteration order (issue #56841)" begin
     dict = Dict(randn() => randn() for _ = 1:100)
-    foreach(zip(dict, keys(dict), values(dict), pairs(dict))) do (d, k, v, p)
-        @test d == p
-        @test first(d) == first(p) == k
-        @test last(d) == last(p) == v
+    @test all(zip(dict, keys(dict), values(dict), pairs(dict))) do (d, k, v, p)
+        d == p && first(d) == first(p) == k && last(d) == last(p) == v
     end
 end
 
