@@ -575,12 +575,7 @@ struct UndefInitializer end
 const undef = UndefInitializer()
 
 # type and dimensionality specified
-(self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, m::Int) where {T,addrspace,kind} =
-    if isdefined(self, :instance) && m === 0
-        self.instance
-    else
-        ccall(:jl_alloc_genericmemory, Ref{GenericMemory{kind,T,addrspace}}, (Any, Int), self, m)
-    end
+(self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, m::Int) where {T,addrspace,kind} = memorynew(self, m)
 (self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, d::NTuple{1,Int}) where {T,kind,addrspace} = self(undef, getfield(d,1))
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
