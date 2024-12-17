@@ -6125,3 +6125,17 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+@eval get_exception() = $(Expr(:the_exception))
+@test Base.infer_return_type() do
+    get_exception()
+end <: Any
+@test @eval Base.infer_return_type((Float64,)) do x
+    out = $(Expr(:the_exception))
+    try
+        out = sin(x)
+    catch
+        out = $(Expr(:the_exception))
+    end
+    return out
+end == Union{Float64,DomainError}
