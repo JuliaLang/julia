@@ -2656,7 +2656,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if sv isa InferenceState && f === typeassert
             # perform very limited back-propagation of invariants after this type assertion
             if rt !== Bottom && isa(fargs, Vector{Any})
-                farg2 = fargs[2]
+                farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
                     refinements = SlotRefinement(farg2, rt)
                 end
