@@ -790,7 +790,7 @@ backtrace()
     @test lstrip(output[3])[1] == '┌'
     @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
     @test occursin("g28442", output[3])
-    @test lstrip(output[5])[1] == '│'
+    @test lstrip(output[5])[1] == '├'
     @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("f28442", output[5])
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
