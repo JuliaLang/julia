@@ -993,6 +993,56 @@ findmin(itr) = _findmin(itr, :)
 _findmin(a, ::Colon) = findmin(identity, a)
 
 """
+    findextrema(f, domain) -> ((f(x), index_mn), (f(x), index_mx))
+
+Return the pair of pairs which would be returned by `(findmin(f, domain), findmax(f, domain))`,
+but computed in a single pass.
+
+# Examples
+
+```jldoctest
+julia> findextrema(identity, 5:9)
+((5, 1), (9, 5))
+
+julia> findextrema(-, 1:10)
+((-10, 10), (-1, 1))
+
+julia> findextrema(first, [(2, :a), (2, :b), (3, :c)])
+((2, 1), (3, 3))
+
+julia> findextrema(cos, 0:π/2:2π)
+((-1.0, 3), (1.0, 1))
+```
+"""
+findextrema(f, domain) = _findextrema(f, domain, :)
+_findextrema(f, domain, ::Colon) = mapfoldl(((k, v),) -> (fv = f(v); ((fv, k), (fv, k))), _rf_findextrema, pairs(domain))
+_rf_findextrema((a, b), (c, d)) = _rf_findmin(a, c), _rf_findmax(b, d)
+
+"""
+    findextrema(itr) -> ((mn, index_mn), (mx, index_mx))
+
+Return the pair of pairs which would be returned by `(findmin(itr), findmax(itr))`,
+but computed in a single pass.
+
+See also: [`findmin`](@ref), [`findmax`](@ref)
+
+# Examples
+
+```jldoctest
+julia> findextrema([8, 0.1, -9, pi])
+((-9.0, 3), (8.0, 1))
+
+julia> findextrema([1, 7, 7, 6])
+((1, 1), (7, 2))
+
+julia> findextrema([1, 7, 7, NaN])
+((NaN, 4), (NaN, 4))
+```
+"""
+findextrema(itr) = _findextrema(itr, :)
+_findextrema(a, ::Colon) = findextrema(identity, a)
+
+"""
     argmax(f, domain)
 
 Return a value `x` from `domain` for which `f(x)` is maximised.
