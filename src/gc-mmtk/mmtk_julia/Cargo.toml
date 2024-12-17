@@ -7,12 +7,6 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# Metadata for the Julia repository
-[package.metadata.julia]
-# Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
-julia_repo = "https://github.com/udesou/julia.git"
-julia_version = "5f743032000a5ac85d18a64e3c6992e3b8e0f0bc"
-
 [lib]
 crate-type = ["cdylib"]
 
