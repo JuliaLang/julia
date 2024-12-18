@@ -2223,11 +2223,12 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             our_world = sv.world.this
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-            sig = method_or_ci.def.specTypes
+            specsig = method_or_ci.def.specTypes
+            defdef = method_or_ci.def.def
             exct = method_or_ci.exctype
-            if !hasintersect(argtype, sig)
+            if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-            elseif !(argtype <: sig)
+            elseif !(argtype <: specsig) || (isa(defdef, Method) && !(argtype <: defdef.sig))
                 exct = Union{exct, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
@@ -2257,7 +2258,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             # Fall through to generic invoke handling
         end
     else
-        widenconst(types) >: Union{Method, CodeInstance} && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        hasintersect(widenconst(types), Union{Method, CodeInstance}) && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
         isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         unwrapped = unwrap_unionall(types)
@@ -3239,8 +3240,16 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
 end
 
 function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
-    (;handlers, handler_at) = sv.handler_info::HandlerInfo
-    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+    (;handler_info) = sv
+    if handler_info === nothing
+        return the_exception_info(Any)
+    end
+    (;handlers, handler_at) = handler_info
+    handler_id = handler_at[sv.currpc][2]
+    if handler_id === 0
+        return the_exception_info(Any)
+    end
+    return the_exception_info(handlers[handler_id].exct)
 end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))

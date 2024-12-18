@@ -277,7 +277,7 @@ struct InvokeCICallInfo <: CallInfo
     edge::CodeInstance
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
-    add_one_edge!(edges, info.edge)
+    add_inlining_edge!(edges, info.edge)
 
 """
     info::InvokeCallInfo

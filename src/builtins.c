@@ -1590,8 +1590,10 @@ JL_CALLABLE(jl_f_invoke)
     } else if (jl_is_code_instance(argtypes)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-        if (jl_tuple1_isa(args[0], &args[2], nargs - 2, (jl_datatype_t*)codeinst->def->specTypes)) {
-            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 2));
+        // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->specTypes) ||
+            (jl_is_method(codeinst->def->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->def.method->sig))) {
+            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
         }
         if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
             jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
@@ -1604,10 +1606,10 @@ JL_CALLABLE(jl_f_invoke)
         if (invoke) {
             return invoke(args[0], &args[2], nargs - 2, codeinst);
         } else {
-            if (codeinst->owner != jl_nothing || !jl_is_method(codeinst->def->def.value)) {
+            if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_gf_invoke_by_method(codeinst->def->def.method, args[0], &args[2], nargs - 1);
+            return jl_invoke(args[0], &args[2], nargs - 1, codeinst->def);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
@@ -1673,6 +1675,15 @@ JL_CALLABLE(jl_f__typevar)
 }
 
 // genericmemory ---------------------------------------------------------------------
+JL_CALLABLE(jl_f_memorynew)
+{
+    JL_NARGS(memorynew, 2, 2);
+    jl_datatype_t *jl_genericmemory_type_type = jl_datatype_type;
+    JL_TYPECHK(memorynew, genericmemory_type, args[0]);
+    JL_TYPECHK(memorynew, long, args[1]);
+    size_t nel = jl_unbox_long(args[1]);
+    return (jl_value_t*)jl_alloc_genericmemory(args[0], nel);
+}
 
 JL_CALLABLE(jl_f_memoryref)
 {
@@ -2439,6 +2450,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
+    jl_builtin_memorynew = add_builtin_func("memorynew", jl_f_memorynew);
     jl_builtin_memoryref = add_builtin_func("memoryrefnew", jl_f_memoryref);
     jl_builtin_memoryrefoffset = add_builtin_func("memoryrefoffset", jl_f_memoryrefoffset);
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);

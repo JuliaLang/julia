@@ -3031,14 +3031,13 @@ end
 
 # issue #28279
 # ensure that lowering doesn't move these into statement position, which would require renumbering
-using Base: +, -
-function f28279(b::Bool)
+@eval function f28279(b::Bool)
     let i = 1
-        while i > b
-            i -= 1
+        while $(>)(i, b)
+            i = $(-)(i, 1)
         end
         if b end
-        return i + 1
+        return $(+)(i, 1)
     end
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
@@ -4437,7 +4436,7 @@ let x = Tuple{Int,Any}[
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
     (;handler_at, handlers) = Compiler.compute_trycatch(last.(x))
-    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
+    @test map(x->x[1] == 0 ? 0 : Compiler.get_enter_idx(handlers[x[1]]), handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -6126,3 +6125,17 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+@eval get_exception() = $(Expr(:the_exception))
+@test Base.infer_return_type() do
+    get_exception()
+end <: Any
+@test @eval Base.infer_return_type((Float64,)) do x
+    out = $(Expr(:the_exception))
+    try
+        out = sin(x)
+    catch
+        out = $(Expr(:the_exception))
+    end
+    return out
+end == Union{Float64,DomainError}
