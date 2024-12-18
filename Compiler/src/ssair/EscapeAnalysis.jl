@@ -19,13 +19,13 @@ import Base: ==, ∈, copy, delete!, getindex, isempty, setindex!
 using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
 using Core.IR
 using Base:       # Base definitions
-    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline,
-    @nospecialize, @specialize, BitSet, IdDict, IdSet, UnitRange, Vector,
+    @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
+    @nospecialize, @specialize, BitSet, IdDict, IdSet, Pair, UnitRange, Vector,
     _bits_findnext, copy!, empty!, enumerate, fill!, first, get, hasintersect, haskey,
-    isassigned, isexpr, last, length, max, min, missing, only, println, push!, pushfirst!,
-    resize!, :, !, !==, <, <<, >, =>, ≠, ≤, ≥, ∉, ⊆, ⊇, &, *, +, -, |
+    isassigned, isexpr, keys, last, length, max, min, missing, only, println, push!,
+    pushfirst!, resize!, :, !, !==, <, <<, >, =>, ≠, ≤, ≥, ∉, ⊆, ⊇, &, *, +, -, |
 using ..Compiler: # Compiler specific definitions
-    @show, Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, SimpleHandler,
+    @show, Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, NewNodeInfo, SimpleHandler,
     argextype, block_for_inst, compute_trycatch, fieldcount_noerror, gethandler, has_flag,
     intrinsic_nothrow, is_meta_expr_head, is_identity_free_argtype, isterminator,
     singleton_type, try_compute_field, try_compute_fieldidx, widenconst
@@ -506,7 +506,7 @@ struct BlockEscapeState{Sealed#=::Bool=#}
     nargs::Int
 end
 function BlockEscapeState(ir::IRCode, nargs::Int)
-    nstmts = length(ir.stmts)
+    nstmts = length(ir.stmts) + length(ir.new_nodes)
     nelms = nargs + nstmts
     escapes = EscapeTable()
     aliasset = AliasSet(nelms)
@@ -694,19 +694,55 @@ Analyzes escape information in `ir`:
   retrieves cached argument escape information
 """
 function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
-    @assert isempty(ir.new_nodes.stmts) "compacted IRCode is assumed currently"
     currbb = 1
     bbs = ir.cfg.blocks
     W = BitSet()
     W.offset = 0 # for _bits_findnext
     astate = AnalysisState(ir, nargs, get_escape_cache)
     (; currstate) = astate
+    if isempty(ir.new_nodes)
+        new_nodes_info = nothing
+    else
+        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
+        for (i, nni) in enumerate(ir.new_nodes.info)
+            if haskey(new_nodes_map, nni.pos)
+                push!(new_nodes_map[nni.pos], i => nni)
+            else
+                new_nodes_map[nni.pos] = Pair{Int,NewNodeInfo}[i => nni]
+            end
+        end
+        new_nodes_info = (new_nodes_map, keys(new_nodes_map))
+    end
+
     while true
         local nextbb::Int
         bbstart, bbend = first(bbs[currbb].stmts), last(bbs[currbb].stmts)
         for pc = bbstart:bbend
-            stmt = ir[SSAValue(pc)][:stmt]
-            if pc == bbend
+            local new_nodes_counter::Int = 0
+            if new_nodes_info === nothing || pc ∉ new_nodes_info[2]
+                stmt = ir[SSAValue(pc)][:stmt]
+                isterminator = pc == bbend
+            else
+                new_nodes = new_nodes_info[1][pc]
+                attach_before_idxs = Int[i for (i, nni) in new_nodes if !nni.attach_after]
+                attach_after_idxs  = Int[i for (i, nni) in new_nodes if nni.attach_after]
+                na, nb = length(attach_after_idxs), length(attach_before_idxs)
+                n_nodes = new_nodes_counter = na + nb + 1 # +1 for this statement
+                @label analyze_new_node
+                curridx = n_nodes - new_nodes_counter + 1
+                if curridx ≤ nb
+                    stmt = ir.new_nodes.stmts[attach_before_idxs[curridx]][:stmt]
+                elseif curridx == nb + 1
+                    stmt = ir[SSAValue(pc)][:stmt]
+                else
+                    @assert curridx ≤ n_nodes
+                    stmt = ir.new_nodes.stmts[attach_after_idxs[curridx - nb - 1]][:stmt]
+                end
+                isterminator = curridx == n_nodes
+                new_nodes_counter -= 1
+            end
+
+            if isterminator
                 # if this is the last statement of the current block, handle the control-flow
                 if stmt isa GotoNode
                     succs = bbs[currbb].succs
@@ -770,6 +806,10 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                     end
                 end
             end
+
+            if new_nodes_counter > 0
+                @goto analyze_new_node
+            end
         end
 
         begin @label fall_through
@@ -799,7 +839,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
 end
 
 function initialize_state!(currstate::BlockEscapeState, ir::IRCode, nargs::Int)
-    nstmts = length(ir.stmts)
+    nstmts = length(ir.stmts) + length(ir.new_nodes)
     nelms = nargs + nstmts
     empty!(currstate.escapes)
     resize!(currstate.aliasset.parents, nelms)
