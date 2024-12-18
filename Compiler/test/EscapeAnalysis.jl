@@ -230,14 +230,18 @@ end
             c = m === nothing
             return c
         end
-        @test has_no_escape(ignore_argescape(result[Argument(2)]))
+        @test !has_thrown_escape(result[Argument(2)])
+        @test !has_return_escape(result[Argument(2)])
+        @test_broken has_no_escape(result[Argument(2)])
     end
 
     let # sizeof
         result = code_escapes((Vector{Any},)) do xs
             sizeof(xs)
         end
-        @test has_no_escape(ignore_argescape(result[Argument(2)]))
+        @test !has_thrown_escape(result[Argument(2)])
+        @test !has_return_escape(result[Argument(2)])
+        @test_broken has_no_escape(result[Argument(2)])
     end
 
     let # ifelse
@@ -1599,7 +1603,7 @@ let result = code_escapes() do
         nothing
     end
     i = only(findall(isnew, result.ir.stmts.stmt))
-    @test_broken has_no_escape(result[SSAValue(i)])
+    @test has_no_escape(result[SSAValue(i)])
 
     result = code_escapes() do
         a = Ref("foo") # still should be "return escape"
@@ -1629,7 +1633,7 @@ let result = code_escapes() do
         return ret                    # must not alias to `obj`
     end
     i = only(findall(isnew, result.ir.stmts.stmt))
-    @test_broken has_no_escape(result[SSAValue(i)])
+    @test has_no_escape(result[SSAValue(i)])
 end
 
 function with_self_aliased(from_bb::Int, succs::Vector{Int})
@@ -1655,7 +1659,7 @@ end
 let result = code_escapes((SafeRef{String},)) do x
         identity_if_string(x)
     end
-    @test_broken has_no_escape(ignore_argescape(result[Argument(2)]))
+    @test has_no_escape(ignore_argescape(result[Argument(2)]))
 end
 let result = code_escapes((SafeRef,)) do x
         identity_if_string(x)
@@ -1672,7 +1676,7 @@ let result = code_escapes((SafeRef{String},)) do x
         end
         return nothing
     end
-    @test_broken !has_all_escape(result[Argument(2)])
+    @test !has_all_escape(result[Argument(2)])
 end
 let result = code_escapes((Union{SafeRef{String},Vector{String}},)) do x
         try

@@ -67,7 +67,7 @@ function Compiler.ipo_dataflow_analysis!(interp::EscapeAnalyzer, opt::Optimizati
         # return back the result
         interp.result = EscapeAnalysisResultForEntry(Compiler.copy(ir), eresult, caller.linfo)
     end
-    # record_escapes!(caller, eresult, ir)
+    record_escapes!(caller, eresult, ir)
 
     @invoke Compiler.ipo_dataflow_analysis!(interp::AbstractInterpreter, opt::OptimizationState,
                                             ir::IRCode, caller::InferenceResult)
@@ -88,7 +88,6 @@ end
 
 struct GetEscapeCache end
 function (::GetEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
-    return false
     codeinst isa CodeInstance || return false
     ecacheinfo = Compiler.traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
