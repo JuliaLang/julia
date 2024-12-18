@@ -2326,18 +2326,21 @@ end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], vtypes, sv)
-    # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
+    # rt = sp_type_rewrap(e.args[3], sv.linfo, true) # verify that the result type make sense?
+    # rt === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     atv = e.args[4]::SimpleVector
     at = Vector{Any}(undef, length(atv) + 1)
     at[1] = f
     for i = 1:length(atv)
-        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
-        at[i + 1] === Bottom && return
+        atᵢ = at[i + 1] = sp_type_rewrap(atv[i], frame_instance(sv), false)
+        atᵢ === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
     abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false), sv)
+    rt = e.args[1]
+    isconcretetype(rt) || (rt = Any)
     nothing
 end
 
