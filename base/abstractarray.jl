@@ -835,13 +835,11 @@ similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
 to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
-to_shape(dims::Tuple{Vararg{Union{Integer, AbstractUnitRange, Colon}}}) = map(to_shape, dims)
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
 to_shape(r::OneTo) = Int(last(r))
 to_shape(r::AbstractUnitRange) = r
-to_shape(r::Colon) = r
 
 """
     similar(storagetype, axes)
