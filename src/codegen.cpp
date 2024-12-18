@@ -996,6 +996,15 @@ static const auto jlinvoke_func = new JuliaFunction<>{
             {AttributeSet(),
              Attributes(C, {Attribute::ReadOnly, Attribute::NoCapture})}); },
 };
+static const auto jlinvokeoc_func = new JuliaFunction<>{
+    XSTR(jl_invoke_oc),
+    get_func2_sig,
+    [](LLVMContext &C) { return AttributeList::get(C,
+            AttributeSet(),
+            Attributes(C, {Attribute::NonNull}),
+            {AttributeSet(),
+             Attributes(C, {Attribute::ReadOnly, Attribute::NoCapture})}); },
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -7288,7 +7297,9 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, M
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
-        theFunc = prepare_call(jlinvoke_func);
+        jl_method_instance_t *mi = codeinst->def;
+        bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+        theFunc = prepare_call(is_opaque_closure ? jlinvokeoc_func : jlinvoke_func);
         theFarg = literal_pointer_val(ctx, (jl_value_t*)jl_get_ci_mi(codeinst));
     }
     theFarg = track_pjlvalue(ctx, theFarg);
