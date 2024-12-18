@@ -310,6 +310,7 @@ void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
+    PTR_PIN((void*)p);
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,
     // and thus, this should typically be avoided in new API's

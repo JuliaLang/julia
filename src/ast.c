@@ -780,6 +780,7 @@ static value_t julia_to_list2_noalloc(fl_context_t *fl_ctx, jl_value_t *a, jl_va
 
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_valid)
 {
+    PTR_PIN(v);
     value_t retval;
     if (julia_to_scm_noalloc1(fl_ctx, v, &retval))
         return retval;

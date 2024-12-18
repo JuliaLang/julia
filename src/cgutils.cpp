@@ -570,6 +570,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
+    PTR_PIN(p);
     Value *pgv = literal_pointer_val_slot(ctx, p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
