@@ -1913,4 +1913,41 @@ let result = code_escapes((String,Bool)) do s, c
     @test !is_load_forwardable(result, idx)
 end
 
+# `analyze_escapes` should be able to handle `IRCode` with new nodes
+let code = Any[
+        # block 1
+        #=1=# Expr(:new, Base.RefValue{Bool}, Argument(2))
+        #=2=# Expr(:call, GlobalRef(Core, :getfield), SSAValue(1), 1)
+        #=3=# GotoIfNot(SSAValue(2), 5)
+        # block 2
+        #=4=# nothing
+        # block 3
+        #=5=# Expr(:call, GlobalRef(Core, :setfield!), SSAValue(1), 1, false)
+        #=6=# ReturnNode(nothing)
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool])
+    ir.stmts[1][:type] = Base.RefValue{Bool}
+    Compiler.insert_node!(ir, SSAValue(4), Compiler.NewInstruction(Expr(:call, GlobalRef(Core, :setfield!), SSAValue(1), 1, false), Any), #=attach_after=#false)
+    Compiler.insert_node!(ir, SSAValue(4), Compiler.NewInstruction(GotoNode(3), Any), #=attach_after=#true)
+    ir[SSAValue(6)] = nothing # eliminate the ReturnNode
+    s = Compiler.insert_node!(ir, SSAValue(6), Compiler.NewInstruction(Expr(:call, GlobalRef(Core, :getfield), SSAValue(1), 1), Any), #=attach_after=#false)
+    Compiler.insert_node!(ir, SSAValue(6), Compiler.NewInstruction(ReturnNode(s), Any), #=attach_after=#true)
+    # now this `ir` would look like:
+    # 1 ─ %1 = %new(Base.RefValue{Bool}, _2)::Base.RefValue{Bool}                    │
+    # │   %2 =   builtin Core.getfield(%1, 1)::Any                                   │
+    # └──      goto #3 if not %2                                                     │
+    # 2 ─        builtin Core.setfield!(%1, 1, false)::Any                           │
+    # │        nothing::Any
+    # └──      goto #3
+    # 3 ┄        builtin Core.setfield!(%1, 1, false)::Any                           │
+    # │   %9 =   builtin Core.getfield(%1, 1)::Any                                   │
+    # │        nothing::Any
+    # └──      return %9
+    result = code_escapes(ir, 2)
+    idxs = findall(iscall((result.ir, getfield)), result.ir.stmts.stmt)
+    for idx = idxs
+        @test is_load_forwardable(result, idx)
+    end
+end
+
 end # module test_EA
