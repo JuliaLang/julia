@@ -156,14 +156,13 @@ A lattice for escape information, which holds the following properties:
   * `pc ∈ x.ThrownEscape`: `x` may be thrown at the SSA statement at `pc`
   * `-1 ∈ x.ThrownEscape`: `x` may be thrown at arbitrary points of this call frame (the top)
   This information will be used by `escape_exception!` to propagate potential escapes via exception.
-- `x.AliasInfo::Union{Bool,IndexableFields,Unindexable}`: maintains all possible values
+- `x.ObjectInfo::ObjectInfo`: maintains all possible values
   that can be aliased to fields or array elements of `x`:
-  * `x.AliasInfo === false` indicates the fields/elements of `x` aren't analyzed yet
-  * `x.AliasInfo === true` indicates the fields/elements of `x` can't be analyzed,
+  * `x.ObjectInfo::HasUnanalyzedMemory` indicates the fields/elements of `x` aren't analyzed yet
+  * `x.ObjectInfo::HasUnknownMemory` indicates the fields/elements of `x` can't be analyzed,
     e.g. the type of `x` is not known or is not concrete and thus its fields/elements
     can't be known precisely
-  * `x.AliasInfo::IndexableFields` records all the possible values that can be aliased to fields of object `x` with precise index information
-  * `x.AliasInfo::Unindexable` records all the possible values that can be aliased to fields/elements of `x` without precise index information
+  * `x.ObjectInfo::HasIndexableMemory` records all the possible values that can be aliased to fields of object `x` with precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
   * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
@@ -222,16 +221,17 @@ function copy(x::EscapeInfo)
         copy(x.Liveness))
 end
 
-const ARG_LIVENESS = PCLiveness(BitSet(0))
+ArgLiveness() = PCLiveness(BitSet(0))
 
 NoEscape() = EscapeInfo(false, false, ⊥ₒ, ⊥ₗ)
-ArgEscape() = EscapeInfo(false, false, ⊤ₒ, ARG_LIVENESS)
+ArgEscape() = EscapeInfo(false, false, ⊤ₒ, ArgLiveness())
 AllEscape() = EscapeInfo(true, true, ⊤ₒ, ⊤ₗ)
 
 const ⊥, ⊤ = NoEscape(), AllEscape()
 
 # Convenience names for some ⊑ₑ queries
-has_no_escape(x::EscapeInfo) = !x.ReturnEscape && !x.ThrownEscape && 0 ∉ x.Liveness
+has_no_escape(x::EscapeInfo) =
+    !x.ReturnEscape && !x.ThrownEscape #=&& x.ObjectInfo !== HasUnknownMemory()=# && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 ∈ x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc ∈ x.Liveness
@@ -616,31 +616,10 @@ isaliased(bbstate::BlockEscapeState, x::Union{Argument,SSAValue}, y::Union{Argum
 isaliased(bbstate::BlockEscapeState, xidx::Int, yidx::Int) =
     in_same_set(bbstate.aliasset, xidx, yidx)
 
-struct ArgEscapeInfo
-    escape_bits::UInt8
-end
-function ArgEscapeInfo(x::EscapeInfo)
-    x === ⊤ && return ArgEscapeInfo(ARG_ALL_ESCAPE)
-    escape_bits = 0x00
-    has_return_escape(x) && (escape_bits |= ARG_RETURN_ESCAPE)
-    has_thrown_escape(x) && (escape_bits |= ARG_THROWN_ESCAPE)
-    return ArgEscapeInfo(escape_bits)
-end
-
-const ARG_ALL_ESCAPE    = 0x01 << 0
-const ARG_RETURN_ESCAPE = 0x01 << 1
-const ARG_THROWN_ESCAPE = 0x01 << 2
-
-has_no_escape(x::ArgEscapeInfo)     = !has_all_escape(x) && !has_return_escape(x) && !has_thrown_escape(x)
-has_all_escape(x::ArgEscapeInfo)    = x.escape_bits & ARG_ALL_ESCAPE    ≠ 0
-has_return_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_RETURN_ESCAPE ≠ 0
-has_thrown_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_THROWN_ESCAPE ≠ 0
-
 abstract type Change end
 const Changes = Vector{Change}
 
 const SSAMemoryInfo = IdDict{Int,Any}
-const SSA_MEMORY_INFO = SSAMemoryInfo()
 # TODO CFG-aware `MemoryInfo`:
 # By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
 # to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
@@ -672,8 +651,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
         retescape = BlockEscapeState(ir, nargs)
         currstate = BlockEscapeState(ir, nargs)
     end
-    @assert isempty(SSA_MEMORY_INFO) "SSA_MEMORY_INFO is not empty"
-    ssamemoryinfo = SSA_MEMORY_INFO
+    ssamemoryinfo = IdDict{Int,Any}()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
@@ -691,52 +669,20 @@ Escape information imposed on SSA IR element `x` can be retrieved by `eresult[x]
 struct EscapeResult
     bbescapes::Vector{Union{Nothing,BlockEscapeState{true}}}
     retescape::BlockEscapeState{true}
-    ssamemoryinfo::Union{Nothing,SSAMemoryInfo}
+    ssamemoryinfo::SSAMemoryInfo
     function EscapeResult(astate::AnalysisState)
         bbescapes = Union{Nothing,BlockEscapeState{true}}[bbstate === nothing ?
             nothing : BlockEscapeState{true}(bbstate) for bbstate in astate.bbescapes]
         retescape = BlockEscapeState{true}(astate.retescape)
-        if isempty(astate.ssamemoryinfo)
-            ssamemoryinfo = nothing
-        else
-            ssamemoryinfo = copy(astate.ssamemoryinfo)
-            empty!(astate.ssamemoryinfo)
-        end
-        return new(bbescapes, retescape, ssamemoryinfo)
+        return new(bbescapes, retescape, astate.ssamemoryinfo)
     end
 end
 getindex(eresult::EscapeResult, @nospecialize(x)) = getindex(eresult.retescape, x)
 isaliased(eresult::EscapeResult, @nospecialize(x), @nospecialize(y)) = isaliased(eresult.retescape, x, y)
 getaliases(eresult::EscapeResult, @nospecialize(x)) = getaliases(eresult.retescape, x)
 function is_load_forwardable((; ssamemoryinfo)::EscapeResult, pc::Int)
-    ssamemoryinfo !== nothing || return false
     memoryinfo = ssamemoryinfo[pc]
     return memoryinfo !== ConflictedMemory() && memoryinfo !== UnknownMemory()
-end
-
-struct ArgAliasing
-    aidx::Int
-    bidx::Int
-end
-struct ArgEscapeCache
-    argescapes::Vector{ArgEscapeInfo}
-    argaliases::Vector{ArgAliasing}
-    function ArgEscapeCache(eresult::EscapeResult)
-        nargs = eresult.nargs
-        argescapes = Vector{ArgEscapeInfo}(undef, nargs)
-        argaliases = ArgAliasing[]
-        for i = 1:nargs
-            info = eresult.escapes[i]
-            @assert info.AliasInfo === true
-            argescapes[i] = ArgEscapeInfo(info)
-            for j = (i+1):nargs
-                if isaliased(eresult, i, j)
-                    push!(argaliases, ArgAliasing(i, j))
-                end
-            end
-        end
-        return new(argescapes, argaliases)
-    end
 end
 
 """
@@ -752,6 +698,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
     currbb = 1
     bbs = ir.cfg.blocks
     W = BitSet()
+    W.offset = 0 # for _bits_findnext
     astate = AnalysisState(ir, nargs, get_escape_cache)
     (; currstate) = astate
     while true
@@ -1364,6 +1311,51 @@ end
 
 is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
+struct ArgEscapeInfo
+    escape_bits::UInt8
+end
+function ArgEscapeInfo(x::EscapeInfo)
+    has_all_escape(x) && return ArgEscapeInfo(ARG_ALL_ESCAPE)
+    escape_bits = 0x00
+    has_return_escape(x) && (escape_bits |= ARG_RETURN_ESCAPE)
+    has_thrown_escape(x) && (escape_bits |= ARG_THROWN_ESCAPE)
+    return ArgEscapeInfo(escape_bits)
+end
+
+const ARG_ALL_ESCAPE    = 0x01 << 0
+const ARG_RETURN_ESCAPE = 0x01 << 1
+const ARG_THROWN_ESCAPE = 0x01 << 2
+
+has_no_escape(x::ArgEscapeInfo)     = !has_all_escape(x) && !has_return_escape(x) && !has_thrown_escape(x)
+has_all_escape(x::ArgEscapeInfo)    = x.escape_bits & ARG_ALL_ESCAPE    ≠ 0
+has_return_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_RETURN_ESCAPE ≠ 0
+has_thrown_escape(x::ArgEscapeInfo) = x.escape_bits & ARG_THROWN_ESCAPE ≠ 0
+
+struct ArgAlias
+    aidx::Int
+    bidx::Int
+end
+struct ArgEscapeCache
+    argescapes::Vector{ArgEscapeInfo}
+    argaliases::Vector{ArgAlias}
+    function ArgEscapeCache(eresult::EscapeResult)
+        nargs = eresult.retescape.nargs
+        argescapes = Vector{ArgEscapeInfo}(undef, nargs)
+        argaliases = ArgAlias[]
+        for i = 1:nargs
+            arginfo = eresult[i]
+            @assert arginfo.ObjectInfo === HasUnknownMemory() "Argument's memory information isn't tracked"
+            argescapes[i] = ArgEscapeInfo(arginfo)
+            for j = (i+1):nargs
+                if isaliased(eresult, i, j)
+                    push!(argaliases, ArgAlias(i, j))
+                end
+            end
+        end
+        return new(argescapes, argaliases)
+    end
+end
+
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     codeinst = first(args)
@@ -1407,40 +1399,48 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # COMBAK will this be invalid once we take alias information into account?
             i = nargs
         end
-        argescape = cache.argescapes[i]
-        info = from_interprocedural(argescape, pc)
-        # propagate the escape information imposed on this call argument by the callee
-        error("TODO") # add_escape_change!(astate, arg, info)
-        if has_return_escape(argescape)
-            # if this argument can be "returned", we should also account for possible
-            # aliasing between this argument and the returned value
-            add_alias_change!(astate, ret, arg)
-        end
+        from_interprocedural!(astate, pc, arg, cache.argescapes[i])
+        continue
     end
     for (; aidx, bidx) in cache.argaliases
         add_alias_change!(astate, args[aidx+(first_idx-1)], args[bidx+(first_idx-1)])
     end
     # we should disable the alias analysis on this newly introduced object
-    error("TODO") # add_escape_change!(astate, ret, EscapeInfo(retinfo, true))
+    add_object_info_change!(astate, ret, HasUnknownMemory())
 end
 
 """
-    from_interprocedural(argescape::ArgEscapeInfo, pc::Int) -> x::EscapeInfo
+    from_interprocedural!(argescape::ArgEscapeInfo, pc::Int) -> x::EscapeInfo
 
 Reinterprets the escape information imposed on the call argument which is cached as `argescape`
 in the context of the caller frame, where `pc` is the SSA statement number of the return value.
 """
-function from_interprocedural(argescape::ArgEscapeInfo, pc::Int)
-    has_all_escape(argescape) && return ⊤
-    ThrownEscape = has_thrown_escape(argescape) ? BitSet(pc) : false
-    # TODO implement interprocedural memory effect-analysis:
-    # currently, this essentially disables the entire field analysis–it might be okay from
-    # the SROA point of view, since we can't remove the allocation as far as it's passed to
-    # a callee anyway, but still we may want some field analysis for e.g. stack allocation
-    # or some other IPO optimizations
-    AliasInfo = true
-    Liveness = BitSet(pc)
-    return EscapeInfo(#=ReturnEscape=#false, ThrownEscape, AliasInfo, Liveness)
+function from_interprocedural!(astate::AnalysisState, pc::Int, @nospecialize(arg),
+                               argescape::ArgEscapeInfo)
+    @assert isempty(astate.visited)
+    _from_interprocedural!(astate, pc, arg, argescape)
+    empty!(astate.visited)
+end
+function _from_interprocedural!(astate::AnalysisState, pc::Int, @nospecialize(arg),
+                                argescape::ArgEscapeInfo)
+    with_profitable_irval(astate, arg) do argidx::Int
+        if has_all_escape(argescape)
+            push!(astate.changes, AllEscapeChange(argidx))
+        else
+            if !is_nothrow(astate.ir, pc) && has_thrown_escape(argescape)
+                push!(astate.changes, ThrownEscapeChange(argidx))
+            end
+            if has_return_escape(argescape)
+                _add_alias_change!(astate, argidx, SSAValue(pc))
+            end
+            push!(astate.changes, ObjectInfoChange(argidx, HasUnknownMemory()))
+            push!(astate.changes, LivenessChange(argidx))
+        end
+        # Propagate the updated information to the field values of `x`
+        traverse_object_memory(astate, argidx) do @nospecialize aval
+            _from_interprocedural!(astate, pc, aval, argescape)
+        end
+    end
 end
 
 # escape every argument `(args[6:length(args[3])])` and the name `args[1]`
