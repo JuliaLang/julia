@@ -2020,6 +2020,7 @@ end
 @nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
     hasintersect(widenconst(memlen), Int) || return Bottom
     memt = tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+    memt == Union{} && return memt
     # PartialStruct so that loads of Const `length` get inferred
     return PartialStruct(𝕃, memt, Any[memlen, Ptr{Nothing}])
 end
