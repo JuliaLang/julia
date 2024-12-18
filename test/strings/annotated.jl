@@ -34,6 +34,9 @@
     @test str[3:4] == SubString(str, 3, 4)
     @test str[3:4] != SubString("me")
     @test SubString("me") != str[3:4]
+    @test Base.AnnotatedString(str[3:4]) == SubString(str, 3, 4)
+    @test repeat(SubString(str, 3, 4), 2) == repeat(Base.AnnotatedString(str[3:4]), 2)
+    @test reverse(SubString(str, 3, 4)) == reverse(Base.AnnotatedString(str[3:4]))
     @test Base.AnnotatedString(str[3:4]) ==
         Base.AnnotatedString("me", [(1:2, :thing, 0x01), (1:2, :all, 0x03)])
     @test Base.AnnotatedString(str[3:6]) ==
@@ -247,4 +250,8 @@ end
     @test write(wrapio, Base.AnnotatedChar('a', [(:y, 2)])) == 1
     @test read(seekstart(aio), Base.AnnotatedString) ==
         Base.AnnotatedString("heya", [(1:3, :x, 1), (4:4, :y, 2)])
+    # show-ing an AnnotatedIOBuffer
+    aio = Base.AnnotatedIOBuffer()
+    write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
+    @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
 end

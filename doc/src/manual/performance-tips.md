@@ -1058,12 +1058,12 @@ the output. As a trivial example, compare
 
 ```jldoctest prealloc
 julia> function xinc(x)
-           return [x, x+1, x+2]
+           return [x + i for i  in 1:3000]
        end;
 
 julia> function loopinc()
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                ret = xinc(i)
                y += ret[2]
            end
@@ -1075,16 +1075,16 @@ with
 
 ```jldoctest prealloc
 julia> function xinc!(ret::AbstractVector{T}, x::T) where T
-           ret[1] = x
-           ret[2] = x+1
-           ret[3] = x+2
+           for i in 1:3000
+               ret[i] = x+i
+           end
            nothing
        end;
 
 julia> function loopinc_prealloc()
-           ret = Vector{Int}(undef, 3)
+           ret = Vector{Int}(undef, 3000)
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                xinc!(ret, i)
                y += ret[2]
            end
@@ -1096,12 +1096,12 @@ Timing results:
 
 ```jldoctest prealloc; filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> @time loopinc()
-  0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
-50000015000000
+  0.297454 seconds (200.00 k allocations: 2.239 GiB, 39.80% gc time)
+5000250000
 
 julia> @time loopinc_prealloc()
-  0.030850 seconds (6 allocations: 288 bytes)
-50000015000000
+  0.009410 seconds (2 allocations: 23.477 KiB)
+5000250000
 ```
 
 Preallocation has other advantages, for example by allowing the caller to control the "output"

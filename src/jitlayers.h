@@ -229,6 +229,7 @@ struct jl_codegen_params_t {
     // outputs
     jl_workqueue_t workqueue;
     std::map<void*, GlobalVariable*> global_targets;
+    jl_array_t *temporary_roots = nullptr;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
@@ -258,9 +259,8 @@ struct jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging_mode;
-    int debug_level;
     bool use_swiftcc = true;
-    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
@@ -271,6 +271,8 @@ struct jl_codegen_params_t {
         if (TargetTriple.isRISCV())
             use_swiftcc = false;
     }
+    jl_codegen_params_t(jl_codegen_params_t &&) JL_NOTSAFEPOINT = default;
+    ~jl_codegen_params_t() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
 };
 
 jl_llvm_functions_t jl_emit_code(
@@ -299,8 +301,7 @@ void emit_specsig_to_fptr1(
         jl_value_t *calltype, jl_value_t *rettype, bool is_for_opaque_closure,
         size_t nargs,
         jl_codegen_params_t &params,
-        Function *target,
-        size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+        Function *target) JL_NOTSAFEPOINT;
 Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
 
@@ -362,14 +363,6 @@ public:
 private:
 };
 using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
-
-#if JL_LLVM_VERSION < 170000
-typedef JITSymbol JL_JITSymbol;
-// The type that is similar to SymbolInfo on LLVM 4.0 is actually
-// `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
-// is expected.
-typedef JITSymbol JL_SymbolInfo;
-#endif
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
@@ -472,7 +465,7 @@ public:
             }
             private:
             ResourcePool &pool;
-            Optional<ResourceT> resource;
+            std::optional<ResourceT> resource;
         };
 
         OwningResource operator*() JL_NOTSAFEPOINT {
@@ -558,16 +551,10 @@ public:
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    #if JL_LLVM_VERSION >= 170000
     Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
     Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
     Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
     SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names) JL_NOTSAFEPOINT;
-    #else
-    JITEvaluatedSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    JITEvaluatedSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
-    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
-    #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
     StringRef getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
@@ -659,10 +646,6 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
-
-#if JL_LLVM_VERSION < 170000
-void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
-#endif
 
 void optimizeDLSyms(Module &M);
 

@@ -2,7 +2,7 @@
 
 using Test
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be

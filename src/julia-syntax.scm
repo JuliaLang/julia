@@ -1038,6 +1038,7 @@
                                '())))))
          (call (core _typebody!) ,name (call (core svec) ,@(insert-struct-shim field-types name)))
          (const (globalref (thismodule) ,name) ,name)
+         (latestworld)
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -1087,6 +1088,7 @@
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 (define (primitive-type-def-expr n name params super)
@@ -1107,6 +1109,7 @@
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
@@ -2744,6 +2747,9 @@
                  ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
                    `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                 ((eq? f 'include)
+                  (let ((r (make-ssavalue)))
+                    `(block (= ,r ,(map expand-forms e)) (latestworld-if-toplevel) ,r)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -4125,7 +4131,8 @@ f(x) = yt(x)
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                        ,body)))))
+                                        ,body)))
+                          (latestworld)))
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
                                (top-stmts (cdr exprs))
@@ -4133,7 +4140,8 @@ f(x) = yt(x)
                           `(toplevel-butfirst
                             (block ,@sp-inits
                                    (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
-                                           ,(julia-bq-macro newlam)))
+                                           ,(julia-bq-macro newlam))
+                                   (latestworld))
                             ,@top-stmts))))
 
                  ;; local case - lift to a new type at top level
@@ -4271,8 +4279,10 @@ f(x) = yt(x)
                    (if (or exists (and short (pair? alldefs)))
                        `(toplevel-butfirst
                          (null)
+                         ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                          ,@sp-inits
-                         ,@mk-method)
+                         ,@mk-method
+                         (latestworld))
                        (begin
                          (put! defined name #t)
                          `(toplevel-butfirst
@@ -4280,7 +4290,8 @@ f(x) = yt(x)
                            ,@typedef
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
-                           ,@mk-method))))))))
+                           ,@mk-method
+                           (latestworld)))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
@@ -4345,7 +4356,6 @@ f(x) = yt(x)
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
-      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
            (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
@@ -4447,15 +4457,16 @@ f(x) = yt(x)
     (define (pop-handler-list src-tokens dest-tokens lab)
       (if (eq? src-tokens dest-tokens)
           #f
-          (let loop ((s src-tokens)
-                     (l '()))
-            (if (not (pair? s))
-                (if (null? lab)
-                  (error "Attempt to jump into catch block")
-                  (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
-            (if (eq? (cdr s) dest-tokens)
-                (cons (car s) l)
-                (loop (cdr s) (cons (car s) l))))))
+          (reverse
+            (let loop ((s src-tokens)
+                       (l '()))
+              (if (not (pair? s))
+                  (if (null? lab)
+                    (error "Attempt to jump into catch block")
+                    (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
+              (if (eq? (cdr s) dest-tokens)
+                  (cons (car s) l)
+                  (loop (cdr s) (cons (car s) l)))))))
     (define (emit-return tail x)
       (define (emit- x)
         (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
@@ -4512,6 +4523,7 @@ f(x) = yt(x)
           ((struct_type)       "\"struct\" expression")
           ((method)            "method definition")
           ((set_binding_type!) (string "type declaration for global \"" (deparse (cadr e)) "\""))
+          ((latestworld)       "World age increment")
           (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " not at top level"))))
@@ -4594,14 +4606,20 @@ f(x) = yt(x)
                                  (cdr cnd)
                                  (list cnd))))))
           tests))
+    (define (emit-assignment-or-setglobal lhs rhs)
+      (if (globalref? lhs)
+        (begin
+          (emit `(global ,lhs))
+          (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
+        (emit `(= ,lhs ,rhs))))
     (define (emit-assignment lhs rhs)
       (if rhs
           (if (valid-ir-rvalue? lhs rhs)
-              (emit `(= ,lhs ,rhs))
+              (emit-assignment-or-setglobal lhs rhs)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,rhs))
-                (emit `(= ,lhs ,rr))))
-          (emit `(= ,lhs (null)))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
+                (emit-assignment-or-setglobal lhs rr)))
+          (emit-assignment-or-setglobal lhs `(null))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
@@ -4680,7 +4698,7 @@ f(x) = yt(x)
                                        rhs (make-ssavalue))))
                            (if (not (eq? rr rhs))
                                (emit `(= ,rr ,rhs)))
-                           (emit `(= ,lhs ,rr))
+                           (emit-assignment-or-setglobal lhs rr)
                            (if tail (emit-return tail rr))
                            rr)
                          (emit-assignment lhs rhs))))))
@@ -4963,7 +4981,12 @@ f(x) = yt(x)
                      (else  (emit temp)))))
 
             ;; top level expressions
-            ((thunk module)
+            ((thunk)
+             (check-top-level e)
+             (emit e)
+             (if tail (emit-return tail '(null)))
+             '(null))
+            ((module)
              (check-top-level e)
              (emit e)
              (if tail (emit-return tail '(null)))
@@ -4979,10 +5002,17 @@ f(x) = yt(x)
                (if tail (emit-return tail val))
                val))
 
+            ((latestworld-if-toplevel)
+             (if (null? (cadr lam))
+               (emit `(latestworld)))
+             '(null))
+
             ;; other top level expressions
-            ((import using export public)
+            ((import using export public latestworld)
              (check-top-level e)
-             (emit e)
+             (if (not (eq? (car e) 'latestworld))
+              (emit e))
+             (emit `(latestworld))
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (if (and tail (not have-ret?))
                    (emit-return tail '(null))))

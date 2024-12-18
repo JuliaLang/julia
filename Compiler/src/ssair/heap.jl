@@ -3,12 +3,10 @@
 # Heap operations on flat vectors
 # -------------------------------
 
-
 # Binary heap indexing
 heapleft(i::Integer) = 2i
 heapright(i::Integer) = 2i + 1
 heapparent(i::Integer) = div(i, 2)
-
 
 # Binary min-heap percolate down.
 function percolate_down!(xs::Vector, i::Integer, x, o::Ordering, len::Integer=length(xs))
@@ -59,7 +57,6 @@ function heappush!(xs::Vector, x, o::Ordering)
     percolate_up!(xs, i, @inbounds(xs[i]), o)
     return xs
 end
-
 
 """
     heapify!(v, ord::Ordering)

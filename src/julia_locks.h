@@ -115,7 +115,7 @@ public:
     explicit jl_unique_gcsafe_lock(std::mutex &native) JL_NOTSAFEPOINT_ENTER
     {
         jl_task_t *ct = jl_current_task;
-        gc_state = jl_gc_safe_enter(ct->ptls);
+        gc_state = jl_gc_safe_enter(ct->ptls); // contains jl_gc_safepoint after enter
         this->native = std::unique_lock(native);
         ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
     }
@@ -123,7 +123,8 @@ public:
     jl_unique_gcsafe_lock(jl_unique_gcsafe_lock &native) = delete;
     ~jl_unique_gcsafe_lock() JL_NOTSAFEPOINT_LEAVE {
         jl_task_t *ct = jl_current_task;
-        jl_gc_safe_leave(ct->ptls, gc_state);
+        native.unlock();
+        jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint after leave
         ct->ptls->engine_nqueued--; // enable finalizers (but don't run them until the next gc)
     }
     void wait(std::condition_variable& cond) JL_NOTSAFEPOINT {

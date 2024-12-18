@@ -60,6 +60,17 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
     }
 }
 
+jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min_world, size_t max_world) {
+    if (!b)
+        return NULL;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, min_world);
+    if (!bpart)
+        return NULL;
+    if (jl_atomic_load_relaxed(&bpart->max_world) < max_world)
+        return NULL;
+    return bpart;
+}
+
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
