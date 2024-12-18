@@ -37,6 +37,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -1297,6 +1305,12 @@ kw";"
 
 Short-circuiting boolean AND.
 
+This is equivalent to `x ? y : false`: it returns `false` if `x` is `false` and the result of evaluating `y` if `x` is `true`.
+Note that if `y` is an expression, it is only evaluated when `x` is `true`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) && (statement)` can be used as shorthand for
+`if condition; statement; end` for an arbitrary `statement`.
+
 See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
 # Examples
@@ -1308,6 +1322,9 @@ true
 
 julia> x < 0 && error("expected positive x")
 false
+
+julia> x > 0 && "not a boolean"
+"not a boolean"
 ```
 """
 kw"&&"
@@ -1316,6 +1333,12 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+This is equivalent to `x ? true : y`: it returns `true` if `x` is `true` and the result of evaluating `y` if `x` is `false`.
+Note that if `y` is an expression, it is only evaluated when `x` is `false`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
+`if !(condition); statement; end` for an arbitrary `statement`.
 
 See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
@@ -1326,6 +1349,9 @@ true
 
 julia> false || true || println("neither is true!")
 true
+
+julia> pi < 3 || "not a boolean"
+"not a boolean"
 ```
 """
 kw"||"
@@ -1489,7 +1515,7 @@ kw"new"
 """
     where
 
-The `where` keyword creates a type that is an iterated union of other types, over all
+The `where` keyword creates a [`UnionAll`](@ref) type, which may be thought of as an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
@@ -1681,7 +1707,7 @@ ErrorException
 """
     FieldError(type::DataType, field::Symbol)
 
-An operation tried to access invalid `field` of `type`.
+An operation tried to access invalid `field` on an object of `type`.
 
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
@@ -2004,20 +2030,48 @@ applicable
 
 """
     invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Method, args...; kwargs...)
+    invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
+implementation of a more specific method of the same function). However, because this means
+the runtime must do more work, `invoke` is generally also slower--sometimes significantly
+so--than doing normal dispatch with a regular call.
 
-Be careful when using `invoke` for functions that you don't write.  What definition is used
+Be careful when using `invoke` for functions that you don't write. What definition is used
 for given `argtypes` is an implementation detail unless the function is explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
 visible if you use `invoke`.
+
+# Passing a `Method` instead of a signature
+The `argtypes` argument may be a `Method`, in which case the ordinary method table lookup is
+bypassed entirely and the given method is invoked directly. Needing this feature is uncommon.
+Note in particular that the specified `Method` may be entirely unreachable from ordinary dispatch
+(or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
+If the method is part of the ordinary method table, this call behaves similar
+to `invoke(f, method.sig, args...)`.
+
+!!! compat "Julia 1.12"
+    Passing a `Method` requires Julia 1.12.
+
+# Passing a `CodeInstance` instead of a signature
+The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
+The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
+`invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
+parent `MethodInstance` or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a `CodeInstance` whose behavior does not match the constraints
+specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
+by external compilers), it may be an error to invoke them after passing through precompilation.
+This is an advanced interface intended for use with external compiler plugins.
+
+!!! compat "Julia 1.12"
+    Passing a `CodeInstance` requires Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -2580,7 +2634,7 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
 julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
@@ -2588,7 +2642,7 @@ ERROR: UndefVarError: `a` not defined in `M`
 Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
 Stacktrace:
  [1] getproperty(x::Module, f::Symbol)
-   @ Base ./Base.jl:42
+   @ Base ./Base_compiler.jl:40
  [2] top-level scope
    @ none:1
 

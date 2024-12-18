@@ -639,11 +639,26 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
-    try
-        getipaddr(IPv6) in getipaddrs(IPv6)
-    catch
-        if !isempty(getipaddrs(IPv6))
-            @test "getipaddr(IPv6) errored when it shouldn't have!"
+
+    has_ipv4 = !isempty(getipaddrs(IPv4))
+    if has_ipv4
+        @test getipaddr(IPv4) in getipaddrs(IPv4)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv4)
+    end
+
+    has_ipv6 = !isempty(getipaddrs(IPv6))
+    if has_ipv6
+        @test getipaddr(IPv6) in getipaddrs(IPv6)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv6)
+    end
+
+    @testset "getipaddr() prefers IPv4 over IPv6" begin
+        if has_ipv4
+            @test getipaddr() isa IPv4
+        else
+            @test getipaddr() isa IPv6
         end
     end
 

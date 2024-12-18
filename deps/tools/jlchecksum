@@ -63,7 +63,7 @@ find_checksum()
         fi
     done
     if [ ! -f "$DEPSDIR/checksums/$BASENAME/$CHECKSUM_TYPE" ]; then
-        if [ ${TAGGED_RELEASE_BANNER:-} ]; then
+        if [ "${TAGGED_RELEASE_BANNER:-}" ]; then
             echo "WARNING: $CHECKSUM_TYPE checksum for $BASENAME not found in deps/checksums/, failing release build." >&2
             exit 3
         fi

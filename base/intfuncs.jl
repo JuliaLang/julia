@@ -792,7 +792,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
@@ -806,7 +806,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 # 2-digit decimal characters ("00":"99")
@@ -876,7 +876,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     a = StringMemory(n)
     append_c_digits_fast(n, x, a, 1)
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
@@ -897,7 +897,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 const base36digits = UInt8['0':'9';'a':'z']
@@ -922,7 +922,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 split_sign(n::Integer) = unsigned(abs(n)), n < 0
@@ -998,7 +998,7 @@ function bitstring(x::T) where {T}
         x = lshr_int(x, 4)
         i -= 4
     end
-    return String(str)
+    return unsafe_takestring(str)
 end
 
 """
@@ -1205,6 +1205,8 @@ julia> binomial(-5, 3)
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
+
 Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
     k < 0 && return zero(T)
@@ -1233,7 +1235,6 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
-binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)

@@ -70,7 +70,7 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world, jl_codeinstance_lookup_t lookup) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
@@ -109,22 +109,6 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
 }
 
 JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
-
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraMPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define CGSCC_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraCGPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraFPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT void LLVMExtraLPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
-
-#include "llvm-julia-passes.inc"
-
-#undef MODULE_PASS
-#undef CGSCC_PASS
-#undef FUNCTION_PASS
-#undef LOOP_PASS
 
 //LLVM C api to the julia JIT
 JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE

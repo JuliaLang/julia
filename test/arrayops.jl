@@ -307,34 +307,40 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
-
-
-    a = rand(8, 7)
-    @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
-    @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
-    @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
-    @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
-    @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
-
-    @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
-    @test_throws UndefKeywordError insertdims(a)
-    @test_throws ArgumentError insertdims(a, dims=0)
-    @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
-    @test_throws ArgumentError insertdims(a, dims=4)
-    @test_throws ArgumentError insertdims(a, dims=6)
-
-    # insertdims and dropdims are inverses
-    b = rand(1,1,1,5,1,1,7)
-    for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
-        @test dropdims(insertdims(a; dims); dims) == a
-        @test insertdims(dropdims(b; dims); dims) == b
+    @testset "insertdims" begin
+        a = rand(8, 7)
+        @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+        @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
+        @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
+        @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+        @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
+        @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
+        @test_throws UndefKeywordError insertdims(a)
+        @test_throws ArgumentError insertdims(a, dims=0)
+        @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+        @test_throws ArgumentError insertdims(a, dims=4)
+        @test_throws ArgumentError insertdims(a, dims=6)
+        A = reshape(1:6, 2, 3)
+        @test_throws ArgumentError insertdims(A, dims=(2, 2))
+        D = insertdims(A, dims=())
+        @test size(D) == size(A)
+        @test D == A
+        E = ones(2, 3, 4)
+        F = insertdims(E, dims=(2, 4, 6))
+        @test size(F) == (2, 1, 3, 1, 4, 1)
+        # insertdims and dropdims are inverses
+        b = rand(1,1,1,5,1,1,7)
+        for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
+            @test dropdims(insertdims(a; dims); dims) == a
+            @test insertdims(dropdims(b; dims); dims) == b
+        end
     end
 
     sz = (5,8,7)
@@ -1409,6 +1415,14 @@ end
 end
 
 @testset "lexicographic comparison" begin
+    @testset "zero-dimensional" begin
+        vals = (0, 0.0, 1, 1.0)
+        for l ∈ vals
+            for r ∈ vals
+                @test cmp(fill(l), fill(r)) == cmp(l, r)
+            end
+        end
+    end
     @test cmp([1.0], [1]) == 0
     @test cmp([1], [1.0]) == 0
     @test cmp([1, 1], [1, 1]) == 0
@@ -2659,31 +2673,32 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C, D, E
-    A = [-10,0,3]
-    B = [-10.0,0.0,3.0]
-    C = [1,im,0]
+    let A, B, C, D, E # Suppress :latestworld to get good inference for the allocations test
+        A = [-10,0,3]
+        B = [-10.0,0.0,3.0]
+        C = [1,im,0]
 
-    @test sign.(A) == [-1,0,1]
-    @test sign.(B) == [-1,0,1]
-    @test typeof(sign.(A)) == Vector{Int}
-    @test typeof(sign.(B)) == Vector{Float64}
+        @test sign.(A) == [-1,0,1]
+        @test sign.(B) == [-1,0,1]
+        @test typeof(sign.(A)) == Vector{Int}
+        @test typeof(sign.(B)) == Vector{Float64}
 
-    @test conj(A) == A
-    @test conj!(copy(A)) == A
-    @test conj(B) == A
-    @test conj(C) == [1,-im,0]
-    @test typeof(conj(A)) == Vector{Int}
-    @test typeof(conj(B)) == Vector{Float64}
-    @test typeof(conj(C)) == Vector{Complex{Int}}
-    D = [C copy(C); copy(C) copy(C)]
-    @test conj(D) == conj!(copy(D))
-    E = [D, copy(D)]
-    @test conj(E) == conj!(copy(E))
-    @test (@allocations conj!(E)) == 0
+        @test conj(A) == A
+        @test conj!(copy(A)) == A
+        @test conj(B) == A
+        @test conj(C) == [1,-im,0]
+        @test typeof(conj(A)) == Vector{Int}
+        @test typeof(conj(B)) == Vector{Float64}
+        @test typeof(conj(C)) == Vector{Complex{Int}}
+        D = [C copy(C); copy(C) copy(C)]
+        @test conj(D) == conj!(copy(D))
+        E = [D, copy(D)]
+        @test conj(E) == conj!(copy(E))
+        @test (@allocations conj!(E)) == 0
 
-    @test .~A == [9,-1,-4]
-    @test typeof(.~A) == Vector{Int}
+        @test .~A == [9,-1,-4]
+        @test typeof(.~A) == Vector{Int}
+    end
 end
 
 # @inbounds is expression-like, returning its value; #15558
