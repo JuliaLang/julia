@@ -671,13 +671,12 @@ end
 
 function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
-        # ir = sv.ir
-        # nargs = Int(opt.src.nargs)
-        # eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(interp))
-        # argescapes = EscapeAnalysis.ArgEscapeCache(eresult)
-        # stack_analysis_result!(sv.result, argescapes)
-        # validate_mutable_arg_escapes!(eresult, sv)
-        sv.all_effect_free = false
+        ir = sv.ir
+        nargs = Int(opt.src.nargs)
+        eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(interp))
+        argescapes = EscapeAnalysis.ArgEscapeCache(eresult)
+        stack_analysis_result!(sv.result, argescapes)
+        validate_mutable_arg_escapes!(eresult, sv)
     end
 
     any_refinable(sv) || return false
