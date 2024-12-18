@@ -140,6 +140,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_argument_type);
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
+        INSERT_TAG(jl_constset_type);
         INSERT_TAG(jl_partial_struct_type);
         INSERT_TAG(jl_partial_opaque_type);
         INSERT_TAG(jl_interconditional_type);
