@@ -173,6 +173,9 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
 end
 
 function copy(a::T) where {T<:Memory}
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
     newmem = T(undef, length(a))
     @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
 end
