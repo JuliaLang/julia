@@ -2722,6 +2722,7 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
             initial_invoke = jl_atomic_load_acquire(&ci->invoke); // happens-before for subsequent read of fptr
         }
         void *fptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
+        // TODO: if fptr is NULL, it may mean we read this too fast, and should have spun and waited for jl_compile_codeinst to finish
         if (initial_invoke == NULL || fptr == NULL) {
             *invoke = initial_invoke;
             *specptr = NULL;
