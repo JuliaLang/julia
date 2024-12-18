@@ -573,7 +573,6 @@ _reshape_nov(A, inds) = _reshape(no_offset_view(A), inds)
 # And for non-offset axes, we can just return a reshape of the parent directly
 Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
-
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))

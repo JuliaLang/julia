@@ -125,19 +125,25 @@ reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Int
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
-# convert axes to sizes using to_shape, and convert colons to sizes using _reshape_uncolon
+# Replace `OneTo`s by their lengths, and convert colons to sizes using _reshape_uncolon
 # We add a level of indirection to avoid method ambiguities in reshape
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = _reshape_maybecolon(parent, dims)
 _reshape_maybecolon(parent::AbstractVector, ::Tuple{Colon}) = parent
-_reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = reshape(parent, _reshape_uncolon(length(parent), to_shape(dims)))
+# helper function analogous to to_shape, but this doesn't cast Integers to Int
+# this allows dispatching to a specialized reshape(M::MyArray, dims::Tuple{Vararg{Integer}})
+_to_shape(i::AbstractOneTo) = length(i)
+_to_shape(i::Union{Integer, Colon}) = i
+_to_shape(t::Tuple) = map(_to_shape, t)
+_reshape_maybecolon(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon,AbstractOneTo}}}) = reshape(parent, _reshape_uncolon(parent, _to_shape(dims)))
 
 @noinline _reshape_throwcolon(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
         " may have at most one omitted dimension specified by `Colon()`")))
 @noinline _reshape_throwsize(lenA, dims) = throw(DimensionMismatch(LazyString("array size ", lenA,
     " must be divisible by the product of the new dimensions ", dims)))
 
-_reshape_uncolon(len, ::Tuple{Colon}) = len
-@inline function _reshape_uncolon(len, _dims::Tuple{Vararg{Union{Integer, Colon}}})
+_reshape_uncolon(parent::AbstractArray, dims::Tuple) =  _reshape_uncolon(length(parent), dims)
+_reshape_uncolon(len::Integer, ::Tuple{Colon}) = len
+@inline function _reshape_uncolon(len::Integer, _dims::Tuple{Vararg{Union{Integer, Colon}}})
     # promote the dims to `Int` at least
     dims = map(x -> x isa Colon ? x : promote_type(typeof(x), Int)(x), _dims)
     dims isa Tuple{Vararg{Integer}} && return dims
