@@ -4103,6 +4103,17 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
         end
         return a
     end == Union{Int32,Int64}
+
+    @test Base.infer_return_type((Vector{Any},)) do args
+        codeinst = first(args)
+        if codeinst isa Core.MethodInstance
+            mi = codeinst
+        else
+            codeinst::Core.CodeInstance
+            mi = codeinst.def
+        end
+        return mi
+    end == Core.MethodInstance
 end
 
 callsig_backprop_basic(::Int) = nothing
