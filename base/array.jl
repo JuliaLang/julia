@@ -347,9 +347,12 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 copy
 
 @eval function copy(a::Array)
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
     ref = a.ref
     newmem = typeof(ref.mem)(undef, length(a))
-    unsafe_copyto!(memoryref(newmem), ref, length(a))
+    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 

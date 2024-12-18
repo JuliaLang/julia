@@ -174,7 +174,7 @@ end
 
 function copy(a::T) where {T<:Memory}
     newmem = T(undef, length(a))
-    unsafe_copyto!(newmem, 1, a, 1, length(a))
+    @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
 end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
