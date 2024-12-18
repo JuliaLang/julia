@@ -382,7 +382,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                 jl_method_instance_t *mi = codeinst->def;
                 size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
                 bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
-                emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke, 0, 0);
+                emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke);
                 jl_gc_unsafe_leave(ct->ptls, gc_state);
                 preal_decl = ""; // no need to fixup the name
             }
@@ -713,7 +713,7 @@ static void jl_emit_codeinst_to_jit(
     int waiting = jl_analyze_workqueue(codeinst, params);
     if (waiting) {
         auto release = std::move(params.tsctx_lock); // unlock again before moving from it
-        incompletemodules.insert(std::pair(codeinst, std::make_tuple(std::move(params), waiting)));
+        incompletemodules.try_emplace(codeinst, std::move(params), waiting);
     }
     else {
         finish_params(result_m.getModuleUnlocked(), params);
@@ -760,7 +760,7 @@ static void _jl_compile_codeinst(
 }
 
 
-const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -774,45 +774,68 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
+    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
+    DataLayout DL = pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout();
+    Triple TargetTriple = pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple();
     orc::ThreadSafeContext ctx;
     auto into = unwrap(llvmmod);
-    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
+    bool success = true;
+    const char *name = "";
+    SmallVector<jl_code_instance_t*,0> dependencies;
     if (into == NULL) {
-        if (!pparams) {
-            ctx = jl_ExecutionEngine->makeContext();
-        }
-        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx,  pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
+        ctx = pparams ? pparams->tsctx : jl_ExecutionEngine->makeContext();
+        backing = jl_create_ts_module("cextern", ctx, DL, TargetTriple);
         into = &backing;
     }
-    bool success = true;
-    {
-        auto Lock = into->getContext().getLock();
-        Module *M = into->getModuleUnlocked();
-        jl_codegen_params_t params(into->getContext(), M->getDataLayout(), Triple(M->getTargetTriple()));
-        params.imaging_mode = imaging_default();
+    { // params scope
+        jl_codegen_params_t params(into->getContext(), DL, TargetTriple);
         if (pparams == NULL) {
-            M->getContext().setDiscardValueNames(true);
+            params.cache = p == NULL;
+            params.imaging_mode = imaging_default();
+            params.tsctx.getContext()->setDiscardValueNames(true);
             pparams = &params;
         }
-        assert(pparams->tsctx.getContext() == into->getContext().getContext());
-        const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
-        if (!sysimg) {
-            jl_unique_gcsafe_lock lock(extern_c_lock);
-            if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
-                success = false;
+        Module &M = *into->getModuleUnlocked();
+        assert(pparams->tsctx.getContext() == &M.getContext());
+        name = jl_generate_ccallable(&M, sysimg, declrt, sigt, *pparams);
+        if (!sysimg && !p) {
+            { // drop lock to keep analyzer happy (since it doesn't know we have the only reference to it)
+                auto release = std::move(params.tsctx_lock);
             }
-            if (success && p == NULL) {
-                jl_jit_globals(params.global_targets);
-                assert(params.workqueue.empty());
-                if (params._shared_module) {
-                    jl_ExecutionEngine->optimizeDLSyms(*params._shared_module); // safepoint
-                    jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
+            { // lock scope
+                jl_unique_gcsafe_lock lock(extern_c_lock);
+                if (jl_ExecutionEngine->getGlobalValueAddress(name))
+                    success = false;
+            }
+            params.tsctx_lock = params.tsctx.getLock(); // re-acquire lock
+            if (success && params.cache) {
+                for (auto &it : params.workqueue) {
+                    jl_code_instance_t *codeinst = it.first;
+                    JL_GC_PROMISE_ROOTED(codeinst);
+                    dependencies.push_back(codeinst);
+                    recursive_compile_graph(codeinst, nullptr);
                 }
+                jl_analyze_workqueue(nullptr, params, true);
+                assert(params.workqueue.empty());
+                finish_params(&M, params);
             }
-            if (success && llvmmod == NULL) {
-                jl_ExecutionEngine->optimizeDLSyms(*M); // safepoint
-                jl_ExecutionEngine->addModule(std::move(*into));
+        }
+        pparams = nullptr;
+    }
+    if (!sysimg && success && llvmmod == NULL) {
+        { // lock scope
+            jl_unique_gcsafe_lock lock(extern_c_lock);
+            if (!jl_ExecutionEngine->getGlobalValueAddress(name)) {
+                for (auto dep : dependencies)
+                    jl_compile_codeinst_now(dep);
+                {
+                    auto Lock = backing.getContext().getLock();
+                    jl_ExecutionEngine->optimizeDLSyms(*backing.getModuleUnlocked()); // safepoint
+                }
+                jl_ExecutionEngine->addModule(std::move(backing));
+                success = jl_ExecutionEngine->getGlobalValueAddress(name);
+                assert(success);
             }
         }
     }

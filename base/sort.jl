@@ -4,7 +4,7 @@ module Sort
 
 using Base.Order
 
-using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
+using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
     sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
@@ -1482,8 +1482,9 @@ InitialOptimizations(next) = SubArrayOptimization(
 `DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
 algorithm should be used, but does not specify exactly which algorithm.
 
-Currently, it is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of
-Radix, Insertion, Counting, Quick sorts.
+Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
+composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
+Counting, Quick sorts.
 
 We begin with MissingOptimization because it has no runtime cost when it is not
 triggered and can enable other optimizations to be applied later. For example,
@@ -1619,6 +1620,7 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::NTuple) = DEFAULT_STABLE
 
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
@@ -1756,6 +1758,41 @@ julia> v
 ```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+
+function sort(x::NTuple;
+              alg::Algorithm=defalg(x),
+              lt=isless,
+              by=identity,
+              rev::Union{Bool,Nothing}=nothing,
+              order::Ordering=Forward,
+              scratch::Union{Vector, Nothing}=nothing)
+    # Can't do this check with type parameters because of https://github.com/JuliaLang/julia/issues/56698
+    scratch === nothing || eltype(x) == eltype(scratch) || throw(ArgumentError("scratch has the wrong eltype"))
+    _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
+end
+# Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
+# or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
+function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
+    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
+    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
+    if length(x) > 9
+        v = copymutable(x)
+        _sort!(v, a, o, kw)
+        typeof(x)(v)
+    else
+        _mergesort(x, o)
+    end
+end
+_mergesort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _mergesort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_mergesort(a, o), _mergesort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 

@@ -3240,8 +3240,16 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
 end
 
 function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
-    (;handlers, handler_at) = sv.handler_info::HandlerInfo
-    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+    (;handler_info) = sv
+    if handler_info === nothing
+        return the_exception_info(Any)
+    end
+    (;handlers, handler_at) = handler_info
+    handler_id = handler_at[sv.currpc][2]
+    if handler_id === 0
+        return the_exception_info(Any)
+    end
+    return the_exception_info(handlers[handler_id].exct)
 end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
