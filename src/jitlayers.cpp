@@ -445,15 +445,6 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
     return params.workqueue.size();
 }
 
-// test whether codeinst->invoke is usable already without further compilation needed
-static bool jl_is_compiled_codeinst(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT
-{
-    auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-    if (invoke == nullptr || invoke == jl_fptr_wait_for_compiled_addr)
-        return false;
-    return true;
-}
-
 // move codeinst (and deps) from incompletemodules to emitted modules
 // and populate compileready from complete_graph
 static void prepare_compile(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER

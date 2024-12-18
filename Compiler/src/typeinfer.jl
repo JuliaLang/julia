@@ -126,7 +126,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
-            relocatability = 0x0
             if inferred_result isa CodeInfo
                 if may_compress(interp)
                     nslots = length(inferred_result.slotflags)
@@ -140,6 +139,8 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
                 inferred_result = nothing
+            else
+                relocatability = 0x0
             end
             if isa(inferred_result, String)
                 t = @_gc_preserve_begin inferred_result
@@ -147,7 +148,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
                 @_gc_preserve_end t
             end
         end
-        # n.b. relocatability = isa(inferred_result, String) && inferred_result[end]
+        # n.b. relocatability = !isa(inferred_result, String) || inferred_result[end]
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
@@ -489,7 +490,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             rettype_const = nothing
             const_flags = 0x0
         end
-        relocatability = 0x0
+        relocatability = 0x1
         di = nothing
         edges = empty_edges # `edges` will be updated within `finish!`
         ci = result.ci
