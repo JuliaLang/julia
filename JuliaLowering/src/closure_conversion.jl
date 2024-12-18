@@ -31,6 +31,49 @@ function add_lambda_local!(ctx::ClosureConversionCtx, id)
     init_lambda_binding(ctx.lambda_bindings, id)
 end
 
+# Access captured variable from inside a closure
+function captured_var_access(ctx, ex)
+    cinfo = ctx.closure_info
+    field_sym = cinfo.field_syms[cinfo.field_name_inds[ex.var_id]]
+    @ast ctx ex [K"call"
+        "getfield"::K"core"
+        # FIXME: attributing the self binding to srcref=ex gives misleading printing.
+        # We should carry provenance with each binding to fix this.
+        ctx.lambda_bindings.self::K"BindingId"
+        field_sym
+    ]
+end
+
+function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
+    undef_var = new_mutable_var(ctx, var, lookup_binding(ctx, var.var_id).name)
+    @ast ctx var [K"block"
+        box := box_ex
+        # Lower in an UndefVar check to a similarly named variable
+        # (ref #20016) so that closure lowering Box introduction
+        # doesn't impact the error message and the compiler is expected
+        # to fold away the extraneous null check
+        #
+        # TODO: Ideally the runtime would rely on provenance info for
+        # this error and we can remove isdefined check.
+        [K"if" [K"call"
+                "isdefined"::K"core"
+                box
+                "contents"::K"Symbol"
+            ]
+            ::K"TOMBSTONE"
+            [K"block"
+                 [K"newvar" undef_var]
+                 undef_var
+            ]
+        ]
+        [K"call"
+            "getfield"::K"core"
+            box
+            "contents"::K"Symbol"
+        ]
+    ]
+end
+
 # Convert `ex` to `type` by calling `convert(type, ex)` when necessary.
 #
 # Used for converting the right hand side of an assignment to a typed local or
@@ -118,37 +161,32 @@ function convert_assignment(ctx, ex)
     if binfo.kind == :global
         convert_global_assignment(ctx, ex, var, rhs0)
     else
-        closed   = false # TODO
-        captured = false # TODO
-        @assert binfo.kind == :local
-        if isnothing(binfo.type) && !closed && !captured
+        @assert binfo.kind == :local || binfo.kind == :argument
+        lbinfo = get(ctx.lambda_bindings.bindings, var.var_id, nothing)
+        self_captured = !isnothing(lbinfo) && lbinfo.is_captured
+        captured      = binfo.is_captured
+        if isnothing(binfo.type) && !self_captured && !captured
             @ast ctx ex [K"=" var rhs0]
         else
-            @assert binfo.kind == :local
             # Typed local
-            tmp_rhs0 = is_simple_atom(ctx, rhs0) ? nothing : ssavar(ctx, rhs0)
-            rhs1 = isnothing(tmp_rhs0) ? rhs0 : tmp_rhs0
-            rhs = isnothing(binfo.type) ? rhs1 :
-                  convert_for_type_decl(ctx, ex, rhs1, _convert_closures(ctx, binfo.type), true)
-            assgn = if closed
-                @assert false # TODO
-            elseif captured
-                @assert false # TODO
+            tmp_rhs0 = ssavar(ctx, rhs0)
+            rhs = isnothing(binfo.type) ? tmp_rhs0 :
+                  convert_for_type_decl(ctx, ex, tmp_rhs0, _convert_closures(ctx, binfo.type), true)
+            assignment = if self_captured || captured
+                @ast ctx ex [K"call"
+                    "setfield!"::K"core"
+                    self_captured ? captured_var_access(ctx, var) : var
+                    "contents"::K"Symbol"
+                    rhs
+                ]
             else
                 @ast ctx ex [K"=" var rhs]
             end
-            if isnothing(tmp_rhs0)
-                @ast ctx ex [K"block"
-                    assgn
-                    rhs0
-                ]
-            else
-                @ast ctx ex [K"block"
-                    [K"=" tmp_rhs0 rhs0]
-                    assgn
-                    tmp_rhs0
-                ]
-            end
+            @ast ctx ex [K"block"
+                [K"=" tmp_rhs0 rhs0]
+                assignment
+                tmp_rhs0
+            ]
         end
     end
 end
@@ -237,40 +275,10 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     if k == K"BindingId"
         id = ex.var_id
         lbinfo = get(ctx.lambda_bindings.bindings, id, nothing)
-        if !isnothing(lbinfo) && lbinfo.is_captured
-            cinfo = ctx.closure_info
-            field_sym = cinfo.field_syms[cinfo.field_name_inds[id]]
-            undef_var = new_mutable_var(ctx, ex, lookup_binding(ctx, id).name)
-            @ast ctx ex [K"block"
-                box := [K"call"
-                    "getfield"::K"core"
-                    ctx.lambda_bindings.self::K"BindingId"
-                    field_sym
-                ]
-                # Lower in an UndefVar check to a similarly named variable
-                # (ref #20016) so that closure lowering Box introduction
-                # doesn't impact the error message and the compiler is expected
-                # to fold away the extraneous null check
-                #
-                # TODO: Ideally the runtime would rely on provenance info for
-                # this error and we can remove isdefined check.
-                [K"if" [K"call"
-                        "isdefined"::K"core"
-                        box
-                        "contents"::K"Symbol"
-                    ]
-                    "nothing"::K"core"
-                    [K"block"
-                         [K"newvar" undef_var]
-                         undef_var
-                    ]
-                ]
-                [K"call"
-                    "getfield"::K"core"
-                    box
-                    "contents"::K"Symbol"
-                ]
-            ]
+        if !isnothing(lbinfo) && lbinfo.is_captured # TODO: && vinfo:asgn cv ??
+            get_box_contents(ctx, ex, captured_var_access(ctx, ex))
+        elseif lookup_binding(ctx, id).is_captured # TODO: && vinfo:asgn vi
+            get_box_contents(ctx, ex, ex)
         else
             ex
         end
@@ -294,6 +302,16 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 binfo.name::K"Symbol"
                 _convert_closures(ctx, ex[2])
             ]
+        end
+    elseif k == K"local"
+        var = ex[1]
+        binfo = lookup_binding(ctx, var)
+        if binfo.is_captured
+            @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
+        elseif !binfo.is_always_defined
+            @ast ctx ex [K"newvar" var]
+        else
+            makeleaf(ctx, ex, K"TOMBSTONE")
         end
     elseif k == K"::"
         _convert_closures(ctx,
@@ -322,10 +340,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ctx.closure_infos[func_name_id] = closure_info
                 init_closure_args = SyntaxList(ctx)
                 for id in field_orig_bindings
-                    # FIXME: This isn't actually correct: we need to convert
-                    # all outer references to boxes too!
-                    push!(init_closure_args, _convert_closures(ctx,
-                          @ast ctx ex [K"call" "Box"::K"core" id::K"BindingId"]))
+                    push!(init_closure_args, @ast ctx ex id::K"BindingId")
                 end
                 @ast ctx ex [K"block"
                     [K"=" func_name
@@ -380,18 +395,30 @@ function closure_convert_lambda(ctx, ex)
     @assert kind(ex) == K"lambda"
     body_stmts = SyntaxList(ctx)
     toplevel_stmts = ex.is_toplevel_thunk ? body_stmts : ctx.toplevel_stmts
+    lambda_bindings = ex.lambda_bindings
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                ctx.closure_bindings, ctx.closure_info, ex.lambda_bindings,
+                                ctx.closure_bindings, ctx.closure_info, lambda_bindings,
                                 toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
-    push!(lambda_children, _convert_closures(ctx2, ex[1]))
-    push!(lambda_children, _convert_closures(ctx2, ex[2]))
+    args = ex[1]
+    push!(lambda_children, args)
+    push!(lambda_children, ex[2])
 
-    # Convert body. This is done as a special case to allow inner calls to
-    # _convert_closures to also add to body_stmts in the case that
-    # ex.is_toplevel_thunk is true.
-    in_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
-    for e in in_body_stmts
+    # Add box initializations for arguments which are captured by an inner lambda
+    for arg in children(args)
+        kind(arg) != K"Placeholder" || continue
+        binfo = lookup_binding(ctx, arg)
+        if binfo.is_captured # TODO: && binfo.is_assigned
+            push!(body_stmts, @ast ctx arg [K"="
+                arg
+                [K"call" "Box"::K"core" arg]
+            ])
+        end
+    end
+    # Convert body. Note that _convert_closures may call `push!(body_stmts, e)`
+    # internally for any expressions `e` which need to be moved to top level.
+    input_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
+    for e in input_body_stmts
         push!(body_stmts, _convert_closures(ctx2, e))
     end
     push!(lambda_children, @ast ctx2 ex[3] [K"block" body_stmts...])

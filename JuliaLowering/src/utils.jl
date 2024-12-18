@@ -78,6 +78,9 @@ function print_ir(io::IO, ex, indent="")
             println(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
             @assert kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
             print_ir(io, e[3], indent*"    ")
+        elseif kind(e) == K"code_info" && e.is_toplevel_thunk
+            println(io, indent, lno, " --- thunk")
+            print_ir(io, e, indent*"    ")
         else
             code = string(e)
             println(io, indent, lno, " ", code)

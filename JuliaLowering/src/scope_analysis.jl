@@ -64,9 +64,9 @@ function _find_scope_vars!(assignments, locals, destructured_args, globals, used
 end
 
 # Find names of all identifiers used in the given expression, grouping them
-# into sets by type.
+# into sets by type of usage.
 #
-# NB: This only works propery after desugaring has already processed assignments
+# NB: This only works propery after desugaring
 function find_scope_vars(ex)
     ExT = typeof(ex)
     assignments = Dict{NameKey,ExT}()
@@ -422,6 +422,7 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
                 if !haskey(lambda_bindings.bindings, id)
                     # Used vars from a scope *outside* the current lambda are captured
                     init_lambda_binding(lambda_bindings, id, is_captured=true, is_read=true)
+                    update_binding!(ctx, id; is_captured=true)
                 else
                     update_lambda_binding!(lambda_bindings, id, is_read=true)
                 end
@@ -437,6 +438,7 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
                 if !haskey(lambda_bindings.bindings, id)
                     # Assigned vars from a scope *outside* the current lambda are captured
                     init_lambda_binding(lambda_bindings, id, is_captured=true, is_assigned=true)
+                    update_binding!(ctx, id; is_captured=true)
                 else
                     update_lambda_binding!(lambda_bindings, id, is_assigned=true)
                 end
@@ -455,6 +457,17 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
 
     return ScopeInfo(is_toplevel_global_scope, in_toplevel_thunk, is_soft_scope,
                      is_hard_scope, var_ids, lambda_bindings)
+end
+
+function add_local_decls!(ctx, stmts, srcref, scope)
+    # Add local decls to start of block so that closure conversion can
+    # initialize if necessary.
+    for id in values(scope.var_ids)
+        binfo = lookup_binding(ctx, id)
+        if binfo.kind == :local
+            push!(stmts, @ast ctx srcref [K"local" id::K"BindingId"])
+        end
+    end
 end
 
 # Do some things which are better done after converting to BindingId.
@@ -522,12 +535,20 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         push!(ctx.scope_stack, scope)
         arg_bindings = _resolve_scopes(ctx, ex[1])
         sparm_bindings = _resolve_scopes(ctx, ex[2])
+        body_stmts = SyntaxList(ctx)
+        add_local_decls!(ctx, body_stmts, ex, scope)
         body = _resolve_scopes(ctx, ex[3])
+        if kind(body) == K"block"
+            append!(body_stmts, children(body))
+        else
+            push!(body_stmts, body)
+        end
         ret_var = numchildren(ex) == 4 ? _resolve_scopes(ctx, ex[4]) : nothing
         pop!(ctx.scope_stack)
 
         lambda_bindings = scope.lambda_bindings
         if !is_toplevel_thunk
+            # Record all lambdas for the same closure type in one place
             func_name = last(ctx.method_def_stack)
             if kind(func_name) == K"BindingId"
                 func_name_id = func_name.var_id
@@ -544,19 +565,21 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
                                is_toplevel_thunk=is_toplevel_thunk)
             arg_bindings
             sparm_bindings
-            body
+            [K"block"
+                body_stmts...
+            ]
             ret_var
         ]
     elseif k == K"scope_block"
         scope = analyze_scope(ctx, ex, ex.scope_type)
         push!(ctx.scope_stack, scope)
-        body = SyntaxList(ctx)
+        stmts = SyntaxList(ctx)
+        add_local_decls!(ctx, stmts, ex, scope)
         for e in children(ex)
-            push!(body, _resolve_scopes(ctx, e))
+            push!(stmts, _resolve_scopes(ctx, e))
         end
-        body
         pop!(ctx.scope_stack)
-        @ast ctx ex [K"block" body...]
+        @ast ctx ex [K"block" stmts...]
     elseif k == K"extension"
         etype = extension_type(ex)
         if etype == "islocal"
