@@ -18,9 +18,7 @@ using Core.IR
 using .Compiler: InferenceResult, InferenceState, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeState
 
-struct EscapeAnalyzerCacheToken
-    token_symbol::Symbol
-end
+mutable struct EscapeAnalyzerCacheToken end
 
 struct EscapeResultForEntry
     ir::IRCode
@@ -36,17 +34,13 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const token::EscapeAnalyzerCacheToken
     const entry_mi::Union{Nothing,MethodInstance}
     result::EscapeResultForEntry
-    function EscapeAnalyzer(world::UInt, token::EscapeAnalyzerCacheToken;
+    function EscapeAnalyzer(world::UInt, cache_token::EscapeAnalyzerCacheToken;
                             entry_mi::Union{Nothing,MethodInstance}=nothing)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, token, entry_mi)
+        return new(world, inf_params, opt_params, inf_cache, cache_token, entry_mi)
     end
-end
-function EscapeAnalyzer(world::UInt, token_symbol::Symbol;
-                        entry_mi::Union{Nothing,MethodInstance}=nothing)
-    return EscapeAnalyzer(world, EscapeAnalyzerCacheToken(token_symbol); entry_mi)
 end
 
 Compiler.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
@@ -299,29 +293,29 @@ while caching the analysis results.
 
 - `world::UInt = Base.get_world_counter()`:
   controls the world age to use when looking up methods, use current world age if not specified.
-- `token_symbol::Symbol = gensym(:EA)`:
-  specifies the cache token symbol to use, by default a new symbol is generated to ensure
+- `cache_token::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken()`:
+  specifies the cache token to use, by default a new token is generated to ensure
   that `code_escapes` uses a fresh cache and performs a new analysis on each invocation.
-  If you with to perform analysis with the global cache enabled, specify a particular symbol.
-- `interp::EscapeAnalyzer = EscapeAnalyzer(world, token_symbol)`:
+  If you with to perform analysis with the global cache enabled, specify a particular token instance.
+- `interp::EscapeAnalyzer = EscapeAnalyzer(world, cache_token)`:
   specifies the escape analyzer to use.
 - `debuginfo::Symbol = :none`:
   controls the amount of code metadata present in the output, possible options are `:none` or `:source`.
 """
 function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       world::UInt = get_world_counter(),
-                      token_symbol::Symbol = gensym(:EA),
+                      cache_token::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken(),
                       debuginfo::Symbol = :none)
     tt = Base.signature_type(f, types)
     match = Base._which(tt; world, raise=true)
     mi = Compiler.specialize_method(match)
-    return code_escapes(mi; world, token_symbol, debuginfo)
+    return code_escapes(mi; world, cache_token, debuginfo)
 end
 
 function code_escapes(mi::MethodInstance;
                       world::UInt = get_world_counter(),
-                      token_symbol::Symbol = gensym(:EA),
-                      interp::EscapeAnalyzer=EscapeAnalyzer(world, token_symbol; entry_mi=mi),
+                      cache_token::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken(),
+                      interp::EscapeAnalyzer=EscapeAnalyzer(world, cache_token; entry_mi=mi),
                       debuginfo::Symbol = :none)
     frame = Compiler.typeinf_frame(interp, mi, #=run_optimizer=#true)
     isdefined(interp, :result) || error("optimization didn't happen: maybe everything has been constant folded?")
@@ -343,19 +337,17 @@ Note that this version does not cache the analysis results.
 
 - `world::UInt = Base.get_world_counter()`:
   controls the world age to use when looking up methods, use current world age if not specified.
-- `token_symbol::Symbol = gensym(:EA)`:
-  specifies the cache token symbol to use, by default a new symbol is generated to ensure
+- `cache_token::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken()`:
+  specifies the cache token to use, by default a new token is generated to ensure
   that `code_escapes` uses a fresh cache and performs a new analysis on each invocation.
-  If you with to perform analysis with the global cache enabled, specify a particular symbol.
-- `interp::EscapeAnalyzer = EscapeAnalyzer(world, token_symbol)`:
-  specifies the escape analyzer to use.
-- `interp::AbstractInterpreter = EscapeAnalyzer(world, EscapeAnalyzerCacheToken(gensym(:EA)))`:
+  If you with to perform analysis with the global cache enabled, specify a particular token instance.
+- `interp::AbstractInterpreter = EscapeAnalyzer(world, cache_token)`:
   specifies the abstract interpreter to use, by default a new `EscapeAnalyzer` with an empty cache is created.
 """
 function code_escapes(ir::IRCode, nargs::Int;
                       world::UInt = get_world_counter(),
-                      token_symbol::Symbol = gensym(:EA),
-                      interp::AbstractInterpreter=EscapeAnalyzer(world, token_symbol))
+                      cache_token::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken(),
+                      interp::AbstractInterpreter=EscapeAnalyzer(world, cache_token))
     estate = analyze_escapes(ir, nargs, Compiler.optimizer_lattice(interp), Compiler.get_escape_cache(interp))
     return EscapeResult(ir, estate) # return back the result
 end
