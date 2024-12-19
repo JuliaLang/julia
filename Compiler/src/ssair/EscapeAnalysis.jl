@@ -626,15 +626,20 @@ const SSAMemoryInfo = IdDict{Int,Any}
 struct ConflictedMemory end # a special instance to indicate the aliased memory is conflicted
 struct UnknownMemory end    # a special instance to indicate the aliased memory is unknown
 
-const LINEAR_BBESCAPES = Union{Nothing,BlockEscapeState{false}}[nothing]
+const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
 
 struct AnalysisState{GetEscapeCache}
     ir::IRCode
-    bbescapes::Vector{Union{Nothing,BlockEscapeState{false}}}
+    # escape states for each basic block:
+    # - `bbescape === false` indicates the state for the block has not been initialized
+    # - `bbescape === true` indicates the state for the block is known to be identical to
+    #   the state of its single predecessor
+    bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
     retescape::BlockEscapeState{false}
     ssamemoryinfo::SSAMemoryInfo
     get_escape_cache::GetEscapeCache
     #= temporary states =#
+    new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
     currstate::BlockEscapeState{false}                 # the state currently being analyzed
     changes::Changes                                   # changes made at the current statement
     visited::BitSet
@@ -647,9 +652,21 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
         bbescapes = LINEAR_BBESCAPES # avoid unnecessary allocation
         retescape = currstate = BlockEscapeState(ir, nargs) # no need to maintain a separate state
     else
-        bbescapes = fill!(Vector{Union{Nothing,BlockEscapeState{false}}}(undef, nbbs), nothing)
+        bbescapes = fill!(Vector{Union{Bool,BlockEscapeState{false}}}(undef, nbbs), false)
         retescape = BlockEscapeState(ir, nargs)
         currstate = BlockEscapeState(ir, nargs)
+    end
+    if isempty(ir.new_nodes)
+        new_nodes_map = nothing
+    else
+        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
+        for (i, nni) in enumerate(ir.new_nodes.info)
+            if haskey(new_nodes_map, nni.pos)
+                push!(new_nodes_map[nni.pos], i => nni)
+            else
+                new_nodes_map[nni.pos] = Pair{Int,NewNodeInfo}[i => nni]
+            end
+        end
     end
     ssamemoryinfo = IdDict{Int,Any}()
     changes = Changes()
@@ -657,7 +674,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
     equalized_roots = BitSet()
     handler_info = compute_trycatch(ir)
     return AnalysisState(ir, bbescapes, retescape, ssamemoryinfo, get_escape_cache,
-        currstate, changes, visited, equalized_roots, handler_info)
+        new_nodes_map, currstate, changes, visited, equalized_roots, handler_info)
 end
 
 """
@@ -667,12 +684,12 @@ Extended lattice that maps arguments and SSA values to escape information repres
 Escape information imposed on SSA IR element `x` can be retrieved by `eresult[x]`.
 """
 struct EscapeResult
-    bbescapes::Vector{Union{Nothing,BlockEscapeState{true}}}
+    bbescapes::Vector{Union{Bool,BlockEscapeState{true}}}
     retescape::BlockEscapeState{true}
     ssamemoryinfo::SSAMemoryInfo
     function EscapeResult(astate::AnalysisState)
-        bbescapes = Union{Nothing,BlockEscapeState{true}}[bbstate === nothing ?
-            nothing : BlockEscapeState{true}(bbstate) for bbstate in astate.bbescapes]
+        bbescapes = Union{Bool,BlockEscapeState{true}}[bbstate isa Bool ?
+            bbstate : BlockEscapeState{true}(bbstate) for bbstate in astate.bbescapes]
         retescape = BlockEscapeState{true}(astate.retescape)
         return new(bbescapes, retescape, astate.ssamemoryinfo)
     end
@@ -699,31 +716,18 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
     W = BitSet()
     W.offset = 0 # for _bits_findnext
     astate = AnalysisState(ir, nargs, get_escape_cache)
-    (; currstate) = astate
-    if isempty(ir.new_nodes)
-        new_nodes_info = nothing
-    else
-        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
-        for (i, nni) in enumerate(ir.new_nodes.info)
-            if haskey(new_nodes_map, nni.pos)
-                push!(new_nodes_map[nni.pos], i => nni)
-            else
-                new_nodes_map[nni.pos] = Pair{Int,NewNodeInfo}[i => nni]
-            end
-        end
-        new_nodes_info = (new_nodes_map, keys(new_nodes_map))
-    end
+    (; new_nodes_map, currstate) = astate
 
     while true
-        local nextbb::Int
+        local nextbb::Int, nextcurrbb::Int
         bbstart, bbend = first(bbs[currbb].stmts), last(bbs[currbb].stmts)
         for pc = bbstart:bbend
             local new_nodes_counter::Int = 0
-            if new_nodes_info === nothing || pc ∉ new_nodes_info[2]
+            if new_nodes_map === nothing || pc ∉ keys(new_nodes_map)
                 stmt = ir[SSAValue(pc)][:stmt]
                 isterminator = pc == bbend
             else
-                new_nodes = new_nodes_info[1][pc]
+                new_nodes = new_nodes_map[pc]
                 attach_before_idxs = Int[i for (i, nni) in new_nodes if !nni.attach_after]
                 attach_after_idxs  = Int[i for (i, nni) in new_nodes if nni.attach_after]
                 na, nb = length(attach_after_idxs), length(attach_before_idxs)
@@ -766,7 +770,11 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                         @assert length(succs) == 2 "GotoIfNot with ≥2 successors"
                         truebb = currbb + 1
                         falsebb = succs[1] == truebb ? succs[2] : succs[1]
-                        if propagate_bbstate!(astate, currstate, falsebb)
+                        falseret = propagate_bbstate!(astate, currstate, falsebb, #=allow_direct_propagation=#!(@isdefined nextcurrbb))
+                        if falseret === nothing
+                            @assert currbb == only(bbs[falsebb].preds)
+                            nextcurrbb = falsebb
+                        elseif falseret
                             push!(W, falsebb)
                         end
                         @goto fall_through
@@ -801,7 +809,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 if excstate_excbb !== nothing
                     # propagate the escape information of this block to the exception handler block
                     excstate, excbb = excstate_excbb
-                    if propagate_bbstate!(astate, excstate, excbb)
+                    if propagate_bbstate!(astate, excstate, excbb)::Bool
                         push!(W, excbb)
                     end
                 end
@@ -817,21 +825,31 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
         end
 
         begin @label propagate_state
-            if propagate_bbstate!(astate, currstate, nextbb)
+            ret = propagate_bbstate!(astate, currstate, nextbb, #=allow_direct_propagation=#!(@isdefined nextcurrbb))
+            if ret === nothing
+                @assert currbb == only(bbs[nextbb].preds)
+                nextcurrbb = nextbb
+            elseif ret
                 push!(W, nextbb)
             end
         end
 
         begin @label next_bb
-            currbb = _bits_findnext(W.bits, 1)
-            currbb == -1 && break # the working set is empty
-            delete!(W, currbb)
-            nextcurrstate = astate.bbescapes[currbb]
-            if nextcurrstate === nothing
-                initialize_state!(currstate, ir, nargs)
+            if !(@isdefined nextcurrbb)
+                nextcurrbb = _bits_findnext(W.bits, 1)
+                nextcurrbb == -1 && break # the working set is empty
+                delete!(W, nextcurrbb)
+                nextcurrstate = astate.bbescapes[nextcurrbb]
+                if nextcurrstate isa Bool
+                    @assert nextcurrstate === false
+                    initialize_state!(currstate, ir, nargs)
+                else
+                    overwrite_state!(currstate, nextcurrstate)
+                end
             else
-                overwrite_state!(currstate, nextcurrstate)
+                # propagate the current state to the next block directly
             end
+            currbb = nextcurrbb
         end
     end
 
@@ -860,16 +878,44 @@ function overwrite_state!(currstate::BlockEscapeState, nextcurrstate::BlockEscap
     nothing
 end
 
-function propagate_bbstate!(astate::AnalysisState, currstate::BlockEscapeState, nextbb::Int)
+function propagate_bbstate!(astate::AnalysisState, currstate::BlockEscapeState, nextbbidx::Int,
+                            allow_direct_propagation::Bool=false)
     bbescapes = astate.bbescapes
-    nextstate = bbescapes[nextbb]
-    if nextstate === nothing
-        bbescapes[nextbb] = copy(currstate)
+    nextstate = bbescapes[nextbbidx]
+    if nextstate isa Bool
+        nextbb = astate.ir.cfg.blocks[nextbbidx]
+        if allow_direct_propagation && length(nextbb.stmts) == 1 && length(nextbb.preds) == 1
+            # Performance optimization:
+            # If the next block has a single predecessor (the current block) and it has a
+            # single statament which is a non-returning terminator, then it can simply
+            # propagate the current state to the subsequent block(s). This is valid because
+            # it does not update the escape information at all, and even if the state is
+            # updated during the further iterations of abstract interpretation, the updated
+            # state is always propagated from the predecessor.
+            # In such cases, set `bbescapes[nextbbidx] = true` to explicitly indicate that
+            # the state for this next block is identical to the state of the predecessor,
+            # avoiding unnecessary copying of the state.
+            nextpc = only(nextbb.stmts)
+            new_nodes_map = astate.new_nodes_map
+            if new_nodes_map === nothing || nextpc ∉ keys(new_nodes_map)
+                nextstmt = astate.ir[SSAValue(nextpc)][:stmt]
+                if is_stmt_escape_free(nextstmt)
+                    bbescapes[nextbbidx] = true
+                    return nothing
+                end
+            end
+        end
+        bbescapes[nextbbidx] = copy(currstate)
         return true
     else
         return propagate_bbstate!(nextstate, currstate)
     end
 end
+
+# NOTE we can't include `ReturnNode` here since it may add `ReturnEscape` change
+is_stmt_escape_free(@nospecialize(stmt)) =
+    stmt === nothing || stmt isa GotoNode || stmt isa Core.GotoIfNot ||
+    stmt isa EnterNode || isexpr(stmt, :leave)
 
 function propagate_bbstate!(nextstate::BlockEscapeState, currstate::BlockEscapeState)
     anychanged = false
