@@ -188,7 +188,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
         jl_code_instance_t *be;
         i = get_next_edge(mi->backedges, i, NULL, &be);
         JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-        int child_found = has_backedge_to_worklist(be->def, visited, stack);
+        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack);
         if (child_found == 1 || child_found == 2) {
             // found what we were looking for, so terminate early
             found = 1;
@@ -219,7 +219,7 @@ static int is_relocatable_ci(htable_t *relocatable_ext_cis, jl_code_instance_t *
 {
     if (!ci->relocatability)
         return 0;
-    jl_method_instance_t *mi = ci->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_method_t *m = mi->def.method;
     if (!ptrhash_has(relocatable_ext_cis, ci) && jl_object_in_image((jl_value_t*)m) && (!jl_is_method(m) || jl_object_in_image((jl_value_t*)m->module)))
         return 0;
@@ -249,7 +249,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         assert(jl_is_code_instance(ci));
         if (!ci->relocatability)
             continue;
-        jl_method_instance_t *mi = ci->def;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
         jl_method_t *m = mi->def.method;
         if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack);
@@ -283,7 +283,7 @@ static void jl_collect_new_roots(htable_t *relocatable_ext_cis, jl_array_t *root
     for (size_t i = 0; i < l; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
         assert(jl_is_code_instance(ci));
-        jl_method_t *m = ci->def->def.method;
+        jl_method_t *m = jl_get_ci_mi(ci)->def.method;
         assert(jl_is_method(m));
         ptrhash_put(&mset, (void*)m, (void*)m);
         ptrhash_put(relocatable_ext_cis, (void*)ci, (void*)ci);
@@ -864,7 +864,7 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
     *minworld = 1;
     size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
     *maxworld = current_world;
-    assert(jl_is_method_instance(codeinst->def) && jl_is_method(codeinst->def->def.method));
+    assert(jl_is_method_instance(jl_get_ci_mi(codeinst)) && jl_is_method(jl_get_ci_mi(codeinst)->def.method));
     void **bp = ptrhash_bp(visiting, codeinst);
     if (*bp != HT_NOTFOUND)
         return (char*)*bp - (char*)HT_NOTFOUND; // cycle idx
@@ -893,7 +893,7 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
             size_t max_valid2;
             assert(!jl_is_method(edge)); // `Method`-edge isn't allowed for the optimized one-edge format
             if (jl_is_code_instance(edge))
-                edge = (jl_value_t*)((jl_code_instance_t*)edge)->def;
+                edge = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)edge);
             if (jl_is_method_instance(edge)) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)edge;
                 sig = jl_type_intersection(mi->def.method->sig, (jl_value_t*)mi->specTypes); // TODO: ??
@@ -917,7 +917,7 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
                     continue;
                 }
                 if (jl_is_code_instance(callee))
-                    callee = ((jl_code_instance_t*)callee)->def;
+                    callee = jl_get_ci_mi((jl_code_instance_t*)callee);
                 if (jl_is_method_instance(callee)) {
                     meth = callee->def.method;
                 }
@@ -1048,7 +1048,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_ci_list)
         for (size_t i = 0; i < nedges; i++) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_array_ptr_ref(edges, i);
             jl_svec_t *callees = jl_atomic_load_relaxed(&codeinst->edges);
-            jl_method_instance_t *caller = codeinst->def;
+            jl_method_instance_t *caller = jl_get_ci_mi(codeinst);
             jl_verify_method_graph(codeinst, &stack, &visiting);
             size_t minvalid = jl_atomic_load_relaxed(&codeinst->min_world);
             size_t maxvalid = jl_atomic_load_relaxed(&codeinst->max_world);

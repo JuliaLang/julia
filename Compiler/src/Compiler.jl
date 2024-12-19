@@ -41,7 +41,7 @@ ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
 
 using Core.Intrinsics, Core.IR
 
-using Core: Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
     MethodTable, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,

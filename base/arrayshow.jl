@@ -41,7 +41,7 @@ Accept keyword args `c` for alternate single character marker.
 """
 function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
     N = textwidth(ANSIIterator(s))
-    return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
+    return N == 0 ? string(c) : join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
 
 const undef_ref_alignment = (3,3)

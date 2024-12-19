@@ -465,6 +465,12 @@ struct InitError <: WrappedException
     error
 end
 
+struct ABIOverride
+    abi::Type
+    def::MethodInstance
+    ABIOverride(@nospecialize(abi::Type), def::MethodInstance) = new(abi, def)
+end
+
 struct PrecompilableError <: Exception end
 
 String(s::String) = s  # no constructor yet
@@ -552,7 +558,7 @@ end
 
 
 function CodeInstance(
-    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::Union{MethodInstance, ABIOverride}, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8, di::Union{DebugInfo,Nothing}, edges::SimpleVector)

@@ -538,7 +538,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_task_t *ct = jl_current_task;
     jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
             jl_code_instance_type);
-    codeinst->def = mi;
+    codeinst->def = (jl_value_t*)mi;
     codeinst->owner = owner;
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_atomic_store_relaxed(&codeinst->min_world, min_world);
@@ -1772,17 +1772,18 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
         JL_GC_POP();
     }
     //jl_static_show(JL_STDERR, (jl_value_t*)replaced->def);
-    if (!jl_is_method(replaced->def->def.method))
+    jl_method_instance_t *replaced_mi = jl_get_ci_mi(replaced);
+    if (!jl_is_method(replaced_mi->def.method))
         return; // shouldn't happen, but better to be safe
-    JL_LOCK(&replaced->def->def.method->writelock);
+    JL_LOCK(&replaced_mi->def.method->writelock);
     if (jl_atomic_load_relaxed(&replaced->max_world) == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
     }
     assert(jl_atomic_load_relaxed(&replaced->max_world) <= max_world);
     // recurse to all backedges to update their valid range also
-    _invalidate_backedges(replaced->def, max_world, depth + 1);
-    JL_UNLOCK(&replaced->def->def.method->writelock);
+    _invalidate_backedges(replaced_mi, max_world, depth + 1);
+    JL_UNLOCK(&replaced_mi->def.method->writelock);
 }
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth) {
@@ -2329,7 +2330,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                                 int replaced_edge;
                                 if (invokeTypes) {
                                     // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
-                                    if (jl_egal(invokeTypes, caller->def->def.method->sig))
+                                    if (jl_egal(invokeTypes, jl_get_ci_mi(caller)->def.method->sig))
                                         replaced_edge = 0; // if invokeTypes == m.sig, then the only way to change this invoke is to replace the method itself
                                     else
                                         replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
@@ -2907,7 +2908,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_callptr_t ucache_invoke = jl_atomic_load_acquire(&ucache->invoke);
         if (ucache_invoke == NULL) {
             if ((!jl_is_method(def) || def->source == jl_nothing) &&
-                !jl_cached_uninferred(jl_atomic_load_relaxed(&ucache->def->cache), world)) {
+                !jl_cached_uninferred(jl_atomic_load_relaxed(&jl_get_ci_mi(ucache)->cache), world)) {
                 jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
             }
             jl_generate_fptr_for_unspecialized(ucache);
@@ -2953,7 +2954,7 @@ jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_co
 
 jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
-    jl_svec_t *sparams = m->def->sparam_vals;
+    jl_svec_t *sparams = jl_get_ci_mi(m)->sparam_vals;
     assert(sparams != jl_emptysvec);
     jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
     assert(invoke && "Forgot to set specptr for jl_fptr_sparam!");

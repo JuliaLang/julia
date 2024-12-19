@@ -426,7 +426,7 @@ typedef struct _jl_opaque_closure_t {
 // This type represents an executable operation
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
-    jl_method_instance_t *def; // method this is specialized from
+    jl_value_t *def; // MethodInstance or ABIOverride
     jl_value_t *owner; // Compiler token this belongs to, `jl_nothing` is reserved for native
     _Atomic(struct _jl_code_instance_t*) next; // pointer to the next cache entry
 
@@ -478,6 +478,13 @@ typedef struct _jl_code_instance_t {
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
 } jl_code_instance_t;
+
+// May be used as the ->def field of a CodeInstance to override the ABI
+typedef struct _jl_abi_override_t {
+    JL_DATA_TYPE
+    jl_value_t *abi;
+    jl_method_instance_t *def;
+} jl_abi_override_t;
 
 // all values are callable as Functions
 typedef jl_value_t jl_function_t;
@@ -935,6 +942,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_fielderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_abioverride_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_readonlymemory_exception JL_GLOBALLY_ROOTED;
@@ -1570,6 +1578,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_llvmpointer(v) (((jl_datatype_t*)jl_typeof(v))->name == jl_llvmpointer_typename)
 #define jl_is_intrinsic(v)   jl_typetagis(v,jl_intrinsic_type)
 #define jl_is_addrspacecore(v) jl_typetagis(v,jl_addrspacecore_type)
+#define jl_is_abioverride(v) jl_typetagis(v,jl_abioverride_type)
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);

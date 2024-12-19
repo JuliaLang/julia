@@ -101,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    194
+#define NUM_TAGS    195
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -216,6 +216,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
         INSERT_TAG(jl_debuginfo_type);
+        INSERT_TAG(jl_abioverride_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -909,13 +910,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
         // make sure we don't serialize other reachable cache entries of foreign methods
         // Should this now be:
         // if (ci !in ci->defs->cache)
         //     record_field_change((jl_value_t**)&ci->next, NULL);
         // Why are we checking that the method/module this originates from is in_image?
         // and then disconnect this CI?
-        if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
+        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
@@ -923,8 +925,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
             if (!is_relocatable_ci(&relocatable_ext_cis, ci))
                 record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-            else if (jl_is_method(ci->def->def.method) && // don't delete toplevel code
-                     ci->def->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+            else if (jl_is_method(mi->def.method) && // don't delete toplevel code
+                     mi->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
                 if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
                     jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
@@ -1809,7 +1811,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     fptr_id = JL_API_CONST;
                 }
                 else {
-                    if (jl_is_method(ci->def->def.method)) {
+                    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
                         builtin_id = jl_fptr_id(jl_atomic_load_relaxed(&ci->specptr.fptr));
                         if (builtin_id) { // found in the table of builtins
                             assert(builtin_id >= 2);
@@ -2352,9 +2354,9 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+            assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst->def;     // now it's a MethodInstance
+            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;

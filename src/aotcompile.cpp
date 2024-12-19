@@ -105,7 +105,7 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     assert(*num_elements == map.size());
     size_t i = 0;
     for (auto &ci : map) {
-        data[i++] = ci.first->def;
+        data[i++] = jl_get_ci_mi(ci.first);
     }
 }
 
@@ -455,14 +455,14 @@ static void compile_workqueue(jl_codegen_params_t &params, egal_set &method_root
                 if ((policy != CompilationPolicy::Default || params.params->trim) &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     // XXX: SOURCE_MODE_FORCE_SOURCE is wrong here (neither sufficient nor necessary)
-                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
+                    codeinst = jl_type_infer(jl_get_ci_mi(codeinst), jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
                 }
                 if (codeinst) {
                     orc::ThreadSafeModule result_m =
-                        jl_create_ts_module(name_from_method_instance(codeinst->def),
+                        jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
                             params.tsctx, params.DL, params.TargetTriple);
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
-                    record_method_roots(method_roots, codeinst->def);
+                    record_method_roots(method_roots, jl_get_ci_mi(codeinst));
                     if (result_m)
                         it = compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
                 }
@@ -501,7 +501,7 @@ static void compile_workqueue(jl_codegen_params_t &params, egal_set &method_root
             proto.decl->setLinkage(GlobalVariable::InternalLinkage);
             //protodecl->setAlwaysInline();
             jl_init_function(proto.decl, params.TargetTriple);
-            jl_method_instance_t *mi = codeinst->def;
+            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
             // TODO: maybe this can be cached in codeinst->specfptr?
@@ -641,12 +641,12 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
                     }
                     else {
-                        orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
+                        orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
                                 params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                                 Triple(clone.getModuleUnlocked()->getTargetTriple()));
                         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                         JL_GC_PROMISE_ROOTED(codeinst->def); // analyzer seems confused
-                        record_method_roots(method_roots, codeinst->def);
+                        record_method_roots(method_roots, jl_get_ci_mi(codeinst));
                         if (result_m)
                             compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                         else if (jl_options.trim != JL_TRIM_NO) {
@@ -2267,7 +2267,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
         // To get correct names in the IR this needs to be at least 2
         output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
         JL_GC_PUSH1(&output.temporary_roots);
-        auto decls = jl_emit_code(m, mi, src, output);
+        auto decls = jl_emit_code(m, mi, src, NULL, output);
         output.temporary_roots = nullptr;
         JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it
 

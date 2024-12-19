@@ -167,7 +167,7 @@ void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const D
     // Non-opaque-closure MethodInstances are considered globally rooted
     // through their methods, but for OC, we need to create a global root
     // here.
-    jl_method_instance_t *mi = codeinst->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
         jl_as_global_root((jl_value_t*)mi, 1);
     getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
@@ -374,7 +374,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         jl_method_instance_t *mi = NULL;
         if (codeinst) {
             JL_GC_PROMISE_ROOTED(codeinst);
-            mi = codeinst->def;
+            mi = jl_get_ci_mi(codeinst);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
