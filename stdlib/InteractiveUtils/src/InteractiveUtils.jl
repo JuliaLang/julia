@@ -166,6 +166,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
