@@ -1293,9 +1293,7 @@ public:
                                   size_t Size) override {
         return MemMgr->registerEHFrames(Addr, LoadAddr, Size);
     }
-    virtual void deregisterEHFrames() override {
-        return MemMgr->deregisterEHFrames();
-    }
+    virtual void deregisterEHFrames() override { /* not actually supported or allowed with this */ }
     virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
         bool b = false;
         if (MemMgr.use_count() == 2)
