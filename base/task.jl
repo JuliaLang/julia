@@ -968,21 +968,38 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
-            # Otherwise, put the task in the multiqueue.
-            Partr.multiq_insert(t, t.priority)
+            # Otherwise, push the task to the scheduler
+            Scheduler.enqueue!(t, t.priority)
             tid = 0
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    if (tid == 0)
+        n_spinning = Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads_spinning, Cint), :acquire)
+        n_spinning == 0 && ccall(:jl_add_spinner, Cvoid, ())
+    else
+        ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    end
+    # n_spinning = Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire)
+    # n_spinning == 0 && ccall(:jl_add_spinner, Cvoid, ())
     return t
 end
 
 function schedule(t::Task)
-    # [task] created -scheduled-> wait_time
-    maybe_record_enqueued!(t)
-    enq_work(t)
-end
-
+    if ChildFirst
+        ct = current_task()
+        if ct.sticky || t.sticky
+            maybe_record_enqueued!(t)
+            enq_work(t)
+        else
+            maybe_record_enqueued!(t)
+            enq_work(ct)
+            yieldto(t)
+        end
+    else
+        maybe_record_enqueued!(t)
+        enq_work(t)
+    end
+    return t
 """
     schedule(t::Task, [val]; error=false)
 
@@ -1176,10 +1193,10 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    return Scheduler.dequeue!()
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty = Scheduler.checktaskempty
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
