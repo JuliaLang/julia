@@ -673,10 +673,10 @@ function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
         nargs = Int(opt.src.nargs)
-        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), get_escape_cache(interp))
-        argescapes = EscapeAnalysis.ArgEscapeCache(estate)
+        eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(interp))
+        argescapes = EscapeAnalysis.ArgEscapeCache(eresult)
         stack_analysis_result!(sv.result, argescapes)
-        validate_mutable_arg_escapes!(estate, sv)
+        validate_mutable_arg_escapes!(eresult, sv)
     end
 
     any_refinable(sv) || return false
@@ -718,7 +718,7 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
 end
 
 function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospecialize(stmt),
-                                  estate::EscapeAnalysis.EscapeState)
+                                  eresult::EscapeAnalysis.EscapeResult)
     stmt isa Expr || return false
     if isexpr(stmt, :invoke)
         startidx = 2
@@ -737,7 +737,7 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
         end
         # See if we can find the allocation
         if isa(arg, Argument)
-            if has_no_escape(estate[arg])
+            if has_no_escape(eresult[arg])
                 # Even if we prove everything else effect_free, the best we can
                 # say is :effect_free_if_argmem_only
                 if sv.effect_free_if_argmem_only === nothing
@@ -748,8 +748,8 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
             end
             return false
         elseif isa(arg, SSAValue)
-            has_no_escape(estate[arg]) || return false
-            check_all_args_noescape!(sv, ir, ir[arg][:stmt], estate) || return false
+            has_no_escape(eresult[arg]) || return false
+            check_all_args_noescape!(sv, ir, ir[arg][:stmt], eresult) || return false
         else
             return false
         end
@@ -757,14 +757,14 @@ function check_all_args_noescape!(sv::PostOptAnalysisState, ir::IRCode, @nospeci
     return true
 end
 
-function validate_mutable_arg_escapes!(estate::EscapeAnalysis.EscapeState, sv::PostOptAnalysisState)
+function validate_mutable_arg_escapes!(eresult::EscapeAnalysis.EscapeResult, sv::PostOptAnalysisState)
     ir = sv.ir
     for idx in sv.ea_analysis_pending
         # See if any mutable memory was allocated in this function and determined
         # not to escape.
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if !check_all_args_noescape!(sv, ir, stmt, estate)
+        if !check_all_args_noescape!(sv, ir, stmt, eresult)
             return sv.all_effect_free = false
         end
     end
