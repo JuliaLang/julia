@@ -137,7 +137,7 @@ const liblapack_name = libblas_name
 # Note that `atomics.jl` here should be deprecated
 Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
-include("partr.jl")
+include("scheduler/scheduler.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
