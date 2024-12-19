@@ -335,7 +335,7 @@ end
 
 const REFLECTION_COMPILER = RefValue{Union{Nothing, Module}}(nothing)
 
-function invoke_in_typeinf_world(args...)
+function invoke_in_typeinf_world(@nospecialize args...)
     vargs = Any[args...]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), vargs, length(vargs))
 end
