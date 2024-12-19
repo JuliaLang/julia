@@ -163,6 +163,10 @@ end
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
 @test merge((c=0, z=1), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (c=5, z=1, a=4, b=2)
 
+@test mergewith(+, (b=2,), (a=10,)) == (b=2, a=10)
+@test mergewith(+, (a=1, b=2), (a=10,)) == (a=11, b=2)
+@test mergewith((a,b) -> error(), NamedTuple(), NamedTuple()) == NamedTuple()
+
 @test keys((a=1, b=2, c=3)) == (:a, :b, :c)
 @test keys(NamedTuple()) == ()
 @test keys((a=1,)) == (:a,)
