@@ -1841,27 +1841,27 @@ try # test the functionality of `UndefVarError_hint`
         backend = REPL.REPLBackend()
         repltask = @async REPL.run_repl(repl; backend)
         write(stdin_write, """
-        module AAAA # can't clash with anything else (module A defined elsewhere)
+        module A53000
             export f
             f() = 0.0
         end
 
-        module C_outer
-            import ..AAAA: f
+        module C_outer_53000
+            import ..A53000: f
             public f
 
-            module C_inner
-            import ..C_outer: f
+            module C_inner_53000
+            import ..C_outer_53000: f
             export f
-            end # C_inner
-        end # C_outer
+            end
+        end
 
-        module D
+        module D_53000
             public f
             f() = 1.0
         end
 
-        append!(Base.loaded_modules_order, [AAAA, C_outer, C_outer.C_inner, D])
+        append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
         f
         """
         )
@@ -1869,10 +1869,10 @@ try # test the functionality of `UndefVarError_hint`
         txt = readuntil(stdout_read, "ZZZZZ")
         write(stdin_write, '\x04')
         wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Main.AAAA.", txt)
-        @test occursin("Hint: a global variable of this name also exists in Main.D.", txt)
-        @test occursin("- Also made available as public by Main.C_outer.", txt)
-        @test occursin("- Also exported by Main.C_outer.C_inner (loaded but not imported in Main).", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.A53000.", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.D_53000.", txt)
+        @test occursin("- Also made available as public by Main.C_outer_53000.", txt)
+        @test occursin("- Also exported by Main.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", txt)
     end
 catch e
     # fail test if error
