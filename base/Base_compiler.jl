@@ -255,6 +255,7 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("invalidation.jl")
 
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
