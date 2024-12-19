@@ -1700,12 +1700,15 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (2, "b")
  (1, "c")
 
-julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) # same as sort(0:3, by=abs(x->x-2))
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs))
 4-element Vector{Int64}:
  2
  1
  3
  0
+
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) == sort(0:3, by=x->abs(x-2))
+true
 
 julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
 5-element Vector{Float64}:

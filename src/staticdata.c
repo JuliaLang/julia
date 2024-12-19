@@ -101,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    193
+#define NUM_TAGS    194
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -290,6 +290,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_replacefield);
         INSERT_TAG(jl_builtin_setfieldonce);
         INSERT_TAG(jl_builtin_fieldtype);
+        INSERT_TAG(jl_builtin_memorynew);
         INSERT_TAG(jl_builtin_memoryref);
         INSERT_TAG(jl_builtin_memoryrefoffset);
         INSERT_TAG(jl_builtin_memoryrefget);
@@ -508,7 +509,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
-    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
+    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
     &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryref_isassigned,
     &jl_f_memoryrefset,  &jl_f_memoryrefswap, &jl_f_memoryrefmodify, &jl_f_memoryrefreplace, &jl_f_memoryrefsetonce,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
@@ -769,6 +770,16 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
+           ((effects >> 6) & 0x01); // is_terminates(effects)
+}
+
+
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
@@ -908,8 +919,24 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
-        if (jl_atomic_load_relaxed(&ci->inferred) && !is_relocatable_ci(&relocatable_ext_cis, ci))
-            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
+                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+            else if (jl_is_method(ci->def->def.method) && // don't delete toplevel code
+                     ci->def->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (native_functions && // don't delete any code if making a ji file
+                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
+                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
+                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+            }
+        }
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
