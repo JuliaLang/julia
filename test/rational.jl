@@ -203,6 +203,21 @@ end
     end
 
     @test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+    @test (true//true) / complex(false, true) === 0//1 - 1//1*im
+    @test (false//true) / complex(false, true) === 0//1 + 0//1*im
+    @test (false//true) / complex(true, false) === 0//1 + 0//1*im
+    @test (false//true) / complex(true, true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true, true) === 1//2 - 1//2*im
+    @test (false//true) / complex(true//true, true//true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true//true, true//true) === 1//2 - 1//2*im
+    @test (false//true) / complex(true//false, false//true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true//true, true//false) === 0//1 + 0//1*im
+    @test_throws DivideError (0//1) / complex(0, 0)
+    @test_throws DivideError (1//1) / complex(0, 0)
+    @test_throws DivideError (1//0) / complex(0, 0)
+
+    # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
+    @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)
