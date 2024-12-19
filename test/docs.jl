@@ -1289,7 +1289,7 @@ let x = Binding(Main, :+)
 end
 
 let x = Binding(Meta, :parse)
-    @test Meta.parse(string(x)) == :(Base.Meta.parse)
+    @test Meta.parse(string(x)) == :(Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
