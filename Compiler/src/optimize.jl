@@ -647,9 +647,11 @@ struct GetNativeEscapeCache{CodeCache}
     GetNativeEscapeCache(code_cache::CodeCache) where CodeCache = new{CodeCache}(code_cache)
 end
 GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
-function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
-    codeinst = get(code_cache, mi, nothing)
-    codeinst isa CodeInstance || return false
+function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
+    if codeinst isa MethodInstance
+        codeinst = get(code_cache, codeinst, nothing)
+        codeinst isa CodeInstance || return false
+    end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
     end

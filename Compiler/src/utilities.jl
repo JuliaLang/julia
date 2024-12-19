@@ -12,25 +12,6 @@ if !@isdefined(var"@timeit")
     end
 end
 
-# avoid cycle due to over-specializing `any` when used by inference
-function _any(@nospecialize(f), a)
-    for x in a
-        f(x) && return true
-    end
-    return false
-end
-any(@nospecialize(f), itr) = _any(f, itr)
-any(itr) = _any(identity, itr)
-
-function _all(@nospecialize(f), a)
-    for x in a
-        f(x) || return false
-    end
-    return true
-end
-all(@nospecialize(f), itr) = _all(f, itr)
-all(itr) = _all(identity, itr)
-
 function contains_is(itr, @nospecialize(x))
     for y in itr
         if y === x

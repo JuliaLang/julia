@@ -71,6 +71,9 @@
         "AnnotatedString{String}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
+
+    a = Base.AnnotatedString("hello", [(1:5, :label, 1)])
+    @test first(a) == Base.AnnotatedChar('h', [(:label, 1)])
 end
 
 @testset "AnnotatedChar" begin

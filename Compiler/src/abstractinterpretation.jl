@@ -2656,7 +2656,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if sv isa InferenceState && f === typeassert
             # perform very limited back-propagation of invariants after this type assertion
             if rt !== Bottom && isa(fargs, Vector{Any})
-                farg2 = fargs[2]
+                farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
                     refinements = SlotRefinement(farg2, rt)
                 end
@@ -2894,20 +2894,21 @@ end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], sstate, sv)
-    # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
+    # rt = sp_type_rewrap(e.args[3], sv.linfo, true) # verify that the result type make sense?
+    # rt === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     atv = e.args[4]::SimpleVector
     at = Vector{Any}(undef, length(atv) + 1)
     at[1] = f
     for i = 1:length(atv)
-        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
-        at[i + 1] === Bottom && return
+        atᵢ = at[i + 1] = sp_type_rewrap(atv[i], frame_instance(sv), false)
+        atᵢ === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
     abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sv)::Future
     rt = e.args[1]
-    isa(rt, Type) || (rt = Any)
+    isconcretetype(rt) || (rt = Any)
     return RTEffects(rt, Any, EFFECTS_UNKNOWN)
 end
 
@@ -3240,8 +3241,16 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
 end
 
 function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
-    (;handlers, handler_at) = sv.handler_info::HandlerInfo
-    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+    (;handler_info) = sv
+    if handler_info === nothing
+        return the_exception_info(Any)
+    end
+    (;handlers, handler_at) = handler_info
+    handler_id = handler_at[sv.currpc][2]
+    if handler_id === 0
+        return the_exception_info(Any)
+    end
+    return the_exception_info(handlers[handler_id].exct)
 end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))

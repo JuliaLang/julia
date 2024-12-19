@@ -430,6 +430,8 @@ end
 
     @test Symbol(gstr) === Symbol("12")
 
+    @test eltype(gstr) == Char
+    @test firstindex(gstr) == 1
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
     @test length(gstr) == 2
