@@ -1861,6 +1861,8 @@ try # test the functionality of `UndefVarError_hint`
             f() = 1.0
         end
 
+        C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
+
         append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
         f
         """
