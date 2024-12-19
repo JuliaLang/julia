@@ -528,7 +528,6 @@ _similar_axes_or_length(A, T, ax::I, ::I) where {I} = similar(A, T, map(_indexle
 _similar_axes_or_length(AT, ax::I, ::I) where {I} = similar(AT, map(_indexlength, ax))
 
 # reshape accepts a single colon
-Base.reshape(A::AbstractArray, inds::OffsetAxis...) = reshape(A, inds)
 function Base.reshape(A::AbstractArray, inds::Tuple{Vararg{OffsetAxis}})
     AR = reshape(no_offset_view(A), map(_indexlength, inds))
     O = OffsetArray(AR, map(_offset, axes(AR), inds))
@@ -553,22 +552,9 @@ _reshape2(A, inds) = reshape(A, inds)
 _reshape2(A::OffsetArray, inds) = reshape(parent(A), inds)
 _reshape_nov(A, inds) = _reshape(no_offset_view(A), inds)
 
-Base.reshape(A::OffsetArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) =
-    OffsetArray(_reshape(parent(A), inds), map(_toaxis, inds))
 # And for non-offset axes, we can just return a reshape of the parent directly
-Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{Integer,Base.OneTo}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Union{Colon, Integer}, Vararg{Union{Colon, Integer}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetVector, ::Colon) = A
-Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
-Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = _reshape_nov(A, inds)
-# The following two additional methods for Colon are added to resolve method ambiguities to
-# Base: https://github.com/JuliaLang/julia/pull/45387#issuecomment-1132859663
-Base.reshape(A::OffsetArray, inds::Colon) = _reshape_nov(A, inds)
-Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
-
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))
