@@ -553,6 +553,11 @@ let a = []
     sleep(0.2)
     @test a == [1]
 end
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0, spawn = true)
+    sleep(0.2)
+    @test a == [1]
+end
 
 # make sure that we don't accidentally create a one-shot timer
 let
