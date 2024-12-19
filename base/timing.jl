@@ -106,9 +106,14 @@ function gc_page_utilization_data()
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
+
+const USING_STOCK_GC = occursin("stock", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+# Full sweep reasons are currently only available for the stock GC
+@static if USING_STOCK_GC
 # must be kept in sync with `src/gc-stock.h``
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
                             :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+end
 
 """
     Base.full_sweep_reasons()
@@ -124,11 +129,15 @@ The reasons are:
 Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
 """
 function full_sweep_reasons()
-    reason = cglobal(:jl_full_sweep_reasons, UInt64)
-    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
     d = Dict{Symbol, Int64}()
-    for (i, r) in enumerate(FULL_SWEEP_REASONS)
-        d[r] = reasons_as_array[i]
+    # populate the dictionary according to the reasons above for the stock GC
+    # otherwise return an empty dictionary for now
+    @static if USING_STOCK_GC
+        reason = cglobal(:jl_full_sweep_reasons, UInt64)
+        reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+        for (i, r) in enumerate(FULL_SWEEP_REASONS)
+            d[r] = reasons_as_array[i]
+        end
     end
     return d
 end
