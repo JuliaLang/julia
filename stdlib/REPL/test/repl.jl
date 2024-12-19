@@ -1833,23 +1833,50 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
-try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+try # test the functionality of `UndefVarError_hint`
     @assert isempty(Base.Experimental._hint_handlers)
     Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    # check the requirement to trigger the hint via `UndefVarError_hint`
-    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
 
     fake_repl() do stdin_write, stdout_read, repl
         backend = REPL.REPLBackend()
         repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write,
-              "remove_linenums!\n\"ZZZZZ\"\n")
+        write(stdin_write, """
+        module AAAA # can't clash with anything else (module A defined elsewhere)
+            export f
+            f() = 0.0
+        end
+
+        module C_outer
+            import ..AAAA: f
+            public f
+
+            module C_inner
+            import ..C_outer: f
+            export f
+            end # C_inner
+        end # C_outer
+
+        module D
+            public f
+            f() = 1.0
+        end
+
+        append!(Base.loaded_modules_order, [AAAA, C_outer, C_outer.C_inner, D])
+        f
+        """
+        )
+        write(stdin_write, "\nZZZZZ\n")
         txt = readuntil(stdout_read, "ZZZZZ")
         write(stdin_write, '\x04')
         wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.AAAA.", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.D.", txt)
+        @test occursin("- Also made available as public by Main.C_outer.", txt)
+        @test occursin("- Also exported by Main.C_outer.C_inner (loaded but not imported in Main).", txt)
     end
+catch e
+    # fail test if error
+    @test false
 finally
     empty!(Base.Experimental._hint_handlers)
 end
