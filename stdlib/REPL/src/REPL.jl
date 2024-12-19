@@ -97,22 +97,20 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
         end
     end
 
-    if !isempty(to_warn_about)
-        for (binding_m, modules) in pairs(to_warn_about)
-            print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
-            for m in modules
-                m == binding_m && continue
-                how_available = if Base.isexported(m, var)
-                    "exported by"
-                elseif Base.ispublic(m, var)
-                    "declared public in"
-                end
-                print(io, "\n    - Also $how_available $m")
-                if !isdefined(active_mod, nameof(m))
-                    print(io, " (loaded but not imported in $active_mod)")
-                end
-                print(io, ".")
+    for (binding_m, modules) in pairs(to_warn_about)
+        print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
+        for m in modules
+            m == binding_m && continue
+            how_available = if Base.isexported(m, var)
+                "exported by"
+            elseif Base.ispublic(m, var)
+                "made available as public by"
             end
+            print(io, "\n    - Also $how_available $m")
+            if !isdefined(active_mod, nameof(m))
+                print(io, " (loaded but not imported in $active_mod)")
+            end
+            print(io, ".")
         end
     end
     return warned
