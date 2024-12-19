@@ -94,6 +94,22 @@ end
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort(()) == ()
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(rand(NTuple{i, Float64}))
+    end
+    @test_throws MethodError sort((1,2,3.0))
+    @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -913,6 +929,20 @@ end
     end
     @test sort([1,2,3], alg=MySecondAlg()) == [9,9,9]
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
+
+    # Tuple extensions (custom alg)
+    @test_throws MethodError sort((1,2,3), alg=MyFirstAlg())
+    Base.Sort._sort(v::NTuple, ::MyFirstAlg, o::Base.Order.Ordering, kw) = (17,2,9)
+    @test sort((1,2,3), alg=MyFirstAlg()) == (17,2,9)
+
+    struct TupleFoo
+        x::Int
+    end
+
+    # Tuple extensions (custom type)
+    @test_throws MethodError sort(TupleFoo.((3,1,2)))
+    Base.Sort._sort(v::NTuple{N, TupleFoo}, ::Base.Sort.DefaultStable, o::Base.Order.Ordering, kw) where N = v
+    @test sort(TupleFoo.((3,1,2))) === TupleFoo.((3,1,2))
 end
 
 @testset "sort!(v, lo, hi, alg, order)" begin

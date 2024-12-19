@@ -152,6 +152,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-size-hint
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // task_metrics
     };
     jl_options_initialized = 1;
 }
@@ -316,6 +317,7 @@ static const char opts_hidden[]  =
     "                                               comment if color is not supported\n"
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
     "                                               compile in ms\n"
+    " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
     " --trim={no*|safe|unsafe|unsafe-warn}\n"
@@ -347,6 +349,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
+           opt_task_metrics,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -427,6 +430,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
+        { "task-metrics",    required_argument, 0, opt_task_metrics },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -977,6 +981,14 @@ restart_switch:
                 jl_options.trim = JL_TRIM_UNSAFE_WARN;
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
+            break;
+        case opt_task_metrics:
+            if (!strcmp(optarg, "no"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
+            else if (!strcmp(optarg, "yes"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
+            else
+                jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

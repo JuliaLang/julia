@@ -12,25 +12,6 @@ if !@isdefined(var"@timeit")
     end
 end
 
-# avoid cycle due to over-specializing `any` when used by inference
-function _any(@nospecialize(f), a)
-    for x in a
-        f(x) && return true
-    end
-    return false
-end
-any(@nospecialize(f), itr) = _any(f, itr)
-any(itr) = _any(identity, itr)
-
-function _all(@nospecialize(f), a)
-    for x in a
-        f(x) || return false
-    end
-    return true
-end
-all(@nospecialize(f), itr) = _all(f, itr)
-all(itr) = _all(identity, itr)
-
 function contains_is(itr, @nospecialize(x))
     for y in itr
         if y === x
@@ -54,8 +35,8 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
         # No definite size
         (isa(x, GenericMemory) || isa(x, String) || isa(x, SimpleVector)) &&
             return MAX_INLINE_CONST_SIZE + 1
-        if isa(x, Module) || isa(x, Method)
-            # We allow modules and methods, because we already assume they are externally
+        if isa(x, Module) || isa(x, Method) || isa(x, CodeInstance)
+            # We allow modules, methods and CodeInstance, because we already assume they are externally
             # rooted, so we count their contents as 0 size.
             return sizeof(Ptr{Cvoid})
         end

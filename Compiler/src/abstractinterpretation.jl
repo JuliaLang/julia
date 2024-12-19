@@ -2218,16 +2218,47 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     ft = widenconst(ft′)
     ft === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
     types = argtype_by_index(argtypes, 3)
-    if types isa Const && types.val isa Method
-        method = types.val::Method
-        types = method # argument value
-        lookupsig = method.sig # edge kind
-        argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-        nargtype = typeintersect(lookupsig, argtype)
-        nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-        nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+    if types isa Const && types.val isa Union{Method, CodeInstance}
+        method_or_ci = types.val
+        if isa(method_or_ci, CodeInstance)
+            our_world = sv.world.this
+            argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
+            specsig = method_or_ci.def.specTypes
+            defdef = method_or_ci.def.def
+            exct = method_or_ci.exctype
+            if !hasintersect(argtype, specsig)
+                return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+            elseif !(argtype <: specsig) || (isa(defdef, Method) && !(argtype <: defdef.sig))
+                exct = Union{exct, TypeError}
+            end
+            callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
+            if !(our_world in callee_valid_range)
+                if our_world < first(callee_valid_range)
+                    update_valid_age!(sv, WorldRange(first(sv.world.valid_worlds), first(callee_valid_range)-1))
+                else
+                    update_valid_age!(sv, WorldRange(last(callee_valid_range)+1, last(sv.world.valid_worlds)))
+                end
+                return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
+            end
+            # TODO: When we add curing, we may want to assume this is nothrow
+            if (method_or_ci.owner === Nothing && method_ir_ci.def.def isa Method)
+                exct = Union{exct, ErrorException}
+            end
+            update_valid_age!(sv, callee_valid_range)
+            return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
+                InvokeCICallInfo(method_or_ci)))
+        else
+            method = method_or_ci::Method
+            types = method # argument value
+            lookupsig = method.sig # edge kind
+            argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
+            nargtype = typeintersect(lookupsig, argtype)
+            nargtype === Bottom && return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
+            nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
+            # Fall through to generic invoke handling
+        end
     else
-        widenconst(types) >: Method && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
+        hasintersect(widenconst(types), Union{Method, CodeInstance}) && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
         isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         unwrapped = unwrap_unionall(types)
@@ -2625,7 +2656,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if sv isa InferenceState && f === typeassert
             # perform very limited back-propagation of invariants after this type assertion
             if rt !== Bottom && isa(fargs, Vector{Any})
-                farg2 = fargs[2]
+                farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
                     refinements = SlotRefinement(farg2, rt)
                 end
@@ -2863,20 +2894,21 @@ end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], sstate, sv)
-    # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
+    # rt = sp_type_rewrap(e.args[3], sv.linfo, true) # verify that the result type make sense?
+    # rt === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     atv = e.args[4]::SimpleVector
     at = Vector{Any}(undef, length(atv) + 1)
     at[1] = f
     for i = 1:length(atv)
-        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
-        at[i + 1] === Bottom && return
+        atᵢ = at[i + 1] = sp_type_rewrap(atv[i], frame_instance(sv), false)
+        atᵢ === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
     abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sv)::Future
     rt = e.args[1]
-    isa(rt, Type) || (rt = Any)
+    isconcretetype(rt) || (rt = Any)
     return RTEffects(rt, Any, EFFECTS_UNKNOWN)
 end
 
@@ -3209,8 +3241,16 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
 end
 
 function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
-    (;handlers, handler_at) = sv.handler_info::HandlerInfo
-    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+    (;handler_info) = sv
+    if handler_info === nothing
+        return the_exception_info(Any)
+    end
+    (;handlers, handler_at) = handler_info
+    handler_id = handler_at[sv.currpc][2]
+    if handler_id === 0
+        return the_exception_info(Any)
+    end
+    return the_exception_info(handlers[handler_id].exct)
 end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
@@ -4020,13 +4060,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 end
                 effects === nothing || merge_override_effects!(interp, effects, frame)
                 if lhs !== nothing && rt !== Bottom
-                    if isa(lhs, SlotNumber)
-                        changes = StateUpdate(lhs, VarState(rt, false))
-                    elseif isa(lhs, GlobalRef)
-                        handle_global_assignment!(interp, frame, currsaw_latestworld, lhs, rt)
-                    else
-                        merge_effects!(interp, frame, EFFECTS_UNKNOWN)
-                    end
+                    changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
                 end
             end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
