@@ -787,9 +787,11 @@ backtrace()
     Base.show_backtrace(io, bt)
     output = split(String(take!(io)), '\n')
     length(output) >= 8 || println(output) # for better errors when this fails
-    @test lstrip(output[3])[1:3] == "[1]"
+    @test lstrip(output[3])[1] == '┌'
+    @test lstrip(lstrip(output[3])[4:end])[1:3] == "[1]"
     @test occursin("g28442", output[3])
-    @test lstrip(output[5])[1:3] == "[2]"
+    @test lstrip(output[5])[1] == '├'
+    @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("f28442", output[5])
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
@@ -798,13 +800,13 @@ backtrace()
         # Instead of skipping them entirely, we skip one, and we loosen the other.
 
         # Broken test: @test occursin("the above 2 lines are repeated 5000 more times", output[7])
-        @test occursin("the above 2 lines are repeated ", output[7])
+        @test occursin("repeated ", output[7])
         @test occursin(" more times", output[7])
 
         # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
         @test_broken false
     else
-        @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test occursin("repeated 5000 more times", output[7])
         @test lstrip(output[8])[1:7] == "[10003]"
     end
 end
@@ -972,7 +974,7 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
                 catch_backtrace()
             end
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"repeats \d+ times", bt_str)
+            @test occursin(r"repeated \d+ more times", bt_str)
         end
 
         let bt = try
@@ -981,7 +983,7 @@ if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
                 catch_backtrace()
             end
             bt_str = sprint(Base.show_backtrace, bt)
-            @test occursin(r"the above 2 lines are repeated \d+ more times", bt_str)
+            @test occursin(r"repeated \d+ more times", bt_str)
         end
     end
 end
