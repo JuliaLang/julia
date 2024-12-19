@@ -31,7 +31,6 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
-(define (nothrow-julia-global v) #f)
 
 ;; parser entry points
 

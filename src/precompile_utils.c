@@ -264,10 +264,8 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         jl_value_t *item = jl_array_ptr_ref(m, i);
         if (jl_is_method_instance(item)) {
             mi = (jl_method_instance_t*)item;
-            size_t min_world = 0;
-            size_t max_world = ~(size_t)0;
             if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, mi->def.method))
-                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
         }

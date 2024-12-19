@@ -783,6 +783,15 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
+    let JL_OPTIONS_TASK_METRICS_OFF = 0, JL_OPTIONS_TASK_METRICS_ON = 1
+        @test parse(Int,readchomp(`$exename -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_OFF
+        @test parse(Int, readchomp(`$exename --task-metrics=yes -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_ON
+        @test !parse(Bool, readchomp(`$exename  -E "current_task().metrics_enabled"`))
+        @test parse(Bool, readchomp(`$exename --task-metrics=yes -E "current_task().metrics_enabled"`))
+    end
+
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)

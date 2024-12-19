@@ -914,3 +914,14 @@ end
     b = sum(a, dims=1)
     @test b[begin] == sum(r)
 end
+
+@testset "reshape" begin
+    A0 = [1 3; 2 4]
+    A = reshape(A0, 2:3, 4:5)
+    @test axes(A) == Base.IdentityUnitRange.((2:3, 4:5))
+
+    B = reshape(A0, -10:-9, 9:10)
+    @test isa(B, OffsetArray{Int,2})
+    @test parent(B) == A0
+    @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
+end

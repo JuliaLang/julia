@@ -219,16 +219,29 @@ const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
 const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
-mutable struct TryCatchFrame
+abstract type Handler end
+get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int
+
+mutable struct TryCatchFrame <: Handler
     exct
     scopet
     const enter_idx::Int
     scope_uses::Vector{Int}
-    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) =
+        new(exct, scopet, enter_idx)
 end
+TryCatchFrame(stmt::EnterNode, pc::Int) =
+    TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc)
+get_enter_idx_impl((; enter_idx)::TryCatchFrame) = enter_idx
 
-struct HandlerInfo
-    handlers::Vector{TryCatchFrame}
+struct SimpleHandler <: Handler
+    enter_idx::Int
+end
+SimpleHandler(::EnterNode, pc::Int) = SimpleHandler(pc)
+get_enter_idx_impl((; enter_idx)::SimpleHandler) = enter_idx
+
+struct HandlerInfo{T<:Handler}
+    handlers::Vector{T}
     handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
@@ -261,12 +274,13 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handler_info::Union{Nothing,HandlerInfo}
+    handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
+    ssaflags::Vector{UInt32}
     edges::Vector{Any}
     stmt_info::Vector{CallInfo}
 
@@ -317,7 +331,7 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_info = compute_trycatch(code)
+        handler_info = ComputeTryCatch{TryCatchFrame}()(code)
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
@@ -343,6 +357,7 @@ mutable struct InferenceState
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        ssaflags = copy(src.ssaflags)
 
         unreachable = BitSet()
         pclimitations = IdSet{InferenceState}()
@@ -374,7 +389,7 @@ mutable struct InferenceState
 
         this = new(
             mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -419,10 +434,16 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-compute_trycatch(ir::IRCode) = compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
+struct ComputeTryCatch{T<:Handler} end
+
+const compute_trycatch = ComputeTryCatch{SimpleHandler}()
+
+(compute_trycatch::ComputeTryCatch{SimpleHandler})(ir::IRCode) =
+    compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    compute_trycatch(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo}
+    (::ComputeTryCatch{Handler})(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo{Handler}}
+    const compute_trycatch = ComputeTryCatch{SimpleHandler}()
 
 Given the code of a function, compute, at every statement, the current
 try/catch handler, and the current exception stack top. This function returns
@@ -431,9 +452,9 @@ a tuple of:
     1. `handler_info.handler_at`: A statement length vector of tuples
        `(catch_handler, exception_stack)`, which are indices into `handlers`
 
-    2. `handler_info.handlers`: A `TryCatchFrame` vector of handlers
+    2. `handler_info.handlers`: A `Handler` vector of handlers
 """
-function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing)
+function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing) where Handler
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -452,10 +473,10 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
         stmt = code[pc]
         if isa(stmt, EnterNode)
             (;handlers, handler_at) = handler_info =
-                (handler_info === nothing ? HandlerInfo(TryCatchFrame[], fill((0, 0), n)) : handler_info)
+                (handler_info === nothing ? HandlerInfo{Handler}(Handler[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
-            (bbs !== nothing) && (l = first(bbs[l].stmts))
-            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
+            (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
+            push!(handlers, Handler(stmt, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
@@ -498,7 +519,7 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
-                (bbs !== nothing) && (l = first(bbs[l].stmts))
+                (bbs !== nothing) && (l != 0) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
@@ -524,7 +545,7 @@ function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothi
                     end
                     cur_hand = cur_stacks[1]
                     for i = 1:l
-                        cur_hand = handler_at[handlers[cur_hand].enter_idx][1]
+                        cur_hand = handler_at[get_enter_idx(handlers[cur_hand])][1]
                     end
                     cur_stacks = (cur_hand, cur_stacks[2])
                     cur_stacks == (0, 0) && break
@@ -1004,25 +1025,22 @@ function callers_in_cycle(sv::InferenceState)
 end
 callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
 
-get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+get_curr_ssaflag(sv::InferenceState) = sv.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
-has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.src.ssaflags[sv.currpc], flag)
+has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.ssaflags[sv.currpc], flag)
 has_curr_ssaflag(sv::IRInterpretationState, flag::UInt32) = has_flag(sv.ir.stmts[sv.curridx][:flag], flag)
 
 function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
-    curr_flag = sv.src.ssaflags[sv.currpc]
-    sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
-end
-function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32=typemax(UInt32))
-    curr_flag = sv.ir.stmts[sv.curridx][:flag]
-    sv.ir.stmts[sv.curridx][:flag] = (curr_flag & ~mask) | flag
+    curr_flag = sv.ssaflags[sv.currpc]
+    sv.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
+    nothing
 end
 
-add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] |= flag
 add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
 
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.ssaflags[sv.currpc] &= ~flag
 sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
@@ -1035,8 +1053,8 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
-decode_statement_effects_override(sv::AbsIntState) =
-    decode_statement_effects_override(get_curr_ssaflag(sv))
+decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
+decode_statement_effects_override(sv::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState
     rt

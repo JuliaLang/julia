@@ -23,7 +23,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
     Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
@@ -63,7 +63,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
     m.args[1] = copy(src)
     Compiler.verify_ir(Compiler.inflate_ir(src))
@@ -103,7 +103,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
     Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true

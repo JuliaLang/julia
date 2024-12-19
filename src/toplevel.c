@@ -496,7 +496,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
-size_t jl_require_world = ~(size_t)0;
+extern size_t jl_require_world;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
@@ -1050,10 +1050,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-        // Don't infer blocks containing e.g. method definitions, since it's probably not
-        // worthwhile and also unsound (see #24316).
-        // TODO: This is still not correct since an `eval` can happen elsewhere, but it
-        // helps in common cases.
+        // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
@@ -1068,7 +1065,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         if (has_opaque) {
             jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         }
+        size_t world = jl_atomic_load_acquire(&jl_world_counter);
+        ct->world_age = world;
         result = jl_interpret_toplevel_thunk(m, thk);
+        ct->world_age = last_age;
     }
 
     JL_GC_POP();
@@ -1078,8 +1078,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 {
     const char *filename = jl_filename;
-    int lieno = jl_lineno;
-    return jl_toplevel_eval_flex(m, v, 1, 0, &filename, &lieno);
+    int lineno = jl_lineno;
+    return jl_toplevel_eval_flex(m, v, 1, 0, &filename, &lineno);
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
@@ -1180,14 +1180,13 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
-    size_t last_age = ct->world_age;
     int lineno = 0;
     jl_lineno = 0;
     const char *filename_str = jl_string_data(filename);
     jl_filename = filename_str;
-    int err = 0;
 
     JL_TRY {
+        size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         for (size_t i = 0; i < jl_expr_nargs(ast); i++) {
             expression = jl_exprarg(ast, i);
@@ -1203,23 +1202,20 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
             ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
+        ct->world_age = last_age;
     }
     JL_CATCH {
-        result = jl_box_long(jl_lineno); // (ab)use result to root error line
-        err = 1;
-        goto finally; // skip jl_restore_excstack
-    }
-finally:
-    ct->world_age = last_age;
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
-    if (err) {
+        result = jl_box_long(lineno); // (ab)use result to root error line
+        jl_lineno = last_lineno;
+        jl_filename = last_filename;
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
                                            jl_current_exception(ct)));
     }
+    jl_lineno = last_lineno;
+    jl_filename = last_filename;
     JL_GC_POP();
     return result;
 }

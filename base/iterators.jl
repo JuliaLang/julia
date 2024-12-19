@@ -15,7 +15,8 @@ using .Base:
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    afoldl
 using Core: @doc
 
 using .Base:
@@ -1202,8 +1203,13 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}} = promote_typejoin(map(eltype, fieldtypes(I))...)
-eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
+
+# For tuples, we statically know the element type of each index, so we can compute
+# this at compile time.
+function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
+end
+
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))

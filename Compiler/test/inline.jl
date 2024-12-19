@@ -2111,7 +2111,7 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(x->isexpr(x, :(=)), src.code)
+        @test any(iscall((src, Core.setglobal!)), src.code)
     end
 
     let

@@ -1205,6 +1205,8 @@ julia> binomial(-5, 3)
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
+
 Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
     k < 0 && return zero(T)
@@ -1233,7 +1235,6 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
-binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)

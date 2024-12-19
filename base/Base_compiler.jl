@@ -249,6 +249,8 @@ using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 include("namedtuple.jl")
 
+include("anyall.jl")
+
 include("ordering.jl")
 using .Order
 

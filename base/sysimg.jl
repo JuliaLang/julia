@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Can be be loaded on top of either an existing system image built from
+# Can be loaded on top of either an existing system image built from
 # `Base_compiler.jl` or standalone, in which case we will build it now.
 let had_compiler = isdefined(Main, :Base)
 if had_compiler; else

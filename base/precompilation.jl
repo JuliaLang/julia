@@ -944,7 +944,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         try
                             # allows processes to wait if another process is precompiling a given package to
                             # a functionally identical package cache (except for preferences, which may differ)
-                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
+                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
                                     keep_loaded_modules = false
@@ -1130,7 +1130,7 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
     end
@@ -1153,17 +1153,22 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         !fancyprint && lock(print_lock) do
             println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
-        # wait until the lock is available
-        @invokelatest Base.mkpidlock_hook(() -> begin
-                # double-check in case the other process crashed or the lock expired
-                if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
-                    return nothing # returning nothing indicates a process waited for another
-                else
-                    delete!(pkgspidlocked, pkg_config)
-                    return f() # precompile
-                end
-            end,
-            pidfile; stale_age)
+        Base.release(parallel_limiter) # release so other work can be done while waiting
+        try
+            # wait until the lock is available
+            @invokelatest Base.mkpidlock_hook(() -> begin
+                    # double-check in case the other process crashed or the lock expired
+                    if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
+                        return nothing # returning nothing indicates a process waited for another
+                    else
+                        delete!(pkgspidlocked, pkg_config)
+                        Base.acquire(f, parallel_limiter) # precompile
+                    end
+                end,
+                pidfile; stale_age)
+        finally
+            Base.acquire(parallel_limiter) # re-acquire so the outer release is balanced
+        end
     end
     return cachefile
 end
