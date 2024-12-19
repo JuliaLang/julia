@@ -5,6 +5,13 @@ abstract type MarkdownElement end
 include("block.jl")
 include("inline.jl")
 
+"""
+    const Markdown.common
+
+A constant indicating the CommonMark flavor of Markdown.
+
+See also [`Markdown.parse`](@ref), [`Markdown.github`](@ref), [`Markdown.julia`](@ref).
+"""
 @flavor common [list, indentcode, blockquote, admonition, footnote, hashheader, horizontalrule,
                 paragraph,
 
