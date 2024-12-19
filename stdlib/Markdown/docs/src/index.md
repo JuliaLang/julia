@@ -420,6 +420,10 @@ custom flavour of Markdown can be used, but this should generally be unnecessary
 Markdown.MD
 Markdown.@md_str
 Markdown.@doc_str
+Markdown.common
+Markdown.github
+Markdown.julia
+Markdown.parse
 Markdown.html
 Markdown.latex
 ```

@@ -7,6 +7,13 @@
 
 include("interp.jl")
 
+"""
+    const Markdown.julia
+
+A constant indicating Julia's flavor of Markdown.
+
+See also [`Markdown.parse`](@ref), [`Markdown.common`](@ref), [`Markdown.github`](@ref).
+"""
 @flavor julia [blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
                blockquote, admonition, footnote, github_table, horizontalrule, setextheader, paragraph,
 
