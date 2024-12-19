@@ -1589,11 +1589,19 @@ JL_CALLABLE(jl_f_invoke)
         return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
     } else if (jl_is_code_instance(argtypes)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
         // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
-        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->specTypes) ||
-            (jl_is_method(codeinst->def->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->def.method->sig))) {
-            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+        if (jl_is_abioverride(codeinst->def)) {
+            jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)(codeinst->def))->abi;
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, abi)) {
+                jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(args[0], &args[2], nargs - 1));
+            }
+        } else {
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->specTypes) ||
+                (jl_is_method(mi->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->def.method->sig))) {
+                jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+            }
         }
         if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
             jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
@@ -1609,7 +1617,7 @@ JL_CALLABLE(jl_f_invoke)
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_invoke(args[0], &args[2], nargs - 1, codeinst->def);
+            return jl_invoke(args[0], &args[2], nargs - 1, mi);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))

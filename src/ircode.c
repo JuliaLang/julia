@@ -1194,7 +1194,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_close(s.s);
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
-        code->parent = metadata->def;
+        code->parent = jl_get_ci_mi(metadata);
         jl_gc_wb(code, code->parent);
         code->rettype = metadata->rettype;
         jl_gc_wb(code, code->rettype);

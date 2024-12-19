@@ -2212,6 +2212,18 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     return CallMeta(ret, Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
 end
 
+function ci_abi(ci::CodeInstance)
+    def = ci.def
+    isa(def, ABIOverride) && return def.abi
+    (def::MethodInstance).specTypes
+end
+
+function get_ci_mi(ci::CodeInstance)
+    def = ci.def
+    isa(def, ABIOverride) && return def.def
+    return def::MethodInstance
+end
+
 function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
     argtypes = arginfo.argtypes
     ft′ = argtype_by_index(argtypes, 2)
@@ -2223,12 +2235,12 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             our_world = sv.world.this
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-            specsig = method_or_ci.def.specTypes
-            defdef = method_or_ci.def.def
+            specsig = ci_abi(method_or_ci)
+            defdef = get_ci_mi(method_or_ci).def
             exct = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
-            elseif !(argtype <: specsig) || (isa(defdef, Method) && !(argtype <: defdef.sig))
+            elseif !(argtype <: specsig) || ((!isa(method_or_ci.def, ABIOverride) && isa(defdef, Method)) && !(argtype <: defdef.sig))
                 exct = Union{exct, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
