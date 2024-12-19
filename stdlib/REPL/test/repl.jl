@@ -1871,7 +1871,7 @@ try # test the functionality of `UndefVarError_hint`
         wait(repltask)
         @test occursin("Hint: a global variable of this name also exists in Main.A53000.", txt)
         @test occursin("Hint: a global variable of this name also exists in Main.D_53000.", txt)
-        @test occursin("- Also made available as public by Main.C_outer_53000.", txt)
+        @test occursin("- Also declared public in Main.C_outer_53000.", txt)
         @test occursin("- Also exported by Main.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", txt)
     end
 catch e
