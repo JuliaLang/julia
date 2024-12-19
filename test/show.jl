@@ -1753,8 +1753,8 @@ end
             true
         end
         M = MyBigFill(4, (big(2)^65, 3))
-        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{Int64, 2}: …"
-        @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{Int64, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
     end
 end
 
