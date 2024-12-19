@@ -616,7 +616,7 @@ julia> foo(A(3, 4))
 
 For anonymous functions, destructuring a single argument requires an extra comma:
 
-```
+```julia-repl
 julia> map(((x, y),) -> x + y, [(1, 2), (3, 4)])
 2-element Array{Int64,1}:
  3
