@@ -105,7 +105,7 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
                 how_available = if Base.isexported(m, var)
                     "exported by"
                 elseif Base.ispublic(m, var)
-                    "made available as public by"
+                    "declared public in"
                 end
                 print(io, "\n    - Also $how_available $m")
                 if !isdefined(active_mod, nameof(m))
