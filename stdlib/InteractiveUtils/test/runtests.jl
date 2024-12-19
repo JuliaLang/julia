@@ -846,3 +846,7 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+@testset "code_llvm returns an object" begin
+    @test (@code_llvm sin(0.5)) isa InteractiveUtils.LLVMCode
+end
