@@ -301,6 +301,29 @@ static void finish_params(Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOIN
     }
 }
 
+// look for something with an egal ABI that is already in the JIT
+static jl_code_instance_t *jl_method_compiled_egal(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_method_instance_t *mi = ci->def;
+    jl_value_t *owner = ci->owner;
+    jl_value_t *rettype = ci->rettype;
+    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
+    while (codeinst) {
+        if (codeinst != ci &&
+            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->invoke) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+            jl_egal(codeinst->owner, owner) &&
+            jl_egal(codeinst->rettype, rettype)) {
+            return codeinst;
+        }
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    }
+    return codeinst;
+}
 
 static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t &params, bool forceall=false) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
@@ -309,6 +332,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
     std::swap(params.workqueue, edges);
     for (auto &it : edges) {
         jl_code_instance_t *codeinst = it.first;
+        JL_GC_PROMISE_ROOTED(codeinst);
         auto &proto = it.second;
         // try to emit code for this item from the workqueue
         StringRef invokeName = "";
@@ -321,7 +345,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         // But it must be consistent with the following invokenames lookup, which is protected by the engine_lock
         uint8_t specsigflags;
         void *fptr;
-        void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT; // not a safepoint (or deadlock) in this file due to 0 parameter
+        void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT; // declare it is not a safepoint (or deadlock) in this file due to 0 parameter
         jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
         //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
         if (invoke == jl_fptr_args_addr) {
@@ -347,6 +371,40 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                     isedge = true;
                 }
                 force = true;
+            }
+        }
+        if (preal_decl.empty()) {
+            // there may be an equivalent method already compiled (or at least registered with the JIT to compile), in which case we should be using that instead
+            jl_code_instance_t *compiled_ci = jl_method_compiled_egal(codeinst);
+            if (compiled_ci) {
+                codeinst = compiled_ci;
+                uint8_t specsigflags;
+                void *fptr;
+                jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &fptr, 0);
+                //if (specsig ? specsigflags & 0b1 : invoke == jl_fptr_args_addr)
+                if (invoke == jl_fptr_args_addr) {
+                    preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
+                }
+                else if (specsigflags & 0b1) {
+                    preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, invoke, codeinst);
+                    preal_specsig = true;
+                }
+                if (preal_decl.empty()) {
+                    auto it = invokenames.find(codeinst);
+                    if (it != invokenames.end()) {
+                        auto &decls = it->second;
+                        invokeName = decls.functionObject;
+                        if (decls.functionObject == "jl_fptr_args") {
+                            preal_decl = decls.specFunctionObject;
+                            isedge = true;
+                        }
+                        else if (decls.functionObject != "jl_fptr_sparam" && decls.functionObject != "jl_f_opaque_closure_call") {
+                            preal_decl = decls.specFunctionObject;
+                            preal_specsig = true;
+                            isedge = true;
+                        }
+                    }
+                }
             }
         }
         if (!preal_decl.empty() || force) {
@@ -733,14 +791,17 @@ static void recursive_compile_graph(
     while (!workqueue.empty()) {
         auto this_code = workqueue.pop_back_val();
         if (Seen.insert(this_code).second) {
-            if (this_code != codeinst) {
-                JL_GC_PROMISE_ROOTED(this_code); // rooted transitively from following edges from original argument
-                jl_emit_codeinst_to_jit(this_code, nullptr); // contains safepoints
-            }
-            jl_unique_gcsafe_lock lock(engine_lock);
-            auto edges = complete_graph.find(this_code);
-            if (edges != complete_graph.end()) {
-                workqueue.append(edges->second);
+            jl_code_instance_t *compiled_ci = jl_method_compiled_egal(codeinst);
+            if (!compiled_ci) {
+                if (this_code != codeinst) {
+                    JL_GC_PROMISE_ROOTED(this_code); // rooted transitively from following edges from original argument
+                    jl_emit_codeinst_to_jit(this_code, nullptr); // contains safepoints
+                }
+                jl_unique_gcsafe_lock lock(engine_lock);
+                auto edges = complete_graph.find(this_code);
+                if (edges != complete_graph.end()) {
+                    workqueue.append(edges->second);
+                }
             }
         }
     }

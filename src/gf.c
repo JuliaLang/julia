@@ -344,7 +344,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode)
 {
     if (jl_typeinf_func == NULL)
-        return NULL;
+        return jl_method_inferred_with_abi(mi, world);
     jl_task_t *ct = jl_current_task;
     if (ct->reentrant_timing & 0b1000) {
         // We must avoid attempting to re-enter inference here
@@ -2857,9 +2857,6 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     }
 
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
-    // Try to find a codeinst we have already inferred (e.g. while we were compiling
-    // something else).
-    codeinst = jl_method_inferred_with_abi(mi, world);
 
     // Everything from here on is considered (user facing) compile time
     uint64_t start = jl_typeinf_timing_begin();
@@ -2875,7 +2872,6 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         codeinst_old = jl_atomic_load_relaxed(&codeinst_old->next);
     }
 
-    // This codeinst hasn't been previously inferred do that now
     // jl_type_infer will internally do a cache lookup and jl_engine_reserve call
     // to synchronize this across threads
     if (!codeinst) {
