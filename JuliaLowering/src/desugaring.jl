@@ -1431,176 +1431,176 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         name = name[1]
     end
 
-    if kind(name) == K"call"
-        callex = rewrite_call(name)
-        # TODO
-        # dotop names
-        # overlays
-        static_parameters = SyntaxList(ctx)
+    if kind(name) == K"tuple"
+        TODO(name, "Anon function lowering")
+    elseif kind(name) != K"call"
+        throw(LoweringError(name, "Bad function definition"))
+    end
 
-        # Add self argument where necessary
-        args = callex[2:end]
-        name = callex[1]
+    callex = rewrite_call(name)
+    # TODO
+    # dotop names
+    # overlays
+    static_parameters = SyntaxList(ctx)
 
-        arg_names = SyntaxList(ctx)
-        arg_types = SyntaxList(ctx)
-        body_stmts = SyntaxList(ctx)
-        first_default = 0
-        arg_defaults = SyntaxList(ctx)
-        for (i,arg) in enumerate(args)
-            info = match_function_arg(arg)
-            aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
-            if kind(aname) == K"tuple"
-                # Argument destructuring
-                is_nospecialize = getmeta(arg, :nospecialize, false)
-                n = new_mutable_var(ctx, aname, "destructured_arg_$i";
-                                    kind=:argument, is_nospecialize=is_nospecialize)
-                push!(body_stmts, @ast ctx aname [
-                    K"local"(meta=CompileHints(:is_destructured_arg, true))
-                    [K"=" aname n]
-                ])
-                aname = n
-            end
-            push!(arg_names, aname)
-            atype = !isnothing(info.type) ? info.type : @ast ctx arg "Any"::K"core"
-            if info.is_slurp
-                if i != length(args)
-                    throw(LoweringError(arg, "`...` may only be used for the last function argument"))
-                end
-                atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
-            end
-            if isnothing(info.default)
-                if !isempty(arg_defaults) && !info.is_slurp
-                    # TODO: Referring to multiple pieces of syntax in one error message is necessary.
-                    # TODO: Poison ASTs with error nodes and continue rather than immediately throwing.
-                    #
-                    # We should make something like the following kind of thing work!
-                    # arg_defaults[1] = @ast_error ctx arg_defaults[1] """
-                    #     Positional arguments with defaults must occur at the end.
-                    #
-                    #     We found a [non-optional position argument]($arg) *after*
-                    #     one with a [default value]($(first(arg_defaults)))
-                    # """
-                    #
-                    throw(LoweringError(args[first_default], "optional positional arguments must occur at end"))
-                end
-            else
-                if isempty(arg_defaults)
-                    first_default = i
-                end
-                push!(arg_defaults, info.default)
-            end
-            # TODO: Ideally, ensure side effects of evaluating arg_types only
-            # happen once - we should create an ssavar if there's any following
-            # defaults. (flisp lowering doesn't ensure this either)
-            push!(arg_types, atype)
+    # Add self argument where necessary
+    args = callex[2:end]
+    name = callex[1]
+
+    arg_names = SyntaxList(ctx)
+    arg_types = SyntaxList(ctx)
+    body_stmts = SyntaxList(ctx)
+    first_default = 0
+    arg_defaults = SyntaxList(ctx)
+    for (i,arg) in enumerate(args)
+        info = match_function_arg(arg)
+        aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
+        if kind(aname) == K"tuple"
+            # Argument destructuring
+            is_nospecialize = getmeta(arg, :nospecialize, false)
+            n = new_mutable_var(ctx, aname, "destructured_arg_$i";
+                                kind=:argument, is_nospecialize=is_nospecialize)
+            push!(body_stmts, @ast ctx aname [
+                K"local"(meta=CompileHints(:is_destructured_arg, true))
+                [K"=" aname n]
+            ])
+            aname = n
         end
-
-        bare_func_name = nothing
-        doc_obj = nothing
-        farg_name = nothing
-        if kind(name) == K"::"
-            # Add methods to an existing type
-            if numchildren(name) == 1
-                # function (::T)() ...
-                farg_type = name[1]
-            else
-                # function (f::T)() ...
-                @chk numchildren(name) == 2
-                farg_name = name[1]
-                farg_type = name[2]
+        push!(arg_names, aname)
+        atype = !isnothing(info.type) ? info.type : @ast ctx arg "Any"::K"core"
+        if info.is_slurp
+            if i != length(args)
+                throw(LoweringError(arg, "`...` may only be used for the last function argument"))
             end
-            doc_obj = farg_type
+            atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
+        end
+        if isnothing(info.default)
+            if !isempty(arg_defaults) && !info.is_slurp
+                # TODO: Referring to multiple pieces of syntax in one error message is necessary.
+                # TODO: Poison ASTs with error nodes and continue rather than immediately throwing.
+                #
+                # We should make something like the following kind of thing work!
+                # arg_defaults[1] = @ast_error ctx arg_defaults[1] """
+                #     Positional arguments with defaults must occur at the end.
+                #
+                #     We found a [non-optional position argument]($arg) *after*
+                #     one with a [default value]($(first(arg_defaults)))
+                # """
+                #
+                throw(LoweringError(args[first_default], "optional positional arguments must occur at end"))
+            end
         else
-            if !is_valid_name(name)
-                throw(LoweringError(name, "Invalid function name"))
+            if isempty(arg_defaults)
+                first_default = i
             end
-            if is_identifier_like(name)
-                # Add methods to a global `Function` object, or local closure
-                # type function f() ...
-                bare_func_name = name
-            else
-                # Add methods to an existing Function
-                # function A.B.f() ...
-            end
-            doc_obj = name # todo: can closures be documented?
-            farg_type = @ast ctx name [K"function_type" name]
+            push!(arg_defaults, info.default)
         end
-        # Add self argument
-        if isnothing(farg_name)
-            farg_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
-        end
-        pushfirst!(arg_names, farg_name)
-        pushfirst!(arg_types, farg_type)
+        # TODO: Ideally, ensure side effects of evaluating arg_types only
+        # happen once - we should create an ssavar if there's any following
+        # defaults. (flisp lowering doesn't ensure this either)
+        push!(arg_types, atype)
+    end
 
-        if !isnothing(return_type)
-            ret_var = ssavar(ctx, return_type, "return_type")
-            push!(body_stmts, @ast ctx return_type [K"=" ret_var return_type])
+    bare_func_name = nothing
+    doc_obj = nothing
+    farg_name = nothing
+    if kind(name) == K"::"
+        # Add methods to an existing type
+        if numchildren(name) == 1
+            # function (::T)() ...
+            farg_type = name[1]
         else
-            ret_var = nothing
+            # function (f::T)() ...
+            @chk numchildren(name) == 2
+            farg_name = name[1]
+            farg_type = name[2]
         end
+        doc_obj = farg_type
+    else
+        if !is_valid_name(name)
+            throw(LoweringError(name, "Invalid function name"))
+        end
+        if is_identifier_like(name)
+            # Add methods to a global `Function` object, or local closure
+            # type function f() ...
+            bare_func_name = name
+        else
+            # Add methods to an existing Function
+            # function A.B.f() ...
+        end
+        doc_obj = name # todo: can closures be documented?
+        farg_type = @ast ctx name [K"function_type" name]
+    end
+    # Add self argument
+    if isnothing(farg_name)
+        farg_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
+    end
+    pushfirst!(arg_names, farg_name)
+    pushfirst!(arg_types, farg_type)
 
-        body = rewrite_body(ex[2])
-        if !isempty(body_stmts)
-            body = @ast ctx body [
-                K"block"
-                body_stmts...
-                body
+    if !isnothing(return_type)
+        ret_var = ssavar(ctx, return_type, "return_type")
+        push!(body_stmts, @ast ctx return_type [K"=" ret_var return_type])
+    else
+        ret_var = nothing
+    end
+
+    body = rewrite_body(ex[2])
+    if !isempty(body_stmts)
+        body = @ast ctx body [
+            K"block"
+            body_stmts...
+            body
+        ]
+    end
+
+    method_table_val = nothing # TODO: method overlays
+    method_table = isnothing(method_table_val)            ?
+                   @ast(ctx, callex, "nothing"::K"core")  :
+                   ssavar(ctx, ex, "method_table")
+    method_stmts = SyntaxList(ctx)
+
+    if !isempty(arg_defaults)
+        # For self argument added above
+        first_default += 1
+        _optional_positional_defs!(ctx, method_stmts, ex, callex,
+                                   method_table, typevar_names, typevar_stmts,
+                                   arg_names, arg_types, first_default, arg_defaults, ret_var)
+    end
+
+    # The method with all non-default arguments
+    push!(method_stmts,
+          _method_def_expr(ctx, ex, callex, method_table, docs,
+                           typevar_names, arg_names, arg_types, ret_var, body))
+    if !isnothing(docs)
+        method_stmts[end] = @ast ctx docs [K"block"
+            method_metadata := method_stmts[end]
+            @ast ctx docs [K"call"
+                bind_docs!::K"Value"
+                doc_obj
+                docs[1]
+                method_metadata
             ]
+        ]
+    end
+
+    @ast ctx ex [K"block"
+        if !isnothing(bare_func_name)
+            [K"function_decl"(bare_func_name) bare_func_name]
         end
-
-        method_table_val = nothing # TODO: method overlays
-        method_table = isnothing(method_table_val)            ?
-                       @ast(ctx, callex, "nothing"::K"core")  :
-                       ssavar(ctx, ex, "method_table")
-        method_stmts = SyntaxList(ctx)
-
-        if !isempty(arg_defaults)
-            # For self argument added above
-            first_default += 1
-            _optional_positional_defs!(ctx, method_stmts, ex, callex,
-                                       method_table, typevar_names, typevar_stmts,
-                                       arg_names, arg_types, first_default, arg_defaults, ret_var)
-        end
-
-        # The method with all non-default arguments
-        push!(method_stmts,
-              _method_def_expr(ctx, ex, callex, method_table, docs,
-                               typevar_names, arg_names, arg_types, ret_var, body))
-        if !isnothing(docs)
-            method_stmts[end] = @ast ctx docs [K"block"
-                method_metadata := method_stmts[end]
-                @ast ctx docs [K"call"
-                    bind_docs!::K"Value"
-                    doc_obj
-                    docs[1]
-                    method_metadata
-                ]
-            ]
-        end
-
-        @ast ctx ex [K"block"
-            if !isnothing(bare_func_name)
-                [K"function_decl"(bare_func_name) bare_func_name]
-            end
-            [K"scope_block"(scope_type=:hard)
-                [K"method_defs"
-                    isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
-                    [K"block"
-                        typevar_stmts...
-                        if !isnothing(method_table_val)
-                            [K"=" method_table method_table_val]
-                        end
-                        method_stmts...
-                    ]
+        [K"scope_block"(scope_type=:hard)
+            [K"method_defs"
+                isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+                [K"block"
+                    typevar_stmts...
+                    if !isnothing(method_table_val)
+                        [K"=" method_table method_table_val]
+                    end
+                    method_stmts...
                 ]
             ]
         ]
-    elseif kind(name) == K"tuple"
-        TODO(name, "Anon function lowering")
-    else
-        throw(LoweringError(name, "Bad function definition"))
-    end
+    ]
 end
 
 function _make_macro_name(ctx, ex)
