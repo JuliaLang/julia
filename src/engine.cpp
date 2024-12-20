@@ -139,7 +139,7 @@ void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
 {
     jl_task_t *ct = jl_current_task;
     std::unique_lock lock(engine_lock);
-    auto record = Reservations.find(InferKey{ci->def, ci->owner});
+    auto record = Reservations.find(InferKey{jl_get_ci_mi(ci), ci->owner});
     if (record == Reservations.end() || record->second.ci != ci)
         return;
     assert(jl_atomic_load_relaxed(&ct->tid) == record->second.tid);

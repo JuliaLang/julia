@@ -71,7 +71,7 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             mi = specialize_method(m) # don't allow `Method`-edge for this optimized format
             edge = mi
         else
-            mi = edge.def
+            mi = edge.def::MethodInstance
         end
         if mi.specTypes === m.spec_types
             add_one_edge!(edges, edge)
@@ -103,7 +103,7 @@ function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
     while i <= length(edges)
         edgeᵢ = edges[i]
         edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
-        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
+        edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
             return # found existing covered edge
@@ -118,7 +118,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
         edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
-        edgeᵢ isa CodeInstance && (edgeᵢ = edgeᵢ.def)
+        edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
             if edgeᵢ_orig isa MethodInstance
@@ -385,7 +385,7 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
         i += 1
     end
     # add_invoke_edge alone
-    push!(edges, (edge.def.def::Method).sig)
+    push!(edges, (get_ci_mi(edge).def::Method).sig)
     push!(edges, edge)
     nothing
 end

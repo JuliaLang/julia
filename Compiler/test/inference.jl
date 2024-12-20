@@ -4110,7 +4110,12 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
             mi = codeinst
         else
             codeinst::Core.CodeInstance
-            mi = codeinst.def
+            def = codeinst.def
+            if isa(def, Core.ABIOverride)
+                mi = def.def
+            else
+                mi = def::Core.MethodInstance
+            end
         end
         return mi
     end == Core.MethodInstance

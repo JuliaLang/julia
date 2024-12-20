@@ -693,6 +693,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         uint32_t effects, jl_value_t *analysis_results,
         uint8_t relocatability, jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/);
 
+STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_abioverride(ci->def))
+        return ((jl_abi_override_t*)ci->def)->def;
+    return (jl_method_instance_t*)ci->def;
+}
+
 JL_DLLEXPORT const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
