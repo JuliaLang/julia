@@ -126,19 +126,56 @@ proceeding.
 function wait end
 
 """
-    wait(c::GenericCondition; first::Bool=false)
+    wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
 
 Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
 
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+
+If `timeout` is specified, cancel the `wait` when it expires and throw a
+`TimeoutError` to the waiting task. The minimum value for `timeout`
+is 0.001 seconds, i.e. 1 millisecond.
 """
-function wait(c::GenericCondition; first::Bool=false)
+function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+    timeout == 0.0 || timeout ≥ 1e-3 || throw(ArgumentError("timeout must be ≥ 1 millisecond"))
+
     ct = current_task()
     _wait2(c, ct, first)
     token = unlockall(c.lock)
+
+    timer::Union{Timer, Nothing} = nothing
+    if timeout > 0.0
+        timer = Timer(timeout)
+        # start a task to wait on the timer
+        t = Task() do
+            try
+                wait(timer)
+            catch e
+                # if the timer was closed, the waiting task has been scheduled; do nothing
+                e isa EOFError && return
+            end
+            dosched = false
+            lock(c.lock)
+            # Confirm that the waiting task is still in the wait queue and remove it. If
+            # the task is not in the wait queue, it must have been notified already so we
+            # don't do anything here.
+            if ct.queue == c.waitq
+                dosched = true
+                Base.list_deletefirst!(c.waitq, ct)
+            end
+            unlock(c.lock)
+            # send the waiting task a timeout
+            dosched && schedule(ct, TimeoutError(timeout); error=true)
+        end
+        t.sticky = false
+        schedule(t)
+    end
+
     try
-        return wait()
+        res = wait()
+        timer === nothing || close(timer)
+        return res
     catch
         q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()

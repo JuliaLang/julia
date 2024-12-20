@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using Base.Threads
 using Base: Experimental
 using Base: n_avail
 
@@ -37,6 +38,22 @@ end
     end
     @test fetch(waiter3) == "success"
     @test fetch(t) == "finished"
+end
+
+@testset "timed wait on Condition" begin
+    a = Condition()
+    @test_throws ArgumentError wait(a; timeout=0.0005)
+    @test_throws TimeoutError wait(a; timeout=0.1)
+    @spawn begin
+        sleep(0.01)
+        notify(a)
+    end
+    @test try
+        wait(a; timeout=2)
+        true
+    catch
+        false
+    end
 end
 
 @testset "various constructors" begin
