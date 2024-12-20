@@ -1092,9 +1092,6 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8)
     return false
 end
 
-_uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
-
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
