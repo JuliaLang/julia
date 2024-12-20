@@ -14,7 +14,7 @@ struct CapturedException <: Exception
         # Typically the result of a catch_backtrace()
 
         # Process bt_raw so that it can be safely serialized
-        bt_lines = process_backtrace(bt_raw, 100) # Limiting this to 100 lines.
+        bt_lines = process_backtrace(stacktrace(bt_raw))[1:min(100, end)] # Limiting this to 100 lines.
         CapturedException(ex, bt_lines)
     end
 
