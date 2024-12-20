@@ -44,7 +44,7 @@ function github_paragraph(stream::IO, md::MD)
     for char in readeach(stream, Char)
         if char == '\n'
             eof(stream) && break
-            if blankline(stream) || parse(stream, md, breaking = true)
+            if blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, '\n')
@@ -57,6 +57,13 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
+"""
+    const Markdown.github
+
+A constant indicating the GitHub flavor of Markdown.
+
+See also [`Markdown.parse`](@ref), [`Markdown.common`](@ref), [`Markdown.julia`](@ref).
+"""
 @flavor github [list, indentcode, blockquote, admonition, footnote, fencedcode, hashheader,
                 github_table, github_paragraph,
 
