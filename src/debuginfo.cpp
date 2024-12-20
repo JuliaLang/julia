@@ -94,12 +94,12 @@ void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t
     (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
 }
 
-jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer)
+jl_code_instance_t *JITDebugInfoRegistry::lookupCodeInstance(size_t pointer)
 {
     jl_lock_profile();
-    auto region = linfomap.lower_bound(pointer);
-    jl_method_instance_t *linfo = NULL;
-    if (region != linfomap.end() && pointer < region->first + region->second.first)
+    auto region = cimap.lower_bound(pointer);
+    jl_code_instance_t *linfo = NULL;
+    if (region != cimap.end() && pointer < region->first + region->second.first)
         linfo = region->second.second;
     jl_unlock_profile();
     return linfo;
@@ -371,14 +371,9 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 codeinst_in_flight.erase(codeinst_it);
             }
         }
-        jl_method_instance_t *mi = NULL;
-        if (codeinst) {
-            JL_GC_PROMISE_ROOTED(codeinst);
-            mi = jl_get_ci_mi(codeinst);
-        }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-            if (mi)
-                linfomap[Addr] = std::make_pair(Size, mi);
+            if (codeinst)
+                cimap[Addr] = std::make_pair(Size, codeinst);
             hassection = true;
             objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
                 ObjectCopy,
@@ -506,7 +501,7 @@ static int lookup_pointer(
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
-                    frame->linfo = NULL; // Looked up on Julia side
+                    frame->ci = NULL; // Looked up on Julia side
                 }
             }
         }
@@ -692,9 +687,9 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPO
 }
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
-    jl_method_instance_t **linfos, size_t n)
+    jl_code_instance_t **cinfos, size_t n)
 {
-    getJITDebugRegistry().add_image_info({(uintptr_t) image_base, *fptrs, linfos, n});
+    getJITDebugRegistry().add_image_info({(uintptr_t) image_base, *fptrs, cinfos, n});
 }
 
 template<typename T>
@@ -1177,13 +1172,13 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
                 if (saddr == image.fptrs.clone_ptrs[i]) {
                     uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
                     if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
-                        frame0->linfo = image.fvars_linfo[idx];
+                        frame0->ci = image.fvars_cinst[idx];
                     break;
                 }
             }
             for (size_t i = 0; i < image.fvars_n; i++) {
                 if (saddr == image.fptrs.ptrs[i]) {
-                    frame0->linfo = image.fvars_linfo[i];
+                    frame0->ci = image.fvars_cinst[i];
                     break;
                 }
             }
@@ -1255,16 +1250,16 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     int64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
-        frames[0].linfo = getJITDebugRegistry().lookupLinfo(pointer);
+        frames[0].ci = getJITDebugRegistry().lookupCodeInstance(pointer);
         int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
+extern "C" jl_code_instance_t *jl_gdblookupci(void *p) JL_NOTSAFEPOINT
 {
-    return getJITDebugRegistry().lookupLinfo((size_t)p);
+    return getJITDebugRegistry().lookupCodeInstance((size_t)p);
 }
 
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
