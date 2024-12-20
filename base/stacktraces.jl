@@ -7,7 +7,7 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Core: CodeInfo, MethodInstance
+import Core: CodeInfo, MethodInstance, CodeInstance
 using Base.IRShow: normalize_method_name, append_scopes!, LineInfoNode
 
 export StackTrace, StackFrame, stacktrace
@@ -21,9 +21,9 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Method, Core.MethodInstance, Core.CodeInfo, Nothing}`
+- `linfo::Union{Method, Core.MethodInstance, Core.CodeInstance, Core.CodeInfo, Nothing}`
 
-  The Method, MethodInstance, or CodeInfo containing the execution context (if it could be found), \
+  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found), \
      or nothing (for example, if the inlining was a result of macro expansion).
 
 - `file::Symbol`
@@ -54,9 +54,9 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found), \
+    "the CodeInstance or CodeInfo containing the execution context (if it could be found), \
      or nothing (for example, if the inlining was a result of macro expansion)."
-    linfo::Union{MethodInstance, Method, CodeInfo, Nothing}
+    linfo::Union{Core.MethodInstance, Core.CodeInstance, Method, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -137,16 +137,26 @@ function lookup(ip::Base.InterpreterIP)
         line = meth.line
         codeinfo = meth.source
     else
-        if code isa Core.CodeInstance
-            codeinfo = code.inferred::CodeInfo
-        else
-            codeinfo = code::CodeInfo
-        end
         func = top_level_scope_sym
         file = empty_sym
         line = Int32(0)
+        if code isa Core.CodeInstance
+            codeinfo = code.inferred::CodeInfo
+            def = code.def
+            if isa(def, Core.ABIOverride)
+                def = def.def
+            end
+            if isa(def, MethodInstance) && isa(def.def, Method)
+                meth = def.def
+                func = meth.name
+                file = meth.file
+                line = meth.line
+            end
+        else
+            codeinfo = code::CodeInfo
+        end
     end
-    def = (code isa MethodInstance ? code : StackTraces) # Module just used as a token for top-level code
+    def = (code isa CodeInfo ? StackTraces : code) # Module just used as a token for top-level code
     pc::Int = max(ip.stmt + 1, 0) # n.b. ip.stmt is 0-indexed
     scopes = LineInfoNode[]
     append_scopes!(scopes, pc, codeinfo.debuginfo, def)
@@ -157,7 +167,7 @@ function lookup(ip::Base.InterpreterIP)
     scopes = map(scopes) do lno
         if inlined
             def = lno.method
-            def isa Union{Method,MethodInstance} || (def = nothing)
+            def isa Union{Method,Core.CodeInstance,MethodInstance} || (def = nothing)
         else
             def = codeinfo
         end
@@ -241,16 +251,22 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         print(io, "top-level scope")
     elseif linfo isa Module
         Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
-    elseif linfo isa MethodInstance
-        def = linfo.def
-        if def isa Module
-            Base.show_mi(io, linfo, #=from_stackframe=#true)
-        else
-            show_spec_sig(io, def, linfo.specTypes)
-        end
     else
-        m = linfo::Method
-        show_spec_sig(io, m, m.sig)
+        if linfo isa CodeInstance
+            linfo = linfo.def
+            isa(linfo, Core.ABIOverride) && (linfo = linfo.def)
+        end
+        if linfo isa MethodInstance
+            def = linfo.def
+            if def isa Module
+                Base.show_mi(io, linfo, #=from_stackframe=#true)
+            else
+                show_spec_sig(io, def, linfo.specTypes)
+            end
+        else
+            m = linfo::Method
+            show_spec_sig(io, m, m.sig)
+        end
     end
 end
 
@@ -302,6 +318,12 @@ end
 
 function Base.parentmodule(frame::StackFrame)
     linfo = frame.linfo
+    if linfo isa CodeInstance
+        linfo = linfo.def
+        if isa(linfo, Core.ABIOverride)
+            linfo = linfo.def
+        end
+    end
     if linfo isa MethodInstance
         def = linfo.def
         if def isa Module
