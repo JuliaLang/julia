@@ -41,7 +41,7 @@ function collect_unquoted!(ctx, unquoted, ex, depth)
 end
 
 function expand_quote(ctx, ex)
-    unquoted = SyntaxTree[]
+    unquoted = SyntaxList(ctx)
     collect_unquoted!(ctx, unquoted, ex, 0)
     # Unlike user-defined macro expansion, we don't call append_sourceref for
     # the entire expression produced by `quote` expansion. We could, but it

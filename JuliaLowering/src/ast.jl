@@ -169,6 +169,22 @@ _unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
 _unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
 _unpack_srcref(graph, srcref)             = srcref
 
+function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val)
+    push!(ids, _node_id(graph, val))
+end
+function _push_nodeid!(graph::SyntaxGraph, ids::Vector{NodeId}, val::Nothing)
+    nothing
+end
+function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals)
+    for v in vals
+        _push_nodeid!(graph, ids, v)
+    end
+end
+function _append_nodeids!(graph::SyntaxGraph, ids::Vector{NodeId}, vals::SyntaxList)
+    check_compatible_graph(graph, vals)
+    append!(ids, vals.ids)
+end
+
 function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
     id = newnode!(graph)
     ex = SyntaxTree(graph, id)
@@ -177,17 +193,20 @@ function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
     return ex
 end
 
-function makenode(graph::SyntaxGraph, srcref, proto, children...; attrs...)
+function _makenode(graph::SyntaxGraph, srcref, proto, children; attrs...)
     id = newnode!(graph)
-    setchildren!(graph, id, _node_ids(graph, children...))
+    setchildren!(graph, id, children)
     ex = SyntaxTree(graph, id)
     copy_attrs!(ex, proto, true)
     setattr!(graph, id; source=_unpack_srcref(graph, srcref), attrs...)
     return SyntaxTree(graph, id)
 end
+function _makenode(ctx, srcref, proto, children; attrs...)
+    _makenode(syntax_graph(ctx), srcref, proto, children; attrs...)
+end
 
 function makenode(ctx, srcref, proto, children...; attrs...)
-    makenode(syntax_graph(ctx), srcref, proto, children...; attrs...)
+    _makenode(ctx, srcref, proto, _node_ids(syntax_graph(ctx), children...); attrs...)
 end
 
 function makeleaf(ctx, srcref, proto; kws...)
@@ -335,9 +354,20 @@ function _expand_ast_tree(ctx, srcref, tree)
                 push!(flatargs, a)
             end
         end
+        children_ex = :(let child_ids = Vector{NodeId}(), graph = syntax_graph($ctx)
+        end)
+        child_stmts = children_ex.args[2].args
+        for a in flatargs[2:end]
+            child = _expand_ast_tree(ctx, srcref, a)
+            if Meta.isexpr(child, :(...))
+                push!(child_stmts, :(_append_nodeids!(graph, child_ids, $(child.args[1]))))
+            else
+                push!(child_stmts, :(_push_nodeid!(graph, child_ids, $child)))
+            end
+        end
+        push!(child_stmts, :(child_ids))
         _match_kind(srcref, flatargs[1]) do kind, srcref, kws
-            children = map(a->_expand_ast_tree(ctx, srcref, a), flatargs[2:end])
-            :(makenode($ctx, $srcref, $kind, $(children...), $(kws...)))
+            :(_makenode($ctx, $srcref, $kind, $children_ex; $(kws...)))
         end
     elseif Meta.isexpr(tree, :(:=))
         lhs = tree.args[1]

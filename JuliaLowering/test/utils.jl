@@ -38,7 +38,7 @@ macro ast_(tree)
     quote
         graph = _ast_test_graph()
         srcref = _source_node(graph, $(QuoteNode(__source__)))
-        $(JuliaLowering._expand_ast_tree(:graph, :srcref, tree))
+        @ast graph srcref $tree
     end
 end
 

@@ -203,7 +203,7 @@ function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
-        @ast ctx srcref [K"leave" src_tokens[n+1:end]]
+        @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
     else
         nothing
     end
@@ -959,11 +959,12 @@ function compile_lambda(outer_ctx, ex)
     end
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
-    makenode(ctx, ex, K"code_info",
-             makenode(ctx, ex[1], K"block", code),
-             is_toplevel_thunk=ex.is_toplevel_thunk,
-             slots=slots
-            )
+    @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
+                              slots=slots)
+        [K"block"(ex[3])
+            code...
+        ]
+    ]
 end
 
 """
