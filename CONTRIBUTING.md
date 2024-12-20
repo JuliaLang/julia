@@ -190,7 +190,7 @@ The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issu
 Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
 i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
 
-You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+You can make pull requests for incomplete features to get code review. The convention is to open these as draft PRs and prefix
 the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
 for merging. This will prevent accidental merging of work that is in progress.
 
