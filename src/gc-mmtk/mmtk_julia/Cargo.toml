@@ -1,6 +1,6 @@
 [package]
 name = "mmtk-julia"
-version = "0.29.0"
+version = "0.30.0"
 authors = ["Eduardo Souza <ledusou@gmail.com>", "Yi Lin <qinsoon@gmail.com>"]
 build = "build.rs"
 edition = "2018"
@@ -27,7 +27,7 @@ lazy_static = "1.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "de10fa4c3bc0a2a5010b9ce04a540c63b14dc214" }
+mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "c0f97884234b51b13c8ba5d1563a8e0f592d11c2" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }

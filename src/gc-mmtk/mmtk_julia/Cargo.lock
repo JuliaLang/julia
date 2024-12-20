@@ -572,8 +572,8 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "mmtk"
-version = "0.27.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=de10fa4c3bc0a2a5010b9ce04a540c63b14dc214#de10fa4c3bc0a2a5010b9ce04a540c63b14dc214"
+version = "0.30.0"
+source = "git+https://github.com/qinsoon/mmtk-core.git?rev=7ce3d8a0c26d64b535c5a1b9ffd4c70037351fac#7ce3d8a0c26d64b535c5a1b9ffd4c70037351fac"
 dependencies = [
  "atomic 0.6.0",
  "atomic-traits",
@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "mmtk-julia"
-version = "0.29.0"
+version = "0.30.0"
 dependencies = [
  "atomic 0.4.6",
  "bindgen",
@@ -626,8 +626,8 @@ dependencies = [
 
 [[package]]
 name = "mmtk-macros"
-version = "0.27.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=de10fa4c3bc0a2a5010b9ce04a540c63b14dc214#de10fa4c3bc0a2a5010b9ce04a540c63b14dc214"
+version = "0.30.0"
+source = "git+https://github.com/qinsoon/mmtk-core.git?rev=7ce3d8a0c26d64b535c5a1b9ffd4c70037351fac#7ce3d8a0c26d64b535c5a1b9ffd4c70037351fac"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
