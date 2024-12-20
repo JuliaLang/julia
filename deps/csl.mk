@@ -112,7 +112,8 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
-	cp -a /mingw64/lib/libmsvcrt.a	$(build_private_libdir)/
+	-cp -a /mingw64/lib/libmsvcrt.a	$(build_private_libdir)/
+	-cp -a /mingw32/lib/libmsvcrt.a	$(build_private_libdir)/
 endif
 endif
 ifeq ($(OS),WINNT)
