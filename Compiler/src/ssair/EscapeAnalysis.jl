@@ -496,26 +496,15 @@ end
 x::MemoryInfo ⊔ₘ y::MemoryInfo = copy(x) ⊔ₘꜝ y
 
 const EscapeTable = IdDict{Int,EscapeInfo} # TODO `Dict` would be more efficient?
-const AliasSet = IntDisjointSet{Int}
-
-# COMBAK Is is valid to share the same `aliasset` across all the states? (for better memory efficiency)
 
 struct BlockEscapeState{Sealed#=::Bool=#}
     escapes::EscapeTable
-    aliasset::AliasSet
     nargs::Int
     nstmts::Int
 end
-function BlockEscapeState(ir::IRCode, nargs::Int)
-    nstmts = length(ir.stmts) + length(ir.new_nodes)
-    nelms = nargs + nstmts
-    escapes = EscapeTable()
-    aliasset = AliasSet(nelms)
-    return BlockEscapeState{false}(escapes, aliasset, nargs, nstmts)
-end
-function BlockEscapeState{Sealed}(bbstate::BlockEscapeState) where Sealed
-    return BlockEscapeState{Sealed}(bbstate.escapes, bbstate.aliasset, bbstate.nargs, bbstate.nstmts)
-end
+BlockEscapeState(nargs::Int, nstmts::Int) = BlockEscapeState{false}(EscapeTable(), nargs, nstmts)
+BlockEscapeState{Sealed}(bbstate::BlockEscapeState) where Sealed =
+    BlockEscapeState{Sealed}(bbstate.escapes, bbstate.nargs, bbstate.nstmts)
 
 function getindex(bbstate::BlockEscapeState{Sealed}, @nospecialize(x)) where Sealed
     xidx = iridx(x, bbstate)
@@ -536,12 +525,11 @@ function setindex!(bbstate::BlockEscapeState{Sealed}, xinfo::EscapeInfo, xidx::I
 end
 function copy(bbstate::BlockEscapeState{Sealed}) where Sealed
     escapes = EscapeTable(i => copy(x) for (i, x) in bbstate.escapes)
-    return BlockEscapeState{Sealed}(escapes, copy(bbstate.aliasset), bbstate.nargs, bbstate.nstmts)
+    return BlockEscapeState{Sealed}(escapes, bbstate.nargs, bbstate.nstmts)
 end
 function (bbstate1::BlockEscapeState{Sealed1} == bbstate2::BlockEscapeState{Sealed2}) where {Sealed1,Sealed2}
     return Sealed1 == Sealed2 &&
            bbstate1.escapes == bbstate2.escapes &&
-           bbstate1.aliasset == bbstate2.aliasset &&
            bbstate1.nargs == bbstate2.nargs &&
            bbstate1.nstmts == bbstate2.nstmts
 end
@@ -592,14 +580,86 @@ function irval(xidx::Int, nargs::Int, nstmts::Int)
     end
 end
 
-function getaliases(bbstate::BlockEscapeState, x::AnalyzableIRElement)
-    xidx = iridx(x, bbstate)
-    aliases = getaliases(bbstate, xidx)
-    aliases === nothing && return nothing
-    return AnalyzableIRElement[irval(aidx, bbstate) for aidx in aliases]
+abstract type Change end
+const Changes = Vector{Change}
+
+const SSAMemoryInfo = IdDict{Int,Any}
+# TODO CFG-aware `MemoryInfo`:
+# By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
+# to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
+struct ConflictedMemory end # a special instance to indicate the aliased memory is conflicted
+struct UnknownMemory end    # a special instance to indicate the aliased memory is unknown
+
+const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
+
+const AliasSet = IntDisjointSet{Int}
+
+struct AnalysisState{GetEscapeCache}
+    ir::IRCode
+    nargs::Int
+    nstmts::Int
+    new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
+    # escape states for each basic block:
+    # - `bbescape === false` indicates the state for the block has not been initialized
+    # - `bbescape === true` indicates the state for the block is known to be identical to
+    #   the state of its single predecessor
+    bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
+    aliasset::AliasSet
+    get_escape_cache::GetEscapeCache
+    #= results =#
+    retescape::BlockEscapeState{false}
+    ssamemoryinfo::SSAMemoryInfo
+    #= temporary states =#
+    currstate::BlockEscapeState{false}                 # the state currently being analyzed
+    changes::Changes                                   # changes made at the current statement
+    visited::BitSet
+    equalized_roots::BitSet
+    handler_info::Union{Nothing,HandlerInfo{SimpleHandler}}
 end
-function getaliases(bbstate::BlockEscapeState, xidx::Int)
-    aliasset = bbstate.aliasset
+function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
+    nstmts = length(ir.stmts) + length(ir.new_nodes)
+    if isempty(ir.new_nodes)
+        new_nodes_map = nothing
+    else
+        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
+        for (i, nni) in enumerate(ir.new_nodes.info)
+            if haskey(new_nodes_map, nni.pos)
+                push!(new_nodes_map[nni.pos], i => nni)
+            else
+                new_nodes_map[nni.pos] = Pair{Int,NewNodeInfo}[i => nni]
+            end
+        end
+    end
+    nbbs = length(ir.cfg.blocks)
+    if nbbs == 1 # optimization for linear control flow
+        bbescapes = LINEAR_BBESCAPES # avoid unnecessary allocation
+        retescape = currstate = BlockEscapeState(nargs, nstmts) # no need to maintain a separate state
+    else
+        bbescapes = fill!(Vector{Union{Bool,BlockEscapeState{false}}}(undef, nbbs), false)
+        retescape = BlockEscapeState(nargs, nstmts)
+        currstate = BlockEscapeState(nargs, nstmts)
+    end
+    aliasset = AliasSet(nargs + nstmts)
+    ssamemoryinfo = IdDict{Int,Any}()
+    changes = Changes()
+    visited = BitSet()
+    equalized_roots = BitSet()
+    handler_info = compute_trycatch(ir)
+    return AnalysisState(ir, nargs, nstmts, new_nodes_map,
+        bbescapes, aliasset, get_escape_cache,
+        retescape, ssamemoryinfo,
+        currstate, changes, visited, equalized_roots, handler_info)
+end
+
+getaliases(astate::AnalysisState, x::AnalyzableIRElement) =
+    getaliases(astate.aliasset, astate.nargs, astate.nstmts, x)
+function getaliases(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement)
+    aliases = getaliases(aliasset, iridx(x, nargs, nstmts))
+    aliases === nothing && return nothing
+    return AnalyzableIRElement[irval(aidx, nargs, nstmts) for aidx in aliases]
+end
+getaliases(astate::AnalysisState, xidx::Int) = getaliases(astate.aliasset, xidx)
+function getaliases(aliasset::AliasSet, xidx::Int)
     xroot, hasalias = getaliasroot!(aliasset, xidx)
     if hasalias
         # the size of this alias set containing `key` is larger than 1,
@@ -624,71 +684,12 @@ end
     end
 end
 
-isaliased(bbstate::BlockEscapeState, x::AnalyzableIRElement, y::AnalyzableIRElement) =
-    isaliased(bbstate, iridx(x, bbstate), iridx(y, bbstate))
-isaliased(bbstate::BlockEscapeState, xidx::Int, yidx::Int) =
-    in_same_set(bbstate.aliasset, xidx, yidx)
-
-abstract type Change end
-const Changes = Vector{Change}
-
-const SSAMemoryInfo = IdDict{Int,Any}
-# TODO CFG-aware `MemoryInfo`:
-# By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
-# to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
-struct ConflictedMemory end # a special instance to indicate the aliased memory is conflicted
-struct UnknownMemory end    # a special instance to indicate the aliased memory is unknown
-
-const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
-
-struct AnalysisState{GetEscapeCache}
-    ir::IRCode
-    # escape states for each basic block:
-    # - `bbescape === false` indicates the state for the block has not been initialized
-    # - `bbescape === true` indicates the state for the block is known to be identical to
-    #   the state of its single predecessor
-    bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
-    retescape::BlockEscapeState{false}
-    ssamemoryinfo::SSAMemoryInfo
-    get_escape_cache::GetEscapeCache
-    #= temporary states =#
-    new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
-    currstate::BlockEscapeState{false}                 # the state currently being analyzed
-    changes::Changes                                   # changes made at the current statement
-    visited::BitSet
-    equalized_roots::BitSet
-    handler_info::Union{Nothing,HandlerInfo{SimpleHandler}}
-end
-function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
-    nbbs = length(ir.cfg.blocks)
-    if nbbs == 1 # optimization for linear control flow
-        bbescapes = LINEAR_BBESCAPES # avoid unnecessary allocation
-        retescape = currstate = BlockEscapeState(ir, nargs) # no need to maintain a separate state
-    else
-        bbescapes = fill!(Vector{Union{Bool,BlockEscapeState{false}}}(undef, nbbs), false)
-        retescape = BlockEscapeState(ir, nargs)
-        currstate = BlockEscapeState(ir, nargs)
-    end
-    if isempty(ir.new_nodes)
-        new_nodes_map = nothing
-    else
-        new_nodes_map = IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}()
-        for (i, nni) in enumerate(ir.new_nodes.info)
-            if haskey(new_nodes_map, nni.pos)
-                push!(new_nodes_map[nni.pos], i => nni)
-            else
-                new_nodes_map[nni.pos] = Pair{Int,NewNodeInfo}[i => nni]
-            end
-        end
-    end
-    ssamemoryinfo = IdDict{Int,Any}()
-    changes = Changes()
-    visited = BitSet()
-    equalized_roots = BitSet()
-    handler_info = compute_trycatch(ir)
-    return AnalysisState(ir, bbescapes, retescape, ssamemoryinfo, get_escape_cache,
-        new_nodes_map, currstate, changes, visited, equalized_roots, handler_info)
-end
+isaliased(astate::AnalysisState, x::AnalyzableIRElement, y::AnalyzableIRElement) =
+    isaliased(astate.aliasset, astate.nargs, astate.nstmts, x, y)
+isaliased(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement, y::AnalyzableIRElement) =
+    isaliased(aliasset, iridx(x, nargs, nstmts), iridx(y, nargs, nstmts))
+isaliased(astate::AnalysisState, xidx::Int, yidx::Int) = isaliased(astate.aliasset, xidx, yidx)
+isaliased(aliasset::AliasSet, xidx::Int, yidx::Int) = in_same_set(aliasset, xidx, yidx)
 
 """
     eresult::EscapeResult
@@ -697,19 +698,27 @@ Extended lattice that maps arguments and SSA values to escape information repres
 Escape information imposed on SSA IR element `x` can be retrieved by `eresult[x]`.
 """
 struct EscapeResult
+    nargs::Int
+    nstmts::Int
     bbescapes::Vector{Union{Bool,BlockEscapeState{true}}}
+    aliasset::AliasSet
     retescape::BlockEscapeState{true}
     ssamemoryinfo::SSAMemoryInfo
     function EscapeResult(astate::AnalysisState)
         bbescapes = Union{Bool,BlockEscapeState{true}}[bbstate isa Bool ?
             bbstate : BlockEscapeState{true}(bbstate) for bbstate in astate.bbescapes]
         retescape = BlockEscapeState{true}(astate.retescape)
-        return new(bbescapes, retescape, astate.ssamemoryinfo)
+        return new(astate.nargs, astate.nstmts, bbescapes, astate.aliasset, retescape, astate.ssamemoryinfo)
     end
 end
 getindex(eresult::EscapeResult, @nospecialize(x)) = getindex(eresult.retescape, x)
-isaliased(eresult::EscapeResult, @nospecialize(x), @nospecialize(y)) = isaliased(eresult.retescape, x, y)
-getaliases(eresult::EscapeResult, @nospecialize(x)) = getaliases(eresult.retescape, x)
+getaliases(eresult::EscapeResult, x::AnalyzableIRElement) =
+    getaliases(eresult.aliasset, eresult.nargs, eresult.nstmts, x)
+getaliases(eresult::EscapeResult, xidx::Int) = getaliases(eresult.aliasset, xidx)
+isaliased(eresult::EscapeResult, x::AnalyzableIRElement, y::AnalyzableIRElement) =
+    isaliased(eresult.aliasset, eresult.nargs, eresult.nstmts, x, y)
+isaliased(eresult::EscapeResult, xidx::Int, yidx::Int) = isaliased(eresult.aliasset, xidx, yidx)
+
 function is_load_forwardable((; ssamemoryinfo)::EscapeResult, pc::Int)
     memoryinfo = ssamemoryinfo[pc]
     return memoryinfo !== ConflictedMemory() && memoryinfo !== UnknownMemory()
@@ -855,9 +864,9 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 nextcurrstate = astate.bbescapes[nextcurrbb]
                 if nextcurrstate isa Bool
                     @assert nextcurrstate === false
-                    initialize_state!(currstate)
+                    empty!(currstate.escapes) # initialize the state
                 else
-                    overwrite_state!(currstate, nextcurrstate)
+                    copy!(currstate.escapes, nextcurrstate.escapes) # overwrite the state
                 end
             else
                 # propagate the current state to the next block directly
@@ -867,27 +876,6 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
     end
 
     return EscapeResult(astate)
-end
-
-function initialize_state!(currstate::BlockEscapeState)
-    empty!(currstate.escapes)
-    nelms = currstate.nargs + currstate.nstmts
-    resize!(currstate.aliasset.parents, nelms)
-    for i = 1:nelms
-        s.parents[i] = i
-    end
-    resize!(s.ranks, nelms)
-    fill!(s.ranks, 0)
-    s.ngroups = nelms
-    nothing
-end
-
-function overwrite_state!(currstate::BlockEscapeState, nextcurrstate::BlockEscapeState)
-    copy!(currstate.escapes, nextcurrstate.escapes)
-    currstate.aliasset.parents = copy(nextcurrstate.aliasset.parents)
-    currstate.aliasset.ranks = copy(nextcurrstate.aliasset.ranks)
-    currstate.aliasset.ngroups = nextcurrstate.aliasset.ngroups
-    nothing
 end
 
 function propagate_bbstate!(astate::AnalysisState, currstate::BlockEscapeState, nextbbidx::Int,
@@ -942,21 +930,6 @@ function propagate_bbstate!(nextstate::BlockEscapeState, currstate::BlockEscapeS
         else
             nextstate.escapes[idx] = copy(newinfo)
             anychanged |= true
-        end
-    end
-    anychanged |= merge_aliassets!(nextstate.aliasset, currstate.aliasset)
-    return anychanged
-end
-
-function merge_aliassets!(nextaliasset::AliasSet, curraliasset::AliasSet)
-    anychanged = false
-    for xidx = 1:length(curraliasset.parents)
-        xroot = _find_root_impl!(curraliasset.parents, xidx)
-        if xroot ≠ xidx
-            if !in_same_set(nextaliasset, xidx, xroot)
-                union!(nextaliasset, xidx, xroot)
-                anychanged |= true
-            end
         end
     end
     return anychanged
@@ -1063,7 +1036,7 @@ function make_exc_state(astate::AnalysisState, enter_idx::Int)
         else
             continue
         end
-        aliases = getaliases(astate.currstate, xidx)
+        aliases = getaliases(astate, xidx)
         if aliases !== nothing
             for aidx in aliases
                 excstate[aidx] = ⊤
@@ -1134,7 +1107,7 @@ end
 function apply_alias_change!(astate::AnalysisState, change::AliasChange)
     anychange = false
     (; xidx, yidx) = change
-    aliasset = astate.currstate.aliasset
+    aliasset = astate.aliasset
     xroot = find_root!(aliasset, xidx)
     yroot = find_root!(aliasset, yidx)
     if xroot ≠ yroot
@@ -1146,7 +1119,7 @@ function apply_alias_change!(astate::AnalysisState, change::AliasChange)
 end
 
 function record_equalized_root!(astate::AnalysisState, xidx::Int)
-    xroot, hasalias = getaliasroot!(astate.currstate.aliasset, xidx)
+    xroot, hasalias = getaliasroot!(astate.aliasset, xidx)
     if hasalias
         push!(astate.equalized_roots, xroot)
     end
@@ -1158,7 +1131,7 @@ function equalize_aliased_escapes!(astate::AnalysisState)
     end
 end
 function equalize_aliased_escapes!(astate::AnalysisState, xroot::Int)
-    aliases = getaliases(astate.currstate, xroot)
+    aliases = getaliases(astate, xroot)
     @assert aliases !== nothing "no aliases found"
     ainfo = ⊥
     for aidx in aliases
@@ -1292,7 +1265,7 @@ function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecializ
     xidx = iridx(x, bbstate)
     yidx = iridx(y, bbstate)
     if xidx !== nothing && yidx !== nothing
-        if !isaliased(bbstate, xidx, yidx)
+        if !isaliased(astate, xidx, yidx)
             push!(astate.changes, AliasChange(xidx, yidx))
         end
     end
@@ -1306,7 +1279,7 @@ function _add_alias_change!(astate::AnalysisState, xidx::Int, @nospecialize(y))
     bbstate = astate.currstate
     yidx = iridx(y, bbstate)
     if yidx !== nothing
-        if !isaliased(bbstate, xidx, yidx)
+        if !isaliased(astate, xidx, yidx)
             push!(astate.changes, AliasChange(xidx, yidx))
         end
     end

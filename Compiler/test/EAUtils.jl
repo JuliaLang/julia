@@ -194,8 +194,8 @@ struct EscapeAnalysisResult
     end
 end
 Base.getindex(res::EscapeAnalysisResult, @nospecialize(x)) = res.eresult[x]
-EA.isaliased(res::EscapeAnalysisResult, @nospecialize(x), @nospecialize(y)) = EA.isaliased(res.eresult, x, y)
-EA.getaliases(res::EscapeAnalysisResult, @nospecialize(x)) = EA.getaliases(res.eresult, x)
+EA.getaliases(res::EscapeAnalysisResult, args...) = EA.getaliases(res.eresult, args...)
+EA.isaliased(res::EscapeAnalysisResult, args...) = EA.isaliased(res.eresult, args...)
 EA.is_load_forwardable(res::EscapeAnalysisResult, pc::Int) = EA.is_load_forwardable(res.eresult, pc)
 @eval Base.iterate(res::EscapeAnalysisResult, s=1) =
     return s > $(fieldcount(EscapeAnalysisResult)) ? nothing : (getfield(res, s), s+1)
@@ -249,13 +249,15 @@ function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
 
     lineprinter = IRShow.inline_linfo_printer(ir)
     preprinter = function (@nospecialize(io::IO), linestart::String, idx::Int)
-        str1 = lineprinter(io, linestart, idx)
-        c, color = get_name_color(bbstate[SSAValue(idx)], true)
-        str2 = sprint(;context=IOContext(io)) do @nospecialize io::IO
-            print(io, " ")
-            printstyled(io, rpad(c, 2); color)
+        str = lineprinter(io, linestart, idx)
+        if idx ≠ 0
+            c, color = get_name_color(bbstate[SSAValue(idx)], true)
+            return str * sprint(;context=IOContext(io)) do @nospecialize io::IO
+                print(io, " ")
+                printstyled(io, rpad(c, 2); color)
+            end
         end
-        str1 * str2
+        return str
     end
 
     _postprinter = IRShow.default_expr_type_printer
