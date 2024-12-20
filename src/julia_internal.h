@@ -1349,7 +1349,7 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
-    jl_method_instance_t *linfo;
+    jl_code_instance_t *ci;
     int fromC;
     int inlined;
 } jl_frame_t;
