@@ -5440,6 +5440,22 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         specFunctionObject, fromexternal, argv, nargs, cc, return_roots, inferred_retty, age_ok);
 }
 
+static jl_value_t *get_ci_abi(jl_code_instance_t *ci)
+{
+    if (jl_typeof(ci->def) == (jl_value_t*)jl_abioverride_type)
+        return ((jl_abi_override_t*)ci->def)->abi;
+    return jl_get_ci_mi(ci)->specTypes;
+}
+
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_code_instance_t *ci, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
+    ArrayRef<jl_cgval_t> argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty, Value *age_ok)
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+    return emit_call_specfun_other(ctx, is_opaque_closure, get_ci_abi(ci), jlretty, NULL,
+        specFunctionObject, fromexternal, argv, nargs, cc, return_roots, inferred_retty, age_ok);
+}
+
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
                                           ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *inferred_retty, Value *age_ok)
 {
@@ -5485,13 +5501,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
             return jl_cgval_t();
     }
     return emit_invoke(ctx, lival, argv, nargs, rt, nullptr);
-}
-
-static jl_value_t *get_ci_abi(jl_code_instance_t *ci)
-{
-    if (jl_typeof(ci->def) == (jl_value_t*)jl_abioverride_type)
-        return ((jl_abi_override_t*)ci->def)->abi;
-    return jl_get_ci_mi(ci)->specTypes;
 }
 
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt, Value *age_ok)
@@ -5589,7 +5598,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                         unsigned return_roots = 0;
                         if (specsig)
-                            result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
+                            result = emit_call_specfun_other(ctx, codeinst, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
                         else
                             result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt, age_ok);
                         handled = true;
