@@ -1276,8 +1276,8 @@ end
         @test !is_load_forwardable_old(result[SSAValue(i)]) # obj
     end
 
-    # interprocedural
-    # ---------------
+    # inter-procedural
+    # ----------------
 
     let result = @eval EATModule() begin
             @noinline getx(obj) = obj[]
@@ -1294,7 +1294,7 @@ end
         @test_broken is_load_forwardable_old(result[SSAValue(i)])
     end
 
-    # TODO interprocedural alias analysis
+    # TODO inter-procedural alias analysis
     let result = code_escapes((SafeRef{Base.RefValue{String}},)) do s
             s[] = Ref("bar")
             global GV = s[]
@@ -1540,8 +1540,8 @@ end
     end
 end
 
-# interprocedural analysis
-# ========================
+# inter-procedural analysis
+# =========================
 
 # propagate escapes imposed on call arguments
 @noinline broadcast_noescape2(b) = broadcast(identity, b)
@@ -1549,8 +1549,8 @@ let result = code_escapes() do
         broadcast_noescape2(Ref(Ref("Hi")))
     end
     i = last(findall(isnew, result.ir.stmts.stmt))
-    @test_broken !has_return_escape(result[SSAValue(i)]) # TODO interprocedural alias analysis
-    @test        !has_thrown_escape(result[SSAValue(i)])
+    @test_broken !has_return_escape(result[SSAValue(i)]) # TODO inter-procedural alias analysis
+    @test_broken !has_thrown_escape(result[SSAValue(i)]) # TODO inter-procedural alias analysis
 end
 let result = code_escapes((Base.RefValue{Base.RefValue{String}},)) do x
         out1 = broadcast_noescape2(Ref(Ref("Hi")))
@@ -1558,8 +1558,8 @@ let result = code_escapes((Base.RefValue{Base.RefValue{String}},)) do x
         return out1, out2
     end
     i = last(findall(isnew, result.ir.stmts.stmt))
-    @test_broken !has_return_escape(result[SSAValue(i)]) # TODO interprocedural alias analysis
-    @test        !has_thrown_escape(result[SSAValue(i)])
+    @test_broken !has_return_escape(result[SSAValue(i)]) # TODO inter-procedural alias analysis
+    @test_broken !has_thrown_escape(result[SSAValue(i)]) # TODO inter-procedural alias analysis
     @test has_thrown_escape(result[Argument(2)])
 end
 @noinline allescape_argument(a) = (global GV = a) # obvious escape

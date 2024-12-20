@@ -112,7 +112,7 @@ function get_name_color(x::Union{Nothing,EscapeInfo}, symbol::Bool = false)
         name, color = ("NotAnalyzed", "◌"), :plain
     elseif EA.has_no_escape(EA.ignore_argescape(x))
         if EA.has_arg_escape(x)
-            name, color = ("ArgEscape", "✓"), :cyan
+            name, color = ("ArgEscape", "✓"), :blue
         else
             name, color = ("NoEscape", "✓"), :green
         end

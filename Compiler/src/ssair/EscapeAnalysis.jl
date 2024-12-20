@@ -230,14 +230,12 @@ AllEscape() = EscapeInfo(true, true, ⊤ₒ, ⊤ₗ)
 const ⊥, ⊤ = NoEscape(), AllEscape()
 
 # Convenience names for some ⊑ₑ queries
-has_no_escape(x::EscapeInfo) =
-    !x.ReturnEscape && !x.ThrownEscape #=&& x.ObjectInfo !== HasUnknownMemory()=# && 0 ∉ x.Liveness
+has_no_escape(x::EscapeInfo) = !x.ReturnEscape && !x.ThrownEscape && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 ∈ x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc ∈ x.Liveness
 has_thrown_escape(x::EscapeInfo) = x.ThrownEscape
-has_all_escape(x::EscapeInfo, strict::Bool=false) =
-    strict ? ⊤ ⊑ₑ x : ignore_thrownescapes(⊤) ⊑ₑ ignore_thrownescapes(x)
+has_all_escape(x::EscapeInfo) = x.Liveness == TopLiveness() # top-liveness == this object may exit anywhere
 
 # utility lattice constructors
 ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
@@ -500,20 +498,23 @@ x::MemoryInfo ⊔ₘ y::MemoryInfo = copy(x) ⊔ₘꜝ y
 const EscapeTable = IdDict{Int,EscapeInfo} # TODO `Dict` would be more efficient?
 const AliasSet = IntDisjointSet{Int}
 
+# COMBAK Is is valid to share the same `aliasset` across all the states? (for better memory efficiency)
+
 struct BlockEscapeState{Sealed#=::Bool=#}
     escapes::EscapeTable
     aliasset::AliasSet
     nargs::Int
+    nstmts::Int
 end
 function BlockEscapeState(ir::IRCode, nargs::Int)
     nstmts = length(ir.stmts) + length(ir.new_nodes)
     nelms = nargs + nstmts
     escapes = EscapeTable()
     aliasset = AliasSet(nelms)
-    return BlockEscapeState{false}(escapes, aliasset, nargs)
+    return BlockEscapeState{false}(escapes, aliasset, nargs, nstmts)
 end
 function BlockEscapeState{Sealed}(bbstate::BlockEscapeState) where Sealed
-    return BlockEscapeState{Sealed}(bbstate.escapes, bbstate.aliasset, bbstate.nargs)
+    return BlockEscapeState{Sealed}(bbstate.escapes, bbstate.aliasset, bbstate.nargs, bbstate.nstmts)
 end
 
 function getindex(bbstate::BlockEscapeState{Sealed}, @nospecialize(x)) where Sealed
@@ -535,31 +536,36 @@ function setindex!(bbstate::BlockEscapeState{Sealed}, xinfo::EscapeInfo, xidx::I
 end
 function copy(bbstate::BlockEscapeState{Sealed}) where Sealed
     escapes = EscapeTable(i => copy(x) for (i, x) in bbstate.escapes)
-    return BlockEscapeState{Sealed}(escapes, copy(bbstate.aliasset), bbstate.nargs)
+    return BlockEscapeState{Sealed}(escapes, copy(bbstate.aliasset), bbstate.nargs, bbstate.nstmts)
 end
 function (bbstate1::BlockEscapeState{Sealed1} == bbstate2::BlockEscapeState{Sealed2}) where {Sealed1,Sealed2}
     return Sealed1 == Sealed2 &&
            bbstate1.escapes == bbstate2.escapes &&
            bbstate1.aliasset == bbstate2.aliasset &&
-           bbstate1.nargs == bbstate2.nargs
+           bbstate1.nargs == bbstate2.nargs &&
+           bbstate1.nstmts == bbstate2.nstmts
 end
+
+const AnalyzableIRElement = Union{Argument,SSAValue}
 
 """
     iridx(x, bbstate::BlockEscapeState) -> xidx::Union{Int,Nothing}
 
-Tries to convert analyzable IR element `x::Union{Argument,SSAValue}` to
+Tries to convert analyzable IR element `x::AnalyzableIRElement` to
 its unique identifier number `xidx` that is valid in the analysis context of `bbstate`.
 Returns `nothing` if `x` isn't maintained by `bbstate` and thus unanalyzable (e.g. `x::GlobalRef`).
 
 `irval` is the inverse function of `iridx` (not formally), i.e.
-`irval(iridx(x::Union{Argument,SSAValue}, state), state) === x`.
+`irval(iridx(x::AnalyzableIRElement, state), state) === x`.
 """
-function iridx(@nospecialize(x), bbstate::BlockEscapeState)
+iridx(@nospecialize(x), bbstate::BlockEscapeState) = iridx(x, bbstate.nargs, bbstate.nstmts)
+function iridx(@nospecialize(x), nargs::Int, nstmts::Int)
     if isa(x, Argument)
         xidx = x.n
-        @assert 1 ≤ xidx ≤ bbstate.nargs "invalid Argument"
+        @assert 1 ≤ xidx ≤ nargs "invalid Argument"
     elseif isa(x, SSAValue)
-        xidx = x.id + bbstate.nargs
+        xidx = x.id + nargs
+        @assert nargs < xidx ≤ nargs + nstmts "invalid SSAValue"
     else
         return nothing
     end
@@ -567,23 +573,30 @@ function iridx(@nospecialize(x), bbstate::BlockEscapeState)
 end
 
 """
-    irval(xidx::Int, bbstate::BlockEscapeState) -> x::Union{Argument,SSAValue}
+    irval(xidx::Int, bbstate::BlockEscapeState) -> x::AnalyzableIRElement
 
-Converts its unique identifier number `xidx` to the original IR element `x::Union{Argument,SSAValue}`
+Converts its unique identifier number `xidx` to the original IR element `x::AnalyzableIRElement`
 that is analyzable in the context of `bbstate`.
 
 `iridx` is the inverse function of `irval` (not formally), i.e.
 `iridx(irval(xidx, state), state) === xidx`.
 """
-function irval(xidx::Int, bbstate::BlockEscapeState)
-    return xidx > bbstate.nargs ? SSAValue(xidx-bbstate.nargs) : Argument(xidx)
+irval(xidx::Int, bbstate::BlockEscapeState) = irval(xidx, bbstate.nargs, bbstate.nstmts)
+function irval(xidx::Int, nargs::Int, nstmts::Int)
+    if xidx ≤ nargs
+        return Argument(xidx)
+    elseif xidx ≤ nargs + nstmts
+        return SSAValue(xidx - nargs)
+    else
+        error("invalid xidx")
+    end
 end
 
-function getaliases(bbstate::BlockEscapeState, x::Union{Argument,SSAValue})
+function getaliases(bbstate::BlockEscapeState, x::AnalyzableIRElement)
     xidx = iridx(x, bbstate)
     aliases = getaliases(bbstate, xidx)
     aliases === nothing && return nothing
-    return Union{Argument,SSAValue}[irval(aidx, bbstate) for aidx in aliases]
+    return AnalyzableIRElement[irval(aidx, bbstate) for aidx in aliases]
 end
 function getaliases(bbstate::BlockEscapeState, xidx::Int)
     aliasset = bbstate.aliasset
@@ -611,7 +624,7 @@ end
     end
 end
 
-isaliased(bbstate::BlockEscapeState, x::Union{Argument,SSAValue}, y::Union{Argument,SSAValue}) =
+isaliased(bbstate::BlockEscapeState, x::AnalyzableIRElement, y::AnalyzableIRElement) =
     isaliased(bbstate, iridx(x, bbstate), iridx(y, bbstate))
 isaliased(bbstate::BlockEscapeState, xidx::Int, yidx::Int) =
     in_same_set(bbstate.aliasset, xidx, yidx)
@@ -842,7 +855,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 nextcurrstate = astate.bbescapes[nextcurrbb]
                 if nextcurrstate isa Bool
                     @assert nextcurrstate === false
-                    initialize_state!(currstate, ir, nargs)
+                    initialize_state!(currstate)
                 else
                     overwrite_state!(currstate, nextcurrstate)
                 end
@@ -856,10 +869,9 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
     return EscapeResult(astate)
 end
 
-function initialize_state!(currstate::BlockEscapeState, ir::IRCode, nargs::Int)
-    nstmts = length(ir.stmts) + length(ir.new_nodes)
-    nelms = nargs + nstmts
+function initialize_state!(currstate::BlockEscapeState)
     empty!(currstate.escapes)
+    nelms = currstate.nargs + currstate.nstmts
     resize!(currstate.aliasset.parents, nelms)
     for i = 1:nelms
         s.parents[i] = i
@@ -989,7 +1001,7 @@ function apply_changes!(astate::AnalysisState, pc::Int)
     curr_hand = gethandler(astate.handler_info, pc)
     for change in astate.changes
         if change isa AllEscapeChange
-            apply_all_escape_change!(astate, change, nothrow)
+            apply_all_escape_change!(astate, change)
         elseif change isa ReturnEscapeChange
             apply_return_escape_change!(astate, change)
         elseif change isa ThrownEscapeChange
@@ -1063,10 +1075,10 @@ function make_exc_state(astate::AnalysisState, enter_idx::Int)
     return excstate, enter_node.catch_dest
 end
 
-function apply_all_escape_change!(astate::AnalysisState, change::AllEscapeChange, nothrow::Bool)
+function apply_all_escape_change!(astate::AnalysisState, change::AllEscapeChange)
     (; xidx) = change
     oldinfo = astate.currstate[xidx]
-    newnewinfo, changed = oldinfo ⊔ₑꜝ EscapeInfo(⊤; ThrownEscape=!nothrow)
+    newnewinfo, changed = oldinfo ⊔ₑꜝ ⊤
     if changed
         astate.currstate[xidx] = newnewinfo
         record_equalized_root!(astate, xidx)
@@ -1709,7 +1721,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
             astate.ssamemoryinfo[pc] = UninitializedMemory() # TODO CFG-aware `MemoryInfo`
         else
             MemoryInfo = MemoryInfo::AliasedMemory
-            nothrow |= !MemoryInfo.maybeundef
+            nothrow |= !MemoryInfo.maybeundef # refine `nothrow` information if possible
             traverse_aliased_memory(MemoryInfo) do @nospecialize aval
                 add_alias_change!(astate, retval, aval)
                 if !haskey(astate.ssamemoryinfo, pc)
@@ -1730,6 +1742,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
         # 2. alias the object to the returned value (since the field may opoint to `obj` itself)
         add_object_info_change!(astate, obj, ⊤ₒ)     # 1
         add_alias_change!(astate, obj, retval)       # 2
+        add_all_escape_change!(astate, retval)
         astate.ssamemoryinfo[pc] = UnknownMemory()
     end
     return nothrow

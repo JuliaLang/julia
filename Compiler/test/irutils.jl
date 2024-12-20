@@ -3,7 +3,7 @@
 include("setup_Compiler.jl")
 
 using Core.IR
-using .Compiler: IRCode, IncrementalCompact, singleton_type, VarState
+using .Compiler: IRCode, IncrementalCompact, VarState, singleton_type
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
