@@ -54,7 +54,7 @@ function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
         # to fold away the extraneous null check
         #
         # TODO: Ideally the runtime would rely on provenance info for
-        # this error and we can remove isdefined check.
+        # this error and we can remove the isdefined check.
         [K"if" [K"call"
                 "isdefined"::K"core"
                 box
@@ -230,8 +230,21 @@ function closure_type_fields(ctx, srcref, closure_binds)
     return field_syms, field_orig_bindings, field_name_inds
 end
 
+function closure_name(mod, name_stack)
+    basename = "#$(join(name_stack, "#"))##"
+    i = 0
+    while true
+        name = "$basename$i"
+        if reserve_module_binding(mod, Symbol(name))
+            return name
+        end
+        i += 1
+    end
+end
+
 # Return a thunk which creates a new type for a closure with `field_syms` named
-# fields. The new type will be named `name_str`, which must be unique.
+# fields. The new type will be named `name_str` which must be an unassigned
+# name in the module.
 function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_syms)
     # New closure types always belong to the module we're expanding into - they
     # need to be serialized there during precompile.
@@ -329,10 +342,10 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             closure_info = get(ctx.closure_infos, func_name_id, nothing)
             needs_def = isnothing(closure_info)
             if needs_def
-                # TODO: Names for closures without relying on gensym
-                name_str = string(gensym("closure"))
+                closure_binds = ctx.closure_bindings[func_name_id]
                 field_syms, field_orig_bindings, field_name_inds =
-                    closure_type_fields(ctx, ex, ctx.closure_bindings[func_name_id])
+                    closure_type_fields(ctx, ex, closure_binds)
+                name_str = closure_name(ctx.mod, closure_binds.name_stack)
                 closure_type_def, closure_type =
                     type_for_closure(ctx, ex, name_str, field_syms)
                 push!(ctx.toplevel_stmts, closure_type_def)

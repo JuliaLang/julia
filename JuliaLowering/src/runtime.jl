@@ -221,8 +221,8 @@ end
 # Get the binding for `name` if one is already resolved in module `mod`. Note
 # that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
 # binding resolution which is a massive side effect we must avoid in lowering.
-function _get_module_binding(mod, name)
-    b = @ccall jl_get_module_binding(mod::Module, name::Symbol, 0::Cint)::Ptr{Core.Binding}
+function _get_module_binding(mod, name; create=false)
+    b = @ccall jl_get_module_binding(mod::Module, name::Symbol, create::Cint)::Ptr{Core.Binding}
     b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
 end
 
@@ -243,6 +243,20 @@ function is_defined_nothrow_global(mod, name)
     b = _get_module_binding(mod, name)
     !isnothing(b) && isdefined(b, :owner) || return false
     isdefined(b.owner, :value)
+end
+
+# "Reserve" a binding: create the binding if it doesn't exist but do not assign
+# to it.
+function reserve_module_binding(mod, name)
+    # TODO: Fix the race condition here: We should really hold the Module's
+    # binding lock during this test-and-set type operation. But the binding
+    # lock is only accessible from C. See also the C code in
+    # `fl_module_unique_name`.
+    if _get_module_binding(mod, name; create=false) === nothing
+        _get_module_binding(mod, name; create=true) !== nothing
+    else
+        return false
+    end
 end
 
 #-------------------------------------------------------------------------------

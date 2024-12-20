@@ -136,10 +136,11 @@ function update_lambda_binding!(ctx::AbstractLoweringContext, id; kws...)
 end
 
 struct ClosureBindings
-    lambdas::Vector{LambdaBindings}
+    name_stack::Vector{String}      # Names of functions the closure is nested within
+    lambdas::Vector{LambdaBindings} # Bindings for each method of the closure
 end
 
-ClosureBindings() = ClosureBindings(Vector{LambdaBindings}())
+ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
 
 struct ScopeInfo
     # True if scope is the global top level scope
@@ -173,7 +174,8 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     # Variables which were implicitly global due to being assigned to in top
     # level code
     implicit_toplevel_globals::Set{NameKey}
-    # 
+    # Collection of information about each closure, principally which methods
+    # are part of the closure (and hence captures).
     closure_bindings::Dict{IdTag,ClosureBindings}
 end
 
@@ -554,7 +556,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
                 func_name_id = func_name.var_id
                 if lookup_binding(ctx, func_name_id).kind == :local
                     cbinds = get!(ctx.closure_bindings, func_name_id) do
-                        ClosureBindings()
+                        name_stack = Vector{String}()
+                        for fname in ctx.method_def_stack
+                            if kind(fname) == K"BindingId"
+                                push!(name_stack, lookup_binding(ctx, fname).name)
+                            end
+                        end
+                        ClosureBindings(name_stack)
                     end
                     push!(cbinds.lambdas, lambda_bindings)
                 end
