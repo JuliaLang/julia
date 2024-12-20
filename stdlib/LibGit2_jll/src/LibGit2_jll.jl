@@ -3,7 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, MbedTLS_jll, LibSSH2_jll
+using Base, Libdl, LibSSH2_jll
+if !(Sys.iswindows() || Sys.isapple())
+    # On Windows and macOS we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
