@@ -100,7 +100,7 @@ function print_matrix_row(io::IO,
         #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
-        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
+        if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(io, x)::Tuple{Int,Int}
 
