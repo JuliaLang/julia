@@ -19,6 +19,13 @@ end
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
+isnew_with_type(@nospecialize(srcT)) = @nospecialize(x) -> isnew_with_type(srcT, x)
+function isnew_with_type(@nospecialize(srcT), @nospecialize(x))
+    isexpr(x, :new) || return false
+    (src, T) = srcT
+    return singleton_type(argextype(x.args[1], src)) == T
+end
+isnew_with_type(@nospecialize(T::Type)) = (@nospecialize(x) -> isnew_with_type(x, T))
 issplatnew(@nospecialize x) = isexpr(x, :splatnew)
 isreturn(@nospecialize x) = isa(x, ReturnNode) && isdefined(x, :val)
 isisdefined(@nospecialize x) = isexpr(x, :isdefined)

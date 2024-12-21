@@ -3,8 +3,9 @@ baremodule EscapeAnalysis
 export
     analyze_escapes,
     getaliases,
-    isaliased,
     is_load_forwardable,
+    is_not_analyzed,
+    isaliased,
     has_no_escape,
     has_arg_escape,
     has_return_escape,
@@ -20,15 +21,16 @@ using Core: Builtin, IntrinsicFunction, SimpleVector, ifelse, sizeof
 using Core.IR
 using Base:       # Base definitions
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @isdefined, @label, @noinline,
-    @nospecialize, @specialize, BitSet, IdDict, IdSet, Pair, UnitRange, Vector,
+    @nospecialize, @specialize, BitSet, IdDict, IdSet, Pair, RefValue, UnitRange, Vector,
     _bits_findnext, copy!, empty!, enumerate, error, fill!, first, get, hasintersect,
     haskey, isassigned, isexpr, keys, last, length, max, min, missing, only, println, push!,
     pushfirst!, resize!, :, !, !==, <, <<, >, =>, ≠, ≤, ≥, ∉, ⊆, ⊇, &, *, +, -, |
 using ..Compiler: # Compiler specific definitions
     @show, Compiler, HandlerInfo, IRCode, IR_FLAG_NOTHROW, NewNodeInfo, SimpleHandler,
-    argextype, block_for_inst, compute_trycatch, fieldcount_noerror, gethandler, has_flag,
-    intrinsic_nothrow, is_meta_expr_head, is_identity_free_argtype, isterminator,
-    singleton_type, try_compute_field, try_compute_fieldidx, widenconst
+    argextype, argument_datatype, compute_trycatch, datatype_min_ninitialized,
+    fieldcount_noerror, gethandler, has_flag, is_identity_free_argtype, is_meta_expr_head,
+    is_nothrow, isterminator, singleton_type, try_compute_field, try_compute_fieldidx,
+    widenconst
 
 function include(x::String)
     if !isdefined(Base, :end_base_include)
@@ -40,55 +42,94 @@ end
 
 include("disjoint_set.jl")
 
-@nospecialize
+abstract type MemoryKind end
+struct UninitializedMemory <: MemoryKind end
+struct CallerMemory <: MemoryKind
+    id::Int
+end
+# struct SSAValueMemory <: MemoryKind end
+# struct ArgumentMemory <: MemoryKind end
+# struct GlobalRefMemory <: MemoryKind end
+# struct LiteralMemory <: MemoryKind end
+
+# TODO [^CFG-aware `MemoryInfo`]:
+# By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
+# to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
 
 abstract type MemoryInfo end
-struct UninitializedMemory <: MemoryInfo end
-const AliasedValues = IdSet{Any}
-struct AliasedMemory <: MemoryInfo
-    alias::Any # anything that is valid as IR elements (e.g. `SSAValue`, `Argument`, `GlobalRef`, literals), or `AliasedValues` of them
-    maybeundef::Bool # required when `AliasedMemory` is merged with `UninitializedMemory`
+struct MustAliasMemoryInfo <: MemoryInfo
+    alias::Any # anything that is valid as IR elements (e.g. `SSAValue`, `Argument`, `GlobalRef`, literals, and `MemoryKind`)
+    function MustAliasMemoryInfo(@nospecialize alias)
+        @assert !(alias isa CallerMemory) "CallerMemory is only allowed for `MayAliasMemoryInfo`"
+        return new(alias)
+    end
 end
+struct MayAliasMemoryInfo <: MemoryInfo
+    aliases::IdSet{Any}
+    function MayAliasMemoryInfo(aliases::IdSet{Any})
+        @assert length(aliases) ≥ 2
+        return new(aliases)
+    end
+    function MayAliasMemoryInfo(CallerMemory::CallerMemory)
+        aliases = IdSet{Any}()
+        push!(aliases, CallerMemory)
+        return new(aliases)
+    end
+end
+struct UnknownMemoryInfo <: MemoryInfo end # not part of the `⊑ₘ` lattice, just a marker for `ssamemoryinfo`
+const ⊤ₘ = UnknownMemoryInfo()
+
 x::MemoryInfo == y::MemoryInfo = begin
-    if x === UninitializedMemory()
-        return y === UninitializedMemory()
+    @nospecialize
+    if x isa MayAliasMemoryInfo
+        return y isa MayAliasMemoryInfo && x.aliases == y.aliases
     else
-        x = x::AliasedMemory
-        y isa AliasedMemory || return false
-        return x.alias == y.alias && x.maybeundef == y.maybeundef
+        x = x::MustAliasMemoryInfo
+        y isa MustAliasMemoryInfo || return false
+        return x === y
     end
 end
 function copy(MemoryInfo::MemoryInfo)
-    if MemoryInfo isa AliasedMemory
-        (; alias, maybeundef) = MemoryInfo
-        return AliasedMemory(alias isa AliasedValues ? copy(alias) : alias, maybeundef)
+    @nospecialize MemoryInfo
+    if MemoryInfo isa MayAliasMemoryInfo
+        return MayAliasMemoryInfo(copy(MemoryInfo.aliases))
     end
     return MemoryInfo
+end
+function has_caller_memory(MemoryInfo::MemoryInfo)
+    MemoryInfo isa MustAliasMemoryInfo && return false
+    MemoryInfo = MemoryInfo::MayAliasMemoryInfo
+    for alias in MemoryInfo.aliases
+        alias isa CallerMemory && return true
+    end
+    return false
 end
 
 abstract type ObjectInfo end
 struct HasUnanalyzedMemory <: ObjectInfo end
-struct HasIndexableMemory <: ObjectInfo
-    MemoryInfos::Vector{MemoryInfo}
+struct HasIndexableFields <: ObjectInfo
+    FieldInfos::Vector{MemoryInfo}
 end
 struct HasUnknownMemory <: ObjectInfo end
 const ⊥ₒ, ⊤ₒ = HasUnanalyzedMemory(), HasUnknownMemory()
 x::ObjectInfo == y::ObjectInfo = begin
+    @nospecialize
     x === y && return true
     if x === ⊥ₒ
         return y === ⊥ₒ
     elseif x === ⊤ₒ
         return y === ⊤ₒ
     else
-        x = x::HasIndexableMemory
-        y isa HasIndexableMemory || return false
-        return x.MemoryInfos == y.MemoryInfos
+        x = x::HasIndexableFields
+        y isa HasIndexableFields || return false
+        return x.FieldInfos == y.FieldInfos
     end
 end
 function copy(ObjectInfo::ObjectInfo)
-    if ObjectInfo isa HasIndexableMemory
-        return HasIndexableMemory(
-            MemoryInfo[copy(MemoryInfo) for MemoryInfo in ObjectInfo.MemoryInfos])
+    @nospecialize ObjectInfo
+    if ObjectInfo isa HasIndexableFields
+        return HasIndexableFields(
+            MemoryInfo[copy(MemoryInfo) for MemoryInfo in ObjectInfo.FieldInfos])
     end
     return ObjectInfo
 end
@@ -102,6 +143,7 @@ PCLiveness(pc::Int) = PCLiveness(BitSet(pc))
 struct TopLiveness <: Liveness end
 const ⊥ₗ, ⊤ₗ = BotLiveness(), TopLiveness()
 x::Liveness == y::Liveness = begin
+    @nospecialize
     if x === ⊥ₗ
         return y === ⊥ₗ
     elseif x === ⊤ₗ
@@ -113,6 +155,7 @@ x::Liveness == y::Liveness = begin
     end
 end
 pc::Int ∈ Liveness::Liveness = begin
+    @nospecialize Liveness
     if Liveness === ⊤ₗ
         return true
     elseif Liveness === ⊥ₗ
@@ -123,6 +166,7 @@ pc::Int ∈ Liveness::Liveness = begin
     end
 end
 function isempty(Liveness::Liveness)
+    @nospecialize Liveness
     if Liveness === ⊥ₗ
         return true
     elseif Liveness === ⊤ₗ
@@ -132,19 +176,19 @@ function isempty(Liveness::Liveness)
     end
 end
 function copy(Liveness::Liveness)
+    @nospecialize Liveness
     if Liveness isa PCLiveness
         return PCLiveness(copy(Liveness.pcs))
     end
     return Liveness
 end
 function delete!(Liveness::Liveness, pc::Int)
+    @nospecialize Liveness
     if Liveness isa PCLiveness
         delete!(Liveness.pcs, pc)
     end
     return Liveness
 end
-
-@specialize
 
 """
     x::EscapeInfo
@@ -162,7 +206,7 @@ A lattice for escape information, which holds the following properties:
   * `x.ObjectInfo::HasUnknownMemory` indicates the fields/elements of `x` can't be analyzed,
     e.g. the type of `x` is not known or is not concrete and thus its fields/elements
     can't be known precisely
-  * `x.ObjectInfo::HasIndexableMemory` records all the possible values that can be aliased to fields of object `x` with precise index information
+  * `x.ObjectInfo::HasIndexableFields` records all the possible values that can be aliased to fields of object `x` with precise index information
 - `x.Liveness::BitSet`: records SSA statement numbers where `x` should be live, e.g.
   to be used as a call argument, to be returned to a caller, or preserved for `:foreigncall`:
   * `isempty(x.Liveness)`: `x` is never be used in this call frame (the bottom)
@@ -224,18 +268,34 @@ end
 ArgLiveness() = PCLiveness(BitSet(0))
 
 NoEscape() = EscapeInfo(false, false, ⊥ₒ, ⊥ₗ)
-ArgEscape() = EscapeInfo(false, false, ⊤ₒ, ArgLiveness())
+ArgEscape() = EscapeInfo(false, false, ⊤ₒ, ArgLiveness()) # TODO allow inter-procedural alias analysis
+CallerEscape() = EscapeInfo(false, false, ⊤ₒ, ArgLiveness()) # COMBAK allow only one-level inter-procedural alias analysis (for now)
 AllEscape() = EscapeInfo(true, true, ⊤ₒ, ⊤ₗ)
 
 const ⊥, ⊤ = NoEscape(), AllEscape()
 
 # Convenience names for some ⊑ₑ queries
+function is_not_analyzed(x::EscapeInfo)
+    if x.Liveness === BotLiveness()
+        @assert !x.ThrownEscape && !x.ReturnEscape && x.ObjectInfo === HasUnanalyzedMemory()
+        return true
+    else
+        return false
+    end
+end
 has_no_escape(x::EscapeInfo) = !x.ReturnEscape && !x.ThrownEscape && 0 ∉ x.Liveness
 has_arg_escape(x::EscapeInfo) = 0 ∈ x.Liveness
 has_return_escape(x::EscapeInfo) = x.ReturnEscape
 has_return_escape(x::EscapeInfo, pc::Int) = x.ReturnEscape && pc ∈ x.Liveness
 has_thrown_escape(x::EscapeInfo) = x.ThrownEscape
-has_all_escape(x::EscapeInfo) = x.Liveness == TopLiveness() # top-liveness == this object may exit anywhere
+function has_all_escape(x::EscapeInfo)
+    if x.Liveness === TopLiveness() # top-liveness == this object may exist anywhere
+        @assert x.ThrownEscape && x.ReturnEscape && x.ObjectInfo === HasUnknownMemory()
+        return true
+    else
+        return false
+    end
+end
 
 # utility lattice constructors
 ignore_argescape(x::EscapeInfo) = EscapeInfo(x; Liveness=delete!(copy(x.Liveness), 0))
@@ -261,6 +321,7 @@ end
 The non-strict partial order over [`EscapeInfo`](@ref).
 """
 x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
+    @nospecialize
     # fast pass: better to avoid top comparison
     if x === ⊥
         return true
@@ -279,6 +340,7 @@ x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
 end
 
 x::Liveness ⊑ₗ y::Liveness = begin
+    @nospecialize
     if x === ⊥ₗ
         return true
     elseif x === ⊤ₗ
@@ -294,6 +356,7 @@ x::Liveness ⊑ₗ y::Liveness = begin
 end
 
 x::ObjectInfo ⊑ₒ y::ObjectInfo = begin
+    @nospecialize
     if x === ⊥ₒ
         return true
     elseif x === ⊤ₒ
@@ -303,8 +366,8 @@ x::ObjectInfo ⊑ₒ y::ObjectInfo = begin
     elseif y === ⊤ₒ
         return true
     else
-        x, y = x::HasIndexableMemory, y::HasIndexableMemory
-        xinfos, yinfos = x.MemoryInfos, y.MemoryInfos
+        x, y = x::HasIndexableFields, y::HasIndexableFields
+        xinfos, yinfos = x.FieldInfos, y.FieldInfos
         xn, yn = length(xinfos), length(yinfos)
         xn ≤ yn || return false
         for i in 1:xn
@@ -315,28 +378,22 @@ x::ObjectInfo ⊑ₒ y::ObjectInfo = begin
 end
 
 x::MemoryInfo ⊑ₘ y::MemoryInfo = begin
-    if x === UninitializedMemory()
-        return y === UninitializedMemory()
-    elseif y === UninitializedMemory()
-        return false
-    else
-        x, y = x::AliasedMemory, y::AliasedMemory
-        xa, ya = x.alias, y.alias
-        if !(xa isa AliasedValues)
-            if ya isa AliasedValues
-                xa ∈ ya || return false
-            else
-                xa == ya || return false
-            end
-        elseif ya isa AliasedValues
-            xa ⊆ ya || return false
+    @nospecialize
+    if x isa MustAliasMemoryInfo
+        if y isa MustAliasMemoryInfo
+            return x.alias === y.alias
         else
+            y = y::MayAliasMemoryInfo
+            return x.alias ∈ y.aliases
+        end
+    else
+        x = x::MayAliasMemoryInfo
+        if y isa MustAliasMemoryInfo
             return false
+        else
+            y = y::MayAliasMemoryInfo
+            return x.aliases ⊆ y.aliases
         end
-        if x.maybeundef
-            y.maybeundef || return false
-        end
-        return true
     end
 end
 
@@ -394,9 +451,10 @@ x::EscapeInfo ⊔ₑꜝ y::EscapeInfo = begin
         Liveness)
     return xy, changed
 end
-x::EscapeInfo ⊔ₑ y::EscapeInfo = copy(x) ⊔ₑꜝ y
+x::EscapeInfo ⊔ₑ y::EscapeInfo = first(copy(x) ⊔ₑꜝ y)
 
 x::Liveness ⊔ₗꜝ y::Liveness = begin
+    @nospecialize
     if x === ⊥ₗ
         if y === ⊥ₗ
             return ⊥ₗ, false
@@ -417,9 +475,10 @@ x::Liveness ⊔ₗꜝ y::Liveness = begin
     union!(x.pcs, y.pcs)
     return x, true
 end
-x::Liveness ⊔ₗ y::Liveness = copy(x) ⊔ₗꜝ y
+x::Liveness ⊔ₗ y::Liveness = (@nospecialize; first(copy(x) ⊔ₗꜝ y))
 
 x::ObjectInfo ⊔ₒꜝ y::ObjectInfo = begin
+    @nospecialize
     if x === ⊥ₒ
         if y === ⊥ₒ
             return ⊥ₒ, false
@@ -433,8 +492,8 @@ x::ObjectInfo ⊔ₒꜝ y::ObjectInfo = begin
     elseif y === ⊤ₒ
         return ⊤ₒ, true # x !== ⊤ₒ
     end
-    x, y = x::HasIndexableMemory, y::HasIndexableMemory
-    xinfos, yinfos = x.MemoryInfos, y.MemoryInfos
+    x, y = x::HasIndexableFields, y::HasIndexableFields
+    xinfos, yinfos = x.FieldInfos, y.FieldInfos
     xn, yn = length(xinfos), length(yinfos)
     nmax, nmin = max(xn, yn), min(xn, yn)
     changed = false
@@ -454,64 +513,82 @@ x::ObjectInfo ⊔ₒꜝ y::ObjectInfo = begin
     end
     return x, changed
 end
-x::ObjectInfo ⊔ₒ y::ObjectInfo = copy(x) ⊔ₒꜝ y
+x::ObjectInfo ⊔ₒ y::ObjectInfo = (@nospecialize; first(copy(x) ⊔ₒꜝ y))
 
 x::MemoryInfo ⊔ₘꜝ y::MemoryInfo = begin
-    if x === UninitializedMemory()
-        if y === UninitializedMemory()
-            return UninitializedMemory(), false
+    @nospecialize
+    if x isa MustAliasMemoryInfo
+        if y isa MustAliasMemoryInfo
+            if x.alias !== y.alias
+                # TODO [^CFG-aware `MemoryInfo`]
+                aliases = IdSet{Any}()
+                push!(aliases, x.alias)
+                push!(aliases, y.alias)
+                return MayAliasMemoryInfo(aliases), true
+            else
+                return x, false
+            end
         else
-            return AliasedMemory(copy(y::AliasedMemory).alias, true), true
+            y = y::MayAliasMemoryInfo
+            if x.alias ∈ y.aliases
+                return copy(y), true
+            else
+                x′ = copy(y)
+                push!(x′.aliases, x.alias)
+                return x′, true
+            end
         end
-    end
-    x = x::AliasedMemory
-    if y === UninitializedMemory()
-        maybeundef = true
-        return AliasedMemory(x.alias, maybeundef), x.maybeundef < maybeundef
-    end
-    y = y::AliasedMemory
-    xa, ya = x.alias, y.alias
-    changed = false
-    if xa isa AliasedValues
-        alias = xa
-        if ya isa AliasedValues
-            changed = alias ≠ ya
-            changed && union!(alias, ya)
-        else
-            changed = ya ∉ alias
-            changed && push!(alias, ya)
-        end
-    elseif ya isa AliasedValues
-        alias = copy(ya)
-        changed = xa ∉ alias
-        changed && push!(alias, xa)
     else
-        changed = xa ≠ ya
-        alias = changed ? AliasedValues((xa, ya)) : xa
+        x = x::MayAliasMemoryInfo
+        if y isa MustAliasMemoryInfo
+            if y ∉ x.aliases
+                push!(x.aliases, y.alias)
+                return x, true
+            else
+                return x, false
+            end
+        else
+            y = y::MayAliasMemoryInfo
+            if x.aliases == y.aliases
+                return x, false
+            else
+                union!(x.aliases, y.aliases)
+                return x, true
+            end
+        end
     end
-    maybeundef = x.maybeundef | y.maybeundef
-    changed |= x.maybeundef < maybeundef
-    return AliasedMemory(alias, maybeundef), changed
 end
-x::MemoryInfo ⊔ₘ y::MemoryInfo = copy(x) ⊔ₘꜝ y
+x::MemoryInfo ⊔ₘ y::MemoryInfo = (@nospecialize; first(copy(x) ⊔ₘꜝ y))
 
 const EscapeTable = IdDict{Int,EscapeInfo} # TODO `Dict` would be more efficient?
 
-struct BlockEscapeState{Sealed#=::Bool=#}
-    escapes::EscapeTable
+struct AnalysisFrameInfo
     nargs::Int
     nstmts::Int
+    n_caller_memory::RefValue{Int}
 end
-BlockEscapeState(nargs::Int, nstmts::Int) = BlockEscapeState{false}(EscapeTable(), nargs, nstmts)
-BlockEscapeState{Sealed}(bbstate::BlockEscapeState) where Sealed =
-    BlockEscapeState{Sealed}(bbstate.escapes, bbstate.nargs, bbstate.nstmts)
 
-function getindex(bbstate::BlockEscapeState{Sealed}, @nospecialize(x)) where Sealed
+struct BlockEscapeState
+    escapes::EscapeTable
+    afinfo::AnalysisFrameInfo
+end
+
+function getindex(bbstate::BlockEscapeState, @nospecialize(x))
     xidx = iridx(x, bbstate)
     return xidx === nothing ? nothing : bbstate[xidx]
 end
-getindex(bbstate::BlockEscapeState{Sealed}, xidx::Int) where Sealed =
-    get(bbstate.escapes, xidx, xidx ≤ bbstate.nargs ? ArgEscape() : Sealed ? nothing : ⊥)
+function getindex(bbstate::BlockEscapeState, xidx::Int)
+    return get(bbstate.escapes, xidx) do
+        (; nargs, nstmts) = bbstate.afinfo
+        if xidx ≤ nargs
+            return ArgEscape()
+        elseif nargs < xidx ≤ nargs + nstmts
+            return ⊥
+        else
+            error("The escape information for `CallerMemory` should be initialized using `add_caller_memory!`")
+        end
+    end
+end
 function setindex!(bbstate::BlockEscapeState, xinfo::EscapeInfo, @nospecialize(x))
     xidx = iridx(x, bbstate)
     if xidx !== nothing
@@ -519,22 +596,19 @@ function setindex!(bbstate::BlockEscapeState, xinfo::EscapeInfo, @nospecialize(x
     end
     return bbstate
 end
-function setindex!(bbstate::BlockEscapeState{Sealed}, xinfo::EscapeInfo, xidx::Int) where Sealed
-    Sealed && error("This BlockEscapeState is sealed")
+function setindex!(bbstate::BlockEscapeState, xinfo::EscapeInfo, xidx::Int)
     return bbstate.escapes[xidx] = xinfo
 end
-function copy(bbstate::BlockEscapeState{Sealed}) where Sealed
+function copy(bbstate::BlockEscapeState)
     escapes = EscapeTable(i => copy(x) for (i, x) in bbstate.escapes)
-    return BlockEscapeState{Sealed}(escapes, bbstate.nargs, bbstate.nstmts)
+    # NOTE we don't copy `afinfo` (and `afinfo.n_caller_memory`) here
+    #      since it should be shared across all states
+    return BlockEscapeState(escapes, bbstate.afinfo)
 end
-function (bbstate1::BlockEscapeState{Sealed1} == bbstate2::BlockEscapeState{Sealed2}) where {Sealed1,Sealed2}
-    return Sealed1 == Sealed2 &&
-           bbstate1.escapes == bbstate2.escapes &&
-           bbstate1.nargs == bbstate2.nargs &&
-           bbstate1.nstmts == bbstate2.nstmts
-end
+bbstate1::BlockEscapeState == bbstate2::BlockEscapeState =
+    bbstate1.escapes == bbstate2.escapes && bbstate1.afinfo === bbstate2.afinfo
 
-const AnalyzableIRElement = Union{Argument,SSAValue}
+const AnalyzableIRElement = Union{Argument,SSAValue,CallerMemory}
 
 """
     iridx(x, bbstate::BlockEscapeState) -> xidx::Union{Int,Nothing}
@@ -546,14 +620,18 @@ Returns `nothing` if `x` isn't maintained by `bbstate` and thus unanalyzable (e.
 `irval` is the inverse function of `iridx` (not formally), i.e.
 `irval(iridx(x::AnalyzableIRElement, state), state) === x`.
 """
-iridx(@nospecialize(x), bbstate::BlockEscapeState) = iridx(x, bbstate.nargs, bbstate.nstmts)
-function iridx(@nospecialize(x), nargs::Int, nstmts::Int)
+iridx(@nospecialize(x), bbstate::BlockEscapeState) = iridx(x, bbstate.afinfo)
+function iridx(@nospecialize(x), afinfo::AnalysisFrameInfo)
+    (; nargs, nstmts, n_caller_memory) = afinfo
     if isa(x, Argument)
         xidx = x.n
         @assert 1 ≤ xidx ≤ nargs "invalid Argument"
     elseif isa(x, SSAValue)
         xidx = x.id + nargs
         @assert nargs < xidx ≤ nargs + nstmts "invalid SSAValue"
+    elseif isa(x, CallerMemory)
+        xidx = x.id
+        @assert nargs + nstmts < xidx ≤ nargs + nstmts + n_caller_memory[] "invalid CallerMemory"
     else
         return nothing
     end
@@ -569,55 +647,51 @@ that is analyzable in the context of `bbstate`.
 `iridx` is the inverse function of `irval` (not formally), i.e.
 `iridx(irval(xidx, state), state) === xidx`.
 """
-irval(xidx::Int, bbstate::BlockEscapeState) = irval(xidx, bbstate.nargs, bbstate.nstmts)
-function irval(xidx::Int, nargs::Int, nstmts::Int)
+irval(xidx::Int, bbstate::BlockEscapeState) = irval(xidx, bbstate.afinfo)
+function irval(xidx::Int, afinfo::AnalysisFrameInfo)
+    (; nargs, nstmts, n_caller_memory) = afinfo
     if xidx ≤ nargs
         return Argument(xidx)
     elseif xidx ≤ nargs + nstmts
         return SSAValue(xidx - nargs)
+    elseif xidx ≤ nargs + nstmts + n_caller_memory[]
+        return CallerMemory(xidx)
     else
-        error("invalid xidx")
+        error("invalid xidx::Int")
     end
 end
 
 abstract type Change end
 const Changes = Vector{Change}
 
-const SSAMemoryInfo = IdDict{Int,Any}
-# TODO CFG-aware `MemoryInfo`:
-# By incorporating some form of CFG information into `MemoryInfo`, it becomes possible
-# to enable load-forwarding even in cases where conflicts occur by inserting φ-nodes.
-struct ConflictedMemory end # a special instance to indicate the aliased memory is conflicted
-struct UnknownMemory end    # a special instance to indicate the aliased memory is unknown
+const SSAMemoryInfo = IdDict{Int,MemoryInfo}
 
-const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState{false}}[false]
+const LINEAR_BBESCAPES = Union{Bool,BlockEscapeState}[false]
 
 const AliasSet = IntDisjointSet{Int}
 
 struct AnalysisState{GetEscapeCache}
     ir::IRCode
-    nargs::Int
-    nstmts::Int
+    afinfo::AnalysisFrameInfo
     new_nodes_map::Union{Nothing,IdDict{Int,Vector{Pair{Int,NewNodeInfo}}}}
     # escape states for each basic block:
     # - `bbescape === false` indicates the state for the block has not been initialized
     # - `bbescape === true` indicates the state for the block is known to be identical to
     #   the state of its single predecessor
-    bbescapes::Vector{Union{Bool,BlockEscapeState{false}}}
+    bbescapes::Vector{Union{Bool,BlockEscapeState}}
     aliasset::AliasSet
     get_escape_cache::GetEscapeCache
     #= results =#
-    retescape::BlockEscapeState{false}
+    retescape::BlockEscapeState
     ssamemoryinfo::SSAMemoryInfo
     #= temporary states =#
-    currstate::BlockEscapeState{false}                 # the state currently being analyzed
-    changes::Changes                                   # changes made at the current statement
+    currstate::BlockEscapeState                 # the state currently being analyzed
+    changes::Changes                            # changes made at the current statement
     visited::BitSet
     equalized_roots::BitSet
     handler_info::Union{Nothing,HandlerInfo{SimpleHandler}}
 end
 function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
-    nstmts = length(ir.stmts) + length(ir.new_nodes)
     if isempty(ir.new_nodes)
         new_nodes_map = nothing
     else
@@ -631,35 +705,36 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
         end
     end
     nbbs = length(ir.cfg.blocks)
+    nstmts = length(ir.stmts) + length(ir.new_nodes)
+    afinfo = AnalysisFrameInfo(nargs, nstmts, RefValue(0))
+    n_caller_memory = RefValue(0)
     if nbbs == 1 # optimization for linear control flow
         bbescapes = LINEAR_BBESCAPES # avoid unnecessary allocation
-        retescape = currstate = BlockEscapeState(nargs, nstmts) # no need to maintain a separate state
+        retescape = currstate = BlockEscapeState(EscapeTable(), afinfo) # no need to maintain a separate state
     else
-        bbescapes = fill!(Vector{Union{Bool,BlockEscapeState{false}}}(undef, nbbs), false)
-        retescape = BlockEscapeState(nargs, nstmts)
-        currstate = BlockEscapeState(nargs, nstmts)
+        bbescapes = fill!(Vector{Union{Bool,BlockEscapeState}}(undef, nbbs), false)
+        retescape = BlockEscapeState(EscapeTable(), afinfo)
+        currstate = BlockEscapeState(EscapeTable(), afinfo)
     end
     retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
-    ssamemoryinfo = IdDict{Int,Any}()
+    ssamemoryinfo = SSAMemoryInfo()
     changes = Changes()
     visited = BitSet()
     equalized_roots = BitSet()
     handler_info = compute_trycatch(ir)
-    return AnalysisState(ir, nargs, nstmts, new_nodes_map,
+    return AnalysisState(
+        ir, afinfo, new_nodes_map,
         bbescapes, aliasset, get_escape_cache,
         retescape, ssamemoryinfo,
         currstate, changes, visited, equalized_roots, handler_info)
 end
 
-getaliases(astate::AnalysisState, x::AnalyzableIRElement) =
-    getaliases(astate.aliasset, astate.nargs, astate.nstmts, x)
-function getaliases(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement)
-    aliases = getaliases(aliasset, iridx(x, nargs, nstmts))
+function getaliases(aliasset::AliasSet, afinfo::AnalysisFrameInfo, x::AnalyzableIRElement)
+    aliases = getaliases(aliasset, iridx(x, afinfo))
     aliases === nothing && return nothing
-    return AnalyzableIRElement[irval(aidx, nargs, nstmts) for aidx in aliases]
+    return AnalyzableIRElement[irval(aidx, afinfo) for aidx in aliases]
 end
-getaliases(astate::AnalysisState, xidx::Int) = getaliases(astate.aliasset, xidx)
 function getaliases(aliasset::AliasSet, xidx::Int)
     xroot, hasalias = getaliasroot!(aliasset, xidx)
     if hasalias
@@ -684,13 +759,24 @@ end
         return root, false
     end
 end
+getaliases(astate::AnalysisState, x::AnalyzableIRElement) = getaliases(astate.aliasset, astate.afinfo, x)
+getaliases(astate::AnalysisState, xidx::Int) = getaliases(astate.aliasset, xidx)
 
-isaliased(astate::AnalysisState, x::AnalyzableIRElement, y::AnalyzableIRElement) =
-    isaliased(astate.aliasset, astate.nargs, astate.nstmts, x, y)
-isaliased(aliasset::AliasSet, nargs::Int, nstmts::Int, x::AnalyzableIRElement, y::AnalyzableIRElement) =
-    isaliased(aliasset, iridx(x, nargs, nstmts), iridx(y, nargs, nstmts))
-isaliased(astate::AnalysisState, xidx::Int, yidx::Int) = isaliased(astate.aliasset, xidx, yidx)
+isaliased(aliasset::AliasSet, afinfo::AnalysisFrameInfo, x::AnalyzableIRElement, y::AnalyzableIRElement) = isaliased(aliasset, iridx(x, afinfo), iridx(y, afinfo))
 isaliased(aliasset::AliasSet, xidx::Int, yidx::Int) = in_same_set(aliasset, xidx, yidx)
+isaliased(astate::AnalysisState, x::AnalyzableIRElement, y::AnalyzableIRElement) = isaliased(astate.aliasset, astate.afinfo, x, y)
+isaliased(astate::AnalysisState, xidx::Int, yidx::Int) = isaliased(astate.aliasset, xidx, yidx)
+
+function add_caller_memory!(astate::AnalysisState)
+    (; nargs, nstmts, n_caller_memory) = astate.afinfo
+    n_caller_memory[] += 1
+    new_n_caller_memory = n_caller_memory[]
+    id = nargs + nstmts + new_n_caller_memory
+    astate.currstate[id] = CallerEscape()
+    id′ = push!(astate.aliasset)
+    @assert id == id′
+    return CallerMemory(id)
+end
 
 """
     eresult::EscapeResult
@@ -699,30 +785,24 @@ Extended lattice that maps arguments and SSA values to escape information repres
 Escape information imposed on SSA IR element `x` can be retrieved by `eresult[x]`.
 """
 struct EscapeResult
-    nargs::Int
-    nstmts::Int
-    bbescapes::Vector{Union{Bool,BlockEscapeState{true}}}
+    afinfo::AnalysisFrameInfo
+    bbescapes::Vector{Union{Bool,BlockEscapeState}}
     aliasset::AliasSet
-    retescape::BlockEscapeState{true}
+    retescape::BlockEscapeState
     ssamemoryinfo::SSAMemoryInfo
     function EscapeResult(astate::AnalysisState)
-        bbescapes = Union{Bool,BlockEscapeState{true}}[bbstate isa Bool ?
-            bbstate : BlockEscapeState{true}(bbstate) for bbstate in astate.bbescapes]
-        retescape = BlockEscapeState{true}(astate.retescape)
-        return new(astate.nargs, astate.nstmts, bbescapes, astate.aliasset, retescape, astate.ssamemoryinfo)
+        return new(astate.afinfo, astate.bbescapes, astate.aliasset, astate.retescape, astate.ssamemoryinfo)
     end
 end
 getindex(eresult::EscapeResult, @nospecialize(x)) = getindex(eresult.retescape, x)
-getaliases(eresult::EscapeResult, x::AnalyzableIRElement) =
-    getaliases(eresult.aliasset, eresult.nargs, eresult.nstmts, x)
+getaliases(eresult::EscapeResult, x::AnalyzableIRElement) = getaliases(eresult.aliasset, eresult.afinfo, x)
 getaliases(eresult::EscapeResult, xidx::Int) = getaliases(eresult.aliasset, xidx)
-isaliased(eresult::EscapeResult, x::AnalyzableIRElement, y::AnalyzableIRElement) =
-    isaliased(eresult.aliasset, eresult.nargs, eresult.nstmts, x, y)
+isaliased(eresult::EscapeResult, x::AnalyzableIRElement, y::AnalyzableIRElement) = isaliased(eresult.aliasset, eresult.afinfo, x, y)
 isaliased(eresult::EscapeResult, xidx::Int, yidx::Int) = isaliased(eresult.aliasset, xidx, yidx)
 
 function is_load_forwardable((; ssamemoryinfo)::EscapeResult, pc::Int)
-    memoryinfo = ssamemoryinfo[pc]
-    return memoryinfo !== ConflictedMemory() && memoryinfo !== UnknownMemory()
+    haskey(ssamemoryinfo, pc) || return false
+    return ssamemoryinfo[pc] isa MustAliasMemoryInfo
 end
 
 """
@@ -965,8 +1045,6 @@ end
 propagate_ret_state!(astate::AnalysisState, currstate::BlockEscapeState) =
     propagate_bbstate!(astate.retescape, currstate)
 
-# COMBAK Is the separation of "apply" and "add" changes necessary?
-
 # Apply
 # =====
 # Apply `Change`s and update the current escape information `currstate`
@@ -1106,7 +1184,6 @@ function apply_thrown_escape_change!(astate::AnalysisState, change::ThrownEscape
     end
 end
 
-# COMBAK support weak update
 function apply_object_info_change!(astate::AnalysisState, change::ObjectInfoChange)
     (; xidx, ObjectInfo) = change
     astate.currstate[xidx] = EscapeInfo(astate.currstate[xidx]; ObjectInfo)
@@ -1261,24 +1338,18 @@ end
 function traverse_object_memory(callback, astate::AnalysisState, xidx::Int,
                                 track_visited::Bool=true)
     (; ObjectInfo) = astate.currstate[xidx]
-    if ObjectInfo isa HasIndexableMemory && (!track_visited || xidx ∉ astate.visited)
+    if ObjectInfo isa HasIndexableFields && (!track_visited || xidx ∉ astate.visited)
         track_visited && push!(astate.visited, xidx) # avoid infinite traversal for cyclic references
-        for MemoryInfo in ObjectInfo.MemoryInfos
-            if MemoryInfo isa AliasedMemory
-                traverse_aliased_memory(callback, MemoryInfo)
+        for MemoryInfo in ObjectInfo.FieldInfos
+            if MemoryInfo isa MustAliasMemoryInfo
+                callback(MemoryInfo.alias)
+            else
+                MemoryInfo = MemoryInfo::MayAliasMemoryInfo
+                for aval in MemoryInfo.aliases
+                    callback(aval)
+                end
             end
         end
-    end
-end
-
-function traverse_aliased_memory(callback, MemoryInfo::AliasedMemory)
-    alias = MemoryInfo.alias
-    if alias isa AliasedValues
-        for aval in alias
-            callback(aval)
-        end
-    else
-        callback(alias)
     end
 end
 
@@ -1401,13 +1472,10 @@ function analyze_edges!(astate::AnalysisState, pc::Int, edges::Vector{Any})
     ret = SSAValue(pc)
     for i in 1:length(edges)
         if isassigned(edges, i)
-            v = edges[i]
-            add_alias_change!(astate, ret, v)
+            add_alias_change!(astate, ret, edges[i])
         end
     end
 end
-
-is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 struct ArgEscapeInfo
     escape_bits::UInt8
@@ -1438,15 +1506,13 @@ struct ArgEscapeCache
     argaliases::Vector{ArgAlias}
     retescape::ArgEscapeInfo
     function ArgEscapeCache(eresult::EscapeResult)
-        nargs = eresult.retescape.nargs
+        (; nargs, nstmts, n_caller_memory) = eresult.afinfo
         argescapes = Vector{ArgEscapeInfo}(undef, nargs)
         argaliases = ArgAlias[]
         for i = 1:nargs
-            arginfo = eresult[i]
-            @assert arginfo.ObjectInfo === HasUnknownMemory() "Argument's memory information isn't tracked"
-            argescapes[i] = ArgEscapeInfo(arginfo)
+            argescapes[i] = ArgEscapeInfo(eresult[i])
             for j = (i+1):nargs
-                if isaliased(eresult, i, j)
+                if isaliased(eresult.aliasset, i, j)
                     push!(argaliases, ArgAlias(i, j))
                 end
             end
@@ -1468,7 +1534,7 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     add_liveness_changes!(astate, args, first_idx, last_idx)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(codeinst)
-    ret = SSAValue(pc)
+    retval = SSAValue(pc)
     if cache isa Bool
         if cache
             # This method call is very simple and has good effects, so there's no need to
@@ -1480,7 +1546,7 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
                     continue # :effect_free guarantees that nothings escapes to the global scope
                 end
                 if !is_identity_free_argtype(argextype(arg, astate.ir))
-                    add_alias_change!(astate, ret, arg)
+                    add_alias_change!(astate, retval, arg)
                 end
             end
             return nothing
@@ -1489,7 +1555,6 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
         end
     end
     cache = cache::ArgEscapeCache
-    retinfo = astate.currstate[ret] # escape information imposed on the call statement
     method = mi.def::Method
     nargs = Int(method.nargs)
     for (i, argidx) in enumerate(first_idx:last_idx)
@@ -1499,7 +1564,7 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
             # COMBAK will this be invalid once we take alias information into account?
             i = nargs
         end
-        from_interprocedural!(astate, pc, arg, cache.argescapes[i])
+        from_interprocedural!(astate, retval, arg, cache.argescapes[i])
         continue
     end
     for (; aidx, bidx) in cache.argaliases
@@ -1510,35 +1575,36 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
 end
 
 """
-    from_interprocedural!(argescape::ArgEscapeInfo, pc::Int) -> x::EscapeInfo
+    from_interprocedural!(astate::AnalysisState, retval::SSAValue, arg,
+                          argescape::ArgEscapeInfo) -> x::EscapeInfo
 
 Reinterprets the escape information imposed on the call argument which is cached as `argescape`
 in the context of the caller frame, where `pc` is the SSA statement number of the return value.
 """
-function from_interprocedural!(astate::AnalysisState, pc::Int, @nospecialize(arg),
+function from_interprocedural!(astate::AnalysisState, retval::SSAValue, @nospecialize(arg),
                                argescape::ArgEscapeInfo)
     @assert isempty(astate.visited)
-    _from_interprocedural!(astate, pc, arg, argescape)
+    _from_interprocedural!(astate, retval, arg, argescape)
     empty!(astate.visited)
 end
-function _from_interprocedural!(astate::AnalysisState, pc::Int, @nospecialize(arg),
+function _from_interprocedural!(astate::AnalysisState, retval::SSAValue, @nospecialize(arg),
                                 argescape::ArgEscapeInfo)
     with_profitable_irval(astate, arg) do argidx::Int
         if has_all_escape(argescape)
             push!(astate.changes, AllEscapeChange(argidx))
         else
-            if !is_nothrow(astate.ir, pc) && has_thrown_escape(argescape)
+            if !is_nothrow(astate.ir, retval) && has_thrown_escape(argescape)
                 push!(astate.changes, ThrownEscapeChange(argidx))
             end
             if has_return_escape(argescape)
-                _add_alias_change!(astate, argidx, SSAValue(pc))
+                _add_alias_change!(astate, argidx, retval)
             end
             push!(astate.changes, ObjectInfoChange(argidx, HasUnknownMemory()))
             push!(astate.changes, LivenessChange(argidx))
         end
         # Propagate the updated information to the field values of `x`
         traverse_object_memory(astate, argidx) do @nospecialize aval
-            _from_interprocedural!(astate, pc, aval, argescape)
+            _from_interprocedural!(astate, retval, aval, argescape)
         end
     end
 end
@@ -1669,18 +1735,18 @@ function analyze_new!(astate::AnalysisState, pc::Int, args::Vector{Any}, add_liv
         end
         add_object_info_change!(astate, obj, ⊤ₒ)
     else
-        MemoryInfos = Vector{MemoryInfo}(undef, nflds)
+        FieldInfos = Vector{MemoryInfo}(undef, nflds)
         for i = 1:nflds
             if i+1 > nargs
-                MemoryInfo = UninitializedMemory()
+                MemoryInfo = MustAliasMemoryInfo(UninitializedMemory())
             else
                 arg = args[i+1]
-                MemoryInfo = AliasedMemory(arg, false)
+                MemoryInfo = MustAliasMemoryInfo(arg)
                 add_liveness && add_liveness_change!(astate, arg)
             end
-            MemoryInfos[i] = MemoryInfo
+            FieldInfos[i] = MemoryInfo
         end
-        add_object_info_change!(astate, obj, HasIndexableMemory(MemoryInfos))
+        add_object_info_change!(astate, obj, HasIndexableFields(FieldInfos))
     end
     if !is_nothrow(astate.ir, pc)
         add_thrown_escape_change!(astate, obj)
@@ -1711,32 +1777,36 @@ function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, ar
     end
     nothrow = is_nothrow(astate.ir, pc)
     ObjectInfo = objinfo.ObjectInfo
-    if ObjectInfo isa HasIndexableMemory
+    if ObjectInfo isa HasIndexableFields
         fval = try_compute_field(ir, args[3])
         fval === nothing && @goto conservative_propagation
         fidx = try_compute_fieldidx(typ, fval)
         fidx === nothing && @goto conservative_propagation
-        @assert length(ObjectInfo.MemoryInfos) ≥ fidx "invalid field index"
-        MemoryInfo = ObjectInfo.MemoryInfos[fidx]
-        if MemoryInfo isa UninitializedMemory
-            # `UndefRefError` should be raised here
-            astate.ssamemoryinfo[pc] = UninitializedMemory() # TODO CFG-aware `MemoryInfo`
+        @assert length(ObjectInfo.FieldInfos) ≥ fidx "invalid field index"
+        MemoryInfo = ObjectInfo.FieldInfos[fidx]
+        @label precise_propagation
+        local all_initialized::Bool = true
+        if MemoryInfo isa MustAliasMemoryInfo
+            aval = MemoryInfo.alias
+            add_alias_change!(astate, retval, aval)
+            all_initialized &= !(aval === UninitializedMemory())
         else
-            MemoryInfo = MemoryInfo::AliasedMemory
-            nothrow |= !MemoryInfo.maybeundef # refine `nothrow` information if possible
-            traverse_aliased_memory(MemoryInfo) do @nospecialize aval
+            MemoryInfo = MemoryInfo::MayAliasMemoryInfo
+            for aval in MemoryInfo.aliases
                 add_alias_change!(astate, retval, aval)
-                if !haskey(astate.ssamemoryinfo, pc)
-                    if MemoryInfo.maybeundef
-                        astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware `MemoryInfo`
-                    else
-                        astate.ssamemoryinfo[pc] = aval
-                    end
-                elseif astate.ssamemoryinfo[pc] !== aval
-                    astate.ssamemoryinfo[pc] = ConflictedMemory() # TODO CFG-aware `MemoryInfo`
-                end
+                all_initialized &= !(aval === UninitializedMemory())
             end
         end
+        nothrow = all_initialized # refine `nothrow` information if possible
+        astate.ssamemoryinfo[pc] = MemoryInfo
+    elseif (ObjectInfo isa HasUnanalyzedMemory &&
+            obj isa Argument) # COMBAK allow only one-level inter-procedural alias analysis (for now)
+        ObjectInfo_fidx = initialize_caller_object_info!(astate, typ, args[3])
+        ObjectInfo_fidx === nothing && @goto conservative_propagation
+        ObjectInfo, fidx = ObjectInfo_fidx
+        add_object_info_change!(astate, obj, ObjectInfo)
+        MemoryInfo = ObjectInfo.FieldInfos[fidx]
+        @goto precise_propagation
     else
         @label conservative_propagation
         # the field being read couldn't be analyzed precisely, now we need to:
@@ -1745,7 +1815,7 @@ function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, ar
         add_object_info_change!(astate, obj, ⊤ₒ)     # 1
         add_alias_change!(astate, obj, retval)       # 2
         add_all_escape_change!(astate, retval)
-        astate.ssamemoryinfo[pc] = UnknownMemory()
+        astate.ssamemoryinfo[pc] = ⊤ₘ
     end
     return nothrow
 end
@@ -1768,15 +1838,28 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
     end
     nothrow = is_nothrow(astate.ir, pc)
     ObjectInfo = objinfo.ObjectInfo
-    if ObjectInfo isa HasIndexableMemory
+    if ObjectInfo isa HasIndexableFields
         fval = try_compute_field(ir, args[3])
         fval === nothing && @goto conservative_propagation
         fidx = try_compute_fieldidx(typ, fval)
         fidx === nothing && @goto conservative_propagation
-        @assert length(ObjectInfo.MemoryInfos) ≥ fidx "invalid field index"
-        # COMBAK use `add_object_info_change!` here
-        # TODO fix for the "may-alias" case
-        ObjectInfo.MemoryInfos[fidx] = AliasedMemory(val, false)
+        @assert length(ObjectInfo.FieldInfos) ≥ fidx "invalid field index"
+        MemoryInfo = ObjectInfo.FieldInfos[fidx]
+        if has_caller_memory(MemoryInfo) # HACK is there a better way to encode `CallerMemory` information?
+            push!(MemoryInfo.aliases, val)
+        else
+            ObjectInfo.FieldInfos[fidx] = MustAliasMemoryInfo(val)
+        end
+        add_object_info_change!(astate, obj, ObjectInfo)
+    elseif (ObjectInfo isa HasUnanalyzedMemory &&
+            obj isa Argument) # allow only one-level inter-procedural alias analysis (for now)
+        ObjectInfo_fidx = initialize_caller_object_info!(astate, typ, args[3])
+        ObjectInfo_fidx === nothing && @goto conservative_propagation
+        ObjectInfo, fidx = ObjectInfo_fidx
+        MemoryInfo = ObjectInfo.FieldInfos[fidx]
+        @assert has_caller_memory(MemoryInfo)
+        push!(MemoryInfo.aliases, val)
+        add_object_info_change!(astate, obj, ObjectInfo)
     else
         @label conservative_propagation
         # the field being stored couldn't be analyzed precisely, now we need to:
@@ -1788,6 +1871,30 @@ function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, a
     # also propagate escape information imposed on the return value of this `setfield!`
     add_alias_change!(astate, val, SSAValue(pc))
     return false
+end
+
+function initialize_caller_object_info!(astate::AnalysisState, @nospecialize(typ), @nospecialize(fval))
+    typ = argument_datatype(typ)
+    typ isa DataType || return nothing
+    nflds = fieldcount_noerror(typ)
+    if nflds === nothing
+        return nothing
+    end
+    fval = try_compute_field(astate.ir, fval)
+    fval === nothing && return nothing
+    fidx = try_compute_fieldidx(typ, fval)
+    fidx === nothing && return nothing
+    FieldInfos = Vector{MemoryInfo}(undef, nflds)
+    nmin = datatype_min_ninitialized(typ)
+    for i = 1:nflds
+        maybeundef = i > nmin
+        MemoryInfo = MayAliasMemoryInfo(add_caller_memory!(astate))
+        if maybeundef
+            push!(MemoryInfo.aliases, UninitializedMemory())
+        end
+        FieldInfos[i] = MemoryInfo
+    end
+    return HasIndexableFields(FieldInfos), fidx
 end
 
 function analyze_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})

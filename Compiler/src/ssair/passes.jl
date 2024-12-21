@@ -1569,6 +1569,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 end
 
 is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
+is_nothrow(ir::IRCode, id::Int) = is_nothrow(ir, SSAValue(id))
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     worklist = Int[from_bb]

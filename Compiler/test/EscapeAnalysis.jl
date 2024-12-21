@@ -36,7 +36,7 @@ end
 
 isϕ(@nospecialize x) = isa(x, Core.PhiNode)
 is_load_forwardable_old(x::EscapeAnalysis.EscapeInfo) = # TODO use new `is_load_forwardable` instead
-    isa(x.ObjectInfo, EscapeAnalysis.HasIndexableMemory)
+    isa(x.ObjectInfo, EscapeAnalysis.HasIndexableFields)
 
 mutable struct Object
     s::String
@@ -1970,18 +1970,86 @@ let result = code_escapes((Char,)) do c
     @test has_all_escape(result[SSAValue(idx)])
 end
 
-func_raiser() = throw(g_xoc)
-@noinline function func_inter_throw(xoc)
-    try
-        xoc[] = ObjectC('a')
-        func_raiser()
-    catch e
-        e = e::Base.RefValue{ObjectC}
-        g_xxoc[] = e
-        e[] = ObjectC('b')
-    end
-    xoc[]
+# func_raiser() = throw(g_xoc)
+# @noinline function func_inter_throw(xoc)
+#     try
+#         xoc[] = ObjectC('a')
+#         func_raiser()
+#     catch e
+#         e = e::Base.RefValue{ObjectC}
+#         g_xxoc[] = e
+#         e[] = ObjectC('b')
+#     end
+#     xoc[]
+# end
+# code_escapes(func_inter_throw, (typeof(g_xoc),))
+
+# local alias analysis
+# ====================
+
+# refine `:nothrow` information using `MemoryInfo` analysis
+function func_refine_nothrow(s::String)
+    x = Ref{String}()
+    x[] = s
+    return x, x[]
 end
-code_escapes(func_inter_throw, (typeof(g_xoc),))
+let result = code_escapes(func_refine_nothrow, (String,))
+    idx = only(findall(isnew, result.ir.stmts.stmt))
+    @test !has_thrown_escape(result[SSAValue(idx)])
+    effects = Base.infer_effects(func_refine_nothrow, (String,))
+    @test_broken Compiler.is_nothrow(effects)
+end
+
+# inter-procedural alias analysis
+# ===============================
+
+mutable struct AAObject
+    s::String
+end
+
+const g_yy = Ref(AAObject(""))
+@noinline function some_unsafe_func()
+    println("some_unsafe_func is called")
+    g_yy[] = AAObject("julia2")
+end
+
+function callerfunc(@specialize(calleefunc), s::String)
+    xxx = Ref(Ref{AAObject}())
+    calleefunc(xxx)
+    y = AAObject(s)
+    xxx[][] = y # `y` may escape here (depending on `calleefunc`)
+    some_unsafe_func()
+    return xxx[][].s # returns `s`
+end
+@noinline function calleefunc1(xxx)
+    yy = Ref(AAObject("julia"))
+    xxx[] = yy
+    nothing
+end
+@noinline function calleefunc2(xxx)
+    xxx[] = g_yy
+    nothing
+end
+
+let result = code_escapes(callerfunc, (typeof(calleefunc1), String,))
+    idx = only(findall(isnew_with_type((result.ir, AAObject)), result.ir.stmts.stmt))
+    @test_broken !has_all_escape(result[SSAValue(idx)])
+end
+
+let result = code_escapes(callerfunc, (typeof(calleefunc2), String,))
+    idx = only(findall(isnew_with_type((result.ir, AAObject)), result.ir.stmts.stmt))
+    @test has_all_escape(result[SSAValue(idx)])
+end
+
+# needs to account for possiblity of aliasing between arguments (and their memories)
+# > alias analysis is inherently inter-procedural
+let result = code_escapes((Base.RefValue{Char},Base.RefValue{Char})) do a, b
+        a[] = 'a'
+        b[] = 'b'
+        a[] # might be `'b'`
+    end
+    idx = only(findall(iscall((result.ir, getfield)), result.ir.stmts.stmt))
+    @test !is_load_forwardable(result, idx)
+end
 
 end # module test_EA
