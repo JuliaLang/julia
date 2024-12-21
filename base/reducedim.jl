@@ -129,15 +129,12 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, 
     return R
 end
 
-if isdefined(Core, :Compiler)
-    _mapreduce_might_widen(_, _, _, _) = false
-    function _mapreduce_might_widen(f::F, op::G, A::T, ::Nothing) where {F,G,T}
-        return !isconcretetype(Core.Compiler.return_type(x->op(f(first(x)), f(first(x))), Tuple{T}))
-    end
-else
-    _mapreduce_might_widen(_, _, _, ::Nothing) = true
-    _mapreduce_might_widen(_, _, _, _) = false
+
+_mapreduce_might_widen(_, _, _, _) = false
+function _mapreduce_might_widen(f::F, op::G, A::T, ::Nothing) where {F,G,T}
+    return !isconcretetype(Base._return_type(x->op(f(first(x)), f(first(x))), Tuple{T}))
 end
+
 
 mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
 function _mapreduce_similar_curried(A)
@@ -190,7 +187,6 @@ end
 _mapreducedim_impl(f::Type{F}, op, init, A::AbstractArrayOrBroadcasted, raxs, out) where {F} =
     _mapreducedim_impl(x->F(x), op, init, A::AbstractArrayOrBroadcasted, raxs, out)
 function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, out)
-    # @show f, op, init, A, raxs, out
     outer_inds = CartesianIndices(raxs)
     a_inds = CartesianIndices(axes(A))
     Aaxs = axes(A)
@@ -200,8 +196,6 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
     n = prod(map((b, ax)->ifelse(b, 1, length(ax)), is_outer_dim, Aaxs))
 
     # We have special support for returning empty arrays
-    # isempty(outer_inds) && return collect_allocator(_mapreduce_similar_curried(A),
-    #     (_mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds) for outer_ind in outer_inds))
     (n == 0 || isempty(A)) && return _mapreduce_empty_array(f, op, init, A, raxs, out)
     n == 1 && return _mapreduce_one_array(f, op, init, A, raxs, out)
 
@@ -210,13 +204,13 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
 
     # Create the result vector with the first step of the reduction, using the passed output if given
     # note that this is using a (potentially) bad cache ordering, so we don't want to continue like this
-    i1 = first(outer_inds)
-    inner1 = mergeindices(is_outer_dim, i1, a_inds)
+    o1 = first(outer_inds)
+    inner1 = mergeindices(is_outer_dim, o1, a_inds)
     i1, i2 = inner1
     @inbounds a1, a2 = A[i1], A[i2]
     v = _mapreduce_start(f, op, init, a1, a2)
     R = isnothing(out) ? mapreduce_similar(A, typeof(v), raxs) : out
-    @inbounds R[i1] = v
+    @inbounds R[o1] = v
     for i in Iterators.drop(outer_inds, 1)
         innerj = mergeindices(is_outer_dim, i, a_inds)
         j1, j2 = innerj
@@ -246,35 +240,24 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
             end
         end
     else
-        # Take care of the smallest cartesian "rectangle" that includes our two peeled elements
-        small_inner, large_inner = _split2(inner1)
-        # and we may as well try to do this small part in a cache-advantageous manner
-        if something(findfirst((>)(1), size(inner1))) < something(findfirst((>)(1), size(outer_inds)), typemax(Int))
-            for iR in outer_inds
-                @inbounds r = R[iR]
-                inner_inds = mergeindices(is_outer_dim, CartesianIndices(map(sliceat, Aaxs, iR.I)), small_inner)
-                for iA in Iterators.drop(inner_inds, 2)
-                    r = op(r, f(@inbounds(A[iA])))
-                end
-                @inbounds R[iR] = r
+        # Fall back to a straightforward loop for the remaining elements
+        # We already handled the first two items in each slice above.
+        # So we skip them and keep accumulating in R[iR].
+        # Critically, we do *not* call _split2 after dropping 2 items,
+        # because that leftover set isn’t rectangular for ND.
+        for o in outer_inds
+            # The partial result for the first 2 items is in R[o]
+            @inbounds r = R[o]
+            # Now process the rest of that slice, skipping the first 2
+            fullslice = mergeindices(is_outer_dim, o, a_inds)
+            for iA in Iterators.drop(fullslice, 2)
+                r = op(r, f(@inbounds(A[iA])))
             end
-        else
-            for iA in Iterators.drop(small_inner, 2)
-                for iR in outer_inds
-                    iA = mergeindices(is_outer_dim, iR, iA)
-                    v = op(@inbounds(R[iR]), f(@inbounds(A[iA])))
-                    @inbounds R[iR] = v
-                end
-            end
-        end
-        # And then if there's anything left, defer to _mapreducedim!
-        if !isempty(large_inner)
-            large_inds = mergeindices(is_outer_dim, outer_inds, large_inner)
-            _mapreducedim!(f, op, R, A, large_inds.indices)
+            @inbounds R[o] = r
         end
     end
     return R
-end
+end 
 
 function _mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds)
     inner_inds = mergeindices(is_outer_dim, outer_ind, a_inds)

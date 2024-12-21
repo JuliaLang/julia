@@ -352,7 +352,7 @@ end
     end
 end
 
-@testset "reducedim_init min/max unorderable handling" begin
+@testset "mapreducedim min/max unorderable handling" begin
     x = Any[1.0, NaN]
     y = [1, missing]
     for (v, rval1, rval2) in [(x, [NaN], x),
@@ -609,7 +609,7 @@ end
         try
             #=@test_throws BoundsError=# mapreduce(identity, op, arr; dims)
         catch ex
-            @test_broken ex isa BoundsError
+            @test ex isa BoundsError
         end
         @test_throws BoundsError mapreduce(identity, op, arr; dims, init=0)
 
@@ -938,7 +938,7 @@ end
     a = collect(1.0:4)
     f(x) = x < 3 ? missing : x
     @test ismissing(minimum(f, a))
-    @test ismissing(minimum(f, a); dims = 1)
+    @test ismissing(only(minimum(f, a; dims = 1)))
 end
 
 @testset "zero indices are not special, issue #38660" begin

@@ -408,9 +408,10 @@ maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
 minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
     minimum!_fast(identity, r, A; kw...)
 
-maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-    Base.mapreducedim!(f, max_fast, Base.initarray!(r, f, max, init, A), A)
-minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-    Base.mapreducedim!(f, min_fast, Base.initarray!(r, f, min, init, A), A)
+maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) = init ?
+    Base.mapreduce!(f, max_fast, r, A) : Base.mapreducedim!(f, max_fast, r, A)
+
+minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) = init ?
+    Base.mapreduce!(f, min_fast, r, A) : Base.mapreducedim!(f, min_fast, r, A)
 
 end
