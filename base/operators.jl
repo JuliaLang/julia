@@ -102,7 +102,8 @@ Other properties are typically not taken into account (such as the exact type).
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
 
-The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
+The result is of type `Bool` or `T` where `T` is the argument type. Examples of
+returning the argument type includes [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
 Collections generally implement three-valued logic akin to [`all`](@ref), returning
