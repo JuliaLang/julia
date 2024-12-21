@@ -20,7 +20,7 @@ Base
 """
 parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
-is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
 """
     moduleroot(m::Module) -> Module
@@ -1391,6 +1391,17 @@ end
 hasgenerator(m::Method) = isdefined(m, :generator)
 hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
+function _uncompressed_ir(m::Method)
+    s = m.source
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
+    return s::CodeInfo
+end
+
+_uncompressed_ir(codeinst::CodeInstance, s::String) =
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+
 """
     Base.generating_output([incremental::Bool])::Bool
 
@@ -1556,3 +1567,9 @@ function specialize_method(match::Core.MethodMatch; kwargs...)
 end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+
+###########
+# scoping #
+###########
+
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module

@@ -1220,6 +1220,40 @@ end
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
         end
 
+        # Extensions for "parent" dependencies
+        # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
+
+        mktempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
+        end
+        mktempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
+        end
+
     finally
         try
             rm(depot_path, force=true, recursive=true)

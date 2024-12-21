@@ -529,7 +529,7 @@ _similar_axes_or_length(AT, ax::I, ::I) where {I} = similar(AT, map(_indexlength
 
 # reshape accepts a single colon
 Base.reshape(A::AbstractArray, inds::OffsetAxis...) = reshape(A, inds)
-function Base.reshape(A::AbstractArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}})
+function Base.reshape(A::AbstractArray, inds::Tuple{Vararg{OffsetAxis}})
     AR = reshape(no_offset_view(A), map(_indexlength, inds))
     O = OffsetArray(AR, map(_offset, axes(AR), inds))
     return _popreshape(O, axes(AR), _filterreshapeinds(inds))
@@ -557,6 +557,8 @@ Base.reshape(A::OffsetArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) =
     OffsetArray(_reshape(parent(A), inds), map(_toaxis, inds))
 # And for non-offset axes, we can just return a reshape of the parent directly
 Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{Integer,Base.OneTo}}}) = _reshape_nov(A, inds)
+Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
+Base.reshape(A::OffsetArray, inds::Tuple{Union{Colon, Integer}, Vararg{Union{Colon, Integer}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetVector, ::Colon) = A
 Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
@@ -570,17 +572,6 @@ Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))
-
-Base.fill(v, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(Array{typeof(v)}, inds), v)
-Base.zeros(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), zero(T))
-Base.ones(::Type{T}, inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {T, N} =
-    fill!(similar(Array{T}, inds), one(T))
-Base.trues(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), true)
-Base.falses(inds::NTuple{N, Union{Integer, AbstractUnitRange}}) where {N} =
-    fill!(similar(BitArray, inds), false)
 
 Base.zero(A::OffsetArray) = parent_call(zero, A)
 Base.fill!(A::OffsetArray, x) = parent_call(Ap -> fill!(Ap, x), A)

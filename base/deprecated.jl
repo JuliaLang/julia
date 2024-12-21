@@ -4,7 +4,7 @@
 # Instructions for Julia Core Developers:
 # 1. When making a breaking change that is known to be depnedet upon by an
 #    important and closely coupled package, decide on a unique `change_name`
-#    for your PR and add it to the list below. In general, is is better to
+#    for your PR and add it to the list below. In general, it is better to
 #    err on the side of caution and assign a `change_name` even if it is not
 #    clear that it is required. `change_name`s may also be assigned after the
 #    fact in a separate PR. (Note that this may cause packages to misbehave
@@ -530,7 +530,5 @@ end
 # END 1.11 deprecations
 
 # BEGIN 1.12 deprecations
-
-@deprecate stat(fd::Integer) stat(RawFD(fd))
 
 # END 1.12 deprecations

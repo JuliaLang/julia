@@ -94,6 +94,22 @@ end
         vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort(()) == ()
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(rand(NTuple{i, Float64}))
+    end
+    @test_throws MethodError sort((1,2,3.0))
+    @test Base.infer_return_type(sort, Tuple{Tuple{Vararg{Int}}}) == Tuple{Vararg{Int}}
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
@@ -585,6 +601,22 @@ end
     # Issue #56457
     o2 = OffsetArray([2,2,3], typemax(Int)-3);
     @test searchsorted(o2, 2) == firstindex(o2):firstindex(o2)+1
+
+    struct IdentityVector <: AbstractVector{Int}
+        lo::Int
+        hi::Int
+    end
+    function Base.getindex(s::IdentityVector, i::Int)
+        s.lo <= i <= s.hi || throw(BoundsError(s, i))
+        i
+    end
+    Base.axes(s::IdentityVector) = (s.lo:s.hi,)
+    Base.size(s::IdentityVector) = length.(axes(s))
+
+    o3 = IdentityVector(typemin(Int), typemin(Int)+5)
+    @test searchsortedfirst(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsortedlast(o3, typemin(Int)+2) === typemin(Int)+2
+    @test searchsorted(o3, typemin(Int)+2) === typemin(Int)+2:typemin(Int)+2
 end
 
 function adaptive_sort_test(v; trusted=InsertionSort, kw...)
@@ -803,9 +835,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big),
+            typeof(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
@@ -845,15 +877,18 @@ end
             end
         end
 
-        test_alg_rec(Base.DEFAULT_STABLE)
+        test_alg_rec(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS)
     end
 end
 
 @testset "show(::Algorithm)" begin
-    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
-    lines = split(string(Base.DEFAULT_STABLE), '\n')
+    @test eval(Meta.parse(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS))) === Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS
+    lines = split(string(Base.Sort._DEFAULT_ALGORITHMS_FOR_VECTORS), '\n')
     @test 10 < maximum(length, lines) < 100
     @test 1 < length(lines) < 30
+
+    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
+    @test string(Base.DEFAULT_STABLE) == "Base.Sort.DefaultStable()"
 end
 
 @testset "Extensibility" begin
@@ -894,6 +929,20 @@ end
     end
     @test sort([1,2,3], alg=MySecondAlg()) == [9,9,9]
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
+
+    # Tuple extensions (custom alg)
+    @test_throws MethodError sort((1,2,3), alg=MyFirstAlg())
+    Base.Sort._sort(v::NTuple, ::MyFirstAlg, o::Base.Order.Ordering, kw) = (17,2,9)
+    @test sort((1,2,3), alg=MyFirstAlg()) == (17,2,9)
+
+    struct TupleFoo
+        x::Int
+    end
+
+    # Tuple extensions (custom type)
+    @test_throws MethodError sort(TupleFoo.((3,1,2)))
+    Base.Sort._sort(v::NTuple{N, TupleFoo}, ::Base.Sort.DefaultStable, o::Base.Order.Ordering, kw) where N = v
+    @test sort(TupleFoo.((3,1,2))) === TupleFoo.((3,1,2))
 end
 
 @testset "sort!(v, lo, hi, alg, order)" begin
@@ -952,9 +1001,10 @@ end
 end
 
 @testset "ScratchQuickSort allocations on non-concrete eltype" begin
-    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
-    @test 10 > @allocations sort(v)
-    @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    let v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+        @test 10 > @allocations sort(v)
+        @test 10 > @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
+    end
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end

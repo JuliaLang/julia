@@ -2730,3 +2730,19 @@ let S = Dict{V,V} where {V},
     @test A <: typeintersect(S, T)
     @test A <: typeintersect(T, S)
 end
+
+#issue 56606
+let
+    A = Tuple{Val{1}}
+    B = Tuple{Val}
+    for _ in 1:30
+        A = Tuple{Val{A}}
+        B = Tuple{Val{<:B}}
+    end
+    @test A <: B
+end
+@testintersect(
+    Val{Tuple{Int,S,T}} where {S<:Any,T<:Vector{Vector{Int}}},
+    Val{Tuple{T,R,S}} where {T,R<:Vector{T},S<:Vector{R}},
+    Val{Tuple{Int, Vector{Int}, T}} where T<:Vector{Vector{Int}},
+)

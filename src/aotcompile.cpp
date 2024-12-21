@@ -4,11 +4,7 @@
 #include "platform.h"
 
 // target support
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Triple.h>
-#else
-#include <llvm/ADT/Triple.h>
-#endif
 #include "llvm/Support/CodeGen.h"
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -95,33 +91,55 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
     }
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_mis_impl(void *native_code, arraylist_t* MIs)
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
 {
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    auto map = data->jl_fvar_map;
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &map = desc->jl_fvar_map;
+
+    if (data == NULL) {
+        *num_elements = map.size();
+        return;
+    }
+
+    assert(*num_elements == map.size());
+    size_t i = 0;
     for (auto &ci : map) {
-        jl_method_instance_t *mi = ci.first->def;
-        arraylist_push(MIs, mi);
+        data[i++] = jl_get_ci_mi(ci.first);
     }
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_impl(void *native_code,
+                                                          size_t *num_elements, void **data)
 {
     // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    arraylist_grow(gvs, data->jl_value_to_llvm.size());
-    memcpy(gvs->items, data->jl_value_to_llvm.data(), gvs->len * sizeof(void*));
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &value_map = desc->jl_value_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = value_map.size();
+        return;
+    }
+
+    assert(*num_elements == value_map.size());
+    memcpy(data, value_map.data(), *num_elements * sizeof(void *));
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_external_fns_impl(void *native_code,
+                                                                   size_t *num_elements,
+                                                                   jl_code_instance_t *data)
 {
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    arraylist_grow(external_fns, data->jl_external_to_llvm.size());
-    memcpy(external_fns->items, data->jl_external_to_llvm.data(),
-        external_fns->len * sizeof(jl_code_instance_t*));
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &external_map = desc->jl_external_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = external_map.size();
+        return;
+    }
+
+    assert(*num_elements == external_map.size());
+    memcpy((void *)data, (const void *)external_map.data(),
+           *num_elements * sizeof(jl_code_instance_t *));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -289,21 +307,22 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
-jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world)
+static jl_code_instance_t *jl_ci_cache_lookup(jl_method_instance_t *mi, size_t world, jl_codeinstance_lookup_t lookup)
 {
     ++CICacheLookups;
-    jl_value_t *ci = cgparams.lookup(mi, world, world);
+    jl_value_t *ci = lookup(mi, world, world);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing && jl_atomic_load_relaxed(&((jl_code_instance_t *)ci)->inferred) != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
     }
     else {
-        if (cgparams.lookup != jl_rettype_inferred_addr) {
+        if (lookup != jl_rettype_inferred_addr) {
             // XXX: This will corrupt and leak a lot of memory which may be very bad
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
+            // XXX: SOURCE_MODE_ABI is wrong here (not sufficient)
             codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI);
             /* Even if this codeinst is ordinarily not cacheable, we need to force
              * it into the cache here, since it was explicitly requested and is
@@ -319,14 +338,106 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
     return codeinst;
 }
 
+namespace { // file-local namespace
+class egal_set {
+public:
+    jl_genericmemory_t *list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_genericmemory_t *keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    egal_set(egal_set&) = delete;
+    egal_set(egal_set&&) = delete;
+    egal_set() = default;
+    void insert(jl_value_t *val)
+    {
+        jl_value_t *rval = jl_idset_get(list, keyset, val);
+        if (rval == NULL) {
+            ssize_t idx;
+            list = jl_idset_put_key(list, val, &idx);
+            keyset = jl_idset_put_idx(list, keyset, idx);
+        }
+    }
+    jl_value_t *get(jl_value_t *val)
+    {
+        return jl_idset_get(list, keyset, val);
+    }
+};
+}
+using ::egal_set;
 typedef DenseMap<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
-static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy policy, jl_compiled_functions_t &compiled_functions)
+
+static void record_method_roots(egal_set &method_roots, jl_method_instance_t *mi)
+{
+    jl_method_t *m = mi->def.method;
+    if (!jl_is_method(m))
+        return;
+    // the method might have a root for this already; use it if so
+    JL_LOCK(&m->writelock);
+    if (m->roots) {
+        size_t j, len = jl_array_dim0(m->roots);
+        for (j = 0; j < len; j++) {
+            jl_value_t *v = jl_array_ptr_ref(m->roots, j);
+            if (jl_is_globally_rooted(v))
+                continue;
+            method_roots.insert(v);
+        }
+    }
+    JL_UNLOCK(&m->writelock);
+}
+
+static void aot_optimize_roots(jl_codegen_params_t &params, egal_set &method_roots, jl_compiled_functions_t &compiled_functions)
+{
+    for (size_t i = 0; i < jl_array_dim0(params.temporary_roots); i++) {
+        jl_value_t *val = jl_array_ptr_ref(params.temporary_roots, i);
+        auto ref = params.global_targets.find((void*)val);
+        if (ref == params.global_targets.end())
+            continue;
+        auto get_global_root = [val, &method_roots]() {
+            if (jl_is_globally_rooted(val))
+                return val;
+            jl_value_t *mval = method_roots.get(val);
+            if (mval)
+                return mval;
+            return jl_as_global_root(val, 1);
+        };
+        jl_value_t *mval = get_global_root();
+        if (mval != val) {
+            GlobalVariable *GV = ref->second;
+            params.global_targets.erase(ref);
+            auto mref = params.global_targets.find((void*)mval);
+            if (mref != params.global_targets.end()) {
+                // replace ref with mref in all Modules
+                std::string OldName(GV->getName());
+                StringRef NewName(mref->second->getName());
+                for (auto &def : compiled_functions) {
+                    orc::ThreadSafeModule &TSM = std::get<0>(def.second);
+                    Module &M = *TSM.getModuleUnlocked();
+                    if (GlobalValue *GV2 = M.getNamedValue(OldName)) {
+                        if (GV2 == GV)
+                            GV = nullptr;
+                        // either replace or rename the old value to use the other equivalent name
+                        if (GlobalValue *GV3 = M.getNamedValue(NewName)) {
+                            GV2->replaceAllUsesWith(GV3);
+                            GV2->eraseFromParent();
+                        }
+                        else {
+                            GV2->setName(NewName);
+                        }
+                    }
+                }
+                assert(GV == nullptr);
+            }
+            else {
+                params.global_targets[(void*)mval] = GV;
+            }
+        }
+    }
+}
+
+static void compile_workqueue(jl_codegen_params_t &params, egal_set &method_roots, CompilationPolicy policy, jl_compiled_functions_t &compiled_functions)
 {
     decltype(params.workqueue) workqueue;
     std::swap(params.workqueue, workqueue);
-    jl_code_info_t *src = NULL;
     jl_code_instance_t *codeinst = NULL;
-    JL_GC_PUSH2(&src, &codeinst);
+    JL_GC_PUSH1(&codeinst);
     assert(!params.cache);
     while (!workqueue.empty()) {
         auto it = workqueue.pop_back_val();
@@ -344,13 +455,14 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
                 if ((policy != CompilationPolicy::Default || params.params->trim) &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     // XXX: SOURCE_MODE_FORCE_SOURCE is wrong here (neither sufficient nor necessary)
-                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
+                    codeinst = jl_type_infer(jl_get_ci_mi(codeinst), jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
                 }
                 if (codeinst) {
                     orc::ThreadSafeModule result_m =
-                        jl_create_ts_module(name_from_method_instance(codeinst->def),
+                        jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
                             params.tsctx, params.DL, params.TargetTriple);
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
+                    record_method_roots(method_roots, jl_get_ci_mi(codeinst));
                     if (result_m)
                         it = compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
                 }
@@ -389,11 +501,11 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
             proto.decl->setLinkage(GlobalVariable::InternalLinkage);
             //protodecl->setAlwaysInline();
             jl_init_function(proto.decl, params.TargetTriple);
-            jl_method_instance_t *mi = codeinst->def;
+            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
             // TODO: maybe this can be cached in codeinst->specfptr?
-            emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke, 0, 0);
+            emit_specsig_to_fptr1(proto.decl, proto.cc, proto.return_roots, mi->specTypes, codeinst->rettype, is_opaque_closure, nrealargs, params, pinvoke);
             preal_decl = ""; // no need to fixup the name
         }
         if (!preal_decl.empty()) {
@@ -431,7 +543,6 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
     JL_GC_POP();
 }
 
-
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -440,19 +551,19 @@ static void compile_workqueue(jl_codegen_params_t &params, CompilationPolicy pol
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world, jl_codeinstance_lookup_t lookup)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_nrows(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
+    if (lookup == NULL)
+        lookup = &jl_rettype_inferred_native;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     CompilationPolicy policy = (CompilationPolicy) _policy;
     bool imaging = imaging_default() || _imaging_mode == 1;
     jl_method_instance_t *mi = NULL;
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
     auto ct = jl_current_task;
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
@@ -476,11 +587,15 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     auto target_info = clone.withModuleDo([&](Module &M) {
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
+    egal_set method_roots;
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
+    if (!llvmmod)
+        params.getContext().setDiscardValueNames(true);
     params.params = cgparams;
     params.imaging_mode = imaging;
-    params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
+    params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH3(&params.temporary_roots, &method_roots.list, &method_roots.keyset);
     size_t compile_for[] = { jl_typeinf_world, _world };
     int worlds = 0;
     if (jl_options.trim != JL_TRIM_NO)
@@ -505,13 +620,13 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 continue;
             }
             mi = (jl_method_instance_t*)item;
-            src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
             // then we want to compile and emit this
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
-                jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
+                jl_code_instance_t *codeinst = jl_ci_cache_lookup(mi, this_world, lookup);
+                JL_GC_PROMISE_ROOTED(codeinst);
                 if (jl_options.trim != JL_TRIM_NO && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
@@ -524,12 +639,14 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
                     if (jl_options.trim != JL_TRIM_NO && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
-                    } else {
-                        JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                        orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
+                    }
+                    else {
+                        orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
                                 params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                                 Triple(clone.getModuleUnlocked()->getTargetTriple()));
                         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
+                        JL_GC_PROMISE_ROOTED(codeinst->def); // analyzer seems confused
+                        record_method_roots(method_roots, jl_get_ci_mi(codeinst));
                         if (result_m)
                             compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                         else if (jl_options.trim != JL_TRIM_NO) {
@@ -551,9 +668,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
         }
     }
-    JL_GC_POP();
     // finally, make sure all referenced methods also get compiled or fixed up
-    compile_workqueue(params, policy, compiled_functions);
+    compile_workqueue(params, method_roots, policy, compiled_functions);
+    aot_optimize_roots(params, method_roots, compiled_functions);
+    params.temporary_roots = nullptr;
+    JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
     SmallVector<std::string, 0> gvars(params.global_targets.size());
@@ -608,6 +727,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
             else if (func == "jl_fptr_sparam") {
                 func_id = -2;
+            }
+            else if (decls.functionObject == "jl_f_opaque_closure_call") {
+                func_id = -4;
             }
             else {
                 //Safe b/c context is locked by params
@@ -837,11 +959,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
         auto val = F.getFnAttribute("julia.mv.clones").getValueAsString();
         // base16, so must be at most 4 * length bits long
         // popcount gives number of clones
-        #if JL_LLVM_VERSION >= 170000
         info.clones = APInt(val.size() * 4, val, 16).popcount() + 1;
-        #else
-        info.clones = APInt(val.size() * 4, val, 16).countPopulation() + 1;
-        #endif
     }
     info.weight += info.insts;
     // more basic blocks = more complex than just sum of insts,
@@ -896,19 +1014,18 @@ struct Partition {
     size_t weight;
 };
 
-static bool canPartition(const GlobalValue &G) {
-    if (auto F = dyn_cast<Function>(&G)) {
-        if (F->hasFnAttribute(Attribute::AlwaysInline))
-            return false;
-    }
-    return true;
+static bool canPartition(const Function &F)
+{
+    return !F.hasFnAttribute(Attribute::AlwaysInline);
 }
 
-static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
+static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     bool bad = false;
 #ifndef JL_NDEBUG
-    SmallVector<uint32_t, 0> fvars(fvars_size);
-    SmallVector<uint32_t, 0> gvars(gvars_size);
+    size_t fvars_size = fvars.size();
+    size_t gvars_size = gvars.size();
+    SmallVector<uint32_t, 0> fvars_partition(fvars_size);
+    SmallVector<uint32_t, 0> gvars_partition(gvars_size);
     StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
@@ -919,18 +1036,18 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             GVNames[name.getKey()] = i;
         }
         for (auto &fvar : partitions[i].fvars) {
-            if (fvars[fvar.second] != 0) {
+            if (fvars_partition[fvar.second] != 0) {
                 bad = true;
-                dbgs() << "Duplicate fvar " << fvar.first() << " in partitions " << i << " and " << fvars[fvar.second] - 1 << "\n";
+                dbgs() << "Duplicate fvar " << fvar.first() << " in partitions " << i << " and " << fvars_partition[fvar.second] - 1 << "\n";
             }
-            fvars[fvar.second] = i+1;
+            fvars_partition[fvar.second] = i+1;
         }
         for (auto &gvar : partitions[i].gvars) {
-            if (gvars[gvar.second] != 0) {
+            if (gvars_partition[gvar.second] != 0) {
                 bad = true;
-                dbgs() << "Duplicate gvar " << gvar.first() << " in partitions " << i << " and " << gvars[gvar.second] - 1 << "\n";
+                dbgs() << "Duplicate gvar " << gvar.first() << " in partitions " << i << " and " << gvars_partition[gvar.second] - 1 << "\n";
             }
-            gvars[gvar.second] = i+1;
+            gvars_partition[gvar.second] = i+1;
         }
     }
     for (auto &GV : M.global_values()) {
@@ -941,13 +1058,6 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
         } else {
             // Local global values are not partitioned
-            if (!canPartition(GV)) {
-                if (GVNames.count(GV.getName())) {
-                    bad = true;
-                    dbgs() << "Shouldn't have partitioned " << GV.getName() << ", but is in partition " << GVNames[GV.getName()] << "\n";
-                }
-                continue;
-            }
             if (!GVNames.count(GV.getName())) {
                 bad = true;
                 dbgs() << "Global " << GV << " not in any partition\n";
@@ -967,13 +1077,14 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
         }
     }
     for (uint32_t i = 0; i < fvars_size; i++) {
-        if (fvars[i] == 0) {
+        if (fvars_partition[i] == 0) {
+            auto gv = find_if(fvars.begin(), fvars.end(), [i](auto var) { return var.second == i; });
             bad = true;
-            dbgs() << "fvar " << i << " not in any partition\n";
+            dbgs() << "fvar " << gv->first->getName() << " at " << i << " not in any partition\n";
         }
     }
     for (uint32_t i = 0; i < gvars_size; i++) {
-        if (gvars[i] == 0) {
+        if (gvars_partition[i] == 0) {
             bad = true;
             dbgs() << "gvar " << i << " not in any partition\n";
         }
@@ -1035,8 +1146,6 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (auto &G : M.global_values()) {
         if (G.isDeclaration())
             continue;
-        if (!canPartition(G))
-            continue;
         // Currently ccallable global aliases have extern linkage, we only want to make the
         // internally linked functions/global variables extern+hidden
         if (G.hasLocalLinkage()) {
@@ -1045,7 +1154,8 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
-        } else {
+        }
+        else {
             partitioner.make(&G, 1);
         }
     }
@@ -1117,7 +1227,9 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
-    bool verified = verify_partitioning(partitions, M, fvars.size(), gvars.size());
+    bool verified = verify_partitioning(partitions, M, fvars, gvars);
+    if (!verified)
+        llvm_dump(&M);
     assert(verified && "Partitioning failed to partition globals correctly");
     (void) verified;
 
@@ -1252,7 +1364,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             // So for now we inject a definition of these functions that calls our runtime
             // functions. We do so after optimization to avoid cloning these functions.
             // Float16 conversion routines
-#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_)
             // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
             // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
             injectCRTAlias(M, "__gnu_h2f_ieee", "julia_half_to_float",
@@ -1371,6 +1483,12 @@ static void materializePreserved(Module &M, Partition &partition) {
             continue;
         if (Preserve.contains(&F))
             continue;
+        if (!canPartition(F)) {
+            F.setLinkage(GlobalValue::AvailableExternallyLinkage);
+            F.setVisibility(GlobalValue::HiddenVisibility);
+            F.setDSOLocal(true);
+            continue;
+        }
         F.deleteBody();
         F.setLinkage(GlobalValue::ExternalLinkage);
         F.setVisibility(GlobalValue::HiddenVisibility);
@@ -1594,9 +1712,7 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         for (unsigned i = 0; i < threads; i++) {
             std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
-                #if JL_LLVM_VERSION < 170000
-                SetOpaquePointer(ctx);
-                #endif
+                ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
                 auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
@@ -1761,7 +1877,7 @@ void jl_dump_native_impl(void *native_code,
             Str += "10.14.0";
         TheTriple.setOSName(Str);
     }
-    Optional<Reloc::Model> RelocModel;
+    std::optional<Reloc::Model> RelocModel;
     if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD() || TheTriple.isOSOpenBSD()) {
         RelocModel = Reloc::PIC_;
     }
@@ -1805,9 +1921,7 @@ void jl_dump_native_impl(void *native_code,
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
-        #if JL_LLVM_VERSION < 170000
-        SetOpaquePointer(Context);
-        #endif
+        Context.setDiscardValueNames(true);
         Module sysimgM("sysimg", Context);
         sysimgM.setTargetTriple(TheTriple.str());
         sysimgM.setDataLayout(DL);
@@ -1952,9 +2066,7 @@ void jl_dump_native_impl(void *native_code,
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
-        #if JL_LLVM_VERSION < 170000
-        SetOpaquePointer(Context);
-        #endif
+        Context.setDiscardValueNames(true);
         Module metadataM("metadata", Context);
         metadataM.setTargetTriple(TheTriple.str());
         metadataM.setDataLayout(DL);
@@ -2153,8 +2265,11 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
         // output.imaging = true;
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
         // To get correct names in the IR this needs to be at least 2
-        output.debug_level = params.debug_info_level;
-        auto decls = jl_emit_code(m, mi, src, output);
+        output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        JL_GC_PUSH1(&output.temporary_roots);
+        auto decls = jl_emit_code(m, mi, src, NULL, output);
+        output.temporary_roots = nullptr;
+        JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it
 
         Function *F = NULL;
         if (m) {
@@ -2164,18 +2279,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
             for (auto &global : output.global_targets) {
                 if (jl_options.image_codegen) {
                     global.second->setLinkage(GlobalValue::ExternalLinkage);
-                } else {
+                }
+                else {
                     auto p = literal_static_pointer_val(global.first, global.second->getValueType());
-                    #if JL_LLVM_VERSION >= 170000
                     Type *elty = PointerType::get(output.getContext(), 0);
-                    #else
-                    Type *elty;
-                    if (p->getType()->isOpaquePointerTy()) {
-                        elty = PointerType::get(output.getContext(), 0);
-                    } else {
-                        elty = p->getType()->getNonOpaquePointerElementType();
-                    }
-                    #endif
                     // For pretty printing, when LLVM inlines the global initializer into its loads
                     auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, global.second->getParent());
                     global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));

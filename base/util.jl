@@ -678,7 +678,7 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, revise=false, [seed])
+                  exit_on_error=false, revise=false, propagate_project=true, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
@@ -686,12 +686,14 @@ fails, all remaining tests in other files will still be run; they are otherwise 
 when `exit_on_error == true`.
 If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
 to the standard libraries before running the tests.
+If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
 function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
+                  propagate_project::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
@@ -706,8 +708,9 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
+    project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
