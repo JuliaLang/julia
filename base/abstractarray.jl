@@ -17,6 +17,8 @@ convert(::Type{T}, a::T) where {T<:AbstractArray} = a
 convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)::AbstractArray{T}
 convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)::AbstractArray{T,N}
 
+
+
 """
     size(A::AbstractArray, [dim])
 
@@ -37,9 +39,12 @@ julia> size(A)
 
 julia> size(A, 2)
 3
+# Allow using Colon to get full size equivalent to size(t)
 ```
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+size(t::AbstractArray, ::Colon) = size(t)
+
 
 """
     axes(A, d)
