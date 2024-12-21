@@ -219,14 +219,10 @@ end
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
 end
 @testset "traits" begin
-    @test Dates._units(Dates.Year(0)) == " years"
-    @test Dates._units(Dates.Year(1)) == " year"
-    @test Dates._units(Dates.Year(-1)) == " year"
-    @test Dates._units(Dates.Year(2)) == " years"
-    @test Dates.string(Dates.Year(0)) == "0 years"
-    @test Dates.string(Dates.Year(1)) == "1 year"
-    @test Dates.string(Dates.Year(-1)) == "-1 year"
-    @test Dates.string(Dates.Year(2)) == "2 years"
+    @test Dates.string(Dates.Year(0)) == "0 yr"
+    @test Dates.string(Dates.Year(1)) == "1 yr"
+    @test Dates.string(Dates.Year(-1)) == "-1 yr"
+    @test Dates.string(Dates.Year(2)) == "2 yr"
     @test isfinite(Dates.Year)
     @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
@@ -284,7 +280,7 @@ Beat(p::Period) = Beat(Dates.toms(p) ÷ 86400)
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
     Dates.value(b::Beat) = b.value
     Dates.toms(b::Beat) = Dates.value(b) * 86400
-    Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
+    Dates.abbr(::Type{Beat}) = "beat"
     Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
     Base.convert(::Type{T}, b::Beat) where {T<:Dates.Millisecond} = T(Dates.toms(b))::T
 
@@ -371,7 +367,7 @@ end
     @test emptyperiod == 2y + (m - d) + ms - ((m - d) + 2y + ms)
     @test emptyperiod == 0ms
     @test string(emptyperiod) == "empty period"
-    @test string(ms + mi + d + m + y + w + h + s + 2y + m) == "3 years, 2 months, 1 week, 1 day, 1 hour, 1 minute, 1 second, 1 millisecond"
+    @test string(ms + mi + d + m + y + w + h + s + 2y + m) == "3 yr, 2 mo, 1 w, 1 d, 1 h, 1 m, 1 s, 1 ms"
     @test 8d - s == 1w + 23h + 59mi + 59s
     @test h + 3mi == 63mi
     @test y - m == 11m
@@ -549,6 +545,38 @@ end
     @test_throws MethodError convert(Second, Month(1) + Second(30))
     @test_throws MethodError convert(Period, Minute(1) + Second(30))
     @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
+end
+
+@testset "Printing" begin
+    @test string(Nanosecond(1)) == "1 ns"
+    @test string(Microsecond(1)) == "1 μs"
+    @test string(Millisecond(1)) == "1 ms"
+    @test string(Second(1)) == "1 s"
+    @test string(Hour(1)) == "1 h"
+    @test string(Day(1)) == "1 d"
+    @test string(Quarter(1)) == "1 q"
+    @test string(Year(1)) == "1 yr"
+end
+
+@testset "Parsing" begin
+    @test parse(Nanosecond, "1") == Nanosecond(1)
+    @test parse(Nanosecond, "1 ns") == Nanosecond(1)
+    @test parse(Period, "1 ns") == Nanosecond(1)
+    @test parse(Period, "1 nanosecond") == Nanosecond(1)
+    @test parse(Microsecond, "1") == Microsecond(1)
+    @test parse(Microsecond, "1 μs") == Microsecond(1)
+    @test parse(Period, "1 μs") == Microsecond(1)
+    @test parse(Period, "1 microsecond") == Microsecond(1)
+    @test parse(Millisecond, "1") == Millisecond(1)
+    @test parse(Millisecond, "1 ms") == Millisecond(1)
+    @test parse(Period, "1 ms") == Millisecond(1)
+    @test parse(Period, "1 millisecond") == Millisecond(1)
+    @test parse(Second, "1") == Second(1)
+    @test parse(Second, "1 s") == Second(1)
+    @test parse(Period, "1 s") == Second(1)
+    @test parse(Period, "1 second") == Second(1)
+    @test_throws ArgumentError parse(Period, "1 decade")
+    @test_throws ArgumentError parse(Period, "1d 2h")
 end
 
 end
