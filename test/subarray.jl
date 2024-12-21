@@ -381,6 +381,8 @@ end
     sA = view(A, 1:2, 3, [1 3; 4 2])
     @test ndims(sA) == 3
     @test axes(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
+    @test axes(similar(typeof(A),axes(A))) == axes(A)
+    @time eltype(similar(typeof(A),axes(A))) == eltype(A)
 end
 
 @testset "logical indexing #4763" begin
