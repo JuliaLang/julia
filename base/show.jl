@@ -3265,7 +3265,9 @@ showindices(io) = nothing
 function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, "reshape(")
     showarg(io, parent(r), false)
-    print(io, ", ", join(r.dims, ", "))
+    if !isempty(r.dims)
+        print(io, ", ", join(r.dims, ", "))
+    end
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
     return nothing
