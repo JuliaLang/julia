@@ -254,7 +254,10 @@ void *jl_find_dynamic_library_by_addr(void *symbol) {
         jl_error("could not load base module");
     }
     handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-    dlclose(handle); // Undo ref count increment from `dlopen`
+    if (handle == NULL && dlerror() == NULL) // We loaded the executable but got RTLD_DEFAULT back, give a real handle instead
+        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    if (handle) // We may get a null handle so don't segfault
+        dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
 }

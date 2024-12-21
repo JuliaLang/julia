@@ -60,22 +60,7 @@ cflags = Base.shell_split(cflags)
 allflags = readchomp(`$(cmd) $(joinpath(Sys.BINDIR, Base.DATAROOTDIR,"julia", "julia-config.jl")) --allflags`)
 allflags = Base.shell_split(allflags)
 tmpdir = mktempdir(cleanup=false)
-initsrc_path = joinpath(tmpdir, "init.c")
-init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
-bc_path = joinpath(tmpdir, "img-bc.a")
-
-open(initsrc_path, "w") do io
-    print(io, """
-              #include <julia.h>
-              __attribute__((constructor)) void static_init(void) {
-                  if (jl_is_initialized())
-                      return;
-                  julia_init(JL_IMAGE_IN_MEMORY);
-                  jl_exception_clear();
-              }
-              """)
-end
 
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 verbose && println("Running: $cmd")
@@ -83,8 +68,6 @@ if !success(pipeline(cmd; stdout, stderr))
     println(stderr, "\nFailed to compile $file")
     exit(1)
 end
-
-run(`cc $(cflags) -g -c -o $init_path $initsrc_path`)
 
 if output_type == "--output-lib" || output_type == "--output-sysimage"
     of, ext = splitext(outname)
@@ -97,11 +80,11 @@ end
 julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
 try
     if output_type == "--output-lib"
-        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  $(julia_libs)`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`)
     elseif output_type == "--output-sysimage"
         run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`)
     else
-        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`)
+        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $(julia_libs)`)
     end
 catch
     println("\nCompilation failed.")
