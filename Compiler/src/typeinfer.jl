@@ -528,7 +528,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
                 i += 2
                 continue
             elseif isa(callee, CodeInstance)
-                callee = callee.def
+                callee = get_ci_mi(callee)
             end
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
             i += 2
@@ -1091,9 +1091,6 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_FORCE_SOURCE && return ci_has_source(code)
     return false
 end
-
-_uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)

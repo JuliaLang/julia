@@ -4103,6 +4103,22 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
         end
         return a
     end == Union{Int32,Int64}
+
+    @test Base.infer_return_type((Vector{Any},)) do args
+        codeinst = first(args)
+        if codeinst isa Core.MethodInstance
+            mi = codeinst
+        else
+            codeinst::Core.CodeInstance
+            def = codeinst.def
+            if isa(def, Core.ABIOverride)
+                mi = def.def
+            else
+                mi = def::Core.MethodInstance
+            end
+        end
+        return mi
+    end == Core.MethodInstance
 end
 
 callsig_backprop_basic(::Int) = nothing
@@ -6125,3 +6141,17 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+@eval get_exception() = $(Expr(:the_exception))
+@test Base.infer_return_type() do
+    get_exception()
+end <: Any
+@test @eval Base.infer_return_type((Float64,)) do x
+    out = $(Expr(:the_exception))
+    try
+        out = sin(x)
+    catch
+        out = $(Expr(:the_exception))
+    end
+    return out
+end == Union{Float64,DomainError}
