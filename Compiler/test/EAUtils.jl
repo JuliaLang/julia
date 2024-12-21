@@ -16,7 +16,8 @@ import .Compiler:
 # usings
 using Core.IR
 using .Compiler: InferenceResult, InferenceState, OptimizationState, IRCode
-using .EA: analyze_escapes, ArgEscapeCache, ArgEscapeInfo, EscapeInfo, EscapeResult
+using .EA: EscapeCache, InterEscapeInfo, EscapeInfo, EscapeResult, MemoryInfo,
+    analyze_escapes
 
 mutable struct EscapeAnalyzerCacheToken end
 global GLOBAL_EA_CACHE_TOKEN::EscapeAnalyzerCacheToken = EscapeAnalyzerCacheToken()
@@ -75,13 +76,13 @@ end
 
 # cache entire escape state for inspection and debugging
 struct EscapeCacheInfo
-    argescapes::ArgEscapeCache
+    argescapes::EscapeCache
     eresult::EscapeResult # preserved just for debugging purpose
     ir::IRCode            # preserved just for debugging purpose
 end
 
 function record_escapes!(caller::InferenceResult, eresult::EscapeResult, ir::IRCode)
-    argescapes = ArgEscapeCache(eresult)
+    argescapes = EscapeCache(eresult)
     ecacheinfo = EscapeCacheInfo(argescapes, eresult, ir)
     return Compiler.stack_analysis_result!(caller, ecacheinfo)
 end
@@ -106,9 +107,9 @@ end
 
 using .Compiler: widenconst, singleton_type
 
-function get_name_color(x::Union{Nothing,EscapeInfo}, symbol::Bool = false)
-    getname(x) = string(nameof(x))
-    if x === nothing
+function print_escape_info(io::IO, x::EscapeInfo, symbol::Union{Nothing,Bool} = nothing)
+    # print non-ObjectInfo escape information first
+    if EA.is_not_analyzed(x)
         name, color = ("NotAnalyzed", "◌"), :plain
     elseif EA.has_no_escape(EA.ignore_argescape(x))
         if EA.has_arg_escape(x)
@@ -125,33 +126,53 @@ function get_name_color(x::Union{Nothing,EscapeInfo}, symbol::Bool = false)
         name = (nothing, "*")
         color = EA.has_thrown_escape(x) ? :yellow : :bold
     end
-    name = symbol ? last(name) : first(name)
-    if name !== nothing && x !== nothing && isa(x.ObjectInfo, EA.HasIndexableFields)
-        name = string(name, "′")
-    end
-    return name, color
-end
 
-# pcs = sprint(show, collect(x.EscapeSites); context=:limit=>true)
-function Base.show(io::IO, x::EscapeInfo)
-    name, color = get_name_color(x)
-    if isnothing(name)
-        @invoke show(io::IO, x::Any)
+    if x.ObjectInfo isa EA.HasUnanalyzedMemory
+        oname = nothing
+    elseif x.ObjectInfo isa EA.HasIndexableFields
+        oname = "ₒ"
+    elseif x.ObjectInfo isa EA.HasIndexableCallerFields
+        oname = "ₒ̅"
     else
-        printstyled(io, name; color)
+        x.ObjectInfo::EA.HasUnknownMemory
+        oname = "ₓ"
     end
+    if symbol !== nothing
+        name = last(name)
+        if oname !== nothing
+            printstyled(io, name, oname; color)
+        else
+            symbol && print(io, " ")
+            printstyled(io, name; color)
+        end
+    else
+        name = first(name)
+        if name === nothing
+            @invoke Base.show(io::IO, x::Any)
+        else
+            if oname !== nothing
+                printstyled(io, name, oname; color)
+            else
+                printstyled(io, name; color)
+            end
+        end
+    end
+
+    return color
 end
 
-function get_sym_color(x::ArgEscapeInfo)
+Base.show(io::IO, x::EscapeInfo) = print_escape_info(io, x)
+
+function get_sym_color(x::InterEscapeInfo)
     escape_bits = x.escape_bits
     if escape_bits == EA.ARG_ALL_ESCAPE
-        color, sym = :red, "X"
+        sym, color = "X", :red
     elseif escape_bits == 0x00
-        color, sym = :green, "✓"
+        sym, color = "✓", :green
     else
-        color, sym = :bold, "*"
+        sym, color = "*", :bold
         if !iszero(escape_bits & EA.ARG_RETURN_ESCAPE)
-            color, sym = :blue, "↑"
+            sym, color = "↑", :blue
         end
         if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
             color = :yellow
@@ -160,27 +181,15 @@ function get_sym_color(x::ArgEscapeInfo)
     return sym, color
 end
 
-function Base.show(io::IO, x::ArgEscapeInfo)
-    escape_bits = x.escape_bits
-    if escape_bits == EA.ARG_ALL_ESCAPE
-        color, sym = :red, "X"
-    elseif escape_bits == 0x00
-        color, sym = :green, "✓"
-    else
-        color, sym = :bold, "*"
-        if !iszero(escape_bits & EA.ARG_RETURN_ESCAPE)
-            color, sym = :blue, "↑"
-        end
-        if !iszero(escape_bits & EA.ARG_THROWN_ESCAPE)
-            color = :yellow
-        end
-    end
-    printstyled(io, "ArgEscapeInfo(", sym, ")"; color)
+function Base.show(io::IO, x::InterEscapeInfo)
+    sym, color = get_sym_color(x)
+    printstyled(io, "InterEscapeInfo(", sym, ")"; color)
 end
 
 struct EscapeAnalysisResult
     ir::IRCode
     eresult::EscapeResult
+    cacheresult::EscapeCache
     mi::Union{Nothing,MethodInstance}
     slotnames::Union{Nothing,Vector{Symbol}}
     source::Bool
@@ -190,7 +199,7 @@ struct EscapeAnalysisResult
                                   slotnames::Union{Nothing,Vector{Symbol}}=nothing,
                                   source::Bool=false,
                                   interp::Union{Nothing,EscapeAnalyzer}=nothing)
-        return new(ir, eresult, mi, slotnames, source, interp)
+        return new(ir, eresult, EscapeCache(eresult), mi, slotnames, source, interp)
     end
 end
 Base.getindex(res::EscapeAnalysisResult, @nospecialize(x)) = res.eresult[x]
@@ -223,13 +232,14 @@ function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
             f = widenconst(ft)
         end
         print(io, f, '(')
-        for i in 1:bbstate.nargs
+        (; nargs) = bbstate.afinfo
+        for i in 1:nargs
             arginfo = bbstate[Argument(i)]
             i == 1 && continue
-            c, color = get_name_color(arginfo, true)
+            color = print_escape_info(io, arginfo, false)
             slot = isnothing(slotnames) ? "_$i" : slotnames[i]
-            printstyled(io, c, ' ', slot, "::", ir.argtypes[i]; color)
-            i ≠ bbstate.nargs && print(io, ", ")
+            printstyled(io, ' ', slot, "::", ir.argtypes[i]; color)
+            i ≠ nargs && print(io, ", ")
         end
         print(io, ')')
         if !isnothing(mi)
@@ -240,21 +250,13 @@ function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
     end
 
     # print escape information on SSA values
-    # nd = ndigits(length(ssavalues))
-    function print_header(io::IO, idx::Int)
-        c, color = get_name_color(bbstate[SSAValue(idx)], true)
-        # printstyled(io, lpad(idx, nd), ' ', c, ' '; color)
-        printstyled(io, rpad(c, 2), ' '; color)
-    end
-
     lineprinter = IRShow.inline_linfo_printer(ir)
     preprinter = function (@nospecialize(io::IO), linestart::String, idx::Int)
         str = lineprinter(io, linestart, idx)
         if idx ≠ 0
-            c, color = get_name_color(bbstate[SSAValue(idx)], true)
             return str * sprint(;context=IOContext(io)) do @nospecialize io::IO
                 print(io, " ")
-                printstyled(io, rpad(c, 2); color)
+                print_escape_info(io, bbstate[SSAValue(idx)], true)
             end
         end
         return str
@@ -265,22 +267,30 @@ function Base.show(io::IO, result::EscapeAnalysisResult, bb::Int=0)
         function (io::IO; idx::Int, @nospecialize(kws...))
             _postprinter(io; idx, kws...)
             if haskey(ssamemoryinfo, idx)
-                memoryinfo = ssamemoryinfo[idx]
-                if memoryinfo === EA.ConflictedMemory()
-                    c, color = "*", :yellow
-                elseif memoryinfo === EA.UnknownMemory()
-                    c, color = "X", :red
-                elseif memoryinfo === EA.UninitializedMemory()
-                    c, color = "◌", :yellow
-                else
+                MemoryInfo = ssamemoryinfo[idx]
+                if MemoryInfo isa EA.MustAliasMemoryInfo
+                    color = :green
                     c = sprint(context=IOContext(io)) do @nospecialize io::IO
-                        Base.show_unquoted(io, memoryinfo)
+                        Base.show_unquoted(io, MemoryInfo.alias)
                     end
-                    color = :cyan
+                elseif MemoryInfo isa EA.MayAliasMemoryInfo
+                    color = :yellow
+                    c = "[" * sprint(context=IOContext(io)) do @nospecialize io::IO
+                        local isfirst::Bool = true
+                        for aval in MemoryInfo.aliases
+                            if isfirst
+                                isfirst = false
+                            else
+                                print(io, ", ")
+                            end
+                            Base.show_unquoted(io, aval)
+                        end
+                    end * "]"
+                else
+                    @assert MemoryInfo isa EA.UnknownMemoryInfo
+                    c, color = "X", :red
                 end
-                printstyled(io, " (↦ "; color=:light_black)
-                printstyled(io, c; color)
-                printstyled(io, ")"; color=:light_black)
+                printstyled(io, " (↦ ", c, ")"; color)
             end
         end
     else

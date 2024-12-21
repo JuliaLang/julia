@@ -2000,4 +2000,86 @@ let result = code_escapes(func_refine_nothrow, (String,))
     @test_broken Compiler.is_nothrow(effects)
 end
 
+# inter-procedural alias analysis
+# ===============================
+
+mutable struct ObjectS
+    s::String
+end
+
+@noinline update_os(os::ObjectS) = (os.s = ""; nothing)
+@noinline update_os(os::ObjectS, s::String) = (os.s = s; nothing)
+@noinline update_os(os::ObjectS, s::String, c::Bool) = (c && (os.s = s); nothing)
+code_escapes((String,)) do s
+    os = ObjectS(s)
+    update_os(os)
+    os.s
+end
+
+@noinline function swap_os(os1::ObjectS, os2::ObjectS)
+    s1 = os1.s
+    s2 = os2.s
+    os1.s = s1
+    os2.s = s2
+end
+
+function set_xos_yos(xos::ObjectS, yos::ObjectS)
+    xos.s = "a"
+    yos.s = "b"
+    return xos.s # might be "b"
+end
+
+# needs to account for possibility of aliasing between arguments (and their memories)
+# > alias analysis is inherently inter-procedural
+let result = code_escapes(set_xos_yos, (ObjectS,ObjectS))
+    idx = only(findall(iscall((result.ir, getfield)), result.ir.stmts.stmt))
+    @test !is_load_forwardable(result, idx)
+end
+
+let result = code_escapes((String,)) do s
+        os = ObjectS(s)
+        set_xos_yos(os, os)
+        os
+    end
+end
+
+@noinline make_os(s::String) = ObjectS(s)
+code_escapes((String,)) do s
+    os = make_os(s)
+    os.s
+end
+
+const g_xos = Ref(ObjectS(""))
+@noinline function some_unsafe_func()
+    println("some_unsafe_func is called")
+    g_xos[] = ObjectS("julia2")
+end
+
+function callerfunc(@specialize(calleefunc), s::String)
+    xxos = Ref(Ref{ObjectS}())
+    calleefunc(xxos)
+    xxos[][] = ObjectS(s) # may escape here (depending on `calleefunc`)
+    some_unsafe_func()
+    return xxos[][].s # returns `s`
+end
+@noinline function calleefunc1(xxos)
+    yy = Ref(ObjectS("julia"))
+    xxos[] = yy
+    nothing
+end
+@noinline function calleefunc2(xxos)
+    xxos[] = g_xos
+    nothing
+end
+
+let result = code_escapes(callerfunc, (typeof(calleefunc1), String,))
+    idx = only(findall(isnew_with_type((result.ir, ObjectS)), result.ir.stmts.stmt))
+    @test_broken !has_all_escape(result[SSAValue(idx)])
+end
+
+let result = code_escapes(callerfunc, (typeof(calleefunc2), String,))
+    idx = only(findall(isnew_with_type((result.ir, ObjectS)), result.ir.stmts.stmt))
+    @test has_all_escape(result[SSAValue(idx)])
+end
+
 end # module test_EA

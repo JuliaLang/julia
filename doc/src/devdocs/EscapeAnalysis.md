@@ -354,7 +354,7 @@ and especially, it is supposed to be used at the following two stages:
 - `IPO EA`: analyze pre-inlining IR to generate IPO-valid escape information cache
 - `Local EA`: analyze post-inlining IR to collect locally-valid escape information
 
-Escape information derived by `IPO EA` is transformed to the `ArgEscapeCache` data structure and cached globally.
+Escape information derived by `IPO EA` is transformed to the `EscapeCache` data structure and cached globally.
 By passing an appropriate `get_escape_cache` callback to `analyze_escapes`,
 the escape analysis can improve analysis accuracy by utilizing cached inter-procedural information of
 non-inlined callees that has been derived by previous `IPO EA`.

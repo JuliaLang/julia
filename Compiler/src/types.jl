@@ -104,7 +104,7 @@ mutable struct InferenceResult
     valid_worlds::WorldRange          # if inference and optimization is finished
     ipo_effects::Effects              # if inference is finished
     effects::Effects                  # if optimization is finished
-    analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
+    analysis_results::AnalysisResults # AnalysisResults with e.g. result::EscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
 
     #=== uninitialized fields ===#

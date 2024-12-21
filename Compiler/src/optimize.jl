@@ -653,7 +653,7 @@ function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,Met
         codeinst isa CodeInstance || return false
     end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
-        return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
+        return result isa EscapeAnalysis.EscapeCache ? result : nothing
     end
     if argescapes !== nothing
         return argescapes
@@ -674,7 +674,7 @@ function refine_effects!(interp::AbstractInterpreter, opt::OptimizationState, sv
         ir = sv.ir
         nargs = Int(opt.src.nargs)
         eresult = EscapeAnalysis.analyze_escapes(ir, nargs, get_escape_cache(interp))
-        argescapes = EscapeAnalysis.ArgEscapeCache(eresult)
+        argescapes = EscapeAnalysis.EscapeCache(eresult)
         stack_analysis_result!(sv.result, argescapes)
         validate_mutable_arg_escapes!(eresult, sv)
     end
