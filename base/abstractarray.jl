@@ -827,6 +827,9 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T} = similar(a, T, to_shape(dims))
+# legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
+# leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
@@ -837,7 +840,7 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::OneTo) = Int(last(r))
+to_shape(r::AbstractOneTo) = Int(last(r))
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -863,6 +866,8 @@ would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
 similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+# legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
 similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
 similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
