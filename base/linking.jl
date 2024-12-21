@@ -155,7 +155,7 @@ function link_image_cmd(path, out)
     LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") :
                         ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
-        LIBS = (LIBS..., "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
+        LIBS = (LIBS..., "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt", "-lmingwex")
     end
 
     V = VERBOSE[] ? "--verbose" : ""
