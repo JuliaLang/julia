@@ -1153,6 +1153,15 @@ end
     end
 end
 
+@testset "Irrationals subtracting approximations" begin
+    for i in (π, ℯ, γ, catalan)
+        @test isapprox(Float32(i - Float16(i)) + Float16(i), Float32(i), rtol=1e-6)
+        @test isapprox(Float64(i - Float32(i)) + Float32(i), Float64(i), rtol=1e-14)
+        @test isapprox(BigFloat(i - Float64(i)) + Float64(i), BigFloat(i), rtol=1e-30)
+        @test abs(i-BigFloat(i)) ≥ 0.1*eps(BigFloat)
+    end
+end
+
 @testset "Irrational Inverses, Issue #30882" begin
     @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
