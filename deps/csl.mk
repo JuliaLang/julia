@@ -114,8 +114,10 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
 ifeq ($(ARCH),x86_64)
 	-cp -a /mingw64/lib/libmsvcrt.a	$(build_private_libdir)/
+	-cp -a /mingw64/lib/libmingwex.a	$(build_private_libdir)/
 else
 	-cp -a /mingw32/lib/libmsvcrt.a	$(build_private_libdir)/
+	-cp -a /mingw32/lib/libmingwex.a	$(build_private_libdir)/
 endif # ifeq ($(ARCH),x86_64)
 endif # ifeq ($(OS),WINNT)
 endif
