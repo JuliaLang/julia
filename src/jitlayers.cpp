@@ -795,47 +795,6 @@ void jl_emit_codeinst_to_jit_impl(
     emittedmodules[codeinst] = std::move(result_m);
 }
 
-static void recursive_compile_graph(
-    jl_code_instance_t *codeinst,
-    jl_code_info_t *src)
-{
-    jl_emit_codeinst_to_jit(codeinst, src);
-    DenseSet<jl_code_instance_t*> Seen;
-    SmallVector<jl_code_instance_t*> workqueue;
-    workqueue.push_back(codeinst);
-    // if any edges were incomplete, try to complete them now
-    while (!workqueue.empty()) {
-        auto this_code = workqueue.pop_back_val();
-        if (Seen.insert(this_code).second) {
-            jl_code_instance_t *compiled_ci = jl_method_compiled_egal(codeinst);
-            if (!compiled_ci) {
-                if (this_code != codeinst) {
-                    JL_GC_PROMISE_ROOTED(this_code); // rooted transitively from following edges from original argument
-                    jl_emit_codeinst_to_jit(this_code, nullptr); // contains safepoints
-                }
-                jl_unique_gcsafe_lock lock(engine_lock);
-                auto edges = complete_graph.find(this_code);
-                if (edges != complete_graph.end()) {
-                    workqueue.append(edges->second);
-                }
-            }
-        }
-    }
-}
-
-// this generates llvm code for the lambda info
-// and adds the result to the jitlayers
-// (and the shadow module),
-// and generates code for it
-static void _jl_compile_codeinst(
-        jl_code_instance_t *codeinst,
-        jl_code_info_t *src)
-{
-    recursive_compile_graph(codeinst, src);
-    jl_compile_codeinst_now(codeinst);
-    assert(jl_is_compiled_codeinst(codeinst));
-}
-
 
 const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
@@ -859,7 +818,6 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     orc::ThreadSafeModule backing;
     bool success = true;
     const char *name = "";
-    SmallVector<jl_code_instance_t*,0> dependencies;
     if (into == NULL) {
         ctx = pparams ? pparams->tsctx : jl_ExecutionEngine->makeContext();
         backing = jl_create_ts_module("cextern", ctx, DL, TargetTriple);
@@ -887,11 +845,16 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             }
             params.tsctx_lock = params.tsctx.getLock(); // re-acquire lock
             if (success && params.cache) {
-                for (auto &it : params.workqueue) {
+                size_t newest_world = jl_atomic_load_acquire(&jl_world_counter);
+                for (auto &it : params.workqueue) { // really just zero or one, and just the ABI not the rest of the metadata
                     jl_code_instance_t *codeinst = it.first;
                     JL_GC_PROMISE_ROOTED(codeinst);
-                    dependencies.push_back(codeinst);
-                    recursive_compile_graph(codeinst, nullptr);
+                    jl_code_instance_t *newest_ci = jl_type_infer(jl_get_ci_mi(codeinst), newest_world, SOURCE_MODE_ABI);
+                    if (newest_ci) {
+                        if (jl_egal(codeinst->rettype, newest_ci->rettype))
+                            it.first = codeinst;
+                        jl_compile_codeinst_now(newest_ci);
+                    }
                 }
                 jl_analyze_workqueue(nullptr, params, true);
                 assert(params.workqueue.empty());
@@ -904,8 +867,6 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         { // lock scope
             jl_unique_gcsafe_lock lock(extern_c_lock);
             if (!jl_ExecutionEngine->getGlobalValueAddress(name)) {
-                for (auto dep : dependencies)
-                    jl_compile_codeinst_now(dep);
                 {
                     auto Lock = backing.getContext().getLock();
                     jl_ExecutionEngine->optimizeDLSyms(*backing.getModuleUnlocked()); // safepoint
@@ -976,7 +937,7 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
     if (!jl_is_compiled_codeinst(ci)) {
         ++SpecFPtrCount;
         uint64_t start = jl_typeinf_timing_begin();
-        _jl_compile_codeinst(ci, NULL);
+        jl_compile_codeinst_now(ci);
         jl_typeinf_timing_end(start, 0);
         newly_compiled = 1;
     }
@@ -1007,8 +968,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     }
     else {
         jl_method_instance_t *mi = jl_get_ci_mi(unspec);
-        jl_code_instance_t *uninferred = jl_cached_uninferred(
-            jl_atomic_load_relaxed(&mi->cache), 1);
+        jl_code_instance_t *uninferred = jl_cached_uninferred(jl_atomic_load_relaxed(&mi->cache), 1);
         assert(uninferred);
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
         assert(src);
@@ -1019,10 +979,16 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (!jl_is_compiled_codeinst(unspec)) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
+            jl_svec_t *edges = (jl_svec_t*)src->edges;
+            if (jl_is_svec(edges)) {
+                jl_atomic_store_release(&unspec->edges, edges); // n.b. this assumes the field was always empty svec(), which is not entirely true
+                jl_gc_wb(unspec, edges);
+            }
             jl_debuginfo_t *debuginfo = src->debuginfo;
             jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_gc_wb(unspec, debuginfo);
-            _jl_compile_codeinst(unspec, src);
+            jl_emit_codeinst_to_jit(unspec, src);
+            jl_compile_codeinst_now(unspec);
         }
         JL_UNLOCK(&jitlock); // Might GC
     }

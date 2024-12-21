@@ -118,8 +118,10 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
 
         // OC wrapper methods are not world dependent and have no edges or other info
         ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
-        if (!jl_atomic_load_acquire(&ci->invoke))
-            jl_compile_codeinst(ci); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)
+        if (!jl_atomic_load_acquire(&ci->invoke)) {
+            jl_emit_codeinst_to_jit(ci, NULL); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)
+            jl_compile_codeinst(ci);
+        }
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
     }
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);

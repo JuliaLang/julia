@@ -337,6 +337,59 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
     return dt;
 }
 
+// only relevant for bootstrapping. otherwise fairly broken.
+static int emit_codeinst_and_edges(jl_code_instance_t *codeinst)
+{
+    jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
+    if (code) {
+        if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
+            return 1;
+        if (code != jl_nothing) {
+            JL_GC_PUSH1(&code);
+            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+            jl_method_t *def = mi->def.method;
+            if (jl_is_string(code) && jl_is_method(def))
+                code = (jl_value_t*)jl_uncompress_ir(def, codeinst, (jl_value_t*)code);
+            if (jl_is_code_info(code)) {
+                jl_emit_codeinst_to_jit(codeinst, (jl_code_info_t*)code);
+                if (0) {
+                    // next emit all the invoke edges too (if this seems profitable)
+                    jl_array_t *src = ((jl_code_info_t*)code)->code;
+                    for (size_t i = 0; i < jl_array_dim0(src); i++) {
+                        jl_value_t *stmt = jl_array_ptr_ref(src, i);
+                        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_assign_sym)
+                            stmt = jl_exprarg(stmt, 1);
+                        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_invoke_sym) {
+                            jl_value_t *invoke = jl_exprarg(stmt, 0);
+                            if (jl_is_code_instance(invoke))
+                                emit_codeinst_and_edges((jl_code_instance_t*)invoke);
+                        }
+                    }
+                }
+                JL_GC_POP();
+                return 1;
+            }
+            JL_GC_POP();
+        }
+    }
+    return 0;
+}
+
+// Opportunistic SOURCE_MODE_ABI cache lookup, only for bootstrapping.
+static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+{
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
+    for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
+        if (codeinst->owner != jl_nothing)
+            continue;
+        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+            if (emit_codeinst_and_edges(codeinst))
+                return codeinst;
+        }
+    }
+    return NULL;
+}
+
 // run type inference on lambda "mi" for given argument types.
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
@@ -2565,23 +2618,6 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
             continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
-                return codeinst;
-        }
-    }
-    return NULL;
-}
-
-// Opportunistic SOURCE_MODE_ABI cache lookup.
-jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
-{
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-    for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
-        if (codeinst->owner != jl_nothing)
-            continue;
-
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
-            jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && (code != jl_nothing || (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)))
                 return codeinst;
         }
     }
