@@ -10050,29 +10050,19 @@ jl_llvm_functions_t jl_emit_codeinst(
 {
     JL_TIMING(CODEGEN, CODEGEN_Codeinst);
     jl_timing_show_method_instance(jl_get_ci_mi(codeinst), JL_TIMING_DEFAULT_BLOCK);
-    JL_GC_PUSH1(&src);
     if (!src) {
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-        jl_method_t *def = mi->def.method;
-        // Check if this is the generic method for opaque closure wrappers -
-        // if so, this must compile specptr such that it holds the specptr -> invoke wrapper
+        // Assert that this this is the generic method for opaque closure wrappers:
+        // this signals to instead compile specptr such that it holds the specptr -> invoke wrapper
         // to satisfy the dispatching implementation requirements of jl_f_opaque_closure_call
-        if (def == jl_opaque_closure_method) {
-            JL_GC_POP();
+        if (mi->def.method == jl_opaque_closure_method) {
             return jl_emit_oc_wrapper(m, params, mi, codeinst->rettype);
         }
-        if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
-        if (!src || !jl_is_code_info(src)) {
-            JL_GC_POP();
-            m = orc::ThreadSafeModule();
-            return jl_llvm_functions_t(); // failed
-        }
+        m = orc::ThreadSafeModule();
+        return jl_llvm_functions_t(); // user error
     }
     //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
     jl_llvm_functions_t decls = jl_emit_code(m, jl_get_ci_mi(codeinst), src, get_ci_abi(codeinst), params);
-    JL_GC_POP();
     return decls;
 }
 
