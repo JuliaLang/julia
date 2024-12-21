@@ -126,13 +126,15 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 ifeq ($(ARCH),x86_64)
-	-cp -a /mingw64/lib/libmsvcrt.a     $(build_private_libdir)/
+#	libmingw32:		mingw_raise_matherr
+#	libmingwex:		ldexp,log2l,exp2l,powi
+	-cp -a /mingw64/lib/libmingw32.a    $(build_private_libdir)/
 	-cp -a /mingw64/lib/libmingwex.a    $(build_private_libdir)/
 else
 # For i686 we are using niXman/mingw-builds-binaries, i686-12.2.0-release-posix-sjlj-rt_v10-rev0.7z
 #	https://github.com/JuliaCI/rootfs-images/blob/e7be8086ff1285b0f333ca72884977d01aed0e1f/windows/package-i686/Dockerfile#L28C107-L28C152
-	-cp -a /mingw32/i686-w64-mingw32/lib/libmsvcrt.a    $(build_private_libdir)/
-	-cp -a /mingw32/i686-w64-mingw32/lib/libmingwex.a   $(build_private_libdir)/
+	-cp -a /mingw32/i686-w64-mingw32/lib/libmingw32.a	$(build_private_libdir)/
+	-cp -a /mingw32/i686-w64-mingw32/lib/libmingwex.a	$(build_private_libdir)/
 endif # ifeq ($(ARCH),x86_64)
 endif
 endif
