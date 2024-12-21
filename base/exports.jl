@@ -98,6 +98,8 @@ export
     StridedVecOrMat,
     StridedVector,
     SubArray,
+    SubVector,
+    SubMatrix,
     SubString,
     SubstitutionString,
     Timer,
