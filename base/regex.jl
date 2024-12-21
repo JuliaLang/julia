@@ -67,6 +67,20 @@ function Regex(pattern::AbstractString, flags::AbstractString)
 end
 Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_MATCH_OPTS)
 
+"""
+    regex(re...; compile_opt, match_opt)
+
+Create a Regex from multiple other regular expressions.
+
+# Examples
+
+julia> regex(r"a+", r".*b+", r".*?d\$")
+r"a+.*b+.*?d\$"
+"""
+function regex(re::Regex...; compile_opt=DEFAULT_COMPILER_OPTS, match_opt=DEFAULT_MATCH_OPTS)
+    Regex(string([r.pattern for r in re]...), compile_opt, match_opt)
+end
+
 function compile(regex::Regex)
     if regex.regex == C_NULL
         if PCRE.PCRE_COMPILE_LOCK === nothing
