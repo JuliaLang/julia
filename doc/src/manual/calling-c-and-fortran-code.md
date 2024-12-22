@@ -27,9 +27,9 @@ commonly passed in registers when using C or Julia calling conventions.
 The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 
 ```julia
-  @ccall library.function_name(argvalue1::argtype1, ...)::returntype
-  @ccall function_name(argvalue1::argtype1, ...)::returntype
-  @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
+@ccall library.function_name(argvalue1::argtype1, ...)::returntype
+@ccall function_name(argvalue1::argtype1, ...)::returntype
+@ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
 where `library` is a string constant or literal (but see [Non-constant Function
