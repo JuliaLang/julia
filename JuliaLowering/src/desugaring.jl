@@ -1293,10 +1293,10 @@ function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
     end
 end
 
-function _method_def_expr(ctx, srcref, callex, method_table,
-                          docs, typevar_names, arg_names, arg_types, ret_var, body)
-    # metadata contains svec(types, sparms, location)
+function method_def_expr(ctx, srcref, callex, method_table,
+                         docs, typevar_names, arg_names, arg_types, ret_var, body)
     @ast ctx srcref [K"block"
+        # metadata contains svec(types, sparms, location)
         method_metadata := [K"call"(callex)
             "svec"              ::K"core"
             [K"call"
@@ -1360,9 +1360,10 @@ end
 # For example for `f(x, y=1, z=2)` we generate two additional methods
 # f(x) = f(x, 1, 2)
 # f(x, y) = f(x, y, 2)
-function _optional_positional_defs!(ctx, method_stmts, srcref, callex,
-                                    method_table, typevar_names, typevar_stmts,
-                                    arg_names, arg_types, first_default, arg_defaults, ret_var)
+function optional_positional_defs!(ctx, method_stmts, srcref, callex,
+                                   method_table, typevar_names, typevar_stmts,
+                                   arg_names, arg_types, first_default,
+                                   arg_defaults, ret_var)
     # Replace placeholder arguments with variables - we need to pass them to
     # the inner method for dispatch even when unused in the inner method body
     def_arg_names = map(arg_names) do arg
@@ -1394,10 +1395,24 @@ function _optional_positional_defs!(ctx, method_stmts, srcref, callex,
                                                    typevar_names, typevar_stmts)
         # TODO: Ensure we preserve @nospecialize metadata in args
         push!(method_stmts,
-              _method_def_expr(ctx, srcref, callex, method_table, nothing,
-                               trimmed_typevar_names, trimmed_arg_names, trimmed_arg_types,
-                               ret_var, body))
+              method_def_expr(ctx, srcref, callex, method_table, nothing,
+                              trimmed_typevar_names, trimmed_arg_names, trimmed_arg_types,
+                              ret_var, body))
     end
+end
+
+# Check valid identifier/function names
+function is_valid_func_name(ex)
+    k = kind(ex)
+    if k == K"Identifier"
+        name = ex.name_val
+    elseif k == K"." && numchildren(ex) == 2 && kind(ex[2]) == K"Symbol"
+        # `function A.f(x,y) ...`
+        name = ex[2].name_val
+    else
+        return false
+    end
+    return name != "ccall" && name != "cglobal"
 end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity)
@@ -1405,7 +1420,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
-        if !is_valid_name(name)
+        if !is_valid_func_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
         return @ast ctx ex [K"method" name=>K"Symbol"]
@@ -1431,24 +1446,73 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         name = name[1]
     end
 
-    if kind(name) == K"tuple"
-        TODO(name, "Anon function lowering")
-    elseif kind(name) != K"call"
+    callex = if kind(name) == K"call"
+        name
+    elseif kind(name) == K"tuple"
+        # Anonymous function syntax `function (x,y) ... end`
+        @ast ctx name [K"call"
+            "#anon#"::K"Placeholder"
+            children(name)...
+        ]
+    else
         throw(LoweringError(name, "Bad function definition"))
     end
+    # Fixup for `new` constructor sigs if necessary
+    callex = rewrite_call(callex)
 
-    callex = rewrite_call(name)
-    # TODO
-    # dotop names
-    # overlays
-    static_parameters = SyntaxList(ctx)
-
-    # Add self argument where necessary
-    args = callex[2:end]
+    # Construct method argument lists of names and types.
+    #
+    # First, match the "self" argument: In the method signature, each function
+    # gets a self argument name+type. For normal generic functions, this is a
+    # singleton and subtype of `Function`. But objects of any type can be made
+    # callable when the self argument is explicitly given using `::` syntax in
+    # the function name.
     name = callex[1]
+    bare_func_name = nothing
+    doc_obj = nothing
+    self_name = nothing
+    if kind(name) == K"::"
+        # Self argument is specified by user
+        if numchildren(name) == 1
+            # function (::T)() ...
+            self_type = name[1]
+        else
+            # function (f::T)() ...
+            @chk numchildren(name) == 2
+            self_name = name[1]
+            self_type = name[2]
+        end
+        doc_obj = self_type
+    else
+        if kind(name) == K"Placeholder"
+            # Anonymous function. In this case we may use an ssavar for the
+            # closure's value.
+            name = ssavar(ctx, name, name.name_val)
+            bare_func_name = name
+        elseif !is_valid_func_name(name)
+            throw(LoweringError(name, "Invalid function name"))
+        elseif is_identifier_like(name)
+            # Add methods to a global `Function` object, or local closure
+            # type function f() ...
+            bare_func_name = name
+        else
+            # Add methods to an existing Function
+            # function A.B.f() ...
+        end
+        doc_obj = name # todo: can closures be documented?
+        self_type = @ast ctx name [K"function_type" name]
+    end
+    # Add self argument
+    if isnothing(self_name)
+        self_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
+    end
 
+    # Expand remaining argument names and types
     arg_names = SyntaxList(ctx)
     arg_types = SyntaxList(ctx)
+    push!(arg_names, self_name)
+    push!(arg_types, self_type)
+    args = callex[2:end]
     body_stmts = SyntaxList(ctx)
     first_default = 0
     arg_defaults = SyntaxList(ctx)
@@ -1467,6 +1531,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             aname = n
         end
         push!(arg_names, aname)
+
         atype = !isnothing(info.type) ? info.type : @ast ctx arg "Any"::K"core"
         if info.is_slurp
             if i != length(args)
@@ -1497,46 +1562,11 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
         # TODO: Ideally, ensure side effects of evaluating arg_types only
         # happen once - we should create an ssavar if there's any following
-        # defaults. (flisp lowering doesn't ensure this either)
+        # defaults. (flisp lowering doesn't ensure this either). Beware if
+        # fixing this that optional_positional_defs! depends on filtering the
+        # *symbolic* representation of arg_types.
         push!(arg_types, atype)
     end
-
-    bare_func_name = nothing
-    doc_obj = nothing
-    farg_name = nothing
-    if kind(name) == K"::"
-        # Add methods to an existing type
-        if numchildren(name) == 1
-            # function (::T)() ...
-            farg_type = name[1]
-        else
-            # function (f::T)() ...
-            @chk numchildren(name) == 2
-            farg_name = name[1]
-            farg_type = name[2]
-        end
-        doc_obj = farg_type
-    else
-        if !is_valid_name(name)
-            throw(LoweringError(name, "Invalid function name"))
-        end
-        if is_identifier_like(name)
-            # Add methods to a global `Function` object, or local closure
-            # type function f() ...
-            bare_func_name = name
-        else
-            # Add methods to an existing Function
-            # function A.B.f() ...
-        end
-        doc_obj = name # todo: can closures be documented?
-        farg_type = @ast ctx name [K"function_type" name]
-    end
-    # Add self argument
-    if isnothing(farg_name)
-        farg_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
-    end
-    pushfirst!(arg_names, farg_name)
-    pushfirst!(arg_types, farg_type)
 
     if !isnothing(return_type)
         ret_var = ssavar(ctx, return_type, "return_type")
@@ -1561,17 +1591,16 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     method_stmts = SyntaxList(ctx)
 
     if !isempty(arg_defaults)
-        # For self argument added above
-        first_default += 1
-        _optional_positional_defs!(ctx, method_stmts, ex, callex,
-                                   method_table, typevar_names, typevar_stmts,
-                                   arg_names, arg_types, first_default, arg_defaults, ret_var)
+        first_default += 1 # Offset for self argument
+        optional_positional_defs!(ctx, method_stmts, ex, callex,
+                                  method_table, typevar_names, typevar_stmts,
+                                  arg_names, arg_types, first_default, arg_defaults, ret_var)
     end
 
     # The method with all non-default arguments
     push!(method_stmts,
-          _method_def_expr(ctx, ex, callex, method_table, docs,
-                           typevar_names, arg_names, arg_types, ret_var, body))
+          method_def_expr(ctx, ex, callex, method_table, docs,
+                          typevar_names, arg_names, arg_types, ret_var, body))
     if !isnothing(docs)
         method_stmts[end] = @ast ctx docs [K"block"
             method_metadata := method_stmts[end]
@@ -1601,6 +1630,36 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             ]
         ]
     ]
+end
+
+function expand_arrow_arglist(ctx, arglist)
+    k = kind(arglist)
+    if k == K"where"
+        @ast ctx arglist [K"where"
+            expand_arrow_arglist(ctx, arglist[1])
+            argslist[2]
+        ]
+    else
+        # The arglist can sometimes be parsed as a block, or something else, and
+        # fixing this is extremely awkward when nested inside `where`. See
+        # https://github.com/JuliaLang/JuliaSyntax.jl/pull/522
+        if k == K"block"
+            @chk numchildren(arglist) == 2
+            arglist = @ast ctx arglist [K"tuple"
+                ex[1]
+                [K"parameters" ex[2]]
+            ]
+        elseif k != K"tuple"
+            # `x::Int -> body`
+            arglist = @ast ctx arglist [K"tuple"
+                ex[1]
+            ]
+        end
+        @ast ctx arglist [K"call"
+            "->"::K"Placeholder"
+            children(arglist)...
+        ]
+    end
 end
 
 function _make_macro_name(ctx, ex)
@@ -2615,6 +2674,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         sig = expand_forms_2(ctx, ex[2], ex)
     elseif k == K"for"
         expand_forms_2(ctx, expand_for(ctx, ex))
+    elseif k == K"->"
+        expand_forms_2(ctx, 
+            @ast ctx ex [K"function"
+                expand_arrow_arglist(ctx, ex[1])
+                ex[2]
+            ]
+        )
     elseif k == K"function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
@@ -2642,9 +2708,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
     elseif k == K"where"
         expand_forms_2(ctx, expand_wheres(ctx, ex))
-    elseif k == K"char" || k == K"var"
-        @chk numchildren(ex) == 1
-        ex[1]
     elseif k == K"string"
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]

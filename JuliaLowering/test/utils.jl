@@ -138,7 +138,7 @@ function read_ir_test_cases(filename)
         cases_str = only(parts)
     end
     (preamble_str,
-     [match_ir_test_case(s) for s in split(cases_str, r"####*") if strip(s) != ""])
+     [match_ir_test_case(s) for s in split(cases_str, r"######*") if strip(s) != ""])
 end
 
 function format_ir_for_test(mod, description, input, expect_error=false)
@@ -154,7 +154,7 @@ function format_ir_for_test(mod, description, input, expect_error=false)
         if expect_error && (exc isa LoweringError)
             return sprint(io->Base.showerror(io, exc, show_detail=false))
         else
-            rethrow()
+            throw("Error in test case \"$description\"")
         end
     end
 end

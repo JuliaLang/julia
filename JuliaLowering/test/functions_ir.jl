@@ -222,7 +222,7 @@ end
 8   (return %₂)
 
 ########################################
-# Error: Invalid function name
+# Error: Invalid function name ccall
 function ccall()
 end
 #---------------------
@@ -232,13 +232,33 @@ function ccall()
 end
 
 ########################################
-# Error: Invalid function name
+# Error: Invalid function name ccall
 function A.ccall()
 end
 #---------------------
 LoweringError:
 function A.ccall()
 #        └─────┘ ── Invalid function name
+end
+
+########################################
+# Error: Invalid dotop function name
+function (.+)(x,y)
+end
+#---------------------
+LoweringError:
+function (.+)(x,y)
+#         └┘ ── Invalid function name
+end
+
+########################################
+# Error: Invalid function name
+function f[](x,y)
+end
+#---------------------
+LoweringError:
+function f[](x,y)
+#        └─┘ ── Invalid function name
 end
 
 ########################################
@@ -697,7 +717,22 @@ end
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 4 =#)))))
 6   --- method core.nothing %₅
+
+########################################
+# Binding docs to callable type
+"""
+some docs
+"""
+function (x::T)()
+end
+#---------------------
+1   TestMod.T
+2   (call core.svec %₁)
+3   (call core.svec)
+4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 4 =#)))))
+5   --- method core.nothing %₄
     1   (return core.nothing)
-7   (call JuliaLowering.bind_docs! %₁ "some docs\n" %₅)
-8   (return %₁)
+6   TestMod.T
+7   (call JuliaLowering.bind_docs! %₆ "some docs\n" %₄)
+8   (return %₇)
 

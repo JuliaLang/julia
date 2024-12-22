@@ -166,3 +166,61 @@ end
     38  (return %₃₇)
 14  (return %₁₂)
 
+########################################
+# Anonymous function syntax with ->
+x -> x*x
+#---------------------
+1   --- thunk
+    1   (global TestMod.#->##0)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :#->##0 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.#->##0)
+    8   (= TestMod.#->##0 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+2   TestMod.#->##0
+3   (new %₂)
+4   TestMod.#->##0
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
+8   --- method core.nothing %₇
+    1   TestMod.*
+    2   (call %₁ slot₂/x slot₂/x)
+    3   (return %₂)
+9   (return %₃)
+
+########################################
+# Anonymous function syntax with `function`
+function (x)
+    x*x
+end
+#---------------------
+1   --- thunk
+    1   (global TestMod.##anon###0)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :##anon###0 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.##anon###0)
+    8   (= TestMod.##anon###0 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+2   TestMod.##anon###0
+3   (new %₂)
+4   TestMod.##anon###0
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
+8   --- method core.nothing %₇
+    1   TestMod.*
+    2   (call %₁ slot₂/x slot₂/x)
+    3   (return %₂)
+9   (return %₃)
+

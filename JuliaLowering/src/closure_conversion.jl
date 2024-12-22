@@ -374,15 +374,14 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         end
     elseif k == K"function_type"
         func_name = ex[1]
-        @assert kind(func_name) == K"BindingId"
-        if lookup_binding(ctx, func_name.var_id).kind == :global
-            @ast ctx ex [K"call" "Typeof"::K"core" func_name]
-        else
+        if kind(func_name) == K"BindingId" && lookup_binding(ctx, func_name).kind == :local
             ctx.closure_infos[func_name.var_id].type_name
+        else
+            @ast ctx ex [K"call" "Typeof"::K"core" func_name]
         end
     elseif k == K"method_defs"
         name = ex[1]
-        is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind == :local
+        is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind === :local
         cinfo = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                     ctx.closure_bindings, cinfo, ctx.lambda_bindings,

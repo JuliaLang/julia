@@ -125,7 +125,7 @@ function update_binding!(bindings::Bindings, x;
         isnothing(type) ? b.type : type,
         isnothing(is_const) ? b.is_const : is_const,
         b.is_ssa,
-        isnothing(is_captured) ? b.captured : is_captured,
+        isnothing(is_captured) ? b.is_captured : is_captured,
         isnothing(is_always_defined) ? b.is_always_defined : is_always_defined,
         b.is_internal,
         b.is_ambiguous_local,
@@ -274,7 +274,7 @@ end
 # Create a new local mutable variable or lambda argument
 # (TODO: rename this?)
 function new_mutable_var(ctx::AbstractLoweringContext, srcref, name; kind=:local, kws...)
-    @assert kind == :local || kind == :argument
+    @assert kind === :local || kind === :argument
     id = new_binding(ctx.bindings, BindingInfo(name, kind; is_internal=true, kws...))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
@@ -668,21 +668,6 @@ end
 
 function any_assignment(exs)
     any(kind(e) == K"=" for e in exs)
-end
-
-# Check valid identifier/function names
-function is_valid_name(ex)
-    k = kind(ex)
-    if k == K"Identifier"
-        name = ex.name_val
-    elseif k == K"var"
-        name = ex[1].name_val
-    elseif k == K"." && kind(ex[2]) == K"Symbol"
-        name = ex[2].name_val
-    else
-        return false
-    end
-    return name != "ccall" && name != "cglobal"
 end
 
 function is_valid_modref(ex)

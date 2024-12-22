@@ -27,7 +27,7 @@ end
 #-------------------------------------------------------------------------------
 _insert_if_not_present!(dict, key, val) = get!(dict, key, val)
 
-function _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex)
+function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
@@ -51,14 +51,22 @@ function _find_scope_vars!(assignments, locals, destructured_args, globals, used
         if !(kind(v) in KSet"BindingId globalref Placeholder")
             _insert_if_not_present!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex[2])
+        _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, ex[2])
     elseif k == K"function_decl"
         v = ex[1]
-        @assert kind(v) == K"Identifier"
-        _insert_if_not_present!(assignments, NameKey(v), v)
+        kv = kind(v)
+        if kv == K"Identifier"
+            _insert_if_not_present!(assignments, NameKey(v), v)
+        elseif kv == K"BindingId"
+            if !lookup_binding(ctx, v).is_ssa
+                TODO(v, "BindingId as function name")
+            end
+        else
+            @assert false
+        end
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
+            _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
         end
     end
 end
@@ -67,7 +75,7 @@ end
 # into sets by type of usage.
 #
 # NB: This only works propery after desugaring
-function find_scope_vars(ex)
+function find_scope_vars(ctx, ex)
     ExT = typeof(ex)
     assignments = Dict{NameKey,ExT}()
     locals = Dict{NameKey,ExT}()
@@ -77,7 +85,7 @@ function find_scope_vars(ex)
     used_bindings = Set{IdTag}()
     alias_bindings = Vector{Pair{NameKey,IdTag}}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
+        _find_scope_vars!(ctx, assignments, locals, destructured_args, globals, used_names, used_bindings, alias_bindings, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -261,7 +269,7 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
     assignments, locals, destructured_args, globals,
-        used, used_bindings, alias_bindings = find_scope_vars(ex)
+        used, used_bindings, alias_bindings = find_scope_vars(ctx, ex)
 
     # Construct a mapping from identifiers to bindings
     #
@@ -405,7 +413,8 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     # identifiers do.
     for id in used_bindings
         binfo = lookup_binding(ctx, id)
-        if !binfo.is_ssa && binfo.kind !== :global
+        if (binfo.kind === :local && !binfo.is_ssa) || binfo.kind === :argument ||
+                binfo.kind === :static_parameter
             if !haskey(lambda_bindings.bindings, id)
                 init_lambda_binding(lambda_bindings, id, is_read=true, is_assigned=true)
             end
@@ -554,7 +563,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             func_name = last(ctx.method_def_stack)
             if kind(func_name) == K"BindingId"
                 func_name_id = func_name.var_id
-                if lookup_binding(ctx, func_name_id).kind == :local
+                if lookup_binding(ctx, func_name_id).kind === :local
                     cbinds = get!(ctx.closure_bindings, func_name_id) do
                         name_stack = Vector{String}()
                         for fname in ctx.method_def_stack
