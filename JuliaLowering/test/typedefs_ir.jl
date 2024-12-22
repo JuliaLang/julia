@@ -759,7 +759,7 @@ end
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-7   (newvar slot₂)
+7   (newvar slot₂/f)
 8   (global TestMod.X)
 9   (const TestMod.X)
 10  (call core.svec)
@@ -862,7 +862,7 @@ end
     4   (call core.apply_type %₁ %₂ %₃)
     5   (new %₄ 1)
     6   (return %₅)
-7   (newvar slot₅)
+7   (newvar slot₅/f)
 8   (global TestMod.X)
 9   (const TestMod.X)
 10  (= slot₂/S (call core.TypeVar :S))

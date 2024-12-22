@@ -22,7 +22,7 @@ begin
     end
 end
 #---------------------
-1   (= slot₁ (call core.Box))
+1   (= slot₁/y (call core.Box))
 2   2
 3   slot₁/y
 4   (call core.setfield! %₃ :contents %₂)
@@ -56,7 +56,7 @@ begin
     @locals
 end
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/y)
 2   (global TestMod.x)
 3   (call core.apply_type top.Dict core.Symbol core.Any)
 4   (call %₃)

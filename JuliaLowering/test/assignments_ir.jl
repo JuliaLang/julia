@@ -76,7 +76,7 @@ let
     x
 end
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/x)
 2   TestMod.f
 3   (call %₂)
 4   (= slot₂/tmp %₃)

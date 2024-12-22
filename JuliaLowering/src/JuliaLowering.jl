@@ -20,6 +20,7 @@ _register_kinds()
 
 _include("syntax_graph.jl")
 _include("ast.jl")
+_include("bindings.jl")
 _include("utils.jl")
 
 _include("macro_expansion.jl")

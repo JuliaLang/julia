@@ -2,7 +2,7 @@
 # Local declaration with type
 local x::T = 1
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/x)
 2   1
 3   (= slot₂/tmp %₂)
 4   slot₂/tmp

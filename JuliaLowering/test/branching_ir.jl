@@ -7,8 +7,8 @@ begin
     end
 end
 #---------------------
-1   (newvar slot₁)
-2   (newvar slot₂)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
 3   slot₁/a
 4   (gotoifnot %₃ label₇)
 5   slot₂/b
@@ -25,9 +25,9 @@ begin
     c
 end
 #---------------------
-1   (newvar slot₁)
-2   (newvar slot₂)
-3   (newvar slot₃)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
 4   slot₁/a
 5   (gotoifnot %₄ label₇)
 6   slot₂/b
@@ -45,9 +45,9 @@ begin
     end
 end
 #---------------------
-1   (newvar slot₁)
-2   (newvar slot₂)
-3   (newvar slot₃)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
 4   slot₁/a
 5   (gotoifnot %₄ label₈)
 6   slot₂/b
@@ -67,10 +67,10 @@ begin
     d
 end
 #---------------------
-1   (newvar slot₁)
-2   (newvar slot₂)
-3   (newvar slot₃)
-4   (newvar slot₄)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
 5   slot₁/a
 6   (gotoifnot %₅ label₉)
 7   slot₂/b
@@ -88,10 +88,10 @@ begin
    end
 end
 #---------------------
-1   (newvar slot₁)
-2   (newvar slot₂)
-3   (newvar slot₃)
-4   (newvar slot₄)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
 5   slot₁/a
 6   slot₂/b
 7   (gotoifnot %₆ label₁₂)

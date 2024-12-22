@@ -115,7 +115,7 @@ let
     end
 end
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/z)
 2   (enter label₈)
 3   TestMod.a
 4   (leave %₂)
@@ -184,7 +184,7 @@ let
     end
 end
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/z)
 2   (enter label₈)
 3   (= slot₃/finally_tag -1)
 4   TestMod.a

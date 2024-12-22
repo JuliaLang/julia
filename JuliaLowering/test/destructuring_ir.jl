@@ -245,7 +245,7 @@ let
     (; x::T) = rhs
 end
 #---------------------
-1   (newvar slot₁)
+1   (newvar slot₁/x)
 2   TestMod.rhs
 3   (call top.getproperty %₂ :x)
 4   (= slot₂/tmp %₃)

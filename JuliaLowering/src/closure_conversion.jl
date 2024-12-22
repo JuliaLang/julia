@@ -39,13 +39,13 @@ function captured_var_access(ctx, ex)
         "getfield"::K"core"
         # FIXME: attributing the self binding to srcref=ex gives misleading printing.
         # We should carry provenance with each binding to fix this.
-        ctx.lambda_bindings.self::K"BindingId"
+        binding_ex(ctx, ctx.lambda_bindings.self)
         field_sym
     ]
 end
 
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
-    undef_var = new_mutable_var(ctx, var, lookup_binding(ctx, var.var_id).name)
+    undef_var = new_local_binding(ctx, var, lookup_binding(ctx, var.var_id).name)
     @ast ctx var [K"block"
         box := box_ex
         # Lower in an UndefVar check to a similarly named variable
@@ -85,7 +85,7 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
     kt = kind(type)
     @assert (kt == K"Identifier" || kt == K"BindingId" || is_literal(kt))
     # Use a slot to permit union-splitting this in inference
-    tmp = new_mutable_var(ctx, srcref, "tmp", is_always_defined=true)
+    tmp = new_local_binding(ctx, srcref, "tmp", is_always_defined=true)
 
     @ast ctx srcref [K"block"
         # [K"=" type_ssa renumber_assigned_ssavalues(type)]
@@ -353,7 +353,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ctx.closure_infos[func_name_id] = closure_info
                 init_closure_args = SyntaxList(ctx)
                 for id in field_orig_bindings
-                    push!(init_closure_args, @ast ctx ex id::K"BindingId")
+                    push!(init_closure_args, binding_ex(ctx, id))
                 end
                 @ast ctx ex [K"block"
                     [K"=" func_name

@@ -278,7 +278,7 @@ function emit_return(ctx, srcref, ex)
         # TODO: Why does flisp lowering create a mutable variable here even
         # though we don't mutate it?
         # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
-        tmp = new_mutable_var(ctx, srcref, "returnval_via_finally")
+        tmp = new_local_binding(ctx, srcref, "returnval_via_finally")
         emit(ctx, @ast ctx srcref [K"=" tmp ex])
         tmp
     else
@@ -447,7 +447,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end
 
     end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
-    try_result = needs_value && !in_tail_pos ? new_mutable_var(ctx, ex, "try_result") : nothing
+    try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
@@ -458,7 +458,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     if !isnothing(finally_block)
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
         # support a special form for @with)?
-        finally_handler = FinallyHandler(new_mutable_var(ctx, finally_block, "finally_tag"),
+        finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
         emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar (-1)::K"Integer"])
@@ -693,7 +693,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         else
-            val = needs_value && new_mutable_var(ctx, ex, "if_val")
+            val = needs_value && new_local_binding(ctx, ex, "if_val")
             v1 = compile(ctx, ex[2], needs_value, in_tail_pos)
             if needs_value
                 emit_assignment(ctx, ex, val, v1)

@@ -7,7 +7,7 @@ let
     end
 end
 #---------------------
-1   (= slot₂ (call core.Box))
+1   (= slot₂/x (call core.Box))
 2   --- thunk
     1   (global TestMod.#f##0)
     2   (call core.svec)
@@ -26,7 +26,7 @@ end
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
 7   --- method core.nothing %₆
     1   TestMod.+
-    2   (call core.getfield slot₁/x :x)
+    2   (call core.getfield slot₁/#self# :x)
     3   (call core.isdefined %₂ :contents)
     4   (gotoifnot %₃ label₆)
     5   (goto label₈)
@@ -39,7 +39,7 @@ end
 9   slot₂/x
 10  (call core.setfield! %₉ :contents %₈)
 11  TestMod.#f##0
-12  slot₂/f
+12  slot₂/x
 13  (= slot₁/f (new %₁₁ %₁₂))
 14  slot₁/f
 15  (return %₁₄)
@@ -53,7 +53,7 @@ let
     end
 end
 #---------------------
-1   (= slot₂ (call core.Box))
+1   (= slot₂/x (call core.Box))
 2   --- thunk
     1   (global TestMod.#f##1)
     2   (call core.svec)
@@ -72,14 +72,14 @@ end
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
 7   --- method core.nothing %₆
     1   2
-    2   (call core.getfield slot₁/x :x)
+    2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
 8   1
 9   slot₂/x
 10  (call core.setfield! %₉ :contents %₈)
 11  TestMod.#f##1
-12  slot₂/f
+12  slot₂/x
 13  (= slot₁/f (new %₁₁ %₁₂))
 14  slot₁/f
 15  (return %₁₄)
@@ -113,7 +113,7 @@ end
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
 7   --- method core.nothing %₆
     1   10
-    2   (call core.getfield slot₁/x :x)
+    2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
 8   TestMod.f
@@ -124,7 +124,7 @@ end
 13  --- method core.nothing %₁₂
     1   (= slot₂/x (call core.Box slot₂/x))
     2   TestMod.#f#g##0
-    3   (= slot₃/g (new %₂ slot₂/g))
+    3   (= slot₃/g (new %₂ slot₂/x))
     4   slot₃/g
     5   slot₃/g
     6   (call %₅)

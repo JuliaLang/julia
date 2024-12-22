@@ -227,7 +227,7 @@ end
 function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
     n_lhs = numchildren(lhs)
     if n_lhs > 0
-        iterstate = new_mutable_var(ctx, rhs, "iterstate")
+        iterstate = new_local_binding(ctx, rhs, "iterstate")
     end
 
     end_stmts = SyntaxList(ctx)
@@ -1031,7 +1031,7 @@ function expand_for(ctx, ex)
         end
 
         iter_ex = iterspec[2]
-        next = new_mutable_var(ctx, iterspec, "next")
+        next = new_local_binding(ctx, iterspec, "next")
         state = ssavar(ctx, iterspec, "state")
         collection = ssavar(ctx, iter_ex, "collection")
 
@@ -1368,7 +1368,7 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
     # the inner method for dispatch even when unused in the inner method body
     def_arg_names = map(arg_names) do arg
         kind(arg) == K"Placeholder" ?
-            new_mutable_var(ctx, arg, arg.name_val; kind=:argument) :
+            new_local_binding(ctx, arg, arg.name_val; kind=:argument) :
             arg
     end
     for def_idx = 1:length(arg_defaults)
@@ -1504,7 +1504,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
     # Add self argument
     if isnothing(self_name)
-        self_name = new_mutable_var(ctx, name, "#self#"; kind=:argument)
+        self_name = new_local_binding(ctx, name, "#self#"; kind=:argument)
     end
 
     # Expand remaining argument names and types
@@ -1522,7 +1522,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         if kind(aname) == K"tuple"
             # Argument destructuring
             is_nospecialize = getmeta(arg, :nospecialize, false)
-            n = new_mutable_var(ctx, aname, "destructured_arg_$i";
+            n = new_local_binding(ctx, aname, "destructured_arg_$i";
                                 kind=:argument, is_nospecialize=is_nospecialize)
             push!(body_stmts, @ast ctx aname [
                 K"local"(meta=CompileHints(:is_destructured_arg, true))
@@ -1967,7 +1967,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
         # Definition which takes `Any` for all arguments and uses
         # `Base.convert()` to convert those to the exact field type. Only
         # defined if at least one field type is not Any.
-        ctor_self = new_mutable_var(ctx, srcref, "#ctor-self#"; kind=:argument)
+        ctor_self = new_local_binding(ctx, srcref, "#ctor-self#"; kind=:argument)
         @ast ctx srcref [K"function"
             [K"call"
                  [K"::"
@@ -2068,7 +2068,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
     name = callex[1]
     if is_same_identifier_like(struct_name, name)
         # X(x,y)  ==>  (#ctor-self#::Type{X})(x,y)
-        ctor_self[] = new_mutable_var(ctx, callex, "#ctor-self#"; kind=:argument)
+        ctor_self[] = new_local_binding(ctx, callex, "#ctor-self#"; kind=:argument)
         @ast ctx callex [K"call"
             [K"::"
                 ctor_self[]
@@ -2078,7 +2078,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
         ]
     elseif kind(name) == K"curly" && is_same_identifier_like(struct_name, name[1])
         # X{T}(x,y)  ==>  (#ctor-self#::Type{X{T}})(x,y)
-        self = new_mutable_var(ctx, callex, "#ctor-self#"; kind=:argument)
+        self = new_local_binding(ctx, callex, "#ctor-self#"; kind=:argument)
         if numchildren(name) - 1 == length(struct_typevars)
             # Self fully parameterized - can be used as the full type to
             # rewrite new() calls in constructor body.
