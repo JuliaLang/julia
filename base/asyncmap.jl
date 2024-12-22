@@ -32,7 +32,7 @@ First, with `ntasks` undefined, each element is processed in a different task.
 julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
-5-element Array{UInt64,1}:
+5-element Vector{UInt64}:
  0x6e15e66c75c75853
  0x440f8819a1baa682
  0x9fb3eeadd0c83985
@@ -46,7 +46,7 @@ julia> length(unique(asyncmap(x->tskoid(), 1:5)))
 With `ntasks=2` all elements are processed in 2 tasks.
 ```julia-repl
 julia> asyncmap(x->tskoid(), 1:5; ntasks=2)
-5-element Array{UInt64,1}:
+5-element Vector{UInt64}:
  0x027ab1680df7ae94
  0xa23d2f80cd7cf157
  0x027ab1680df7ae94
@@ -65,7 +65,7 @@ julia> batch_func(input) = map(x->string("args_tuple: ", x, ", element_val: ", x
 batch_func (generic function with 1 method)
 
 julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
-5-element Array{String,1}:
+5-element Vector{String}:
  "args_tuple: (1,), element_val: 1, task: 9118321258196414413"
  "args_tuple: (2,), element_val: 2, task: 4904288162898683522"
  "args_tuple: (3,), element_val: 3, task: 9118321258196414413"

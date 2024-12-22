@@ -1313,7 +1313,7 @@ See also: [`circshift`](@ref).
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
