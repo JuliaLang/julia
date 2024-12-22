@@ -48,7 +48,7 @@ Generally it makes sense for `n` to equal the number of CPU threads (logical cor
 argument implicitly loads module [`Distributed`](@ref man-distributed).
 
 
-```julia
+```julia-repl
 $ julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)

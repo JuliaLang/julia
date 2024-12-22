@@ -355,7 +355,7 @@ julia> Int8[[1 2] [3 4]]
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
 
-```
+```julia
 A = [ F(x, y, ...) for x=rx, y=ry, ... ]
 ```
 

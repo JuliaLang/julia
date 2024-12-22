@@ -28,7 +28,7 @@ The following examples highlight execution in different tasks by returning
 the `objectid` of the tasks in which the mapping function is executed.
 
 First, with `ntasks` undefined, each element is processed in a different task.
-```
+```julia-repl
 julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
@@ -44,7 +44,7 @@ julia> length(unique(asyncmap(x->tskoid(), 1:5)))
 ```
 
 With `ntasks=2` all elements are processed in 2 tasks.
-```
+```julia-repl
 julia> asyncmap(x->tskoid(), 1:5; ntasks=2)
 5-element Array{UInt64,1}:
  0x027ab1680df7ae94
@@ -60,7 +60,7 @@ julia> length(unique(asyncmap(x->tskoid(), 1:5; ntasks=2)))
 With `batch_size` defined, the mapping function needs to be changed to accept an array
 of argument tuples and return an array of results. `map` is used in the modified mapping
 function to achieve this.
-```
+```julia-repl
 julia> batch_func(input) = map(x->string("args_tuple: ", x, ", element_val: ", x[1], ", task: ", tskoid()), input)
 batch_func (generic function with 1 method)
 
