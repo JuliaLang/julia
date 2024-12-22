@@ -1371,7 +1371,7 @@ julia> all(C .≈ 4*π)
 true
 
 julia> typeof(C)
-Vector{Float64,1} (alias for Array{Float64, 1})
+Vector{Float64} (alias for Array{Float64, 1})
 
 julia> dB = distribute(B);
 
