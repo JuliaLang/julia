@@ -748,7 +748,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[3], [3], [3]]
+[[3], [3], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 1
@@ -767,7 +767,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[1], [2], [3]]
+[[1], [2], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 3
