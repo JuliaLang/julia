@@ -824,7 +824,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
             end
 
             # process non control-flow statements
-            escape_stmt!(astate, pc, stmt)
+            analyze_stmt!(astate, pc, stmt)
             if !isempty(astate.changes)
                 excstate_excbb = apply_changes!(astate, pc)
                 empty!(astate.changes)
@@ -1312,22 +1312,22 @@ function add_conservative_changes!(astate::AnalysisState, pc::Int, args::Vector{
     return nothing
 end
 
-# Escape
-# ======
+# Analyze
+# =======
 # Subroutines to analyze the current statement and add `Change`s from it
 
-function escape_stmt!(astate::AnalysisState, pc::Int, @nospecialize(stmt))
+function analyze_stmt!(astate::AnalysisState, pc::Int, @nospecialize(stmt))
     @assert isempty(astate.changes) "`astate.changes` should have been applied"
     if isa(stmt, Expr)
         head = stmt.head
         if head === :call
-            escape_call!(astate, pc, stmt.args)
+            analyze_call!(astate, pc, stmt.args)
         elseif head === :invoke
-            escape_invoke!(astate, pc, stmt.args)
+            analyze_invoke!(astate, pc, stmt.args)
         elseif head === :new || head === :splatnew
-            escape_new!(astate, pc, stmt.args)
+            analyze_new!(astate, pc, stmt.args)
         elseif head === :foreigncall
-            escape_foreigncall!(astate, pc, stmt.args)
+            analyze_foreigncall!(astate, pc, stmt.args)
         elseif is_meta_expr_head(head)
             # meta expressions doesn't account for any usages
         elseif head === :the_exception || head === :pop_exception
@@ -1337,7 +1337,7 @@ function escape_stmt!(astate::AnalysisState, pc::Int, @nospecialize(stmt))
         elseif head === :gc_preserve_begin
             # GC preserve is handled by `escape_gc_preserve!`
         elseif head === :gc_preserve_end
-            escape_gc_preserve!(astate, pc, stmt.args)
+            analyze_gc_preserve!(astate, pc, stmt.args)
         elseif head === :static_parameter ||  # this exists statically, not interested in its escape
                head === :copyast ||           # XXX escape something?
                head === :isdefined ||         # returns `Bool`, nothing accounts for any escapes
@@ -1347,13 +1347,13 @@ function escape_stmt!(astate::AnalysisState, pc::Int, @nospecialize(stmt))
             add_conservative_changes!(astate, pc, stmt.args)
         end
     elseif isa(stmt, PhiNode)
-        escape_edges!(astate, pc, stmt.values)
+        analyze_edges!(astate, pc, stmt.values)
     elseif isa(stmt, PiNode)
         if isdefined(stmt, :val)
             add_alias_change!(astate, SSAValue(pc), stmt.val)
         end
     elseif isa(stmt, PhiCNode)
-        escape_edges!(astate, pc, stmt.values)
+        analyze_edges!(astate, pc, stmt.values)
     elseif isa(stmt, UpsilonNode)
         if isdefined(stmt, :val)
             add_alias_change!(astate, SSAValue(pc), stmt.val)
@@ -1370,7 +1370,7 @@ function escape_stmt!(astate::AnalysisState, pc::Int, @nospecialize(stmt))
     end
 end
 
-function escape_edges!(astate::AnalysisState, pc::Int, edges::Vector{Any})
+function analyze_edges!(astate::AnalysisState, pc::Int, edges::Vector{Any})
     ret = SSAValue(pc)
     for i in 1:length(edges)
         if isassigned(edges, i)
@@ -1427,8 +1427,8 @@ struct ArgEscapeCache
     end
 end
 
-# escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
-function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
+# analyze statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
+function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     codeinst = first(args)
     if codeinst isa MethodInstance
         mi = codeinst
@@ -1514,9 +1514,9 @@ function _from_interprocedural!(astate::AnalysisState, pc::Int, @nospecialize(ar
     end
 end
 
-# escape every argument `(args[6:length(args[3])])` and the name `args[1]`
+# analyze every argument `(args[6:length(args[3])])` and the name `args[1]`
 # TODO: we can apply a similar strategy like builtin calls to specialize some foreigncalls
-function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     nargs = length(args)
     if nargs < 6
         # invalid foreigncall, just escape everything
@@ -1549,7 +1549,7 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
-function escape_gc_preserve!(astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_gc_preserve!(astate::AnalysisState, pc::Int, args::Vector{Any})
     @assert length(args) == 1 "invalid :gc_preserve_end"
     val = args[1]
     @assert val isa SSAValue "invalid :gc_preserve_end"
@@ -1560,7 +1560,7 @@ function escape_gc_preserve!(astate::AnalysisState, pc::Int, args::Vector{Any})
     add_liveness_changes!(astate, beginargs)
 end
 
-function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     ft = argextype(first(args), astate.ir)
     f = singleton_type(ft)
     if f isa IntrinsicFunction
@@ -1571,7 +1571,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
         end
         # TODO needs to account for pointer operations?
     elseif f isa Builtin
-        result = escape_builtin!(f, astate, pc, args)
+        result = analyze_builtin!(f, astate, pc, args)
         if result === missing
             # if this call hasn't been handled by any of pre-defined handlers, escape it conservatively
             add_conservative_changes!(astate, pc, args)
@@ -1586,20 +1586,20 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
 end
 
-escape_builtin!(@nospecialize(f), _...) = missing
+analyze_builtin!(@nospecialize(f), _...) = missing
 
 # safe builtins
-escape_builtin!(::typeof(isa), _...) = false
-escape_builtin!(::typeof(typeof), _...) = false
-escape_builtin!(::typeof(sizeof), _...) = false
-escape_builtin!(::typeof(===), _...) = false
-escape_builtin!(::typeof(Core.donotdelete), _...) = false
+analyze_builtin!(::typeof(isa), _...) = false
+analyze_builtin!(::typeof(typeof), _...) = false
+analyze_builtin!(::typeof(sizeof), _...) = false
+analyze_builtin!(::typeof(===), _...) = false
+analyze_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
-escape_builtin!(::typeof(isdefined), _...) = false
-escape_builtin!(::typeof(throw), _...) = false
-escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
+analyze_builtin!(::typeof(isdefined), _...) = false
+analyze_builtin!(::typeof(throw), _...) = false
+analyze_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
-function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
     f, cond, th, el = args
     ret = SSAValue(pc)
@@ -1617,14 +1617,14 @@ function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args:
     return false
 end
 
-function escape_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 3 || return false
     f, obj, typ = args
     add_alias_change!(astate, SSAValue(pc), obj)
     return false
 end
 
-function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any}, add_liveness::Bool=true)
+function analyze_new!(astate::AnalysisState, pc::Int, args::Vector{Any}, add_liveness::Bool=true)
     obj = SSAValue(pc)
     nargs = length(args)
     typ = widenconst(argextype(obj, astate.ir))
@@ -1658,13 +1658,13 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any}, add_live
     end
 end
 
-function escape_builtin!(::typeof(tuple), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(tuple), astate::AnalysisState, pc::Int, args::Vector{Any})
     # `add_liveness = false` since it will be added in `escape_call!` instead
-    escape_new!(astate, pc, args, #=add_liveness=#false)
+    analyze_new!(astate, pc, args, #=add_liveness=#false)
     return true # `tuple` call is always no throw
 end
 
-function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 3 || return false
     ir, bbstate = astate.ir, astate.currstate
     obj = args[2]
@@ -1721,7 +1721,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     return nothrow
 end
 
-function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return false
     ir, bbstate = astate.ir, astate.currstate
     obj = args[2]
@@ -1761,7 +1761,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     return false
 end
 
-function escape_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})
+function analyze_builtin!(::typeof(Core.finalizer), astate::AnalysisState, pc::Int, args::Vector{Any})
     if length(args) ≥ 3
         obj = args[3]
         add_liveness_change!(astate, obj) # TODO setup a proper FinalizerEscape?
