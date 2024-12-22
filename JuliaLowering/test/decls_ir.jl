@@ -2,20 +2,22 @@
 # Local declaration with type
 local x::T = 1
 #---------------------
-1   (= slot₂/tmp 1)
-2   slot₂/tmp
-3   TestMod.T
-4   (call core.isa %₂ %₃)
-5   (gotoifnot %₄ label₇)
-6   (goto label₁₂)
-7   TestMod.T
-8   slot₂/tmp
-9   (call top.convert %₇ %₈)
-10  TestMod.T
-11  (= slot₂/tmp (call core.typeassert %₉ %₁₀))
-12  slot₂/tmp
-13  (= slot₁/x %₁₂)
-14  (return 1)
+1   (newvar slot₁)
+2   1
+3   (= slot₂/tmp %₂)
+4   slot₂/tmp
+5   TestMod.T
+6   (call core.isa %₄ %₅)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₄)
+9   TestMod.T
+10  slot₂/tmp
+11  (call top.convert %₉ %₁₀)
+12  TestMod.T
+13  (= slot₂/tmp (call core.typeassert %₁₁ %₁₂))
+14  slot₂/tmp
+15  (= slot₁/x %₁₄)
+16  (return %₂)
 
 ########################################
 # const

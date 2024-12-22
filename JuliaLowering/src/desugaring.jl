@@ -1629,6 +1629,12 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 ]
             ]
         ]
+        if !isnothing(bare_func_name)
+            # K"function_decl" ensures this name is defined
+            bare_func_name
+        else
+            "nothing"::K"core"
+        end
     ]
 end
 

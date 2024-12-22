@@ -362,10 +362,10 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                             init_closure_args...
                         ]
                     ]
-                    func_name
+                    ::K"TOMBSTONE"
                 ]
             else
-                func_name
+                @ast ctx ex (::K"TOMBSTONE")
             end
         else
             # Single-arg K"method" has the side effect of creating a global
@@ -394,9 +394,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # * Renumbering SSA vars
             # * Ensuring that moved locals become slots in the top level thunk
             push!(ctx.toplevel_stmts, body)
-            name
+            @ast ctx ex (::K"TOMBSTONE")
         else
-            _convert_closures(ctx, body)
+            @ast ctx ex [K"block"
+                body
+                ::K"TOMBSTONE"
+            ]
         end
     else
         mapchildren(e->_convert_closures(ctx, e), ctx, ex)

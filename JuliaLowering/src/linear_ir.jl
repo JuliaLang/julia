@@ -804,6 +804,52 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end
 end
 
+function _remove_vars_with_isdefined_check!(vars, ex)
+    if is_leaf(ex) || is_quoted(ex)
+        return
+    elseif kind(ex) == K"isdefined"
+        delete!(vars, ex[1].var_id)
+    else
+        for e in children(ex)
+            _remove_vars_with_isdefined_check!(vars, e)
+        end
+    end
+end
+
+# Find newvar nodes that are unnecessary because
+# 1. The variable is not captured and 
+# 2. The variable is assigned before any branches.
+#
+# This is used to remove newvar nodes that are not needed for re-initializing
+# variables to undefined (see Julia issue #11065). It doesn't look for variable
+# *uses*, because any variables used-before-def that also pass this test are
+# *always* used undefined, and therefore don't need to be reinitialized. The
+# one exception to that is `@isdefined`, which can observe an undefined
+# variable without throwing an error.
+function unnecessary_newvar_ids(ctx, stmts)
+    vars = Set{IdTag}()
+    ids_assigned_before_branch = Set{IdTag}()
+    for ex in stmts
+        _remove_vars_with_isdefined_check!(vars, ex)
+        k = kind(ex)
+        if k == K"newvar"
+            id = ex[1].var_id
+            if !lookup_binding(ctx, id).is_captured
+                push!(vars, id)
+            end
+        elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
+            empty!(vars)
+        elseif k == K"="
+            id = ex[1].var_id
+            if id in vars
+                delete!(vars, id)
+                push!(ids_assigned_before_branch, id)
+            end
+        end
+    end
+    ids_assigned_before_branch
+end
+
 # flisp: compile-body
 function compile_body(ctx, ex)
     compile(ctx, ex, true, true)
@@ -834,7 +880,12 @@ function compile_body(ctx, ex)
         @assert kind(ctx.code[i]) == K"TOMBSTONE"
         ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
     end
-    # TODO: Filter out any newvar nodes where the arg is definitely initialized
+
+    # Filter out unnecessary newvar nodes
+    ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
+    filter!(ctx.code) do ex
+        !(kind(ex) == K"newvar" && ex[1].var_id in ids_assigned_before_branch)
+    end
 end
 
 #-------------------------------------------------------------------------------

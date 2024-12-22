@@ -61,7 +61,7 @@ function _register_kinds()
             "lambda"
             # [K"function_decl" name]
             # Declare a zero-method generic function with global `name` or
-            # creates a closure object and binds it to the local `name`.
+            # creates a closure object and assigns it to the local `name`.
             "function_decl"
             # [K"function_type name]
             # Evaluates to the type of the function or closure with given `name`

@@ -245,23 +245,24 @@ let
     (; x::T) = rhs
 end
 #---------------------
-1   TestMod.rhs
-2   (call top.getproperty %₁ :x)
-3   (= slot₂/tmp %₂)
-4   slot₂/tmp
-5   TestMod.T
-6   (call core.isa %₄ %₅)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₄)
-9   TestMod.T
-10  slot₂/tmp
-11  (call top.convert %₉ %₁₀)
-12  TestMod.T
-13  (= slot₂/tmp (call core.typeassert %₁₁ %₁₂))
-14  slot₂/tmp
-15  (= slot₁/x %₁₄)
-16  TestMod.rhs
-17  (return %₁₆)
+1   (newvar slot₁)
+2   TestMod.rhs
+3   (call top.getproperty %₂ :x)
+4   (= slot₂/tmp %₃)
+5   slot₂/tmp
+6   TestMod.T
+7   (call core.isa %₅ %₆)
+8   (gotoifnot %₇ label₁₀)
+9   (goto label₁₅)
+10  TestMod.T
+11  slot₂/tmp
+12  (call top.convert %₁₀ %₁₁)
+13  TestMod.T
+14  (= slot₂/tmp (call core.typeassert %₁₂ %₁₃))
+15  slot₂/tmp
+16  (= slot₁/x %₁₅)
+17  TestMod.rhs
+18  (return %₁₇)
 
 ########################################
 # Error: Property destructuring with frankentuple

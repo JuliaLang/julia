@@ -473,7 +473,7 @@ end
 function add_local_decls!(ctx, stmts, srcref, scope)
     # Add local decls to start of block so that closure conversion can
     # initialize if necessary.
-    for id in values(scope.var_ids)
+    for id in sort!(collect(values(scope.var_ids)))
         binfo = lookup_binding(ctx, id)
         if binfo.kind == :local
             push!(stmts, @ast ctx srcref [K"local" id::K"BindingId"])

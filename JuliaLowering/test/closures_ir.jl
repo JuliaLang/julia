@@ -8,8 +8,7 @@ let
 end
 #---------------------
 1   (= slot₂ (call core.Box))
-2   (newvar slot₁)
-3   --- thunk
+2   --- thunk
     1   (global TestMod.#f##0)
     2   (call core.svec)
     3   (call core.svec :x)
@@ -21,11 +20,11 @@ end
     9   (call core.svec core.Box)
     10  (call core._typebody! %₅ %₉)
     11  (return core.nothing)
-4   TestMod.#f##0
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 3 =#)))))
-8   --- method core.nothing %₇
+3   TestMod.#f##0
+4   (call core.svec %₃ core.Any)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
+7   --- method core.nothing %₆
     1   TestMod.+
     2   (call core.getfield slot₁/x :x)
     3   (call core.isdefined %₂ :contents)
@@ -36,15 +35,14 @@ end
     8   (call core.getfield %₂ :contents)
     9   (call %₁ %₈ slot₂/y)
     10  (return %₉)
-9   1
-10  slot₂/x
-11  (call core.setfield! %₁₀ :contents %₉)
-12  TestMod.#f##0
-13  slot₂/f
-14  (= slot₁/f (new %₁₂ %₁₃))
-15  slot₁/f
-16  slot₁/f
-17  (return %₁₆)
+8   1
+9   slot₂/x
+10  (call core.setfield! %₉ :contents %₈)
+11  TestMod.#f##0
+12  slot₂/f
+13  (= slot₁/f (new %₁₁ %₁₂))
+14  slot₁/f
+15  (return %₁₄)
 
 ########################################
 # Closure which sets the value of a captured variable
@@ -56,8 +54,7 @@ let
 end
 #---------------------
 1   (= slot₂ (call core.Box))
-2   (newvar slot₁)
-3   --- thunk
+2   --- thunk
     1   (global TestMod.#f##1)
     2   (call core.svec)
     3   (call core.svec :x)
@@ -69,24 +66,23 @@ end
     9   (call core.svec core.Box)
     10  (call core._typebody! %₅ %₉)
     11  (return core.nothing)
-4   TestMod.#f##1
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 3 =#)))))
-8   --- method core.nothing %₇
+3   TestMod.#f##1
+4   (call core.svec %₃ core.Any)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
+7   --- method core.nothing %₆
     1   2
     2   (call core.getfield slot₁/x :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
-9   1
-10  slot₂/x
-11  (call core.setfield! %₁₀ :contents %₉)
-12  TestMod.#f##1
-13  slot₂/f
-14  (= slot₁/f (new %₁₂ %₁₃))
-15  slot₁/f
-16  slot₁/f
-17  (return %₁₆)
+8   1
+9   slot₂/x
+10  (call core.setfield! %₉ :contents %₈)
+11  TestMod.#f##1
+12  slot₂/f
+13  (= slot₁/f (new %₁₁ %₁₂))
+14  slot₁/f
+15  (return %₁₄)
 
 ########################################
 # Function where arguments are captured into a closure
@@ -127,44 +123,21 @@ end
 12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
 13  --- method core.nothing %₁₂
     1   (= slot₂/x (call core.Box slot₂/x))
-    2   slot₂/x
-    3   (call core.isdefined %₂ :contents)
-    4   (gotoifnot %₃ label₆)
-    5   (goto label₈)
-    6   (newvar slot₅/x)
-    7   slot₅/x
-    8   (call core.getfield %₂ :contents)
-    9   (call core.Box %₈)
-    10  (call core.setfield! slot₂/x :contents %₉)
-    11  (newvar slot₃)
-    12  TestMod.#f#g##0
-    13  slot₂/g
-    14  (call core.isdefined %₁₃ :contents)
-    15  (gotoifnot %₁₄ label₁₇)
-    16  (goto label₁₉)
-    17  (newvar slot₆/x)
-    18  slot₆/x
-    19  (call core.getfield %₁₃ :contents)
-    20  (= slot₃/g (new %₁₂ %₁₉))
-    21  slot₃/g
-    22  slot₃/g
-    23  slot₃/g
-    24  (call %₂₃)
-    25  slot₂/x
-    26  (call core.isdefined %₂₅ :contents)
-    27  (gotoifnot %₂₆ label₂₉)
-    28  (goto label₃₁)
-    29  (newvar slot₇/x)
-    30  slot₇/x
-    31  (call core.getfield %₂₅ :contents)
-    32  (call core.isdefined %₃₁ :contents)
-    33  (gotoifnot %₃₂ label₃₅)
-    34  (goto label₃₇)
-    35  (newvar slot₄/x)
-    36  slot₄/x
-    37  (call core.getfield %₃₁ :contents)
-    38  (return %₃₇)
-14  (return %₁₂)
+    2   TestMod.#f#g##0
+    3   (= slot₃/g (new %₂ slot₂/g))
+    4   slot₃/g
+    5   slot₃/g
+    6   (call %₅)
+    7   slot₂/x
+    8   (call core.isdefined %₇ :contents)
+    9   (gotoifnot %₈ label₁₁)
+    10  (goto label₁₃)
+    11  (newvar slot₄/x)
+    12  slot₄/x
+    13  (call core.getfield %₇ :contents)
+    14  (return %₁₃)
+14  TestMod.f
+15  (return %₁₄)
 
 ########################################
 # Anonymous function syntax with ->

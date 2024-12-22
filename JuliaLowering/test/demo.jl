@@ -13,7 +13,10 @@ function var_kind(ctx, ex)
     if isnothing(id)
         return nothing
     end
-    return lookup_binding(ctx, id).kind
+    binfo = lookup_binding(ctx, id)
+    return binfo.kind == :local ?
+        (binfo.is_captured ? :local_captured : :local) :
+        binfo.kind
 end
 
 # Extract module of globals for highlighting
@@ -163,8 +166,21 @@ eval(JuliaLowering.@SyntaxTree :(baremodule M
         end
     end
 
+    macro mmm(ex)
+        :(let
+              local x
+              function f()
+                  (x, $ex)
+              end
+              f()
+          end)
+    end
+
 end))
 
+# module M
+# end
+#
 #-------------------------------------------------------------------------------
 # Demos of the prototype
 
@@ -701,6 +717,52 @@ function f(x=1, ys...=(1,2)...)
 end
 """
 
+src = """
+let
+    x = 10
+    function f(y)
+        x + y
+    end
+end
+"""
+
+src = """
+begin
+    local f, set_x
+    local x = 10
+    local y = 100
+    function f()
+        z = 1 + y - x
+        z
+    end
+    function set_x()
+        x = 1
+    end
+    println("f = ", f())
+    set_x()
+    y = 10
+    println("f = ", f())
+end
+"""
+
+src = """
+x->y
+"""
+
+src = """
+struct X
+    x
+    f() = new(1)
+    X() = f()
+    X(x) = new(x)
+    X(y,z)::ReallyXIPromise = new(y+z)
+    "
+    Docs for X constructor
+    "
+    X(a,b,c) = new(a)
+end
+"""
+
 # TODO: fix this - it's interpreted in a bizarre way as a kw call.
 # src = """
 # function f(x=y=1)
@@ -723,7 +785,7 @@ ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 @info "Desugared" ex_desugar formatsrc(ex_desugar, color_by=:scope_layer)
 
 ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
-@info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=:var_id)
+@info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=e->var_kind(ctx2,e))
 
 ctx4, ex_converted = JuliaLowering.convert_closures(ctx3, ex_scoped)
 @info "Closure converted" ex_converted formatsrc(ex_converted, color_by=:var_id)

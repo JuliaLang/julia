@@ -115,18 +115,19 @@ let
     end
 end
 #---------------------
-1   (enter label₇)
-2   TestMod.a
-3   (leave %₁)
-4   TestMod.c
-5   (= slot₂/try_result %₄)
-6   (goto label₁₀)
-7   TestMod.b
-8   (= slot₂/try_result %₇)
-9   (pop_exception %₁)
-10  slot₂/try_result
-11  (= slot₁/z %₁₀)
-12  (return %₁₀)
+1   (newvar slot₁)
+2   (enter label₈)
+3   TestMod.a
+4   (leave %₂)
+5   TestMod.c
+6   (= slot₂/try_result %₅)
+7   (goto label₁₁)
+8   TestMod.b
+9   (= slot₂/try_result %₈)
+10  (pop_exception %₂)
+11  slot₂/try_result
+12  (= slot₁/z %₁₁)
+13  (return %₁₁)
 
 ########################################
 # try/catch/else, not value/tail
@@ -183,20 +184,21 @@ let
     end
 end
 #---------------------
-1   (enter label₇)
-2   (= slot₃/finally_tag -1)
-3   TestMod.a
-4   (= slot₂/try_result %₃)
-5   (leave %₁)
-6   (goto label₈)
-7   (= slot₃/finally_tag 1)
-8   TestMod.b
-9   (call core.=== slot₃/finally_tag 1)
-10  (gotoifnot %₉ label₁₂)
-11  (call top.rethrow)
-12  slot₂/try_result
-13  (= slot₁/z %₁₂)
-14  (return %₁₂)
+1   (newvar slot₁)
+2   (enter label₈)
+3   (= slot₃/finally_tag -1)
+4   TestMod.a
+5   (= slot₂/try_result %₄)
+6   (leave %₂)
+7   (goto label₉)
+8   (= slot₃/finally_tag 1)
+9   TestMod.b
+10  (call core.=== slot₃/finally_tag 1)
+11  (gotoifnot %₁₀ label₁₃)
+12  (call top.rethrow)
+13  slot₂/try_result
+14  (= slot₁/z %₁₃)
+15  (return %₁₃)
 
 ########################################
 # basic try/finally, not value/tail
