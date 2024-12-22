@@ -366,7 +366,7 @@ The result is an N-d dense array with dimensions that are the concatenation of t
 of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns a scalar.
 
 The following example computes a weighted average of the current element and its left and right
-neighbor along a 1-d grid. :
+neighbor along a 1-d grid:
 
 ```julia-repl
 julia> x = rand(8)

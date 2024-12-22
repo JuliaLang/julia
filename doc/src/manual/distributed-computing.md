@@ -734,7 +734,7 @@ serialization/deserialization of data. Consequently, the call refers to the same
 as passed - no copies are created. This behavior is highlighted below:
 
 ```julia-repl
-julia> using Distributed;
+julia> using Distributed
 
 julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
 
