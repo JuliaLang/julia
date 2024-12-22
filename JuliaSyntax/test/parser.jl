@@ -234,9 +234,10 @@ tests = [
         ".*(x)"       =>  "(call (. *) x)"
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"   =>  "(call + a b)"
-        ".+(a,)"   =>  "(call (. +) a)"
+        "+(a,)"    =>  "(call-, + a)"
+        ".+(a,)"   =>  "(call-, (. +) a)"
         "(.+)(a)"  =>  "(call (parens (. +)) a)"
-        "+(a=1,)"  =>  "(call + (= a 1))"
+        "+(a=1,)"  =>  "(call-, + (= a 1))"
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
@@ -251,7 +252,7 @@ tests = [
         # Prefix calls have higher precedence than ^
         "+(a,b)^2"  =>  "(call-i (call + a b) ^ 2)"
         "+(a,b)(x)^2"  =>  "(call-i (call (call + a b) x) ^ 2)"
-        "<:(a,)"  =>  "(<: a)"
+        "<:(a,)"  =>  "(<:-, a)"
         # Unary function calls with brackets as grouping, not an arglist
         ".+(a)"   =>  "(dotcall-pre + (parens a))"
         "+(a;b)"  =>  "(call-pre + (block-p a b))"
@@ -306,6 +307,7 @@ tests = [
         # Really for parse_where
         "x where \n {T}"  =>  "(where x (braces T))"
         "x where {T,S}"  =>  "(where x (braces T S))"
+        "x where {T,S,}" =>  "(where x (braces-, T S))"
         "x where {T S}"  =>  "(where x (bracescat (row T S)))"
         "x where {y for y in ys}"  =>  "(where x (braces (generator y (iteration (in y ys)))))"
         "x where T"  =>  "(where x T)"
@@ -364,11 +366,13 @@ tests = [
 
         # calls with brackets
         "f(a,b)"  => "(call f a b)"
+        "f(a,)"   => "(call-, f a)"
         "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))"
         "f(a; b; c)" => "(call f a (parameters b) (parameters c))"
         "(a=1)()" =>  "(call (parens (= a 1)))"
         "f (a)" => "(call f (error-t) a)"
         "@x(a, b)"   =>  "(macrocall-p @x a b)"
+        "@x(a, b,)"  =>  "(macrocall-p-, @x a b)"
         "A.@x(y)"    =>  "(macrocall-p (. A @x) y)"
         "A.@x(y).z"  =>  "(. (macrocall-p (. A @x) y) z)"
         "f(y for x = xs; a)" => "(call f (generator y (iteration (in x xs))) (parameters a))"
@@ -407,6 +411,7 @@ tests = [
         "A.@B.x"    =>  "(macrocall (. (. A B) (error-t) @x))"
         "@M.(x)"    =>  "(macrocall (dotcall @M (error-t) x))"
         "f.(a,b)"   =>  "(dotcall f a b)"
+        "f.(a,b,)"  =>  "(dotcall-, f a b)"
         "f.(a=1; b=2)" => "(dotcall f (= a 1) (parameters (= b 2)))"
         "(a=1).()" =>  "(dotcall (parens (= a 1)))"
         "f. (x)"    =>  "(dotcall f (error-t) x)"
@@ -577,9 +582,10 @@ tests = [
         "macro (\$f)()  end"   =>  "(macro (call (parens (\$ f))) (block))"
         "function (x) body end"=>  "(function (tuple-p x) (block body))"
         "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
+        "function (x,y,) end"  =>  "(function (tuple-p-, x y) (block))"
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"
         "function (;x=1) end"  =>  "(function (tuple-p (parameters (= x 1))) (block))"
-        "function (f(x),) end" =>  "(function (tuple-p (call f x)) (block))"
+        "function (f(x),) end" =>  "(function (tuple-p-, (call f x)) (block))"
         "function (@f(x);) end" => "(function (tuple-p (macrocall-p @f x) (parameters)) (block))"
         "function (@f(x)...) end" =>  "(function (tuple-p (... (macrocall-p @f x))) (block))"
         "function (@f(x)) end" =>  "(function (error (tuple-p (macrocall-p @f x))) (block))"
@@ -715,7 +721,7 @@ tests = [
     JuliaSyntax.parse_paren => [
         # Tuple syntax with commas
         "()"          =>  "(tuple-p)"
-        "(x,)"        =>  "(tuple-p x)"
+        "(x,)"        =>  "(tuple-p-, x)"
         "(x,y)"       =>  "(tuple-p x y)"
         "(x=1, y=2)"  =>  "(tuple-p (= x 1) (= y 2))"
         # Named tuples with initial semicolon
@@ -827,11 +833,12 @@ tests = [
         "="    => "(error =)"
         # parse_cat
         "[]"        =>  "(vect)"
-        "[x,]"      =>  "(vect x)"
-        "[x\n,,]"   =>  "(vect x (error-t ✘))"
+        "[x,]"      =>  "(vect-, x)"
+        "[x,y,]"    =>  "(vect-, x y)"
+        "[x\n,,]"   =>  "(vect-, x (error-t ✘))"
         "[x]"       =>  "(vect x)"
         "[x \n ]"   =>  "(vect x)"
-        "[x \n, ]"  =>  "(vect x)"
+        "[x \n, ]"  =>  "(vect-, x)"
         "[x"        =>  "(vect x (error-t))"
         "[x \n\n ]" =>  "(vect x)"
         "[x for a in as]"  =>  "(comprehension (generator x (iteration (in a as))))"
@@ -849,10 +856,10 @@ tests = [
         "(x for a in as if z)" => "(parens (generator x (filter (iteration (in a as)) z)))"
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
-        "[x, y]"        =>  "(vect x y)"
+        "[x, y,]"       =>  "(vect-, x y)"
         "[x,\n y]"      =>  "(vect x y)"
         "[x\n, y]"      =>  "(vect x y)"
-        "[x\n,, y]"     =>  "(vect x (error-t ✘ y))"
+        "[x\n,, y]"     =>  "(vect-, x (error-t ✘ y))"
         "[x,y ; z]"     =>  "(vect x y (parameters z))"
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
@@ -862,6 +869,8 @@ tests = [
         ":(::\n)" => "(quote-: (parens ::))"
         "(function f \n end)" => "(parens (function f))"
         # braces
+        "{x,y}"      =>  "(braces x y)"
+        "{x,y,}"     =>  "(braces-, x y)"
         "{x y}"      =>  "(bracescat (row x y))"
         ((v=v"1.7",), "{x ;;; y}") =>  "(bracescat (nrow-3 x y))"
         # Macro names can be keywords

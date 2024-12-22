@@ -115,6 +115,7 @@ JuliaSyntax.has_flags
 JuliaSyntax.TRIPLE_STRING_FLAG
 JuliaSyntax.RAW_STRING_FLAG
 JuliaSyntax.PARENS_FLAG
+JuliaSyntax.TRAILING_COMMA_FLAG
 JuliaSyntax.COLON_QUOTE
 JuliaSyntax.TOPLEVEL_SEMICOLONS_FLAG
 JuliaSyntax.MUTABLE_FLAG
