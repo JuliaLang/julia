@@ -339,6 +339,131 @@ The second step uses this metadata to
 * Lower const and non-const global assignments
 * TODO: probably more here.
 
+
+### Q&A
+
+#### When does `function` introduce a closure?
+
+Closures are just functions where the name of the function is *local* in scope.
+How does the function name become a local? The `function` keyword acts like an
+assignment to the function name for the purposes of scope resolution. Thus
+`function f() body end` is rather like `f = ()->body` and may result in the
+symbol `f` being either `local` or `global`. Like other assignments, `f` may be
+declared global or local explicitly, but if not `f` is subject to the usual
+rules for assignments inside scopes. For example, inside a `let` scope
+`function f() ...` would result in the symbol `f` being local.
+
+Examples:
+
+```julia
+begin
+    # f is global because `begin ... end` does not introduce a scope
+    function f()
+        body
+    end
+
+    # g is a closure because `g` is explicitly declared local
+    local g
+    function g()
+        body
+    end
+end
+
+let
+    # f is local so this is a closure becuase `let ... end` introduces a scope
+    function f()
+        body
+    end
+
+    # g is not a closure because `g` is declared global
+    global g
+    function g()
+        body
+    end
+end
+```
+
+#### How do captures work with non-closures?
+
+Yes it's true, you can capture local variables into global methods. For example:
+
+```julia
+begin
+    local x = 1
+    function f(y)
+        x + y
+    end
+    x = 2
+end
+```
+
+The way this works is to put `x` in a `Box` and interpolate it into the AST of
+`f` (the `Box` can be eliminated in some cases, but not here). Essentially this
+lowers to code which is almost-equivalent to the following:
+
+```julia
+begin
+    local x = Core.Box(1)
+    @eval function f(y)
+        $(x.contents) + y
+    end
+    x.contents = 2
+end
+```
+
+#### How do captures work with closures with multiple methods?
+
+Sometimes you might want a closure with multiple methods, but those methods
+might capture different local variables. For example,
+
+```julia
+let
+    x = 1
+    y = 1.5
+    function f(xx::Int)
+        xx + x
+    end
+    function f(yy::Float64)
+        yy + y
+    end
+
+    f(42)
+end
+```
+
+In this case, the closure type must capture both `x` and `y` and the generated
+code looks rather like this:
+
+```julia
+struct TheClosureType
+    x
+    y
+end
+
+let
+    x = 1
+    y = 1.5
+    f = TheClosureType(x,y)
+    function (self::TheClosureType)(xx::Int)
+        xx + self.x
+    end
+    function (self::TheClosureType)(yy::Int)
+        yy + self.y
+    end
+
+    f(42)
+end
+```
+
+#### When are `method` defs lifted to top level?
+
+Closure method definitions must be lifted to top level whenever the definitions
+appear inside a function. This is allow efficient compilation and avoid world
+age issues.
+
+Conversely, when method defs appear in top level code, they are executed
+inline.
+
 ## Pass 5: Convert to untyped IR
 
 This pass is implemented in `linear_ir.jl`.

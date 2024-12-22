@@ -25,21 +25,24 @@ end
 
 ########################################
 # short form function def, not chain of assignments
-let
+begin
+    local a
     a = b() = c = d
 end
 #---------------------
-1   (method :b)
-2   (call core.Typeof %₁)
-3   (call core.svec %₂)
-4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 2 =#)))))
-6   --- method core.nothing %₅
+1   (method TestMod.b)
+2   TestMod.b
+3   (call core.Typeof %₂)
+4   (call core.svec %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
+7   --- method core.nothing %₆
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)
-7   (= slot₁/a %₁)
-8   (return %₁)
+8   TestMod.b
+9   (= slot₁/a %₈)
+10  (return %₈)
 
 ########################################
 # a.b = ... => setproperty! assignment
@@ -73,23 +76,24 @@ let
     x
 end
 #---------------------
-1   TestMod.f
-2   (call %₁)
-3   (= slot₂/tmp %₂)
-4   slot₂/tmp
-5   TestMod.T
-6   (call core.isa %₄ %₅)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₄)
-9   TestMod.T
-10  slot₂/tmp
-11  (call top.convert %₉ %₁₀)
-12  TestMod.T
-13  (= slot₂/tmp (call core.typeassert %₁₁ %₁₂))
-14  slot₂/tmp
-15  (= slot₁/x %₁₄)
-16  slot₁/x
-17  (return %₁₆)
+1   (newvar slot₁/x)
+2   TestMod.f
+3   (call %₂)
+4   (= slot₂/tmp %₃)
+5   slot₂/tmp
+6   TestMod.T
+7   (call core.isa %₅ %₆)
+8   (gotoifnot %₇ label₁₀)
+9   (goto label₁₅)
+10  TestMod.T
+11  slot₂/tmp
+12  (call top.convert %₁₀ %₁₁)
+13  TestMod.T
+14  (= slot₂/tmp (call core.typeassert %₁₂ %₁₃))
+15  slot₂/tmp
+16  (= slot₁/x %₁₅)
+17  slot₁/x
+18  (return %₁₇)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl

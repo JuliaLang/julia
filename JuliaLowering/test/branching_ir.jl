@@ -7,11 +7,13 @@ begin
     end
 end
 #---------------------
-1   slot₁/a
-2   (gotoifnot %₁ label₅)
-3   slot₂/b
-4   (return %₃)
-5   (return core.nothing)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   slot₁/a
+4   (gotoifnot %₃ label₇)
+5   slot₂/b
+6   (return %₅)
+7   (return core.nothing)
 
 ########################################
 # Branching, !tail && !value
@@ -23,11 +25,14 @@ begin
     c
 end
 #---------------------
-1   slot₁/a
-2   (gotoifnot %₁ label₄)
-3   slot₂/b
-4   slot₃/c
-5   (return %₄)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   slot₁/a
+5   (gotoifnot %₄ label₇)
+6   slot₂/b
+7   slot₃/c
+8   (return %₇)
 
 ########################################
 # Branching with else
@@ -40,12 +45,15 @@ begin
     end
 end
 #---------------------
-1   slot₁/a
-2   (gotoifnot %₁ label₅)
-3   slot₂/b
-4   (return %₃)
-5   slot₃/c
-6   (return %₅)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   slot₁/a
+5   (gotoifnot %₄ label₈)
+6   slot₂/b
+7   (return %₆)
+8   slot₃/c
+9   (return %₈)
 
 ########################################
 # Branching with else, !tail && !value
@@ -59,13 +67,17 @@ begin
     d
 end
 #---------------------
-1   slot₁/a
-2   (gotoifnot %₁ label₅)
-3   slot₂/b
-4   (goto label₆)
-5   slot₃/c
-6   slot₄/d
-7   (return %₆)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
+5   slot₁/a
+6   (gotoifnot %₅ label₉)
+7   slot₂/b
+8   (goto label₁₀)
+9   slot₃/c
+10  slot₄/d
+11  (return %₁₀)
 
 ########################################
 # Blocks compile directly to branches
@@ -76,14 +88,18 @@ begin
    end
 end
 #---------------------
-1   slot₁/a
-2   slot₂/b
-3   (gotoifnot %₂ label₈)
-4   slot₃/c
-5   (gotoifnot %₄ label₈)
-6   slot₄/d
-7   (return %₆)
-8   (return core.nothing)
+1   (newvar slot₁/a)
+2   (newvar slot₂/b)
+3   (newvar slot₃/c)
+4   (newvar slot₄/d)
+5   slot₁/a
+6   slot₂/b
+7   (gotoifnot %₆ label₁₂)
+8   slot₃/c
+9   (gotoifnot %₈ label₁₂)
+10  slot₄/d
+11  (return %₁₀)
+12  (return core.nothing)
 
 ########################################
 # symbolic goto forward jump

@@ -15,23 +15,28 @@ end
 
 ########################################
 # @islocal with function arguments
-let y = 2
+begin
+    local y = 2
     function f(x)
         @islocal(a), @islocal(x), @islocal(y)
     end
 end
 #---------------------
-1   2
-2   (= slot₁/y %₁)
-3   (method :f)
-4   (call core.Typeof %₃)
-5   (call core.svec %₄ core.Any)
-6   (call core.svec)
-7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 2 =#)))))
-8   --- method core.nothing %₇
+1   (= slot₁/y (call core.Box))
+2   2
+3   slot₁/y
+4   (call core.setfield! %₃ :contents %₂)
+5   (method TestMod.f)
+6   TestMod.f
+7   (call core.Typeof %₆)
+8   (call core.svec %₇ core.Any)
+9   (call core.svec)
+10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 3 =#)))))
+11  --- method core.nothing %₁₀
     1   (call core.tuple false true true)
     2   (return %₁)
-9   (return %₃)
+12  TestMod.f
+13  (return %₁₂)
 
 ########################################
 # @islocal with global
@@ -51,14 +56,15 @@ begin
     @locals
 end
 #---------------------
-1   (global TestMod.x)
-2   (call core.apply_type top.Dict core.Symbol core.Any)
-3   (call %₂)
-4   (isdefined slot₁/y)
-5   (gotoifnot %₄ label₈)
-6   slot₁/y
-7   (call top.setindex! %₃ %₆ :y)
-8   (return %₃)
+1   (newvar slot₁/y)
+2   (global TestMod.x)
+3   (call core.apply_type top.Dict core.Symbol core.Any)
+4   (call %₃)
+5   (isdefined slot₁/y)
+6   (gotoifnot %₅ label₉)
+7   slot₁/y
+8   (call top.setindex! %₄ %₇ :y)
+9   (return %₄)
 
 ########################################
 # @locals with function args (TODO: static parameters)
@@ -66,19 +72,21 @@ function f(z)
     @locals
 end
 #---------------------
-1   (method :f)
-2   (call core.Typeof %₁)
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+1   (method TestMod.f)
+2   TestMod.f
+3   (call core.Typeof %₂)
+4   (call core.svec %₃ core.Any)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
+7   --- method core.nothing %₆
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (isdefined slot₂/z)
     4   (gotoifnot %₃ label₆)
     5   (call top.setindex! %₂ slot₂/z :z)
     6   (return %₂)
-7   (return %₁)
+8   TestMod.f
+9   (return %₈)
 
 ########################################
 # Error: Duplicate function argument names

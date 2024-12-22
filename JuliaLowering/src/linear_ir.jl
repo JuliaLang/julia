@@ -278,7 +278,7 @@ function emit_return(ctx, srcref, ex)
         # TODO: Why does flisp lowering create a mutable variable here even
         # though we don't mutate it?
         # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
-        tmp = new_mutable_var(ctx, srcref, "returnval_via_finally")
+        tmp = new_local_binding(ctx, srcref, "returnval_via_finally")
         emit(ctx, @ast ctx srcref [K"=" tmp ex])
         tmp
     else
@@ -447,7 +447,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end
 
     end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
-    try_result = needs_value && !in_tail_pos ? new_mutable_var(ctx, ex, "try_result") : nothing
+    try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
@@ -458,7 +458,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     if !isnothing(finally_block)
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
         # support a special form for @with)?
-        finally_handler = FinallyHandler(new_mutable_var(ctx, finally_block, "finally_tag"),
+        finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
                                          JumpTarget(end_label, ctx))
         push!(ctx.finally_handlers, finally_handler)
         emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar (-1)::K"Integer"])
@@ -693,7 +693,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         else
-            val = needs_value && new_mutable_var(ctx, ex, "if_val")
+            val = needs_value && new_local_binding(ctx, ex, "if_val")
             v1 = compile(ctx, ex[2], needs_value, in_tail_pos)
             if needs_value
                 emit_assignment(ctx, ex, val, v1)
@@ -791,9 +791,63 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             ex
         end
+    elseif k == K"newvar"
+        @assert !needs_value
+        is_duplicate = !isempty(ctx.code) &&
+            (e = last(ctx.code); kind(e) == K"newvar" && e[1].var_id == ex[1].var_id)
+        if !is_duplicate
+            # TODO: also exclude deleted vars
+            emit(ctx, ex)
+        end
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
+end
+
+function _remove_vars_with_isdefined_check!(vars, ex)
+    if is_leaf(ex) || is_quoted(ex)
+        return
+    elseif kind(ex) == K"isdefined"
+        delete!(vars, ex[1].var_id)
+    else
+        for e in children(ex)
+            _remove_vars_with_isdefined_check!(vars, e)
+        end
+    end
+end
+
+# Find newvar nodes that are unnecessary because
+# 1. The variable is not captured and 
+# 2. The variable is assigned before any branches.
+#
+# This is used to remove newvar nodes that are not needed for re-initializing
+# variables to undefined (see Julia issue #11065). It doesn't look for variable
+# *uses*, because any variables used-before-def that also pass this test are
+# *always* used undefined, and therefore don't need to be reinitialized. The
+# one exception to that is `@isdefined`, which can observe an undefined
+# variable without throwing an error.
+function unnecessary_newvar_ids(ctx, stmts)
+    vars = Set{IdTag}()
+    ids_assigned_before_branch = Set{IdTag}()
+    for ex in stmts
+        _remove_vars_with_isdefined_check!(vars, ex)
+        k = kind(ex)
+        if k == K"newvar"
+            id = ex[1].var_id
+            if !lookup_binding(ctx, id).is_captured
+                push!(vars, id)
+            end
+        elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
+            empty!(vars)
+        elseif k == K"="
+            id = ex[1].var_id
+            if id in vars
+                delete!(vars, id)
+                push!(ids_assigned_before_branch, id)
+            end
+        end
+    end
+    ids_assigned_before_branch
 end
 
 # flisp: compile-body
@@ -826,7 +880,12 @@ function compile_body(ctx, ex)
         @assert kind(ctx.code[i]) == K"TOMBSTONE"
         ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
     end
-    # TODO: Filter out any newvar nodes where the arg is definitely initialized
+
+    # Filter out unnecessary newvar nodes
+    ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
+    filter!(ctx.code) do ex
+        !(kind(ex) == K"newvar" && ex[1].var_id in ids_assigned_before_branch)
+    end
 end
 
 #-------------------------------------------------------------------------------

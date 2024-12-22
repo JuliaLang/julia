@@ -705,6 +705,10 @@ function Base.empty!(v::SyntaxList)
     v
 end
 
+function Base.deleteat!(v::SyntaxList, inds)
+    deleteat!(v.ids, inds)
+end
+
 function Base.copy(v::SyntaxList)
     SyntaxList(v.graph, copy(v.ids))
 end

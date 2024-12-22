@@ -43,8 +43,6 @@ function _register_kinds()
             # Semantic assertions used by lowering. The content of an assertion
             # is not considered to be quoted, so use K"Symbol" etc inside where necessary.
             "assert"
-            # Alias a name to a given binding
-            "alias_binding"
             # Unique identifying integer for bindings (of variables, constants, etc)
             "BindingId"
             # Various heads harvested from flisp lowering.
@@ -59,6 +57,17 @@ function _register_kinds()
             "top"
             "core"
             "lambda"
+            # [K"function_decl" name]
+            # Declare a zero-method generic function with global `name` or
+            # creates a closure object and assigns it to the local `name`.
+            "function_decl"
+            # [K"function_type name]
+            # Evaluates to the type of the function or closure with given `name`
+            "function_type"
+            # [K"method_defs" name block]
+            # The code in `block` defines methods for generic function `name`
+            "method_defs"
+            # The enclosed statements must be executed at top level
             "toplevel_butfirst"
             "const_if_global"
             "moved_local"
@@ -89,6 +98,9 @@ function _register_kinds()
             "pop_exception"
             # Lowering targets for method definitions arising from `function` etc
             "method"
+            # (re-)initialize a slot to undef
+            # See Core.NewvarNode
+            "newvar"
             # Result of lowering a `K"lambda"` after bindings have been
             # converted to slot/globalref/SSAValue.
             "code_info"

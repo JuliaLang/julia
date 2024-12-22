@@ -730,7 +730,7 @@ end
 struct X
     x
     f() = new(1)
-    X() = f()
+    #X() = f() # FIXME: this X() captures `f` (in flisp, as a Box :-/ )
     X(x) = new(x)
     X(y,z)::ReallyXIPromise = new(y+z)
     """
@@ -739,63 +739,69 @@ struct X
     X(a,b,c) = new(a)
 end
 #---------------------
-1   (global TestMod.X)
-2   (const TestMod.X)
-3   (call core.svec)
-4   (call core.svec :x)
-5   (call core.svec)
-6   (call core._structtype TestMod :X %₃ %₄ %₅ false 1)
-7   (= slot₁/X %₆)
-8   (call core._setsuper! %₆ core.Any)
-9   (isdefined TestMod.X)
-10  (gotoifnot %₉ label₂₀)
-11  TestMod.X
-12  (call core._equiv_typedef %₁₁ %₆)
-13  (gotoifnot %₁₂ label₁₇)
-14  TestMod.X
-15  (= slot₁/X %₁₄)
-16  (goto label₁₉)
-17  slot₁/X
-18  (= TestMod.X %₁₇)
-19  (goto label₂₂)
-20  slot₁/X
-21  (= TestMod.X %₂₀)
-22  slot₁/X
-23  (call core.svec core.Any)
-24  (call core._typebody! %₂₂ %₂₃)
-25  (method :f)
-26  (call core.Typeof %₂₅)
-27  (call core.svec %₂₆)
-28  (call core.svec)
-29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 3 =#)))))
-30  --- method core.nothing %₂₉
+1   --- thunk
+    1   (global TestMod.#f##0)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :#f##0 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.#f##0)
+    8   (= TestMod.#f##0 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+2   TestMod.#f##0
+3   (call core.svec %₂)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 3 =#)))))
+6   --- method core.nothing %₅
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-31  TestMod.X
-32  (call core.apply_type core.Type %₃₁)
-33  (call core.svec %₃₂)
-34  (call core.svec)
-35  (call core.svec %₃₃ %₃₄ :($(QuoteNode(:(#= line 4 =#)))))
-36  --- method core.nothing %₃₅
-    1   TestMod.f
-    2   (call %₁)
-    3   (return %₂)
-37  TestMod.X
-38  (call core.apply_type core.Type %₃₇)
-39  (call core.svec %₃₈ core.Any)
-40  (call core.svec)
-41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 5 =#)))))
-42  --- method core.nothing %₄₁
+7   (newvar slot₂/f)
+8   (global TestMod.X)
+9   (const TestMod.X)
+10  (call core.svec)
+11  (call core.svec :x)
+12  (call core.svec)
+13  (call core._structtype TestMod :X %₁₀ %₁₁ %₁₂ false 1)
+14  (= slot₁/X %₁₃)
+15  (call core._setsuper! %₁₃ core.Any)
+16  (isdefined TestMod.X)
+17  (gotoifnot %₁₆ label₂₇)
+18  TestMod.X
+19  (call core._equiv_typedef %₁₈ %₁₃)
+20  (gotoifnot %₁₉ label₂₄)
+21  TestMod.X
+22  (= slot₁/X %₂₁)
+23  (goto label₂₆)
+24  slot₁/X
+25  (= TestMod.X %₂₄)
+26  (goto label₂₉)
+27  slot₁/X
+28  (= TestMod.X %₂₇)
+29  slot₁/X
+30  (call core.svec core.Any)
+31  (call core._typebody! %₂₉ %₃₀)
+32  TestMod.#f##0
+33  (= slot₂/f (new %₃₂))
+34  slot₂/f
+35  TestMod.X
+36  (call core.apply_type core.Type %₃₅)
+37  (call core.svec %₃₆ core.Any)
+38  (call core.svec)
+39  (call core.svec %₃₇ %₃₈ :($(QuoteNode(:(#= line 5 =#)))))
+40  --- method core.nothing %₃₉
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
     3   (return %₂)
-43  TestMod.X
-44  (call core.apply_type core.Type %₄₃)
-45  (call core.svec %₄₄ core.Any core.Any)
-46  (call core.svec)
-47  (call core.svec %₄₅ %₄₆ :($(QuoteNode(:(#= line 6 =#)))))
-48  --- method core.nothing %₄₇
+41  TestMod.X
+42  (call core.apply_type core.Type %₄₁)
+43  (call core.svec %₄₂ core.Any core.Any)
+44  (call core.svec)
+45  (call core.svec %₄₃ %₄₄ :($(QuoteNode(:(#= line 6 =#)))))
+46  --- method core.nothing %₄₅
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
     3   TestMod.+
@@ -810,16 +816,18 @@ end
     12  (= slot₄/tmp (call core.typeassert %₁₁ %₁))
     13  slot₄/tmp
     14  (return %₁₃)
-49  TestMod.X
-50  (call core.apply_type core.Type %₄₉)
-51  (call core.svec %₅₀ core.Any core.Any core.Any)
-52  (call core.svec)
-53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 10 =#)))))
-54  --- method core.nothing %₅₃
+47  TestMod.X
+48  (call core.apply_type core.Type %₄₇)
+49  (call core.svec %₄₈ core.Any core.Any core.Any)
+50  (call core.svec)
+51  (call core.svec %₄₉ %₅₀ :($(QuoteNode(:(#= line 10 =#)))))
+52  --- method core.nothing %₅₁
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
     3   (return %₂)
-55  (call JuliaLowering.bind_docs! %₅₀ "Docs for X constructor\n" %₅₃)
+53  TestMod.X
+54  (call core.apply_type core.Type %₅₃)
+55  (call JuliaLowering.bind_docs! %₅₄ "Docs for X constructor\n" %₅₁)
 56  (return core.nothing)
 
 ########################################
@@ -831,85 +839,100 @@ struct X{S,T}
     f() = new{A,B}(1)
 end
 #---------------------
-1   (global TestMod.X)
-2   (const TestMod.X)
-3   (= slot₂/S (call core.TypeVar :S))
-4   (= slot₃/T (call core.TypeVar :T))
-5   slot₂/S
-6   slot₃/T
-7   (call core.svec %₅ %₆)
-8   (call core.svec :x)
-9   (call core.svec)
-10  (call core._structtype TestMod :X %₇ %₈ %₉ false 1)
-11  (= slot₄/X %₁₀)
-12  (call core._setsuper! %₁₀ core.Any)
-13  (isdefined TestMod.X)
-14  (gotoifnot %₁₃ label₃₄)
-15  TestMod.X
-16  (call core._equiv_typedef %₁₅ %₁₀)
-17  (gotoifnot %₁₆ label₃₁)
-18  TestMod.X
-19  (= slot₄/X %₁₈)
-20  TestMod.X
-21  (call top.getproperty %₂₀ :body)
-22  (call top.getproperty %₂₁ :body)
-23  (call top.getproperty %₂₂ :parameters)
-24  (call top.indexed_iterate %₂₃ 1)
-25  (= slot₂/S (call core.getfield %₂₄ 1))
-26  (= slot₁/iterstate (call core.getfield %₂₄ 2))
-27  slot₁/iterstate
-28  (call top.indexed_iterate %₂₃ 2 %₂₇)
-29  (= slot₃/T (call core.getfield %₂₈ 1))
-30  (goto label₃₃)
-31  slot₄/X
-32  (= TestMod.X %₃₁)
-33  (goto label₃₆)
-34  slot₄/X
-35  (= TestMod.X %₃₄)
-36  slot₄/X
-37  (call core.svec core.Any)
-38  (call core._typebody! %₃₆ %₃₇)
-39  TestMod.X
-40  TestMod.A
-41  TestMod.B
-42  (call core.apply_type %₃₉ %₄₀ %₄₁)
-43  (call core.apply_type core.Type %₄₂)
-44  (call core.svec %₄₃)
-45  (call core.svec)
-46  (call core.svec %₄₄ %₄₅ :($(QuoteNode(:(#= line 3 =#)))))
-47  --- method core.nothing %₄₆
-    1   slot₁/#ctor-self#
-    2   (new %₁ 1)
-    3   (return %₂)
-48  (= slot₅/U (call core.TypeVar :U))
-49  (= slot₆/V (call core.TypeVar :V))
-50  TestMod.X
-51  slot₅/U
-52  slot₆/V
-53  (call core.apply_type %₅₀ %₅₁ %₅₂)
-54  (call core.apply_type core.Type %₅₃)
-55  (call core.svec %₅₄)
-56  slot₅/U
-57  slot₆/V
-58  (call core.svec %₅₆ %₅₇)
-59  (call core.svec %₅₅ %₅₈ :($(QuoteNode(:(#= line 4 =#)))))
-60  --- method core.nothing %₅₉
-    1   slot₁/#ctor-self#
-    2   (new %₁ 1)
-    3   (return %₂)
-61  (method :f)
-62  (call core.Typeof %₆₁)
-63  (call core.svec %₆₂)
-64  (call core.svec)
-65  (call core.svec %₆₃ %₆₄ :($(QuoteNode(:(#= line 5 =#)))))
-66  --- method core.nothing %₆₅
+1   --- thunk
+    1   (global TestMod.#f##1)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :#f##1 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.#f##1)
+    8   (= TestMod.#f##1 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+2   TestMod.#f##1
+3   (call core.svec %₂)
+4   (call core.svec)
+5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 5 =#)))))
+6   --- method core.nothing %₅
     1   TestMod.X
     2   TestMod.A
     3   TestMod.B
     4   (call core.apply_type %₁ %₂ %₃)
     5   (new %₄ 1)
     6   (return %₅)
-67  (return core.nothing)
+7   (newvar slot₅/f)
+8   (global TestMod.X)
+9   (const TestMod.X)
+10  (= slot₂/S (call core.TypeVar :S))
+11  (= slot₃/T (call core.TypeVar :T))
+12  slot₂/S
+13  slot₃/T
+14  (call core.svec %₁₂ %₁₃)
+15  (call core.svec :x)
+16  (call core.svec)
+17  (call core._structtype TestMod :X %₁₄ %₁₅ %₁₆ false 1)
+18  (= slot₄/X %₁₇)
+19  (call core._setsuper! %₁₇ core.Any)
+20  (isdefined TestMod.X)
+21  (gotoifnot %₂₀ label₄₁)
+22  TestMod.X
+23  (call core._equiv_typedef %₂₂ %₁₇)
+24  (gotoifnot %₂₃ label₃₈)
+25  TestMod.X
+26  (= slot₄/X %₂₅)
+27  TestMod.X
+28  (call top.getproperty %₂₇ :body)
+29  (call top.getproperty %₂₈ :body)
+30  (call top.getproperty %₂₉ :parameters)
+31  (call top.indexed_iterate %₃₀ 1)
+32  (= slot₂/S (call core.getfield %₃₁ 1))
+33  (= slot₁/iterstate (call core.getfield %₃₁ 2))
+34  slot₁/iterstate
+35  (call top.indexed_iterate %₃₀ 2 %₃₄)
+36  (= slot₃/T (call core.getfield %₃₅ 1))
+37  (goto label₄₀)
+38  slot₄/X
+39  (= TestMod.X %₃₈)
+40  (goto label₄₃)
+41  slot₄/X
+42  (= TestMod.X %₄₁)
+43  slot₄/X
+44  (call core.svec core.Any)
+45  (call core._typebody! %₄₃ %₄₄)
+46  TestMod.X
+47  TestMod.A
+48  TestMod.B
+49  (call core.apply_type %₄₆ %₄₇ %₄₈)
+50  (call core.apply_type core.Type %₄₉)
+51  (call core.svec %₅₀)
+52  (call core.svec)
+53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 3 =#)))))
+54  --- method core.nothing %₅₃
+    1   slot₁/#ctor-self#
+    2   (new %₁ 1)
+    3   (return %₂)
+55  (= slot₆/U (call core.TypeVar :U))
+56  (= slot₇/V (call core.TypeVar :V))
+57  TestMod.X
+58  slot₆/U
+59  slot₇/V
+60  (call core.apply_type %₅₇ %₅₈ %₅₉)
+61  (call core.apply_type core.Type %₆₀)
+62  (call core.svec %₆₁)
+63  slot₆/U
+64  slot₇/V
+65  (call core.svec %₆₃ %₆₄)
+66  (call core.svec %₆₂ %₆₅ :($(QuoteNode(:(#= line 4 =#)))))
+67  --- method core.nothing %₆₆
+    1   slot₁/#ctor-self#
+    2   (new %₁ 1)
+    3   (return %₂)
+68  TestMod.#f##1
+69  (= slot₅/f (new %₆₈))
+70  slot₅/f
+71  (return core.nothing)
 
 ########################################
 # new() calls with splats; `Any` fields
