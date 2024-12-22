@@ -1302,10 +1302,10 @@ function parse_unary(ps::ParseState)
             # +(a,b)(x)^2  ==>  (call-i (call (call + a b) x) ^ 2)
             if is_type_operator(op_t)
                 # <:(a,)  ==>  (<: a)
-                emit(ps, mark, op_k)
+                emit(ps, mark, op_k, opts.delim_flags)
                 reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
             else
-                emit(ps, mark, K"call")
+                emit(ps, mark, K"call", opts.delim_flags)
             end
             parse_call_chain(ps, mark)
             parse_factor_with_initial_ex(ps, mark)
@@ -1552,13 +1552,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f (a)    ==>  (call f (error-t) a)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_call_arglist(ps, K")")
+            opts = parse_call_arglist(ps, K")")
             if peek(ps) == K"do"
                 # f(x) do y body end  ==>  (call f x (do (tuple y) (block body)))
                 parse_do(ps)
             end
             emit(ps, mark, is_macrocall ? K"macrocall" : K"call",
-                 is_macrocall ? PARENS_FLAG : EMPTY_FLAGS)
+                 # TODO: Add PARENS_FLAG to all calls which use them?
+                 (is_macrocall ? PARENS_FLAG : EMPTY_FLAGS)|opts.delim_flags)
             if is_macrocall
                 # @x(a, b)   ==>  (macrocall-p @x a b)
                 # A.@x(y)    ==>  (macrocall-p (. A @x) y)
@@ -1634,8 +1635,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # f. (x)    ==>  (dotcall f (error-t) x)
                 bump_disallowed_space(ps)
                 bump(ps, TRIVIA_FLAG)
-                parse_call_arglist(ps, K")")
-                emit(ps, mark, K"dotcall")
+                opts = parse_call_arglist(ps, K")")
+                emit(ps, mark, K"dotcall", opts.delim_flags)
             elseif k == K":"
                 # A.:+  ==>  (. A (quote-: +))
                 # A.: +  ==>  (. A (error-t) (quote-: +))
@@ -1697,20 +1698,20 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # S {a} ==> (curly S (error-t) a)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_call_arglist(ps, K"}")
+            opts = parse_call_arglist(ps, K"}")
             if is_macrocall
                 # @S{a,b} ==> (macrocall S (braces a b))
                 # A.@S{a}  ==> (macrocall (. A @S) (braces a))
                 # @S{a}.b  ==> (. (macrocall @S (braces a)) b)
                 fix_macro_name_kind!(ps, macro_name_position)
-                emit(ps, m, K"braces")
+                emit(ps, m, K"braces", opts.delim_flags)
                 emit(ps, mark, K"macrocall")
                 min_supported_version(v"1.6", ps, mark, "macro call without space before `{}`")
                 is_macrocall = false
                 macro_atname_range = nothing
             else
                 # S{a,b} ==> (curly S a b)
-                emit(ps, mark, K"curly")
+                emit(ps, mark, K"curly", opts.delim_flags)
             end
         elseif k in KSet" \" \"\"\" ` ``` " &&
                 !preceding_whitespace(t) && maybe_strmac &&
@@ -2151,7 +2152,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function (f(x),) end  ==>  (function (tuple-p (call f x)) (block))
                 ambiguous_parens = opts.maybe_grouping_parens &&
                                    peek_behind(ps).kind in KSet"macrocall $"
-                emit(ps, mark, K"tuple", PARENS_FLAG)
+                emit(ps, mark, K"tuple", PARENS_FLAG|opts.delim_flags)
                 if ambiguous_parens
                     # Got something like `(@f(x))`. Is it anon `(@f(x),)` or named sig `@f(x)` ??
                     emit(ps, mark, K"error", error="Ambiguous signature. Add a trailing comma if this is a 1-argument anonymous function; remove parentheses if this is a macro call acting as function signature.")
@@ -2716,16 +2717,21 @@ end
 # surrounding brackets.
 #
 # flisp: parse-vect
-function parse_vect(ps::ParseState, closer)
+function parse_vect(ps::ParseState, closer, prefix_trailing_comma)
     # [x, y]        ==>  (vect x y)
     # [x, y]        ==>  (vect x y)
     # [x,y ; z]     ==>  (vect x y (parameters z))
     # [x=1, y=2]    ==>  (vect (= x 1) (= y 2))
     # [x=1, ; y=2]  ==>  (vect (= x 1) (parameters (= y 2)))
-    parse_brackets(ps, closer) do _, _, _, _
-        return (needs_parameters=true,)
+    opts = parse_brackets(ps, closer) do _, _, _, num_subexprs
+        return (needs_parameters=true,
+                num_subexprs=num_subexprs)
     end
-    return (K"vect", EMPTY_FLAGS)
+    delim_flags = opts.delim_flags
+    if opts.num_subexprs == 0 && prefix_trailing_comma
+        delim_flags |= TRAILING_COMMA_FLAG
+    end
+    return (K"vect", delim_flags)
 end
 
 # Parse generators
@@ -2988,7 +2994,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     mark = position(ps)
     if k == closer
         # []  ==>  (vect)
-        return parse_vect(ps, closer)
+        return parse_vect(ps, closer, false)
     elseif k == K";"
         #v1.8: [;]           ==>  (ncat-1)
         #v1.8: [;;]          ==>  (ncat-2)
@@ -3003,14 +3009,15 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)
     if k == K"," || (is_closing_token(ps, k) && k != K";")
-        if k == K","
+        prefix_trailing_comma = k == K","
+        if prefix_trailing_comma
             # [x,]  ==>  (vect x)
             bump(ps, TRIVIA_FLAG; skip_newlines = true)
         end
         # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
         # [x       ==>  (vect x (error-t))
-        parse_vect(ps, closer)
+        parse_vect(ps, closer, prefix_trailing_comma)
     elseif k == K"for"
         # [x for a in as]  ==>  (comprehension (generator x (iteration (in a as))))
         # [x \n\n for a in as]  ==>  (comprehension (generator x (iteration (in a as))))
@@ -3087,7 +3094,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # (; a=1; b=2)    ==> (tuple-p (parameters (= a 1)) (parameters (= b 2)))
             # (a; b; c,d)     ==> (tuple-p a (parameters b) (parameters c d))
             # (a=1, b=2; c=3) ==> (tuple-p (= a 1) (= b 2) (parameters (= c 3)))
-            emit(ps, mark, K"tuple", PARENS_FLAG)
+            emit(ps, mark, K"tuple", PARENS_FLAG|opts.delim_flags)
         elseif opts.is_block
             # Blocks
             # (;;)        ==>  (block-p)
@@ -3135,6 +3142,7 @@ function parse_brackets(after_parse::Function,
     had_commas = false
     had_splat = false
     param_start = nothing
+    trailing_comma = false
     while true
         k = peek(ps)
         if k == closing_kind
@@ -3150,11 +3158,13 @@ function parse_brackets(after_parse::Function,
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
         elseif is_closing_token(ps, k)
+            trailing_comma = false
             # Error; handled below in bump_closing_token
             break
         else
             mark = position(ps)
             parse_eq_star(ps)
+            trailing_comma = false
             num_subexprs += 1
             if num_subexprs == 1
                 had_splat = peek_behind(ps).kind == K"..."
@@ -3172,6 +3182,7 @@ function parse_brackets(after_parse::Function,
             if k == K","
                 had_commas = true
                 bump(ps, TRIVIA_FLAG)
+                trailing_comma = true
             elseif k == K";" || k == closing_kind
                 # Handled above
                 continue
@@ -3193,7 +3204,7 @@ function parse_brackets(after_parse::Function,
     end
     release_positions(ps.stream, params_positions)
     bump_closing_token(ps, closing_kind, " or `,`")
-    return opts
+    return (; opts..., delim_flags=trailing_comma ? TRAILING_COMMA_FLAG : EMPTY_FLAGS)
 end
 
 _is_indentation(b::UInt8) = (b == u8" " || b == u8"\t")
@@ -3420,14 +3431,15 @@ end
 function emit_braces(ps, mark, ckind, cflags)
     if ckind == K"hcat"
         # {x y}  ==>  (bracescat (row x y))
-        emit(ps, mark, K"row", cflags)
+        emit(ps, mark, K"row", cflags & ~TRAILING_COMMA_FLAG)
     elseif ckind == K"ncat"
         # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
-        emit(ps, mark, K"nrow", cflags)
+        emit(ps, mark, K"nrow", cflags & ~TRAILING_COMMA_FLAG)
     end
     check_ncat_compat(ps, mark, ckind)
     outk = ckind in KSet"vect comprehension" ? K"braces" : K"bracescat"
-    emit(ps, mark, outk)
+    delim_flags = outk == K"braces" ? (cflags & TRAILING_COMMA_FLAG) : EMPTY_FLAGS
+    emit(ps, mark, outk, delim_flags)
 end
 
 # parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.

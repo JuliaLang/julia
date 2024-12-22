@@ -40,6 +40,13 @@ Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
 const PARENS_FLAG = RawFlags(1<<5)
 
 """
+Set for various delimited constructs when they contains a trailing comma. For
+example, to distinguish `(a,b,)` vs `(a,b)`, and `f(a)` vs `f(a,)`. Kinds where
+this applies are: `tuple call dotcall macrocall vect curly braces <: >:`.
+"""
+const TRAILING_COMMA_FLAG = RawFlags(1<<6)
+
+"""
 Set for K"quote" for the short form `:x` as opposed to long form `quote x end`
 """
 const COLON_QUOTE = RawFlags(1<<5)
@@ -139,21 +146,26 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
         is_prefix_op_call(head)  && (str = str*"-pre")
         is_postfix_op_call(head) && (str = str*"-post")
 
-        if kind(head) in KSet"string cmdstring Identifier"
+        k = kind(head)
+        if k in KSet"string cmdstring Identifier"
             has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
             has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
-        elseif kind(head) in KSet"tuple block macrocall"
+        elseif k in KSet"tuple block macrocall"
             has_flags(head, PARENS_FLAG) && (str = str*"-p")
-        elseif kind(head) == K"quote"
+        elseif k == K"quote"
             has_flags(head, COLON_QUOTE) && (str = str*"-:")
-        elseif kind(head) == K"toplevel"
+        elseif k == K"toplevel"
             has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
-        elseif kind(head) == K"function"
+        elseif k == K"function"
             has_flags(head, SHORT_FORM_FUNCTION_FLAG) && (str = str*"-=")
-        elseif kind(head) == K"struct"
+        elseif k == K"struct"
             has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
-        elseif kind(head) == K"module"
+        elseif k == K"module"
             has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
+        end
+        if k in KSet"tuple call dotcall macrocall vect curly braces <: >:" &&
+                has_flags(head, TRAILING_COMMA_FLAG)
+            str *= "-,"
         end
         is_suffixed(head) && (str = str*"-suf")
         n = numeric_flags(head)
