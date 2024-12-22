@@ -33,10 +33,11 @@ let
 end
 """) == 100
 
+Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
+
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """
 begin
-    call_it(f, arg) = f(arg)
     local y = 2
     call_it(x->x+y, 3)
 end
@@ -45,7 +46,6 @@ end
 # Anon function syntax with `where`
 @test JuliaLowering.include_string(test_mod, """
 begin
-    call_it(f, arg) = f(arg)
     local y = 2
     call_it((x::T where {T<:Integer})->x+y, 3)
 end
