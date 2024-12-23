@@ -835,6 +835,18 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                         push!(W, excbb)
                     end
                 end
+            else
+                # propagate the escape information of this block to the exception handler block
+                # even if there are no chages made on this statement
+                if !is_nothrow(ir, pc)
+                    curr_hand = gethandler(astate.handler_info, pc)
+                    if curr_hand !== nothing
+                        enter_node = ir[SSAValue(curr_hand.enter_idx)][:stmt]::EnterNode
+                        if propagate_bbstate!(astate, currstate, enter_node.catch_dest)::Bool
+                            push!(W, enter_node.catch_dest)
+                        end
+                    end
+                end
             end
 
             if new_nodes_counter > 0
@@ -1476,8 +1488,6 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     for (; aidx, bidx) in cache.argaliases
         add_alias_change!(astate, args[aidx+(first_idx-1)], args[bidx+(first_idx-1)])
     end
-    # we should disable the alias analysis on this newly introduced object
-    add_object_info_change!(astate, ret, HasUnknownMemory())
 end
 
 """

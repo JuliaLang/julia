@@ -178,9 +178,9 @@ end
     let # try/catch
         result = code_escapes((Any,)) do a
             try
-                println("prevent ConstABI")
+                @noinline(rand(Bool)) && error("")
                 nothing
-            catch err
+            catch
                 return a # return escape
             end
         end
@@ -188,7 +188,7 @@ end
     end
     let result = code_escapes((Any,)) do a
             try
-                println("prevent ConstABI")
+                @noinline(rand(Bool)) && error("")
                 nothing
             finally
                 return a # return escape
