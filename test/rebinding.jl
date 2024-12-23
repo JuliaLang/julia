@@ -33,4 +33,11 @@ module Rebinding
     @test Base.@world(Foo, defined_world_age) == typeof(x)
     @test Base.@world(Rebinding.Foo, defined_world_age) == typeof(x)
     @test Base.@world((@__MODULE__).Foo, defined_world_age) == typeof(x)
+
+    # Test invalidation (const -> undefined)
+    const delete_me = 1
+    f_return_delete_me() = delete_me
+    @test f_return_delete_me() == 1
+    Base.delete_binding(@__MODULE__, :delete_me)
+    @test_throws UndefVarError f_return_delete_me()
 end
