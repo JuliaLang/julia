@@ -402,7 +402,7 @@ end
 
 function check_for_hint(s::MIState)
     st = state(s)
-    if !options(st).hint_tab_completes || !eof(buffer(st))
+    if options(st).hint_tab_completes_tmp_off || !options(st).hint_tab_completes || !eof(buffer(st))
         # only generate hints if enabled and at the end of the line
         # TODO: maybe show hints for insertions at other positions
         # Requires making space for them earlier in refresh_multi_line
@@ -917,6 +917,7 @@ function edit_insert(s::PromptState, c::StringLike)
         if pos > 0
             if buf.data[pos] != _space && string(c) != " "
                 options(s).auto_indent_tmp_off = false
+                options(s).hint_tab_completes_tmp_off = false
             end
             if buf.data[pos] == _space
                 #tabulators are already expanded to space
@@ -924,9 +925,14 @@ function edit_insert(s::PromptState, c::StringLike)
                 s.last_newline = time()
             else
                 #if characters after new line are coming in very fast
-                #its probably copy&paste => switch auto-indent off for the next coming new line
-                if ! options(s).auto_indent_tmp_off && time() - s.last_newline < options(s).auto_indent_time_threshold
-                    options(s).auto_indent_tmp_off = true
+                #its probably copy&paste => switch auto-indent and tab hinting off for the next coming new line
+                if time() - s.last_newline < options(s).auto_indent_time_threshold
+                    if !options(s).auto_indent_tmp_off
+                        options(s).auto_indent_tmp_off = true
+                    end
+                    if !options(s).hint_tab_completes_tmp_off
+                        options(s).hint_tab_completes_tmp_off = true
+                    end
                 end
             end
         end
