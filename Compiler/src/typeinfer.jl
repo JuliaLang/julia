@@ -92,20 +92,22 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
+function result_edges(interp::AbstractInterpreter, caller::InferenceState)
+    result = caller.result
+    opt = result.src
+    if isa(opt, OptimizationState)
+        return Core.svec(opt.inlining.edges...)
+    else
+        return Core.svec(caller.edges...)
+    end
+end
+
 function finish!(interp::AbstractInterpreter, caller::InferenceState;
                  can_discard_trees::Bool=may_discard_trees(interp))
     result = caller.result
-    opt = result.src
-    if opt isa OptimizationState
-        src = ir_to_codeinf!(opt)
-        edges = src.edges::SimpleVector
-        caller.src = result.src = src
-    else
-        edges = Core.svec(caller.edges...)
-        caller.src.edges = edges
-    end
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
     if isdefined(result, :ci)
+        edges = result_edges(interp, caller)
         ci = result.ci
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
@@ -123,7 +125,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
         if !can_discard_trees || (is_cached(caller) && !const_flag)
-            inferred_result = transform_result_for_cache(interp, result)
+            inferred_result = transform_result_for_cache(interp, result, edges)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             relocatability = 0x0
             if inferred_result isa CodeInfo
@@ -221,7 +223,16 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 
-transform_result_for_cache(::AbstractInterpreter, result::InferenceResult) = result.src
+function transform_result_for_cache(::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+    src = result.src
+    if isa(src, OptimizationState)
+        src = ir_to_codeinf!(src)
+    end
+    if isa(src, CodeInfo)
+        src.edges = edges
+    end
+    return src
+end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo,
                                  can_discard_trees::Bool=may_discard_trees(interp))

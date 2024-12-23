@@ -14,7 +14,7 @@ Compiler.may_optimize(::AbsIntOnlyInterp1) = false
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
 Compiler.may_optimize(::AbsIntOnlyInterp2) = false
-Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult) = nothing
+Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -493,9 +493,9 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult)
+function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     inferred_result = @invoke Compiler.transform_result_for_cache(
-        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
+        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     return CustomData(inferred_result)
 end
 function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),

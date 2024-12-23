@@ -226,10 +226,13 @@ include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = Core.svec(opt.inlining.edges...)
+    (; linfo, src, ir) = opt
+    if ir === nothing
+        return src
+    end
+    src = ir_to_codeinf!(src, ir::IRCode)
     opt.ir = nothing
+    opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
 end
