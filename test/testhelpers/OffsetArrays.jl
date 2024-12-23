@@ -105,7 +105,7 @@ end
 # function offset_coerce(::Type{Base.OneTo{T}}, r::IdOffsetRange) where T<:Integer
 #     rc, o = offset_coerce(Base.OneTo{T}, r.parent)
 
-# Fallback, specialze this method if `convert(I, r)` doesn't do what you need
+# Fallback, specialize this method if `convert(I, r)` doesn't do what you need
 offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange =
     convert(I, r)::I, 0
 
@@ -211,13 +211,7 @@ Base.show(io::IO, r::IdOffsetRange) = print(io, IdOffsetRange, "(values=",first(
 
 # Optimizations
 @inline Base.checkindex(::Type{Bool}, inds::IdOffsetRange, i::Real) = Base.checkindex(Bool, inds.parent, i - inds.offset)
-
-# This was deemed "too private" to extend: see issue #184
-# # Fixes an inference failure in Base.mapfirst!
-# # Test: A = OffsetArray(rand(4,4), (-3,5)); R = similar(A, (1:1, 6:9)); maximum!(R, A)
-# if isdefined(Base, :_firstslice)
-#     Base._firstslice(i::IdOffsetRange) = IdOffsetRange(Base._firstslice(i.parent), i.offset)
-# end
+Base._firstslice(i::IdOffsetRange) = IdOffsetRange(Base._firstslice(i.parent), i.offset)
 
 ########################################################################################################
 # origin.jl
