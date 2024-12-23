@@ -1162,4 +1162,3 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     end
     return n
 end
-
