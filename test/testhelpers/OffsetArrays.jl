@@ -288,8 +288,8 @@ end
 @inline _indexedby(r::AbstractUnitRange{Bool}, ::Base.OneTo) = no_offset_view(r)
 @inline _indexedby(r::AbstractVector, ::Base.OneTo) = no_offset_view(r)
 @inline function _indexedby(r::AbstractUnitRange{<:Integer}, ax::AbstractUnitRange)
-	of = convert(eltype(r), first(ax) - 1)
-	IdOffsetRange(_subtractoffset(r, of), of)
+    of = convert(eltype(r), first(ax) - 1)
+    IdOffsetRange(_subtractoffset(r, of), of)
 end
 @inline _indexedby(r::AbstractUnitRange{Bool}, ax::AbstractUnitRange) = OffsetArray(r, ax)
 @inline _indexedby(r::AbstractVector, ax::AbstractUnitRange) = OffsetArray(r, ax)
