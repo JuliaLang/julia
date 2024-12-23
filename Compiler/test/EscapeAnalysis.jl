@@ -1950,4 +1950,38 @@ let code = Any[
     end
 end
 
+mutable struct ObjectC
+    c::Char
+end
+const g_xoc = Ref{ObjectC}()
+const g_xxoc = Ref{Ref{ObjectC}}()
+
+@noinline func_inter_return() = g_xoc
+let result = code_escapes(func_inter_return)
+    @test has_all_escape(result[0])
+end
+let result = code_escapes((Char,)) do c
+        oc = ObjectC(c)
+        xoc = func_inter_return()
+        xoc[] = oc
+        nothing
+    end
+    idx = only(findall(isnew_with_type((result.ir, ObjectC)), result.ir.stmts.stmt))
+    @test has_all_escape(result[SSAValue(idx)])
+end
+
+func_raiser() = throw(g_xoc)
+@noinline function func_inter_throw(xoc)
+    try
+        xoc[] = ObjectC('a')
+        func_raiser()
+    catch e
+        e = e::Base.RefValue{ObjectC}
+        g_xxoc[] = e
+        e[] = ObjectC('b')
+    end
+    xoc[]
+end
+code_escapes(func_inter_throw, (typeof(g_xoc),))
+
 end # module test_EA

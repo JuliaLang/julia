@@ -639,6 +639,7 @@ function AnalysisState(ir::IRCode, nargs::Int, get_escape_cache)
         retescape = BlockEscapeState(nargs, nstmts)
         currstate = BlockEscapeState(nargs, nstmts)
     end
+    retescape[0] = ⊥
     aliasset = AliasSet(nargs + nstmts)
     ssamemoryinfo = IdDict{Int,Any}()
     changes = Changes()
@@ -813,6 +814,20 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                         @assert astate.retescape === currstate # `astate.retescape` has been updated in-place
                     else
                         propagate_ret_state!(astate, currstate)
+                    end
+                    if isdefined(stmt, :val)
+                        # Accumulate the escape information of the return value
+                        # so that it can be expanded in the caller context.
+                        retval = stmt.val
+                        if retval isa GlobalRef
+                            astate.retescape[0] = ⊤
+                        elseif retval isa SSAValue || retval isa Argument
+                            retinfo = currstate[retval]
+                            newrinfo, changed = astate.retescape[0] ⊔ₑꜝ retinfo
+                            if changed
+                                astate.retescape[0] = newrinfo
+                            end
+                        end
                     end
                     @goto next_bb
                 elseif stmt isa EnterNode
@@ -1421,6 +1436,7 @@ end
 struct ArgEscapeCache
     argescapes::Vector{ArgEscapeInfo}
     argaliases::Vector{ArgAlias}
+    retescape::ArgEscapeInfo
     function ArgEscapeCache(eresult::EscapeResult)
         nargs = eresult.retescape.nargs
         argescapes = Vector{ArgEscapeInfo}(undef, nargs)
@@ -1435,7 +1451,8 @@ struct ArgEscapeCache
                 end
             end
         end
-        return new(argescapes, argaliases)
+        retescape = ArgEscapeInfo(eresult[0])
+        return new(argescapes, argaliases, retescape)
     end
 end
 
@@ -1488,6 +1505,8 @@ function analyze_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     for (; aidx, bidx) in cache.argaliases
         add_alias_change!(astate, args[aidx+(first_idx-1)], args[bidx+(first_idx-1)])
     end
+    # propagate the escape information of the return value to the `retval::SSAValue`
+    from_interprocedural!(astate, retval, retval, cache.retescape)
 end
 
 """
