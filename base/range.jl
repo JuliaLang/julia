@@ -1425,13 +1425,6 @@ function sum(r::AbstractRange{<:Real})
                                      : (step(r) * l) * ((l-1)>>1))
 end
 
-# common reductions with init specified
-for (fred, f) in [(maximum, max), (minimum, min), (sum, add_sum)]
-    @eval function _foldl_impl(op::typeof(BottomRF($f)), init, r::AbstractRange)
-        isempty(r) ? init : op(init, $fred(r))
-    end
-end
-
 function _in_range(x, r::AbstractRange)
     isempty(r) && return false
     f, l = first(r), last(r)

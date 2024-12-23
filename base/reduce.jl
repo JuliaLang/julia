@@ -61,6 +61,13 @@ function _foldl_impl(op, init, itr::Union{Tuple,NamedTuple})
     @invoke _foldl_impl(op, init, itr::Any)
 end
 
+# common reductions for ranges with init specified
+for (fred, f) in ((maximum, max), (minimum, min), (sum, add_sum))
+    @eval function _foldl_impl(op::typeof(BottomRF($f)), init, r::AbstractRange)
+        isempty(r) ? init : op(init, $fred(r))
+    end
+end
+
 struct _InitialValue end
 
 """
@@ -1155,3 +1162,4 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     end
     return n
 end
+
