@@ -757,7 +757,7 @@ julia> function f(x)
            return sin(y*x + 1)
        end;
 
-julia> @code_warntype f(3.2)
+julia> @ f(3.2)
 MethodInstance for f(::Float64)
   from f(x) @ Main REPL[9]:1
 Arguments
