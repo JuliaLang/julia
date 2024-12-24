@@ -15,21 +15,7 @@ const LOCKED_BIT = 0b01
 # parked if it wants to lock the lock, but it is currently being held by some other task.
 const PARKED_BIT = 0b10
 
-const MAX_SPINS = 10
-
-# Spins without yielding the thread to the OS.
-#
-# Instead, the backoff is simply capped at a maximum value. This can be
-# used to improve throughput in `compare_exchange` loops that have high
-# contention.
-@inline function spin(iteration::Int)
-    next = iteration >= MAX_SPINS ? MAX_SPINS : iteration + 1
-    for _ in 1:(1 << next)
-        ccall(:jl_cpu_pause, Cvoid, ())
-    end
-    GC.safepoint()
-    return next
-end
+const MAX_SPIN_ITERS = 40
 
 # Advisory reentrant lock
 """
@@ -186,7 +172,8 @@ function trylock end
 end
 @noinline function _trylock(rl::ReentrantLock, ct::Task)
     GC.disable_finalizers()
-    if (@atomicreplace :acquire rl.havelock 0x0 => LOCKED_BIT).success
+    state = (@atomic :monotonic rl.havelock) & PARKED_BIT
+    if (@atomicreplace :acquire rl.havelock state => (state | LOCKED_BIT)).success
         rl.reentrancy_cnt = 0x0000_0001
         @atomic :release rl.locked_by = ct
         return true
@@ -209,9 +196,9 @@ Each `lock` must be matched by an [`unlock`](@ref).
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         ct = current_task()
-        iteration = 0
-        state = @atomic :monotonic rl.havelock
+        iteration = 1
         while true
+            state = @atomic :monotonic rl.havelock
             # Grab the lock if it isn't locked, even if there is a queue on it
             if state & LOCKED_BIT == 0
                 GC.disable_finalizers()
@@ -220,30 +207,24 @@ Each `lock` must be matched by an [`unlock`](@ref).
                     rl.reentrancy_cnt = 0x0000_0001
                     @atomic :release rl.locked_by = ct
                     return
-                else
-                    state = result.old
                 end
                 GC.enable_finalizers()
                 continue
             end
 
-            # If there is no queue, try spinning a few times
-            iteration = spin(iteration)
-            if state & PARKED_BIT == 0 && iteration < MAX_SPINS
-                state = @atomic :monotonic rl.havelock
-                continue
-            end
-
-            # If still not locked, set the parked bit
             if state & PARKED_BIT == 0
-                result = (@atomicreplace :monotonic :monotonic rl.havelock state => (state | PARKED_BIT))
-                if !result.success
-                    state = result.old
+                # If there is no queue, try spinning a few times
+                if iteration <= MAX_SPIN_ITERS
+                    Base.yield()
+                    iteration += 1
                     continue
                 end
+
+                # If still not locked, try setting the parked bit
+                @atomicreplace :monotonic :monotonic rl.havelock state => (state | PARKED_BIT)
             end
 
-            # With the parked bit set, lock the `cond_wait`
+            # lock the `cond_wait`
             lock(c.lock)
 
             # Last check before we wait to make sure `unlock` did not win the race
@@ -258,8 +239,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
             wait_no_relock(c)
 
             # Loop back and try locking again
-            iteration = 0
-            state = @atomic :monotonic rl.havelock
+            iteration = 1
         end
     end)(rl)
     return
@@ -301,28 +281,17 @@ internal counter and return immediately.
                 (@noinline function notifywaiters(rl)
                     cond_wait = rl.cond_wait
                     lock(cond_wait)
-                    try
 
-                        tasks_notified = notify(cond_wait, all=false)
-                        if tasks_notified == 0
-                            # Either:
-                            # - We won the race to the `cond_wait` lock as a task was about to park
-                            # - We are the last task on the queue
-                            #
-                            # Unlock anyway as any parking task will retry
-
-                            @atomic :release rl.havelock = 0x00
-                        elseif isempty(cond_wait.waitq)
-                            # We notified the last task, unlock and unset the parked bit
-                            @atomic :release rl.havelock = 0x00
-                        else
-                            # There are more tasks on the queue, we unlock and keep the parked bit set
-                            @atomic :release rl.havelock = PARKED_BIT
-                            notify(cond_wait, all=false)
-                        end
-                    finally
-                        unlock(cond_wait)
+                    notify(cond_wait, all=false)
+                    if !isempty(cond_wait.waitq)
+                        @atomic :release rl.havelock = PARKED_BIT
+                    else
+                        # We may have won the race to the `cond_wait` lock as a task was about to park
+                        # but we unlock anyway as any parking task will retry
+                        @atomic :release rl.havelock = 0x00
                     end
+
+                    unlock(cond_wait)
                 end)(rl)
                 return true
             end
