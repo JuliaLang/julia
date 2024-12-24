@@ -1078,7 +1078,7 @@ end
     end
 end
 
-let itr = (i for i in 1:9) # Base.eltype == Any
+let itr = ((x -> x)(i) for i in 1:9) # Base.eltype == Any
     @test first(Iterators.partition(itr, 3)) isa Vector{Any}
     @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
 end
