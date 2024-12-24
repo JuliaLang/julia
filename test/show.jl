@@ -1733,6 +1733,29 @@ end
               string("4×30 Matrix{Float64}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                   ")
+
+    @testset "extremely large arrays" begin
+        struct MyBigFill{T,N} <: AbstractArray{T,N}
+            val :: T
+            axes :: NTuple{N,Base.OneTo{BigInt}}
+        end
+        MyBigFill(val, sz::Tuple{}) = MyBigFill{typeof(val),0}(val, sz)
+        MyBigFill(val, sz::NTuple{N,BigInt}) where {N} = MyBigFill(val, map(Base.OneTo, sz))
+        MyBigFill(val, sz::Tuple{Vararg{Integer}}) = MyBigFill(val, map(BigInt, sz))
+        Base.size(M::MyBigFill) = map(length, M.axes)
+        Base.axes(M::MyBigFill) = M.axes
+        function Base.getindex(M::MyBigFill{<:Any,N}, ind::Vararg{Integer,N}) where {N}
+            checkbounds(M, ind...)
+            M.val
+        end
+        function Base.isassigned(M::MyBigFill{<:Any,N}, ind::Vararg{BigInt,N}) where {N}
+            checkbounds(M, ind...)
+            true
+        end
+        M = MyBigFill(4, (big(2)^65, 3))
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
+    end
 end
 
 module UnexportedOperators
