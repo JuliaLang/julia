@@ -1016,10 +1016,6 @@ end
 end
 
 @testset "`eltype` for `Generator` involving `Fix` and `getindex`/`getfield` (issue #41519)" begin
-    @testset "special cases" begin
-        (f, i) = (Base.Fix1(getindex, Int), [3, 7])
-        @test AbstractVector{Int} >: @inferred eltype(Iterators.map(f, i))
-    end
     @testset "correct `eltype`" begin
         for (f, i) ∈ (
             (Base.Fix1(getindex, Int), [3, 7]),
