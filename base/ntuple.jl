@@ -97,5 +97,5 @@ end
 function reverse(t::NTuple{N}) where N
     ntuple(Val{N}()) do i
         t[end+1-i]
-    end
+    end::NTuple
 end
