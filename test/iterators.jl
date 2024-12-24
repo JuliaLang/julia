@@ -1017,17 +1017,21 @@ end
 
 @testset "`eltype` for `Generator` involving `Fix` and `getindex`/`getfield` (issue #41519)" begin
     @testset "correct `eltype`" begin
-        f = Base.Fix1(getindex, Int)
-        i = [3, 7]
-        r = map(f, i)
-        t = Iterators.map(f, i)
-        @test eltype(r) <: @inferred eltype(t)
-        @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+        for (f, i) ∈ (
+            (Base.Fix1(getindex, Int), [3, 7]),
+            (Base.Fix1(getindex, [3, 7]), [[1 2], [2 1]]),
+        )
+            r = map(f, i)
+            t = Iterators.map(f, i)
+            @test eltype(r) <: @inferred eltype(t)
+            @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+        end
     end
     @testset "precise `eltype`" begin
         for (f, i) ∈ (
             (identity, [3, 7]),
             (Base.Fix1(getindex, [3, 7]), 1:2),
+            (Base.Fix1(getindex, Dict("a" => 3, "b" => 7)), ["a", "b"]),
             (Base.Fix1(getfield, (; a = 3, b = 7)), 1:2),
             (Base.Fix1(getfield, (; a = 3, b = 7)), [:a, :b]),
         )
