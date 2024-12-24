@@ -3,9 +3,15 @@ function eltype(::Type{Generator{A, typeof(identity)}}) where {A}
 end
 
 function eltype(::Type{Generator{A, Fix1{typeof(getindex), B}}}) where {A, B}
+    function h(::Type{Type{T}}) where {T}
+        T
+    end
+    function h(::Type{<:Type})
+        Any
+    end
     if B <: Type
         # a user may overload `getindex(user_type)` to return a non-`Vector` `AbstractVector`
-        Any
+        AbstractVector{h(B)}
     elseif (eltype(A) == keytype(B)) || ((eltype(A) <: Integer) && (keytype(B) <: Integer))
         valtype(B)
     else
