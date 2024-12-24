@@ -132,14 +132,6 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
 
-function uncompressed_ir(ci::CodeInstance)
-    inferred = ci.inferred
-    isa(inferred, CodeInfo) && return inferred
-    isa(inferred, String) && return _uncompressed_ir(ci, inferred)
-    inferred === nothing && error("Inferred code was deleted.")
-    error(string("Unknown inferred code type ", typeof(inferred)))
-end
-
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
