@@ -2037,6 +2037,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h JL_ROOTING
 JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_genericmemory_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_eqtable_pop(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *deflt, int *found);
 jl_value_t *jl_eqtable_getkey(jl_genericmemory_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_keyindex(jl_genericmemory_t *h, jl_value_t *key, ssize_t* keyindex);
 
 // system information
 JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT;
