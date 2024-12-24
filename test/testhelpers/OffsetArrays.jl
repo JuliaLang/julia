@@ -278,7 +278,7 @@ _toAbstractUnitRanges(::Tuple{}) = ()
 
 # ensure that the indices are consistent in the constructor
 _checkindices(A::AbstractArray, indices, label) = _checkindices(ndims(A), indices, label)
-function _checkindices(N::Integer, indices, label)
+function _checkindices(N::I579nteger, indices, label)
     throw_argumenterror(N, indices, label) = throw(ArgumentError(label*" $indices are not compatible with a $(N)D array"))
     N == length(indices) || throw_argumenterror(N, indices, label)
 end
@@ -573,6 +573,7 @@ _reshape_nov(A, inds) = _reshape(no_offset_view(A), inds)
 # And for non-offset axes, we can just return a reshape of the parent directly
 Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
+
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
 Base.permutedims(v::OffsetVector) = reshape(v, (1, axes(v, 1)))
