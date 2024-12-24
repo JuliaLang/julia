@@ -251,21 +251,29 @@ get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,libgmp), Ptr{Cchar}, (Ptr{Cc
 set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
 get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
-function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
-    stride(a, 1) == 1 || throw(ArgumentError("a must have stride 1"))
+function export!(x::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+    stride(x, 1) == 1 || throw(ArgumentError("x must have stride 1"))
     ndigits = cld(sizeinbase(n, 2), 8*sizeof(T) - nails)
-    length(a) < ndigits && resize!(a, ndigits)
+    length(x) < ndigits && resize!(x, ndigits)
     count = Ref{Csize_t}()
-    ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
-        a, count, order, sizeof(T), endian, nails, n)
-    @assert count[] ≤ length(a)
-    return a, Int(count[])
+    ccall((:__gmpz_export, libgmp),
+           Ptr{T},
+           (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
+           x, count, order, sizeof(T), endian, nails, n)
+    @assert count[] ≤ length(x)
+    return x, Int(count[])
 end
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
 limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, libgmp), Cvoid, (mpz_t, Clong), x, a)
-import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, libgmp), Cvoid,
-    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
+
+function import!(x::BigInt, n::AbstractVector{T}; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+    ccall((:__gmpz_import, libgmp),
+           Cvoid,
+           (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}),
+           x, length(n), order, sizeof(T), endian, nails, n)
+    return x
+end
 
 setbit!(x, a) = (ccall((:__gmpz_setbit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
