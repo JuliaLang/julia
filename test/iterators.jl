@@ -1015,6 +1015,35 @@ end
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
 
+@testset "`eltype` for `Generator` involving `Fix` and `getindex`/`getfield` (issue #41519)" begin
+    @testset "correct `eltype`" begin
+        f = Base.Fix1(getindex, Int)
+        i = [3, 7]
+        r = map(f, i)
+        t = Iterators.map(f, i)
+        @test eltype(r) <: @inferred eltype(t)
+        @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+    end
+    @testset "precise `eltype`" begin
+        for (f, i) ∈ (
+            (identity, [3, 7]),
+            (Base.Fix1(getindex, [3, 7]), 1:2),
+            (Base.Fix1(getfield, (; a = 3, b = 7)), 1:2),
+            (Base.Fix1(getfield, (; a = 3, b = 7)), [:a, :b]),
+        )
+            r = map(f, i)
+            t = Iterators.map(f, i)
+            @test eltype(r) == @inferred eltype(t)
+            @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+        end
+    end
+end
+
+@testset "issue #48448" begin
+    it = union(i for i in 1:5)
+    @test Int == @inferred eltype(it)
+end
+
 @testset "isempty and isdone for Generators" begin
     itr = eachline(IOBuffer("foo\n"))
     gen = (x for x in itr)
