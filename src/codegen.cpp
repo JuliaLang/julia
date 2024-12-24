@@ -10063,7 +10063,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             JL_GC_POP();
             return jl_emit_oc_wrapper(m, params, mi, codeinst->rettype);
         }
-        if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
+        if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_is_string(src))
             src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
