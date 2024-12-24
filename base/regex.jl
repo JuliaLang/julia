@@ -400,6 +400,8 @@ The optional `idx` argument specifies an index at which to start the search.
 The matching substring can be retrieved by accessing `m.match`, the captured sequences can be retrieved by accessing `m.captures`.
 The resulting [`RegexMatch`](@ref) object can be used to construct other collections: e.g. `Tuple(m)`, `NamedTuple(m)`.
 
+See also [`eachmatch`](@ref) for finding all matches, and [`findfirst`](@ref) for locating the position of the first match.
+
 !!! compat "Julia 1.11"
     Constructing NamedTuples and Dicts requires Julia 1.11
 
@@ -514,6 +516,8 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such
 elements in `s`, return an empty array.
 
+See also [`match`](@ref) for finding the first match, [`eachmatch`](@ref) for iterating over all matches, and [`occursin`](@ref) for checking if a match exists.
+
 # Examples
 ```jldoctest
 julia> findall('a', "batman")
@@ -540,6 +544,8 @@ calling `length(findall(pattern, string))` but more efficient.
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
+
+See also [`findall`](@ref) for getting the positions of matches, [`eachmatch`](@ref) for iterating over all matches, and [`occursin`](@ref) for checking if a match exists.
 
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
@@ -769,6 +775,8 @@ end
 Search for all matches of the regular expression `r` in `s` and return an iterator over the
 matches. If `overlap` is `true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from distinct character ranges.
+
+See also [`match`](@ref) for finding the first match, and [`findall`](@ref) for getting the positions of all matches.
 
 # Examples
 ```jldoctest
