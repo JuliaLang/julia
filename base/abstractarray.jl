@@ -818,10 +818,10 @@ julia> similar(falses(10), Float64, 2, 4)
 See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
-similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
-similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
+similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, dims)
+similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, dims)
+similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, dims)
 # Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
 # thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
