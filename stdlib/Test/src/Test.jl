@@ -1516,20 +1516,24 @@ along with a summary of the test results.
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
-accepts three boolean options:
-- `verbose`: if `true`, the result summary of the nested testsets is shown even
+accepts the following options:
+- `verbose::Bool`: if `true`, the result summary of the nested testsets is shown even
   when they all pass (the default is `false`).
-- `showtiming`: if `true`, the duration of each displayed testset is shown
+- `showtiming::Bool`: if `true`, the duration of each displayed testset is shown
   (the default is `true`).
-- `failfast`: if `true`, any test failure or error will cause the testset and any
+- `failfast::Bool`: if `true`, any test failure or error will cause the testset and any
   child testsets to return immediately (the default is `false`).
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
+- `seed::Random.AbstractRNG`: seed the testset with the given random number generator (RNG).
 
 !!! compat "Julia 1.8"
     `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
+
+!!! compat "Julia 1.12"
+    The `seed` option requires at least Julia 1.12.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
