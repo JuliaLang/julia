@@ -1071,6 +1071,34 @@ end
     @test maximum(m) <= 0.106
 end
 
+@testset "`shuffle(::NTuple)`" begin
+    @testset "sorted" begin
+        for n ∈ 0:20
+            tup = ntuple(identity, n)
+            @test tup === sort(@inferred shuffle(tup))
+        end
+    end
+    @testset "not identity" begin
+        function is_not_identity_at_least_once()
+            function f(::Any)
+                tup = ntuple(identity, 9)
+                tup !== shuffle(tup)
+            end
+            @test any(f, 1:1000000)
+        end
+        is_not_identity_at_least_once()
+    end
+    @testset "no heap allocation" begin
+        function no_heap_allocation(tup)
+            @test iszero(@allocated shuffle(tup))
+        end
+        for n ∈ 0:9
+            tup = ntuple(identity, n)
+            no_heap_allocation(tup)
+        end
+    end
+end
+
 # issue #42752
 # test that running finalizers that launch tasks doesn't change RNG stream
 function f42752(do_gc::Bool, cell = (()->Any[[]])())
