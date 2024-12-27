@@ -70,6 +70,7 @@ class of tokenization errors and lets the parser deal with them.
 * Standalone dotted operators are always parsed as `(. op)`. For example `.*(x,y)` is parsed as `(call (. *) x y)` (#240)
 * The `K"="` kind is used for keyword syntax rather than `kw`, to avoid various inconsistencies and ambiguities (#103)
 * Unadorned postfix adjoint is parsed as `call` rather than as a syntactic operator for consistency with suffixed versions like `x'ᵀ` (#124)
+* The argument list in the left hand side of `->` is always a tuple. For example, `x->y` parses as `(-> (tuple x) y)` rather than `(-> x y)` (#522)
 
 ### Improvements to awkward AST forms
 
