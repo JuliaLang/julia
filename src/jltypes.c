@@ -3248,8 +3248,10 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), core, jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), core, jl_function_type, jl_emptysvec);
+    jl_closure_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Closure"), core, jl_function_type, jl_emptysvec);
     jl_function_type->name->mt = NULL; // subtypes of Function have independent method tables
     jl_builtin_type->name->mt = NULL;  // so they don't share the Any type table
+    jl_closure_type->name->mt = NULL;
 
     jl_svec_t *tv;
 

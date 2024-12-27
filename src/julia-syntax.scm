@@ -4232,8 +4232,8 @@ f(x) = yt(x)
                                               (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
                            (if (null? para)
-                               (type-for-closure type-name capt-vars '(core Function))
-                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
+                               (type-for-closure type-name capt-vars '(core Closure))
+                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Closure)))))
                         (mk-method ;; expression to make the method
                          (if short '()
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
