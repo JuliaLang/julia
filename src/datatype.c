@@ -845,7 +845,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     }
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module, abstract, mutabl);
-        if (super == jl_function_type || super == jl_builtin_type || is_anonfn_typename(jl_symbol_name(name))) {
+        if (super == jl_function_type || super == jl_builtin_type ||
+            super == jl_closure_type || is_anonfn_typename(jl_symbol_name(name))) {
             // Callable objects (including compiler-generated closures) get independent method tables
             // as an optimization
             tn->mt = jl_new_method_table(name, module);
