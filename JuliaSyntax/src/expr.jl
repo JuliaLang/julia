@@ -388,11 +388,35 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         # Block for conditional's source location
         args[1] = Expr(:block, loc, args[1])
     elseif k == K"->"
+        a1 = args[1]
+        if @isexpr(a1, :tuple)
+            # TODO: This makes the Expr form objectively worse for the sake of
+            # compatibility. We should consider deleting this special case in
+            # the future as a minor change.
+            if length(a1.args) == 1 &&
+                    (!has_flags(childheads[1], PARENS_FLAG) ||
+                     !has_flags(childheads[1], TRAILING_COMMA_FLAG)) &&
+                    !Meta.isexpr(a1.args[1], :parameters)
+                # `(a) -> c` is parsed without tuple on lhs in Expr form
+                args[1] = a1.args[1]
+            elseif length(a1.args) == 2 && (a11 = a1.args[1]; @isexpr(a11, :parameters) &&
+                                            length(a11.args) <= 1 && !Meta.isexpr(a1.args[2], :(...)))
+                # `(a; b=1) -> c`  parses args as `block` in Expr form :-(
+                if length(a11.args) == 0
+                    args[1] = Expr(:block, a1.args[2])
+                else
+                    a111 = only(a11.args)
+                    assgn = @isexpr(a111, :kw) ? Expr(:(=), a111.args...) : a111
+                    argloc = source_location(LineNumberNode, source, last(childranges[1]))
+                    args[1] = Expr(:block, a1.args[2], argloc, assgn)
+                end
+            end
+        end
         a2 = args[2]
+        # Add function source location to rhs; add block if necessary
         if @isexpr(a2, :block)
             pushfirst!(a2.args, loc)
         else
-            # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
         end
     elseif k == K"function"

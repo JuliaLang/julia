@@ -288,9 +288,18 @@ tests = [
         "begin x end::T"  =>  "(::-i (block x) T)"
         # parse_decl_with_initial_ex
         "a::b"     =>  "(::-i a b)"
-        "a->b"     =>  "(-> a b)"
         "a::b::c"  =>  "(::-i (::-i a b) c)"
-        "a::b->c"  =>  "(-> (::-i a b) c)"
+        "a->b"     =>  "(-> (tuple a) b)"
+        "(a,b)->c" =>  "(-> (tuple-p a b) c)"
+        "(a;b=1)->c" =>  "(-> (tuple-p a (parameters (= b 1))) c)"
+        "x::T->c"  =>  "(-> (tuple (::-i x T)) c)"
+        # `where` combined with `->` still parses strangely. However:
+        # * It's extra hard to add a tuple around the `x` in this syntax corner case.
+        # * The user already needs to add additional, ugly, parens to get this
+        #   to parse correctly because the precendence of `where` is
+        #   inconsistent with `::` and `->` in this case.
+        "(x where T)->c" => "(-> (parens (where x T)) c)"
+        "((x::T) where T)->c" => "(-> (parens (where (parens (::-i x T)) T)) c)"
     ],
     JuliaSyntax.parse_unary_subtype => [
         "<: )"    =>  "<:"

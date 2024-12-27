@@ -1409,8 +1409,21 @@ function parse_decl_with_initial_ex(ps::ParseState, mark)
         emit(ps, mark, K"::", INFIX_FLAG)
     end
     if peek(ps) == K"->"
-        # x -> y    ==>  (-> x y)
-        # a::b->c   ==>  (-> (::-i a b) c)
+        kb = peek_behind(ps).kind
+        if kb == K"tuple"
+            # (x,y) -> z
+            # (x) -> y
+            # (x; a=1) -> y
+        elseif kb == K"where"
+            # `where` and `->` have the "wrong" precedence when writing anon functons.
+            # So ignore this case to allow use of grouping brackets with `where`.
+            # This needs to worked around in lowering :-(
+            # (x where T) -> y  ==>  (-> (x where T) y)
+        else
+            # x -> y    ==>  (-> (tuple x) y)
+            # a::b->c   ==>  (-> (tuple (::-i a b)) c)
+            emit(ps, mark, K"tuple")
+        end
         bump(ps, TRIVIA_FLAG)
         # -> is unusual: it binds tightly on the left and loosely on the right.
         parse_eq_star(ps)
@@ -3073,7 +3086,8 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         initial_semi = peek(ps) == K";"
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
-                       (initial_semi && (num_semis == 1 || num_subexprs > 0))
+                       (initial_semi && (num_semis == 1 || num_subexprs > 0)) ||
+                       (peek(ps, 2) == K"->" && peek_behind(ps).kind != K"where")
             return (needs_parameters=is_tuple,
                     is_tuple=is_tuple,
                     is_block=num_semis > 0)

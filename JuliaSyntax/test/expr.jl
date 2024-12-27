@@ -130,6 +130,10 @@
         @testset "->" begin
             @test parsestmt("a -> b") ==
                 Expr(:->, :a, Expr(:block, LineNumberNode(1), :b))
+            @test parsestmt("(a,) -> b") ==
+                Expr(:->, Expr(:tuple, :a), Expr(:block, LineNumberNode(1), :b))
+            @test parsestmt("(a where T) -> b") ==
+                Expr(:->, Expr(:where, :a, :T), Expr(:block, LineNumberNode(1), :b))
             # @test parsestmt("a -> (\nb;c)") ==
             #     Expr(:->, :a, Expr(:block, LineNumberNode(1), :b))
             @test parsestmt("a -> begin\nb\nc\nend") ==
@@ -137,6 +141,20 @@
                                    LineNumberNode(1),
                                    LineNumberNode(2), :b,
                                    LineNumberNode(3), :c))
+            @test parsestmt("(a;b=1) -> c") ==
+                Expr(:->,
+                     Expr(:block, :a, LineNumberNode(1), Expr(:(=), :b, 1)),
+                     Expr(:block, LineNumberNode(1), :c))
+            @test parsestmt("(a...;b...) -> c") ==
+                Expr(:->,
+                     Expr(:tuple, Expr(:parameters, Expr(:(...), :b)), Expr(:(...), :a)),
+                     Expr(:block, LineNumberNode(1), :c))
+            @test parsestmt("(;) -> c") ==
+                Expr(:->,
+                     Expr(:tuple, Expr(:parameters)),
+                     Expr(:block, LineNumberNode(1), :c))
+            @test parsestmt("a::T -> b") ==
+                Expr(:->, Expr(:(::), :a, :T), Expr(:block, LineNumberNode(1), :b))
         end
 
         @testset "elseif" begin
