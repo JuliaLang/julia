@@ -337,6 +337,13 @@ if bc_opt == bc_default
     end
     @test confuse_alias_analysis() == 3
     @test (@allocated confuse_alias_analysis()) == 0
+    function no_alias_prove(n)
+        m1 = Memory{Int}(undef,n)
+        m2 = Memory{Int}(undef,n)
+        m1 === m2
+    end
+    no_alias_prove(1)
+    @test (@allocated no_alias_prove(5)) == 0
 end
 end
 

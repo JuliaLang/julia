@@ -1179,6 +1179,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
