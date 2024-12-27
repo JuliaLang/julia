@@ -463,7 +463,7 @@ internals.
   when looking up methods, use current world age if not specified.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
-- `optimize_until::Union{Integer,AbstractString,Nothing} = nothing`: optional,
+- `optimize_until::Union{Int,String,Nothing} = nothing`: optional,
   controls the optimization passes to run.
   If it is a string, it specifies the name of the pass up to which the optimizer is run.
   If it is an integer, it specifies the number of passes to run.
@@ -507,7 +507,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     interp=nothing,
-    optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
+    optimize_until::Union{Int,String,Nothing}=nothing,
 )
     passed_interp = interp
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
