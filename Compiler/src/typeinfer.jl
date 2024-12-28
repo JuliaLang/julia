@@ -977,23 +977,23 @@ end
 
 """
     typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
-                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+                   optimize_until::Union{Int,String,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
     typeinf_ircode(interp::AbstractInterpreter,
                    method::Method, atype, sparams::SimpleVector,
-                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+                   optimize_until::Union{Int,String,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
     typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
-                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+                   optimize_until::Union{Int,String,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
 
 Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
 typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
-               optimize_until::Union{Integer,AbstractString,Nothing}) =
+               optimize_until::Union{Int,String,Nothing}) =
     typeinf_ircode(interp, specialize_method(match), optimize_until)
 typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
-               optimize_until::Union{Integer,AbstractString,Nothing}) =
+               optimize_until::Union{Int,String,Nothing}) =
     typeinf_ircode(interp, specialize_method(method, atype, sparams), optimize_until)
 function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
-                        optimize_until::Union{Integer,AbstractString,Nothing})
+                        optimize_until::Union{Int,String,Nothing})
     frame = typeinf_frame(interp, mi, false)
     if frame === nothing
         return nothing, Any
