@@ -13,6 +13,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
     2   (call JuliaLowering.interpolate_ast (inert (block (call-i ($ ex) + 1))) %₁)
     3   (return %₂)
@@ -32,6 +33,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
     3   (return %₁)

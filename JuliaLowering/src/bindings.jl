@@ -8,6 +8,7 @@ struct BindingInfo
     node_id::Int              # ID of associated K"BindingId" node in the syntax graph
     mod::Union{Nothing,Module} # Set when `kind === :global`
     type::Union{Nothing,SyntaxTree} # Type, for bindings declared like x::T = 10
+    n_assigned::Int32         # Number of times variable is assigned to
     is_const::Bool            # Constant, cannot be reassigned
     is_ssa::Bool              # Single assignment, defined before use
     is_captured::Bool         # Variable is captured by some lambda
@@ -20,6 +21,7 @@ end
 function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Integer;
                      mod::Union{Nothing,Module} = nothing,
                      type::Union{Nothing,SyntaxTree} = nothing,
+                     n_assigned::Integer = 0,
                      is_const::Bool = false,
                      is_ssa::Bool = false,
                      is_captured::Bool = false,
@@ -27,7 +29,8 @@ function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Int
                      is_internal::Bool = false,
                      is_ambiguous_local::Bool = false,
                      is_nospecialize::Bool = false)
-    BindingInfo(id, name, kind, node_id, mod, type, is_const, is_ssa, is_captured, is_always_defined,
+    BindingInfo(id, name, kind, node_id, mod, type, n_assigned, is_const,
+                is_ssa, is_captured, is_always_defined,
                 is_internal, is_ambiguous_local, is_nospecialize)
 end
 
@@ -66,7 +69,8 @@ function _binding_id(ex::SyntaxTree)
 end
 
 function update_binding!(bindings::Bindings, x;
-        type=nothing, is_const=nothing, is_always_defined=nothing, is_captured=nothing)
+        type=nothing, is_const=nothing, add_assigned=0,
+        is_always_defined=nothing, is_captured=nothing)
     id = _binding_id(x)
     b = lookup_binding(bindings, id)
     bindings.info[id] = BindingInfo(
@@ -76,6 +80,7 @@ function update_binding!(bindings::Bindings, x;
         b.node_id,
         b.mod,
         isnothing(type) ? b.type : type,
+        b.n_assigned + add_assigned,
         isnothing(is_const) ? b.is_const : is_const,
         b.is_ssa,
         isnothing(is_captured) ? b.is_captured : is_captured,
@@ -117,7 +122,10 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name; kind=:loc
     @assert kind === :local || kind === :argument
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     ex = new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
-    add_lambda_local!(ctx, ex.var_id)
+    lbindings = current_lambda_bindings(ctx)
+    if !isnothing(lbindings)
+        init_lambda_binding(lbindings, ex.var_id)
+    end
     ex
 end
 
@@ -132,5 +140,73 @@ function binding_ex(ctx::AbstractLoweringContext, id::IdTag)
     # that would contain the type of the graph used in the pass where the
     # bindings were created and we'd need to call reparent(), etc.
     SyntaxTree(syntax_graph(ctx), lookup_binding(ctx, id).node_id)
+end
+
+
+#-------------------------------------------------------------------------------
+"""
+Metadata about how a binding is used within some enclosing lambda
+"""
+struct LambdaBindingInfo
+    is_captured::Bool
+    is_read::Bool
+    is_assigned::Bool
+    # Binding was the function name in a call. Used for specialization
+    # heuristics in the optimizer.
+    is_called::Bool
+end
+
+LambdaBindingInfo() = LambdaBindingInfo(false, false, false, false)
+
+function LambdaBindingInfo(parent::LambdaBindingInfo;
+                           is_captured = nothing,
+                           is_read     = nothing,
+                           is_assigned = nothing,
+                           is_called   = nothing)
+    LambdaBindingInfo(
+        isnothing(is_captured) ? parent.is_captured : is_captured,
+        isnothing(is_read)     ? parent.is_read     : is_read,
+        isnothing(is_assigned) ? parent.is_assigned : is_assigned,
+        isnothing(is_called)   ? parent.is_called   : is_called,
+    )
+end
+
+struct LambdaBindings
+    # Bindings used within the lambda
+    self::IdTag
+    bindings::Dict{IdTag,LambdaBindingInfo}
+end
+
+LambdaBindings(self::IdTag = 0) = LambdaBindings(self, Dict{IdTag,LambdaBindings}())
+
+function init_lambda_binding(bindings::LambdaBindings, id; kws...)
+    @assert !haskey(bindings.bindings, id)
+    bindings.bindings[id] = LambdaBindingInfo(LambdaBindingInfo(); kws...)
+end
+
+function update_lambda_binding!(bindings::LambdaBindings, x; kws...)
+    id = _binding_id(x)
+    binfo = bindings.bindings[id]
+    bindings.bindings[id] = LambdaBindingInfo(binfo; kws...)
+end
+
+function update_lambda_binding!(ctx::AbstractLoweringContext, x; kws...)
+    update_lambda_binding!(current_lambda_bindings(ctx), x; kws...)
+end
+
+function lookup_lambda_binding(bindings::LambdaBindings, x)
+    get(bindings.bindings, _binding_id(x), nothing)
+end
+
+function lookup_lambda_binding(ctx::AbstractLoweringContext, x)
+    lookup_lambda_binding(current_lambda_bindings(ctx), x)
+end
+
+function has_lambda_binding(bindings::LambdaBindings, x)
+    haskey(bindings.bindings, _binding_id(x))
+end
+
+function has_lambda_binding(ctx::AbstractLoweringContext, x)
+    has_lambda_binding(current_lambda_bindings(ctx), x)
 end
 

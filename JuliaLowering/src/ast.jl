@@ -48,9 +48,13 @@ end
 #-------------------------------------------------------------------------------
 abstract type AbstractLoweringContext end
 
-function add_lambda_local!(ctx::AbstractLoweringContext, id)
-    # empty - early passes don't need to record lambda locals
-end
+"""
+Bindings for the current lambda being processed.
+
+Lowering passes prior to scope resolution return `nothing` and bindings are
+collected later.
+"""
+current_lambda_bindings(ctx::AbstractLoweringContext) = nothing
 
 function syntax_graph(ctx::AbstractLoweringContext)
     ctx.graph

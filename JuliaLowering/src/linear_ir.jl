@@ -106,6 +106,10 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
                     Vector{JumpOrigin{GraphType}}(), ctx.mod)
 end
 
+function current_lambda_bindings(ctx::LinearIRContext)
+    ctx.lambda_bindings
+end
+
 function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
@@ -396,10 +400,6 @@ function compile_conditional(ctx, ex, false_label)
         c = compile_condition_term(ctx, test)
         emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
     end
-end
-
-function add_lambda_local!(ctx::LinearIRContext, id)
-    init_lambda_binding(ctx.lambda_bindings, id)
 end
 
 # Lowering of exception handling must ensure that
@@ -974,37 +974,46 @@ struct Slot
     name::String
     kind::Symbol
     is_nospecialize::Bool
-    # <- todo: flags here etc
+    is_read::Bool
+    is_single_assign::Bool
+    is_maybe_undef::Bool
+    is_called::Bool
 end
 
 function compile_lambda(outer_ctx, ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
     ret_var = numchildren(ex) == 4 ? ex[4] : nothing
-    # TODO: Add assignments for reassigned arguments to body using lambda_args
-    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, ex.lambda_bindings, ret_var)
+    # TODO: Add assignments for reassigned arguments to body
+    lambda_bindings = ex.lambda_bindings
+    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, lambda_bindings, ret_var)
     compile_body(ctx, ex[3])
     slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument, false))
+            push!(slots, Slot(arg.name_val, :argument, false, false, false, false, false))
         else
             @assert kind(arg) == K"BindingId"
             id = arg.var_id
-            info = lookup_binding(ctx.bindings, id)
-            @assert info.kind == :local || info.kind == :argument
-            push!(slots, Slot(info.name, :argument, info.is_nospecialize))
+            binfo = lookup_binding(ctx, id)
+            lbinfo = lookup_lambda_binding(ctx, id)
+            @assert binfo.kind == :local || binfo.kind == :argument
+            # FIXME: is_single_assign, is_maybe_undef
+            push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
+                              lbinfo.is_read, false, false, lbinfo.is_called))
             slot_rewrites[id] = length(slots)
         end
     end
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
-    for (id, lbinfo) in sort(collect(pairs(ex.lambda_bindings.bindings)), by=first)
+    for (id, lbinfo) in sort(collect(pairs(lambda_bindings.bindings)), by=first)
         if !lbinfo.is_captured
-            info = lookup_binding(ctx.bindings, id)
-            if info.kind == :local
-                push!(slots, Slot(info.name, :local, false))
+            binfo = lookup_binding(ctx.bindings, id)
+            if binfo.kind == :local
+                # FIXME: is_single_assign, is_maybe_undef
+                push!(slots, Slot(binfo.name, :local, false,
+                                  lbinfo.is_read, false, false, lbinfo.is_called))
                 slot_rewrites[id] = length(slots)
             end
         end

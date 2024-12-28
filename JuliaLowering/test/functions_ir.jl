@@ -11,6 +11,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/_(!read) slot₄/y]
     1   TestMod.+
     2   (call %₁ slot₂/x slot₄/y)
     3   (return %₂)
@@ -31,6 +32,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 9   TestMod.f
@@ -50,6 +52,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
     1   TestMod.body
     2   (return %₁)
 9   TestMod.f
@@ -69,6 +72,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys(!read)]
     1   TestMod.body
     2   (return %₁)
 9   TestMod.f
@@ -89,6 +93,7 @@ end
 7   (call core.svec)
 8   (call core.svec %₆ %₇ :($(QuoteNode(:(#= line 1 =#)))))
 9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys(!read)]
     1   TestMod.body
     2   (return %₁)
 10  TestMod.f
@@ -128,6 +133,7 @@ end
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  (call core.svec %₁₀ %₁₄ :($(QuoteNode(:(#= line 1 =#)))))
 16  --- method core.nothing %₁₅
+    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/_(!read) slot₄/_(!read)]
     1   static_parameter₃
     2   static_parameter₁
     3   static_parameter₂
@@ -156,6 +162,7 @@ end
 12  (call core.svec %₁₁)
 13  (call core.svec %₁₀ %₁₂ :($(QuoteNode(:(#= line 1 =#)))))
 14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(!read) slot₂/_(!read)]
     1   static_parameter₁
     2   (return %₁)
 15  TestMod.f
@@ -177,6 +184,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read)]
     1   TestMod.Int
     2   (gotoifnot slot₂/x label₃)
     3   (= slot₃/tmp 0xff)
@@ -203,6 +211,7 @@ end
 3   (call core.svec)
 4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 1 =#)))))
 5   --- method core.nothing %₄
+    slots: [slot₁/#self#(!read) slot₂/x]
     1   slot₂/x
     2   (return %₁)
 6   (return core.nothing)
@@ -218,6 +227,7 @@ end
 3   (call core.svec)
 4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 1 =#)))))
 5   --- method core.nothing %₄
+    slots: [slot₁/y slot₂/x]
     1   (call core.tuple slot₁/y slot₂/x)
     2   (return %₁)
 6   (return core.nothing)
@@ -237,6 +247,7 @@ end
 7   (call core.svec %₆)
 8   (call core.svec %₅ %₇ :($(QuoteNode(:(#= line 1 =#)))))
 9   --- method core.nothing %₈
+    slots: [slot₁/x(!read)]
     1   static_parameter₁
     2   (return %₁)
 10  (return core.nothing)
@@ -253,6 +264,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 8   (return core.nothing)
 
@@ -368,6 +380,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(called) slot₂/x]
     1   (call slot₁/#self# slot₂/x 1 2)
     2   (return %₁)
 9   TestMod.f
@@ -378,6 +391,7 @@ end
 14  (call core.svec)
 15  (call core.svec %₁₃ %₁₄ :($(QuoteNode(:(#= line 1 =#)))))
 16  --- method core.nothing %₁₅
+    slots: [slot₁/#self#(called) slot₂/x slot₃/y]
     1   (call slot₁/#self# slot₂/x slot₃/y 2)
     2   (return %₁)
 17  TestMod.f
@@ -389,6 +403,7 @@ end
 23  (call core.svec)
 24  (call core.svec %₂₂ %₂₃ :($(QuoteNode(:(#= line 1 =#)))))
 25  --- method core.nothing %₂₄
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z(!read)]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 26  TestMod.f
@@ -407,6 +422,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(called)]
     1   (call slot₁/#self# 1)
     2   (return %₁)
 8   TestMod.f
@@ -415,6 +431,7 @@ end
 11  (call core.svec)
 12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
 13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(called) slot₂/x]
     1   (call slot₁/#self# slot₂/x slot₂/x)
     2   (return %₁)
 14  TestMod.f
@@ -423,6 +440,7 @@ end
 17  (call core.svec)
 18  (call core.svec %₁₆ %₁₇ :($(QuoteNode(:(#= line 1 =#)))))
 19  --- method core.nothing %₁₈
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 20  TestMod.f
@@ -442,6 +460,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(called) slot₂/_]
     1   (call slot₁/#self# slot₂/_ 1 2)
     2   (return %₁)
 9   TestMod.f
@@ -451,6 +470,7 @@ end
 13  (call core.svec)
 14  (call core.svec %₁₂ %₁₃ :($(QuoteNode(:(#= line 1 =#)))))
 15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(called) slot₂/_ slot₃/y]
     1   (call slot₁/#self# slot₂/_ slot₃/y 2)
     2   (return %₁)
 16  TestMod.f
@@ -460,6 +480,7 @@ end
 20  (call core.svec)
 21  (call core.svec %₁₉ %₂₀ :($(QuoteNode(:(#= line 1 =#)))))
 22  --- method core.nothing %₂₁
+    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 23  TestMod.f
@@ -479,6 +500,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(called) slot₂/_]
     1   (call slot₁/#self# slot₂/_ 1)
     2   (return %₁)
 9   TestMod.f
@@ -488,6 +510,7 @@ end
 13  (call core.svec)
 14  (call core.svec %₁₂ %₁₃ :($(QuoteNode(:(#= line 1 =#)))))
 15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 16  TestMod.f
@@ -513,6 +536,7 @@ end
 12  (call core.svec %₁₁)
 13  (call core.svec %₁₀ %₁₂ :($(QuoteNode(:(#= line 1 =#)))))
 14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(called) slot₂/x]
     1   (call slot₁/#self# slot₂/x 1 2)
     2   (return %₁)
 15  TestMod.f
@@ -525,6 +549,7 @@ end
 22  (call core.svec %₂₀ %₂₁)
 23  (call core.svec %₁₉ %₂₂ :($(QuoteNode(:(#= line 1 =#)))))
 24  --- method core.nothing %₂₃
+    slots: [slot₁/#self#(called) slot₂/x slot₃/y]
     1   (call slot₁/#self# slot₂/x slot₃/y 2)
     2   (return %₁)
 25  TestMod.f
@@ -539,6 +564,7 @@ end
 34  (call core.svec %₃₁ %₃₂ %₃₃)
 35  (call core.svec %₃₀ %₃₄ :($(QuoteNode(:(#= line 1 =#)))))
 36  --- method core.nothing %₃₅
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   (call core.tuple slot₂/x slot₃/y slot₄/z)
     2   (return %₁)
 37  TestMod.f
@@ -565,6 +591,7 @@ end
 11  (call core.svec)
 12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
 13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(called) slot₂/x]
     1   (call top.vect 1)
     2   (call slot₁/#self# slot₂/x %₁ 2)
     3   (return %₂)
@@ -577,6 +604,7 @@ end
 20  (call core.svec %₁₈ %₁₉)
 21  (call core.svec %₁₇ %₂₀ :($(QuoteNode(:(#= line 1 =#)))))
 22  --- method core.nothing %₂₁
+    slots: [slot₁/#self#(called) slot₂/x slot₃/y]
     1   (call slot₁/#self# slot₂/x slot₃/y 2)
     2   (return %₁)
 23  TestMod.f
@@ -590,6 +618,7 @@ end
 31  (call core.svec %₂₈ %₂₉ %₃₀)
 32  (call core.svec %₂₇ %₃₁ :($(QuoteNode(:(#= line 1 =#)))))
 33  --- method core.nothing %₃₂
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   static_parameter₁
     2   static_parameter₂
     3   static_parameter₃
@@ -611,6 +640,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(called)]
     1   (call slot₁/#self# 1)
     2   (return %₁)
 8   TestMod.f
@@ -620,6 +650,7 @@ end
 12  (call core.svec)
 13  (call core.svec %₁₁ %₁₂ :($(QuoteNode(:(#= line 1 =#)))))
 14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
 15  TestMod.f
@@ -650,6 +681,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(called)]
     1   (call slot₁/#self# 1)
     2   (return %₁)
 8   TestMod.f
@@ -659,6 +691,7 @@ end
 12  (call core.svec)
 13  (call core.svec %₁₁ %₁₂ :($(QuoteNode(:(#= line 1 =#)))))
 14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 15  TestMod.f
@@ -677,6 +710,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#]
     1   (call core.tuple 1 2)
     2   (call core._apply_iterate top.iterate slot₁/#self# %₁)
     3   (return %₂)
@@ -687,6 +721,7 @@ end
 12  (call core.svec)
 13  (call core.svec %₁₁ %₁₂ :($(QuoteNode(:(#= line 1 =#)))))
 14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 15  TestMod.f
@@ -704,6 +739,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/destructured_arg_2 slot₄/w(!read) slot₅/iterstate slot₆/y(!read) slot₇/z(!read)]
     1   (call top.indexed_iterate slot₃/destructured_arg_2 1)
     2   (= slot₆/y (call core.getfield %₁ 1))
     3   (= slot₅/iterstate (call core.getfield %₁ 2))
@@ -726,6 +762,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(called)]
     1   TestMod.rhs
     2   (call slot₁/#self# %₁)
     3   (return %₂)
@@ -737,6 +774,7 @@ end
 13  (call core.svec)
 14  (call core.svec %₁₂ %₁₃ :($(QuoteNode(:(#= line 1 =#)))))
 15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg_1 slot₃/x(!read)]
     1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
@@ -755,6 +793,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg_1 slot₃/destructured_arg_2]
     1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
     2   (call core.getfield %₁ 1)
     3   (call top.indexed_iterate slot₃/destructured_arg_2 1)
@@ -764,18 +803,23 @@ end
 9   (return %₈)
 
 ########################################
-# Functions with @nospecialize argument metadata
-function f(@nospecialize(x))
+# Slot flags
+function f(@nospecialize(x), g, y)
+    g() + y
 end
 #---------------------
 1   (method TestMod.f)
 2   TestMod.f
 3   (call core.Typeof %₂)
-4   (call core.svec %₃ core.Any)
+4   (call core.svec %₃ core.Any core.Any core.Any)
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
-    1   (return core.nothing)
+    slots: [slot₁/#self#(!read) slot₂/x(nospecialize,!read) slot₃/g(called) slot₄/y]
+    1   TestMod.+
+    2   (call slot₃/g)
+    3   (call %₁ %₂ slot₄/y)
+    4   (return %₃)
 8   TestMod.f
 9   (return %₈)
 
@@ -794,6 +838,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 4 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 8   TestMod.f
 9   (call JuliaLowering.bind_docs! %₈ "some docs\n" %₆)
@@ -813,6 +858,7 @@ end
 3   (call core.svec)
 4   (call core.svec %₂ %₃ :($(QuoteNode(:(#= line 4 =#)))))
 5   --- method core.nothing %₄
+    slots: [slot₁/x(!read)]
     1   (return core.nothing)
 6   TestMod.T
 7   (call JuliaLowering.bind_docs! %₆ "some docs\n" %₄)

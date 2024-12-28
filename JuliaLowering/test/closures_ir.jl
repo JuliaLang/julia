@@ -1,5 +1,6 @@
 ########################################
 # Simple closure
+# (FIXME: #self# should have `read` flag set)
 let
     x = 1
     function f(y)
@@ -25,6 +26,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/y slot₃/x(!read)]
     1   TestMod.+
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.isdefined %₂ :contents)
@@ -71,6 +73,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   2
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
@@ -112,6 +115,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read)]
     1   10
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
@@ -122,6 +126,7 @@ end
 11  (call core.svec)
 12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
 13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g(called) slot₄/x(!read)]
     1   (= slot₂/x (call core.Box slot₂/x))
     2   TestMod.#f#g##0
     3   (= slot₃/g (new %₂ slot₂/x))
@@ -162,6 +167,7 @@ x -> x*x
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)
@@ -192,6 +198,7 @@ end
 6   (call core.svec)
 7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
 8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)

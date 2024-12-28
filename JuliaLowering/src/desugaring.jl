@@ -2668,6 +2668,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             @ast ctx ex [K"if" cond true::K"Bool" cs[end]]
         end
+    elseif k == K"::" && numchildren(ex) == 2
+        @ast ctx ex [K"call"
+            "typeassert"::K"core"
+            expand_forms_2(ctx, ex[1])
+            expand_forms_2(ctx, ex[2])
+        ]
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"

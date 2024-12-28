@@ -112,6 +112,9 @@ function to_code_info(ex, mod, funcname, slots)
     slotflags = Vector{UInt8}(undef, length(slots))
     for (i, slot) in enumerate(slots)
         name = slot.name
+        # TODO: Do we actually want unique names here? The C code in
+        # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
+        # use the empty string for compiler-generated bindings.
         ni = get(slot_rename_inds, name, 0)
         slot_rename_inds[name] = ni + 1
         if ni > 0
@@ -119,8 +122,13 @@ function to_code_info(ex, mod, funcname, slots)
         end
         sname = Symbol(name)
         slotnames[i] = sname
-        slotflags[i] = 0x00  # FIXME!!
+        slotflags[i] =                   # Inference          | Codegen
+            slot.is_read          << 3 | # SLOT_USED          | jl_vinfo_sa
+            slot.is_single_assign << 4 | # SLOT_ASSIGNEDONCE  | -
+            slot.is_maybe_undef   << 5 | # SLOT_USEDUNDEF     | jl_vinfo_usedundef
+            slot.is_called        << 6   # SLOT_CALLED        | -
         if slot.is_nospecialize
+            # Ideally this should be a slot flag instead
             add_ir_debug_info!(current_codelocs_stack, ex)
             push!(stmts, Expr(:meta, :nospecialize, Core.SlotNumber(i)))
         end

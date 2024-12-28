@@ -95,58 +95,6 @@ function find_scope_vars(ctx, ex)
     return assignments, locals, destructured_args, globals, used_names, used_bindings
 end
 
-# Metadata about how a binding is used within some enclosing lambda
-struct LambdaBindingInfo
-    is_captured::Bool
-    is_read::Bool
-    is_assigned::Bool
-    is_called::Bool
-end
-
-LambdaBindingInfo() = LambdaBindingInfo(false, false, false, false)
-
-function LambdaBindingInfo(parent::LambdaBindingInfo;
-                           is_captured = nothing,
-                           is_read     = nothing,
-                           is_assigned = nothing,
-                           is_called   = nothing)
-    LambdaBindingInfo(
-        isnothing(is_captured) ? parent.is_captured : is_captured,
-        isnothing(is_read)     ? parent.is_read     : is_read,
-        isnothing(is_assigned) ? parent.is_assigned : is_assigned,
-        isnothing(is_called)   ? parent.is_called   : is_called,
-    )
-end
-
-struct LambdaBindings
-    # Bindings used within the lambda
-    self::IdTag
-    bindings::Dict{IdTag,LambdaBindingInfo}
-end
-
-LambdaBindings(self::IdTag = 0) = LambdaBindings(self, Dict{IdTag,LambdaBindings}())
-
-function init_lambda_binding(binds::LambdaBindings, id; kws...)
-    @assert !haskey(binds.bindings, id)
-    binds.bindings[id] = LambdaBindingInfo(LambdaBindingInfo(); kws...)
-end
-
-function update_lambda_binding!(binds::LambdaBindings, id; kws...)
-    binfo = binds.bindings[id]
-    binds.bindings[id] = LambdaBindingInfo(binfo; kws...)
-end
-
-function update_lambda_binding!(ctx::AbstractLoweringContext, id; kws...)
-    update_lambda_binding!(last(ctx.scope_stack).lambda_bindings, id; kws...)
-end
-
-struct ClosureBindings
-    name_stack::Vector{String}      # Names of functions the closure is nested within
-    lambdas::Vector{LambdaBindings} # Bindings for each method of the closure
-end
-
-ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
-
 struct ScopeInfo
     # True if scope is the global top level scope
     is_toplevel_global_scope::Bool
@@ -173,13 +121,9 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     global_vars::Dict{NameKey,IdTag}
     # Stack of name=>id mappings for each scope, innermost scope last.
     scope_stack::Vector{ScopeInfo}
-    method_def_stack::SyntaxList{GraphType}
     # Variables which were implicitly global due to being assigned to in top
     # level code
     implicit_toplevel_globals::Set{NameKey}
-    # Collection of information about each closure, principally which methods
-    # are part of the closure (and hence captures).
-    closure_bindings::Dict{IdTag,ClosureBindings}
 end
 
 function ScopeResolutionContext(ctx)
@@ -190,9 +134,11 @@ function ScopeResolutionContext(ctx)
                            ctx.scope_layers,
                            Dict{NameKey,IdTag}(),
                            Vector{ScopeInfo}(),
-                           SyntaxList(graph),
-                           Set{NameKey}(),
-                           Dict{IdTag,ClosureBindings}())
+                           Set{NameKey}())
+end
+
+function current_lambda_bindings(ctx::ScopeResolutionContext)
+    last(ctx.scope_stack).lambda_bindings
 end
 
 function lookup_var(ctx, varkey::NameKey, exclude_toplevel_globals=false)
@@ -382,6 +328,8 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
     # enclosing lambda
     # * All non-globals are recorded (kind :local and :argument will later be turned into slots)
     # * Captured variables are detected and recorded
+    #
+    # TODO: Move most or-all of this to the VariableAnalysis sub-pass
     lambda_bindings = if is_outer_lambda_scope
         if isempty(lambda_args)
             LambdaBindings()
@@ -410,8 +358,8 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         binfo = lookup_binding(ctx, id)
         if (binfo.kind === :local && !binfo.is_ssa) || binfo.kind === :argument ||
                 binfo.kind === :static_parameter
-            if !haskey(lambda_bindings.bindings, id)
-                init_lambda_binding(lambda_bindings, id, is_read=true, is_assigned=true)
+            if !has_lambda_binding(lambda_bindings, id)
+                init_lambda_binding(lambda_bindings, id)
             end
         end
     end
@@ -425,12 +373,10 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
         elseif !in_toplevel_thunk
             binfo = lookup_binding(ctx, id)
             if binfo.kind !== :global
-                if !haskey(lambda_bindings.bindings, id)
+                if !has_lambda_binding(lambda_bindings, id)
                     # Used vars from a scope *outside* the current lambda are captured
-                    init_lambda_binding(lambda_bindings, id, is_captured=true, is_read=true)
+                    init_lambda_binding(lambda_bindings, id, is_captured=true)
                     update_binding!(ctx, id; is_captured=true)
-                else
-                    update_lambda_binding!(lambda_bindings, id, is_read=true)
                 end
             end
         end
@@ -441,12 +387,10 @@ function analyze_scope(ctx, ex, scope_type, is_toplevel_global_scope=false,
             id = haskey(var_ids, varkey) ? var_ids[varkey] : lookup_var(ctx, varkey)
             binfo = lookup_binding(ctx, id)
             if binfo.kind !== :global
-                if !haskey(lambda_bindings.bindings, id)
+                if !has_lambda_binding(lambda_bindings, id)
                     # Assigned vars from a scope *outside* the current lambda are captured
-                    init_lambda_binding(lambda_bindings, id, is_captured=true, is_assigned=true)
+                    init_lambda_binding(lambda_bindings, id, is_captured=true)
                     update_binding!(ctx, id; is_captured=true)
-                else
-                    update_lambda_binding!(lambda_bindings, id, is_assigned=true)
                 end
             end
         end
@@ -467,52 +411,26 @@ function add_local_decls!(ctx, stmts, srcref, scope)
     end
 end
 
-# Do some things which are better done after converting to BindingId.
-function maybe_update_bindings!(ctx, ex)
-    k = kind(ex)
-    if k == K"decl"
-        @chk numchildren(ex) == 2
-        id = ex[1]
-        if kind(id) != K"Placeholder"
-            binfo = lookup_binding(ctx, id)
-            if !isnothing(binfo.type)
-                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
-            end
-            if binfo.kind == :global && !ctx.scope_stack[end].in_toplevel_thunk
-                throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
-                # set_binding_type!
-            end
-            update_binding!(ctx, id; type=ex[2])
-        end
-    elseif k == K"const"
-        id = ex[1]
-        if lookup_binding(ctx, id).kind == :local
-            throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
-        end
-        update_binding!(ctx, id; is_const=true)
-    elseif k == K"call"
-        name = ex[1]
-        if kind(name) == K"BindingId"
-            id = name.var_id
-            if haskey(last(ctx.scope_stack).lambda_bindings.bindings, id)
-                update_lambda_binding!(ctx, id, is_called=true)
-            end
-        end
-    end
-    nothing
-end
-
 function _resolve_scopes(ctx, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
-        id = lookup_var(ctx, NameKey(ex))
-        @ast ctx ex id::K"BindingId"
+        @ast ctx ex lookup_var(ctx, NameKey(ex))::K"BindingId"
     elseif is_leaf(ex) || is_quoted(ex) || k == K"toplevel"
         ex
     # elseif k == K"global"
     #     ex
     elseif k == K"local"
         makeleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"decl"
+        ex_out = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
+        name = ex_out[1]
+        if kind(name) != K"Placeholder"
+            binfo = lookup_binding(ctx, name)
+            if binfo.kind == :global && !ctx.scope_stack[end].in_toplevel_thunk
+                throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
+            end
+        end
+        ex_out
     elseif k == K"local_def"
         id = lookup_var(ctx, NameKey(ex[1]))
         update_binding!(ctx, id; is_always_defined=true)
@@ -536,28 +454,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         ret_var = numchildren(ex) == 4 ? _resolve_scopes(ctx, ex[4]) : nothing
         pop!(ctx.scope_stack)
 
-        lambda_bindings = scope.lambda_bindings
-        if !is_toplevel_thunk
-            # Record all lambdas for the same closure type in one place
-            func_name = last(ctx.method_def_stack)
-            if kind(func_name) == K"BindingId"
-                func_name_id = func_name.var_id
-                if lookup_binding(ctx, func_name_id).kind === :local
-                    cbinds = get!(ctx.closure_bindings, func_name_id) do
-                        name_stack = Vector{String}()
-                        for fname in ctx.method_def_stack
-                            if kind(fname) == K"BindingId"
-                                push!(name_stack, lookup_binding(ctx, fname).name)
-                            end
-                        end
-                        ClosureBindings(name_stack)
-                    end
-                    push!(cbinds.lambdas, lambda_bindings)
-                end
-            end
-        end
-
-        @ast ctx ex [K"lambda"(lambda_bindings=lambda_bindings,
+        @ast ctx ex [K"lambda"(lambda_bindings=scope.lambda_bindings,
                                is_toplevel_thunk=is_toplevel_thunk)
             arg_bindings
             sparm_bindings
@@ -649,15 +546,8 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         else
             makeleaf(ctx, ex, K"TOMBSTONE")
         end
-    elseif k == K"method_defs"
-        push!(ctx.method_def_stack, _resolve_scopes(ctx, ex[1]))
-        ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
-        pop!(ctx.method_def_stack)
-        ex_mapped
     else
-        ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
-        maybe_update_bindings!(ctx, ex_mapped)
-        ex_mapped
+        mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
     end
 end
 
@@ -669,13 +559,139 @@ function _resolve_scopes(ctx, exs::AbstractVector)
     out
 end
 
+#-------------------------------------------------------------------------------
+# Sub-pass to compute additional information about variable usage as required
+# by closure conversion, etc
+struct ClosureBindings
+    name_stack::Vector{String}      # Names of functions the closure is nested within
+    lambdas::Vector{LambdaBindings} # Bindings for each method of the closure
+end
+
+ClosureBindings(name_stack) = ClosureBindings(name_stack, Vector{LambdaBindings}())
+
+struct VariableAnalysisContext{GraphType} <: AbstractLoweringContext
+    graph::GraphType
+    bindings::Bindings
+    mod::Module
+    lambda_bindings::LambdaBindings
+    # Stack of method definitions for closure naming
+    method_def_stack::SyntaxList{GraphType}
+    # Collection of information about each closure, principally which methods
+    # are part of the closure (and hence captures).
+    closure_bindings::Dict{IdTag,ClosureBindings}
+end
+
+function VariableAnalysisContext(graph, bindings, mod, lambda_bindings)
+    VariableAnalysisContext(graph, bindings, mod, lambda_bindings,
+                            SyntaxList(graph), Dict{IdTag,ClosureBindings}())
+end
+
+function current_lambda_bindings(ctx::VariableAnalysisContext)
+    ctx.lambda_bindings
+end
+
+# Update ctx.bindings and ctx.lambda_bindings metadata based on binding usage
+function analyze_variables!(ctx, ex)
+    k = kind(ex)
+    if k == K"BindingId"
+        if has_lambda_binding(ctx, ex)
+            # FIXME: Move this after closure conversion so that we don't need
+            # to model the closure conversion transformations here.
+            update_lambda_binding!(ctx, ex, is_read=true)
+        end
+    elseif is_leaf(ex) || is_quoted(ex)
+        return
+    elseif k == K"local" || k == K"global"
+        # Uses of bindings which don't count as uses.
+        return
+    elseif k == K"="
+        lhs = ex[1]
+        if kind(lhs) != K"Placeholder"
+            update_binding!(ctx, lhs, add_assigned=1)
+            if has_lambda_binding(ctx, lhs)
+                update_lambda_binding!(ctx, lhs, is_assigned=true)
+            end
+        end
+        analyze_variables!(ctx, ex[2])
+    elseif k == K"function_decl"
+        name = ex[1]
+        update_binding!(ctx, name, add_assigned=1)
+        if has_lambda_binding(ctx, name)
+            update_lambda_binding!(ctx, name, is_assigned=true)
+        end
+    elseif k == K"function_type"
+        if kind(ex[1]) != K"BindingId" || lookup_binding(ctx, ex[1]).kind !== :local
+            analyze_variables!(ctx, ex[1])
+        end
+    elseif k == K"decl"
+        @chk numchildren(ex) == 2
+        id = ex[1]
+        if kind(id) != K"Placeholder"
+            binfo = lookup_binding(ctx, id)
+            if !isnothing(binfo.type)
+                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
+            end
+            update_binding!(ctx, id; type=ex[2])
+        end
+        analyze_variables!(ctx, ex[2])
+    elseif k == K"const"
+        id = ex[1]
+        if lookup_binding(ctx, id).kind == :local
+            throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+        end
+        update_binding!(ctx, id; is_const=true)
+    elseif k == K"call"
+        name = ex[1]
+        if kind(name) == K"BindingId"
+            id = name.var_id
+            if has_lambda_binding(ctx, id)
+                # FIXME: Move this after closure conversion so that we don't need
+                # to model the closure conversion transformations.
+                update_lambda_binding!(ctx, id, is_called=true)
+            end
+        end
+        foreach(e->analyze_variables!(ctx, e), children(ex))
+    elseif k == K"method_defs"
+        push!(ctx.method_def_stack, ex[1])
+        analyze_variables!(ctx, ex[2])
+        pop!(ctx.method_def_stack)
+    elseif k == K"lambda"
+        lambda_bindings = ex.lambda_bindings
+        if !ex.is_toplevel_thunk
+            # Record all lambdas for the same closure type in one place
+            func_name = last(ctx.method_def_stack)
+            if kind(func_name) == K"BindingId"
+                func_name_id = func_name.var_id
+                if lookup_binding(ctx, func_name_id).kind === :local
+                    cbinds = get!(ctx.closure_bindings, func_name_id) do
+                        name_stack = Vector{String}()
+                        for fname in ctx.method_def_stack
+                            if kind(fname) == K"BindingId"
+                                push!(name_stack, lookup_binding(ctx, fname).name)
+                            end
+                        end
+                        ClosureBindings(name_stack)
+                    end
+                    push!(cbinds.lambdas, lambda_bindings)
+                end
+            end
+        end
+        ctx2 = VariableAnalysisContext(ctx.graph, ctx.bindings, ctx.mod, lambda_bindings,
+                                       ctx.method_def_stack, ctx.closure_bindings)
+        foreach(e->analyze_variables!(ctx2, e), ex[3:end])
+    else
+        foreach(e->analyze_variables!(ctx, e), children(ex))
+    end
+    nothing
+end
+
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
     thunk = @ast ctx ex [K"lambda"(is_toplevel_thunk=true)
         [K"block"]
         [K"block"]
         ex
     ]
-    return _resolve_scopes(ctx, thunk)
+    _resolve_scopes(ctx, thunk)
 end
 
 """
@@ -691,5 +707,7 @@ enclosing lambda form and information about variables captured by closures.
 function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
     ex2 = resolve_scopes(ctx2, reparent(ctx2, ex))
-    ctx2, ex2
+    ctx3 = VariableAnalysisContext(ctx2.graph, ctx2.bindings, ctx2.mod, ex2.lambda_bindings)
+    analyze_variables!(ctx3, ex2)
+    ctx3, ex2
 end

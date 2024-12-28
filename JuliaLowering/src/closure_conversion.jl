@@ -27,8 +27,8 @@ function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
         Dict{IdTag,ClosureInfo{GraphType}}())
 end
 
-function add_lambda_local!(ctx::ClosureConversionCtx, id)
-    init_lambda_binding(ctx.lambda_bindings, id)
+function current_lambda_bindings(ctx::ClosureConversionCtx)
+    ctx.lambda_bindings
 end
 
 # Access captured variable from inside a closure
@@ -39,7 +39,7 @@ function captured_var_access(ctx, ex)
         "getfield"::K"core"
         # FIXME: attributing the self binding to srcref=ex gives misleading printing.
         # We should carry provenance with each binding to fix this.
-        binding_ex(ctx, ctx.lambda_bindings.self)
+        binding_ex(ctx, current_lambda_bindings(ctx).self)
         field_sym
     ]
 end
@@ -162,7 +162,7 @@ function convert_assignment(ctx, ex)
         convert_global_assignment(ctx, ex, var, rhs0)
     else
         @assert binfo.kind == :local || binfo.kind == :argument
-        lbinfo = get(ctx.lambda_bindings.bindings, var.var_id, nothing)
+        lbinfo = lookup_lambda_binding(ctx, var)
         self_captured = !isnothing(lbinfo) && lbinfo.is_captured
         captured      = binfo.is_captured
         if isnothing(binfo.type) && !self_captured && !captured
@@ -287,7 +287,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     k = kind(ex)
     if k == K"BindingId"
         id = ex.var_id
-        lbinfo = get(ctx.lambda_bindings.bindings, id, nothing)
+        lbinfo = lookup_lambda_binding(ctx, id)
         if !isnothing(lbinfo) && lbinfo.is_captured # TODO: && vinfo:asgn cv ??
             get_box_contents(ctx, ex, captured_var_access(ctx, ex))
         elseif lookup_binding(ctx, id).is_captured # TODO: && vinfo:asgn vi
@@ -326,12 +326,6 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             makeleaf(ctx, ex, K"TOMBSTONE")
         end
-    elseif k == K"::"
-        _convert_closures(ctx,
-            @ast ctx ex [K"call"
-                "typeassert"::K"core"
-                children(ex)...
-        ])
     elseif k == K"lambda"
         closure_convert_lambda(ctx, ex)
     elseif k == K"function_decl"
@@ -370,11 +364,14 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             # Single-arg K"method" has the side effect of creating a global
             # binding for `func_name` if it doesn't exist.
-            @ast ctx ex [K"method" func_name]
+            @ast ctx ex [K"block"
+                [K"method" func_name]
+                ::K"TOMBSTONE"
+            ]
         end
     elseif k == K"function_type"
         func_name = ex[1]
-        if kind(func_name) == K"BindingId" && lookup_binding(ctx, func_name).kind == :local
+        if kind(func_name) == K"BindingId" && lookup_binding(ctx, func_name).kind === :local
             ctx.closure_infos[func_name.var_id].type_name
         else
             @ast ctx ex [K"call" "Typeof"::K"core" func_name]
@@ -443,7 +440,7 @@ function closure_convert_lambda(ctx, ex)
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    makenode(ctx, ex, ex, lambda_children)
+    makenode(ctx, ex, ex, lambda_children; lambda_bindings=lambda_bindings)
 end
 
 
@@ -460,7 +457,7 @@ Invariants:
 * This pass must not introduce new K"Identifier" - only K"BindingId".
 * Any new binding IDs must be added to the enclosing lambda locals
 """
-function convert_closures(ctx::ScopeResolutionContext, ex)
+function convert_closures(ctx::VariableAnalysisContext, ex)
     ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                ctx.closure_bindings, ex.lambda_bindings)
     ex1 = closure_convert_lambda(ctx, ex)

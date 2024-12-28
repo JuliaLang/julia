@@ -69,18 +69,45 @@ function showprov(x; kws...)
     showprov(stdout, x; kws...)
 end
 
+function subscript_str(i)
+     replace(string(i),
+             "0"=>"₀", "1"=>"₁", "2"=>"₂", "3"=>"₃", "4"=>"₄",
+             "5"=>"₅", "6"=>"₆", "7"=>"₇", "8"=>"₈", "9"=>"₉")
+end
+
 function print_ir(io::IO, ex, indent="")
+    added_indent = "    "
     @assert (kind(ex) == K"lambda" || kind(ex) == K"code_info") && kind(ex[1]) == K"block"
+    if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
+        slots = ex.slots
+        print(io, indent, "slots: [")
+        for (i,slot) in enumerate(slots)
+            print(io, "slot$(subscript_str(i))/$(slot.name)")
+            flags = String[]
+            slot.is_nospecialize   && push!(flags, "nospecialize")
+            !slot.is_read          && push!(flags, "!read")
+            slot.is_single_assign  && push!(flags, "single_assign")
+            slot.is_maybe_undef    && push!(flags, "maybe_undef")
+            slot.is_called         && push!(flags, "called")
+            if !isempty(flags)
+                print(io, "($(join(flags, ",")))")
+            end
+            if i < length(slots)
+                print(io, " ")
+            end
+        end
+        println(io, "]")
+    end
     stmts = children(ex[1])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
         if kind(e) == K"method" && numchildren(e) == 3
             println(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
             @assert kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
-            print_ir(io, e[3], indent*"    ")
+            print_ir(io, e[3], indent*added_indent)
         elseif kind(e) == K"code_info" && e.is_toplevel_thunk
             println(io, indent, lno, " --- thunk")
-            print_ir(io, e, indent*"    ")
+            print_ir(io, e, indent*added_indent)
         else
             code = string(e)
             println(io, indent, lno, " ", code)

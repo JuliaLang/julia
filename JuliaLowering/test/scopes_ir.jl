@@ -33,6 +33,7 @@ end
 9   (call core.svec)
 10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 3 =#)))))
 11  --- method core.nothing %₁₀
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
 12  TestMod.f
@@ -79,6 +80,7 @@ end
 5   (call core.svec)
 6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
 7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (isdefined slot₂/z)

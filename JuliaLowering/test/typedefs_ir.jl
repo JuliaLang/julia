@@ -322,6 +322,7 @@ end
 28  (call core.svec)
 29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
 30  --- method core.nothing %₂₉
+    slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁)
     3   (return %₂)
@@ -370,6 +371,7 @@ end
 33  (call core.svec)
 34  (call core.svec %₃₂ %₃₃ :($(QuoteNode(:(#= line 1 =#)))))
 35  --- method core.nothing %₃₄
+    slots: [slot₁/#ctor-self# slot₂/a slot₃/b slot₄/c slot₅/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 2)
     2   slot₃/b
     3   (= slot₅/tmp %₂)
@@ -389,6 +391,7 @@ end
 40  (call core.svec)
 41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
 42  --- method core.nothing %₄₁
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/c]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b slot₄/c)
     3   (return %₂)
@@ -453,6 +456,7 @@ end
 52  (call core.svec)
 53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 1 =#)))))
 54  --- method core.nothing %₅₃
+    slots: [slot₁/#ctor-self#]
     1   (new slot₁/#ctor-self#)
     2   (return %₁)
 55  (return core.nothing)
@@ -495,6 +499,7 @@ end
 28  (call core.svec)
 29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
 30  --- method core.nothing %₂₉
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/c]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b slot₄/c)
     3   (return %₂)
@@ -542,6 +547,7 @@ end
 28  (call core.svec)
 29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 4 =#)))))
 30  --- method core.nothing %₂₉
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b)
     3   (return %₂)
@@ -603,6 +609,7 @@ end
 40  (call core.svec)
 41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
 42  --- method core.nothing %₄₁
+    slots: [slot₁/#ctor-self# slot₂/x slot₃/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 1)
     2   slot₂/x
     3   (= slot₃/tmp %₂)
@@ -623,6 +630,7 @@ end
 48  (call core.svec %₄₇)
 49  (call core.svec %₄₆ %₄₈ :($(QuoteNode(:(#= line 1 =#)))))
 50  --- method core.nothing %₄₉
+    slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.X
     2   static_parameter₁
     3   (call core.apply_type %₁ %₂)
@@ -694,6 +702,7 @@ end
 55  (call core.svec)
 56  (call core.svec %₅₄ %₅₅ :($(QuoteNode(:(#= line 1 =#)))))
 57  --- method core.nothing %₅₆
+    slots: [slot₁/#ctor-self# slot₂/v slot₃/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 1)
     2   slot₂/v
     3   (= slot₃/tmp %₂)
@@ -717,6 +726,7 @@ end
 66  (call core.svec %₆₄ %₆₅)
 67  (call core.svec %₆₃ %₆₆ :($(QuoteNode(:(#= line 1 =#)))))
 68  --- method core.nothing %₆₇
+    slots: [slot₁/#self#(!read) slot₂/v]
     1   TestMod.X
     2   static_parameter₁
     3   static_parameter₂
@@ -756,6 +766,7 @@ end
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 3 =#)))))
 6   --- method core.nothing %₅
+    slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
@@ -793,6 +804,7 @@ end
 38  (call core.svec)
 39  (call core.svec %₃₇ %₃₈ :($(QuoteNode(:(#= line 5 =#)))))
 40  --- method core.nothing %₃₉
+    slots: [slot₁/#ctor-self# slot₂/x]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
     3   (return %₂)
@@ -802,6 +814,7 @@ end
 44  (call core.svec)
 45  (call core.svec %₄₃ %₄₄ :($(QuoteNode(:(#= line 6 =#)))))
 46  --- method core.nothing %₄₅
+    slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
     3   TestMod.+
@@ -822,6 +835,7 @@ end
 50  (call core.svec)
 51  (call core.svec %₄₉ %₅₀ :($(QuoteNode(:(#= line 10 =#)))))
 52  --- method core.nothing %₅₁
+    slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
     3   (return %₂)
@@ -856,6 +870,7 @@ end
 4   (call core.svec)
 5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 5 =#)))))
 6   --- method core.nothing %₅
+    slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   TestMod.A
     3   TestMod.B
@@ -910,6 +925,7 @@ end
 52  (call core.svec)
 53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 3 =#)))))
 54  --- method core.nothing %₅₃
+    slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
     3   (return %₂)
@@ -926,6 +942,7 @@ end
 65  (call core.svec %₆₃ %₆₄)
 66  (call core.svec %₆₂ %₆₅ :($(QuoteNode(:(#= line 4 =#)))))
 67  --- method core.nothing %₆₆
+    slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
     3   (return %₂)
@@ -972,6 +989,7 @@ end
 28  (call core.svec)
 29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 4 =#)))))
 30  --- method core.nothing %₂₉
+    slots: [slot₁/#ctor-self# slot₂/xs]
     1   slot₁/#ctor-self#
     2   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     3   (splatnew %₁ %₂)
@@ -1029,6 +1047,7 @@ end
 41  (call core.svec %₄₀)
 42  (call core.svec %₃₉ %₄₁ :($(QuoteNode(:(#= line 4 =#)))))
 43  --- method core.nothing %₄₂
+    slots: [slot₁/#ctor-self# slot₂/xs slot₃/tmp slot₄/tmp]
     1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     2   (call core.nfields %₁)
     3   (call top.ult_int %₂ 2)

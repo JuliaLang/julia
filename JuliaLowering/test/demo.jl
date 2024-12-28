@@ -754,6 +754,12 @@ end
 # end
 # """
 
+src = """
+function f_slotflags(x, y, f, z)
+    f() + x + y
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
