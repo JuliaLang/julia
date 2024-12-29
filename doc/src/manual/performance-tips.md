@@ -3,6 +3,13 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## [Table of contents](@id man-performance-tips-toc)
+
+```@contents
+Pages = ["performance-tips.md"]
+Depth = 3
+```
+
 ## General advice
 
 ### Performance critical code should be inside a function
