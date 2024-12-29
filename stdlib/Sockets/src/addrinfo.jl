@@ -58,7 +58,7 @@ Uses the operating system's underlying `getaddrinfo` implementation, which may d
 # Examples
 ```julia-repl
 julia> getalladdrinfo("google.com")
-2-element Array{IPAddr,1}:
+2-element Vector{IPAddr}:
  ip"172.217.6.174"
  ip"2607:f8b0:4000:804::200e"
 ```
@@ -307,7 +307,7 @@ The `loopback` keyword argument dictates whether loopback addresses (e.g. `ip"12
 # Examples
 ```julia-repl
 julia> getipaddrs()
-5-element Array{IPAddr,1}:
+5-element Vector{IPAddr}:
  ip"198.51.100.17"
  ip"203.0.113.2"
  ip"2001:db8:8:4:445e:5fff:fe5d:5500"
@@ -315,7 +315,7 @@ julia> getipaddrs()
  ip"fe80::445e:5fff:fe5d:5500"
 
 julia> getipaddrs(IPv6)
-3-element Array{IPv6,1}:
+3-element Vector{IPv6}:
  ip"2001:db8:8:4:445e:5fff:fe5d:5500"
  ip"2001:db8:8:4:c164:402e:7e3c:3668"
  ip"fe80::445e:5fff:fe5d:5500"

@@ -174,8 +174,8 @@ end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
     ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
-invert(a::BigInt, b::BigInt) = invert!(BigInt(), a, b)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
+invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)

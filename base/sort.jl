@@ -186,10 +186,10 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
-    @inbounds while len != 0
+    while len != 0
         half_len = len >>> 0x01
         m = lo + half_len
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m + 1
             len -= half_len + 1
         else
@@ -206,9 +206,9 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     u = T(1)
     lo = lo - u
     hi = hi + u
-    @inbounds while lo != hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt(o, x, @inbounds(v[m]))
             hi = m
         else
             lo = m
@@ -224,11 +224,11 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     u = T(1)
     lo = ilo - u
     hi = ihi + u
-    @inbounds while lo != hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, x, @inbounds(v[m]))
             hi = m
         else
             a = searchsortedfirst(v, x, lo+u, m, o)

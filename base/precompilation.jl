@@ -1098,7 +1098,7 @@ function _precompilepkgs(pkgs::Vector{String},
             direct = strict ? "" : "direct "
             err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
             if internal_call # aka. auto-precompilation
-                if isinteractive() && !get(ENV, "CI", false)
+                if isinteractive()
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"
                     println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
                     println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")

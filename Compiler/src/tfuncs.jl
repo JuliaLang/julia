@@ -2017,9 +2017,12 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
 end
 
-@nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, m)
-    hasintersect(widenconst(m), Int) || return Bottom
-    return tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+@nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
+    hasintersect(widenconst(memlen), Int) || return Bottom
+    memt = tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+    memt == Union{} && return memt
+    # PartialStruct so that loads of Const `length` get inferred
+    return PartialStruct(𝕃, memt, Any[memlen, Ptr{Nothing}])
 end
 add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
 
@@ -3125,16 +3128,7 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 
 const FOREIGNCALL_ARG_START = 6
 
-function foreigncall_effects(@specialize(abstract_eval), e::Expr)
-    args = e.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
-    if name === :jl_alloc_genericmemory
-        nothrow = new_genericmemory_nothrow(abstract_eval, args)
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
-    elseif name === :jl_genericmemory_copy_slice
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
-    end
+function foreigncall_effects(@nospecialize(abstract_eval), e::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
     # concern that the method calls that potentially occur within the `:foreigncall` will
