@@ -1712,14 +1712,13 @@ end
 
         # this tests both the `TestCounts` parts as well as the fallback `x`s
         expected = r"""
-                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
-                    outer         |    3     1      1       1      6  \s*\d*.\ds
-                      a           |    1                           1  \s*\d*.\ds
-                      custom      |    1     1      1       1      4  \s*?s
-                      no-record   |    x     x      x       x      ?  \s*?s
-                      b           |    1                           1  \s*\d*.\ds
+                    Test Summary: \| Pass  Fail  Error  Broken  Total  Time
+                    outer         \|    3     1      1       1      6  \s*\d*.\ds
+                      a           \|    1                           1  \s*\d*.\ds
+                      custom      \|    1     1      1       1      4  \s*\?s
+                      no-record   \|    x     x      x       x      \?  \s*\?s
+                      b           \|    1                           1  \s*\d*.\ds
                     Random seed of the outermost testset: .*
-                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
                     """
 
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
