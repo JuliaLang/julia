@@ -357,15 +357,11 @@ let retval_tests = @testset NoThrowTestSet begin
 end
 
 @testset "printing of a TestSetException" begin
-    tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}(),nothing))
+    tse_str = sprint(show, Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}()))
     @test occursin("1 passed", tse_str)
     @test occursin("2 failed", tse_str)
     @test occursin("3 errored", tse_str)
     @test occursin("4 broken", tse_str)
-    @test !occursin("Random seed for this testset", tse_str)
-    tse = Test.TestSetException(1, 2, 3, 4, Vector{Union{Test.Error, Test.Fail}}(),Xoshiro(0x0c3f0fd71e1b608d, 0xf204adac6b421bcc, 0x431ba859cc9a911d, 0xafc39b4261a71e9a, 0x0030a16e0a785fb8))
-    tse_str = sprint(show, tse)
-    @test occursin("Random seed for this testset: $(tse.seed)", tse_str)
 end
 
 @test Test.finish(Test.FallbackTestSet()) !== nothing
@@ -836,14 +832,14 @@ end
 end
 
 let io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}(),nothing)
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !occursin("backtrace()", String(take!(io)))
 end
 
 @testset "#19750" begin
     io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}(),nothing)
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
     Base.showerror(io, exc, backtrace())
     @test !occursin("backtrace()", String(take!(io)))
 
@@ -1722,6 +1718,7 @@ end
                       custom      |    1     1      1       1      4  \s*?s
                       no-record   |    x     x      x       x      ?  \s*?s
                       b           |    1                           1  \s*\d*.\ds
+                    Random seed of the outermost testset: .*
                     ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
                     """
 

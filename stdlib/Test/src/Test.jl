@@ -982,7 +982,6 @@ struct TestSetException <: Exception
     error::Int
     broken::Int
     errors_and_fails::Vector{Union{Fail, Error}}
-    seed::Union{Nothing,AbstractRNG}
 end
 
 function Base.show(io::IO, ex::TestSetException)
@@ -991,10 +990,6 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.fail,  " failed, ")
     print(io, ex.error, " errored, ")
     print(io, ex.broken, " broken.")
-    if !isnothing(ex.seed)
-        println(io)
-        print(io, "Random seed for this testset: ", ex.seed)
-    end
 end
 
 function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
@@ -1225,6 +1220,13 @@ function print_test_results(ts::AbstractTestSet, depth_pad=0)
     println()
     # Recursively print a summary at every level
     print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
+    # Print the RNG seed of the outer testset if there are failures
+    if total != total_pass + total_broken
+        seed = get_seed(ts)
+        if !isnothing(seed)
+            println("Random seed of the outermost testset: ", seed)
+        end
+    end
 end
 
 
@@ -1257,7 +1259,7 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     if total != total_pass + total_broken
         # Get all the error/failures and bring them along for the ride
         efs = filter_errors(ts)
-        throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs, ts.seed))
+        throw(TestSetException(total_pass, total_fail, total_error, total_broken, efs))
     end
 
     # return the testset so it is returned from the @testset macro
@@ -1525,6 +1527,13 @@ accepts the following options:
   child testsets to return immediately (the default is `false`).
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 - `seed::Random.AbstractRNG`: seed the testset with the given random number generator (RNG).
+  This can be useful to locally reproduce stochastic test failures which only depend on the
+  state of the global RNG.
+
+!!! note "RNG seed of nested testsets"
+    Unless changed with the `seed` option, the same seed is set at the beginning of all
+    nested testsets.  The seed printed to screen when a testset has failures is the seed of
+    the outermost testset even if inner testsets have different seeds manually set by the user.
 
 !!! compat "Julia 1.8"
     `@testset test_func()` requires at least Julia 1.8.
