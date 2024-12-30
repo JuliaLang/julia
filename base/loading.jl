@@ -1782,7 +1782,7 @@ function compilecache_path(pkg::PkgId;
     path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
+        staledeps = stale_cachefile(sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
         if staledeps === true
             continue
         end
@@ -2555,7 +2555,7 @@ function _require(pkg::PkgId, env=nothing)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try
-                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
+                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true, ignore_loaded=false)
                 finally
                     lock(require_lock)
                 end
