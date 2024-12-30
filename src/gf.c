@@ -2863,7 +2863,17 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     // Everything from here on is considered (user facing) compile time
     uint64_t start = jl_typeinf_timing_begin();
-    int is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
+
+    // Is a recompile if there is cached code, and it was compiled (not only inferred) before
+    int is_recompile = 0;
+    jl_code_instance_t *codeinst_old = jl_atomic_load_relaxed(&mi->cache);
+    while (codeinst_old != NULL) {
+        if (jl_atomic_load_relaxed(&codeinst_old->invoke) != NULL) {
+            is_recompile = 1;
+            break;
+        }
+        codeinst_old = jl_atomic_load_relaxed(&codeinst_old->next);
+    }
 
     // This codeinst hasn't been previously inferred do that now
     // jl_type_infer will internally do a cache lookup and jl_engine_reserve call
