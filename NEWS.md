@@ -181,10 +181,10 @@ Standard library changes
 #### Test
 
 * A failing `DefaultTestSet` now prints to screen the random number generator (RNG) of the failed test, to help reproducing a stochastic failure which only depends on the state of the RNG.
-  It is also possible seed a test set by passing the `seed` keyword argument to `@testset`:
+  It is also possible seed a test set by passing the `rng` keyword argument to `@testset`:
   ```julia
   using Test, Random
-  @testset seed=Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850) begin
+  @testset rng=Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850) begin
       @test rand() == 0.559472630416976
   end
   ```

@@ -1718,7 +1718,7 @@ end
                       custom      \|    1     1      1       1      4  \s*\?s
                       no-record   \|    x     x      x       x      \?  \s*\?s
                       b           \|    1                           1  \s*\d*.\ds
-                    Random seed of the outermost testset: .*
+                    RNG of the outermost testset: .*
                     """
 
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
@@ -1754,18 +1754,18 @@ module M54082 end
     end
 end
 
-@testset "Set seed of testset" begin
+@testset "Set RNG of testset" begin
     rng1 = Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850)
     rng2 = Xoshiro(0xc380f460355639ee, 0xb39bc754b7d63bbf, 0x1551dbcfb5ed5668, 0x71ab5a18fec21a25, 0x649d0c1be1ca5436)
     rng3 = Xoshiro(0xee97f5b53f7cdc49, 0x480ac387b0527d3d, 0x614b416502a9e0f5, 0x5250cb36e4a4ceb1, 0xed6615c59e475fa0)
 
-    @testset seed=rng1 begin
+    @testset rng=rng1 begin
         @test rand() == rand(rng1)
     end
 
-    @testset seed=rng2 "Outer" begin
+    @testset rng=rng2 "Outer" begin
         @test rand() == rand(rng2)
-        @testset seed=rng3 "Inner: $(i)" for i in 1:10
+        @testset rng=rng3 "Inner: $(i)" for i in 1:10
             @test rand() == rand(rng3)
         end
     end
