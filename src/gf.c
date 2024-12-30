@@ -2867,8 +2867,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // Is a recompile if there is cached code, and it was compiled (not only inferred) before
     int is_recompile = 0;
     jl_code_instance_t *codeinst_old = jl_atomic_load_relaxed(&mi->cache);
-    if ((codeinst_old != NULL) && (jl_atomic_load_relaxed(&codeinst_old->invoke) != NULL)) {
-        is_recompile = 1;
+    while (codeinst_old != NULL) {
+        if (jl_atomic_load_relaxed(&codeinst_old->invoke) != NULL) {
+            is_recompile = 1;
+            break;
+        }
+        codeinst_old = jl_atomic_load_relaxed(&codeinst_old->next);
     }
 
     // This codeinst hasn't been previously inferred do that now
