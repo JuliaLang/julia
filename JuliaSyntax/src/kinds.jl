@@ -1230,3 +1230,12 @@ function is_whitespace(x)
     k = kind(x)
     return k == K"Whitespace" || k == K"NewlineWs" || k == K"Comment"
 end
+
+function is_syntactic_operator(x)
+    k = kind(x)
+    # TODO: Do we need to disallow dotted and suffixed forms when this is used
+    # in the parser? The lexer itself usually disallows such tokens, so it's
+    # not clear whether we need to handle them. (Though note `.->` is a
+    # token...)
+    return k in KSet"&& || . ... ->" || is_syntactic_assignment(k)
+end

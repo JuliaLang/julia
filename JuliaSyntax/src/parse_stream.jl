@@ -890,7 +890,8 @@ function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         h = SyntaxHead(k, f)
         b = (i == length(split_spec)) ? tok.next_byte : b + nbyte
-        push!(stream.tokens, SyntaxToken(h, kind(tok), false, b))
+        orig_k = k == K"." ? K"." : kind(tok)
+        push!(stream.tokens, SyntaxToken(h, orig_k, false, b))
     end
     stream.peek_count = 0
     return position(stream)

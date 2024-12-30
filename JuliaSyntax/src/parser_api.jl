@@ -174,15 +174,20 @@ Token() = Token(SyntaxHead(K"None", EMPTY_FLAGS), 0:0)
 head(t::Token) = t.head
 
 """
-    tokenize(text)
+    tokenize(text; operators_as_identifiers=true)
 
 Returns the tokenized UTF-8 encoded `text` as a vector of `Token`s. The
 text for the token can be retrieved by using `untokenize()`. The full text can be
 reconstructed with, for example, `join(untokenize.(tokenize(text), text))`.
 
 This interface works on UTF-8 encoded string or buffer data only.
+
+The keyword `operators_as_identifiers` specifies whether operators in
+identifier-position should have `K"Identifier"` as their kind, or be emitted as
+more specific operator kinds. For example, whether the `+` in `a + b` should be
+emitted as `K"Identifier"` (the default) or as `K"+"`.
 """
-function tokenize(text)
+function tokenize(text; operators_as_identifiers=true)
     ps = ParseStream(text)
     parse!(ps, rule=:all)
     ts = ps.tokens
@@ -192,7 +197,15 @@ function tokenize(text)
             continue
         end
         r = ts[i-1].next_byte:ts[i].next_byte-1
-        push!(output_tokens, Token(head(ts[i]), r))
+        k = kind(ts[i])
+        if k == K"Identifier" && !operators_as_identifiers
+            orig_k = ts[i].orig_kind
+            if is_operator(orig_k) && !is_word_operator(orig_k)
+                k = orig_k
+            end
+        end
+        f = flags(ts[i])
+        push!(output_tokens, Token(SyntaxHead(k,f), r))
     end
     output_tokens
 end
