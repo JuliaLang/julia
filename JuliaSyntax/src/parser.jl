@@ -382,14 +382,14 @@ function parse_LtoR(ps::ParseState, down, is_op)
     down(ps)
     while is_op(peek(ps))
         t = peek_token(ps)
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         down(ps)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
 # parse right-to-left binary operator
-# produces structures like (= a (= b (= c d)))
+# produces structures like (=> a (=> b (=> c d)))
 #
 # flisp: parse-RtoL
 function parse_RtoL(ps::ParseState, down, is_op, self)
@@ -397,7 +397,7 @@ function parse_RtoL(ps::ParseState, down, is_op, self)
     down(ps)
     t = peek_token(ps)
     if is_op(kind(t))
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         self(ps)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
@@ -624,7 +624,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # a .~ b     ==>  (dotcall-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
         # [a~b]      ==>  (vect (call-i a ~ b))
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         bump_trivia(ps)
         parse_assignment(ps, down)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
@@ -759,7 +759,7 @@ function parse_arrow(ps::ParseState)
             # x <--> y  ==>  (call-i x <--> y)
             # x .--> y  ==>  (dotcall-i x --> y)
             # x -->₁ y  ==>  (call-i x -->₁ y)
-            bump_dotsplit(ps)
+            bump_dotsplit(ps, remap_kind=K"Identifier")
             parse_arrow(ps)
             emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
         end
@@ -821,7 +821,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     while (t = peek_token(ps); is_prec_comparison(t))
         n_comparisons += 1
         op_dotted = is_dotted(t)
-        op_pos = bump_dotsplit(ps, emit_dot_node=true)
+        op_pos = bump_dotsplit(ps, emit_dot_node=true, remap_kind=K"Identifier")
         parse_pipe_lt(ps)
     end
     if n_comparisons == 1
@@ -881,7 +881,7 @@ function parse_range(ps::ParseState)
         # a..b     ==>   (call-i a .. b)
         # a … b    ==>   (call-i a … b)
         # a .… b    ==>  (dotcall-i a … b)
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         parse_invalid_ops(ps)
         emit(ps, mark, is_dotted(initial_tok) ? K"dotcall" : K"call", INFIX_FLAG)
     elseif initial_kind == K":" && ps.range_colon_enabled
@@ -904,9 +904,9 @@ function parse_range(ps::ParseState)
                 # a :> b   ==>  (call-i a (error : >) b)
                 bump_trivia(ps, skip_newlines=false)
                 emark = position(ps)
-                bump(ps) # K":"
+                bump(ps, remap_kind=K"Identifier") # K":"
                 ks = untokenize(peek(ps))
-                bump(ps) # K"<" or K">"
+                bump(ps, remap_kind=K"Identifier") # K"<" or K">"
                 emit(ps, emark, K"error",
                      error="Invalid `:$ks` found, maybe replace with `$ks:`")
                 parse_invalid_ops(ps)
@@ -914,7 +914,7 @@ function parse_range(ps::ParseState)
                 break
             end
             n_colons += 1
-            bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG)
+            bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG; remap_kind=K"Identifier")
             had_newline = peek(ps) == K"NewlineWs"
             t = peek_token(ps)
             if is_closing_token(ps, kind(t))
@@ -1008,7 +1008,7 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
             # [x+y + z]  ==>  (vect (call-i x + y z))
             break
         end
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         down(ps)
         if kind(t) in chain_ops && !is_decorated(t)
             # a + b + c    ==>  (call-i a + b c)
@@ -1217,7 +1217,7 @@ function parse_unary(ps::ParseState)
                 # unary negation
                 # -2^x      ==>  (call-pre - (call-i 2 ^ x))
                 # -2[1, 3]  ==>  (call-pre - (ref 2 1 3))
-                bump(ps)
+                bump(ps, remap_kind=K"Identifier")
                 parse_factor(ps)
                 emit(ps, mark, K"call", PREFIX_OP_FLAG)
             else
@@ -1256,7 +1256,7 @@ function parse_unary(ps::ParseState)
         #
         # (The flisp parser only considers commas before `;` and thus gets this
         # last case wrong)
-        op_pos = bump_dotsplit(ps, emit_dot_node=true)
+        op_pos = bump_dotsplit(ps, emit_dot_node=true, remap_kind=K"Identifier")
 
         space_before_paren = preceding_whitespace(t2)
         if space_before_paren
@@ -1303,7 +1303,7 @@ function parse_unary(ps::ParseState)
             if is_type_operator(op_t)
                 # <:(a,)  ==>  (<: a)
                 emit(ps, mark, op_k, opts.delim_flags)
-                reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
+                reset_node!(ps, op_pos, flags=TRIVIA_FLAG, kind=op_k)
             else
                 emit(ps, mark, K"call", opts.delim_flags)
             end
@@ -1329,7 +1329,7 @@ function parse_unary(ps::ParseState)
             if is_type_operator(op_t)
                 # <:(a)  ==>  (<:-pre (parens a))
                 emit(ps, mark, op_k, PREFIX_OP_FLAG)
-                reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
+                reset_node!(ps, op_pos, flags=TRIVIA_FLAG, kind=op_k)
             else
                 if is_dotted(op_t)
                     emit(ps, mark, K"dotcall", PREFIX_OP_FLAG)
@@ -1349,12 +1349,12 @@ function parse_unary(ps::ParseState)
             # -0x1 ==> (call-pre - 0x01)
             # - 2  ==> (call-pre - 2)
             # .-2  ==> (dotcall-pre - 2)
-            op_pos = bump_dotsplit(ps, EMPTY_FLAGS)
+            op_pos = bump_dotsplit(ps, EMPTY_FLAGS, remap_kind=K"Identifier")
         else
             # /x     ==>  (call-pre (error /) x)
             # +₁ x   ==>  (call-pre (error +₁) x)
             # .<: x  ==>  (dotcall-pre (error (. <:)) x)
-            bump_dotsplit(ps, EMPTY_FLAGS, emit_dot_node=true)
+            bump_dotsplit(ps, EMPTY_FLAGS, emit_dot_node=true, remap_kind=K"Identifier")
             op_pos = emit(ps, mark, K"error", error="not a unary operator")
         end
         parse_unary(ps)
@@ -1385,7 +1385,7 @@ end
 function parse_factor_with_initial_ex(ps::ParseState, mark)
     parse_decl_with_initial_ex(ps, mark)
     if (t = peek_token(ps); is_prec_power(kind(t)))
-        bump_dotsplit(ps)
+        bump_dotsplit(ps, remap_kind=K"Identifier")
         parse_factor_after(ps)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
@@ -1687,11 +1687,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 macro_atname_range = (m, position(ps))
                 emit(ps, mark, K".")
             elseif k == K"'"
+                # f.'  =>  f (error-t (. '))
+                bump_dotsplit(ps, remap_kind=K"Identifier")
                 # TODO: Reclaim dotted postfix operators :-)
-                # f.'  =>  f (error-t ')
-                bump(ps)
-                emit(ps, emark, K"error", TRIVIA_FLAG,
+                emit(ps, emark, K"error",
                      error="the .' operator for transpose is discontinued")
+                emit(ps, mark, K"dotcall", POSTFIX_OP_FLAG)
             else
                 # Field/property syntax
                 # f.x.y ==> (. (. f x) y)
@@ -1703,7 +1704,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         elseif k == K"'" && !preceding_whitespace(t)
             # f'  ==> (call-post f ')
             # f'ᵀ ==> (call-post f 'ᵀ)
-            bump(ps)
+            bump(ps, remap_kind=K"Identifier")
             emit(ps, mark, K"call", POSTFIX_OP_FLAG)
         elseif k == K"{"
             # Type parameter curlies and macro calls
@@ -3554,11 +3555,8 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # +     ==>  +
         # .+    ==>  (. +)
         # .=    ==>  (. =)
-        if is_dotted(peek_token(ps))
-            bump_dotsplit(ps, emit_dot_node=true)
-        else
-            bump(ps, remap_kind=K"Identifier")
-        end
+        bump_dotsplit(ps, emit_dot_node=true, remap_kind=
+                      is_syntactic_operator(leading_kind) ? leading_kind : K"Identifier")
         if check_identifiers && !is_valid_identifier(leading_kind)
             # +=   ==>  (error +=)
             # ?    ==>  (error ?)

@@ -8,7 +8,7 @@
     @test head.(children(t)) == [
          SyntaxHead(K"Identifier", 0x0000)
          SyntaxHead(K"Whitespace", 0x0001)
-         SyntaxHead(K"+", 0x0000)
+         SyntaxHead(K"Identifier", 0x0000)
          SyntaxHead(K"Whitespace", 0x0001)
          SyntaxHead(K"Identifier", 0x0000)
     ]

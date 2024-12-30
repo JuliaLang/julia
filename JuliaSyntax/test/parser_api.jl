@@ -170,7 +170,7 @@ end
     end
 end
 
-tokensplit(str) = [kind(tok) => untokenize(tok, str) for tok in tokenize(str)]
+tokensplit(str; kws...) = [kind(tok) => untokenize(tok, str) for tok in tokenize(str; kws...)]
 
 @testset "tokenize() API" begin
     # tokenize() is eager
@@ -178,6 +178,17 @@ tokensplit(str) = [kind(tok) => untokenize(tok, str) for tok in tokenize(str)]
 
     # . is a separate token from + in `.+`
     @test tokensplit("a .+ β") == [
+        K"Identifier" => "a",
+        K"Whitespace" => " ",
+        K"." => ".",
+        K"Identifier" => "+",
+        K"Whitespace" => " ",
+        K"Identifier" => "β",
+    ]
+
+    # + is kind K"+" when operators in identifier position are emitted as
+    # operator kinds.
+    @test tokensplit("a .+ β"; operators_as_identifiers=false) == [
         K"Identifier" => "a",
         K"Whitespace" => " ",
         K"." => ".",
@@ -189,6 +200,14 @@ tokensplit(str) = [kind(tok) => untokenize(tok, str) for tok in tokenize(str)]
     # Contextual keywords become identifiers where necessary
     @test tokensplit("outer = 1") == [
         K"Identifier" => "outer",
+        K"Whitespace" => " ",
+        K"=" => "=",
+        K"Whitespace" => " ",
+        K"Integer" => "1",
+    ]
+    # Including word operators
+    @test tokensplit("where = 1"; operators_as_identifiers=false) == [
+        K"Identifier" => "where",
         K"Whitespace" => " ",
         K"=" => "=",
         K"Whitespace" => " ",

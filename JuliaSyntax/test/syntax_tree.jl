@@ -25,7 +25,7 @@
 
     @test sprint(show, t) == "(call-i (call-i a * b) + c)"
     @test sprint(io->show(io, MIME("text/x.sexpression"), t, show_kind=true)) ==
-        "(call-i (call-i a::Identifier *::* b::Identifier) +::+ c::Identifier)"
+        "(call-i (call-i a::Identifier *::Identifier b::Identifier) +::Identifier c::Identifier)"
 
     @test sprint(highlight, t[1][3]) == "a*b + c\n# ╙"
     @test sprint(highlight, t.source, t.raw, 1, 3) == "a*b + c\n# ╙"
@@ -75,7 +75,7 @@ end
       f                                      :: Identifier
       [call-i]
         a                                    :: Identifier
-        *                                    :: *
+        *                                    :: Identifier
         b                                    :: Identifier
       c                                      :: Identifier
     """
@@ -88,7 +88,7 @@ end
        1:1  │     1:1     │  f                                      :: Identifier
        1:3  │     3:5     │  [call-i]
        1:3  │     3:3     │    a                                    :: Identifier
-       1:4  │     4:4     │    *                                    :: *
+       1:4  │     4:4     │    *                                    :: Identifier
        1:5  │     5:5     │    b                                    :: Identifier
        2:3  │    10:10    │  c                                      :: Identifier
     """

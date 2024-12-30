@@ -297,7 +297,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             if !@isexpr(a2, :quote) && !(a2 isa QuoteNode)
                 args[2] = QuoteNode(a2)
             end
-        elseif length(args) == 1 && is_operator(childheads[1])
+        elseif length(args) == 1
             # Hack: Here we preserve the head of the operator to determine whether
             # we need to coalesce it with the dot into a single symbol later on.
             args[1] = (childheads[1], args[1])

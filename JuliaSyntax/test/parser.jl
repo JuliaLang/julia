@@ -1,14 +1,14 @@
 """
 Parse string to SyntaxNode tree and show as an sexpression
 """
-function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6")
+function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", show_kws...)
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
     JuliaSyntax.validate_tokens(stream)
     t = build_tree(GreenNode, stream)
     source = SourceFile(code)
     s = SyntaxNode(source, t, keep_parens=true)
-    return sprint(show, MIME("text/x.sexpression"), s)
+    return sprint(io->show(io, MIME("text/x.sexpression"), s; show_kws...))
 end
 
 function test_parse(production, input, output)
@@ -29,7 +29,7 @@ function test_parse(inout::Pair)
     test_parse(JuliaSyntax.parse_toplevel, inout...)
 end
 
-const PARSE_ERROR = r"\(error-t "
+PARSE_ERROR = r"\(error-t "
 
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
@@ -436,7 +436,7 @@ tests = [
         "A.@x a"    =>  "(macrocall (. A @x) a)"
         "@A.B.@x a" =>  "(macrocall (. (. A B) (error-t) @x) a)"
         # .' discontinued
-        "f.'"    =>  "(wrapper f (error-t '))"
+        "f.'"    =>  "(dotcall-post f (error '))"
         # Field/property syntax
         "f.x.y"  =>  "(. (. f x) y)"
         "x .y"   =>  "(. x (error-t) y)"
@@ -1108,6 +1108,44 @@ parsestmt_test_specs = [
 
 @testset "Parser does not crash on broken code" begin
     @testset "$(repr(input))" for (input, output) in parsestmt_test_specs
+        test_parse(JuliaSyntax.parse_stmts, input, output)
+    end
+end
+
+parsestmt_with_kind_tests = [
+    # Most operators are semantically just normal identifiers after parsing so
+    # get the Kind K"Identifier"
+    "+"      => "+::Identifier"
+    "a + b"  => "(call-i a::Identifier +::Identifier b::Identifier)"
+    "a .+ b" => "(dotcall-i a::Identifier +::Identifier b::Identifier)"
+    "a |> b" => "(call-i a::Identifier |>::Identifier b::Identifier)"
+    "a => b" => "(call-i a::Identifier =>::Identifier b::Identifier)"
+    "a →  b" => "(call-i a::Identifier →::Identifier b::Identifier)"
+    "a < b < c" => "(comparison a::Identifier <::Identifier b::Identifier <::Identifier c::Identifier)"
+    "a .<: b"=> "(dotcall-i a::Identifier <:::Identifier b::Identifier)"
+    "a .. b" => "(call-i a::Identifier ..::Identifier b::Identifier)"
+    "a : b"  => "(call-i a::Identifier :::Identifier b::Identifier)"
+    "-2^x"   => "(call-pre -::Identifier (call-i 2::Integer ^::Identifier x::Identifier))"
+    "-(2)"   => "(call-pre -::Identifier (parens 2::Integer))"
+    "<:(a,)" => "(<:-, a::Identifier)"
+    "- 2"    => "(call-pre -::Identifier 2::Integer)"
+    "/x"     => "(call-pre (error /::Identifier) x::Identifier)"
+    "a^b"    => "(call-i a::Identifier ^::Identifier b::Identifier)"
+    "f.'"    => "(dotcall-post f::Identifier (error '::Identifier))"
+    "f'"     => "(call-post f::Identifier '::Identifier)"
+    # Standalone syntactic ops which keep their kind - they can't really be
+    # used in a sane way as identifiers or interpolated into expressions
+    # because they have their own syntactic forms.
+    ":(::)"  => "(quote-: (parens ::::::))"
+    ":(\$)"  => "(quote-: (parens \$::\$))"
+    ":(<:)"  => "(quote-: (parens <:::<:))"
+    ":(&&)"  => "(quote-: (parens &&::&&))"
+    ":(=)"   => "(quote-: (parens =::=))"
+]
+
+@testset "parser `Kind` remapping" begin
+    @testset "$(repr(input))" for (input, output) in parsestmt_with_kind_tests
+        input = ((show_kind=true,), input)
         test_parse(JuliaSyntax.parse_stmts, input, output)
     end
 end
