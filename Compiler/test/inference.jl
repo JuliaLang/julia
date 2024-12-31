@@ -6189,3 +6189,21 @@ end
 @test fully_eliminated((BitSet,)) do b
     iterate((pairs((b,))))[2]
 end
+
+# test closure optimization
+
+function issue15276_1(a)
+    local x
+    return #=@inline=# (function (a)
+        x = sin(a)
+        return a + x
+    end)(a)
+end
+@test Base.infer_return_type(issue15276_1, (Float64,)) == Float64
+
+function issue56561_2(a)
+    x = sin(a)
+    x = identity(x)
+    return #=@inline=# ((a) -> a + x)(a)
+end
+@test Base.infer_return_type(issue56561_2, (Float64,)) == Float64

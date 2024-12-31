@@ -492,8 +492,8 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     opt.ir = ir
 
     # determine and cache inlineability
+    sig = unwrap_unionall(specTypes)
     if !force_noinline
-        sig = unwrap_unionall(specTypes)
         if !(isa(sig, DataType) && sig.name === Tuple.name)
             force_noinline = true
         end
@@ -517,6 +517,13 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # if the method is declared as `@inline`, increase the cost threshold 20x
             if is_declared_inline(src)
                 cost_threshold += 19*default
+            else
+                if sig isa DataType && length(sig.parameters) ≥ 1
+                    funct = sig.parameters[1]
+                    if funct isa DataType && funct.super === Core.Closure
+                        cost_threshold += 19*default
+                    end
+                end
             end
             # a few functions get special treatment
             if def.module === _topmod(def.module)
