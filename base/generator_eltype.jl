@@ -10,6 +10,10 @@ function eltype(::Type{Generator{A, Fix1{typeof(getindex), B}}}) where {A, B}
         # https://github.com/mcabbott/AxisKeys.jl/issues/163
         Any
     else
+        # TODO: add special-casing for the case when `B <: AbstractArray`?
+        #       It could make sense to do this because arrays support multiple
+        #       index types, not all of which are necessarily covered by
+        #       `keytype`.
         if eltype(A) == keytype(B)
             valtype(B)
         else
