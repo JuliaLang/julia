@@ -716,6 +716,15 @@ function iterate(c::Channel, state=nothing)
             end
         end
     else
+        # If the channel was closed with an exception, it needs to be thrown
+        if (@atomic :acquire c.state) === :closed
+            e = c.excp
+            if isa(e, InvalidStateException) && e.state === :closed
+                nothing
+            else
+                throw(e)
+            end
+        end
         return nothing
     end
 end
