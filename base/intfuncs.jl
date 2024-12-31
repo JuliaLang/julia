@@ -155,7 +155,7 @@ function lcm(abc::AbstractArray{<:Real})
     l = length(abc)
     if l == 0
         eltype(abc) <: Integer && return one(eltype(abc))
-        throw(ArgumentError("lcm has no identity over $(eltype(abc))"))
+        throw(ArgumentError("lcm has no identity for $(eltype(abc))"))
     end
     l == 1 && return abs(only(abc))
     return reduce(lcm, abc)
