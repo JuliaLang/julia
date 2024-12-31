@@ -11,7 +11,7 @@ function eltype(::Type{Generator{A, Fix1{typeof(getindex), B}}}) where {A, B}
         Any
     else
         let a = eltype(A), b = keytype(B)
-            if (a == b) || (a <: Integer >: b)
+            if a == b
                 valtype(B)
             else
                 Any
