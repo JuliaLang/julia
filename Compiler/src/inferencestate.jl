@@ -828,21 +828,25 @@ mutable struct IRInterpretationState
     new_call_inferred::Bool
 
     function IRInterpretationState(interp::AbstractInterpreter,
-        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
+        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Union{Nothing,Vector{Any}},
         world::UInt, min_world::UInt, max_world::UInt)
         curridx = 1
-        given_argtypes = Vector{Any}(undef, length(argtypes))
-        for i = 1:length(given_argtypes)
-            given_argtypes[i] = widenslotwrapper(argtypes[i])
-        end
-        if isa(mi.def, Method)
-            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-                for i = 1:length(given_argtypes)]
+        if argtypes !== nothing
+            given_argtypes = Vector{Any}(undef, length(argtypes))
+            for i = 1:length(given_argtypes)
+                given_argtypes[i] = widenslotwrapper(argtypes[i])
+            end
+            if isa(mi.def, Method)
+                argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                    for i = 1:length(given_argtypes)]
+            else
+                argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
+            end
+            empty!(ir.argtypes)
+            append!(ir.argtypes, given_argtypes)
         else
-            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+            argtypes_refined = Bool[false for _ = 1:length(ir.argtypes)]
         end
-        empty!(ir.argtypes)
-        append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)

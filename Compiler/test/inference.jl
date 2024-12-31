@@ -6183,3 +6183,9 @@ let mi = only(methods(func_opt_inf, ())).specializations
     ci = mi.cache
     @test ci.rettype_const == sin(1.0)
 end
+@test fully_eliminated((BitSet,)) do b
+    iterate((pairs((b,))))[1][1]
+end
+@test fully_eliminated((BitSet,)) do b
+    iterate((pairs((b,))))[2]
+end
