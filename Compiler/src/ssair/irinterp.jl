@@ -229,8 +229,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             end
             return true
         end
-        ⋤ = strictneqpartialorder(typeinf_lattice(interp))
-        if rt ⋤ inst[:type]
+        ⊏ = strictpartialorder(typeinf_lattice(interp))
+        if rt ⊏ inst[:type]
             inst[:type] = rt
             return true
         end
@@ -319,6 +319,7 @@ function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irs
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
+        sub_ir_flag_refined::Bool = true,
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
 
@@ -341,7 +342,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         any_refined = false
         if has_flag(flag, IR_FLAG_REFINED)
             any_refined = true
-            sub_flag!(inst, IR_FLAG_REFINED)
+            sub_ir_flag_refined && sub_flag!(inst, IR_FLAG_REFINED)
         elseif is_all_const_call(stmt, interp, irsv)
             # force reinference on calls with all constant arguments
             any_refined = true
@@ -394,7 +395,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
             stmt = inst[:stmt]
             flag = inst[:flag]
             if has_flag(flag, IR_FLAG_REFINED)
-                sub_flag!(inst, IR_FLAG_REFINED)
+                sub_ir_flag_refined && sub_flag!(inst, IR_FLAG_REFINED)
                 push!(stmt_ip, idx)
             end
             check_ret!(stmt, idx)

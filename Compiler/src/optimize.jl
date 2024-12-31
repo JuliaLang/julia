@@ -1067,20 +1067,26 @@ function optinf!(ir::IRCode, interp::AbstractInterpreter, sv::OptimizationState,
     spec_info = SpecInfo(ci)
     world = get_inference_world(interp)
     min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
-    irsv = IRInterpretationState(interp, spec_info, ir, result.linfo, ir.argtypes,
+    irsv = IRInterpretationState(interp, spec_info, ir, result.linfo, #=argtypes=#nothing,
                                  world, min_world, max_world)
-    rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
+    rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv;
+        # While `optinf!` itself performs reanalysis based on `IR_FLAG_REFINED`, since
+        # `IR_FLAG_REFINED` is also useful for subsequent `semi_concrete_eval`s that may
+        # occur on this `IRCode`, it is necessary to ensure that `optinf!` does not
+        # subtract `IR_FLAG_REFINED` (otherwise there might cases where the expected
+        # constant propagation information is not obtained through `irinterp`)
+        sub_ir_flag_refined=false)
     if irsv.new_call_inferred
         ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
         ir = compact!(ir)
-        effects = result.effects
+        effects = result.ipo_effects
         if nothrow
             effects = Effects(effects; nothrow=true)
         end
         if noub
             effects = Effects(effects; noub=ALWAYS_TRUE)
         end
-        result.effects = effects
+        result.ipo_effects = effects
         result.exc_result = refine_exception_type(result.exc_result, effects)
         ⋤ = strictneqpartialorder(ipo_lattice(interp))
         result.result = rt ⋤ result.result ? rt : result.result
