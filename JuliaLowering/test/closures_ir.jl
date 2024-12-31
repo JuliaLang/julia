@@ -204,3 +204,31 @@ end
     3   (return %₂)
 9   (return %₃)
 
+########################################
+# Error: Attempt to add methods to a function argument
+function f(g)
+    function g()
+    end
+end
+#---------------------
+LoweringError:
+function f(g)
+    function g()
+#            ╙ ── Cannot add method to a function argument
+    end
+end
+
+########################################
+# Error: Static parameter clashing with closure name
+function f() where {g}
+    function g()
+    end
+end
+#---------------------
+LoweringError:
+function f() where {g}
+    function g()
+#            ╙ ── local variable name `g` conflicts with a static parameter
+    end
+end
+

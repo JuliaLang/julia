@@ -615,6 +615,9 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[2])
     elseif k == K"function_decl"
         name = ex[1]
+        if kind(name) == K"BindingId" && lookup_binding(ctx, name).kind == :argument
+            throw(LoweringError(name, "Cannot add method to a function argument"))
+        end
         update_binding!(ctx, name, add_assigned=1)
         if has_lambda_binding(ctx, name)
             update_lambda_binding!(ctx, name, is_assigned=true)
