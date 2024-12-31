@@ -9,7 +9,7 @@ Profiling support.
 - `@profile foo()` to profile a specific call.
 - `Profile.print()` to print the report. Paths are clickable links in supported terminals and specialized for JULIA_EDITOR etc.
 - `Profile.clear()` to clear the buffer.
-- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+- Send a SIGUSR1 (on linux) or SIGINFO (on macOS/BSD) signal to the process to automatically trigger a profile and print. i.e. `kill -s SIGUSR1/SIGINFO 1234`, where 1234 is the pid of the julia process. On macOS & BSD platforms `ctrl-t` can be used directly.
 
 ## Memory profiling
 - `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
@@ -42,6 +42,8 @@ import Base: AnnotatedString
 using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+
+const slash = Sys.iswindows() ? "\\" : "/"
 
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
@@ -217,6 +219,7 @@ const META_OFFSET_THREADID = 5
 
 """
     print([io::IO = stdout,] [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
+    print(path::String, [cols::Int = 1000], [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
@@ -355,6 +358,13 @@ function print(io::IO,
         any_nosamples && warning_empty(summary = true)
     end
     return
+end
+
+function print(path::String, cols::Int = 1000, args...; kwargs...)
+    open(path, "w") do io
+        ioc = IOContext(io, :displaysize=>(1000,cols))
+        print(ioc, args...; kwargs...)
+    end
 end
 
 """
@@ -529,9 +539,11 @@ function flatten(data::Vector, lidict::LineInfoDict)
 end
 
 const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
+const COMPILER_DIR = "../usr/share/julia/Compiler/"
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
+# filenamecache is a dict of spath -> (fullpath or "" if !isfile, modulename, shortpath)
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
@@ -544,6 +556,10 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
         elseif startswith(path_norm, lib_dir)
             remainder = only(split(path_norm, lib_dir, keepempty=false))
             return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
+        elseif contains(path, COMPILER_DIR)
+            remainder = split(path, COMPILER_DIR, keepempty=false)[end]
+            possible_compiler_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", remainder))
+            return (isfile(possible_compiler_path) ? possible_compiler_path : ""), "@Compiler", remainder
         elseif isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
@@ -558,7 +574,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
                         project_file = joinpath(root, proj)
                         if Base.isfile_casesensitive(project_file)
                             pkgid = Base.project_file_name_uuid(project_file, "")
-                            isempty(pkgid.name) && return path # bad Project file
+                            isempty(pkgid.name) && return path, "", path # bad Project file
                             # return the joined the module name prefix and path suffix
                             _short_path = path[nextind(path, sizeof(root)):end]
                             return path, string("@", pkgid.name), _short_path
@@ -930,8 +946,8 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             Base.printstyled(io, pkgname, color=pkgcolor)
             file_trunc = ltruncate(file, max(1, wfile))
             wpad = wfile - textwidth(pkgname)
-            if !isempty(pkgname) && !startswith(file_trunc, "/")
-                Base.print(io, "/")
+            if !isempty(pkgname) && !startswith(file_trunc, slash)
+                Base.print(io, slash)
                 wpad -= 1
             end
             if isempty(path)
@@ -1034,8 +1050,8 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
                 remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
                 linenum = li.line == -1 ? "?" : string(li.line)
-                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
-                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                _slash = (!isempty(pkgname) && !startswith(remaining_path, slash)) ? slash : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$(_slash)$remaining_path:$linenum"
                 rich_file = if isempty(path)
                     styled_path
                 else

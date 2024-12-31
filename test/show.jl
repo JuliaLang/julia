@@ -1275,6 +1275,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(y, x)
     push!(y, z)
     @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
+    @test replstr(x, :color => true) == "1-element Vector{Any}:\n Any[Any[\e[33m#= circular reference @-2 =#\e[39m], Base.ImmutableDict{Vector{Any}, Vector{Any}}([\e[33m#= circular reference @-3 =#\e[39m] => [\e[33m#= circular reference @-2 =#\e[39m])]"
     @test repr(z) == "Base.ImmutableDict{Vector{Any}, Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
@@ -1860,6 +1861,9 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    Base.showarg(io, reshape(UnitRange{Int64}(1,1)), false)
+    @test String(take!(io)) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin

@@ -46,6 +46,7 @@ DECLARE_BUILTIN(is);
 DECLARE_BUILTIN(isa);
 DECLARE_BUILTIN(isdefined);
 DECLARE_BUILTIN(issubtype);
+DECLARE_BUILTIN(memorynew);
 DECLARE_BUILTIN(memoryref);
 DECLARE_BUILTIN(memoryref_isassigned);
 DECLARE_BUILTIN(memoryrefget);

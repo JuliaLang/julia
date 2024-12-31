@@ -264,9 +264,6 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (auto &arg : plt->args())
         args.push_back(&arg);
-    #if JL_LLVM_VERSION < 170000
-    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
-    #endif
     CallInst *ret = irbuilder.CreateCall(
         functype,
         ptr, ArrayRef<Value*>(args));
@@ -851,6 +848,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // generate a temporary module that contains our IR
     std::unique_ptr<Module> Mod;
+    bool shouldDiscardValueNames = ctx.builder.getContext().shouldDiscardValueNames();
     Function *f;
     if (entry == NULL) {
         // we only have function IR, which we should put in a function
@@ -878,7 +876,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                   << jl_string_data(ir) << "\n}";
 
         SMDiagnostic Err = SMDiagnostic();
+        ctx.builder.getContext().setDiscardValueNames(false);
         Mod = parseAssemblyString(ir_stream.str(), Err, ctx.builder.getContext());
+        ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
 
         // backwards compatibility: support for IR with integer pointers
         if (!Mod) {
@@ -911,8 +911,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                              << jl_string_data(ir) << "\n}";
 
             SMDiagnostic Err = SMDiagnostic();
-            Mod =
-                parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(false);
+            Mod = parseAssemblyString(compat_ir_stream.str(), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
         }
 
         if (!Mod) {
@@ -932,7 +933,9 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
         if (jl_is_string(ir)) {
             SMDiagnostic Err = SMDiagnostic();
+            ctx.builder.getContext().setDiscardValueNames(false);
             Mod = parseAssemblyString(jl_string_data(ir), Err, ctx.builder.getContext());
+            ctx.builder.getContext().setDiscardValueNames(shouldDiscardValueNames);
             if (!Mod) {
                 std::string message = "Failed to parse LLVM assembly: \n";
                 raw_string_ostream stream(message);
@@ -1548,7 +1551,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return jl_cgval_t();
     }
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
-        rt = jl_ensure_rooted(ctx, rt);
+        jl_temporary_root(ctx, rt);
     function_sig_t sig("ccall", lrt, rt, retboxed,
                        (jl_svec_t*)at, unionall, nreqargs,
                        cc, llvmcall, &ctx.emission_context);
@@ -1712,18 +1715,12 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func(jl_get_tls_world_age)) {
-        bool toplevel = !(ctx.linfo && jl_is_method(ctx.linfo->def.method));
-        if (!toplevel) { // top level code does not see a stable world age during execution
-            ++CCALL_STAT(jl_get_tls_world_age);
-            assert(lrt == ctx.types().T_size);
-            assert(!isVa && !llvmcall && nccallargs == 0);
-            JL_GC_POP();
-            Instruction *world_age = cast<Instruction>(ctx.world_age_at_entry);
-            setName(ctx.emission_context, world_age, "task_world_age");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            ai.decorateInst(world_age);
-            return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
-        }
+        ++CCALL_STAT(jl_get_tls_world_age);
+        assert(lrt == ctx.types().T_size);
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        Value *world_age = get_tls_world_age(ctx);
+        return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_get_world_counter)) {
         ++CCALL_STAT(jl_get_world_counter);
@@ -1880,33 +1877,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_julia_type(ctx, obj, true, jl_any_type);
     }
-    else if (is_libjulia_func(jl_alloc_genericmemory)) {
-        ++CCALL_STAT(jl_alloc_genericmemory);
-        assert(lrt == ctx.types().T_prjlvalue);
-        assert(!isVa && !llvmcall && nccallargs == 2);
-        const jl_cgval_t &typ = argv[0];
-        const jl_cgval_t &nel = argv[1];
-        auto arg_typename = [&] JL_NOTSAFEPOINT {
-            auto istyp = argv[0].constant;
-            std::string type_str;
-            if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)){
-                auto eltype = jl_tparam1(istyp);
-                if (jl_is_datatype(eltype))
-                    type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
-                else if (jl_is_uniontype(eltype))
-                    type_str = "Union";
-                else
-                    type_str = "<unknown type>";
-            }
-            else
-                type_str = "<unknown type>";
-            return "Memory{" + type_str + "}[]";
-            };
-        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
-        setName(ctx.emission_context, alloc, arg_typename);
-        JL_GC_POP();
-        return mark_julia_type(ctx, alloc, true, jl_any_type);
-    }
     else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
         ++CCALL_STAT(memcpy);
         const jl_cgval_t &dst = argv[0];
@@ -2036,8 +2006,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
                 jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx.linfo->sparam_vals));
-            if (jargty_in_env != jargty)
-                jargty_in_env = jl_ensure_rooted(ctx, jargty_in_env);
+            if (jargty_in_env != jargty) {
+                JL_GC_PUSH1(&jargty_in_env);
+                jl_temporary_root(ctx, jargty_in_env);
+                JL_GC_POP();
+            }
         }
 
         Value *v;

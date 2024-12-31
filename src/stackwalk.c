@@ -624,7 +624,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
             jl_svecset(r, 1, jl_empty_sym);
         free(frame.file_name);
         jl_svecset(r, 2, jl_box_long(frame.line));
-        jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);
+        jl_svecset(r, 3, frame.ci != NULL ? (jl_value_t*)frame.ci : jl_nothing);
         jl_svecset(r, 4, jl_box_bool(frame.fromC));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
     }
@@ -992,7 +992,13 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     #endif
 #elif defined(_OS_LINUX_) && defined(__GLIBC__)
     __jmp_buf *_ctx = &mctx->__jmpbuf;
+    #if defined(_CPU_AARCH64_)
+    // Only on aarch64-linux libunwind uses a different struct than system's one:
+    // <https://github.com/libunwind/libunwind/blob/e63e024b72d35d4404018fde1a546fde976da5c5/include/libunwind-aarch64.h#L193-L205>.
+    struct unw_sigcontext *mc = &c->uc_mcontext;
+    #else
     mcontext_t *mc = &c->uc_mcontext;
+    #endif
     #if defined(_CPU_X86_)
     // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
     // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h

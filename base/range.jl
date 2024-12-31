@@ -711,6 +711,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where {T} = oneunit(T) - zero(T)
+step(r::AbstractUnitRange{Bool}) = true
 step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
@@ -953,7 +954,7 @@ function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
 end
 
 let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
-    function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+    global function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
         res = widemul(step(v), i-oneunit(i)) + first(v)
         (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
     end

@@ -910,7 +910,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         if (jl_options.depwarn) {
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                 jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.");
-            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\n");
+            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\nTo make this warning an error, and hence obtain a stack trace, use `julia --depwarn=error`.\n");
         }
         jl_vararg_t *vm = (jl_vararg_t*)body;
         int T_has_tv = vm->T && jl_has_typevar(vm->T, v);
@@ -3656,7 +3656,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(18,
-                            jl_method_instance_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3746,7 +3746,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(16,
+                        jl_perm_symsvec(27,
                                         "next",
                                         "queue",
                                         "storage",
@@ -3754,16 +3754,27 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "result",
                                         "scope",
                                         "code",
+                                        "_state",
+                                        "sticky",
+                                        "priority",
+                                        "_isexception",
+                                        "pad00",
+                                        "pad01",
+                                        "pad02",
                                         "rngState0",
                                         "rngState1",
                                         "rngState2",
                                         "rngState3",
                                         "rngState4",
-                                        "_state",
-                                        "sticky",
-                                        "_isexception",
-                                        "priority"),
-                        jl_svec(16,
+                                        "metrics_enabled",
+                                        "pad10",
+                                        "pad11",
+                                        "pad12",
+                                        "first_enqueued_at",
+                                        "last_started_running_at",
+                                        "running_time_ns",
+                                        "finished_at"),
+                        jl_svec(27,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -3771,21 +3782,36 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
                                 jl_uint8_type,
                                 jl_bool_type,
+                                jl_uint16_type,
                                 jl_bool_type,
-                                jl_uint16_type),
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_bool_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
-    const static uint32_t task_atomicfields[1] = {0x00001000}; // Set fields 13 as atomic
+    // Set field 20 (metrics_enabled) as const
+    // Set fields 8 (_state) and 24-27 (metric counters) as atomic
+    const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
+    const static uint32_t task_atomicfields[1] = { 0b00000111100000000000000010000000 };
+    jl_task_type->name->constfields = task_constfields;
     jl_task_type->name->atomicfields = task_atomicfields;
 
     tv = jl_svec2(tvar("A"), tvar("R"));
@@ -3926,6 +3952,7 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
+    jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
     jl_init_box_caches();
 
@@ -3956,14 +3983,16 @@ void post_image_load_hooks(void) {
     // Ensure that `Base` has been loaded.
     assert(jl_base_module != NULL);
 
-    jl_libdl_module = (jl_module_t *)jl_get_global(
-        ((jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"))),
-        jl_symbol("Libdl")
-    );
-    jl_libdl_dlopen_func = jl_get_global(
-        jl_libdl_module,
-        jl_symbol("dlopen")
-    );
+    jl_module_t *libc_module = (jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"));
+    if (libc_module) {
+        jl_libdl_module = (jl_module_t *)jl_get_global(libc_module, jl_symbol("Libdl"));
+    }
+    if (jl_libdl_module) {
+        jl_libdl_dlopen_func = jl_get_global(
+            jl_libdl_module,
+            jl_symbol("dlopen")
+        );
+    }
 }
 #undef XX
 
