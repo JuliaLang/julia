@@ -274,14 +274,6 @@ function is_block_form(k)
                     abstract primitive struct try module"
 end
 
-function is_syntactic_operator(k)
-    k = kind(k)
-    # TODO: Do we need to disallow dotted and suffixed forms here?
-    # The lexer itself usually disallows such tokens, so it's not clear whether
-    # we need to handle them. (Though note `.->` is a token...)
-    return k in KSet"&& || . ... ->" || is_syntactic_assignment(k)
-end
-
 function is_syntactic_unary_op(k)
     kind(k) in KSet"$ & ::"
 end
