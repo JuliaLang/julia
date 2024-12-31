@@ -1032,6 +1032,7 @@ end
             (identity, [3, 7]),
             (Base.Fix1(getindex, [3, 7]), 1:2),
             (Base.Fix1(getindex, Dict("a" => 3, "b" => 7)), ["a", "b"]),
+            (Base.Fix1(getindex, Dict{AbstractString, Int}("a" => 3, "b" => 7)), ["a", "b"]),
             (Base.Fix1(getfield, (; a = 3, b = 7)), 1:2),
             (Base.Fix1(getfield, (; a = 3, b = 7)), [:a, :b]),
         )
