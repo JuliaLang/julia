@@ -153,7 +153,10 @@ gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
 function lcm(abc::AbstractArray{<:Real})
     # Using reduce with init=one(eltype(abc)) is buggy for Rationals.
     l = length(abc)
-    l == 0 && return one(eltype(abc))
+    if l == 0
+        eltype(abc) <: Integer && return one(eltype(abc))
+        throw(ArgumentError("lcm has no identity over $(eltype(abc))"))
+    end
     l == 1 && return abs(only(abc))
     return reduce(lcm, abc)
 end
