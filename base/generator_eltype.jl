@@ -10,12 +10,10 @@ function eltype(::Type{Generator{A, Fix1{typeof(getindex), B}}}) where {A, B}
         # https://github.com/mcabbott/AxisKeys.jl/issues/163
         Any
     else
-        let a = eltype(A), b = keytype(B)
-            if a == b
-                valtype(B)
-            else
-                Any
-            end
+        if eltype(A) == keytype(B)
+            valtype(B)
+        else
+            Any
         end
     end
 end
