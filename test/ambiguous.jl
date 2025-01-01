@@ -162,6 +162,22 @@ end
 ambs = detect_ambiguities(Ambig48312)
 @test length(ambs) == 4
 
+module UnboundAmbig55868
+    module B
+        struct C end
+        export C
+        Base.@deprecate_binding D C
+    end
+    using .B
+    export C, D
+end
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+@test isempty(detect_unbound_args(UnboundAmbig55868))
+@test isempty(detect_ambiguities(UnboundAmbig55868))
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
@@ -176,8 +192,7 @@ ambs = detect_ambiguities(Ambig48312)
 
     # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        @test !isempty(ambig)
-        @test length(ambig) < 30
+        @test isempty(ambig)
     end
 
     STDLIB_DIR = Sys.STDLIB
@@ -333,10 +348,6 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken isempty(need_to_handle_undef_sparam)
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =

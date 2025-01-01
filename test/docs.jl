@@ -101,7 +101,7 @@ end
 
 @test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:g]
 
 
 # issue #11548
@@ -1518,7 +1518,7 @@ struct B_20087 end
 # issue #27832
 
 _last_atdoc = Core.atdoc
-Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+Core.atdoc!(Base.CoreDocs.docm)  # test bootstrap doc system
 
 """
 """

@@ -60,7 +60,7 @@ end
 
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())::NTuple{N, Any}
 end
 
 
@@ -427,10 +427,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 # constructing from an iterator
 
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
@@ -495,8 +491,6 @@ _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 _totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
-
-end
 
 ## find ##
 
@@ -664,7 +658,9 @@ all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
 all(x::Tuple{Bool, Bool}) = x[1]&x[2]
 all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
+all(x::Tuple{Any}) = x[1] || return false
+all(f, x::Tuple{}) = true
+all(f, x::Tuple{Any}) = all((f(x[1]),))
 
 any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]

@@ -22,8 +22,10 @@ struct GC_Num
     total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
+    stack_pool_sweep_time ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    total_stack_pool_sweep_time::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
 end
@@ -104,6 +106,33 @@ function gc_page_utilization_data()
     return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
+# must be kept in sync with `src/gc-stock.h``
+const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+
+"""
+    Base.full_sweep_reasons()
+
+Return a dictionary of the number of times each full sweep reason has occurred.
+
+The reasons are:
+- `:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL`: Full sweep was caused due to `always_full` being set in the GC debug environment
+- `:FULL_SWEEP_REASON_FORCED_FULL_SWEEP`: Full sweep was forced by `GC.gc(true)`
+- `:FULL_SWEEP_REASON_USER_MAX_EXCEEDED`: Full sweep was forced due to the system reaching the heap soft size limit
+- `:FULL_SWEEP_REASON_LARGE_PROMOTION_RATE`: Full sweep was forced by a large promotion rate across GC generations
+
+Note that the set of reasons is not guaranteed to be stable across minor versions of Julia.
+"""
+function full_sweep_reasons()
+    reason = cglobal(:jl_full_sweep_reasons, UInt64)
+    reasons_as_array = Base.unsafe_wrap(Vector{UInt64}, reason, length(FULL_SWEEP_REASONS), own=false)
+    d = Dict{Symbol, Int64}()
+    for (i, r) in enumerate(FULL_SWEEP_REASONS)
+        d[r] = reasons_as_array[i]
+    end
+    return d
+end
+
 """
     Base.jit_total_bytes()
 
@@ -179,7 +208,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -197,11 +226,14 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
         if lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
             plural = lock_conflicts == 1 ? "" : "s"
-            print(io, ", ", lock_conflicts, " lock conflict$plural")
+            print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -594,5 +626,40 @@ macro timed(ex)
             compile_time=compile_elapsedtimes[1]/1e9,
             recompile_time=compile_elapsedtimes[2]/1e9
         )
+    end
+end
+
+# Exported, documented, and tested in InteractiveUtils
+# here so it's possible to time/trace all imports, including InteractiveUtils and its deps
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
+    end
+end
+
+macro trace_compile(ex)
+    quote
+        try
+            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
+        end
+    end
+end
+
+macro trace_dispatch(ex)
+    quote
+        try
+            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+            $(esc(ex))
+        finally
+            ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
+        end
     end
 end

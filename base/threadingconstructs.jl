@@ -3,6 +3,8 @@
 export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
+public Condition, threadpoolsize, ngcthreads
+
 """
     Threads.threadid([t::Task]) -> Int
 

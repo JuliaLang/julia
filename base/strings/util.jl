@@ -476,7 +476,12 @@ function lpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want pad^max(0, npad - ncodeunits(str)) * str to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
@@ -508,7 +513,12 @@ function rpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want str * pad^max(0, npad - ncodeunits(str)) to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
@@ -613,22 +623,25 @@ function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{Ab
     end
 end
 
+# return whether textwidth(str) <= maxwidth
+function check_textwidth(str::AbstractString, maxwidth::Integer)
+    # check efficiently for early return if str is wider than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && return false
+    end
+    return true
+end
+
 function string_truncate_boundaries(
             str::AbstractString,
             maxwidth::Integer,
             replacement::Union{AbstractString,AbstractChar},
             ::Val{mode},
             prefer_left::Bool = true) where {mode}
-
     maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
-
-    # check efficiently for early return if str is less wide than maxwidth
-    total_width = 0
-    for c in str
-        total_width += textwidth(c)
-        total_width > maxwidth && break
-    end
-    total_width <= maxwidth && return nothing
+    check_textwidth(str, maxwidth) && return nothing
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
@@ -1214,7 +1227,7 @@ function bytes2hex(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
-    return String(b)
+    return unsafe_takestring(b)
 end
 
 function bytes2hex(io::IO, itr)

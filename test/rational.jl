@@ -702,6 +702,22 @@ end
     end
 end
 
+@testset "gcdx for 1 and 3+ arguments" begin
+    # one-argument
+    @test gcdx(7) == (7, 1)
+    @test gcdx(-7) == (7, -1)
+    @test gcdx(1//4) == (1//4, 1)
+
+    # 3+ arguments
+    @test gcdx(2//3) == gcdx(2//3) == (2//3, 1)
+    @test gcdx(15, 12, 20) == (1, 7, -7, -1)
+    @test gcdx(60//4, 60//5, 60//3) == (1//1, 7, -7, -1)
+    abcd = (105, 1638, 2145, 3185)
+    d, uvwp... = gcdx(abcd...)
+    @test d == sum(abcd .* uvwp) # u*a + v*b + w*c + p*d == gcd(a, b, c, d)
+    @test (@inferred gcdx(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) isa NTuple{11, Int}
+end
+
 @testset "Binary operations with Integer" begin
     @test 1//2 - 1 == -1//2
     @test -1//2 + 1 == 1//2

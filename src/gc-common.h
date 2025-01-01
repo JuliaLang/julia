@@ -12,6 +12,14 @@
 #endif
 #endif
 
+#include <stdlib.h>
+
+#if defined(_OS_DARWIN_)
+#include <malloc/malloc.h>
+#else
+#include <malloc.h> // for malloc_trim
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -172,5 +180,11 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
 
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
+
+// =========================================================================== //
+// Logging
+// =========================================================================== //
+
+extern int gc_logging_enabled;
 
 #endif // JL_GC_COMMON_H

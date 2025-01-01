@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <optional>
 #include <utility>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
@@ -8,29 +9,14 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
-
-#if JL_LLVM_VERSION >= 160000
 #include <llvm/Support/ModRef.h>
-#endif
 
 #include "julia.h"
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
 
-#if JL_LLVM_VERSION >= 160000
-
-#include <optional>
-
-template<typename T>
-using Optional = std::optional<T>;
 static constexpr std::nullopt_t None = std::nullopt;
-
-#else
-
-#include <llvm/ADT/Optional.h>
-
-#endif
 
 enum AddressSpace {
     Generic = 0,
@@ -125,7 +111,6 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
-unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> &irbuilder);
 llvm::SmallVector<llvm::Value*, 0> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
 
 static inline void llvm_dump(llvm::Value *v)
@@ -181,7 +166,7 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
     if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), None));
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), std::nullopt));
     }
     return inst;
 }
@@ -246,11 +231,7 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
         if (!F) {
             FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_size->getPointerTo()}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
-#if JL_LLVM_VERSION >= 160000
             F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            F->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
         }
         builder.CreateCall(F, {signal_page});
     }

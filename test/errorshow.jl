@@ -215,6 +215,7 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 @test occursin("bad_vararg_decl(!Matched::$Int, ::Any...)", String(take!(buf)))
 
 macro except_str(expr, err_type)
+    source_info = __source__
     return quote
         let err = nothing
             try
@@ -222,7 +223,9 @@ macro except_str(expr, err_type)
             catch err
             end
             err === nothing && error("expected failure, but no exception thrown")
-            @test typeof(err) === $(esc(err_type))
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
             buf = IOBuffer()
             showerror(buf, err)
             String(take!(buf))
@@ -231,6 +234,7 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    source_info = __source__
     errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
@@ -239,7 +243,9 @@ macro except_strbt(expr, err_type)
             catch err
             end
             err === nothing && error($errmsg)
-            @test typeof(err) === $(esc(err_type))
+            @testset let expr=$(repr(expr))
+                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+            end
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
             String(take!(buf))
@@ -248,6 +254,7 @@ macro except_strbt(expr, err_type)
 end
 
 macro except_stackframe(expr, err_type)
+    source_info = __source__
     return quote
        let err = nothing
            local st
@@ -257,7 +264,9 @@ macro except_stackframe(expr, err_type)
                st = stacktrace(catch_backtrace())
            end
            err === nothing && error("expected failure, but no exception thrown")
-           @test typeof(err) === $(esc(err_type))
+           @testset let expr=$(repr(expr))
+               $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
+           end
            sprint(show, st[1])
        end
     end
@@ -739,8 +748,7 @@ end
 pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
 
 struct ANumber <: Number end
-let err_str
-    err_str = @except_str ANumber()(3 + 4) MethodError
+let err_str = @except_str ANumber()(3 + 4) MethodError
     @test occursin("objects of type $(curmod_prefix)ANumber are not callable", err_str)
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
     # issue 40478
@@ -748,20 +756,23 @@ let err_str
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
 end
 
-let err_str
-    a = [1 2; 3 4];
+let a = [1 2; 3 4];
     err_str = @except_str (a[1][2] = 5) MethodError
     @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
     @test occursin("a[1, 2]", err_str)
     @test occursin("rather than a[1][2]", err_str)
 end
 
-let err_str
-    d = Dict
+let d = Dict
     err_str = @except_str (d[1] = 5) MethodError
     @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
     @test occursin("d = Dict([...])", err_str)
     @test occursin(" rather than d = Dict", err_str)
+end
+
+let s = Some("foo")
+    err_str = @except_str (s[] = "bar") MethodError
+    @test !occursin("You attempted to index the type String", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
@@ -780,8 +791,22 @@ backtrace()
     @test occursin("g28442", output[3])
     @test lstrip(output[5])[1:3] == "[2]"
     @test occursin("f28442", output[5])
-    @test occursin("the above 2 lines are repeated 5000 more times", output[7])
-    @test lstrip(output[8])[1:7] == "[10003]"
+    is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
+    if is_windows_32_bit
+        # These tests are currently broken (intermittently/non-determistically) on 32-bit Windows.
+        # https://github.com/JuliaLang/julia/issues/55900
+        # Instead of skipping them entirely, we skip one, and we loosen the other.
+
+        # Broken test: @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test occursin("the above 2 lines are repeated ", output[7])
+        @test occursin(" more times", output[7])
+
+        # Broken test: @test lstrip(output[8])[1:7] == "[10003]"
+        @test_broken false
+    else
+        @test occursin("the above 2 lines are repeated 5000 more times", output[7])
+        @test lstrip(output[8])[1:7] == "[10003]"
+    end
 end
 
 @testset "Line number correction" begin

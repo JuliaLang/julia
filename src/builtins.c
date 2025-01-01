@@ -931,20 +931,25 @@ JL_CALLABLE(jl_f__call_in_world_total)
 
 // tuples ---------------------------------------------------------------------
 
-JL_CALLABLE(jl_f_tuple)
+static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
 {
     size_t i;
-    if (nargs == 0)
-        return (jl_value_t*)jl_emptytuple;
-    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 0);
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(a1, args, nargs, 0);
     JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
     if (tt->instance != NULL)
         return tt->instance;
     jl_task_t *ct = jl_current_task;
     jl_value_t *jv = jl_gc_alloc(ct->ptls, jl_datatype_size(tt), tt);
     for (i = 0; i < nargs; i++)
-        set_nth_field(tt, jv, i, args[i], 0);
+        set_nth_field(tt, jv, i, i == 0 ? a1 : args[i - 1], 0);
     return jv;
+}
+
+JL_CALLABLE(jl_f_tuple)
+{
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptytuple;
+    return arg_tuple(args[0], &args[1], nargs);
 }
 
 JL_CALLABLE(jl_f_svec)
@@ -1008,7 +1013,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     else {
         jl_value_t *ts[2] = {(jl_value_t*)jl_long_type, (jl_value_t*)jl_symbol_type};
         jl_value_t *t = jl_type_union(ts, 2);
-        jl_type_error("getfield", t, arg);
+        jl_type_error(name, t, arg);
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
@@ -1577,14 +1582,49 @@ JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
-    if (!jl_is_tuple_type(jl_unwrap_unionall(args[1])))
-        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, args[1]);
+    if (jl_is_method(argtypes)) {
+        jl_method_t *m = (jl_method_t*)argtypes;
+        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)m->sig))
+            jl_type_error("invoke: argument type error", argtypes, arg_tuple(args[0], &args[2], nargs - 1));
+        return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
+    } else if (jl_is_code_instance(argtypes)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
+        if (jl_is_abioverride(codeinst->def)) {
+            jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)(codeinst->def))->abi;
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, abi)) {
+                jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(args[0], &args[2], nargs - 1));
+            }
+        } else {
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->specTypes) ||
+                (jl_is_method(mi->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->def.method->sig))) {
+                jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+            }
+        }
+        if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
+            jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
+            jl_error("invoke: CodeInstance not valid for this world");
+        }
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            return invoke(args[0], &args[2], nargs - 2, codeinst);
+        } else {
+            if (codeinst->owner != jl_nothing) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            return jl_invoke(args[0], &args[2], nargs - 1, mi);
+        }
+    }
+    if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
+        jl_type_error("invoke", (jl_value_t*)jl_anytuple_type_type, argtypes);
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_type_error("invoke: argument type error", argtypes, jl_f_tuple(NULL, &args[2], nargs - 2));
-    jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
-    JL_GC_POP();
-    return res;
+    return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
 // Expr constructor for internal use ------------------------------------------
@@ -1643,6 +1683,15 @@ JL_CALLABLE(jl_f__typevar)
 }
 
 // genericmemory ---------------------------------------------------------------------
+JL_CALLABLE(jl_f_memorynew)
+{
+    JL_NARGS(memorynew, 2, 2);
+    jl_datatype_t *jl_genericmemory_type_type = jl_datatype_type;
+    JL_TYPECHK(memorynew, genericmemory_type, args[0]);
+    JL_TYPECHK(memorynew, long, args[1]);
+    size_t nel = jl_unbox_long(args[1]);
+    return (jl_value_t*)jl_alloc_genericmemory(args[0], nel);
+}
 
 JL_CALLABLE(jl_f_memoryref)
 {
@@ -2409,6 +2458,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
+    jl_builtin_memorynew = add_builtin_func("memorynew", jl_f_memorynew);
     jl_builtin_memoryref = add_builtin_func("memoryrefnew", jl_f_memoryref);
     jl_builtin_memoryrefoffset = add_builtin_func("memoryrefoffset", jl_f_memoryrefoffset);
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);

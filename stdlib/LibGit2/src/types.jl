@@ -78,7 +78,7 @@ When fetching data from LibGit2, a typical usage would look like:
 ```julia
 sa_ref = Ref(StrArrayStruct())
 @check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
-res = convert(Vector{String}, sa_ref[])
+res = collect(sa_ref[])
 free(sa_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.

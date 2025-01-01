@@ -42,12 +42,16 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        foreach(Fix1(print, io), xs)
+        for x in xs
+            print(io, x)
+        end
     finally
         unlock(io)
     end
     return nothing
 end
+
+setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
 
 """
     println([io::IO], xs...)
@@ -72,6 +76,7 @@ julia> String(take!(io))
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
 
+setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -136,20 +141,33 @@ function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
-    siz = sum(_str_sizehint, xs; init = 0)
+    siz::Int = 0
+    for x in xs
+        siz += _str_sizehint(x)
+    end
+    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    print(s, xs...)
+    for x in xs
+        print(s, x)
+    end
     String(_unsafe_take!(s))
 end
+setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
         return ""
     end
-    siz = sum(_str_sizehint, xs; init = 0)
+    siz::Int = 0
+    for x in xs
+        siz += _str_sizehint(x)
+    end
+    # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    print(env_io, xs...)
+    for x in xs
+        print(env_io, x)
+    end
     String(_unsafe_take!(s))
 end
 
@@ -196,35 +214,29 @@ function show(
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
     end
+    limit = max(0, limit-2) # quote chars
 
     # early out for short strings
-    len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
-        return show(io, str)
+    check_textwidth(str, limit) && return show(io, str)
 
     # these don't depend on string data
     units = codeunit(str) == UInt8 ? "bytes" : "code units"
     skip_text(skip) = " ⋯ $skip $units ⋯ "
-    short = length(skip_text("")) + 4 # quote chars
-    chars = max(limit, short + 1) - short # at least 1 digit
 
-    # figure out how many characters to print in elided case
-    chars -= d = ndigits(len - chars) # first adjustment
-    chars += d - ndigits(len - chars) # second if needed
-    chars = max(0, chars)
+    # longest possible replacement string for omitted chars
+    max_replacement = skip_text(ncodeunits(str) * 100) # *100 for 2 inner quote chars
 
-    # find head & tail, avoiding O(length(str)) computation
-    head = nextind(str, 0, 1 + (chars + 1) ÷ 2)
-    tail = prevind(str, len + 1, chars ÷ 2)
+    head, tail = string_truncate_boundaries(str, limit, max_replacement, Val(:center))
 
     # threshold: min chars skipped to make elision worthwhile
-    t = short + ndigits(len - chars) - 1
-    n = tail - head # skipped code units
-    if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
-        skip = skip_text(n)
-        show(io, SubString(str, 1:prevind(str, head)))
-        printstyled(io, skip; color=:light_yellow, bold=true)
-        show(io, SubString(str, tail))
+    afterhead = nextind(str, head)
+    n = tail - afterhead # skipped code units
+    replacement = skip_text(n)
+    t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
+    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
+        show(io, str[begin:head])
+        printstyled(io, replacement; color=:light_yellow, bold=true)
+        show(io, str[tail:end])
     else
         show(io, str)
     end
@@ -238,7 +250,9 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the 2-argument `show(io, x)` function.
+Create a string representation of any value using the 2-argument `show(io, x)` function,
+which aims to produce a string that is parseable Julia code, where possible.
+i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
@@ -798,12 +812,12 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    annots = RegionAnnotation[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
             for annot in c.annotations
-                push!(annots, (point:point, annot))
+                push!(annots, (point:point, annot...))
             end
         end
         point += ncodeunits(c)
