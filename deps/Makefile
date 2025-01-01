@@ -175,6 +175,10 @@ ifeq ($(WITH_NVTX),1)
 DEP_LIBS += nvtx
 endif
 
+ifneq ($(WITH_TERMINFO),0)
+DEP_LIBS += terminfo
+endif
+
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
 # This is useful where one wants to use the vendor BLAS, but
@@ -197,7 +201,8 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
+	terminfo
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -259,6 +264,7 @@ include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
+include $(SRCDIR)/terminfo.mk
 
 # vendored Julia libs
 include $(SRCDIR)/JuliaSyntax.mk

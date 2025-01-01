@@ -9,9 +9,8 @@ Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 `kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
 
-`addrspace` can currently only be set to Core.CPU. It is designed to  to permit extension by other systems
-such as GPUs, which might define values such as:
-```
+`addrspace` can currently only be set to `Core.CPU`. It is designed to permit extension by other systems such as GPUs, which might define values such as:
+```julia
 module CUDA
 const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
 const Global = bitcast(Core.AddrSpace{CUDA}, 1)
@@ -71,6 +70,8 @@ size(a::GenericMemory) = (length(a),)
 
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
+parent(ref::GenericMemoryRef) = ref.mem
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
@@ -83,17 +84,16 @@ function _unsetindex!(A::MemoryRef{T}) where T
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
     elsz = datatype_layoutsize(MemT)
-    isboxed = 1; isunion = 2
+    isbits = 0; isboxed = 1; isunion = 2
+    arrayelem == isbits && datatype_pointerfree(T::DataType) && return A
     t = @_gc_preserve_begin mem
     p = Ptr{Ptr{Cvoid}}(@inbounds pointer(A))
     if arrayelem == isboxed
         Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
     elseif arrayelem != isunion
-        if !datatype_pointerfree(T::DataType)
-            for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
-                # XXX: this violates memory ordering, since it writes more than one C_NULL to each
-                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
-            end
+        for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
+            # XXX: this violates memory ordering, since it writes more than one C_NULL to each
+            Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
         end
     end
     @_gc_preserve_end t
@@ -117,7 +117,17 @@ function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
     n == 0 && return dest
     @boundscheck memoryref(dest, n), memoryref(src, n)
-    ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    if isbitstype(T)
+        tdest = @_gc_preserve_begin dest
+        tsrc = @_gc_preserve_begin src
+        pdest = unsafe_convert(Ptr{Cvoid}, dest)
+        psrc = unsafe_convert(Ptr{Cvoid}, src)
+        memmove(pdest, psrc, aligned_sizeof(T) * n)
+        @_gc_preserve_end tdest
+        @_gc_preserve_end tsrc
+    else
+        ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
+    end
     return dest
 end
 
@@ -134,6 +144,7 @@ function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{
     return dest
 end
 
+#fallback method when types don't match
 function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     @_terminates_locally_meta
     n == 0 && return dest
@@ -161,7 +172,13 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     return dest
 end
 
-copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
+function copy(a::T) where {T<:Memory}
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
+    newmem = T(undef, length(a))
+    @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
+end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
@@ -188,7 +205,7 @@ function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
     p = unsafe_convert(Ptr{Cvoid}, a)
     T = eltype(a)
-    memset(p, x isa T ? x : convert(T, x), length(a))
+    memset(p, x isa T ? x : convert(T, x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -201,10 +218,8 @@ promote_rule(a::Type{Memory{T}}, b::Type{Memory{S}}) where {T,S} = el_same(promo
 
 ## Constructors ##
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Memory{T}(x::AbstractArray{S,1}) where {T,S} = copyto_axcheck!(Memory{T}(undef, size(x)), x)
-end
 
 ## copying iterators to containers
 
@@ -233,11 +248,16 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-function setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
+function _setindex!(A::Memory{T}, x::T, i1::Int) where {T}
     ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
-    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
+    memoryrefset!(ref, x, :not_atomic, @_boundscheck)
     return A
+end
+
+function setindex!(A::Memory{T}, x, i1::Int) where {T}
+    @_propagate_inbounds_meta
+    val = x isa T ? x : convert(T,x)::T
+    return _setindex!(A, val, i1)
 end
 
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
@@ -316,38 +336,15 @@ function indcopy(sz::Dims, I::GenericMemory)
     dst, src
 end
 
-# Wrapping a memory region in an Array
-@eval begin # @eval for the Array construction. Block for the docstring.
-    function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
-        len = Core.checked_dims(dims...)
-        length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
-        ref = memoryref(m)
-        $(Expr(:new, :(Array{T, N}), :ref, :dims))
-    end
-
-    """
-        view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
-
-    Create a vector `v::Vector{T}` backed by the specified indices of `m`. It is only safe to
-    resize `v` if `m` is subseqently not used.
-    """
-    function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
-        isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
-        @boundscheck checkbounds(m, inds)
-        ref = memoryref(m, first(inds)) # @inbounds would be safe here but does not help performance.
-        dims = (Int(length(inds)),)
-        $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-    end
-end
-view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
-
 # get, set(once), modify, swap and replace at index, atomically
 function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return memoryrefget(memref, order, @_boundscheck)
 end
 
 function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return memoryrefset!(
@@ -365,6 +362,7 @@ function setindexonce_atomic!(
     val,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefsetonce!(
@@ -377,11 +375,13 @@ function setindexonce_atomic!(
 end
 
 function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
+    @_propagate_inbounds_meta
     memref = memoryref(mem, i)
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
 end
 
 function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefswap!(
@@ -400,6 +400,7 @@ function replaceindex_atomic!(
     desired,
     i::Int,
 )
+    @_propagate_inbounds_meta
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefreplace!(

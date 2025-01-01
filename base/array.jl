@@ -324,9 +324,13 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    xT = x isa T ? x : convert(T, x)::T
+    @inline
+    x = x isa T ? x : convert(T, x)::T
+    return _fill!(dest, x)
+end
+function _fill!(dest::Array{T}, x::T) where T
     for i in eachindex(dest)
-        @inbounds dest[i] = xT
+        @inbounds dest[i] = x
     end
     return dest
 end
@@ -342,13 +346,25 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-@eval function copy(a::Array{T}) where {T}
-    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
-    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+@eval function copy(a::Array)
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
     @_nothrow_meta
     ref = a.ref
-    newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
+    newmem = typeof(ref.mem)(undef, length(a))
+    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
+end
+
+# a mutating version of copyto! that results in dst aliasing src afterwards
+function _take!(dst::Array{T,N}, src::Array{T,N}) where {T,N}
+    if getfield(dst, :ref) !== getfield(src, :ref)
+        setfield!(dst, :ref, getfield(src, :ref))
+    end
+    if getfield(dst, :size) !== getfield(src, :size)
+        setfield!(dst, :size, getfield(src, :size))
+    end
+    return dst
 end
 
 ## Constructors ##
@@ -415,7 +431,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ref = a.ref
     t = @_gc_preserve_begin ref
     p = unsafe_convert(Ptr{Cvoid}, ref)
-    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a) % UInt)
     @_gc_preserve_end t
     return a
 end
@@ -601,11 +617,9 @@ promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(p
 
 ## Constructors ##
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
-end
 
 ## copying iterators to containers
 
@@ -660,7 +674,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
 
 
 """
-    collect(collection)
+    collect(iterator)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
 a `Vector` of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
@@ -670,6 +684,9 @@ and number of dimensions as the argument.
 Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
 into an `Array`. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
 see second example.
+
+The element type of the returned array is based on the types of the values collected. However, if the
+iterator is empty then the element type of the returned (empty) array is determined by type inference.
 
 # Examples
 
@@ -691,6 +708,21 @@ julia> collect(x^2 for x in 1:3)
  1
  4
  9
+```
+
+Collecting an empty iterator where the result type depends on type inference:
+
+```jldoctest
+julia> [rand(Bool) ? 1 : missing for _ in []]
+Union{Missing, Int64}[]
+```
+
+When the iterator is non-empty, the result type depends only on values:
+
+```julia-repl
+julia> [rand(Bool) ? 1 : missing for _ in [""]]
+1-element Vector{Int64}:
+ 1
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
@@ -736,28 +768,15 @@ end
 # gets inlined into the caller before recursion detection
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
-if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                T = ($I).f
-            else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
-            end
-            promote_typejoin_union(T)
+macro default_eltype(itr)
+    I = esc(itr)
+    return quote
+        if $I isa Generator && ($I).f isa Type
+            T = ($I).f
+        else
+            T = Base._return_type(_iterator_upper_bound, Tuple{typeof($I)})
         end
-    end
-else
-    macro default_eltype(itr)
-        I = esc(itr)
-        return quote
-            if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
-            else
-                Any
-            end
-        end
+        promote_typejoin_union(T)
     end
 end
 
@@ -962,16 +981,26 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
+    @_propagate_inbounds_meta
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i)
+end
+function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
-    memoryrefset!(memoryrefnew(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+    @_propagate_inbounds_meta
+    x = x isa T ? x : convert(T, x)::T
+    return _setindex!(A, x, i1, i2, I...)
+end
+function _setindex!(A::Array{T}, x::T, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x, :not_atomic, false)
     return A
 end
 
@@ -1053,13 +1082,14 @@ function _growbeg!(a::Vector, delta::Integer)
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline (function()
+        @_terminates_locally_meta
         memlen = length(mem)
         if offset + len - 1 > memlen || offset < 1
             throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
         end
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
         # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
+        newmemlen = max(overallocation(len), len + 2 * delta + 1)
         newoffset = div(newmemlen - newlen, 2) + 1
         # If there is extra data after the end of the array we can use that space so long as there is enough
         # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
@@ -1068,10 +1098,14 @@ function _growbeg!(a::Vector, delta::Integer)
         if newoffset + newlen < memlen
             newoffset = div(memlen - newlen, 2) + 1
             newmem = mem
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+            for j in offset:newoffset+delta-1
+                @inbounds _unsetindex!(mem, j)
+            end
         else
             newmem = array_new_memory(mem, newmemlen)
+            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         end
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         if ref !== a.ref
             @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
         end
@@ -1244,10 +1278,16 @@ See also [`pushfirst!`](@ref).
 function push! end
 
 function push!(a::Vector{T}, item) where T
+    @inline
     # convert first so we don't grow the array if the assignment won't work
-    itemT = item isa T ? item : convert(T, item)::T
+    # and also to avoid a dynamic dynamic dispatch in the common case that
+    # `item` is poorly-typed and `a` is well-typed
+    item = item isa T ? item : convert(T, item)::T
+    return _push!(a, item)
+end
+function _push!(a::Vector{T}, item::T) where T
     _growend!(a, 1)
-    @_safeindex a[length(a)] = itemT
+    @_safeindex a[length(a)] = item
     return a
 end
 
@@ -1606,6 +1646,7 @@ ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
 ```
 """
 function popat!(a::Vector, i::Integer)
+    @_propagate_inbounds_meta
     x = a[i]
     _deleteat!(a, i, 1)
     x
@@ -1641,7 +1682,11 @@ julia> pushfirst!([1, 2, 3, 4], 5, 6)
 ```
 """
 function pushfirst!(a::Vector{T}, item) where T
+    @inline
     item = item isa T ? item : convert(T, item)::T
+    return _pushfirst!(a, item)
+end
+function _pushfirst!(a::Vector{T}, item::T) where T
     _growbeg!(a, 1)
     @_safeindex a[1] = item
     return a
@@ -1727,12 +1772,16 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
+    @_propagate_inbounds_meta
+    item = item isa T ? item : convert(T, item)::T
+    return _insert!(a, i, item)
+end
+function _insert!(a::Array{T,1}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
-    _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
     # :noub, because _growat! already did bound check
-    @inbounds a[i] = _item
+    @inbounds a[i] = item
     return a
 end
 
@@ -2391,19 +2440,28 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
-findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
-    1 <= p.x <= r.stop ? p.x : nothing
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where {T<:Integer} =
+    1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
-findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
-    first(r) <= p.x <= last(r) ? firstindex(r) + Int(p.x - first(r)) : nothing
+findfirst(::typeof(iszero), ::OneTo) = nothing
+findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+    first(r) <= p.x <= last(r) || return nothing
+    i1 = first(keys(r))
+    return i1 + oftype(i1, p.x - first(r))
+end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))::S
+    d = p.x - first(r)
     iszero(d % step(r)) || return nothing
-    return d ÷ step(r) + 1
+    return convert(keytype(r), d ÷ step(r) + 1)
 end
+
+findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
+findfirst(::typeof(isone), r::AbstractRange) = findfirst(==(one(first(r))), r)
 
 """
     findprev(A, i)
@@ -2574,6 +2632,17 @@ end
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
+
+# for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
+function findlast(p::Union{Fix2{typeof(isequal),<:Integer},Fix2{typeof(==),<:Integer},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer})
+    findfirst(p, r)
+end
+
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::StepRange{T,S}) where {T,S}
+    findfirst(p, r)
+end
 
 """
     findall(f::Function, A)
@@ -3063,4 +3132,53 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
+end
+
+"""
+    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
+
+Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
+of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
+"""
+function wrap end
+
+# validity checking for _wrap calls, separate from allocation of Array so that it can be more likely to inline into the caller
+function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
+    mem = ref.mem
+    mem_len = length(mem) + 1 - memoryrefoffset(ref)
+    len = Core.checked_dims(dims...)
+    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
+    return ref
+end
+
+@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(LazyString(
+    "Attempted to wrap a MemoryRef of length ", len, " with an Array of size dims=", dims,
+    " which is invalid because prod(dims) = ", proddims, " > ", len,
+    " so that the array would have more elements than the underlying memory can store.")))
+
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+end
+
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(memoryref(m), dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(memoryref(m), (l,))
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
+    ref = memoryref(m)
+    dims = (length(m),)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end

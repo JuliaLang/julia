@@ -828,7 +828,6 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::Tuple{Integer, Vararg{Integer}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -1012,14 +1011,19 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         end
         y = iterate(src, y[2])
     end
-    i = Int(dstart)
-    while i <= dmax && y !== nothing
-        val, st = y
-        @inbounds dest[i] = val
-        y = iterate(src, st)
-        i += 1
+    if y === nothing
+        throw(ArgumentError(LazyString(
+            "source has fewer elements than required, ",
+            "expected at least ",sstart," got ", sstart-1)))
     end
-    i <= dmax && throw(BoundsError(dest, i))
+    val, st = y
+    i = Int(dstart)
+    @inbounds dest[i] = val
+    for val in Iterators.take(Iterators.rest(src, st), n-1)
+        i += 1
+        @inbounds dest[i] = val
+    end
+    i < dmax && throw(BoundsError(dest, i))
     return dest
 end
 
@@ -1101,11 +1105,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
-                ret = iterate(iterdest, state)
+            for (Idest, Isrc) in zip(iterdest, itersrc)
+                @inbounds dest[Idest] = src[Isrc]
             end
         end
     end
@@ -1587,7 +1588,7 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
@@ -1921,7 +1922,7 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  2.0
 
 julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
-([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
+(adjoint([10, 20, 30]), [4.0 5.0 6.0; 7.0 8.0 9.0])
 
 julia> vcat(two...)
 3×3 Matrix{Float64}:
@@ -3048,6 +3049,15 @@ function cmp(A::AbstractVector, B::AbstractVector)
 end
 
 """
+    isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+
+Return `true` when the only element of `A` is less than the only element of `B`.
+"""
+function isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+    isless(only(A), only(B))
+end
+
+"""
     isless(A::AbstractVector, B::AbstractVector)
 
 Return `true` when `A` is less than `B` in lexicographic order.
@@ -3408,6 +3418,8 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when any of them is exhausted.
 
+The element type of the result is determined in the same manner as in [`collect`](@ref).
+
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
@@ -3523,12 +3535,45 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
 """
 map(f, it, iters...) = collect(Generator(f, it, iters...))
 
+# Generic versions of push! for AbstractVector
+# These are specialized further for Vector for faster resizing and setindexing
+function push!(a::AbstractVector{T}, item) where T
+    # convert first so we don't grow the array if the assignment won't work
+    itemT = item isa T ? item : convert(T, item)::T
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = itemT
+    return a
+end
+
+# specialize and optimize the single argument case
+function push!(a::AbstractVector{Any}, @nospecialize x)
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = x
+    return a
+end
+function push!(a::AbstractVector{Any}, @nospecialize x...)
+    @_terminates_locally_meta
+    na = length(a)
+    nx = length(x)
+    resize!(a, na + nx)
+    e = lastindex(a) - nx
+    for i = 1:nx
+        a[e+i] = x[i]
+    end
+    return a
+end
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
+
+# sizehint! does not nothing by default
+sizehint!(a::AbstractVector, _) = a
 
 ## hashing AbstractArray ##
 

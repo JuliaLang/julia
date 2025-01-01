@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#include "gc-common.h"
+#include "gc-stock.h"
 #include "julia.h"
 #include <inttypes.h>
 #include <stddef.h>
@@ -536,13 +537,13 @@ static void gc_scrub_task(jl_task_t *ta)
 
     char *low;
     char *high;
-    if (ta->copy_stack && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
+    if (ta->ctx.copy_stack && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
         low  = (char*)ptls2->stackbase - ptls2->stacksize;
         high = (char*)ptls2->stackbase;
     }
-    else if (ta->stkbuf) {
-        low  = (char*)ta->stkbuf;
-        high = (char*)ta->stkbuf + ta->bufsz;
+    else if (ta->ctx.stkbuf) {
+        low  = (char*)ta->ctx.stkbuf;
+        high = (char*)ta->ctx.stkbuf + ta->ctx.bufsz;
     }
     else
         return;
@@ -1024,12 +1025,11 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
-        while (ma != NULL) {
-            uint8_t bits =jl_astaggedvalue(ma->a)->bits.gc;
+        void **lst = ptls2->gc_tls.heap.mallocarrays.items;
+        for (size_t i = 0, l = ptls2->gc_tls.heap.mallocarrays.len; i < l; i++) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
+            uint8_t bits = jl_astaggedvalue(m)->bits.gc;
             if (gc_marked(bits)) {
-                jl_genericmemory_t *m = (jl_genericmemory_t*)ma->a;
-                m = (jl_genericmemory_t*)((uintptr_t)m & ~(uintptr_t)1);
                 size_t sz = jl_genericmemory_nbytes(m);
                 if (gc_old(bits)) {
                     assert(bits == GC_OLD_MARKED);
@@ -1041,7 +1041,6 @@ void gc_stats_big_obj(void)
                     stat.nbytes_used += sz;
                 }
             }
-            ma = ma->next;
         }
     }
     jl_safe_printf("%lld kB (%lld%% old) in %lld large objects (%lld%% old)\n",
@@ -1102,47 +1101,6 @@ void gc_count_pool(void)
     // also GC_CLEAN
     jl_safe_printf("free pages: % "  PRId64 "\n", empty_pages);
     jl_safe_printf("************************\n");
-}
-
-int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
-{
-    int nf = (int)jl_datatype_nfields(vt);
-    for (int i = 1; i < nf; i++) {
-        if (slot < (void*)((char*)obj + jl_field_offset(vt, i)))
-            return i - 1;
-    }
-    return nf - 1;
-}
-
-int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
-{
-    char *slot = (char*)_slot;
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
-    char *start = NULL;
-    size_t len = 0;
-    size_t elsize = sizeof(void*);
-    if (vt == jl_module_type) {
-        jl_module_t *m = (jl_module_t*)obj;
-        start = (char*)m->usings.items;
-        len = m->usings.len;
-    }
-    else if (vt == jl_simplevector_type) {
-        start = (char*)jl_svec_data(obj);
-        len = jl_svec_len(obj);
-    }
-    if (slot < start || slot >= start + elsize * len)
-        return -1;
-    return (slot - start) / elsize;
-}
-
-static int gc_logging_enabled = 0;
-
-JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
-    gc_logging_enabled = enable;
-}
-
-JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
-    return gc_logging_enabled;
 }
 
 void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {

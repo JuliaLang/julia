@@ -54,7 +54,7 @@ function is_expected_union(u::Union)
     return true
 end
 
-function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter, label_dynamic_calls)
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
@@ -74,7 +74,7 @@ function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(retty
     print(io, "Body")
     warntype_type_printer(io; type=rettype, used=true)
     println(io)
-    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer; label_dynamic_calls)
     Base.IRShow.show_ir(io, src, irshow_config)
     println(io)
 end
@@ -128,10 +128,10 @@ end
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types which may be problematic for performance to be emphasized
+as to cause non-concrete types which may be problematic for performance to be emphasized
 (if color is available, displayed in red). This serves as a warning of potential type instability.
 
-Not all non-leaf types are particularly problematic for performance, and the performance
+Not all non-concrete types are particularly problematic for performance, and the performance
 characteristics of a particular type is an implementation detail of the compiler.
 `code_warntype` will err on the side of coloring types red if they might be a performance
 concern, so some types may be colored red even if they do not impact performance.
@@ -145,7 +145,7 @@ See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref)
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f));
                        world=Base.get_world_counter(),
-                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world),
+                       interp::Base.Compiler.AbstractInterpreter=Base.Compiler.NativeInterpreter(world),
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
@@ -154,20 +154,22 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
         isa(f.source, Method) && (nargs = f.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs;
+                                lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
     tt = Base.signature_type(f, tt)
-    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches = findall(tt, Base.Compiler.method_table(interp))
     matches === nothing && Base.raise_match_failure(:code_warntype, tt)
     for match in matches.matches
         match = match::Core.MethodMatch
-        src = Core.Compiler.typeinf_code(interp, match, optimize)
-        mi = Core.Compiler.specialize_method(match)
+        src = Base.Compiler.typeinf_code(interp, match, optimize)
+        mi = Base.Compiler.specialize_method(match)
         mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
         if src isa Core.CodeInfo
-            print_warntype_codeinfo(io, src, src.rettype, nargs; lineprinter)
+            print_warntype_codeinfo(io, src, src.rettype, nargs;
+                                    lineprinter, label_dynamic_calls = optimize)
         else
             println(io, "  inference not successful")
         end
@@ -200,7 +202,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     if !isa(f, Core.OpaqueClosure)
         world = Base.get_world_counter()
         match = Base._which(signature_type(f, t); world)
-        mi = Core.Compiler.specialize_method(match)
+        mi = Base.specialize_method(match)
         # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
         isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
@@ -211,9 +213,9 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
             mi = f.source.specializations::Core.MethodInstance
-            Core.Compiler.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
+            Base.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
-            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
+            mi = Base.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
             isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
     end
@@ -235,18 +237,18 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         if isempty(str)
             # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
             if !isa(f, Core.OpaqueClosure)
-                src = Core.Compiler.typeinf_code(Core.Compiler.NativeInterpreter(world), mi, true)
+                src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
             else
-                src, rt = Base.get_oc_code_rt(f, tt, true)
+                src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
             end
             src isa Core.CodeInfo || error("failed to infer source for $mi")
             str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
         end
     else
         if !isa(f, Core.OpaqueClosure)
-            src = Core.Compiler.typeinf_code(Core.Compiler.NativeInterpreter(world), mi, true)
+            src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
         else
-            src, rt = Base.get_oc_code_rt(f, tt, true)
+            src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)

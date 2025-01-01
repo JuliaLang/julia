@@ -711,6 +711,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where {T} = oneunit(T) - zero(T)
+step(r::AbstractUnitRange{Bool}) = true
 step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
@@ -850,6 +851,11 @@ first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
+function first(r::OneTo, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
+    OneTo(oftype(r.stop, min(r.stop, n)))
+end
+
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
@@ -948,7 +954,7 @@ function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
 end
 
 let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
-    function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+    global function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
         res = widemul(step(v), i-oneunit(i)) + first(v)
         (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
     end
@@ -1485,7 +1491,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).
@@ -1679,4 +1685,15 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bpart = lookup_binding_partition(UInt(first(worlds)), gr)
+    if bpart.max_world < last(worlds)
+        error("Binding does not cover the full world range")
+    end
+    _resolve_in_world(UInt(last(worlds)), gr)
 end

@@ -215,7 +215,7 @@ function fetch_refspecs(rmt::GitRemote)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_get_fetch_refspecs, libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, rmt)
-    res = convert(Vector{String}, sa_ref[])
+    res = collect(sa_ref[])
     free(sa_ref)
     res
 end
@@ -245,7 +245,7 @@ function push_refspecs(rmt::GitRemote)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_remote_get_push_refspecs, libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, rmt)
-    res = convert(Vector{String}, sa_ref[])
+    res = collect(sa_ref[])
     free(sa_ref)
     res
 end

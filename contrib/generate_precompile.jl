@@ -35,10 +35,19 @@ precompile(Base.unsafe_string, (Ptr{UInt8},))
 precompile(Base.unsafe_string, (Ptr{Int8},))
 
 # loading.jl
-precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
-precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.__require, (Module, Symbol))
+precompile(Base.__require, (Base.PkgId,))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
+precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
+
+# LazyArtifacts (but more generally helpful)
+precompile(Tuple{Type{Base.Val{x} where x}, Module})
+precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
+precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
+precompile(Tuple{typeof(Base.invokelatest), Any})
+precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
 precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
@@ -127,53 +136,56 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     m = match.method
     delete!(push!(Set{Method}(), m), m)
     copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
-
-    empty!(Set())
-    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-    Dict(Base => [:(1+1)])[Base]
-    Dict(:one => [1])[:one]
-    Dict("abc" => Set())["abc"]
-    pushfirst!([], sum)
-    get(Base.pkgorigins, Base.PkgId(Base), nothing)
-    sort!([1,2,3])
-    unique!([1,2,3])
-    cumsum([1,2,3])
-    append!(Int[], BitSet())
-    isempty(BitSet())
-    delete!(BitSet([1,2]), 3)
-    deleteat!(Int32[1,2,3], [1,3])
-    deleteat!(Any[1,2,3], [1,3])
-    Core.svec(1, 2) == Core.svec(3, 4)
-    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
-
-    # Code loading uses this
-    sortperm(mtime.(readdir(".")), rev=true)
-    # JLLWrappers uses these
-    Dict{Base.UUID,Set{String}}()[Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
-    get!(Set{String}, Dict{Base.UUID,Set{String}}(), Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
-    eachindex(IndexLinear(), Expr[])
-    push!(Expr[], Expr(:return, false))
-    vcat(String[], String[])
-    k, v = (:hello => nothing)
-
-    # Preferences uses these
-    get(Dict{String,Any}(), "missing", nothing)
-    delete!(Dict{String,Any}(), "missing")
-    for (k, v) in Dict{String,Any}()
-        println(k)
-    end
-
-    # interactive startup uses this
-    write(IOBuffer(), "")
-
     break   # only actually need to do this once
 end
+empty!(Set())
+push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+(setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+(setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+(setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+Dict(Base => [:(1+1)])[Base]
+Dict(:one => [1])[:one]
+Dict("abc" => Set())["abc"]
+pushfirst!([], sum)
+get(Base.pkgorigins, Base.PkgId(Base), nothing)
+sort!([1,2,3])
+unique!([1,2,3])
+cumsum([1,2,3])
+append!(Int[], BitSet())
+isempty(BitSet())
+delete!(BitSet([1,2]), 3)
+deleteat!(Int32[1,2,3], [1,3])
+deleteat!(Any[1,2,3], [1,3])
+Core.svec(1, 2) == Core.svec(3, 4)
+any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
+
+# Code loading uses this
+sortperm(mtime.(readdir(".")), rev=true)
+# JLLWrappers uses these
+Dict{Base.UUID,Set{String}}()[Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+get!(Set{String}, Dict{Base.UUID,Set{String}}(), Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+eachindex(IndexLinear(), Expr[])
+push!(Expr[], Expr(:return, false))
+vcat(String[], String[])
+k, v = (:hello => nothing)
+Base.print_time_imports_report(Base)
+Base.print_time_imports_report_init(Base)
+
+# Preferences uses these
+get(Dict{String,Any}(), "missing", nothing)
+delete!(Dict{String,Any}(), "missing")
+for (k, v) in Dict{String,Any}()
+    println(k)
+end
+
+# interactive startup uses this
+write(IOBuffer(), "")
+
+# precompile @time report generation and printing
+@time @eval Base.Experimental.@force_compile
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -186,12 +198,15 @@ if Artifacts !== nothing
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
     artifact_hash("HelloWorldC", artifacts_toml)
-    oldpwd = pwd(); cd(dirname(artifacts_toml))
-    macroexpand(Main, :(@artifact_str("HelloWorldC")))
-    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
+    if best_platform !== nothing
+      # @artifact errors for unsupported platforms
+      oldpwd = pwd(); cd(dirname(artifacts_toml))
+      macroexpand(Main, :(@artifact_str("HelloWorldC")))
+      cd(oldpwd)
+    end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
@@ -331,8 +346,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "F$n_step1")
         return :ok
     end
-    Base.errormonitor(step1)
-    !PARALLEL_PRECOMPILATION && wait(step1)
+    PARALLEL_PRECOMPILATION ? bind(statements_step1, step1) : wait(step1)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -341,12 +355,13 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
+    eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
     n_succeeded = 0
     # Make statements unique
     statements = Set{String}()
     # Execute the precompile statements
-    for sts in [statements_step1,], statement in sts
+    for statement in statements_step1
         # Main should be completely clean
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
@@ -382,6 +397,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     println()
     # Seems like a reasonable number right now, adjust as needed
     # comment out if debugging script
+    have_repl = false
     n_succeeded > (have_repl ? 650 : 90) || @warn "Only $n_succeeded precompile statements"
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
@@ -392,7 +408,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
 finally
     fancyprint && print(ansi_enablecursor)
     GC.gc(true); GC.gc(false); # reduce memory footprint
-    return
 end
 
 generate_precompile_statements()

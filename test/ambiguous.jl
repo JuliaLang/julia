@@ -162,6 +162,22 @@ end
 ambs = detect_ambiguities(Ambig48312)
 @test length(ambs) == 4
 
+module UnboundAmbig55868
+    module B
+        struct C end
+        export C
+        Base.@deprecate_binding D C
+    end
+    using .B
+    export C, D
+end
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+@test isempty(detect_unbound_args(UnboundAmbig55868))
+@test isempty(detect_ambiguities(UnboundAmbig55868))
+@test !Base.isbindingresolved(UnboundAmbig55868, :C)
+@test !Base.isbindingresolved(UnboundAmbig55868, :D)
+
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
@@ -176,8 +192,7 @@ ambs = detect_ambiguities(Ambig48312)
 
     # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        @test !isempty(ambig)
-        @test length(ambig) < 30
+        @test isempty(ambig)
     end
 
     STDLIB_DIR = Sys.STDLIB
@@ -333,10 +348,6 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken isempty(need_to_handle_undef_sparam)
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
@@ -446,5 +457,21 @@ cc46601(::Type{T}, x::Number) where {T<:Number} = 6
 cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 @test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
+
+# Issue #55231
+struct U55231{P} end
+struct V55231{P} end
+U55231(::V55231) = nothing
+(::Type{T})(::V55231) where {T<:U55231} = nothing
+@test length(methods(U55231)) == 2
+U55231(a, b) = nothing
+@test length(methods(U55231)) == 3
+struct S55231{P} end
+struct T55231{P} end
+(::Type{T})(::T55231) where {T<:S55231} = nothing
+S55231(::T55231) = nothing
+@test length(methods(S55231)) == 2
+S55231(a, b) = nothing
+@test length(methods(S55231)) == 3
 
 nothing

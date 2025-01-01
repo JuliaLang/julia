@@ -148,6 +148,7 @@ Notes for various operating systems:
 Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
+* [RISC-V](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/riscv.md)
 
 ## Required Build Tools and External Libraries
 
@@ -248,7 +249,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/15.x` branch.
+   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
    * The only Julia-specific patch is the lib renaming (`llvm7-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 

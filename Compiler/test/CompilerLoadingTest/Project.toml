@@ -1,0 +1,5 @@
+name = "CompilerLoadingTest"
+uuid = "95defb8a-f82d-44d7-b2c9-37d658f648c1"
+
+[deps]
+Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"

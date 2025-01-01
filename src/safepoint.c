@@ -158,17 +158,16 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
     }
 }
 
-int jl_safepoint_start_gc(void)
+int jl_safepoint_start_gc(jl_task_t *ct)
 {
     // The thread should have just set this before entry
-    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
+    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING);
     uv_mutex_lock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_begin);
     // make sure we are permitted to run GC now (we might be required to stop instead)
-    jl_task_t *ct = jl_current_task;
     while (jl_atomic_load_relaxed(&ct->ptls->suspend_count)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_thread_resume();
+        jl_safepoint_wait_thread_resume(ct);
         uv_mutex_lock(&safepoint_lock);
     }
     // In case multiple threads enter the GC at the same time, only allow
@@ -178,7 +177,7 @@ int jl_safepoint_start_gc(void)
     uint32_t running = 0;
     if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_gc();
+        jl_safepoint_wait_gc(ct);
         return 0;
     }
     // Foreign thread adoption disables the GC and waits for it to finish, however, that may
@@ -213,9 +212,8 @@ void jl_safepoint_end_gc(void)
     uv_cond_broadcast(&safepoint_cond_end);
 }
 
-void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct) // n.b. not used on _OS_DARWIN_
 {
-    jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
@@ -223,18 +221,19 @@ void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
     uv_mutex_lock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
-    jl_safepoint_wait_gc();
+    jl_safepoint_wait_gc(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
-    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
+    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
 
 // this is the core of jl_set_gc_and_wait
-void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
+void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task; (void)ct;
-    JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
-    // The thread should have set this is already
-    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
+    if (ct) {
+        JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
+        // The thread should have set this is already
+        assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
+    }
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
@@ -249,9 +248,8 @@ void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
 }
 
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
-void jl_safepoint_wait_thread_resume(void)
+void jl_safepoint_wait_thread_resume(jl_task_t *ct)
 {
-    jl_task_t *ct = jl_current_task;
     // n.b. we do not permit a fast-path here that skips the lock acquire since
     // we otherwise have no synchronization point to ensure that this thread
     // will observe the change to the safepoint, even though the other thread
@@ -275,6 +273,25 @@ void jl_safepoint_wait_thread_resume(void)
     // correct GC state, and not still stuck in JL_GC_STATE_WAITING
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
+}
+// This takes the sleep lock and puts the thread in GC_SAFE
+int8_t jl_safepoint_take_sleep_lock(jl_ptls_t ptls)
+{
+    int8_t gc_state = jl_gc_safe_enter(ptls);
+    uv_mutex_lock(&ptls->sleep_lock);
+    if (jl_atomic_load_relaxed(&ptls->suspend_count)) {
+        // This dance with the locks is because we are not allowed to hold both these locks at the same time
+        // This avoids a situation where  jl_safepoint_suspend_thread loads our GC state and sees GC_UNSAFE
+        // But we are in the process of becoming GC_SAFE, and also trigger the old safepoint, this causes us
+        // to go sleep in scheduler and the suspender thread to go to sleep in safepoint_cond_begin meaning we hang
+        // To avoid this we do the broadcast below to force it to observe the new gc_state
+        uv_mutex_unlock(&ptls->sleep_lock);
+        uv_mutex_lock(&safepoint_lock);
+        uv_cond_broadcast(&safepoint_cond_begin);
+        uv_mutex_unlock(&safepoint_lock);
+        uv_mutex_lock(&ptls->sleep_lock);
+    }
+    return gc_state;
 }
 
 // n.b. suspended threads may still run in the GC or GC safe regions
@@ -314,7 +331,7 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
             // It will be unable to reenter helping with GC because we have
             // changed its safepoint page.
             uv_mutex_unlock(&safepoint_lock);
-            jl_set_gc_and_wait();
+            jl_set_gc_and_wait(jl_current_task);
             uv_mutex_lock(&safepoint_lock);
         }
         while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {
