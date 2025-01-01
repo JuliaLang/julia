@@ -12,6 +12,7 @@ export quot,
        isunaryoperator,
        isbinaryoperator,
        ispostfixoperator,
+       parse,
        replace_sourceloc!,
        show_sexpr,
        @dump
