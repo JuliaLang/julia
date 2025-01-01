@@ -7,7 +7,7 @@ also encapsulate other information from an encoded byte sequence as described be
 and characters can be converted to integer codepoint values via the [`codepoint`](@ref)
 function, or can be constructed from the same integer.  At least for valid,
 properly encoded Unicode characters, these numerical codepoint values
-determine how characters are compared with `<` and `==`, for example. 
+determine how characters are compared with `<` and `==`, for example.
 New `T <: AbstractChar` types should define a `codepoint(::T)`
 method and a `T(::UInt32)` constructor, at minimum.
 
