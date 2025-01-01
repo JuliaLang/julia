@@ -197,7 +197,7 @@ end
     @test gcd(Int[]) === 0
     @test lcm(Int[]) === 1
     @test gcd(Rational{Int}[]) === 0//1
-    @test_throws ArgumentError("lcm has no identity for Rational{Int}") lcm(Rational{Int}[])
+    @test_throws ArgumentError("lcm has no identity for Rational{$Int}") lcm(Rational{Int}[])
 end
 
 ⟷(a::Tuple{T, T, T}, b::Tuple{T, T, T}) where T <: Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
