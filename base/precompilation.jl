@@ -1042,7 +1042,9 @@ function _precompilepkgs(pkgs::Vector{String},
                     plural4 = n_loaded == 1 ? "this package" : "these packages"
                     print(iostr, "\n  ",
                         color_string(string(n_loaded), Base.warn_color()),
-                        " $(plural1) precompiled but $(plural2) currently loaded. Restart julia to access the new version$(plural3). \
+                        " $(plural1) precompiled but ",
+                        color_string("$(plural2) currently loaded", Base.warn_color()),
+                        ". Restart julia to access the new version$(plural3). \
                         Otherwise, loading dependents of $(plural4) may trigger further precompilation to work with the unexpected version$(plural3)."
                     )
                 end
