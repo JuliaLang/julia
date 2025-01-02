@@ -770,7 +770,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 alignm = al;
         }
         if (alignm > MAX_ALIGN)
-            alignm = MAX_ALIGN; // We cannot guarantee aligments over 16 bytes because that's what our heap is aligned as
+            alignm = MAX_ALIGN; // We cannot guarantee alignments over 16 bytes because that's what our heap is aligned as
         if (LLT_ALIGN(sz, alignm) > sz) {
             haspadding = 1;
             sz = LLT_ALIGN(sz, alignm);
