@@ -1616,19 +1616,24 @@ in the absence of a more specific method.
   in whatever way it thinks best.
   This is the function used by the REPL to output the result of an evaluated expression.
   In the REPL, `display` calls `show(io, MIME"text/plain", x)`.
-  In a graphical environment, such as Jupyter or Pluto, `display` might prefer a non-plaintext
-  representation of an object (such as HTML, Markdown, or a PNG or SVG image), if the
-  corresponding 3-argument `show` method is defined (as determined by [`showable`](@ref)).
+  In a graphical environment, such as Jupyter or Pluto,
+  `display` might prefer a non-plaintext representation of an object
+  (such as HTML, Markdown, or a PNG or SVG image), if the corresponding 3-argument `show`
+  method is defined (as determined by [`showable`](@ref)).
 
 * [`write(io, x)`](@ref), if it is defined
   (it generally has *no* default definition for new types),
   writes a "raw" binary representation of `x` to `io`,
   e.g. an `x::Int32` will be written as 4 bytes.
 
-The `io` argument for all the above functions is optional and defaults to [`stdout`](@ref) if it is omitted;
-this is the default output stream, typically a terminal window.  (`display` has no `io` argument because the output format and stream/device is chosen by the display backend.)
+The `io` argument for all the above functions is optional
+and defaults to [`stdout`](@ref) if it is omitted;
+this is the default output stream, typically a terminal window.
+(`display` has no `io` argument
+because the output format and stream/device is chosen by the display backend.)
 
-More generally, `io` (of type [`IO`](@ref)) specifies a desired output stream (such as a file, buffer, or pipe).
+More generally, `io` (of type [`IO`](@ref)) specifies a desired output stream
+(such as a file, buffer, or pipe).
 In the REPL, `io` is an [`IOContext`](@ref) wrapper around `stdout`, as described below.
 It is also helpful to be familiar with the metadata that can be attached to an `io` stream
 by an [`IOContext`](@ref) wrapper.
