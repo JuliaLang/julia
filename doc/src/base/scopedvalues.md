@@ -297,7 +297,7 @@ Base.ScopedValues.ScopedValue
 Base.ScopedValues.with
 Base.ScopedValues.@with
 Base.isassigned(::Base.ScopedValues.ScopedValue)
-Base.ScopedValues.get
+Base.get(::Base.ScopedValues.ScopedValue)
 ```
 
 ## Implementation notes and performance

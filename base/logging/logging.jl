@@ -515,7 +515,7 @@ LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger
 const CURRENT_LOGSTATE = ScopedValue{LogState}()
 
 function current_logstate()
-    maybe = @inline Base.ScopedValues.get(CURRENT_LOGSTATE)
+    maybe = @inline get(CURRENT_LOGSTATE)
     return something(maybe, _global_logstate)::LogState
 end
 

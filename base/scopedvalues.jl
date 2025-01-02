@@ -3,7 +3,6 @@
 module ScopedValues
 
 export ScopedValue, with, @with
-public get
 
 """
     ScopedValue(x)
@@ -57,7 +56,7 @@ Base.eltype(::ScopedValue{T}) where {T} = T
 
 Test whether a `ScopedValue` has an assigned value.
 
-See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedValues.get`](@ref).
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`get`](@ref).
 
 # Examples
 ```jldoctest
@@ -141,14 +140,14 @@ julia> using Base.ScopedValues
 
 julia> a = ScopedValue(42); b = ScopedValue{Int}();
 
-julia> ScopedValues.get(a)
+julia> get(a)
 Some(42)
 
-julia> isnothing(ScopedValues.get(b))
+julia> isnothing(get(b))
 true
 ```
 """
-function get(val::ScopedValue{T}) where {T}
+function Base.get(val::ScopedValue{T}) where {T}
     scope = Core.current_scope()::Union{Scope, Nothing}
     if scope === nothing
         val.has_default && return Some{T}(val.default)
@@ -156,9 +155,9 @@ function get(val::ScopedValue{T}) where {T}
     end
     scope = scope::Scope
     if val.has_default
-        return Some{T}(Base.get(scope.values, val, val.default)::T)
+        return Some{T}(get(scope.values, val, val.default)::T)
     else
-        v = Base.get(scope.values, val, novalue)
+        v = get(scope.values, val, novalue)
         v === novalue || return Some{T}(v::T)
     end
     return nothing
@@ -191,7 +190,7 @@ new dynamic scope with `var` set to `val`. `val` will be converted to type `T`.
 `@with var=>val expr` is equivalent to `with(var=>val) do expr end`, but `@with`
 avoids creating a closure.
 
-See also: [`ScopedValues.with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`get`](@ref).
 
 # Examples
 ```jldoctest
@@ -231,7 +230,7 @@ end
 Execute `f` in a new dynamic scope with `var` set to `val`. `val` will be converted
 to type `T`.
 
-See also: [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
+See also: [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`get`](@ref).
 
 # Examples
 ```jldoctest
