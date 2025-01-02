@@ -1609,10 +1609,11 @@ in the absence of a more specific method.
   However, `show(io, MIME"text/plain", x)` is often defined to print a more verbose,
   multi-line representation of `x` in plain text.
   Interactive notebooks like Jupyter and Pluto allow for more sophisticated representations
-  For example, both support `MIME"text/html"` and `MIME"text/markdown"` for text
-  as well as `MIME"image/png"` and `MIME"image/svg"` for images.
+  For example,
+  both support `MIME"text/html"`, `MIME"text/markdown"`, and `MIME"text/latex"` for text
+  as well as `MIME"image/jpeg"`, `MIME"image/png"`, and `MIME"image/svg+xml"` for images.
   Types which are representable in these formats may benefit
-  from explicit `show` method definitions for these (and similar) [`MIME`](@ref) types.
+  from explicit `show` method definitions for these and other similar [`MIME`](@ref) types.
 
 * [`print(io, x)`](@ref) by default calls `show(io, x)`,
   but a few types have a distinct `print` format —
