@@ -94,7 +94,7 @@ julia> evalpoly(2, (1, 2, 3))
 function evalpoly(x, p::Tuple)
     if @generated
         N = length(p.parameters::Core.SimpleVector)
-        ex = :(p[end])
+        ex = :(oftype(one(x) * p[end], p[end]))
         for i in N-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
         end

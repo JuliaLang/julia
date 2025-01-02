@@ -723,6 +723,9 @@ end
     @test @inferred(evalpoly(1.0f0, Int[])) === 0.0f0 # issue #56699
     @test_throws MethodError evalpoly(1.0f0, [])
     @test @inferred(evalpoly(1.0f0, [2])) === 2.0f0 # type-stability
+
+    # different @generated branches should return same type:
+    @test evalpoly(3.0, (1,)) === Base.Math._evalpoly(3.0, (1,)) === 1.0
 end
 
 @testset "evalpoly complex" begin
@@ -738,6 +741,10 @@ end
     @test @inferred(evalpoly(1.0f0+im, Int[])) === 0.0f0+0im # issue #56699
     @test_throws MethodError evalpoly(1.0f0, [])
     @test @inferred(evalpoly(1.0f0+im, [2])) === 2.0f0+0im # type-stability
+
+    # different @generated branches should return same type:
+    @test evalpoly(3.0+0im, (1,)) === Base.Math._evalpoly(3.0+0im, (1,)) === 1.0+0im
+    @test evalpoly(3.0+0im, (1,2)) === Base.Math._evalpoly(3.0+0im, (1,2)) === 7.0+0im
 end
 
 @testset "cis" begin
