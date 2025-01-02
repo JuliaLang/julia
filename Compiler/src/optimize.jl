@@ -647,9 +647,11 @@ struct GetNativeEscapeCache{CodeCache}
     GetNativeEscapeCache(code_cache::CodeCache) where CodeCache = new{CodeCache}(code_cache)
 end
 GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
-function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
-    codeinst = get(code_cache, mi, nothing)
-    codeinst isa CodeInstance || return false
+function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
+    if codeinst isa MethodInstance
+        codeinst = get(code_cache, codeinst, nothing)
+        codeinst isa CodeInstance || return false
+    end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
     end
@@ -1023,7 +1025,7 @@ function run_passes_ipo_safe(
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass
-    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
+    # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here

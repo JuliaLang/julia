@@ -22,6 +22,7 @@ New language features
   The available metrics are:
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
+- Support for Unicode 16 ([#56925]).
 
 Language changes
 ----------------
@@ -45,6 +46,9 @@ Language changes
  - Trivial infinite loops (like `while true; end`) are no longer undefined
    behavior. Infinite loops that actually do things (e.g. have side effects
    or sleep) were never and are still not undefined behavior. ([#52999])
+
+ - It is now an error to mark a symbol as both `public` and `export`ed.
+   ([#53664])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -179,6 +183,15 @@ Standard library changes
 #### SparseArrays
 
 #### Test
+
+* A failing `DefaultTestSet` now prints to screen the random number generator (RNG) of the failed test, to help reproducing a stochastic failure which only depends on the state of the RNG.
+  It is also possible seed a test set by passing the `rng` keyword argument to `@testset`:
+  ```julia
+  using Test, Random
+  @testset rng=Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850) begin
+      @test rand() == 0.559472630416976
+  end
+  ```
 
 #### Dates
 
