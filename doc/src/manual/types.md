@@ -1596,14 +1596,23 @@ in the absence of a more specific method.
 
 * [`show(io, x)`](@ref), with two arguments,
   is the default simple text representation of `x`.
-  It is typically the format you would employ to input `x` into Julia.
+  New types will automatically define `show(io, x)`
+  as the format employed to input `x` into Julia.
+  However, it may be desirable to overwrite this default
+  to define nicer printing for collections of the new type.
 
 * [`show(io, mime, x)`](@ref), with three arguments,
-  performs verbose pretty-printing of `x`.
-  Multiple 3-argument `show` methods can be defined for various MIME types to enable
-  richer display of `x` in some interactive environments as discussed below.
-  By default (if no 3-argument method is defined for `typeof(x)`),
-  it calls the 2-argument `show(io, x)`.
+  may be defined for various [`MIME`](@ref) types to enable
+  richer display of `x` when permitted by the execution environment.
+  If not defined otherwise,
+  `show(io, MIME"text/plain", x)` will by default call `show(io, x)`.
+  However, `show(io, MIME"text/plain", x)` is often defined to print a more verbose,
+  multi-line representation of `x` in plain text.
+  Interactive notebooks like Jupyter and Pluto allow for more sophisticated representations
+  For example, both support `MIME"text/html"` and `MIME"text/markdown"` for text
+  as well as `MIME"image/png"` and `MIME"image/svg"` for images.
+  Types which are representable in these formats may benefit
+  from explicit `show` method definitions for these (and similar) [`MIME`](@ref) types.
 
 * [`print(io, x)`](@ref) by default calls `show(io, x)`,
   but a few types have a distinct `print` format —
