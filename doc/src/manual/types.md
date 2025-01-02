@@ -1653,8 +1653,8 @@ Note that [`convert(String, x)`](@ref) is purposely not defined
 so the user can be explicit about the string representation they desire.
 
 * [`string(x)`](@ref) and [`annotatedstring(x)`](@ref) call [`print(io, x)`](@ref).
-* The 2-argument `repr("text/plain", x)` calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
-* The 1-argument [`repr(x)`](@ref) calls the 2-argument [`show(io, x)`](@ref).
+* [`repr(x)`](@ref), with one argument, calls the 2-argument [`show(io, x)`](@ref).
+* `repr("text/plain", x)`, with two arguments, calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
 
 ## "Value types"
 
