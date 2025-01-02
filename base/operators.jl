@@ -344,6 +344,16 @@ false
 julia> a === a
 true
 ```
+
+# Extended help
+It might be possible to construct a program that is actually able to distinguish
+two egal values. For example, one could heap-allocate two integers,
+then compare the value of a pointer pointing to their heap address.
+However, all such programs rely on observing behaviour outside Julia's allowed
+semantics, and so happen to work due to implementation details and/or triggering
+undefined behaviour.
+In the example, it is invalid to assume that a value on the heap has a single
+unique pointer referencing it, and that any such pointer references no other value.
 """
 ===
 const ≡ = ===
