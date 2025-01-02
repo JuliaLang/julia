@@ -1616,8 +1616,9 @@ in the absence of a more specific method.
   in whatever way it thinks best.
   This is the function used by the REPL to output the result of an evaluated expression.
   In the REPL, `display` calls `show(io, MIME"text/plain", x)`.
-  In a notebook, like Jupyter or Pluto, `display` calls `show(io, MIME"text/html", x)`
-  (or sometimes `show(io, MIME"image/<format>", x)` if `x` is representable as an image).
+  In a graphical environment, such as Jupyter or Pluto, `display` might prefer a non-plaintext
+  representation of an object (such as HTML, Markdown, or a PNG or SVG image), if the
+  corresponding 3-argument `show` method is defined (as determined by [`showable`](@ref)).
 
 * [`write(io, x)`](@ref), if it is defined
   (it generally has *no* default definition for new types),
