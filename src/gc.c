@@ -1255,8 +1255,7 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
                     *pma = nxt;
                     int isaligned = (uintptr_t)ma->a & 1;
                     jl_gc_free_memory(a, isaligned);
-                    ma->next = ptls2->heap.mafreelist;
-                    ptls2->heap.mafreelist = ma;
+                    free(ma);
                 }
                 gc_time_count_mallocd_memory(bits);
                 ma = nxt;
