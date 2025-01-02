@@ -142,7 +142,7 @@ As in the example above, we recommend following some simple conventions when wri
    # Examples
    ```jldoctest
    julia> a = [1 2; 3 4]
-   2×2 Array{Int64,2}:
+   2×2 Matrix{Int64}:
     1  2
     3  4
    ```

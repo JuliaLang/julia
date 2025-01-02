@@ -61,6 +61,7 @@ struct JLOptions
     heap_size_hint::UInt64
     trace_compile_timing::Int8
     trim::Int8
+    task_metrics::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

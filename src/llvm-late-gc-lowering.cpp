@@ -1163,9 +1163,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->hasStructRetAttr()) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
-                    #endif
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
@@ -1252,38 +1249,20 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee->getName() == "memcmp") {
                         continue;
                     }
-#if JL_LLVM_VERSION >= 160000
                     if (callee->getMemoryEffects().onlyReadsMemory() ||
                         callee->getMemoryEffects().onlyAccessesArgPointees()) {
                         continue;
                     }
-#else
-                    if (callee->hasFnAttribute(Attribute::ReadNone) ||
-                        callee->hasFnAttribute(Attribute::ReadOnly) ||
-                        callee->hasFnAttribute(Attribute::ArgMemOnly)) {
-                        continue;
-                    }
-#endif
                     if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
                         MaybeTrackDst(S, MI);
                     }
                 }
-#if JL_LLVM_VERSION >= 160000
                 if (isa<IntrinsicInst>(CI) ||
                     CI->getMemoryEffects().onlyAccessesArgPointees() ||
                     CI->getMemoryEffects().onlyReadsMemory()) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
-#else
-                if (isa<IntrinsicInst>(CI) ||
-                    CI->hasFnAttr(Attribute::ArgMemOnly) ||
-                    CI->hasFnAttr(Attribute::ReadNone)   ||
-                    CI->hasFnAttr(Attribute::ReadOnly)) {
-                    // Intrinsics are never safepoints.
-                    continue;
-                }
-#endif
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
@@ -1944,28 +1923,19 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
         if (CFGModified) {
             *CFGModified = true;
         }
-        auto DebugInfoMeta = F.getParent()->getModuleFlag("julia.debug_level");
-        int debug_info = 1;
-        if (DebugInfoMeta != nullptr) {
-            debug_info = cast<ConstantInt>(cast<ConstantAsMetadata>(DebugInfoMeta)->getValue())->getZExtValue();
-        }
 
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED);
-        setName(parBits, "parent_bits", debug_info);
-        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED));
-        setName(parOldMarked, "parent_old_marked", debug_info);
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED, "parent_bits");
+        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED), "parent_old_marked");
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
-        setName(mayTrigTerm->getParent(), "may_trigger_wb", debug_info);
+        mayTrigTerm->getParent()->setName("may_trigger_wb");
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), GC_MARKED);
-            setName(chldBit, "child_bit", debug_info);
-            Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0),"child_not_marked");
-            setName(chldNotMarked, "child_not_marked", debug_info);
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), GC_MARKED, "child_bit");
+            Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
         assert(anyChldNotMarked); // handled by all_of test above
@@ -1973,7 +1943,7 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
         SmallVector<uint32_t, 2> Weights{1, 9};
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
-        setName(trigTerm->getParent(), "trigger_wb", debug_info);
+        trigTerm->getParent()->setName("trigger_wb");
         builder.SetInsertPoint(trigTerm);
         if (CI->getCalledOperand() == write_barrier_func) {
             builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);

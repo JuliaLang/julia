@@ -181,7 +181,18 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = String[], "", true
+# Before, completions were always given as strings. But at least for backslash
+# completions, it's nice to see what glyphs are available in the completion preview.
+# To separate between what's shown in the preview list of possible matches, and what's
+# actually completed, we introduce this struct.
+struct NamedCompletion
+    completion::String # what is actually completed, for example "\trianglecdot"
+    name::String # what is displayed in lists of possible completions, for example "◬ \trianglecdot"
+end
+
+NamedCompletion(completion::String) = NamedCompletion(completion, completion)
+
+complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = NamedCompletion[], "", true
 
 # complete_line can be specialized for only two arguments, when the active module
 # doesn't matter (e.g. Pkg does this)
@@ -308,6 +319,7 @@ end
 
 set_action!(s, command::Symbol) = nothing
 
+common_prefix(completions::Vector{NamedCompletion}) = common_prefix(map(x -> x.completion, completions))
 function common_prefix(completions::Vector{String})
     ret = ""
     c1 = completions[1]
@@ -329,6 +341,8 @@ end
 # column, anything above that and multiple columns will be used. Note that this
 # does not restrict column length when multiple columns are used.
 const MULTICOLUMN_THRESHOLD = 5
+
+show_completions(s::PromptState, completions::Vector{NamedCompletion}) = show_completions(s, map(x -> x.name, completions))
 
 # Show available completions
 function show_completions(s::PromptState, completions::Vector{String})
@@ -374,6 +388,18 @@ function complete_line(s::MIState)
     end
 end
 
+# due to close coupling of the Pkg ReplExt `complete_line` can still return a vector of strings,
+# so we convert those in this helper
+function complete_line_named(args...; kwargs...)::Tuple{Vector{NamedCompletion},String,Bool}
+    result = complete_line(args...; kwargs...)::Union{Tuple{Vector{NamedCompletion},String,Bool},Tuple{Vector{String},String,Bool}}
+    if result isa Tuple{Vector{NamedCompletion},String,Bool}
+        return result
+    else
+        completions, partial, should_complete = result
+        return map(NamedCompletion, completions), partial, should_complete
+    end
+end
+
 function check_for_hint(s::MIState)
     st = state(s)
     if !options(st).hint_tab_completes || !eof(buffer(st))
@@ -383,12 +409,14 @@ function check_for_hint(s::MIState)
         return clear_hint(st)
     end
 
-    completions, partial, should_complete = try
-        complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+    named_completions, partial, should_complete = try
+        complete_line_named(st.p.complete, st, s.active_module; hint = true)
     catch
         @debug "error completing line for hint" exception=current_exceptions()
         return clear_hint(st)
     end
+    completions = map(x -> x.completion, named_completions)
+
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -425,7 +453,7 @@ function clear_hint(s::ModeState)
 end
 
 function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line(s.p.complete, s, mod; hint)::Tuple{Vector{String},String,Bool}
+    completions, partial, should_complete = complete_line_named(s.p.complete, s, mod; hint)
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -435,7 +463,7 @@ function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=fal
         # Replace word by completion
         prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
     else
         p = common_prefix(completions)
         if !isempty(p) && p != partial

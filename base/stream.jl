@@ -76,7 +76,7 @@ function getproperty(stream::LibuvStream, name::Symbol)
 end
 
 # IO
-# +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
+# +- GenericIOBuffer{T<:AbstractVector{UInt8}} (not exported)
 # +- AbstractPipe (not exported)
 # .  +- Pipe
 # .  +- Process (not exported)
@@ -89,7 +89,7 @@ end
 # .  +- TTY (not exported)
 # .  +- UDPSocket
 # .  +- BufferStream (FIXME: 2.0)
-# +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
+# +- IOBuffer = Base.GenericIOBuffer{Vector{UInt8}}
 # +- IOStream
 
 # IOServer

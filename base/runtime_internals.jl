@@ -1391,6 +1391,17 @@ end
 hasgenerator(m::Method) = isdefined(m, :generator)
 hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
+function _uncompressed_ir(m::Method)
+    s = m.source
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
+    return s::CodeInfo
+end
+
+_uncompressed_ir(codeinst::CodeInstance, s::String) =
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+
 """
     Base.generating_output([incremental::Bool])::Bool
 

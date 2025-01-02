@@ -276,6 +276,11 @@ ci = code_lowered(g, Tuple{Val{true}})[1]
     @test Meta.partially_inline!(copy(ci.code), Any[isdefined_globalref, 1], Tuple{typeof(isdefined_globalref), Int},
                                  [], 0, 0, :propagate)[1] == Expr(:isdefined, GlobalRef(Base, :foo))
 
+    withunreachable(s::String) = sin(s)
+    ci = code_lowered(withunreachable, Tuple{String})[1]
+    ci.code[end] = Core.ReturnNode()
+    @test Meta.partially_inline!(copy(ci.code), Any[withunreachable, "foo"], Tuple{typeof(withunreachable), String},
+                                 [], 0, 0, :propagate)[end] == Core.ReturnNode()
 end
 
 @testset "Base.Meta docstrings" begin

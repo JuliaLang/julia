@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia
+```julia-repl
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -1270,7 +1270,7 @@ The `@world` macro is primarily used in the printing of bindings that are no lon
 available in the current world.
 
 ## Example
-```
+```julia-repl
 julia> struct Foo; a::Int; end
 Foo
 

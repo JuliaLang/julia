@@ -406,11 +406,11 @@ Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) o
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 julia> b = [1]; a = copy(b); b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  1
 
 ```
@@ -420,7 +420,7 @@ julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 ```
@@ -439,7 +439,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -449,11 +449,11 @@ julia> b[1] = 2; a, b, c
 Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
-ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
+ERROR: BoundsError: attempt to access 2-element Vector{Int64} at index [3]
 [...]
 
 julia> push!(a, 2, 3)
-4-element Array{Int64, 1}:
+4-element Vector{Int64}:
  1
  1
  2
@@ -467,7 +467,7 @@ ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  2
  3
 
@@ -490,14 +490,14 @@ assignment expression is converted into a single loop.
 julia> A = zeros(4, 4); B = [1, 2, 3, 4];
 
 julia> A .= B
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
  4.0  4.0  4.0  4.0
 
 julia> A
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
@@ -1018,12 +1018,12 @@ collection or the last index of a dimension of an array.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64, 2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[end, :]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  3
  4
 ```
@@ -1429,12 +1429,12 @@ collection or the first index of a dimension of an array. For example,
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[begin, :]
-2-element Array{Int64,1}:
+2-element Matrix{Int64}:
  1
  2
 ```
@@ -1515,7 +1515,7 @@ kw"new"
 """
     where
 
-The `where` keyword creates a type that is an iterated union of other types, over all
+The `where` keyword creates a [`UnionAll`](@ref) type, which may be thought of as an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
@@ -2030,20 +2030,48 @@ applicable
 
 """
     invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Method, args...; kwargs...)
+    invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
+implementation of a more specific method of the same function). However, because this means
+the runtime must do more work, `invoke` is generally also slower--sometimes significantly
+so--than doing normal dispatch with a regular call.
 
-Be careful when using `invoke` for functions that you don't write.  What definition is used
+Be careful when using `invoke` for functions that you don't write. What definition is used
 for given `argtypes` is an implementation detail unless the function is explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
 visible if you use `invoke`.
+
+# Passing a `Method` instead of a signature
+The `argtypes` argument may be a `Method`, in which case the ordinary method table lookup is
+bypassed entirely and the given method is invoked directly. Needing this feature is uncommon.
+Note in particular that the specified `Method` may be entirely unreachable from ordinary dispatch
+(or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
+If the method is part of the ordinary method table, this call behaves similar
+to `invoke(f, method.sig, args...)`.
+
+!!! compat "Julia 1.12"
+    Passing a `Method` requires Julia 1.12.
+
+# Passing a `CodeInstance` instead of a signature
+The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
+The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
+`invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
+parent `MethodInstance` or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a `CodeInstance` whose behavior does not match the constraints
+specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
+by external compilers), it may be an error to invoke them after passing through precompilation.
+This is an advanced interface intended for use with external compiler plugins.
+
+!!! compat "Julia 1.12"
+    Passing a `CodeInstance` requires Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -2798,7 +2826,7 @@ Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
 # Examples
 ```julia-repl
 julia> Vector{Float64}(undef, 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
@@ -2848,7 +2876,7 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
-2×3 Array{Float64, 2}:
+2×3 Matrix{Float64}:
  2.36365e-314  2.28473e-314    5.0e-324
  2.26704e-314  2.26711e-314  NaN
 
@@ -2986,7 +3014,7 @@ an alias for `UndefInitializer()`.
 # Examples
 ```julia-repl
 julia> Array{Float64, 1}(UndefInitializer(), 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314

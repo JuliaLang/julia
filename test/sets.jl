@@ -1037,6 +1037,8 @@ end
     @test !isempty(A)
     A = empty!(A)
     @test isempty(A)
+    @test isnothing(sizehint!(A, 10))
+    @test Base.copymutable(A) == copy(A)
 end
 
 @testset "⊊, ⊋" begin

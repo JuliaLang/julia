@@ -270,12 +270,12 @@ end
 
 # PR #23168
 
-function f23168(a, x)
+@eval function f23168(a, x)
     push!(a, 1)
     if @generated
-        :(y = x + x)
+        :(y = $(+)(x, x))
     else
-        y = 2x
+        y = $(*)(2, x)
     end
     push!(a, y)
     if @generated
@@ -290,9 +290,9 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
-    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(+)(", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("(*)(2", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("(*)(2", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 

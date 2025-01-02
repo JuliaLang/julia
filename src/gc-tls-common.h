@@ -21,9 +21,8 @@ typedef struct {
     // that are holding onto a stack from the pool
     small_arraylist_t live_tasks;
 
-    // variables for tracking malloc'd arrays
-    struct _mallocmemory_t *mallocarrays;
-    struct _mallocmemory_t *mafreelist;
+    // variable for tracking malloc'd arrays
+    small_arraylist_t mallocarrays;
 
 #define JL_N_STACK_POOLS 16
     small_arraylist_t free_stacks[JL_N_STACK_POOLS];

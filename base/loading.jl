@@ -1587,9 +1587,14 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
-        errs = current_exceptions()
-        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
+        if JLOptions().incremental != 0
+            # during incremental precompilation, this should be fail-fast
+            rethrow()
+        else
+            errs = current_exceptions()
+            @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
+        end
         false
     finally
         global loading_extension = false
@@ -1823,7 +1828,7 @@ function compilecache_path(pkg::PkgId;
     path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
+        staledeps = stale_cachefile(sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
         if staledeps === true
             continue
         end
@@ -2644,7 +2649,7 @@ function __require_prelocked(pkg::PkgId, env)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try
-                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
+                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true, ignore_loaded=false)
                 finally
                     lock(require_lock)
                 end

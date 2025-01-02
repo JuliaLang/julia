@@ -316,6 +316,9 @@ extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 
+// Global *atomic* integer controlling *process-wide* task timing.
+extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;
+
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
 STATIC_INLINE uint32_t jl_int32hash_fast(uint32_t a)
@@ -651,6 +654,7 @@ typedef struct {
     uint16_t nargsmatchesmethod:1;
     uint16_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint16_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+    uint16_t has_ssaflags:1;
 } jl_code_info_flags_bitfield_t;
 
 typedef union {
@@ -688,6 +692,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
         uint8_t relocatability, jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/);
+
+STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    if (jl_is_abioverride(ci->def))
+        return ((jl_abi_override_t*)ci->def)->def;
+    return (jl_method_instance_t*)ci->def;
+}
 
 JL_DLLEXPORT const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
@@ -1191,7 +1202,7 @@ _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) J
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache);
+JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
@@ -1338,7 +1349,7 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
-    jl_method_instance_t *linfo;
+    jl_code_instance_t *ci;
     int fromC;
     int inlined;
 } jl_frame_t;
@@ -1951,13 +1962,15 @@ JL_DLLIMPORT void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModule
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s, jl_emission_params_t *params);
-JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
-JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
+JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
+JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
+                                           jl_code_instance_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_method_instance_t **linfos, size_t n);
-JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, arraylist_t* MIs);
+JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, size_t *num_els,
+                                  jl_method_instance_t *MIs);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
