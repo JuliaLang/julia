@@ -707,6 +707,10 @@ end
     c = 3
     @test @evalpoly(c, a0, a1) == 7
     @test @evalpoly(1, 2) == 2
+
+    isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+    using .Main.Furlongs
+    @test @evalpoly(Furlong(2)) === evalpoly(Furlong(2), ()) === evalpoly(Furlong(2), Int[]) === 0
 end
 
 @testset "evalpoly real" begin
