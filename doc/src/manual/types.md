@@ -1646,11 +1646,11 @@ the `:compact => true` flag could be set,
 which you can query with `get(io, :compact, false)`.
 
 The functions `string`, `annotatedstring`, and `repr`
-may be used to save values to a string (rather than output to `io`).
+may be used to save values as a string (rather than output to `io`).
 These functions call either `show` or `print` as indicated below,
 so it is usually not necessary to define new methods for them separately.
-Note that [`convert(String, x)`](@ref) is purposely not defined
-so the user can be explicit about the string representation they desire.
+(Note that [`convert(String, x)`](@ref) is not defined for most `x`
+since the `convert` function is intended for implicit conversions.)
 
 * [`string(x)`](@ref) and [`annotatedstring(x)`](@ref) call [`print(io, x)`](@ref).
 * [`repr(x)`](@ref), with one argument, calls the 2-argument [`show(io, x)`](@ref).
