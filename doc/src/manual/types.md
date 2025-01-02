@@ -1601,7 +1601,7 @@ in the absence of a more specific method.
 * [`show(io, mime, x)`](@ref), with three arguments,
   performs verbose pretty-printing of `x`.
   Multiple 3-argument `show` methods can be defined for various MIME types to enable
-  richer display of `x` in some interactive environments as discussed above.
+  richer display of `x` in some interactive environments as discussed below.
   By default (if no 3-argument method is defined for `typeof(x)`),
   it calls the 2-argument `show(io, x)`.
 
