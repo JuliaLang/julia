@@ -142,7 +142,6 @@ Malformed data, in contrast, cannot be decoded to a codepoint
 See also [`Base.show_invalid`](@ref).
 """
 ismalformed(c::AbstractChar) = false
-public ismalformed
 
 """
     Base.isoverlong(c::AbstractChar) -> Bool
@@ -153,7 +152,6 @@ to `false` for non-`Char` types.
 See also [`Base.show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
-public isoverlong
 
 @constprop :aggressive function UInt32(c::Char)
     # TODO: use optimized inline LLVM
@@ -308,7 +306,6 @@ of `AbstractChar` should define `Base.show_invalid` methods
 if they support storing invalid character data.
 """
 show_invalid
-public show_invalid
 
 # show c to io, assuming UTF-8 encoded output
 function show(io::IO, c::AbstractChar)
