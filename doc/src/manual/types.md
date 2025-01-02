@@ -1625,10 +1625,11 @@ in the absence of a more specific method.
   writes a "raw" binary representation of `x` to `io`,
   e.g. an `x::Int32` will be written as 4 bytes.
 
-The first argument to these functions, `io`, defines where the output should be written.
-In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).
-[`stdout`](@ref) directs output to the default display, typically the terminal window.
-The `io` argument for all the above functions defaults to `stdout` if it is omitted.
+The `io` argument for all the above functions is optional and defaults to [`stdout`](@ref) if it is omitted;
+this is the default output stream, typically a terminal window.  (`display` has no `io` argument because the output format and stream/device is chosen by the display backend.)
+
+More generally, `io` (of type [`IO`](@ref)) specifies a desired output stream (such as a file, buffer, or pipe).
+In the REPL, `io` is an [`IOContext`](@ref) wrapper around `stdout`, as described below.
 It is also helpful to be familiar with the metadata that can be attached to an `io` stream
 by an [`IOContext`](@ref) wrapper.
 For example,
