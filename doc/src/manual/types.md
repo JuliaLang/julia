@@ -1605,8 +1605,8 @@ in the absence of a more specific method.
   may be defined for various [`MIME`](@ref) types to enable
   richer display of `x` when permitted by the execution environment.
   If not defined otherwise,
-  `show(io, MIME"text/plain", x)` will by default call `show(io, x)`.
-  However, `show(io, MIME"text/plain", x)` is often defined to print a more verbose,
+  `show(io, "text/plain", x)` will by default call `show(io, x)`.
+  However, `show(io, "text/plain", x)` is often defined to print a more verbose,
   multi-line representation of `x` in plain text.
   Interactive notebooks like Jupyter and Pluto allow for more sophisticated representations
   For example,
@@ -1625,7 +1625,7 @@ in the absence of a more specific method.
 * [`display(x)`](@ref) tells the current environment to display `x`
   in whatever way it thinks best.
   This is the function used by the REPL to output the result of an evaluated expression.
-  In the REPL, `display` calls `show(io, MIME"text/plain", x)`.
+  In the REPL, `display` calls `show(io, "text/plain", x)`.
   In a graphical environment, such as Jupyter or Pluto,
   `display` might prefer a non-plaintext representation of an object
   (such as HTML, Markdown, or a PNG or SVG image), if the corresponding 3-argument `show`
