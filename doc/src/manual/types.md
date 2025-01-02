@@ -1654,7 +1654,7 @@ since the `convert` function is intended for implicit conversions.)
 
 * [`string(x)`](@ref) and [`annotatedstring(x)`](@ref) call [`print(io, x)`](@ref).
 * [`repr(x)`](@ref), with one argument, calls the 2-argument [`show(io, x)`](@ref).
-* `repr("text/plain", x)`, with two arguments, calls the 3-argument [`show(io, ::MIME"text/plain", x)`](@ref).
+* [`repr(mime, x)`](@ref), with two arguments, calls the 3-argument [`show(io, mime, x)`](@ref).
 
 ## "Value types"
 
