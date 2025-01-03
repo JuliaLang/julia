@@ -28,11 +28,9 @@ end
     @test occursin("Couldn't find 'mutable s'", str)
 end
 
-@testset "Non-Markdown" begin
-    # https://github.com/JuliaLang/julia/issues/37765
-    @test isa(REPL.insert_hlines(Markdown.Text("foo")), Markdown.Text)
-    # https://github.com/JuliaLang/julia/issues/37757
-    @test REPL.insert_hlines(nothing) === nothing
+@testset "non-loaded packages in doc search" begin
+    str = get_help_io("Profile")
+    @test occursin("Couldn't find Profile, but a loadable package with that name exists.", str)
 end
 
 @testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin

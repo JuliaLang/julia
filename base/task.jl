@@ -53,7 +53,6 @@ push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 pushfirst!(c::CompositeException, ex) = pushfirst!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
 iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
-eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)
@@ -115,6 +114,13 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
@@ -137,34 +143,16 @@ macro task(ex)
     :(Task($thunk))
 end
 
-"""
-    current_task()
-
-Get the currently running [`Task`](@ref).
-"""
-current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
-
 # task states
 
 const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
-const _state_index = findfirst(==(:_state), fieldnames(Task))
-@eval function load_state_acquire(t)
-    # TODO: Replace this by proper atomic operations when available
-    @GC.preserve t llvmcall($("""
-        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
-        %rv = load atomic i8, i8* %ptr acquire, align 8
-        ret i8 %rv
-        """), UInt8, Tuple{Ptr{UInt8}},
-        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
-end
-
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = load_state_acquire(t)
+        st = @atomic :acquire t._state
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -181,7 +169,9 @@ end
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
     elseif field === :scope
-        error("Querying `scope` is disallowed. Use `current_scope` instead.")
+        error("""
+            Querying a Task's `scope` field is disallowed.
+            The private `Core.current_scope()` function is better, though still an implementation detail.""")
     else
         return getfield(t, field)
     end
@@ -216,7 +206,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
+istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -260,7 +250,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
+istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -313,6 +303,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
@@ -356,13 +347,164 @@ function _wait2(t::Task, waiter::Task)
     nothing
 end
 
-function wait(t::Task)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+"""
+    wait(t::Task; throw=true)
+
+Wait for a `Task` to finish.
+
+The keyword `throw` (defaults to `true`) controls whether a failed task results
+in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
+"""
+function wait(t::Task; throw=true)
     _wait(t)
-    if istaskfailed(t)
-        throw(TaskFailedException(t))
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
     end
     nothing
+end
+
+# Wait multiple tasks
+
+"""
+    waitany(tasks; throw=true) -> (done_tasks, remaining_tasks)
+
+Wait until at least one of the given tasks have been completed.
+
+If `throw` is `true`, throw `CompositeException` when one of the
+completed tasks completes with an exception.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+
+!!! warning
+    This may scale poorly compared to writing code that uses multiple individual tasks that
+    each runs serially, since this needs to scan the list of `tasks` each time and
+    synchronize with each one every time this is called. Or consider using
+    [`waitall(tasks; failfast=true)`](@ref waitall) instead.
+"""
+waitany(tasks; throw=true) = _wait_multiple(tasks, throw)
+
+"""
+    waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
+
+Wait until all the given tasks have been completed.
+
+If `failfast` is `true`, the function will return when at least one of the
+given tasks is finished by exception. If `throw` is `true`, throw
+`CompositeException` when one of the completed tasks has failed.
+
+`failfast` and `throw` keyword arguments work independently; when only
+`throw=true` is specified, this function waits for all the tasks to complete.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+"""
+waitall(tasks; failfast=true, throw=true) = _wait_multiple(tasks, throw, true, failfast)
+
+function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
+    tasks = Task[]
+
+    for t in waiting_tasks
+        t isa Task || error("Expected an iterator of `Task` object")
+        push!(tasks, t)
+    end
+
+    if (all && !failfast) || length(tasks) <= 1
+        exception = false
+        # Force everything to finish synchronously for the case of waitall
+        # with failfast=false
+        for t in tasks
+            _wait(t)
+            exception |= istaskfailed(t)
+        end
+        if exception && throwexc
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks, Task[]
+        end
+    end
+
+    exception = false
+    nremaining::Int = length(tasks)
+    done_mask = falses(nremaining)
+    for (i, t) in enumerate(tasks)
+        if istaskdone(t)
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+        else
+            done_mask[i] = false
+        end
+    end
+
+    if nremaining == 0
+        return tasks, Task[]
+    elseif any(done_mask) && (!all || (failfast && exception))
+        if throwexc && (!all || failfast) && exception
+            exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks[done_mask], tasks[.~done_mask]
+        end
+    end
+
+    chan = Channel{Int}(Inf)
+    sentinel = current_task()
+    waiter_tasks = fill(sentinel, length(tasks))
+
+    for (i, done) in enumerate(done_mask)
+        done && continue
+        t = tasks[i]
+        if istaskdone(t)
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+            exception && failfast && break
+        else
+            waiter = @task put!(chan, i)
+            waiter.sticky = false
+            _wait2(t, waiter)
+            waiter_tasks[i] = waiter
+        end
+    end
+
+    while nremaining > 0
+        i = take!(chan)
+        t = tasks[i]
+        waiter_tasks[i] = sentinel
+        done_mask[i] = true
+        exception |= istaskfailed(t)
+        nremaining -= 1
+
+        # stop early if requested, unless there is something immediately
+        # ready to consume from the channel (using a race-y check)
+        if (!all || (failfast && exception)) && !isready(chan)
+            break
+        end
+    end
+
+    close(chan)
+
+    if nremaining == 0
+        return tasks, Task[]
+    else
+        remaining_mask = .~done_mask
+        for i in findall(remaining_mask)
+            waiter = waiter_tasks[i]
+            donenotify = tasks[i].donenotify::ThreadSynchronizer
+            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
+        end
+        done_tasks = tasks[done_mask]
+        if throwexc && exception
+            exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return done_tasks, tasks[remaining_mask]
+        end
+    end
 end
 
 """
@@ -576,7 +718,7 @@ Print an error log to `stderr` if task `t` fails.
 
 # Examples
 ```julia-repl
-julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+julia> wait(errormonitor(Threads.@spawn error("task failed")); throw = false)
 Unhandled Task ERROR: task failed
 Stacktrace:
 [...]
@@ -654,6 +796,17 @@ macro sync_add(expr)
     end
 end
 
+function repl_backend_task()
+    @isdefined(active_repl_backend) || return
+    backend = active_repl_backend
+    isdefined(backend, :backend_task) || return
+    backend_task = getfield(active_repl_backend, :backend_task)::Task
+    if backend_task._state === task_state_runnable && getfield(backend, :in_eval)
+        return backend_task
+    end
+    return
+end
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
@@ -675,10 +828,9 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        if isa(result, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, result)
         end
     end
     # Clear sigatomic before waiting
@@ -689,17 +841,19 @@ function task_done_hook(t::Task)
         # If an InterruptException happens while blocked in the event loop, try handing
         # the exception to the REPL task since the current task is done.
         # issue #19467
-        if Threads.threadid() == 1 &&
-            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, e)
-        else
-            rethrow()
+        if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, e)
         end
+        rethrow() # this will terminate the program
     end
 end
 
+function init_task_lock(t::Task) # Function only called from jl_adopt_thread so foreign tasks have a lock.
+    if t.donenotify === nothing
+        t.donenotify = ThreadSynchronizer()
+    end
+end
 
 ## scheduler and work queue
 
@@ -823,7 +977,11 @@ function enq_work(t::Task)
     return t
 end
 
-schedule(t::Task) = enq_work(t)
+function schedule(t::Task)
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
+    enq_work(t)
+end
 
 """
     schedule(t::Task, [val]; error=false)
@@ -838,6 +996,13 @@ the woken task.
 !!! warning
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
     See [the API reference](@ref low-level-schedule-wait) for more information.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest
@@ -863,13 +1028,15 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        t.queue === nothing || Base.list_deletefirst!(t.queue::IntrusiveLinkedList{Task}, t)
+        q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
     end
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     enq_work(t)
     return t
 end
@@ -887,7 +1054,7 @@ function yield()
     try
         wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
@@ -899,11 +1066,19 @@ end
 
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
+    ct = current_task()
+    t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
-    enq_work(current_task())
+    enq_work(ct)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end
@@ -917,6 +1092,7 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    ct = current_task()
     # TODO: these are legacy behaviors; these should perhaps be a scheduler
     # state error instead.
     if t._state === task_state_done
@@ -924,6 +1100,10 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -937,6 +1117,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
+    # [task] wait_time -(re)started-> user_time
+    if ct.metrics_enabled
+        @atomic :monotonic ct.last_started_running_at = time_ns()
+    end
     if ct._isexception
         exc = ct.result
         ct.result = nothing
@@ -950,6 +1134,11 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
+    ct = current_task()
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = exc
     t._isexception = true
     set_next_task(t)
@@ -1002,6 +1191,9 @@ checktaskempty = Partr.multiq_check_empty
 end
 
 function wait()
+    ct = current_task()
+    # [task] user_time -yield-or-done-> wait_time
+    record_running_time!(ct)
     GC.safepoint()
     W = workqueue_for(Threads.threadid())
     poptask(W)
@@ -1015,4 +1207,22 @@ if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
     pause() = ccall(:pause, Cvoid, ())
+end
+
+# update the `running_time_ns` field of `t` to include the time since it last started running.
+function record_running_time!(t::Task)
+    if t.metrics_enabled && !istaskdone(t)
+        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
+    end
+    return t
+end
+
+# if this is the first time `t` has been added to the run queue
+# (or the first time it has been unfairly yielded to without being added to the run queue)
+# then set the `first_enqueued_at` field to the current time.
+function maybe_record_enqueued!(t::Task)
+    if t.metrics_enabled && t.first_enqueued_at == 0
+        @atomic :monotonic t.first_enqueued_at = time_ns()
+    end
+    return t
 end

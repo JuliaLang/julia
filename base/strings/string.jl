@@ -27,8 +27,6 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
-
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
 """
@@ -63,12 +61,7 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
-function String(v::Memory{UInt8})
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
-end
+String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
 function String(v::Vector{UInt8})
     #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
@@ -81,8 +74,14 @@ function String(v::Vector{UInt8})
     end
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
-    setfield!(v, :ref, MemoryRef(Memory{UInt8}()))
+    setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
+end
+
+"Create a string re-using the memory, if possible.
+Mutating or reading the memory after calling this function is undefined behaviour."
+function unsafe_takestring(m::Memory{UInt8})
+    isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end
 
 """
@@ -104,9 +103,11 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# This is `@assume_effects :total !:consistent @ccall jl_alloc_string(n::Csize_t)::Ref{String}`,
 # but the macro is not available at this time in bootstrap, so we write it manually.
-@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
+const _string_n_override = 0x04ee
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -208,7 +209,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
@@ -431,7 +432,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return iterate_continued(s, i, u)
+    return @noinline iterate_continued(s, i, u)
 end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
@@ -570,9 +571,10 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)

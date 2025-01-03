@@ -92,52 +92,55 @@ function assemble_snapshot(in_prefix, io::IO)
     node_count = parse(Int, String(@view preamble[pos:endpos]))
 
     pos = last(findnext("edge_count\":", preamble, endpos)) + 1
-    endpos = findnext(==('}'), preamble, pos) - 1
+    endpos = findnext(==(','), preamble, pos) - 1
     edge_count = parse(Int, String(@view preamble[pos:endpos]))
 
     nodes = Nodes(node_count, edge_count)
 
     orphans = Set{UInt}() # nodes that have no incoming edges
     # Parse nodes with empty edge counts that we need to fill later
-    nodes_file = open(string(in_prefix, ".nodes"), "r")
-    for i in 1:length(nodes)
-        node_type = read(nodes_file, Int8)
-        node_name_idx = read(nodes_file, UInt)
-        id = read(nodes_file, UInt)
-        self_size = read(nodes_file, Int)
-        @assert read(nodes_file, Int) == 0 # trace_node_id
-        @assert read(nodes_file, Int8) == 0 # detachedness
+    open(string(in_prefix, ".nodes"), "r") do nodes_file
+        for i in 1:length(nodes)
+            node_type = read(nodes_file, Int8)
+            node_name_idx = read(nodes_file, UInt)
+            id = read(nodes_file, UInt)
+            self_size = read(nodes_file, Int)
+            @assert read(nodes_file, Int) == 0 # trace_node_id
+            @assert read(nodes_file, Int8) == 0 # detachedness
 
-        nodes.type[i] = node_type
-        nodes.name_idx[i] = node_name_idx
-        nodes.id[i] = id
-        nodes.self_size[i] = self_size
-        nodes.edge_count[i] = 0 # edge_count
-        # populate the orphans set with node index
-        push!(orphans, i-1)
+            nodes.type[i] = node_type
+            nodes.name_idx[i] = node_name_idx
+            nodes.id[i] = id
+            nodes.self_size[i] = self_size
+            nodes.edge_count[i] = 0 # edge_count
+            # populate the orphans set with node index
+            push!(orphans, i-1)
+        end
     end
 
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
-    edges_file = open(string(in_prefix, ".edges"), "r")
-    for i in 1:length(nodes.edges)
-        edge_type = read(edges_file, Int8)
-        edge_name_or_index = read(edges_file, UInt)
-        from_node = read(edges_file, UInt)
-        to_node = read(edges_file, UInt)
+    open(string(in_prefix, ".edges"), "r") do edges_file
+        for i in 1:length(nodes.edges)
+            edge_type = read(edges_file, Int8)
+            edge_name_or_index = read(edges_file, UInt)
+            from_node = read(edges_file, UInt)
+            to_node = read(edges_file, UInt)
 
-        nodes.edges.type[i] = edge_type
-        nodes.edges.name_or_index[i] = edge_name_or_index
-        nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
-        nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
-        push!(nodes.edge_idxs[from_node + 1], i) # Index into nodes.edges
-        # remove the node from the orphans if it has at least one incoming edge
-        if to_node in orphans
-            delete!(orphans, to_node)
+            nodes.edges.type[i] = edge_type
+            nodes.edges.name_or_index[i] = edge_name_or_index
+            nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
+            nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
+            push!(nodes.edge_idxs[from_node + 1], i) # Index into nodes.edges
+            # remove the node from the orphans if it has at least one incoming edge
+            if to_node in orphans
+                delete!(orphans, to_node)
+            end
         end
     end
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
-    println(io, @view(preamble[1:end-2]), ",") # remove trailing "}\n", we don't end the snapshot here
+    println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
+
     println(io, "\"nodes\":[")
     for i in 1:length(nodes)
         i > 1 && println(io, ",")
@@ -152,7 +155,8 @@ function assemble_snapshot(in_prefix, io::IO)
         _write_decimal_number(io, nodes.edge_count[i], _digits_buf)
         print(io, ",0,0")
     end
-    print(io, "],\"edges\":[")
+    print(io, "],\n")
+    print(io, "\"edges\":[")
     e = 1
     for n in 1:length(nodes)
         count = nodes.edge_count[n]
@@ -174,6 +178,13 @@ function assemble_snapshot(in_prefix, io::IO)
     end
     println(io, "],")
 
+    # not used. Required by microsoft/vscode-v8-heap-tools
+    # This order of these fields is required by chrome dev tools otherwise loading fails
+    println(io, "\"trace_function_infos\":[],")
+    println(io, "\"trace_tree\":[],")
+    println(io, "\"samples\":[],")
+    println(io, "\"locations\":[],")
+
     println(io, "\"strings\":[")
     open(string(in_prefix, ".strings"), "r") do strings_io
         first = true
@@ -182,12 +193,11 @@ function assemble_snapshot(in_prefix, io::IO)
             str_bytes = read(strings_io, str_size)
             str = String(str_bytes)
             if first
-                print_str_escape_json(io, str)
                 first = false
             else
                 print(io, ",\n")
-                print_str_escape_json(io, str)
             end
+            print_str_escape_json(io, str)
         end
     end
     print(io, "]}")
@@ -199,6 +209,19 @@ function assemble_snapshot(in_prefix, io::IO)
 
     @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
 
+    return nothing
+end
+
+"""
+    cleanup_streamed_files(prefix::AbstractString)
+
+Remove files streamed during `take_heap_snapshot` in streaming mode.
+"""
+function cleanup_streamed_files(prefix::AbstractString)
+    rm(string(prefix, ".metadata.json"))
+    rm(string(prefix, ".nodes"))
+    rm(string(prefix, ".edges"))
+    rm(string(prefix, ".strings"))
     return nothing
 end
 
@@ -221,6 +244,9 @@ function print_str_escape_json(stream::IO, s::AbstractString)
             print(stream, "\\t")
         elseif '\x00' <= c <= '\x1f'
             print(stream, "\\u", lpad(string(UInt16(c), base=16), 4, '0'))
+        elseif !isvalid(c)
+            # we have to do this because vscode's viewer doesn't like the replace character
+            print(stream, "[invalid unicode character]")
         else
             print(stream, c)
         end

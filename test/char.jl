@@ -121,7 +121,7 @@ end
     #iterate(c::Char)
     for x in testarrays
         @test iterate(x)[1] == x
-        @test iterate(x, iterate(x)[2]) == nothing
+        @test iterate(x, iterate(x)[2]) === nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -288,6 +288,10 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test string(ASCIIChar('x')) == "x"
     @test length(ASCIIChar('x')) == 1
     @test !isempty(ASCIIChar('x'))
+    @test ndims(ASCIIChar('x')) == 0
+    @test ndims(ASCIIChar) == 0
+    @test firstindex(ASCIIChar('x')) == 1
+    @test lastindex(ASCIIChar('x')) == 1
     @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
@@ -359,4 +363,32 @@ end
     @test hash(ASCIIChar('x'), UInt(10)) == hash('x', UInt(10))
     @test Base.IteratorSize(Char) == Base.HasShape{0}()
     @test convert(ASCIIChar, 1) == Char(1)
+end
+
+@testset "foldable functions" begin
+    v = @inferred (() -> Val(isuppercase('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase('C')))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric('C')))()
+    @test v isa Val{false}
+
+    struct MyChar <: AbstractChar
+        x :: Char
+    end
+    Base.codepoint(m::MyChar) = codepoint(m.x)
+    MyChar(x::UInt32) = MyChar(Char(x))
+
+    v = @inferred (() -> Val(isuppercase(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase(MyChar('C'))))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric(MyChar('C'))))()
+    @test v isa Val{false}
 end

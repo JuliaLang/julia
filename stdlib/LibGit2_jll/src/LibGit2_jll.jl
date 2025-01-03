@@ -4,7 +4,6 @@
 
 baremodule LibGit2_jll
 using Base, Libdl, MbedTLS_jll, LibSSH2_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -21,9 +20,9 @@ libgit2_path::String = ""
 if Sys.iswindows()
     const libgit2 = "libgit2.dll"
 elseif Sys.isapple()
-    const libgit2 = "@rpath/libgit2.1.7.dylib"
+    const libgit2 = "@rpath/libgit2.1.8.dylib"
 else
-    const libgit2 = "libgit2.so.1.7"
+    const libgit2 = "libgit2.so.1.8"
 end
 
 function __init__()

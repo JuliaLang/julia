@@ -128,7 +128,7 @@ julia> pwd()
 "/home/JuliaUser"
 
 julia> cd(readdir, "/home/JuliaUser/Projects/julia")
-34-element Array{String,1}:
+34-element Vector{String}:
  ".circleci"
  ".freebsdci.sh"
  ".git"
@@ -211,17 +211,17 @@ julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "my"
 
 julia> cd("my")
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "test"
 
 julia> readdir("test")
-1-element Array{String,1}:
+1-element Vector{String}:
  "dir"
 
 julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
@@ -230,15 +230,19 @@ julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directo
 julia> isdir("intermediate_dir/actually_a_directory.txt")
 true
 
+julia> mkpath("my/test/dir/") # returns the original `path`
+"my/test/dir/"
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
-    isdirpath(path) && (path = dirname(path))
-    dir = dirname(path)
-    (path == dir || isdir(path)) && return path
-    mkpath(dir, mode = checkmode(mode))
+    parent = dirname(path)
+    # stop recursion for `""`, `"/"`, or existing dir
+    (path == parent || isdir(path)) && return path
+    mkpath(parent, mode = checkmode(mode))
     try
-        mkdir(path, mode = mode)
+        # The `isdir` check could be omitted, then `mkdir` will throw an error in cases like `x/`.
+        # Although the error will not be rethrown, we avoid it in advance for performance reasons.
+        isdir(path) || mkdir(path, mode = mode)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
@@ -246,7 +250,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
             rethrow()
         end
     end
-    path
+    return path
 end
 
 # Files that were requested to be deleted but can't be by the current process
@@ -381,7 +385,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 
 !!! note
-    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
@@ -434,12 +438,72 @@ julia> mv("hello.txt", "goodbye.txt", force=true)
 julia> rm("goodbye.txt");
 
 ```
+
+!!! note
+    The `mv` function is different from the `mv` Unix command. The `mv` function by
+    default will error if `dst` exists, while the command will delete
+    an existing `dst` file by default.
+    Also the `mv` function always operates on
+    the assumption that `dst` is a file, while the command does different things depending
+    on whether `dst` is a directory or a file.
+    Using `force=true` when `dst` is a directory will result in loss of all the contents present
+    in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
-    rename(src, dst)
+    if force
+        _mv_replace(src, dst)
+    else
+        _mv_noreplace(src, dst)
+    end
+end
+
+function _mv_replace(src::AbstractString, dst::AbstractString)
+    # This check is copied from checkfor_mv_cp_cptree
+    if ispath(dst) && Base.samefile(src, dst)
+        abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
+        abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+        throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
+                                   "This is not supported.\n  ",
+                                   "`src` refers to: $(abs_src)\n  ",
+                                   "`dst` refers to: $(abs_dst)\n")))
+    end
+    # First try to do a regular rename, because this might avoid a situation
+    # where dst is deleted or truncated.
+    try
+        rename(src, dst)
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
+        # on rename error try to delete dst if it exists and isn't the same as src
+        checkfor_mv_cp_cptree(src, dst, "moving"; force=true)
+        try
+            rename(src, dst)
+        catch err
+            err isa IOError || rethrow()
+            # on second error, default to force cp && rm
+            cp(src, dst; force=true, follow_symlinks=false)
+            rm(src; recursive=true)
+        end
+    end
     dst
 end
+
+function _mv_noreplace(src::AbstractString, dst::AbstractString)
+    # Error if dst exists.
+    # This check currently has TOCTTOU issues.
+    checkfor_mv_cp_cptree(src, dst, "moving"; force=false)
+    try
+        rename(src, dst)
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
+        # on error, default to cp && rm
+        cp(src, dst; force=false, follow_symlinks=false)
+        rm(src; recursive=true)
+    end
+    dst
+end
+
 
 """
     touch(path::AbstractString)
@@ -821,7 +885,7 @@ end
     mktempdir(f::Function, parent=tempdir(); prefix=$(repr(temp_prefix)))
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
-temporary directory all of its contents upon completion.
+temporary directory and all of its contents upon completion.
 
 See also: [`mktemp`](@ref), [`mkdir`](@ref).
 
@@ -879,7 +943,7 @@ See also: [`walkdir`](@ref).
 julia> cd("/home/JuliaUser/dev/julia")
 
 julia> readdir()
-30-element Array{String,1}:
+30-element Vector{String}:
  ".appveyor.yml"
  ".git"
  ".gitattributes"
@@ -889,7 +953,7 @@ julia> readdir()
  "usr-staging"
 
 julia> readdir(join=true)
-30-element Array{String,1}:
+30-element Vector{String}:
  "/home/JuliaUser/dev/julia/.appveyor.yml"
  "/home/JuliaUser/dev/julia/.git"
  "/home/JuliaUser/dev/julia/.gitattributes"
@@ -899,7 +963,7 @@ julia> readdir(join=true)
  "/home/JuliaUser/dev/julia/usr-staging"
 
 julia> readdir("base")
-145-element Array{String,1}:
+145-element Vector{String}:
  ".gitignore"
  "Base.jl"
  "Enums.jl"
@@ -909,7 +973,7 @@ julia> readdir("base")
  "weakkeydict.jl"
 
 julia> readdir("base", join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "base/.gitignore"
  "base/Base.jl"
  "base/Enums.jl"
@@ -919,7 +983,7 @@ julia> readdir("base", join=true)
  "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "/home/JuliaUser/dev/julia/base/.gitignore"
  "/home/JuliaUser/dev/julia/base/Base.jl"
  "/home/JuliaUser/dev/julia/base/Enums.jl"
@@ -929,7 +993,79 @@ julia> readdir(abspath("base"), join=true)
  "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
+readdir(; join::Bool=false, kwargs...) = readdir(join ? pwd() : "."; join, kwargs...)::Vector{String}
+readdir(dir::AbstractString; kwargs...) = _readdir(dir; return_objects=false, kwargs...)::Vector{String}
+
+# this might be better as an Enum but they're not available here
+# UV_DIRENT_T
+const UV_DIRENT_UNKNOWN = Cint(0)
+const UV_DIRENT_FILE = Cint(1)
+const UV_DIRENT_DIR = Cint(2)
+const UV_DIRENT_LINK = Cint(3)
+const UV_DIRENT_FIFO = Cint(4)
+const UV_DIRENT_SOCKET = Cint(5)
+const UV_DIRENT_CHAR = Cint(6)
+const UV_DIRENT_BLOCK = Cint(7)
+
+"""
+    DirEntry
+
+A type representing a filesystem entry that contains the name of the entry, the directory, and
+the raw type of the entry. The full path of the entry can be obtained lazily by accessing the
+`path` field. The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
+[`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
+"""
+struct DirEntry
+    dir::String
+    name::String
+    rawtype::Cint
+end
+function Base.getproperty(obj::DirEntry, p::Symbol)
+    if p === :path
+        return joinpath(obj.dir, obj.name)
+    else
+        return getfield(obj, p)
+    end
+end
+Base.propertynames(::DirEntry) = (:dir, :name, :path, :rawtype)
+Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
+Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
+Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
+joinpath(obj::DirEntry, args...) = joinpath(obj.path, args...)
+isunknown(obj::DirEntry) =  obj.rawtype == UV_DIRENT_UNKNOWN
+islink(obj::DirEntry) =     isunknown(obj) ? islink(obj.path) : obj.rawtype == UV_DIRENT_LINK
+isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(obj.path)      : obj.rawtype == UV_DIRENT_FILE
+isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(obj.path)       : obj.rawtype == UV_DIRENT_DIR
+isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(obj.path)      : obj.rawtype == UV_DIRENT_FIFO
+issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(obj.path)    : obj.rawtype == UV_DIRENT_SOCKET
+ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(obj.path)   : obj.rawtype == UV_DIRENT_CHAR
+isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.path)  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(obj.path)
+
+"""
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+
+Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
+or the current working directory if not given. If `sort` is true, the returned vector is
+sorted by name.
+
+Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
+file, the directory it is in, and the type of the file which is determined during the
+directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
+[`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
+returned objects without further stat calls. However, for some filesystems, the type of the file
+cannot be determined without a stat call. In these cases the `rawtype` field of the [`DirEntry`](@ref))
+object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
+
+```julia
+for obj in _readdirx()
+    isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
+end
+```
+"""
+_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+
+function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
     req = Libc.malloc(_sizeof_uv_fs)
     try
@@ -939,11 +1075,16 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
         err < 0 && uv_error("readdir($(repr(dir)))", err)
 
         # iterate the listing into entries
-        entries = String[]
+        entries = return_objects ? DirEntry[] : String[]
         ent = Ref{uv_dirent_t}()
         while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
             name = unsafe_string(ent[].name)
-            push!(entries, join ? joinpath(dir, name) : name)
+            if return_objects
+                rawtype = ent[].typ
+                push!(entries, DirEntry(dir, name, rawtype))
+            else
+                push!(entries, join ? joinpath(dir, name) : name)
+            end
         end
 
         # Clean up the request string
@@ -957,31 +1098,38 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
         Libc.free(req)
     end
 end
-readdir(; join::Bool=false, sort::Bool=true) =
-    readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
-The iterator returns a tuple containing `(rootpath, dirs, files)`.
+
+The iterator returns a tuple containing `(path, dirs, files)`.
+Each iteration `path` will change to the next directory in the tree;
+then `dirs` and `files` will be vectors containing the directories and files
+in the current `path` directory.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+The returned iterator is stateful so when accessed repeatedly each access will
+resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
 
+!!! compat "Julia 1.12"
+    `pwd()` as the default directory was added in Julia 1.12.
+
 # Examples
 ```julia
-for (root, dirs, files) in walkdir(".")
-    println("Directories in \$root")
+for (path, dirs, files) in walkdir(".")
+    println("Directories in \$path")
     for dir in dirs
-        println(joinpath(root, dir)) # path to directories
+        println(joinpath(path, dir)) # path to directories
     end
-    println("Files in \$root")
+    println("Files in \$path")
     for file in files
-        println(joinpath(root, file)) # path to files
+        println(joinpath(path, file)) # path to files
     end
 end
 ```
@@ -991,18 +1139,18 @@ julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my", ["test"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test", ["dir"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    function _walkdir(chnl, root)
+function walkdir(path = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
+    function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)
             catch err
@@ -1014,33 +1162,31 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        content = tryf(readdir, root)
-        content === nothing && return
-        dirs = Vector{eltype(content)}()
-        files = Vector{eltype(content)}()
-        for name in content
-            path = joinpath(root, name)
-
+        entries = tryf(_readdirx, path)
+        entries === nothing && return
+        dirs = Vector{String}()
+        files = Vector{String}()
+        for entry in entries
             # If we're not following symlinks, then treat all symlinks as files
-            if (!follow_symlinks && something(tryf(islink, path), true)) || !something(tryf(isdir, path), false)
-                push!(files, name)
+            if (!follow_symlinks && something(tryf(islink, entry), true)) || !something(tryf(isdir, entry), false)
+                push!(files, entry.name)
             else
-                push!(dirs, name)
+                push!(dirs, entry.name)
             end
         end
 
         if topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         for dir in dirs
-            _walkdir(chnl, joinpath(root, dir))
+            _walkdir(chnl, joinpath(path, dir))
         end
         if !topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         nothing
     end
-    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, path))
 end
 
 function unlink(p::AbstractString)
@@ -1049,15 +1195,38 @@ function unlink(p::AbstractString)
     nothing
 end
 
-# For move command
-function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
-    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-    # on error, default to cp && rm
+"""
+    Base.rename(oldpath::AbstractString, newpath::AbstractString)
+
+Change the name of a file or directory from `oldpath` to `newpath`.
+If `newpath` is an existing file or empty directory it may be replaced.
+Equivalent to [rename(2)](https://man7.org/linux/man-pages/man2/rename.2.html) on Unix.
+If a path contains a "\\0" throw an `ArgumentError`.
+On other failures throw an `IOError`.
+Return `newpath`.
+
+This is a lower level filesystem operation used to implement [`mv`](@ref).
+
+OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
+
+Currently there are a few differences in behavior on Windows which may be resolved in a future release.
+Specifically, currently on Windows:
+1. `rename` will fail if `oldpath` or `newpath` are opened files.
+2. `rename` will fail if `newpath` is an existing directory.
+3. `rename` may work if `newpath` is a file and `oldpath` is a directory.
+4. `rename` may remove `oldpath` if it is a hardlink to `newpath`.
+
+See also: [`mv`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was made public in Julia 1.12.
+"""
+function rename(oldpath::AbstractString, newpath::AbstractString)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
     if err < 0
-        cp(src, dst; force=force, follow_symlinks=false)
-        rm(src; recursive=true)
+        uv_error("rename($(repr(oldpath)), $(repr(newpath)))", err)
     end
-    nothing
+    newpath
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)

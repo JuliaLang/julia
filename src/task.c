@@ -49,27 +49,27 @@ extern "C" {
 // c.f. interceptor in jl_dlopen as well
 void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
 #endif
-static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) {
+static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_ucontext_t *from, jl_ucontext_t *to) {
     if (to->copy_stack)
-        __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
+        __sanitizer_start_switch_fiber(&from->asan_fake_stack, (char*)ptls->stackbase - ptls->stacksize, ptls->stacksize);
     else
-        __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, to->stkbuf, to->bufsz);
+        __sanitizer_start_switch_fiber(&from->asan_fake_stack, to->stkbuf, to->bufsz);
 }
-static inline void sanitizer_start_switch_fiber_killed(jl_ptls_t ptls, jl_task_t *to) {
+static inline void sanitizer_start_switch_fiber_killed(jl_ptls_t ptls, jl_ucontext_t *to) {
     if (to->copy_stack)
-        __sanitizer_start_switch_fiber(NULL, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
+        __sanitizer_start_switch_fiber(NULL, (char*)ptls->stackbase - ptls->stacksize, ptls->stacksize);
     else
         __sanitizer_start_switch_fiber(NULL, to->stkbuf, to->bufsz);
 }
-static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *current) {
-    __sanitizer_finish_switch_fiber(current->ctx.asan_fake_stack, NULL, NULL);
+static inline void sanitizer_finish_switch_fiber(jl_ucontext_t *last, jl_ucontext_t *current) {
+    __sanitizer_finish_switch_fiber(current->asan_fake_stack, NULL, NULL);
         //(const void**)&last->stkbuf,
         //&last->bufsz);
 }
 #else
-static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) JL_NOTSAFEPOINT {}
-static inline void sanitizer_start_switch_fiber_killed(jl_ptls_t ptls, jl_task_t *to) JL_NOTSAFEPOINT {}
-static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *current) JL_NOTSAFEPOINT {}
+static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_ucontext_t *from, jl_ucontext_t *to) JL_NOTSAFEPOINT {}
+static inline void sanitizer_start_switch_fiber_killed(jl_ptls_t ptls, jl_ucontext_t *to) JL_NOTSAFEPOINT {}
+static inline void sanitizer_finish_switch_fiber(jl_ucontext_t *last, jl_ucontext_t *current) JL_NOTSAFEPOINT {}
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
@@ -85,19 +85,6 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
         jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
         __tsan_switch_to_fiber(_tsan_macro_ctx->tsan_state, 0); \
     } while (0)
-#ifdef COPY_STACKS
-#define tsan_destroy_copyctx(_ptls, _ctx) do { \
-        jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
-        if (_tsan_macro_ctx != &(_ptls)->root_task->ctx) { \
-            __tsan_destroy_fiber(_tsan_macro_ctx->tsan_state); \
-        } \
-        _tsan_macro_ctx->tsan_state = NULL; \
-    } while (0)
-#define tsan_switch_to_copyctx(_ctx) do { \
-        struct jl_stack_context_t *_tsan_macro_ctx = (_ctx); \
-        __tsan_switch_to_fiber(_tsan_macro_ctx->tsan_state, 0); \
-    } while (0)
-#endif
 #else
 // just do minimal type-checking on the arguments
 #define tsan_destroy_ctx(_ptls, _ctx) do { \
@@ -108,16 +95,6 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
         jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
         (void)_tsan_macro_ctx; \
     } while (0)
-#ifdef COPY_STACKS
-#define tsan_destroy_copyctx(_ptls, _ctx) do { \
-        jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
-        (void)_tsan_macro_ctx; \
-    } while (0)
-#define tsan_switch_to_copyctx(_ctx) do { \
-        jl_ucontext_t *_tsan_macro_ctx = (_ctx); \
-        (void)_tsan_macro_ctx; \
-    } while (0)
-#endif
 #endif
 
 // empirically, jl_finish_task needs about 64k stack space to infer/run
@@ -134,7 +111,6 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 #endif
 
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
 static void jl_set_fiber(jl_ucontext_t *t);
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 static void jl_start_fiber_swap(jl_ucontext_t *savet, jl_ucontext_t *t);
@@ -214,17 +190,17 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     assert(stackbase > frame_addr);
     size_t nb = stackbase - frame_addr;
     void *buf;
-    if (lastt->bufsz < nb) {
-        asan_free_copy_stack(lastt->stkbuf, lastt->bufsz);
+    if (lastt->ctx.bufsz < nb) {
+        asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
-        lastt->stkbuf = buf;
-        lastt->bufsz = nb;
+        lastt->ctx.stkbuf = buf;
+        lastt->ctx.bufsz = nb;
     }
     else {
-        buf = lastt->stkbuf;
+        buf = lastt->ctx.stkbuf;
     }
     *pt = NULL; // clear the gc-root for the target task before copying the stack for saving
-    lastt->copy_stack = nb;
+    lastt->ctx.copy_stack = nb;
     lastt->sticky = 1;
     memcpy_stack_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
     // this task's stack could have been modified after
@@ -233,75 +209,124 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     jl_gc_wb_back(lastt);
 }
 
-JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, char *p)
+JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
 {
     size_t nb = t->copy_stack;
     char *_x = (char*)ptls->stackbase - nb;
     if (!p) {
         // switch to a stackframe that's beyond the bounds of the last switch
-        p = _x;
-        if ((char*)&_x > _x) {
-            p = (char*)alloca((char*)&_x - _x);
+        p = _x - 4096;
+        if ((char*)&_x > p) {
+            p = (char*)alloca((char*)&_x - p);
         }
         restore_stack(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
     }
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
+#if defined(_OS_WINDOWS_) // this platform does not implement CFI_NORETURN correctly or at all in libunwind (or equivalent) which requires a workaround
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+    void *volatile *return_address = (void *volatile *)__builtin_frame_address(0) + 1;
+    assert(*return_address == __builtin_return_address(0));
+    *return_address = NULL;
+#else
+#pragma message("warning: CFI_NORETURN not implemented for this platform, so profiling of copy_stacks may segfault in this build")
+#endif
+#else
+CFI_NORETURN
+#endif
     memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
 #if defined(_OS_WINDOWS_)
-    jl_setcontext(&t->ctx.copy_ctx);
+    jl_setcontext(t->copy_ctx);
 #else
-    jl_longjmp(t->ctx.copy_ctx.uc_mcontext, 1);
+    jl_longjmp(t->copy_ctx->uc_mcontext, 1);
 #endif
     abort(); // unreachable
 }
 
-JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
+JL_NO_ASAN static void restore_stack2(jl_ucontext_t *t, jl_ptls_t ptls, jl_ucontext_t *lastt)
 {
     assert(t->copy_stack && !lastt->copy_stack);
     size_t nb = t->copy_stack;
-    char *_x = (char*)ptls->stackbase - nb;
-    void *_y = t->stkbuf;
-    assert(_x != NULL && _y != NULL);
-    memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
+    if (nb > 1) {
+        char *_x = (char*)ptls->stackbase - nb;
+        void *_y = t->stkbuf;
+        assert(_x != NULL && _y != NULL);
+        memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb);
+    }
+#if defined(_OS_WINDOWS_)
+    // jl_swapcontext and setjmp are the same on Windows, so we can just use swapcontext directly
+    tsan_switch_to_ctx(t);
+    jl_swapcontext(lastt->ctx, t->copy_ctx);
+#else
 #if defined(JL_HAVE_UNW_CONTEXT)
     volatile int returns = 0;
-    int r = unw_getcontext(&lastt->ctx.ctx);
+    int r = unw_getcontext(lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK) || defined(_OS_WINDOWS_)
-    if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0))
+#elif defined(JL_HAVE_ASM)
+    if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
         return;
 #else
 #error COPY_STACKS is incompatible with this platform
 #endif
-    tsan_switch_to_copyctx(&t->ctx);
-#if defined(_OS_WINDOWS_)
-    jl_setcontext(&t->ctx.copy_ctx);
-#else
-    jl_longjmp(t->ctx.copy_ctx.uc_mcontext, 1);
+    tsan_switch_to_ctx(t);
+    jl_longjmp(t->copy_ctx->uc_mcontext, 1);
 #endif
 }
+
+JL_NO_ASAN static void NOINLINE restore_stack3(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
+{
+#if !defined(JL_HAVE_ASM)
+    char *_x = (char*)ptls->stackbase;
+    if (!p) {
+        // switch to a stackframe that's well beyond the bounds of the next switch
+        p = _x - 4096;
+        if ((char*)&_x > p) {
+            p = (char*)alloca((char*)&_x - p);
+        }
+        restore_stack3(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
+    }
+#endif
+#if defined(_OS_WINDOWS_) // this platform does not implement CFI_NORETURN correctly or at all in libunwind (or equivalent) which requires a workaround
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+    void *volatile *return_address = (void *volatile *)__builtin_frame_address(0) + 1;
+    assert(*return_address == __builtin_return_address(0));
+    *return_address = NULL;
+#endif
+#else
+CFI_NORETURN
+#endif
+    tsan_switch_to_ctx(t);
+    jl_start_fiber_set(t); // (doesn't return)
+    abort();
+}
+
 #endif
 
 /* Rooted by the base module */
 static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t)
+void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
-    jl_task_t *ct = jl_current_task;
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
-    if (jl_atomic_load_relaxed(&t->_isexception))
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
+    if (ct->metrics_enabled) {
+        // [task] user_time -finished-> wait_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->finished_at, now);
+        jl_atomic_fetch_add_relaxed(&ct->running_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
+    }
+    if (jl_atomic_load_relaxed(&ct->_isexception))
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
-    if (t->copy_stack) { // early free of stkbuf
-        asan_free_copy_stack(t->stkbuf, t->bufsz);
-        t->stkbuf = NULL;
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_DONE);
+    if (ct->ctx.copy_stack) { // early free of stkbuf
+        asan_free_copy_stack(ct->ctx.stkbuf, ct->ctx.bufsz);
+        ct->ctx.stkbuf = NULL;
     }
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
@@ -315,12 +340,12 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
     if (done != NULL) {
-        jl_value_t *args[2] = {done, (jl_value_t*)t};
+        jl_value_t *args[2] = {done, (jl_value_t*)ct};
         JL_TRY {
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception(), ct);
+            jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
     jl_gc_debug_critical_error();
@@ -345,33 +370,33 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid
     if (ptls2) {
         *ptid = jl_atomic_load_relaxed(&task->tid);
 #ifdef COPY_STACKS
-        if (task->copy_stack) {
+        if (task->ctx.copy_stack) {
             *size = ptls2->stacksize;
             return (char *)ptls2->stackbase - *size;
         }
 #endif
     }
-    *size = task->bufsz - off;
-    return (void *)((char *)task->stkbuf + off);
+    *size = task->ctx.bufsz - off;
+    return (void *)((char *)task->ctx.stkbuf + off);
 }
 
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
                                        char **total_start, char **total_end)
 {
-    if (!task->started) {
+    if (!task->ctx.started) {
         *total_start = *active_start = 0;
         *total_end = *active_end = 0;
         return;
     }
 
     jl_ptls_t ptls2 = task->ptls;
-    if (task->copy_stack && ptls2) {
+    if (task->ctx.copy_stack && ptls2) {
         *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
         *total_end = *active_end = (char*)ptls2->stackbase;
     }
-    else if (task->stkbuf) {
-        *total_start = *active_start = (char*)task->stkbuf;
+    else if (task->ctx.stkbuf) {
+        *total_start = *active_start = (char*)task->ctx.stkbuf;
 #ifndef _OS_WINDOWS_
         jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
         if (ptls0->root_task == task) {
@@ -384,12 +409,12 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
         }
 #endif
 
-        *total_end = *active_end = (char*)task->stkbuf + task->bufsz;
+        *total_end = *active_end = (char*)task->ctx.stkbuf + task->ctx.bufsz;
 #ifdef COPY_STACKS
         // save_stack stores the stack of an inactive task in stkbuf, and the
         // actual number of used bytes in copy_stack.
-        if (task->copy_stack > 1)
-            *active_end = (char*)task->stkbuf + task->copy_stack;
+        if (task->ctx.copy_stack > 1)
+            *active_end = (char*)task->ctx.stkbuf + task->ctx.copy_stack;
 #endif
     }
     else {
@@ -450,20 +475,16 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
 #endif
 
     int killed = jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE;
-    if (!t->started && !t->copy_stack) {
+    if (!t->ctx.started && !t->ctx.copy_stack) {
         // may need to allocate the stack
-        if (t->stkbuf == NULL) {
-            t->stkbuf = jl_alloc_fiber(&t->ctx.ctx, &t->bufsz, t);
-            if (t->stkbuf == NULL) {
+        if (t->ctx.stkbuf == NULL) {
+            t->ctx.stkbuf = jl_malloc_stack(&t->ctx.bufsz, t);
+            if (t->ctx.stkbuf == NULL) {
 #ifdef COPY_STACKS
                 // fall back to stack copying if mmap fails
-                t->copy_stack = 1;
+                t->ctx.copy_stack = 1;
+                t->ctx.bufsz = 0;
                 t->sticky = 1;
-                t->bufsz = 0;
-                if (always_copy_stacks)
-                    memcpy(&t->ctx.copy_ctx, &ptls->copy_stack_ctx, sizeof(t->ctx.copy_ctx));
-                else
-                    memcpy(&t->ctx.ctx, &ptls->base_ctx, sizeof(t->ctx.ctx));
 #else
                 jl_throw(jl_memory_exception);
 #endif
@@ -471,28 +492,45 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         }
     }
 
+    union {
+        _jl_ucontext_t ctx;
+        jl_stack_context_t copy_ctx;
+    } lasttstate;
+
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
         lastt->eh = NULL;
-        if (!lastt->copy_stack && lastt->stkbuf) {
+        if (!lastt->ctx.copy_stack && lastt->ctx.stkbuf) {
             // early free of stkbuf back to the pool
             jl_release_task_stack(ptls, lastt);
         }
     }
     else {
+        if (lastt->ctx.copy_stack) { // save the old copy-stack
+#ifdef _OS_WINDOWS_
+            lasttstate.copy_ctx.uc_stack.ss_sp = (char*)ptls->stackbase - ptls->stacksize;
+            lasttstate.copy_ctx.uc_stack.ss_size = ptls->stacksize;
+#endif
 #ifdef COPY_STACKS
-        if (lastt->copy_stack) { // save the old copy-stack
-            save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
-            if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0)) {
-                sanitizer_finish_switch_fiber(ptls->previous_task, jl_atomic_load_relaxed(&ptls->current_task));
-                // TODO: mutex unlock the thread we just switched from
+            if (jl_setjmp(lasttstate.copy_ctx.uc_mcontext, 0)) {
+#ifdef MIGRATE_TASKS
+                ptls = lastt->ptls;
+#endif
+                lastt->ctx.copy_ctx = NULL;
+                sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
                 return;
             }
-        }
-        else
+            save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
+            lastt->ctx.copy_ctx = &lasttstate.copy_ctx;
+#else
+            abort();
 #endif
-        *pt = NULL; // can't fail after here: clear the gc-root for the target task now
+        }
+        else {
+            *pt = NULL; // can't fail after here: clear the gc-root for the target task now
+            lastt->ctx.ctx = &lasttstate.ctx;
+        }
     }
 
     // set up global state for new task and clear global state for old task
@@ -503,45 +541,49 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
+    fegetenv(&lastt->fenv);
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
 
-    if (t->started) {
+    if (t->ctx.started) {
+        if (t->ctx.copy_stack) {
 #ifdef COPY_STACKS
-        if (t->copy_stack) {
-            if (lastt->copy_stack) {
+            if (lastt->ctx.copy_stack) {
                 // Switching from copystack to copystack. Clear any shadow stack
                 // memory above the saved shadow stack.
-                uintptr_t stacktop = (uintptr_t)ptls->stackbase - t->copy_stack;
+                uintptr_t stacktop = (uintptr_t)ptls->stackbase - t->ctx.copy_stack;
                 uintptr_t stackbottom = ((uintptr_t)jl_get_frame_addr() & ~15);
                 if (stackbottom < stacktop)
-                    asan_unpoison_stack_memory(stackbottom, stacktop-stackbottom);
+                    asan_unpoison_stack_memory(stackbottom, stacktop - stackbottom);
             }
-            if (!killed && !lastt->copy_stack) {
-                sanitizer_start_switch_fiber(ptls, lastt, t);
-                restore_stack2(t, ptls, lastt);
-            } else {
-                tsan_switch_to_copyctx(&t->ctx);
+            if (!killed && !lastt->ctx.copy_stack) {
+                sanitizer_start_switch_fiber(ptls, &lastt->ctx, &t->ctx);
+                restore_stack2(&t->ctx, ptls, &lastt->ctx); // half jl_swap_fiber and half restore_stack
+            }
+            else {
+                tsan_switch_to_ctx(&t->ctx);
                 if (killed) {
-                    sanitizer_start_switch_fiber_killed(ptls, t);
-                    tsan_destroy_copyctx(ptls, &lastt->ctx);
-                } else {
-                    sanitizer_start_switch_fiber(ptls, lastt, t);
-                }
-
-                if (lastt->copy_stack) {
-                    restore_stack(t, ptls, NULL); // (doesn't return)
+                    sanitizer_start_switch_fiber_killed(ptls, &t->ctx);
+                    tsan_destroy_ctx(ptls, &lastt->ctx);
                 }
                 else {
-                    restore_stack(t, ptls, (char*)1); // (doesn't return)
+                    sanitizer_start_switch_fiber(ptls, &lastt->ctx, &t->ctx);
+                }
+
+                if (lastt->ctx.copy_stack) {
+                    restore_stack(&t->ctx, ptls, NULL); // (doesn't return)
+                    abort();
+                }
+                else {
+                    restore_stack(&t->ctx, ptls, (char*)1); // (doesn't return)
+                    abort();
                 }
             }
-        }
-        else
 #endif
-        {
-            if (lastt->copy_stack) {
+        }
+        else {
+            if (lastt->ctx.copy_stack) {
                 // Switching away from a copystack to a non-copystack. Clear
                 // the whole shadow stack now, because otherwise we won't know
                 // how much stack memory to clear the next time we switch to
@@ -550,22 +592,23 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
                 uintptr_t stackbottom = ((uintptr_t)jl_get_frame_addr() & ~15);
                 // We're not restoring the stack, but we still need to unpoison the
                 // stack, so it starts with a pristine stack.
-                asan_unpoison_stack_memory(stackbottom, stacktop-stackbottom);
+                asan_unpoison_stack_memory(stackbottom, stacktop - stackbottom);
             }
             if (killed) {
-                sanitizer_start_switch_fiber_killed(ptls, t);
+                sanitizer_start_switch_fiber_killed(ptls, &t->ctx);
                 tsan_switch_to_ctx(&t->ctx);
                 tsan_destroy_ctx(ptls, &lastt->ctx);
                 jl_set_fiber(&t->ctx); // (doesn't return)
                 abort(); // unreachable
             }
             else {
-                sanitizer_start_switch_fiber(ptls, lastt, t);
-                if (lastt->copy_stack) {
+                sanitizer_start_switch_fiber(ptls, &lastt->ctx, &t->ctx);
+                if (lastt->ctx.copy_stack) {
                     // Resume at the jl_setjmp earlier in this function,
                     // don't do a full task swap
                     tsan_switch_to_ctx(&t->ctx);
                     jl_set_fiber(&t->ctx); // (doesn't return)
+                    abort();
                 }
                 else {
                     jl_swap_fiber(&lastt->ctx, &t->ctx);
@@ -574,41 +617,58 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         }
     }
     else {
-        if (lastt->copy_stack) {
+#ifdef _COMPILER_TSAN_ENABLED_
+        t->ctx.tsan_state = __tsan_create_fiber(0);
+#endif
+        if (lastt->ctx.copy_stack) {
             uintptr_t stacktop = (uintptr_t)ptls->stackbase;
             uintptr_t stackbottom = ((uintptr_t)jl_get_frame_addr() & ~15);
             // We're not restoring the stack, but we still need to unpoison the
             // stack, so it starts with a pristine stack.
-            asan_unpoison_stack_memory(stackbottom, stacktop-stackbottom);
+            asan_unpoison_stack_memory(stackbottom, stacktop - stackbottom);
         }
-        if (t->copy_stack && always_copy_stacks) {
-            tsan_switch_to_ctx(&t->ctx);
-            if (killed) {
-                sanitizer_start_switch_fiber_killed(ptls, t);
-                tsan_destroy_ctx(ptls, &lastt->ctx);
-            } else {
-                sanitizer_start_switch_fiber(ptls, lastt, t);
-            }
+        if (t->ctx.copy_stack) {
 #ifdef COPY_STACKS
-#if defined(_OS_WINDOWS_)
-            jl_setcontext(&t->ctx.copy_ctx);
+            tsan_switch_to_ctx(&t->ctx);
+            // create a temporary non-copy_stack context for starting this fiber
+            jl_ucontext_t ctx = t->ctx;
+            ctx.ctx = NULL;
+            ctx.stkbuf = (char*)ptls->stackbase - ptls->stacksize;
+            ctx.bufsz = ptls->stacksize;
+            ctx.copy_stack = 0;
+            ctx.started = 0;
+            if (killed) {
+                sanitizer_start_switch_fiber_killed(ptls, &t->ctx);
+                tsan_destroy_ctx(ptls, &lastt->ctx);
+                if (lastt->ctx.copy_stack)
+                    restore_stack3(&ctx, ptls, NULL); // (doesn't return)
+                else
+                    jl_start_fiber_set(&ctx);
+                abort();
+            }
+            sanitizer_start_switch_fiber(ptls, &lastt->ctx, &t->ctx);
+            if (lastt->ctx.copy_stack) {
+                restore_stack3(&ctx, ptls, NULL); // (doesn't return)
+                abort();
+            }
+            else {
+                jl_start_fiber_swap(&lastt->ctx, &ctx);
+            }
 #else
-            jl_longjmp(t->ctx.copy_ctx.uc_mcontext, 1);
+            abort();
 #endif
-#endif
-            abort(); // unreachable
         }
         else {
             if (killed) {
-                sanitizer_start_switch_fiber_killed(ptls, t);
+                sanitizer_start_switch_fiber_killed(ptls, &t->ctx);
                 tsan_switch_to_ctx(&t->ctx);
                 tsan_destroy_ctx(ptls, &lastt->ctx);
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
             }
-            sanitizer_start_switch_fiber(ptls, lastt, t);
-            if (lastt->copy_stack) {
-                // Resume at the jl_setjmp earlier in this function
+            sanitizer_start_switch_fiber(ptls, &lastt->ctx, &t->ctx);
+            if (lastt->ctx.copy_stack) {
+                // copy_stack resumes at the jl_setjmp earlier in this function, so don't swap here
                 tsan_switch_to_ctx(&t->ctx);
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
@@ -618,7 +678,14 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             }
         }
     }
-    sanitizer_finish_switch_fiber(ptls->previous_task, jl_atomic_load_relaxed(&ptls->current_task));
+
+#ifdef MIGRATE_TASKS
+    ptls = lastt->ptls;
+#endif
+    assert(ptls);
+    assert(lastt == jl_atomic_load_relaxed(&ptls->current_task));
+    lastt->ctx.ctx = NULL;
+    sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &lastt->ctx);
 }
 
 JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
@@ -630,7 +697,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         return;
     }
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
-    if (t->started && t->stkbuf == NULL)
+    if (t->ctx.started && t->ctx.stkbuf == NULL)
         jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
@@ -655,7 +722,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     ptls->previous_task = NULL;
     assert(t != ct);
     assert(jl_atomic_load_relaxed(&t->tid) == ptls->tid);
-    if (!t->sticky && !t->copy_stack)
+    if (!t->sticky && !t->ctx.copy_stack)
         jl_atomic_store_release(&t->tid, -1);
 #else
     assert(ptls == ct->ptls);
@@ -667,6 +734,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
+    fesetenv(&ct->fenv);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -688,7 +756,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
     if (!e)
-        e = jl_current_exception();
+        e = jl_current_exception(ct);
 
     jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
@@ -712,48 +780,31 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body(altstack)                                          \
-    assert(!jl_get_safe_restore());                                            \
-    jl_ptls_t ptls = ct->ptls;                                                 \
-    ptls->io_wait = 0;                                                         \
-    jl_gc_unsafe_enter(ptls);                                                  \
-    if (exception) {                                                           \
-        /* The temporary ptls->bt_data is rooted by special purpose code in the\
-           GC. This exists only for the purpose of preserving bt_data until we \
-           set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(ct, &ct->excstack, exception,                             \
-                          ptls->bt_data, ptls->bt_size);                       \
-        ptls->bt_size = 0;                                                     \
-    }                                                                          \
-    assert(ct->excstack && ct->excstack->top);                                 \
-    jl_handler_t *eh = ct->eh;                                                 \
-    if (eh != NULL) {                                                          \
-        if (altstack) ptls->sig_exception = NULL;                              \
-        pop_timings_stack()                                                    \
-        asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
-        jl_longjmp(eh->eh_ctx, 1);                                             \
-    }                                                                          \
-    else {                                                                     \
-        jl_no_exc_handler(exception, ct);                                      \
-    }                                                                          \
-    assert(0);
-
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
-CFI_NORETURN
     JL_GC_PUSH1(&exception);
-    throw_internal_body(0);
-    jl_unreachable();
-}
-
-/* On the signal stack, we don't want to create any asan frames, but we do on the
-   normal, stack, so we split this function in two, depending on which context
-   we're calling it in. This also lets us avoid making a GC frame on the altstack,
-   which might end up getting corrupted if we recur here through another signal. */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
-{
-CFI_NORETURN
-    throw_internal_body(1);
+    jl_ptls_t ptls = ct->ptls;
+    ptls->io_wait = 0;
+    jl_gc_unsafe_enter(ptls);
+    if (exception) {
+        /* The temporary ptls->bt_data is rooted by special purpose code in the\
+           GC. This exists only for the purpose of preserving bt_data until we
+           set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+    }
+    assert(ct->excstack && ct->excstack->top);
+    jl_handler_t *eh = ct->eh;
+    if (eh != NULL) {
+        pop_timings_stack()
+        asan_unpoison_task_stack(ct, &eh->eh_ctx);
+        jl_longjmp(eh->eh_ctx, 1);
+    }
+    else {
+        jl_no_exc_handler(exception, ct);
+    }
+    assert(0);
     jl_unreachable();
 }
 
@@ -781,24 +832,6 @@ JL_DLLEXPORT void jl_rethrow(void)
     if (!excstack || excstack->top == 0)
         jl_error("rethrow() not allowed outside a catch block");
     throw_internal(ct, NULL);
-}
-
-// Special case throw for errors detected inside signal handlers.  This is not
-// (cannot be) called directly in the signal handler itself, but is returned to
-// after the signal handler exits.
-JL_DLLEXPORT JL_NO_ASAN void JL_NORETURN jl_sig_throw(void)
-{
-CFI_NORETURN
-    jl_jmp_buf *safe_restore = jl_get_safe_restore();
-    jl_task_t *ct = jl_current_task;
-    if (safe_restore) {
-        asan_unpoison_task_stack(ct, safe_restore);
-        jl_longjmp(*safe_restore, 1);
-    }
-    jl_ptls_t ptls = ct->ptls;
-    jl_value_t *e = ptls->sig_exception;
-    JL_GC_PROMISE_ROOTED(e);
-    throw_internal_altstack(ct, e);
 }
 
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
@@ -856,202 +889,181 @@ guaranteed to avoid collisions between the RNG streams of all tasks. The main
 RNG is the xoshiro256++ RNG whose state is stored in rngState[0..3]. There is
 also a small internal RNG used for task forking stored in rngState[4]. This
 state is used to iterate a linear congruential generator (LCG), which is then
-put through four different variations of the strongest PCG output function,
-referred to as PCG-RXS-M-XS-64 [1]. This output function is invertible: it maps
-a 64-bit state to 64-bit output. This is one of the reasons it's not recommended
-for general purpose RNGs unless space is at an absolute premium, but in our
-usage invertibility is actually a benefit (as is explained below) and adding as
-little additional memory overhead to each task object as possible is preferred.
+combined with xoshiro256's state and put through four different variations of
+the strongest PCG output function, referred to as PCG-RXS-M-XS-64 [1].
 
 The goal of jl_rng_split is to perturb the state of each child task's RNG in
-such a way each that for an entire tree of tasks spawned starting with a given
-state in a root task, no two tasks have the same RNG state. Moreover, we want to
-do this in a way that is deterministic and repeatable based on (1) the root
-task's seed, (2) how many random numbers are generated, and (3) the task tree
-structure. The RNG state of a parent task is allowed to affect the initial RNG
-state of a child task, but the mere fact that a child was spawned should not
-alter the RNG output of the parent. This second requirement rules out using the
-main RNG to seed children: if we use the main RNG, we either advance it, which
-affects the parent's RNG stream or, if we don't advance it, then every child
-would have an identical RNG stream. Therefore some separate state must be
-maintained and changed upon forking a child task while leaving the main RNG
-state unchanged.
+such a way that for an entire tree of tasks spawned starting with a given root
+task state, no two tasks have the same RNG state. Moreover, we want to do this
+in a way that is deterministic and repeatable based on (1) the root task's seed,
+(2) how many random numbers are generated, and (3) the task tree structure. The
+RNG state of a parent task is allowed to affect the initial RNG state of a child
+task, but the mere fact that a child was spawned should not alter the RNG output
+of the parent. This second requirement rules out using the main RNG to seed
+children: if we use the main RNG, we either advance it, which affects the
+parent's RNG stream or, if we don't advance it, then every child would have an
+identical RNG stream. Therefore some separate state must be maintained and
+changed upon forking a child task while leaving the main RNG state unchanged.
 
-The basic approach is that used by the DotMix [2] and SplitMix [3] RNG systems:
-each task is uniquely identified by a sequence of "pedigree" numbers, indicating
-where in the task tree it was spawned. This vector of pedigree coordinates is
-then reduced to a single value by computing a dot product with a shared vector
-of random weights. The weights are common but each pedigree of each task is
-distinct, so the dot product of each task is unlikely to be the same. The DotMix
-paper provides a proof that this dot product hash value (referred to as a
-"compression function") is collision resistant in the sense that the pairwise
-collision probability of two distinct tasks is 1/N where N is the number of
-possible weight values. Both DotMix and SplitMix use a prime value of N because
-the proof requires that the difference between two distinct pedigree coordinates
-have a multiplicative inverse, which is guaranteed by N being prime since all
-values are invertible then. We take a somewhat different approach: instead of
-assigning n-ary pedigree coordinates, we assign binary tree coordinates to
-tasks, which means that our pedigree vectors have only 0/1 and differences
-between them can only be -1, 0 or 1. Since the only possible non-zero coordinate
-differences are ±1 which are invertible regardless of the modulus, we can use a
-modulus of 2^64, which is far easier and more efficient then using a prime
-modulus. It also means that when accumulating the dot product incrementally, as
-described in SplitMix, we don't need to multiply weights by anything, we simply
-add the random weight for the current task tree depth to the parent's dot
-product to derive the child's dot product.
+The basic approach is a generalization and simplification of that used in the
+DotMix [2] and SplitMix [3] RNG systems: each task is uniquely identified by a
+sequence of "pedigree" numbers, indicating where in the task tree it was
+spawned. This vector of pedigree coordinates is then reduced to a single value
+by computing a "dot product" with a shared vector of random weights. I write
+"dot product" in quotes because what we use is not an actual dot product. The
+linear dot product construction used in both DotMix and SplitMix was found by
+@foobar_iv2 [4] to allow easy construction of linear relationships between the
+main RNG states of tasks, which was in turn reflected in observable linear
+relationships between the outputs of their RNGs. This relationship was between a
+minimum of four tasks, so doesn't constitute a collision, per se, but is clearly
+undesirable and highlights a hazard of the plain dot product construction.
 
-we instead limit pedigree coordinates to being binary, guaranteeing
-invertibility regardless of modulus. When a task spawns a child, the parent and
-child share the parent's previous pedigree prefix and the parent appends a zero
-to its coordinates, which doesn't affect the task's dot product value, while the
-child appends a one, which does produce a new dot product. In this manner a
-binary pedigree vector uniquely identifies each task and since the coordinates
-are binary, the difference between coordinates is always invertible: 1 and -1
-are their own multiplicative inverses regardless of the modulus.
+As in DotMix and SplitMix, each task is assigned unique task "pedigree"
+coordinates. Our pedigree construction is a bit different and uses only binary
+coordinates rather than arbitrary integers. Each pedigree is an infinite
+sequence of ones and zeros with only finitely many ones. Each task has a "fork
+index": the root task has index 0; the fork index of the jth child task of a
+parent task with fork index i is i+j. The root task's coordinates are all zeros;
+each child task's coordinates are the same as its parents except at its fork
+index, where the parent has a zero while the child has a one; each task's
+coordinates after its fork index are all zeros. The last common ancestor of two
+tasks has coordinates that are the longest common prefix of their coordinates.
 
-How does our assignment of pedigree coordinates to tasks differ from DotMix and
-SplitMix? In DotMix and SplitMix, each task has a fixed pedigree vector that
-never changes. The root tasks's pedigree is `()`, its first child's pedigree is
-`(0,)`, its second child's pedigree is `(2,)` and so on. The length of a task's
-pedigree tuple corresponds to how many ancestors tasks it has. Our approach
-instead appends 0 to the parent's pedigree when it forks a child and appends 1
-to the child's pedigree at the same time. The root task starts with a pedigree
-of `()` as before, but when it spawns a child, we update its pedigree to `(0,)`
-and give its child a pedigree of `(1,)`. When the root task then spawns a second
-child, we update its pedigree to `(0,0)` and give it's second child a pedigree
-of `(0,1)`. If the first child spawns a grandchild, the child's pedigree is
-changed from `(1,)` to `(1,0)` and the grandchild is assigned a pedigree of
-`(1,1)`. In other words, DotMix and SplitMix build an n-ary tree where every
-node is a task: parent nodes are higher up the tree and child tasks are children
-in the pedigree tree. Our approach is to build a binary tree where only leaves
-are tasks and each task spawn replaces a leaf in the tree with two leaves: the
-parent moves to the left/zero leaf while the child is the right/one leaf. Since
-the tree is binary, the pedigree coordinates are binary.
+Also as in DotMix and SplitMix, we generate a sequence of pseudorandom "weights"
+to combine with the coordinates of each task. This sequence is common across all
+tasks, and different mix values for tasks stem entirely from task coordinates
+being different. In DotMix and SplitMix the mix function is a literal dot
+product: the pseudorandom weights are multiplied by corresponding task
+coordinate and summed. While this does provably make collisions as unlikely as
+random seeding, this linear construction can be used to create linearly
+correlated states between more than two tasks. However, it turns out that the
+compression mixing construction need not be linear, nor commutative, nor
+associative. In fact, the mixing function need only be bijective in both
+arguments. This allows us to use a much more non-trivial mixing function and
+avoid any linear or other obvious correlations between related sets of tasks.
 
-It may seem odd for a task's pedigree coordinates to change, but note that we
-only ever append zeros to a task's pedigree, which does not change its dot
-product. So while the pedigree changes, the dot product is fixed. What purpose
-does appending zeros like this serve if the task's dot product doesn't change?
-Changing the pedigree length (which is also the binary tree depth) ensures that
-the next child spawned by that task will have new and different dot product from
-the previous child since it will have a different pseudo-random weight added to
-the parent's dot product value. Whereas the pedigree length in DotMix and
-SplitMix is unchanging and corresponds to how many ancestors a task has, in our
-scheme the pedigree length corresponds to the number of ancestors *plus*
-children a task has, which increases every time it spawns another child.
+We maintain an LCG in rngState[4] to generate pseudorandom weights. An LCG by
+itself is a very bad RNG, but we combine this one with xoshiro256 state
+registers in a non-trivial way and then apply the PCG-RXS-M-XS-64 output
+function to that. Even if the xoshiro256 states are all zeros, which they should
+never be, the output would be the same as PCG-RXS-M-XS-64, which is a solid
+statistical RNG. Each time a child is forked, we update the LCG in both parent
+and child tasks, corresponding to increasing the fork index. In the parent,
+that's all we have to do -- the main RNG state remains unchanged. Recall that
+spawning a child should not affect subsequent RNG draws in the parent. The next
+time the parent forks a child, the mixing weight used will be different. In the
+child, we use the LCG state to perturb the child's main RNG state registers,
+rngState[0..3].
 
-We use the LCG in rngState[4] to generate pseudorandom weights for the dot
-product. Each time a child is forked, we update the LCG in both parent and child
-tasks. In the parent, that's all we have to do -- the main RNG state remains
-unchanged. (Recall that spawning a child should *not* affect subsequent RNG
-draws in the parent). The next time the parent forks a child, the dot product
-weight used will be different, corresponding to being a level deeper in the
-pedigree tree. In the child, we use the LCG state to generate four pseudorandom
-64-bit weights (more below) and add each weight to one of the xoshiro256 state
-registers, rngState[0..3]. If we assume the main RNG remains unused in all
-tasks, then each register rngState[0..3] accumulates a different dot product
-hash as additional child tasks are spawned. Each one is collision resistant with
-a pairwise collision chance of only 1/2^64. Assuming that the four pseudorandom
-64-bit weight streams are sufficiently independent, the pairwise collision
-probability for distinct tasks is 1/2^256. If we somehow managed to spawn a
-trillion tasks, the probability of a collision would be on the order of 1/10^54.
-In other words, practically impossible. Put another way, this is the same as the
-probability of two SHA256 hash values accidentally colliding, which we generally
-consider so unlikely as not to be worth worrying about.
+To generalize SplitMix's optimized dot product construction, we also compute
+each task's compression function value incrementally by combining the parent's
+compression value with pseudorandom weight corresponding with the child's fork
+index. Formally, if the parent's compression value is c then we can compute the
+child's compression value as c′ = f(c, wᵢ) where w is the vector of pseudorandom
+weights. What is f? It can be any function that is bijective in each argument
+for all values of the other argument:
 
-What about the random "junk" that's in the xoshiro256 state registers from
-normal use of the RNG? For a tree of tasks spawned with no intervening samples
-taken from the main RNG, all tasks start with the same junk which doesn't affect
-the chance of collision. The Dot/SplitMix papers even suggest adding a random
-base value to the dot product, so we can consider whatever happens to be in the
-xoshiro256 registers to be that. What if the main RNG gets used between task
-forks? In that case, the initial state registers will be different. The DotMix
-collision resistance proof doesn't apply without modification, but we can
-generalize the setup by adding a different base constant to each compression
-function and observe that we still have a 1/N chance of the weight value
-matching that exact difference. This proves collision resistance even between
-tasks whose dot product hashes are computed with arbitrary offsets. We can
-conclude that this scheme provides collision resistance even in the face of
-different starting states of the main RNG. Does this seem too good to be true?
-Perhaps another way of thinking about it will help. Suppose we seeded each task
-completely randomly. Then there would also be a 1/2^256 chance of collision,
-just as the DotMix proof gives. Essentially what the proof is telling us is that
-if the weights are chosen uniformly and uncorrelated with the rest of the
-compression function, then the dot product construction is a good enough way to
-pseudorandomly seed each task based on its parent's RNG state and where in the
-task tree it lives. From that perspective, all we need to believe is that the
-dot product construction is random enough (assuming the weights are), and it
-becomes easier to believe that adding an arbitrary constant to each dot product
-value doesn't make its randomness any worse.
+    * For all c: w ↦ f(c, w) is bijective
+    * For all w: c ↦ f(c, w) is bijective
 
-This leaves us with the question of how to generate four pseudorandom weights to
-add to the rngState[0..3] registers at each depth of the task tree. The scheme
-used here is that a single 64-bit LCG state is iterated in both parent and child
-at each task fork, and four different variations of the PCG-RXS-M-XS-64 output
-function are applied to that state to generate four different pseudorandom
-weights. Another obvious way to generate four weights would be to iterate the
-LCG four times per task split. There are two main reasons we've chosen to use
-four output variants instead:
+The proof that these requirements are sufficient to ensure collision resistance
+is in the linked discussion [4]. DotMix/SplitMix are a special case where f is
+just addition. Instead we use a much less simple mixing function:
 
-1. Advancing four times per fork reduces the set of possible weights that each
-   register can be perturbed by from 2^64 to 2^60. Since collision resistance is
-   proportional to the number of possible weight values, that would reduce
-   collision resistance. While it would still be strong engough, why reduce it?
+    1. We use (2c+1)(2w+1)÷2 % 2^64 to mix the bits of c and w
+    2. We then apply the PCG-RXS-M-XS-64 output function
 
-2. It's easier to compute four PCG output variants in parallel. Iterating the
-   LCG is inherently sequential. PCG variants can be computed independently. All
-   four can even be computed at once with SIMD vector instructions. The C
-   compiler doesn't currently choose to do that transformation, but it could.
+The first step thoroughly mixes the bits of the previous compression value and
+the pseudorandom weight value using multiplication, which is non-commutative
+with xoshiro's operations (xor, shift, rotate). This mixing function is a
+bijection on each argument witnessed by these inverses:
 
-A key question is whether the approach of using four variations of PCG-RXS-M-XS
-is sufficiently random both within and between streams to provide the collision
-resistance we expect. We obviously can't test that with 256 bits, but we have
-tested it with a reduced state analogue using four PCG-RXS-M-XS-8 output
-variations applied to a common 8-bit LCG. Test results do indicate sufficient
-independence: a single register has collisions at 2^5 while four registers only
-start having collisions at 2^20. This is actually better scaling of collision
-resistance than we theoretically expect. In theory, with one byte of resistance
-we have a 50% chance of some collision at 20 tasks, which matches what we see,
-but four bytes should give a 50% chance of collision at 2^17 tasks and our
-reduced size analogue construction remains collision free at 2^19 tasks. This
-may be due to the next observation, which is that the way we generate
-pseudorandom weights actually guarantees collision avoidance in many common
-situations rather than merely providing collision resistance and thus is better
-than true randomness.
+    * c′ ↦ (2c′+1)(2w+1)⁻¹÷2 % 2^64
+    * w′ ↦ (2c+1)⁻¹(2w′+1)÷2 % 2^64
 
-In the specific case where a parent task spawns a sequence of child tasks with
-no intervening usage of its main RNG, the parent and child tasks are actually
-_guaranteed_ to have different RNG states. This is true because the four PCG
-streams each produce every possible 2^64 bit output exactly once in the full
-2^64 period of the LCG generator. This is considered a weakness of PCG-RXS-M-XS
-when used as a general purpose RNG, but is quite beneficial in this application.
-Since each of up to 2^64 children will be perturbed by different weights, they
-cannot have hash collisions. What about parent colliding with child? That can
-only happen if all four main RNG registers are perturbed by exactly zero. This
-seems unlikely, but could it occur? Consider the core of the output function:
+Here (2w+1)⁻¹ is the modular inverse of (2w+1) mod 2^64, guaranteed to exist
+since 2w+1 is odd. The second PCG output step is a bijection and designed to be
+significantly non-linear -- non-linear enough to mask the linearity of the LCG
+that drives the PCG-RXS-M-XS-64 RNG and allows it to pass statistical RNG test
+suites despite having the same size state and output. In particular, since this
+mixing function is highly non-associative and non-linear, we (hopefully) don't
+have any discernible relationship between these values:
 
-    p ^= p >> ((p >> 59) + 5);
-    p *= m[i];
-    p ^= p >> 43
+    * c₀₀ = c
+    * c₁₀ = f(c, wᵢ)
+    * c₀₁ = f(c, wⱼ)
+    * c₁₁ = f(f(c, wᵢ), wⱼ)
 
-It's easy to check that this maps zero to zero. An unchanged parent RNG can only
-happen if all four `p` values are zero at the end of this, which implies that
-they were all zero at the beginning. However, that is impossible since the four
-`p` values differ from `x` by different additive constants, so they cannot all
-be zero. Stated more generally, this non-collision property: assuming the main
-RNG isn't used between task forks, sibling and parent tasks cannot have RNG
-collisions. If the task tree structure is more deeply nested or if there are
-intervening uses of the main RNG, we're back to relying on "merely" 256 bits of
-collision resistance, but it's nice to know that in what is likely the most
-common case, RNG collisions are actually impossible. This fact may also explain
-better-than-theoretical collision resistance observed in our experiment with a
-reduced size analogue of our hashing system.
+When f is simply `+` then these have a very obvious linear relationship:
+
+    c₀₀ + c₁₁ == c₁₀ + c₀₁
+
+This relationship holds regardless of what wᵢ and wⱼ are and allows easy
+creation of correlated tasks with the way we were previously using the
+DotMix/SplitMix construction. SplitMix itself does not output the raw dot
+product, probably because the authors were aware of this linearity issue;
+instead: they apply the MurmurHash3 finalizer to the dot-product to get an
+output that masks linear relationships. I had failed to understand the
+importance of that finalizer. One possible fix for our task splitting
+correlation issue would have been to also apply a non-linear finalizer
+(MurmurHash3 is one of the best) to our dot product before using it to perturb
+the xoshiro256 state. There are two problems with that fix, however:
+
+1. It requires accumulating the dot product somewhere. The old approach
+   accumulates dot products directly in the xoshiro registers; if we were to
+   accumulate and then finalize, the dot product has to be stored somewhere
+   in each task. We want our tasks to be as small as possible, so adding
+   another 64-bit field that we never change would be unfortunate.
+
+2. We still need to apply the PCG finalizer to the internal LCG in order to
+   generate dot product weights. SplitMix uses a shared static array of
+   1024 pre-generated random weights; we could do the same, but that limits
+   the number of task splits to a max of 1024 before weights have to be
+   reused. We can't use the LCG directly because it's highly linear and we
+   need four variations of the internal RNG stream for the four xoshiro256
+   registers. That means we'd have to apply the PCG finalizer, add it to
+   our dot product accumulator field in the child task, then apply the
+   MurmurHash3 finalizer to that dot product and use the result to purturb
+   the main RNG state.
+
+We avoid both problems by recognizing that the mixing function can be much less
+simple while still allowing the essential collision resistance proof to go
+through. We replace addition with a highly non-linear, non-associative mixing
+function that includes the PCG output function. This allows us to continue to use
+the xoshiro state registers for mixing function accumulation as well as for its
+primary purpose. It also obviates the need for double finalization: it would
+have been disastrous to use LCG state directly as weights for a linear
+construction like SplitMix, but using it as the input to a non-linear mixer that
+includes the strongest PCG output function is reasonable (and precisely what
+PCG-RXS-M-XS-64 does). Since the output of the mixing function is already
+non-linearly finalized, there's no need to apply yet another finalizer.
+
+Since there are four xoshiro256 registers that we want to behave independently
+as mix accumulators, we use four different variations on the mixing function,
+keyed by register index (0-3). Each variation first xors the LCG state with a
+different random constant before combining that value above with the old
+register state via multiplication. The PCG-RXS-M-XS-64 output function is then
+applied to that mixed state, with a different multiplier constant for each
+variation / register index. Xor is used in the first step since we multiply the
+result with the state immediately after and multiplication distributes over `+`
+and commutes with `*`, making both suspect options. Multiplication doesn't
+distribute over or commute with xor. We also use a different odd multiplier in
+PCG-RXS-M-XS-64 for each RNG register. These four sources of variation
+(different initial state, different xor constants, different xoshiro256 state,
+different PCG multipliers) are hopefully sufficient for each of the four outputs
+to behave statistically independently, in the sense that even if two different
+tasks happen to have a state collision in one 64-bit register, it is highly
+improbable that all four registers collide at the same time, giving an actual
+main RNG state collision.
 
 [1]: https://www.pcg-random.org/pdf/hmc-cs-2014-0905.pdf
 
 [2]: http://supertech.csail.mit.edu/papers/dprng.pdf
 
 [3]: https://gee.cs.oswego.edu/dl/papers/oopsla14.pdf
+
+[4]:
+https://discourse.julialang.org/t/linear-relationship-between-xoshiro-tasks/110454
 */
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT
 {
@@ -1060,26 +1072,30 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
     src[4] = dst[4] = x * 0xd1342543de82ef95 + 1;
     // high spectrum multiplier from https://arxiv.org/abs/2001.05304
 
+    // random xor constants
     static const uint64_t a[4] = {
-        0xe5f8fa077b92a8a8, // random additive offsets...
-        0x7a0cd918958c124d,
-        0x86222f7d388588d4,
-        0xd30cbd35f2b64f52
+        0x214c146c88e47cb7,
+        0xa66d8cc21285aafa,
+        0x68c7ef2d7b1a54d4,
+        0xb053a7d7aa238c61
     };
+    // random odd multipliers
     static const uint64_t m[4] = {
         0xaef17502108ef2d9, // standard PCG multiplier
-        0xf34026eeb86766af, // random odd multipliers...
+        0xf34026eeb86766af,
         0x38fd70ad58dd9fbb,
         0x6677f9b93ab0c04d
     };
 
     // PCG-RXS-M-XS-64 output with four variants
     for (int i = 0; i < 4; i++) {
-        uint64_t p = x + a[i];
-        p ^= p >> ((p >> 59) + 5);
-        p *= m[i];
-        p ^= p >> 43;
-        dst[i] = src[i] + p; // SplitMix dot product
+        uint64_t c = src[i];
+        uint64_t w = x ^ a[i];
+        c += w*(2*c + 1); // c = (2c+1)(2w+1)÷2 % 2^64 (double bijection)
+        c ^= c >> ((c >> 59) + 5);
+        c *= m[i];
+        c ^= c >> 43;
+        dst[i] = c;
     }
 }
 
@@ -1089,26 +1105,28 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(t, jl_task_tag, 0);
     JL_PROBE_RT_NEW_TASK(ct, t);
-    t->copy_stack = 0;
+    t->ctx.copy_stack = 0;
     if (ssize == 0) {
         // stack size unspecified; use default
         if (always_copy_stacks) {
-            t->copy_stack = 1;
-            t->bufsz = 0;
+            t->ctx.copy_stack = 1;
+            t->ctx.bufsz = 0;
         }
         else {
-            t->bufsz = JL_STACK_SIZE;
+            t->ctx.bufsz = JL_STACK_SIZE;
         }
-        t->stkbuf = NULL;
+        t->ctx.stkbuf = NULL;
     }
     else {
         // user requested dedicated stack of a certain size
         if (ssize < MINSTKSZ)
             ssize = MINSTKSZ;
-        t->bufsz = ssize;
-        t->stkbuf = jl_alloc_fiber(&t->ctx.ctx, &t->bufsz, t);
-        if (t->stkbuf == NULL)
+        t->ctx.bufsz = ssize;
+        t->ctx.stkbuf = jl_malloc_stack(&t->ctx.bufsz, t);
+        if (t->ctx.stkbuf == NULL) {
+            t->ctx.bufsz = 0;
             jl_throw(jl_memory_exception);
+        }
     }
     t->next = jl_nothing;
     t->queue = jl_nothing;
@@ -1127,30 +1145,27 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
-    t->started = 0;
+    t->ctx.started = 0;
     t->priority = 0;
-    jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
+    fegetenv(&t->fenv);
+    jl_atomic_store_relaxed(&t->tid, -1);
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
+    jl_atomic_store_relaxed(&t->last_started_running_at, 0);
+    jl_atomic_store_relaxed(&t->running_time_ns, 0);
+    jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
 
-#ifdef COPY_STACKS
-    if (!t->copy_stack) {
-#if defined(JL_DEBUG_BUILD)
-        memset(&t->ctx, 0, sizeof(t->ctx));
-#endif
-    }
-    else {
-        if (always_copy_stacks)
-            memcpy(&t->ctx.copy_ctx, &ct->ptls->copy_stack_ctx, sizeof(t->ctx.copy_ctx));
-        else
-            memcpy(&t->ctx.ctx, &ct->ptls->base_ctx, sizeof(t->ctx.ctx));
-    }
-#endif
+    if (t->ctx.copy_stack)
+        t->ctx.copy_ctx = NULL;
+    else
+        t->ctx.ctx = NULL;
 #ifdef _COMPILER_TSAN_ENABLED_
-    t->ctx.tsan_state = __tsan_create_fiber(0);
+    t->ctx.tsan_state = NULL;
 #endif
 #ifdef _COMPILER_ASAN_ENABLED_
     t->ctx.asan_fake_stack = NULL;
@@ -1214,7 +1229,7 @@ CFI_NORETURN
     jl_task_t *ct = jl_current_task;
 #endif
     jl_ptls_t ptls = ct->ptls;
-    sanitizer_finish_switch_fiber(ptls->previous_task, ct);
+    sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &ct->ctx);
     _start_task();
 }
 
@@ -1228,6 +1243,7 @@ CFI_NORETURN
 #else
     jl_task_t *ct = jl_current_task;
 #endif
+    ct->ctx.ctx = NULL;
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
@@ -1235,11 +1251,18 @@ CFI_NORETURN
 #ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;
     ptls->previous_task = NULL;
-    if (!pt->sticky && !pt->copy_stack)
+    if (!pt->sticky && !pt->ctx.copy_stack)
         jl_atomic_store_release(&pt->tid, -1);
 #endif
+    fesetenv(&ct->fenv);
 
-    ct->started = 1;
+    ct->ctx.started = 1;
+    if (ct->metrics_enabled) {
+        // [task] wait_time -started-> user_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
+    }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1258,7 +1281,7 @@ CFI_NORETURN
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
-            res = jl_current_exception();
+            res = jl_current_exception(ct);
             jl_atomic_store_relaxed(&ct->_isexception, 1);
             goto skip_pop_exception;
         }
@@ -1276,64 +1299,52 @@ skip_pop_exception:;
 #ifdef _OS_WINDOWS_
 #define setcontext jl_setcontext
 #define swapcontext jl_swapcontext
-#define makecontext jl_makecontext
 #endif
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
+static int make_fiber(jl_ucontext_t *t, _jl_ucontext_t *ctx)
 {
 #ifndef _OS_WINDOWS_
-    int r = getcontext(t);
-    if (r != 0)
-        jl_error("getcontext failed");
+    int r = getcontext(ctx);
+    if (r != 0) abort();
 #endif
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    t->uc_stack.ss_sp = stk;
-    t->uc_stack.ss_size = *ssize;
+    ctx->uc_stack.ss_sp = (char*)t->stkbuf;
+    ctx->uc_stack.ss_size = t->bufsz;
 #ifdef _OS_WINDOWS_
-    makecontext(t, &start_task);
+    jl_makecontext(ctx, &start_task);
 #else
-    t->uc_link = NULL;
-    makecontext(t, &start_task, 0);
+    ctx->uc_link = NULL;
+    makecontext(ctx, &start_task, 0);
 #endif
-    return (char*)stk;
+    return 1;
 }
 static void jl_start_fiber_set(jl_ucontext_t *t)
 {
-    setcontext(&t->ctx);
+    _jl_ucontext_t ctx;
+    make_fiber(t, &ctx);
+    setcontext(&ctx);
 }
 static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
+    _jl_ucontext_t ctx;
+    make_fiber(t, &ctx);
     assert(lastt);
     tsan_switch_to_ctx(t);
-    swapcontext(&lastt->ctx, &t->ctx);
+    swapcontext(lastt->ctx, &ctx);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     tsan_switch_to_ctx(t);
-    swapcontext(&lastt->ctx, &t->ctx);
+    swapcontext(lastt->ctx, t->ctx);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
 {
-    setcontext(&t->ctx);
-}
-#endif
-
-#if defined(JL_HAVE_UNW_CONTEXT) || defined(JL_HAVE_ASM)
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
-{
-    char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
-    if (stkbuf == NULL)
-        return NULL;
-#ifndef __clang_gcanalyzer__
-    ((char**)t)[0] = stkbuf; // stash the stack pointer somewhere for start_fiber
-    ((size_t*)t)[1] = *ssize; // stash the stack size somewhere for start_fiber
-#endif
-    return stkbuf;
+    setcontext(t->ctx);
 }
 #endif
 
 #if defined(JL_HAVE_UNW_CONTEXT)
+#ifdef _OS_WINDOWS_
+#error unw_context_t not defined in Windows
+#endif
 static inline void jl_unw_swapcontext(unw_context_t *old, unw_cursor_t *c)
 {
     volatile int returns = 0;
@@ -1347,15 +1358,15 @@ static inline void jl_unw_swapcontext(unw_context_t *old, unw_cursor_t *c)
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     unw_cursor_t c;
-    int r = unw_init_local(&c, &t->ctx);
+    int r = unw_init_local(&c, t->ctx);
     if (r < 0)
         abort();
-    jl_unw_swapcontext(&lastt->ctx, &c);
+    jl_unw_swapcontext(lastt->ctx, &c);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
 {
     unw_cursor_t c;
-    int r = unw_init_local(&c, &t->ctx);
+    int r = unw_init_local(&c, t->ctx);
     if (r < 0)
         abort();
     unw_resume(&c);
@@ -1363,14 +1374,14 @@ static void jl_set_fiber(jl_ucontext_t *t)
 #elif defined(JL_HAVE_ASM)
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
+    if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
         return;
     tsan_switch_to_ctx(t);
     jl_set_fiber(t); // doesn't return
 }
 static void jl_set_fiber(jl_ucontext_t *t)
 {
-    jl_longjmp(t->ctx.uc_mcontext, 1);
+    jl_longjmp(t->ctx->uc_mcontext, 1);
 }
 #endif
 
@@ -1391,14 +1402,14 @@ static void jl_set_fiber(jl_ucontext_t *t)
 static void jl_start_fiber_set(jl_ucontext_t *t)
 {
     unw_cursor_t c;
-    char *stk = ((char**)&t->ctx)[0];
-    size_t ssize = ((size_t*)&t->ctx)[1];
+    char *stk = (char*)t->stkbuf;
+    size_t ssize = t->bufsz;
     uintptr_t fn = (uintptr_t)&start_task;
     stk += ssize;
-    int r = unw_getcontext(&t->ctx);
+    int r = unw_getcontext(t->ctx);
     if (r)
         abort();
-    if (unw_init_local(&c, &t->ctx))
+    if (unw_init_local(&c, t->ctx))
         abort();
     PUSH_RET(&c, stk);
 #if defined __linux__
@@ -1414,43 +1425,46 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
     unw_cursor_t c;
-    char *stk = ((char**)&t->ctx)[0];
-    size_t ssize = ((size_t*)&t->ctx)[1];
+    char *stk = (char*)t->stkbuf;
+    size_t ssize = t->bufsz;
     uintptr_t fn = (uintptr_t)&start_task;
     stk += ssize;
     volatile int returns = 0;
-    int r = unw_getcontext(&lastt->ctx);
+    int r = unw_getcontext(lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
         return;
     if (r != 0 || returns != 1)
         abort();
-    r = unw_getcontext(&t->ctx);
+    r = unw_getcontext(t->ctx);
     if (r != 0)
         abort();
-    if (unw_init_local(&c, &t->ctx))
+    if (unw_init_local(&c, t->ctx))
         abort();
     PUSH_RET(&c, stk);
     if (unw_set_reg(&c, UNW_REG_SP, (uintptr_t)stk))
         abort();
     if (unw_set_reg(&c, UNW_REG_IP, fn))
         abort();
-    jl_unw_swapcontext(&lastt->ctx, &c);
+    jl_unw_swapcontext(lastt->ctx, &c);
 }
 #endif
 
 #if defined(JL_HAVE_ASM)
+#ifdef _OS_WINDOWS_
+#error JL_HAVE_ASM not defined in Windows
+#endif
 JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
 #ifdef JL_HAVE_UNW_CONTEXT
     volatile int returns = 0;
-    int r = unw_getcontext(&lastt->ctx);
+    int r = unw_getcontext(lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
         return;
     if (r != 0 || returns != 1)
         abort();
 #else
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
+    if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
         return;
 #endif
     tsan_switch_to_ctx(t);
@@ -1458,8 +1472,9 @@ JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *
 }
 JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 {
-    char *stk = ((char**)&t->ctx)[0];
-    size_t ssize = ((size_t*)&t->ctx)[1];
+CFI_NORETURN
+    char *stk = (char*)t->stkbuf;
+    size_t ssize = t->bufsz;
     uintptr_t fn = (uintptr_t)&start_task;
     stk += ssize;
 #ifdef _CPU_X86_64_
@@ -1498,6 +1513,14 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_RISCV64_)
+    asm volatile(
+        " mv sp, %0;\n"
+        " mv ra, zero;\n" // Clear return address register
+        " mv fp, zero;\n" // Clear frame pointer
+        " jr %1;\n" // call `fn` with fake stack frame
+        " ebreak" // abort
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_PPC64_)
     // N.B.: There is two iterations of the PPC64 ABI.
     // v2 is current and used here. Make sure you have the
@@ -1526,115 +1549,6 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 #endif
     __builtin_unreachable();
 }
-#endif
-
-#if defined(JL_HAVE_SIGALTSTACK)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static void start_basefiber(int sig)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task(); // sanitizer_finish_switch_fiber is part of start_task
-}
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
-{
-    stack_t uc_stack, osigstk;
-    struct sigaction sa, osa;
-    sigset_t set, oset;
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    // setup
-    jl_ptls_t ptls = jl_current_task->ptls;
-    _jl_ucontext_t base_ctx;
-    memcpy(&base_ctx, &ptls->base_ctx, sizeof(base_ctx));
-    sigfillset(&set);
-    if (pthread_sigmask(SIG_BLOCK, &set, &oset) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    uc_stack.ss_sp = stk;
-    uc_stack.ss_size = *ssize;
-    uc_stack.ss_flags = 0;
-    if (sigaltstack(&uc_stack, &osigstk) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    memset(&sa, 0, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = start_basefiber;
-    sa.sa_flags = SA_ONSTACK;
-    if (sigaction(SIGUSR2, &sa, &osa) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    // emit signal
-    pthread_kill(pthread_self(), SIGUSR2); // initializes jl_basectx
-    sigdelset(&set, SIGUSR2);
-    sigsuspend(&set);
-    // cleanup
-    if (sigaction(SIGUSR2, &osa, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    if (osigstk.ss_size < MINSTKSZ && (osigstk.ss_flags | SS_DISABLE))
-       osigstk.ss_size = MINSTKSZ;
-    if (sigaltstack(&osigstk, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    if (pthread_sigmask(SIG_SETMASK, &oset, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    if (&ptls->base_ctx != t) {
-        memcpy(&t, &ptls->base_ctx, sizeof(base_ctx));
-        memcpy(&ptls->base_ctx, &base_ctx, sizeof(base_ctx)); // restore COPY_STACKS context
-    }
-    return (char*)stk;
-}
-static void jl_start_fiber_set(jl_ucontext_t *t) {
-    jl_longjmp(t->ctx.uc_mcontext, 1); // (doesn't return)
-}
-static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    assert(lastt);
-    if (lastt && jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t);
-}
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t); // doesn't return
-}
-static void jl_set_fiber(jl_ucontext_t *t)
-{
-    jl_longjmp(t->ctx.uc_mcontext, 1);
-}
-#endif
-
-#if defined(JL_HAVE_ASYNCIFY)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
-{
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    t->stackbottom = stk;
-    t->stacktop = ((char*)stk) + *ssize;
-    return (char*)stk;
-}
-// jl_*_fiber implemented in js
 #endif
 
 // Initialize a root task using the given stack.
@@ -1666,14 +1580,14 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
 #endif
     if (always_copy_stacks) {
-        ct->copy_stack = 1;
-        ct->stkbuf = NULL;
-        ct->bufsz = 0;
+        ct->ctx.copy_stack = 1;
+        ct->ctx.stkbuf = NULL;
+        ct->ctx.bufsz = 0;
     }
     else {
-        ct->copy_stack = 0;
-        ct->stkbuf = stack;
-        ct->bufsz = ssize;
+        ct->ctx.copy_stack = 0;
+        ct->ctx.stkbuf = stack;
+        ct->ctx.bufsz = ssize;
     }
 
 #ifdef USE_TRACY
@@ -1681,7 +1595,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     strcpy(unique_string, "Root");
     ct->name = unique_string;
 #endif
-    ct->started = 1;
+    ct->ctx.started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
     ct->tls = jl_nothing;
@@ -1700,11 +1614,25 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    jl_atomic_store_relaxed(&ct->running_time_ns, 0);
+    jl_atomic_store_relaxed(&ct->finished_at, 0);
+    ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    if (ct->metrics_enabled) {
+        // [task] created -started-> user_time
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, now);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, now);
+    }
+    else {
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
+    }
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
     jl_set_pgcstack(&ct->gcstack);
     assert(jl_current_task == ct);
+    assert(jl_current_task->ptls == ptls);
 
 #ifdef _COMPILER_TSAN_ENABLED_
     ct->ctx.tsan_state = __tsan_get_current_fiber();
@@ -1720,21 +1648,18 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (always_copy_stacks) {
         // when this is set, we will attempt to corrupt the process stack to switch tasks,
         // although this is unreliable, and thus not recommended
-        ptls->stackbase = stack_hi;
-        ptls->stacksize = ssize;
-#ifdef _OS_WINDOWS_
-        ptls->copy_stack_ctx.uc_stack.ss_sp = stack_hi;
-        ptls->copy_stack_ctx.uc_stack.ss_size = ssize;
-#endif
-        if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
-            start_task(); // sanitizer_finish_switch_fiber is part of start_task
+        ptls->stackbase = jl_get_frame_addr();
+        ptls->stacksize =  (char*)ptls->stackbase - (char*)stack_lo;
     }
     else {
-        ssize = JL_STACK_SIZE;
-        char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
+        size_t bufsz = JL_STACK_SIZE;
+        void *stkbuf = jl_malloc_stack(&bufsz, NULL);
         if (stkbuf != NULL) {
-            ptls->stackbase = stkbuf + ssize;
-            ptls->stacksize = ssize;
+            ptls->stackbase = (char*)stkbuf + bufsz;
+            ptls->stacksize = bufsz;
+        }
+        else {
+            ptls->stacksize = 0;
         }
     }
 #endif
@@ -1747,7 +1672,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 {
-    return t->started;
+    return t->ctx.started;
 }
 
 JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
