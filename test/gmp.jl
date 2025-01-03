@@ -445,6 +445,36 @@ end
     @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
 
+@testset "Base.GMP.MPZ.import!/export!" begin
+    # test import
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base.GMP.MPZ.import!(int_to_import_to, bytes_to_import_from, order=0)
+    @test int_to_import_to == BigInt(256)
+
+    # test export
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test both composed import(export) is identity
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    int_to_import_to = BigInt()
+    Base.GMP.MPZ.import!(int_to_import_to, bytes_to_export_to, order=0)
+    @test int_to_export_from == int_to_import_to
+
+    # test both composed export(import) is identity
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base.GMP.MPZ.import!(int_to_import_to, bytes_to_import_from, order=0)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+end
+
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
 
