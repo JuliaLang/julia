@@ -408,9 +408,9 @@ struct jl_tbaacache_t {
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
         tbaa_arraysize = tbaa_make_child(mbuilder, "jtbaa_arraysize", tbaa_array_scalar).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
-        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar, true).first;
-        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar, true).first;
-        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar, true).first;
+        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar).first;
+        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar).first;
+        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
@@ -1179,6 +1179,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -1499,6 +1500,10 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
         FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::NoSync);
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
@@ -4470,7 +4475,17 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
         if (inst == NULL)
             return false;
-        *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        if (argv[2].constant) {
+            if (!jl_is_long(argv[2].constant))
+                return false;
+            size_t nel = jl_unbox_long(argv[2].constant);
+            if (nel < 0)
+                return false;
+            *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
+        }
+        else {
+            *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        }
         return true;
     }
 
