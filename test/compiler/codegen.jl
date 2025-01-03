@@ -933,3 +933,8 @@ let
    end
    nothing
 end
+
+struct Vec56937 x::NTuple{8, VecElement{Int}} end
+
+x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
+@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
