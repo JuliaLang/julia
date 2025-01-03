@@ -58,6 +58,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::St
     call = abstract_call(interp, arginfo, si, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
+        irsv.new_call_inferred |= true
         nothing
     end
     return call
@@ -204,7 +205,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         # Handled at the very end
         return false
     elseif isa(stmt, PiNode)
-        rt = tmeet(typeinf_lattice(interp), argextype(stmt.val, ir), widenconst(stmt.typ))
+        ⊓ = join(typeinf_lattice(interp))
+        rt = argextype(stmt.val, ir) ⊓ widenconst(stmt.typ)
     elseif stmt === nothing
         return false
     elseif isa(stmt, GlobalRef)
@@ -226,7 +228,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
                 inst[:stmt] = quoted(rt.val)
             end
             return true
-        elseif !⊑(typeinf_lattice(interp), inst[:type], rt)
+        end
+        ⊏ = strictpartialorder(typeinf_lattice(interp))
+        if rt ⊏ inst[:type]
             inst[:type] = rt
             return true
         end
@@ -315,6 +319,7 @@ function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irs
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
+        sub_ir_flag_refined::Bool = true,
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
 
@@ -337,7 +342,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         any_refined = false
         if has_flag(flag, IR_FLAG_REFINED)
             any_refined = true
-            sub_flag!(inst, IR_FLAG_REFINED)
+            sub_ir_flag_refined && sub_flag!(inst, IR_FLAG_REFINED)
         elseif is_all_const_call(stmt, interp, irsv)
             # force reinference on calls with all constant arguments
             any_refined = true
@@ -390,7 +395,7 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
             stmt = inst[:stmt]
             flag = inst[:flag]
             if has_flag(flag, IR_FLAG_REFINED)
-                sub_flag!(inst, IR_FLAG_REFINED)
+                sub_ir_flag_refined && sub_flag!(inst, IR_FLAG_REFINED)
                 push!(stmt_ip, idx)
             end
             check_ret!(stmt, idx)
