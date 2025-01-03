@@ -101,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    195
+#define NUM_TAGS    196
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -162,6 +162,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_unionall_type);
         INSERT_TAG(jl_typename_type);
         INSERT_TAG(jl_builtin_type);
+        INSERT_TAG(jl_closure_type);
         INSERT_TAG(jl_code_info_type);
         INSERT_TAG(jl_opaque_closure_type);
         INSERT_TAG(jl_task_type);

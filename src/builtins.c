@@ -2531,6 +2531,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
+    add_builtin("Closure", (jl_value_t*)jl_closure_type);
     add_builtin("MethodInstance", (jl_value_t*)jl_method_instance_type);
     add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("LLVMPtr", (jl_value_t*)jl_llvmpointer_type);
