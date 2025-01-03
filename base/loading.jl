@@ -3496,14 +3496,22 @@ function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, UInt64, UInt32, Fl
     return CacheHeaderIncludes(PkgId(dep_tuple[1]), dep_tuple[2:end]..., String[])
 end
 
-function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+function replace_depot_path_impl(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    the_depot = nothing
+    reloc_path = path
     for depot in depots
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
-            path = replace(path, depot => "@depot"; count=1)
+            reloc_path = replace(path, depot => "@depot"; count=1)
+            the_depot = depot
             break
         end
     end
-    return path
+    return the_depot, reloc_path
+end
+
+function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    _, reloc_path = replace_depot_path_impl(path, depots)
+    return reloc_path
 end
 
 function normalize_depots_for_relocation()
