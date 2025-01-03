@@ -90,6 +90,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `findextrema(f, itr; [dims])` which computes `findmin(f, itr; [dims]), findmax(f, itr; [dims])` in a single pass. ([#45783])
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
