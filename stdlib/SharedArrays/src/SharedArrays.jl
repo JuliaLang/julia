@@ -101,7 +101,7 @@ beginning of the file.
 """
 SharedArray
 
-function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
+function SharedArray{T,N}(::UndefInitializer, dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     isbitstype(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -158,18 +158,18 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     S
 end
 
-SharedArray{T,N}(I::Integer...; kwargs...) where {T,N} =
-    SharedArray{T,N}(I; kwargs...)
-SharedArray{T}(d::NTuple; kwargs...) where {T} =
-    SharedArray{T,length(d)}(d; kwargs...)
-SharedArray{T}(I::Integer...; kwargs...) where {T} =
-    SharedArray{T,length(I)}(I; kwargs...)
-SharedArray{T}(m::Integer; kwargs...) where {T} =
-    SharedArray{T,1}(m; kwargs...)
-SharedArray{T}(m::Integer, n::Integer; kwargs...) where {T} =
-    SharedArray{T,2}(m, n; kwargs...)
-SharedArray{T}(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
-    SharedArray{T,3}(m, n, o; kwargs...)
+SharedArray{T,N}(::UndefInitializer, I::Integer...; kwargs...) where {T,N} =
+    SharedArray{T,N}(undef, I; kwargs...)
+SharedArray{T}(::UndefInitializer, d::NTuple; kwargs...) where {T} =
+    SharedArray{T,length(d)}(undef, d; kwargs...)
+SharedArray{T}(::UndefInitializer, I::Integer...; kwargs...) where {T} =
+    SharedArray{T,length(I)}(undef, I; kwargs...)
+SharedArray{T}(::UndefInitializer, m::Integer; kwargs...) where {T} =
+    SharedArray{T,1}(undef, m; kwargs...)
+SharedArray{T}(::UndefInitializer, m::Integer, n::Integer; kwargs...) where {T} =
+    SharedArray{T,2}(undef, m, n; kwargs...)
+SharedArray{T}(::UndefInitializer, m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
+    SharedArray{T,3}(undef, m, n, o; kwargs...)
 
 function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
                           mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N}
@@ -561,10 +561,10 @@ function shmem_randn(dims; kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
-similar(S::SharedArray, T::Type, dims::Dims) = similar(S.s, T, dims)
-similar(S::SharedArray, T::Type) = similar(S.s, T, size(S))
-similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
-similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
+similar(S::SharedArray, T::Type, dims::Dims{N}; pids=S.pids) where N = SharedArray{T, N}(undef, dims; pids=pids)
+similar(S::SharedArray{ST, N}, T::Type; pids=S.pids) where {ST, N} = similar(S, T, size(S); pids=pids)
+similar(S::SharedArray, dims::Dims; pids=S.pids) = similar(S, eltype(S), dims; pids=pids)
+similar(S::SharedArray; pids=S.pids) = similar(S, eltype(S), size(S); pids=pids)
 
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
