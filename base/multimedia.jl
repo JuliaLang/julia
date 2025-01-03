@@ -35,7 +35,7 @@ e.g. `MIME{Symbol("text/plain")}`.
 e.g. `MIME"text/plain"`.
 Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
 
-A `MIME` **object** is created by calling the MIME constructor, e.g. `MIME("text/plain)`,
+A `MIME` **object** is created by calling the MIME constructor, e.g. `MIME("text/plain")`,
 or by calling the string macro, e.g. `MIME"text/plain"()`.
 A `MIME` object can be passed as the second argument to [`show`](@ref)
 to request output in that format.
