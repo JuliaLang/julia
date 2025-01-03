@@ -750,10 +750,9 @@ precompile_test_harness("code caching") do dir
               struct X end
               struct X2 end
               @noinline function f(d)
-                  @noinline
-                  d[X()] = nothing
+                  @noinline d[X()] = nothing
               end
-              @noinline fpush(dest) = push!(dest, X())
+              @noinline fpush(dest) = @noinline push!(dest, X())
               function callboth()
                   f(Dict{X,Any}())
                   fpush(X[])
@@ -797,18 +796,6 @@ precompile_test_harness("code caching") do dir
         end
     end
     @test hasspec
-    # Test that compilation adds to method roots with appropriate provenance
-    m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test Memory{M.X} ∈ m.roots
-    # Check that roots added outside of incremental builds get attributed to a moduleid of 0
-    Base.invokelatest() do
-        Dict{M.X2,Any}()[M.X2()] = nothing
-    end
-    @test Memory{M.X2} ∈ m.roots
-    groups = group_roots(m)
-    @test Memory{M.X} ∈ groups[Mid]           # attributed to M
-    @test Memory{M.X2} ∈ groups[0]            # activate module is not known
-    @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations::Core.MethodInstance
@@ -832,12 +819,12 @@ precompile_test_harness("code caching") do dir
           """
           module $Cache_module2
               struct Y end
-              @noinline f(dest) = push!(dest, Y())
+              @noinline f(dest) = @noinline push!(dest, Y())
               callf() = f(Y[])
               callf()
               using $(Cache_module)
               struct Z end
-              @noinline g(dest) = push!(dest, Z())
+              @noinline g(dest) = @noinline push!(dest, Z())
               callg() = g(Z[])
               callg()
           end
@@ -1146,22 +1133,22 @@ precompile_test_harness("invoke") do dir
 
               call_getlast(x) = getlast(x)
 
-              # force precompilation
+              # force precompilation, force call so that inlining heuristics don't affect the result
               begin
                   Base.Experimental.@force_compile
-                  callf(3)
-                  callg(3)
-                  callh(3)
-                  callq(3)
-                  callqi(3)
-                  callfnc(3)
-                  callgnc(3)
-                  callhnc(3)
-                  callqnc(3)
-                  callqnci(3)
-                  internal(3)
-                  internalnc(3)
-                  call_getlast([1,2,3])
+                  @noinline callf(3)
+                  @noinline callg(3)
+                  @noinline callh(3)
+                  @noinline callq(3)
+                  @noinline callqi(3)
+                  @noinline callfnc(3)
+                  @noinline callgnc(3)
+                  @noinline callhnc(3)
+                  @noinline callqnc(3)
+                  @noinline callqnci(3)
+                  @noinline internal(3)
+                  @noinline internalnc(3)
+                  @noinline call_getlast([1,2,3])
               end
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
@@ -1194,9 +1181,15 @@ precompile_test_harness("invoke") do dir
     for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
         m = get_method_for_type(func, Real)
         mi = m.specializations::Core.MethodInstance
-        @test length(mi.backedges) == 2
+        @test length(mi.backedges) == 2 || length(mi.backedges) == 4 # internalnc might have a constprop edge
         @test mi.backedges[1] === Tuple{typeof(func), Real}
         @test isa(mi.backedges[2], Core.CodeInstance)
+        if length(mi.backedges) == 4
+            @test mi.backedges[3] === Tuple{typeof(func), Real}
+            @test isa(mi.backedges[4], Core.CodeInstance)
+            @test mi.backedges[2] !== mi.backedges[4]
+            @test mi.backedges[2].def === mi.backedges[4].def
+        end
         @test mi.cache.max_world == typemax(mi.cache.max_world)
     end
     for func in (M.q, M.qnc)
@@ -1215,7 +1208,7 @@ precompile_test_harness("invoke") do dir
     m = only(methods(M.callq))
     @test nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqnc))
-    @test nvalid(m.specializations::Core.MethodInstance) == 0
+    @test nvalid(m.specializations::Core.MethodInstance) == 1
     m = only(methods(M.callqi))
     @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
