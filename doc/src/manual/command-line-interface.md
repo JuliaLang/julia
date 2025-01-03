@@ -216,7 +216,7 @@ The following is a complete list of command-line switches available when launchi
 |`--output-asm <name>`                  |Generate an assembly file (.s)|
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
 |`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
-|`--trace-compile-timing`               |If --trace-compile is enabled show how long each took to compile in ms|
+|`--trace-compile-timing`               |If `--trace-compile` is enabled show how long each took to compile in ms|
 |`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
