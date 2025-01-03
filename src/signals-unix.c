@@ -933,6 +933,10 @@ static void *signal_listener(void *arg)
                 for (int idx = nthreads; idx-- > 0; ) {
                     // Stop the threads in the random order.
                     int i = randperm[idx];
+                    // skip heartbeat thread
+                    if (i == heartbeat_tid) {
+                        continue;
+                    }
                     // do backtrace for profiler
                     if (profile_running) {
                         jl_profile_thread_unix(i, &signal_context);

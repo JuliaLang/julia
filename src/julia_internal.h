@@ -220,6 +220,7 @@ extern volatile size_t profile_bt_size_max;
 extern volatile size_t profile_bt_size_cur;
 extern volatile int profile_running;
 extern volatile int profile_all_tasks;
+extern int heartbeat_tid; // Mostly used to ensure we skip this thread in the CPU profiler. XXX: not implemented on Windows
 // Ensures that we can safely read the `live_tasks`field of every TLS when profiling.
 // We want to avoid the case that a GC gets interleaved with `jl_profile_task` and shrinks
 // the `live_tasks` array while we are reading it or frees tasks that are being profiled.

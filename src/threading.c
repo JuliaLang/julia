@@ -943,6 +943,7 @@ JL_DLLEXPORT int jl_alignment(size_t sz)
 #include <time.h>
 
 volatile int heartbeat_enabled;
+int heartbeat_tid; // Mostly used to ensure we skip this thread in the CPU profiler. XXX: not implemented on Windows
 uv_thread_t heartbeat_uvtid;
 uv_sem_t heartbeat_on_sem,              // jl_heartbeat_enable -> thread
          heartbeat_off_sem;             // thread -> jl_heartbeat_enable
@@ -1130,6 +1131,7 @@ void jl_heartbeat_threadfun(void *arg)
     jl_adopt_thread();
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
+    heartbeat_tid = ptls->tid;
 
     // Don't hold up GC, this thread doesn't participate.
     uint8_t gc_state = jl_gc_safe_enter(ptls);

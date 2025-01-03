@@ -708,6 +708,10 @@ void *mach_profile_listener(void *arg)
             for (int idx = nthreads; idx-- > 0; ) {
                 // Stop the threads in random order.
                 int i = randperm[idx];
+                // skip heartbeat thread
+                if (i == heartbeat_tid) {
+                    continue;
+                }
                 jl_profile_thread_mach(i);
             }
         }
