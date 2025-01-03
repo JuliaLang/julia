@@ -41,7 +41,6 @@ A `MIME` object can be passed as the second argument to [`show`](@ref)
 to request output in that format.
 
 # Examples
-
 ```jldoctest
 julia> show(stdout, MIME("text/plain"), "hi")
 "hi"
