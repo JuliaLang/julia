@@ -40,7 +40,7 @@ or by calling the string macro, e.g. `MIME"text/plain"()`.
 A `MIME` object can be passed as the second argument to [`show`](@ref)
 to request output in that format.
 
-#Examples
+# Examples
 
 ```jldoctest
 julia> show(stdout, MIME("text/plain"), "hi")
