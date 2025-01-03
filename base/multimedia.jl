@@ -16,17 +16,48 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 """
     MIME
 
-A type representing a standard internet data format. "MIME" stands for
-"Multipurpose Internet Mail Extensions", since the standard was originally
+A parametric type representing a standard internet data format.
+
+"MIME" stands for "Multipurpose Internet Mail Extensions", since the standard was originally
 used to describe multimedia attachments to email messages.
+The [current standard](https://www.iana.org/assignments/media-types/media-types.xhtml),
+maintained by the Internet Assigned Numbers Authority,
+now refers to "MIME types" as "media types".
+Each media type is defined as a string in the form `"<type>/<subtype>"`.
+There are over one thousand official media types,
+but in practice only a few are usually supported.
+Some common MIMEs are `"text/plain"``, `"text/html"``, `"image/jpeg"``, `"video/mpeg"``.
+Unofficial custom MIMEs are also supported.
 
-A `MIME` object can be passed as the second argument to [`show`](@ref) to
-request output in that format.
+A specific singleton MIME **type** is constructed by passing the MIME string as a symbol,
+e.g. `MIME{Symbol("text/plain")}`.
+[`@MIME_str`](@ref) is defined to simplify creation of singleton types in this way,
+e.g. `MIME"text/plain"`.
+Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
 
-# Examples
+A `MIME` **object** is created by calling the MIME constructor, e.g. `MIME("text/plain)`,
+or by calling the string macro, e.g. `MIME"text/plain"()`.
+A `MIME` object can be passed as the second argument to [`show`](@ref)
+to request output in that format.
+
+#Examples
+
 ```jldoctest
 julia> show(stdout, MIME("text/plain"), "hi")
 "hi"
+```
+
+```jldoctest
+julia> struct MyType
+           val
+       end
+
+julia> import Base.show
+
+julia> show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My Value is ", x.val);
+
+julia> show(stdout, MIME"text/plain"(), MyType(5))
+My Value is 5
 ```
 """
 struct MIME{mime} end
