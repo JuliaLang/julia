@@ -3539,6 +3539,67 @@ function resolve_depot(inc::AbstractString)
     return :no_depot_found
 end
 
+"""
+    RelocPath(path::AbstractString)
+
+A type to represent a relocatable path.
+
+Requires `path` to be located within one of `DEPOT_PATH` upon construction.
+
+An error is thrown if relocation fails.
+
+# Example
+```jldoctest
+julia> path1 = joinpath(mktempdir(), "foo"); touch(path1); # set up a file called foo
+
+julia> pushfirst!(DEPOT_PATH, dirname(path1));
+
+julia> relocpath = RelocPath(path1);
+
+julia> String(relocpath) == path1
+true
+
+julia> path2 = joinpath(mktempdir(), "foo"); touch(path2); # set up another foo
+
+julia> pushfirst!(DEPOT_PATH, dirname(path2));
+
+julia> String(relocpath) == path2
+true
+
+julia> path1 != path2
+true
+```
+"""
+struct RelocPath
+    subpath::String
+    function RelocPath(path::AbstractString)
+        depot, _ = replace_depot_path_impl(path)
+        if isnothing(depot)
+            @show DEPOT_PATH
+            error("Failed to locate $(path) in any of DEPOT_PATH.")
+        end
+        subpath = replace(path, depot => ""; count=1)
+        return new(subpath)
+    end
+end
+
+function String(r::RelocPath)
+    for d in DEPOT_PATH
+        if isdirpath(d)
+            d = dirname(d)
+        end
+        path = string(d, r.subpath)
+        if ispath(path)
+            return path
+        end
+    end
+    error("Failed to relocate @depot$(r.subpath) in any of DEPOT_PATH.")
+end
+
+function show(io::IO, r::RelocPath)
+    print(io, string("RelocPath(\"@depot", r.subpath, "\")"))
+end
+
 function read_module_list(f::IO, has_buildid_hi::Bool)
     modules = Vector{Pair{PkgId, UInt128}}()
     while true
