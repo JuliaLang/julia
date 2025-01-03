@@ -2,6 +2,8 @@
 
 # TODO set up a version who defines new interpreter with persistent cache?
 
+include("setup_Compiler.jl")
+
 """
     @newinterp NewInterpreter [ephemeral_cache::Bool=false]
 
