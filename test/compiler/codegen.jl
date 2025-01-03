@@ -873,3 +873,9 @@ end
 
 # Core.getptls() special handling
 @test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
+
+
+struct Vec56937 x::NTuple{8, VecElement{Int}} end
+
+x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
+@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
