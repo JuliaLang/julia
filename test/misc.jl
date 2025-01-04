@@ -1612,3 +1612,13 @@ let errs = IOBuffer()
         '`, devnull, stdout, errs)
     @test occursin("disable_new_worlds", String(take!(errs)))
 end
+
+@testset "`@constprop` handling of unknown setting" begin
+    try
+        eval(Meta.parse("Base.@constprop :unknown f() = 3"))
+        error("unexpectedly reached")
+    catch e
+        e::LoadError
+        @test e.error isa ArgumentError
+    end
+end
