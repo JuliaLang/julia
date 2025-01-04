@@ -3,8 +3,8 @@
 LIBGIT2_JLL_NAME := LibGit2
 
 ## source build
-LIBGIT2_BRANCH=v1.8.4
-LIBGIT2_SHA1=3f4182d15eab74a302718f2de454ffadb1995626
+LIBGIT2_BRANCH=v1.9.0
+LIBGIT2_SHA1=338e6fb681369ff0537719095e22ce9dc602dbf0
 
 ## Other deps
 # Specify the version of the Mozilla CA Certificate Store to obtain.
