@@ -3182,3 +3182,54 @@ end
     dims = (length(m),)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
+
+
+
+
+"""
+
+```
+append(x::T, y::T) where T<: AbstractVector
+```
+
+Concatenate `AbstractVector`s.
+
+```jldoctest
+julia> append([:a, :b], [:c, :d])
+4-element Vector{Symbol}:
+ :a
+ :b
+ :c
+ :d
+```
+"""
+(append(x::T, y::T) where T<: AbstractVector) = append!(copy(x), y)
+
+
+"""
+append(::T, ::T) where T<: AbstractString
+
+Concatenate `AbstractString`s.
+
+
+```jldoctest
+julia> append("ab", "cd")
+"abcd"
+```
+"""
+(append(x::T, y::T) where T<:AbstractString)= join([x, y])
+
+
+"""
+
+Concatenate tuples.
+
+```jldoctest
+julia> append((1,2), (3,4))
+(1, 2, 3, 4)
+```
+"""
+append(x::Tuple, y::Tuple) = tuple(x..., y...)
+
+
+const ++ = append
