@@ -47,17 +47,25 @@ CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
 #   On MacOS, we use SecureTransport
-#   On Linux, we use mbedTLS
+#   On Linux, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
 CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
 else
-CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+$(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/curl-strdup.patch
+	echo 1 > $@
+
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
