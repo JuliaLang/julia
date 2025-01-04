@@ -99,6 +99,7 @@ Standard library changes
 ------------------------
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* `Base.setindex` function is now marked as `public` ([#55129]).
 
 #### StyledStrings
 
