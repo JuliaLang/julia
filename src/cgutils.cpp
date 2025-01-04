@@ -4432,6 +4432,17 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
+static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ)
+{
+    auto ptls = get_current_ptls(ctx);
+    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
+    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+    alloc->setAttributes(call->getAttributes());
+    alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
+    call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
+    return alloc;
+}
+
 static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nbytes, Value* nel, int zi)
 {
     auto arg_typename = [&] JL_NOTSAFEPOINT {
@@ -4514,9 +4525,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         aliasinfo.decorateInst(store);
         setName(ctx.emission_context, memory_data, "memory_data");
     } else { // just use the dynamic length version since the malloc will be slow anyway
-        auto ptls = get_current_ptls(ctx);
-        auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-        alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ);
     }
     emit_memory_zeroinit_and_stores(ctx, typ, alloc, cg_nbytes, cg_nel, zi);
     return mark_julia_type(ctx, alloc, true, typ);
@@ -4538,7 +4547,6 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     if (isboxed)
         elsz = sizeof(void*);
 
-    auto ptls = get_current_ptls(ctx);
     auto T_size = ctx.types().T_size;
     BasicBlock *emptymemBB, *nonemptymemBB, *retvalBB;
     emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
@@ -4580,8 +4588,8 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     Value *notoverflow = ctx.builder.CreateNot(overflow);
     error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
     // actually allocate the memory
-    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-    Value *alloc = ctx.builder.CreateCall(call, { ptls, nbytes, cg_typ});
+
+    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ);
     emit_memory_zeroinit_and_stores(ctx, typ, alloc, nbytes, nel_unboxed, zi);
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB = ctx.builder.GetInsertBlock();
