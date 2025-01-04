@@ -22,6 +22,7 @@ New language features
   The available metrics are:
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
+- Support for Unicode 16 ([#56925]).
 
 Language changes
 ----------------

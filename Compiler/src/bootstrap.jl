@@ -16,9 +16,9 @@ function activate_codegen!()
 end
 
 function bootstrap!()
+    global bootstrapping_compiler = true
     let time() = ccall(:jl_clock_now, Float64, ())
         println("Compiling the compiler. This may take several minutes ...")
-        interp = NativeInterpreter()
 
         ssa_inlining_pass!_tt = Tuple{typeof(ssa_inlining_pass!), IRCode, InliningState{NativeInterpreter}, Bool}
         optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
@@ -45,13 +45,15 @@ function bootstrap!()
             end
         end
         starttime = time()
+        methods = Any[]
+        world = get_world_counter()
         for f in fs
             if isa(f, DataType) && f.name === typename(Tuple)
                 tt = f
             else
                 tt = Tuple{typeof(f), Vararg{Any}}
             end
-            matches = _methods_by_ftype(tt, 10, get_world_counter())::Vector
+            matches = _methods_by_ftype(tt, 10, world)::Vector
             if isempty(matches)
                 println(stderr, "WARNING: no matching method found for `", tt, "`")
             else
@@ -62,14 +64,25 @@ function bootstrap!()
                     for i = 1:length(params)
                         params[i] = unwraptv(params[i])
                     end
-                    typeinf_type(interp, m.method, Tuple{params...}, m.sparams)
+                    mi = specialize_method(m.method, Tuple{params...}, m.sparams)
+                    #isa_compileable_sig(mi) || println(stderr, "WARNING: inferring `", mi, "` which isn't expected to be called.")
+                    push!(methods, mi)
                 end
             end
+        end
+        codeinfos = typeinf_ext_toplevel(methods, [world], false)
+        for i = 1:2:length(codeinfos)
+            ci = codeinfos[i]::CodeInstance
+            src = codeinfos[i + 1]::CodeInfo
+            isa_compileable_sig(ci.def) || continue # println(stderr, "WARNING: compiling `", ci.def, "` which isn't expected to be called.")
+            ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, src)
         end
         endtime = time()
         println("Base.Compiler ──── ", sub_float(endtime,starttime), " seconds")
     end
     activate_codegen!()
+    global bootstrapping_compiler = false
+    nothing
 end
 
 function activate!(; reflection=true, codegen=false)
