@@ -23,7 +23,7 @@ print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
 STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
-		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll MbedTLS_jll OpenLibm_jll PCRE2_jll \
+		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll OpenSSL_jll OpenLibm_jll PCRE2_jll \
 		   Zlib_jll dSFMT_jll libLLVM_jll libblastrampoline_jll OpenBLAS_jll Printf Random Tar \
 		   LibSSH2_jll MPFR_jll LinearAlgebra Dates Distributed Future LibGit2 Profile SparseArrays UUIDs \
 		   SharedArrays TOML Test LibCURL Downloads Pkg Dates LazyArtifacts Sockets Unicode Markdown \
@@ -83,7 +83,7 @@ $(eval $(call pkgimg_builder,GMP_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,LLVMLibUnwind_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,LibUV_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,LibUnwind_jll,Artifacts Libdl))
-$(eval $(call sysimg_builder,MbedTLS_jll,Artifacts Libdl))
+$(eval $(call sysimg_builder,OpenSSL_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,nghttp2_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,OpenLibm_jll,Artifacts Libdl))
 $(eval $(call pkgimg_builder,PCRE2_jll,Artifacts Libdl))
@@ -100,7 +100,7 @@ $(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
 
 # 2-depth packages
 $(eval $(call pkgimg_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
-$(eval $(call sysimg_builder,LibSSH2_jll,Artifacts Libdl MbedTLS_jll))
+$(eval $(call sysimg_builder,LibSSH2_jll,Artifacts Libdl OpenSSL_jll))
 $(eval $(call pkgimg_builder,MPFR_jll,Artifacts Libdl GMP_jll))
 $(eval $(call sysimg_builder,LinearAlgebra,Libdl libblastrampoline_jll OpenBLAS_jll))
 $(eval $(call sysimg_builder,Dates,Printf))
@@ -110,8 +110,8 @@ $(eval $(call sysimg_builder,InteractiveUtils,Markdown))
 $(eval $(call sysimg_builder,UUIDs,Random SHA))
 
  # 3-depth packages
-$(eval $(call sysimg_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
-$(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
+$(eval $(call sysimg_builder,LibGit2_jll,OpenSSL_jll LibSSH2_jll Artifacts Libdl))
+$(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll OpenSSL_jll Zlib_jll Artifacts Libdl))
 $(eval $(call sysimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
 $(eval $(call pkgimg_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call sysimg_builder,TOML,Dates))

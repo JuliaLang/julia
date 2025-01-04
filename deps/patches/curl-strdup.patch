@@ -1,0 +1,10 @@
+--- a/lib/md4.c
++++ b/lib/md4.c
+@@ -23,6 +23,7 @@
+  ***************************************************************************/
+ 
+ #include "curl_setup.h"
++#include "strdup.h"
+ 
+ #if defined(USE_CURL_NTLM_CORE)
+ 
