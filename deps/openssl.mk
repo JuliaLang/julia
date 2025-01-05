@@ -34,6 +34,8 @@ else ifeq ($(ARCH),ppc64le)
 OPENSSL_TARGET := linux-ppc64le
 else ifeq ($(ARCH),powerpc64le)
 OPENSSL_TARGET := linux-ppc64le
+else ifeq ($(ARCH),riscv64)
+OPENSSL_TARGET := linux64-riscv64
 endif
 else
 OPENSSL_TARGET := unknown
