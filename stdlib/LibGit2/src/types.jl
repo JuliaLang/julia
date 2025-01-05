@@ -939,6 +939,17 @@ function Base.show(io::IO, ce::ConfigEntry)
 end
 
 """
+    LibGit2.ConfigBackendEntry
+
+Matches the [`git_config_backend_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_backend_entry) struct.
+"""
+struct ConfigBackendEntry
+    entry::ConfigEntry
+    free::Ptr{Cvoid}
+end
+@assert Base.allocatedinline(ConfigBackendEntry)
+
+"""
     LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
 
 Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
