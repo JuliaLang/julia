@@ -61,15 +61,7 @@ CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
-	cd $(dir $@) && \
-		patch -p1 -f < $(SRCDIR)/patches/curl-strdup.patch
-	echo 1 > $@
-
-$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied
-	echo 1 > $@
-
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
