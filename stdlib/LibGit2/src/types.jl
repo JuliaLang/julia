@@ -237,6 +237,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
     end
+    @static if LibGit2.VERSION >= v"1.9.0"
+        update_refs::Ptr{Cvoid}        = C_NULL
+    end
 end
 @assert Base.allocatedinline(RemoteCallbacks)
 
