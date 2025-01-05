@@ -1605,10 +1605,10 @@ pairs(s::AbstractString) = IterableStatePairs(s)
 """
     nth(itr, n::Integer)
 
-Get the `n`th element of an iterable collection. Return `nothing` if not existing.
+Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
 Will advance any `Stateful`[@ref] iterator.
 
-See also: [`first`](@ref), [`last`](@ref)
+See also: [`first`](@ref), [`last`](@ref), [`nth`](@ref)
 
 # Examples
 ```jldoctest
@@ -1626,56 +1626,77 @@ julia> first(stateful)
 ```
 """
 nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
-nth(itr::AbstractArray, n::Integer) = n > length(itr) ? nothing : _inbounds_nth(itr, n)
-nth(itr::AbstractRange, n) = getindex(itr, n)
+nth(itr::AbstractArray, n::Integer) = _withlength_nth_throw(itr, n, length(itr))
+# specialized versions to better interact with existing iterators
+# Count
+nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : throw(ArgumentError("n must be positive."))
+# # Repeated
+nth(itr::Repeated, n::Integer) = itr.x
+# # Take(Repeated)
+nth(itr::Take{Repeated{O}}, n::Integer) where {O} = begin
+    n > itr.n ? throw(BoundsError("attempted to access $(itr.n)-element $(typeof(itr)) at position $n")) : itr.xs.x
+end
+# infinite cycle
+nth(itr::Cycle{I}, n::Integer) where {I} = _nth_inf_cycle(IteratorSize(I), itr, n)
+# finite cycle: in reality a Flatten{Take{Repeated{O}}} iterator
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O} = _nth_finite_cycle(IteratorSize(O), itr, n)
 
-_nth(::SizeUnknown, itr, n) = _fallback_nth(itr, n)
-_nth(::Union{HasShape,HasLength}, itr, n) = _withlength_nth(itr, n, length(itr))
+_nth(::SizeUnknown, itr, n) = _fallback_nth_throw(itr, n)
+_nth(::Union{HasShape,HasLength}, itr, n) = _withlength_nth_throw(itr, n, length(itr))
 _nth(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
 
 _inbounds_nth(itr, n) = iterate(drop(itr, n - 1))[1]
 _inbounds_nth(itr::AbstractArray, n) = itr[begin + n-1]
 
-_withlength_nth(itr, n, N) = n > N ? nothing : _inbounds_nth(itr, n)
+function _withlength_nth_throw(itr, n, N)
+    n > N && throw(BoundsError("attempted to access $N-element $(typeof(itr)) at position $n"))
+    _inbounds_nth(itr, n)
+end
 
-function _fallback_nth(itr, n)
+function _fallback_nth_throw(itr, n)
     y = iterate(drop(itr, n - 1))
-    y === nothing && return nothing
+    y === nothing && throw(BoundsError("Iterator $(typeof(itr)) has less than $n elements"))
     y[1]
 end
 
-# specialized versions to better interact with existing iterators
-# Count
-nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : nothing
-
-# Repeated
-nth(itr::Repeated, n::Integer) = itr.x
-
-# Take(Repeated)
-nth(itr::Take{Repeated{O}}, n::Integer) where {O} = n > itr.n ? nothing : itr.xs.x
-
-# infinite cycle
-nth(itr::Cycle{I}, n::Integer) where {I} = _nth_inf_cycle(IteratorSize(I), itr, n)
 _nth_inf_cycle(::IsInfinite, itr, n) = _inbounds_nth(itr.xs, n)
 _nth_inf_cycle(::SizeUnknown, itr, n) = _fallback_nth(itr.xs, n)
 _nth_inf_cycle(::Union{HasShape,HasLength}, itr, n) = _repeating_cycle_nth(itr.xs, n, length(itr.xs))
 
-# finite cycle
-# a finite cycle iterator is in reality a Flatten{Take{Repeated{O}}} iterator
-nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O} = _nth_finite_cycle(IteratorSize(O), itr, n)
 _nth_finite_cycle(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
-_nth_finite_cycle(::SizeUnknown, itr, n) = _fallback_nth(itr, n)
-_nth_finite_cycle(::Union{HasShape,HasLength}, itr, n) = begin
-    N = itr.it.n # `Take` iterator n
-    torepeat = itr.it.xs.x # repeated object
-    K = length(torepeat)
-    n > K * N && return nothing
-    _repeating_cycle_nth(torepeat, n, K)
-end
-
+_nth_finite_cycle(::SizeUnknown, itr, n) = _fallback_nth_throw(itr, n)
+_nth_finite_cycle(::Union{HasShape,HasLength}, itr, n) = _walk_cycle_throw(itr, n)
 
 _repeating_cycle_nth(inner_itr, n, inner_N) = _inbounds_nth(inner_itr, 1 + ((n - 1) % inner_N))
 
+function _walk_cycle_throw(itr, n)
+    N = itr.it.n # `Take` iterator n
+    torepeat = itr.it.xs.x # repeated object
+    K = length(torepeat)
+    n > K * N && throw(BoundsError("attempted to access $(N*K)-element $(typeof(itr)) at position $n"))
+    _repeating_cycle_nth(torepeat, n, K)
+end
 
+"""
+    nth(n::Integer)
+
+return a function that gets the `n`-th element from any iterator passed to it.
+Fixes the second element with
+Throw a `BoundsError`[@ref] if not existing.
+Will advance any `Stateful`[@ref] iterator.
+
+See also: [`nth`](@ref), [`Base.Fix2`](@ref)
+# Examples
+```jldoctest
+julia> fifth_element = nth(5)
+(::Base.Fix2{typeof(nth), Int64}) (generic function with 1 method)
+
+julia> fifth_element(reshape(1:30, (5,6)))
+5
+
+julia> map(nth(3), my_vec)
+```
+"""
+nth(n::Integer) = Base.Fix2(nth, n)
 
 end
