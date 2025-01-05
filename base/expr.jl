@@ -408,7 +408,7 @@ function constprop_setting(@nospecialize setting)
     elseif setting === :none
         return :no_constprop
     end
-    throw(ArgumentError(LazyString("`Base.@constprop ", setting, "` not supported")))
+    throw(ArgumentError(LazyString("`Base.@constprop ", s, "` not supported")))
 end
 
 """
