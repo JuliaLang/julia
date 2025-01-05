@@ -2303,6 +2303,12 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
+@testset "issue #56913: `BoundsError` in type inference" begin
+    R = UnitRange{Int}
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+end
+
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
 maybeget_mustalias_tmerge(x) = x
 @test Base.return_types((Union{Nothing,AliasableField{Any}},); interp=MustAliasInterpreter()) do x
