@@ -3,7 +3,4 @@
 CURL_JLL_NAME := LibCURL
 
 ## source build
-# curl version 8.10 and later seem to be broken, probably due to a bug
-# on Julia. See
-# <https://github.com/JuliaLang/Downloads.jl/issues/260>.
-CURL_VER := 8.9.1
+CURL_VER := 8.11.1
