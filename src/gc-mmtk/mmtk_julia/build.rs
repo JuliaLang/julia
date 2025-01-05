@@ -44,48 +44,50 @@ fn main() {
             .expect("failed to execute process");
     }
 
-    let bindings = bindgen::Builder::default()
-        .header(format!("{}/src/julia.h", julia_dir))
-        .header(format!("{}/src/julia_internal.h", julia_dir))
-        // Including the paths to depending .h files
-        .clang_arg("-I")
-        .clang_arg(format!("{}/mmtk/api", mmtk_dir))
-        .clang_arg("-I")
-        .clang_arg(format!("{}/src", julia_dir))
-        .clang_arg("-I")
-        .clang_arg(format!("{}/src/support", julia_dir))
-        .clang_arg("-I")
-        .clang_arg(format!("{}/usr/include", buildroot_dir))
-        // all types that we generate bindings from
-        .allowlist_item("jl_datatype_layout_t")
-        .allowlist_item("jl_ucontext_t")
-        .allowlist_item("jl_small_typeof_tags")
-        .allowlist_item("jl_*_tag")
-        .allowlist_item("jl_svec_t")
-        .allowlist_item("jl_module_t")
-        .allowlist_item("jl_task_t")
-        .allowlist_item("jl_datatype_t")
-        .allowlist_item("jl_weakref_t")
-        .allowlist_item("jl_binding_partition_t")
-        .allowlist_item("jl_bt_element_t")
-        .allowlist_item("jl_taggedvalue_t")
-        .allowlist_item("MMTkMutatorContext")
-        // --opaque-type MMTkMutatorContext
-        .opaque_type("MMTkMutatorContext")
-        // compile using c++
-        .clang_arg("-x")
-        .clang_arg("c++")
-        .clang_arg("-std=c++14")
-        // using MMTK types
-        .clang_arg("-DMMTK_GC")
-        // Finish the builder and generate the bindings.
-        .generate()
-        // Unwrap the Result and panic on failure.
-        .expect("Unable to generate bindings");
+    if !Path::new(format!("{}/mmtk/src/julia_types.rs", mmtk_dir).as_str()).exists() {
+        let bindings = bindgen::Builder::default()
+            .header(format!("{}/src/julia.h", julia_dir))
+            .header(format!("{}/src/julia_internal.h", julia_dir))
+            // Including the paths to depending .h files
+            .clang_arg("-I")
+            .clang_arg(format!("{}/mmtk/api", mmtk_dir))
+            .clang_arg("-I")
+            .clang_arg(format!("{}/src", julia_dir))
+            .clang_arg("-I")
+            .clang_arg(format!("{}/src/support", julia_dir))
+            .clang_arg("-I")
+            .clang_arg(format!("{}/usr/include", buildroot_dir))
+            // all types that we generate bindings from
+            .allowlist_item("jl_datatype_layout_t")
+            .allowlist_item("jl_ucontext_t")
+            .allowlist_item("jl_small_typeof_tags")
+            .allowlist_item("jl_*_tag")
+            .allowlist_item("jl_svec_t")
+            .allowlist_item("jl_module_t")
+            .allowlist_item("jl_task_t")
+            .allowlist_item("jl_datatype_t")
+            .allowlist_item("jl_weakref_t")
+            .allowlist_item("jl_binding_partition_t")
+            .allowlist_item("jl_bt_element_t")
+            .allowlist_item("jl_taggedvalue_t")
+            .allowlist_item("MMTkMutatorContext")
+            // --opaque-type MMTkMutatorContext
+            .opaque_type("MMTkMutatorContext")
+            // compile using c++
+            .clang_arg("-x")
+            .clang_arg("c++")
+            .clang_arg("-std=c++14")
+            // using MMTK types
+            .clang_arg("-DMMTK_GC")
+            // Finish the builder and generate the bindings.
+            .generate()
+            // Unwrap the Result and panic on failure.
+            .expect("Unable to generate bindings");
 
-    bindings
-        .write_to_file("src/julia_types.rs")
-        .expect("Couldn't write bindings!");
+        bindings
+            .write_to_file("src/julia_types.rs")
+            .expect("Couldn't write bindings!");
+    }
 
     built::write_built_file().expect("Failed to acquire build-time information");
 }
