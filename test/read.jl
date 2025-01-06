@@ -170,6 +170,10 @@ for (name, f) in l
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
+        if isone(length(s))
+            @test readuntil(io(t), first(s)) == m
+            @test readuntil(io(t), first(s), keep=true) == kept
+        end
         @test readuntil(io(t), SubString(s, firstindex(s))) == m
         @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
@@ -264,10 +268,24 @@ for (name, f) in l
             n2 = readbytes!(s2, a2)
             @test n1 == n2
             @test length(a1) == length(a2)
-            @test a1[1:n1] == a2[1:n2]
+            let l = min(l, n)
+                @test a1[1:l] == a2[1:l]
+            end
             @test n <= length(text) || eof(s1)
             @test n <= length(text) || eof(s2)
 
+            cleanup()
+        end
+
+        # Test growing output array
+        let x = UInt8[],
+            io = io()
+            n = readbytes!(io, x)
+            @test n == 0
+            @test isempty(x)
+            n = readbytes!(io, x, typemax(Int))
+            @test n == length(x)
+            @test x == codeunits(text)
             cleanup()
         end
 
@@ -473,12 +491,6 @@ let s = "qwerty"
     @test read(IOBuffer(s)) == codeunits(s)
     @test read(IOBuffer(s), 10) == codeunits(s)
     @test read(IOBuffer(s), 1) == codeunits(s)[1:1]
-
-    # Test growing output array
-    x = UInt8[]
-    n = readbytes!(IOBuffer(s), x, 10)
-    @test x == codeunits(s)
-    @test n == length(x)
 end
 
 

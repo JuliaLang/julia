@@ -207,6 +207,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_compiled_modules == 3 && push!(addflags, "--compiled-modules=strict")
     opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
     opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
@@ -248,7 +249,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
 end
 
 function julia_exename()
-    if !Base.isdebugbuild()
+    if !isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -270,15 +271,29 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
 !!! info "Windows"
     Note that on Windows, the secret might be displayed as it is typed; see
     `Base.winprompt` for securely retrieving username/password pairs from a
     graphical interface.
+
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
+# Examples
+
+```julia-repl
+julia> Base.getpass("Secret")
+Secret: SecretBuffer("*******")
+
+julia> Base.getpass("Secret> "; with_suffix=false)
+Secret> SecretBuffer("*******")
+```
 """
 function getpass end
 
@@ -338,11 +353,13 @@ function with_raw_tty(f::Function, input::TTY)
     end
 end
 
-function getpass(input::TTY, output::IO, prompt::AbstractString)
+function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bool=true)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     with_raw_tty(stdin) do
-        print(output, prompt, ": ")
+        print(output, prompt)
+        with_suffix && print(output, ": ")
         flush(output)
+
         s = SecretBuffer()
         plen = 0
         while true
@@ -363,7 +380,7 @@ end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
     prompt(message; default="") -> Union{String, Nothing}
@@ -374,7 +391,7 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> your_name = Base.prompt("Enter your name");
@@ -490,8 +507,10 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+
+function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
 
 function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
@@ -511,7 +530,6 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
 _crc32c(x::UInt128, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
@@ -660,7 +678,7 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, revise=false, [seed])
+                  exit_on_error=false, revise=false, propagate_project=true, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
@@ -668,12 +686,14 @@ fails, all remaining tests in other files will still be run; they are otherwise 
 when `exit_on_error == true`.
 If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
 to the standard libraries before running the tests.
+If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
 function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
+                  propagate_project::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
@@ -686,18 +706,18 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
+    ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
+    project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
         buf = PipeBuffer()
-        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        let InteractiveUtils = Base.require(Base, :InteractiveUtils)
+        let InteractiveUtils = Base.require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
             @invokelatest InteractiveUtils.versioninfo(buf)
         end
-        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

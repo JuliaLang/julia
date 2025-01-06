@@ -114,6 +114,7 @@ end
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
         (; exec, flags, env, dir) = cmd
+        flags ⊻= UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME # libuv inverts the default for this, so flip this bit now
         iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},

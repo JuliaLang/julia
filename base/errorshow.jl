@@ -43,6 +43,15 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
+function showerror(io::IO, ex::Core.TypeNameError)
+    print(io, "TypeNameError: ")
+    if isa(ex.a, Union)
+        print(io, "typename does not apply to unions whose components have different typenames")
+    else
+        print(io, "typename does not apply to this type")
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -196,7 +205,7 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
-typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
+typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -273,7 +282,7 @@ function showerror(io::IO, ex::MethodError)
         arg_types_param = arg_types_param[3:end]
         san_arg_types_param = san_arg_types_param[3:end]
         keys = kwt.parameters[1]::Tuple
-        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in 1:length(keys)]
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
         arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -327,10 +336,11 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if !isempty(kwargs)
+            print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
+        end
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
-        else
-            print(io, "\nThis method may not support any kwargs.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
@@ -366,6 +376,12 @@ function showerror(io::IO, ex::MethodError)
     nothing
 end
 
+function showerror(io::IO, exc::FieldError)
+    @nospecialize
+    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
@@ -399,7 +415,7 @@ end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
-function showerror_nostdio(err, msg::AbstractString)
+function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
@@ -421,7 +437,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # functions methods and counting the number of matching arguments.
     f = ex.f
     ft = typeof(f)
-    lines = []
+    lines = String[]
+    line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
@@ -431,7 +448,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !Core.Compiler.has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -512,85 +529,82 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 end
             end
 
-            if right_matches > 0 || length(arg_types_param) < 2
-                if length(t_i) < length(sig)
-                    # If the methods args is longer than input then the method
-                    # arguments is printed as not a match
-                    for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
-                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
-                        if Base.isvarargtype(sigtype)
-                            sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
-                        else
-                            sigstr = (sigtype,)
-                        end
-                        if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(iob, ", ")
-                        end
-                        if k == 1 && Base.isvarargtype(sigtype)
-                            # There wasn't actually a mismatch - the method match failed for
-                            # some other reason, e.g. world age. Just print the sigstr.
-                            print(iob, sigstr...)
-                        elseif get(io, :color, false)::Bool
-                            let sigstr=sigstr
-                                Base.with_output_color(Base.error_color(), iob) do iob
-                                    print(iob, "::", sigstr...)
-                                end
-                            end
-                        else
-                            print(iob, "!Matched::", sigstr...)
-                        end
+            if length(t_i) < length(sig)
+                # If the methods args is longer than input then the method
+                # arguments is printed as not a match
+                for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                    sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
+                    if Base.isvarargtype(sigtype)
+                        sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
+                    else
+                        sigstr = (sigtype,)
                     end
-                end
-                kwords = kwarg_decl(method)
-                if !isempty(kwords)
-                    print(iob, "; ")
-                    join(iob, kwords, ", ")
-                end
-                print(iob, ")")
-                show_method_params(iob0, tv)
-                file, line = updated_methodloc(method)
-                if file === nothing
-                    file = string(method.file)
-                end
-                stacktrace_contract_userdir() && (file = contractuser(file))
-
-                if !isempty(kwargs)::Bool
-                    unexpected = Symbol[]
-                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in kwargs
-                            if !(k::Symbol in kwords)
-                                push!(unexpected, k::Symbol)
+                    if !((min(length(t_i), length(sig)) == 0) && k==1)
+                        print(iob, ", ")
+                    end
+                    if k == 1 && Base.isvarargtype(sigtype)
+                        # There wasn't actually a mismatch - the method match failed for
+                        # some other reason, e.g. world age. Just print the sigstr.
+                        print(iob, sigstr...)
+                    elseif get(io, :color, false)::Bool
+                        let sigstr=sigstr
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::", sigstr...)
                             end
                         end
-                    end
-                    if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
-                        end
+                    else
+                        print(iob, "!Matched::", sigstr...)
                     end
                 end
-                if ex.world < reinterpret(UInt, method.primary_world)
-                    print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > reinterpret(UInt, method.deleted_world)
-                    print(iob, " (method deleted before this world age.)")
-                end
-                println(iob)
-
-                m = parentmodule_before_main(method)
-                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-
-                # TODO: indicate if it's in the wrong world
-                push!(lines, (buf, right_matches))
             end
+            kwords = kwarg_decl(method)
+            if !isempty(kwords)
+                print(iob, "; ")
+                join(iob, kwords, ", ")
+            end
+            print(iob, ")")
+            show_method_params(iob0, tv)
+            file, line = updated_methodloc(method)
+            if file === nothing
+                file = string(method.file)
+            end
+            stacktrace_contract_userdir() && (file = contractuser(file))
+
+            if !isempty(kwargs)::Bool
+                unexpected = Symbol[]
+                if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                    for (k, v) in kwargs
+                        if !(k::Symbol in kwords)
+                            push!(unexpected, k::Symbol)
+                        end
+                    end
+                end
+                if !isempty(unexpected)
+                    Base.with_output_color(Base.error_color(), iob) do iob
+                        plur = length(unexpected) > 1 ? "s" : ""
+                        print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                    end
+                end
+            end
+            if ex.world < reinterpret(UInt, method.primary_world)
+                print(iob, " (method too new to be called from this world context.)")
+            elseif ex.world > reinterpret(UInt, method.deleted_world)
+                print(iob, " (method deleted before this world age.)")
+            end
+            println(iob)
+
+            m = parentmodule_before_main(method)
+            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+            push!(lines, String(take!(buf)))
+            push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             print(io, "\n\nClosest candidates are:")
-            sort!(lines, by = x -> -x[2])
+            permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
                 println(io)
@@ -599,7 +613,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                     break
                 end
                 i += 1
-                print(io, String(take!(line[1])))
+                print(io, line)
             end
             println(io) # extra newline for spacing to stacktrace
         end
@@ -689,7 +703,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
-    for i in 1:length(displayed_stackframes)
+    for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
         print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
@@ -763,7 +777,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
     end
     println(io)
 
@@ -801,7 +815,7 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     # t is a pre-processed backtrace (ref #12856)
-    if t isa Vector{Any}
+    if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
         filtered = t
     else
         filtered = process_backtrace(t)
@@ -836,7 +850,10 @@ function _simplify_include_frames(trace)
     for i in length(trace):-1:1
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
-        if first_ignored === nothing
+        if mod === Base && frame.func === :IncludeInto ||
+           mod === Core && frame.func === :EvalInto
+            kept_frames[i] = false
+        elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
                 # Hide include() machinery by default
                 first_ignored = i
@@ -866,7 +883,7 @@ end
 function _collapse_repeated_frames(trace)
     kept_frames = trues(length(trace))
     last_frame = nothing
-    for i in 1:length(trace)
+    for i in eachindex(trace)
         frame::StackFrame, _ = trace[i]
         if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
             #=
@@ -898,9 +915,9 @@ function _collapse_repeated_frames(trace)
             [3] g(x::Int64) <-- useless
             @ Main ./REPL[1]:1
             =#
-            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
+            m, last_m = StackTraces.frame_method_or_module(frame),
+                        StackTraces.frame_method_or_module(last_frame)
+            if m isa Method && last_m isa Method
                 params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
@@ -911,7 +928,7 @@ function _collapse_repeated_frames(trace)
                 end
                 if length(last_params) > length(params)
                     issame = true
-                    for i = 1:length(params)
+                    for i = eachindex(params)
                         issame &= params[i] == last_params[i]
                     end
                     if issame
@@ -926,7 +943,6 @@ function _collapse_repeated_frames(trace)
     end
     return trace[kept_frames]
 end
-
 
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
@@ -948,9 +964,8 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             if (lkup.from_c && skipC)
                 continue
             end
-            code = lkup.linfo
-            if code isa MethodInstance
-                def = code.def
+            if lkup.linfo isa Union{MethodInstance, CodeInstance}
+                def = StackTraces.frame_method_or_module(lkup)
                 if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
                     # hide kwcall() methods, which are probably internal keyword sorter methods
                     # (we print the internal method instead, after demangling
@@ -1024,11 +1039,36 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# handler for displaying a hint in case the user tries to call setindex! on
+# something that doesn't support it:
+#  - a number (probably attempting to use wrong indexing)
+#    eg: a = [1 2; 3 4]; a[1][2] = 5
+#  - a type (probably tried to initialize without parentheses)
+#    eg: d = Dict; d["key"] = 2
+function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f == setindex!
+        T = arg_types[1]
+        if T <: Number
+            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
+            printstyled(io, "a[1, 2]", color=:cyan)
+            print(io, " rather than a[1][2]")
+        elseif isType(T)
+            Tx = T.parameters[1]
+            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $Tx([...])", color=:cyan)
+            print(io, " rather than d = $Tx")
+        end
+    end
+end
+
+Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
+
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f === +) && all(i -> i <: AbstractString, arg_types)
+    if (ex.f === +) && !isempty(arg_types) && all(i -> i <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
@@ -1036,7 +1076,6 @@ function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
-
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length
@@ -1063,6 +1102,44 @@ end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
+# Display a hint in case the user tries to access non-member fields of container type datastructures
+function fielderror_dict_hint_handler(io, exc)
+    @nospecialize
+    field = exc.field
+    type = exc.type
+    if type <: AbstractDict
+        print(io, "\nDid you mean to access dict values using key: `:$field` ? Consider using indexing syntax ")
+        printstyled(io, "dict[:$(field)]", color=:cyan)
+        println(io)
+    end
+end
+
+Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
+
+function fielderror_listfields_hint_handler(io, exc)
+    fields = fieldnames(exc.type)
+    if isempty(fields)
+        print(io, "; $(nameof(exc.type)) has no fields at all.")
+    else
+        print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
+    end
+    props = _propertynames_bytype(exc.type)
+    isnothing(props) && return
+    props = setdiff(props, fields)
+    isempty(props) && return
+    print(io, "\nAvailable properties: $(join(map(k -> "`$k`", props), ", "))")
+end
+
+function _propertynames_bytype(T::Type)
+    which(propertynames, (T,)) === which(propertynames, (Any,)) && return nothing
+    inferred_names = promote_op(Val∘propertynames, T)
+    inferred_names isa DataType && inferred_names <: Val || return nothing
+    inferred_names = inferred_names.parameters[1]
+    inferred_names isa NTuple{<:Any, Symbol} || return nothing
+    return Symbol[inferred_names[i] for i in 1:length(inferred_names)]
+end
+
+Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

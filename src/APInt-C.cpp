@@ -476,23 +476,23 @@ void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerP
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_8(uint8_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_8(uint8_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_16(uint16_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_16(uint16_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_32(uint32_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_32(uint32_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_64(uint64_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_64(uint64_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
@@ -524,31 +524,31 @@ void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integer
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa) {
+unsigned LLVMPopcount(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countPopulation();
+    return a.popcount();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountr_one(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countTrailingOnes();
+    return a.countr_one();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountr_zero(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countTrailingZeros();
+    return a.countr_zero();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountl_one(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countLeadingOnes();
+    return a.countl_one();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countLeadingZeros();
+    return a.countl_zero();
 }

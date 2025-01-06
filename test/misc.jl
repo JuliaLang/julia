@@ -129,6 +129,46 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -221,12 +261,14 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
+
+@test_throws ConcurrencyViolationError("Cannot yield to currently running task!") yield(current_task())
 
 # issue #41347
 let t = @async 1
     wait(t)
-    @test_throws ErrorException yield(t)
+    @test_throws ConcurrencyViolationError yield(t)
 end
 
 let t = @async error(42)
@@ -289,25 +331,43 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 redirect_stdout(devnull) do # suppress time prints
+
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
+@test @time 1 true
 let msg = "message"
     @test @time msg true
 end
 let foo() = "message"
     @test @time foo() true
 end
+let foo() = 1
+    @test @time foo() true
+end
 
 # Accepted @timev argument formats
 @test @timev true
 @test @timev "message" true
+@test @timev 1 true
 let msg = "message"
     @test @timev msg true
 end
 let foo() = "message"
     @test @timev foo() true
 end
+let foo() = 1
+    @test @timev foo() true
+end
+
+# this is internal, but used for easy testing
+@test sprint(Base.time_print, 1e9) == "  1.000000 seconds"
+@test sprint(Base.time_print, 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true
@@ -500,7 +560,7 @@ struct ambigconvert; end # inject a problematic `convert` method to ensure it st
 Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -540,6 +600,24 @@ end
 
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
+
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^4]
+    @test allequal(summarysize(s) for i in 1:10)
+end
+struct Z53061
+    x::S53061
+    y::Int64
+end
+let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
+    @test allequal(summarysize(z) for i in 1:10)
+    # broken on i868 linux. issue #54895
+    @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
+end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -1133,10 +1211,7 @@ include("testenv.jl")
 
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
-
-    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
-        error("Deprecation test failed, cmd : $cmd")
-    end
+    run(cmd, devnull)
 end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
@@ -1333,9 +1408,10 @@ end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
 
 @testset "exports of modules" begin
-    for (_, mod) in Base.loaded_modules
+    @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
-        for v in names(mod)
+        @testset "$v" for v in names(mod)
+            isdefined(mod, v) || @error "missing $v in $mod"
             @test isdefined(mod, v)
         end
     end
@@ -1410,7 +1486,7 @@ end
 # Test that read fault on a prot-none region does not incorrectly give
 # ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
-let script = :(
+let script = """
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
                                   (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
                                   C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0))
@@ -1420,19 +1496,24 @@ let script = :(
                 println(e)
             end
         end
-    )
+    """
     cmd = if Sys.isunix()
         # Set the maximum core dump size to 0 to keep this expected crash from
         # producing a (and potentially overwriting an existing) core dump file
-        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e '$script'"`
+        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e $(Base.shell_escape(script))"`
     else
-        `$(Base.julia_cmd()) -e '$script'`
+        `$(Base.julia_cmd()) -e $script`
     end
-    @test !success(cmd)
+    p = run(ignorestatus(cmd), devnull, stdout, devnull)
+    if p.termsignal == 0
+        Sys.isunix() ? @test(p.exitcode ∈ (128+7, 128+10, 128+11)) : @test(p.exitcode != 0) # expect SIGBUS (7 on BSDs or 10 on Linux) or SIGSEGV (11)
+    else
+        @test(p.termsignal ∈ (7, 10, 11))
+    end
 end
 
 # issue #41656
-@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
@@ -1491,9 +1572,55 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :Sort, :TTY]
+    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY]
 end
 
 @testset "Base.Libc docstrings" begin
     @test isempty(Docs.undocumented_names(Libc))
+end
+
+@testset "Silenced missed transformations" begin
+    # Ensure the WarnMissedTransformationsPass is not on by default
+    src = """
+        @noinline iteration(i) = (@show(i); return nothing)
+        @eval function loop_unroll_full_fail(N)
+            for i in 1:N
+              iteration(i)
+              \$(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"), 1)))
+          end
+       end
+       loop_unroll_full_fail(3)
+    """
+    out_err = mktemp() do _, f
+        run(`$(Base.julia_cmd()) -e "$src"`, devnull, devnull, f)
+        seekstart(f)
+        read(f, String)
+    end
+    @test !occursin("loop not unrolled", out_err)
+end
+
+let errs = IOBuffer()
+    run(`$(Base.julia_cmd()) -e '
+        using Test
+        @test isdefined(DataType.name.mt, :backedges)
+        Base.Experimental.disable_new_worlds()
+        @test_throws "disable_new_worlds" @eval f() = 1
+        @test !isdefined(DataType.name.mt, :backedges)
+        @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
+        @test 1+1 == 2
+        using Dates
+        '`, devnull, stdout, errs)
+    @test occursin("disable_new_worlds", String(take!(errs)))
+end
+
+@testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
+    for x ∈ ("constprop", "assume_effects")
+        try
+            eval(Meta.parse("Base.@$x :unknown f() = 3"))
+            error("unexpectedly reached")
+        catch e
+            e::LoadError
+            @test e.error isa ArgumentError
+        end
+    end
 end

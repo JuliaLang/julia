@@ -110,26 +110,24 @@ julia> (; t.x)
 """
 Core.NamedTuple
 
-if nameof(@__MODULE__) === :Base
-
-@eval function NamedTuple{names,T}(args::Tuple) where {names, T <: Tuple}
+@eval function (NT::Type{NamedTuple{names,T}})(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names::Tuple)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
     end
     # Note T(args) might not return something of type T; e.g.
     # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
-    $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
+    $(Expr(:splatnew, :NT, :(T(args))))
 end
 
-function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
+function (NT::Type{NamedTuple{names, T}})(nt::NamedTuple) where {names, T <: Tuple}
     if @generated
-        Expr(:new, :(NamedTuple{names, T}),
-             Any[ :(let Tn = fieldtype(T, $n),
+        Expr(:new, :NT,
+             Any[ :(let Tn = fieldtype(NT, $n),
                       ntn = getfield(nt, $(QuoteNode(names[n])))
                       ntn isa Tn ? ntn : convert(Tn, ntn)
                   end) for n in 1:length(names) ]...)
     else
-        NamedTuple{names, T}(map(Fix1(getfield, nt), names))
+        NT(map(Fix1(getfield, nt), names))
     end
 end
 
@@ -145,15 +143,10 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
     end
 end
 
-NamedTuple{names, T}(itr) where {names, T <: Tuple} = NamedTuple{names, T}(T(itr))
-NamedTuple{names}(itr) where {names} = NamedTuple{names}(Tuple(itr))
+(NT::Type{NamedTuple{names, T}})(itr) where {names, T <: Tuple} = NT(T(itr))
+(NT::Type{NamedTuple{names}})(itr) where {names} = NT(Tuple(itr))
 
 NamedTuple(itr) = (; itr...)
-
-# avoids invalidating Union{}(...)
-NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
-
-end # if Base
 
 # Like NamedTuple{names, T} as a constructor, but omits the additional
 # `convert` call, when the types are known to match the fields
@@ -182,10 +175,11 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
-convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = NT(t)
+convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = (@inline NT(t))::NT
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+    NT = NamedTuple{names,T}
+    (@inline NT(nt))::NT
 end
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
@@ -196,7 +190,6 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
     return NT1(T1(nt))::NT1::NT
 end
 
-if nameof(@__MODULE__) === :Base
 Tuple(nt::NamedTuple) = (nt...,)
 (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
@@ -231,7 +224,6 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
-end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
@@ -425,6 +417,24 @@ function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Varar
         A[i] = getfield(a, n)
     end
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
+end
+
+"""
+    delete(a::NamedTuple, field::Symbol)
+
+Construct a new named tuple from `a` by removing the named field.
+
+```jldoctest
+julia> Base.delete((a=1, b=2, c=3), :a)
+(b = 2, c = 3)
+
+julia> Base.delete((a=1, b=2, c=3), :b)
+(a = 1, c = 3)
+```
+"""
+@constprop :aggressive function delete(a::NamedTuple{an}, field::Symbol) where {an}
+    names = diff_names(an, (field,))
+    NamedTuple{names}(a)
 end
 
 """

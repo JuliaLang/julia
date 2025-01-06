@@ -130,7 +130,7 @@ end
 Wrapper for usage with `do` blocks to automatically close the dynamic library once
 control flow leaves the `do` block scope.
 
-# Example
+# Examples
 ```julia
 vendor = dlopen("libblas") do lib
     if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
@@ -234,7 +234,7 @@ end
 
 Get the full path of the library `libname`.
 
-# Example
+# Examples
 ```julia-repl
 julia> dlpath("libjulia")
 ```

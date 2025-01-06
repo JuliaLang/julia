@@ -68,14 +68,11 @@
 // GC_FINAL_STATS prints total GC stats at exit
 // #define GC_FINAL_STATS
 
-// MEMPROFILE prints pool summary statistics after every GC
-//#define MEMPROFILE
+// MEMPROFILE prints pool and large objects summary statistics after every GC
+// #define MEMPROFILE
 
 // GC_TIME prints time taken by each phase of GC
 // #define GC_TIME
-
-// OBJPROFILE counts objects by type
-// #define OBJPROFILE
 
 // pool allocator configuration options
 
@@ -109,12 +106,14 @@
 
 // When not using COPY_STACKS the task-system is less memory efficient so
 // you probably want to choose a smaller default stack size (factor of 8-10)
+#if !defined(JL_STACK_SIZE)
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_STACK_SIZE (64*1024*1024)
 #elif defined(_P64)
-#define JL_STACK_SIZE (4*1024*1024)
+#define JL_STACK_SIZE (8*1024*1024)
 #else
 #define JL_STACK_SIZE (2*1024*1024)
+#endif
 #endif
 
 // allow a suspended Task to restart on a different thread
@@ -137,6 +136,9 @@
 
 // GC threads
 #define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
+
+// heap size hint
+#define HEAP_SIZE_HINT                  "JULIA_HEAP_SIZE_HINT"
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"

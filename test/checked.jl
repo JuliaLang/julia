@@ -330,6 +330,9 @@ end
 
     @test checked_pow(BigInt(2), 2) == BigInt(4)
     @test checked_pow(BigInt(2), 100) == BigInt(1267650600228229401496703205376)
+
+    # Perf test: Make sure BigInts allocs don't scale with the power:
+    @test @allocations(checked_pow(BigInt(2), 2)) ≈ @allocations(checked_pow(BigInt(2), 10000)) rtol=0.9
 end
 
 @testset "Additional tests" begin

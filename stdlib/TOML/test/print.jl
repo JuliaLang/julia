@@ -148,7 +148,7 @@ d = Dict(
     "y" => inline_dict,
     "z" => [1,2,3],
 )
-inline_tables = Base.IdSet{Dict}()
+inline_tables = IdSet{Dict}()
 push!(inline_tables, inline_dict)
 @test toml_str(d; sorted=true, inline_tables) ==
 """
@@ -165,7 +165,7 @@ d = Dict("deps" => Dict(
         "LocalPkg" => Dict("path" => "LocalPkg"),
         "Example" => Dict("url" => "https://github.com/JuliaLang/Example.jl")))
 
-inline_tables = Base.IdSet{Dict}()
+inline_tables = IdSet{Dict}()
 push!(inline_tables, d["sources"]["LocalPkg"])
 push!(inline_tables, d["sources"]["Example"])
 
@@ -180,7 +180,7 @@ Example = {url = "https://github.com/JuliaLang/Example.jl"}
 LocalPkg = {path = "LocalPkg"}
 """
 
-inline_tables = Base.IdSet{Dict}()
+inline_tables = IdSet{Dict}()
 push!(inline_tables, d["sources"]["LocalPkg"])
 s = """
 [deps]
@@ -194,4 +194,14 @@ LocalPkg = {path = "LocalPkg"}
     url = "https://github.com/JuliaLang/Example.jl"
 """
 @test toml_str(d; sorted=true, inline_tables) == s
+@test roundtrip(s)
+
+# multiline strings (#55083)
+s = """
+a = \"\"\"lorem ipsum
+
+
+
+alpha\"\"\"
+"""
 @test roundtrip(s)

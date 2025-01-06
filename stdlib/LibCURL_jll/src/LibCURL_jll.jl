@@ -3,8 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl
 
 baremodule LibCURL_jll
-using Base, Libdl, nghttp2_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
+using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
+if !(Sys.iswindows() || Sys.isapple())
+    # On Windows and macOS we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

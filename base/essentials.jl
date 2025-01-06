@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
@@ -9,7 +9,8 @@ const Bottom = Union{}
 # Define minimal array interface here to help code used in macros:
 length(a::Array{T, 0}) where {T} = 1
 length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array) = getfield(getfield(getfield(a, :ref), :mem), :length)
+length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
+# other sizes are handled by generic prod definition for AbstractArray
 length(a::GenericMemory) = getfield(a, :length)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
@@ -90,9 +91,9 @@ f(y) = [x for x in y]
     standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
     `@nospecialize` to additionally suppress inference.
 
-# Example
+# Examples
 
-```julia
+```julia-repl
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -180,25 +181,11 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
-"""
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+_nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
-    if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
-       nameof(__module__) === :Base
-        return true
-    end
-    return false
+    return _nameof(__module__) === :Base ||
+      _nameof(ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module) === :Compiler
 end
 
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
@@ -212,7 +199,9 @@ macro _total_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -225,7 +214,9 @@ macro _foldable_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -238,7 +229,9 @@ macro _terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
 macro _terminates_globally_meta()
@@ -251,7 +244,9 @@ macro _terminates_globally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
 macro _terminates_globally_notaskstate_meta()
@@ -264,7 +259,9 @@ macro _terminates_globally_notaskstate_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
 macro _terminates_globally_noub_meta()
@@ -277,7 +274,9 @@ macro _terminates_globally_noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -290,7 +289,9 @@ macro _effect_free_terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow :noub` (supposed to be used for bootstrapping)
 macro _nothrow_noub_meta()
@@ -303,7 +304,9 @@ macro _nothrow_noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -316,7 +319,9 @@ macro _nothrow_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _noub_meta()
@@ -329,7 +334,9 @@ macro _noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
 macro _notaskstate_meta()
@@ -342,7 +349,9 @@ macro _notaskstate_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
 macro _noub_if_noinbounds_meta()
@@ -355,7 +364,9 @@ macro _noub_if_noinbounds_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#true))
+        #=:noub_if_noinbounds=#true,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -372,10 +383,23 @@ default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
-function iterate end
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
+
+typeof(function iterate end).name.constprop_heuristic = Core.ITERATE_HEURISTIC
 
 """
     convert(T, x)
@@ -397,8 +421,9 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) type,
-then it will return the closest value to `x` representable by `T`.
+If `T` is a [`AbstractFloat`](@ref) type, then it will return the
+closest value to `x` representable by `T`. Inf is treated as one
+ulp greater than `floatmax(T)` for purposes of determining nearest.
 
 ```jldoctest
 julia> x = 1/3
@@ -442,10 +467,18 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 macro eval(mod, ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 
 # use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
@@ -560,15 +593,7 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
-typename(a) = error("typename does not apply to this type")
-typename(a::DataType) = a.name
-function typename(a::Union)
-    ta = typename(a.a)
-    tb = typename(a.b)
-    ta === tb || error("typename does not apply to unions whose components have different typenames")
-    return tb
-end
-typename(union::UnionAll) = typename(union.body)
+import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
@@ -673,7 +698,7 @@ Change the type-interpretation of the binary data in the isbits value `x`
 to that of the isbits type `Out`.
 The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-[`Float32`](@ref).
+[`Float32`](@ref). Note that `reinterpret(In, reinterpret(Out, x)) === x`
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
@@ -689,11 +714,16 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 (0x0301, 0x02)
 ```
 
+!!! note
+
+    The treatment of padding differs from reinterpret(::DataType, ::AbstractArray).
+
 !!! warning
 
     Use caution if some combinations of bits in `Out` are not considered valid and would
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
+
 """
 function reinterpret(::Type{Out}, x) where {Out}
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
@@ -844,11 +874,11 @@ end
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
-    Only use `@inbounds` when it is certain from the information locally available
-    that all accesses are in bounds. In particular, using `1:length(A)` instead of
-    `eachindex(A)` in a function like the one above is _not_ safely inbounds because
-    the first index of `A` may not be `1` for all user defined types that subtype
-    `AbstractArray`.
+    Only use `@inbounds` when you are certain that all accesses are in bounds (as
+    undefined behavior, e.g. crashes, might occur if this assertion is violated). For
+    example, using `1:length(A)` instead of `eachindex(A)` in a function like
+    the one above is _not_ safely inbounds because the first index of `A` may not
+    be `1` for all user defined types that subtype `AbstractArray`.
 """
 macro inbounds(blk)
     return Expr(:block,
@@ -884,16 +914,16 @@ end
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
     @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
-    memoryrefget(memoryref(getfield(A, :ref), i, false), :not_atomic, false)
+    memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
     @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
-    memoryrefset!(memoryref(getfield(A, :ref), i, false), x, :not_atomic, false)
+    memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(memoryrefnew(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
@@ -1020,6 +1050,7 @@ call obsolete versions of a function `f`.
     Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
@@ -1054,6 +1085,7 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
@@ -1061,6 +1093,12 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
+"""
+    inferencebarrier(x)
+
+A shorthand for `compilerbarrier(:type, x)` causes the type of this statement to be inferred as `Any`.
+See [`Base.compilerbarrier`](@ref) for more info.
+"""
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
@@ -1219,3 +1257,63 @@ that is whether it has an `iterate` method or not.
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
+
+"""
+    @world(sym, world)
+
+Resolve the binding `sym` in world `world`. See [`invoke_in_world`](@ref) for running
+arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the macro
+will error unless the binding is valid and has the same value across the entire world
+range.
+
+The `@world` macro is primarily used in the printing of bindings that are no longer
+available in the current world.
+
+## Example
+```julia-repl
+julia> struct Foo; a::Int; end
+Foo
+
+julia> fold = Foo(1)
+
+julia> Int(Base.get_world_counter())
+26866
+
+julia> struct Foo; a::Int; b::Int end
+Foo
+
+julia> fold
+@world(Foo, 26866)(1)
+```
+
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+"""
+macro world(sym, world)
+    if isa(sym, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
+    elseif isa(sym, GlobalRef)
+        return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(sym))))
+    elseif isa(sym, Expr) && sym.head === :(.) &&
+            length(sym.args) == 2 && isa(sym.args[2], QuoteNode) && isa(sym.args[2].value, Symbol)
+        return :($(_resolve_in_world)($(esc(world)), $(GlobalRef)($(esc(sym.args[1])), $(sym.args[2]))))
+    else
+        error("`@world` requires a symbol or GlobalRef")
+    end
+end
+
+_resolve_in_world(world::Integer, gr::GlobalRef) =
+    invoke_in_world(UInt(world), Core.getglobal, gr.mod, gr.name)
+
+# Special constprop heuristics for various binary opes
+typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function == end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function != end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

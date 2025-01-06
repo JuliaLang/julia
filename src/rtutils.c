@@ -152,9 +152,16 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
     jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
 {
-    jl_errorf("type %s has no field %s", jl_symbol_name(type_name), jl_symbol_name(var));
+    jl_throw(jl_new_struct(jl_fielderror_type, t, var));
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_argument_error(char *str) // == jl_exceptionf(jl_argumenterror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_argumenterror_type, msg));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
@@ -219,14 +226,6 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOT
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
-{
-    jl_datatype_t *eof_error =
-        (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
-    assert(eof_error != NULL);
-    jl_throw(jl_new_struct(eof_error));
-}
-
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 {
     if (!jl_isa(x,t))
@@ -247,17 +246,16 @@ JL_DLLEXPORT void __stack_chk_fail(void)
 
 // exceptions -----------------------------------------------------------------
 
-JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
+JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
     // Must have no safepoint
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
+    eh->scope = ct->scope;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
     eh->world_age = ct->world_age;
-    ct->eh = eh;
 #ifdef ENABLE_TIMINGS
     eh->timing_stack = ct->ptls->timing_stack;
 #endif
@@ -268,9 +266,8 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 // * We leave a try block through normal control flow
 // * An exception causes a nonlocal jump to the catch block. In this case
 //   there's additional cleanup required, eg pushing the exception stack.
-JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
+JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
 #ifdef _OS_WINDOWS_
     if (ct->ptls->needs_resetstkoflw) {
         _resetstkoflw();
@@ -280,10 +277,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     // `eh` may be not equal to `ct->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
-    sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
+    jl_ptls_t ptls = ct->ptls;
+    sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
-    small_arraylist_t *locks = &ct->ptls->locks;
+    ct->scope = eh->scope;
+    small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
         for (size_t i = locks->len; i > eh->locks_len; i--)
@@ -291,41 +290,69 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
     ct->world_age = eh->world_age;
-    ct->ptls->defer_signal = eh->defer_signal;
-    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
+    ptls->defer_signal = eh->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ptls->gc_state);
     if (old_gc_state != eh->gc_state)
-        jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
+        jl_atomic_store_release(&ptls->gc_state, eh->gc_state);
     if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
-        jl_gc_safepoint_(ct->ptls);
+        jl_gc_safepoint_(ptls);
+    jl_value_t *exception = ptls->sig_exception;
+    JL_GC_PROMISE_ROOTED(exception);
+    if (exception) {
+        int8_t oldstate = jl_gc_unsafe_enter(ptls);
+        /* The temporary ptls->bt_data is rooted by special purpose code in the
+        GC. This exists only for the purpose of preserving bt_data until we
+        set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+        ptls->sig_exception = NULL;
+        jl_gc_unsafe_leave(ptls, oldstate);
+    }
     if (old_defer_signal && !eh->defer_signal)
-        jl_sigint_safepoint(ct->ptls);
+        jl_sigint_safepoint(ptls);
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
             unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
     }
 }
 
-JL_DLLEXPORT void jl_pop_handler(int n)
+JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
+    assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
+    ct->scope = eh->scope;
+    ct->eh = eh->prev;
+    ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
+}
+
+JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n)
+{
     if (__unlikely(n <= 0))
         return;
     jl_handler_t *eh = ct->eh;
     while (--n > 0)
         eh = eh->prev;
-    jl_eh_restore_state(eh);
+    jl_eh_restore_state(ct, eh);
 }
 
-JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_pop_handler_noexcept(jl_task_t *ct, int n)
 {
-    jl_task_t *ct = jl_current_task;
+    if (__unlikely(n <= 0))
+        return;
+    jl_handler_t *eh = ct->eh;
+    while (--n > 0)
+        eh = eh->prev;
+    jl_eh_restore_state_noexcept(ct, eh);
+}
+
+JL_DLLEXPORT size_t jl_excstack_state(jl_task_t *ct) JL_NOTSAFEPOINT
+{
     jl_excstack_t *s = ct->excstack;
     return s ? s->top : 0;
 }
 
-JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_restore_excstack(jl_task_t *ct, size_t state) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
     jl_excstack_t *s = ct->excstack;
     if (s) {
         assert(s->top >= state);
@@ -340,28 +367,27 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
     dest->top = src->top;
 }
 
-static void jl_reserve_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                                 size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
-    jl_task_t *ct = jl_current_task;
     jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
     if (s)
         jl_copy_excstack(new_s, s);
     *stack = new_s;
-    jl_gc_wb(task, new_s);
+    jl_gc_wb(ct, new_s);
 }
 
-void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(task, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
@@ -546,20 +572,12 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
     fflush(stderr);
 }
 
-JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
-{
-    if (jl_base_module == NULL)
-        return NULL;
-    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"), 0);
-    return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
-}
-
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
+    return stderr_obj ? jl_get_binding_value_if_resolved(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -654,12 +672,10 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
-            jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
-            // The `||` makes this function work for both function instances and function types.
-            if (bv == v || jl_typeof(bv) == v)
-                return 1;
-        }
+        jl_value_t *bv = jl_get_binding_value_if_resolved_and_const(b);
+        // The `||` makes this function work for both function instances and function types.
+        if (bv && (bv == v || jl_typeof(bv) == v))
+            return 1;
     }
     return 0;
 }
@@ -817,7 +833,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth, ctx);
             n += jl_printf(out, ".<toplevel thunk> -> ");
-            n += jl_static_show_x(out, jl_atomic_load_relaxed(&li->uninferred), depth, ctx);
+            n += jl_static_show_x(out, jl_atomic_load_relaxed(&jl_cached_uninferred(
+                jl_atomic_load_relaxed(&li->cache), 1)->inferred), depth, ctx);
         }
     }
     else if (vt == jl_typename_type) {
@@ -879,6 +896,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, "}");
             }
             return n;
+        }
+        if (jl_genericmemory_type && dv->name == jl_genericmemory_typename) {
+            jl_value_t *isatomic = jl_tparam0(dv);
+            jl_value_t *el_type = jl_tparam1(dv);
+            jl_value_t *addrspace = jl_tparam2(dv);
+            if (isatomic == (jl_value_t*)jl_not_atomic_sym && addrspace && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
+                n += jl_printf(out, "Memory{");
+                n += jl_static_show_x(out, el_type, depth, ctx);
+                n += jl_printf(out, "}");
+                return n;
+            }
         }
         if (ctx.quiet) {
             return jl_static_show_symbol(out, dv->name->name);
@@ -1120,7 +1148,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_genericmemoryref_type && jl_is_genericmemoryref_type(vt)) {
         jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)v;
-        n += jl_printf(out, "MemoryRef(offset=");
+        n += jl_printf(out, "GenericMemoryRef(offset=");
         size_t offset = (size_t)ref->ptr_or_offset;
         if (ref->mem) {
             const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typeof(ref->mem))->layout;
@@ -1133,30 +1161,19 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_genericmemory_type && jl_is_genericmemory_type(vt)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
-        jl_value_t *isatomic = jl_tparam0(vt);
-        jl_value_t *addrspace = jl_tparam2(vt);
-        if (isatomic == (jl_value_t*)jl_not_atomic_sym && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
-            n += jl_printf(out, "Memory{");
-        }
-        else {
-            n += jl_printf(out, "GenericMemory{");
-            n += jl_static_show_x(out, isatomic, depth, ctx);
-            n += jl_printf(out, ", ");
-            n += jl_static_show_x(out, addrspace, depth, ctx);
-            n += jl_printf(out, ", ");
-        }
+        //jl_value_t *isatomic = jl_tparam0(vt);
         jl_value_t *el_type = jl_tparam1(vt);
-        n += jl_static_show_x(out, el_type, depth, ctx);
+        jl_value_t *addrspace = jl_tparam2(vt);
+        n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         size_t j, tlen = m->length;
-        n += jl_printf(out, "}(%" PRIdPTR ", %p)[", tlen, m->ptr);
-//#ifdef _P64
-//        n += jl_printf(out, "0x%016" PRIx64, tlen);
-//#else
-//        n += jl_printf(out, "0x%08" PRIx32, tlen);
-//#endif
+        n += jl_printf(out, "(%" PRIdPTR ", %p)[", tlen, m->ptr);
+        if (!(addrspace && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0)) {
+            n += jl_printf(out, "...]");
+            return n;
+        }
+        const char *typetagdata = NULL;
         const jl_datatype_layout_t *layout = vt->layout;
         int nlsep = 0;
-        const char *typetagdata = NULL;
         if (layout->flags.arrayelem_isboxed) {
             // print arrays with newlines, unless the elements are probably small
             for (j = 0; j < tlen; j++) {
@@ -1408,6 +1425,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
+            ((jl_datatype_t*)ftype)->name->mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
