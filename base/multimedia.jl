@@ -30,7 +30,7 @@ Examples of common media types include `"text/plain"``, `"text/html"``, `"image/
 
 A specific singleton MIME **type** is constructed by passing the MIME string as a symbol,
 e.g. `MIME{Symbol("text/plain")}`.
-The string macro [`@MIME_str`](@ref) allow you to specify `MIME{Symbol("...")}` types more succinctly
+The string macro [`@MIME_str`](@ref) allows `MIME{Symbol("...")}` types to be specified more succinctly
 as `MIME"..."`, for example `MIME"text/plain"`.
 Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
 
@@ -38,8 +38,8 @@ A `MIME` **instance** is created by calling the MIME constructor, either directl
 e.g. `MIME("text/plain")`, or after the string macro, e.g. `MIME"text/plain"()`.
 A `mime::MIME` instance can be passed as the second argument to [`show(io, mime, x)`](@ref)
 to request output in that format (if it is implemented for `x`), as well as to various other functions like
-[`showable`](@ref), [`repr`](@ref), and [`display`](@ref); most such functions also allow you to
-pass a string (e.g. `"text/plain"`) that will be converted to a `MIME` instance for you.
+[`showable`](@ref), [`repr`](@ref), and [`display`](@ref); most such functions also allow
+passing a string (e.g. `"text/plain"`) that will be converted to a `MIME` instance automatically.
 
 # Examples
 ```jldoctest
