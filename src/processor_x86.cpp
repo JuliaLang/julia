@@ -96,6 +96,7 @@ enum class CPU : uint32_t {
     amd_znver2,
     amd_znver3,
     amd_znver4,
+    amd_znver5,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -236,6 +237,7 @@ constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
                                                    avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
+constexpr auto znver5 = znver4 | get_feature_masks(avxvnni, movdiri, movdir64b, avx512vp2intersect, /*prefetchi,*/ avxvnni);
 
 }
 
@@ -298,6 +300,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
     {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
+    {"znver5", CPU::amd_znver5, CPU::amd_znver4, 190000, Feature::znver5},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -575,6 +578,9 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
                 return CPU::amd_znver4;
             }
         return CPU::amd_znver3; // fallback
+    case 26:
+        // if (model <= 0x77)
+        return CPU::amd_znver5;
     }
 }
 
