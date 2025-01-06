@@ -38,8 +38,7 @@ const BLAME_TRACK_COPIES_ANY_COMMIT_COPIES  = Cuint(1 << 3)
 const BLAME_FIRST_PARENT                    = Cuint(1 << 4)
 
 # checkout
-const CHECKOUT_NONE                    = Cuint(0)
-const CHECKOUT_SAFE                    = Cuint(1 << 0)
+const CHECKOUT_SAFE                    = Cuint(0)
 const CHECKOUT_FORCE                   = Cuint(1 << 1)
 const CHECKOUT_RECREATE_MISSING        = Cuint(1 << 2)
 const CHECKOUT_ALLOW_CONFLICTS         = Cuint(1 << 4)
@@ -57,6 +56,7 @@ const CHECKOUT_DONT_OVERWRITE_IGNORED  = Cuint(1 << 19)
 const CHECKOUT_CONFLICT_STYLE_MERGE    = Cuint(1 << 20)
 const CHECKOUT_CONFLICT_STYLE_DIFF3    = Cuint(1 << 21)
 const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
+const CHECKOUT_NONE                    = Cuint(1 << 30)
 
 const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
 const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
