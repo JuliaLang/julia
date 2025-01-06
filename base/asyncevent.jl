@@ -312,7 +312,7 @@ julia> begin
 ```
 """
 function Timer(cb::Function, timeout; spawn::Union{Nothing,Bool}=nothing, kwargs...)
-    sticky = @something !spawn current_task().sticky
+    sticky = spawn === nothing ? current_task().sticky : !spawn
     timer = Timer(timeout; kwargs...)
     t = @task begin
         unpreserve_handle(timer)
