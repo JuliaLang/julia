@@ -3321,7 +3321,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
-    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
     aliasinfo.decorateInst(LI);
     Value *ptr = LI;
     if (AS) {
@@ -3347,7 +3347,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
     return emit_guarded_test(ctx, foreign, t, [&] {
             addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_jlgenericmemory, m, 1);
             LoadInst *owner = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
             ai.decorateInst(owner);
             return ctx.builder.CreateSelect(ctx.builder.CreateIsNull(owner), t, owner);
         });
@@ -4432,6 +4432,105 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
+static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ)
+{
+    auto ptls = get_current_ptls(ctx);
+    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
+    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+    alloc->setAttributes(call->getAttributes());
+    alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
+    call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
+    return alloc;
+}
+
+static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nbytes, Value* nel, int zi)
+{
+    auto arg_typename = [&] JL_NOTSAFEPOINT {
+        std::string type_str;
+        auto eltype = jl_tparam1(typ);
+        if (jl_is_datatype(eltype))
+            type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+        else if (jl_is_uniontype(eltype))
+            type_str = "Union";
+        else
+            type_str = "<unknown type>";
+        return "Memory{" + type_str + "}[]";
+    };
+    setName(ctx.emission_context, alloc, arg_typename);
+    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
+    Value *decay_alloc = decay_derived(ctx, alloc);
+    Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
+    auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
+    auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
+    aliasinfo.decorateInst(len_store);
+    //This avoids the length store from being deleted which is illegal
+    ctx.builder.CreateFence(AtomicOrdering::Release, SyncScope::SingleThread);
+    // zeroinit pointers and unions
+    if (zi) {
+        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(load);
+        auto int8t = getInt8Ty(ctx.builder.getContext());
+        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
+    }
+    return;
+}
+
+
+static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, size_t nel, jl_genericmemory_t *inst)
+{
+    if (nel == 0) {
+        Value *empty_alloc = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)inst));
+        return mark_julia_type(ctx, empty_alloc, true, typ);
+    }
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+    assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)typ)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
+    size_t nbytes;
+    bool overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        overflow |= __builtin_add_overflow(nbytes, nel, &nbytes);
+    }
+    // overflow if signed size is too big or nel is too big (the latter matters iff elsz==0)
+    ssize_t tmp=1;
+    overflow |= __builtin_add_overflow(nel, 1, &tmp) || __builtin_add_overflow(nbytes, 1, &tmp);
+    if (overflow)
+        emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
+
+    auto T_size = ctx.types().T_size;
+    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
+    auto cg_nbytes = ConstantInt::get(T_size, nbytes);
+    auto cg_nel = ConstantInt::get(T_size, nel);
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+    // if allocation fits within GC pools
+    int pooled = tot <= GC_MAX_SZCLASS;
+    Value *alloc, *decay_alloc, *memory_ptr;
+    jl_aliasinfo_t aliasinfo;
+    if (pooled) {
+        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT);
+        decay_alloc = decay_derived(ctx, alloc);
+        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        setName(ctx.emission_context, memory_ptr, "memory_ptr");
+        auto objref = emit_pointer_from_objref(ctx, alloc);
+        Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
+        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(store);
+        setName(ctx.emission_context, memory_data, "memory_data");
+    } else { // just use the dynamic length version since the malloc will be slow anyway
+        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ);
+    }
+    emit_memory_zeroinit_and_stores(ctx, typ, alloc, cg_nbytes, cg_nel, zi);
+    return mark_julia_type(ctx, alloc, true, typ);
+}
+
 static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
 {
     emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
@@ -4448,9 +4547,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     if (isboxed)
         elsz = sizeof(void*);
 
-    auto ptls = get_current_ptls(ctx);
     auto T_size = ctx.types().T_size;
-    auto int8t = getInt8Ty(ctx.builder.getContext());
     BasicBlock *emptymemBB, *nonemptymemBB, *retvalBB;
     emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
     nonemptymemBB = BasicBlock::Create(ctx.builder.getContext(), "nonemptymem");
@@ -4466,18 +4563,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(nonemptymemBB);
-    // else actually allocate mem
-    auto arg_typename = [&] JL_NOTSAFEPOINT {
-        std::string type_str;
-        auto eltype = jl_tparam1(typ);
-        if (jl_is_datatype(eltype))
-            type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
-        else if (jl_is_uniontype(eltype))
-            type_str = "Union";
-        else
-            type_str = "<unknown type>";
-        return "Memory{" + type_str + "}[]";
-    };
+
     auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
     auto cg_elsz = ConstantInt::get(T_size, elsz);
 
@@ -4501,27 +4587,10 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     overflow = ctx.builder.CreateOr(overflow, tobignel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);
     error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
-    // actually allocate
-    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-    Value *alloc = ctx.builder.CreateCall(call, { ptls, nbytes, cg_typ});
-    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
-    Value *decay_alloc = decay_derived(ctx, alloc);
-    Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
-    auto len_store = ctx.builder.CreateAlignedStore(nel_unboxed, len_field, Align(sizeof(void*)));
-    auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
-    aliasinfo.decorateInst(len_store);
-    //This avoids the length store from being deleted which is illegal
-    ctx.builder.CreateFence(AtomicOrdering::Release, SyncScope::SingleThread);
-    // zeroinit pointers and unions
-    if (zi) {
-        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
-        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
-        aliasinfo.decorateInst(load);
-        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
-    }
+    // actually allocate the memory
 
-    setName(ctx.emission_context, alloc, arg_typename);
+    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ);
+    emit_memory_zeroinit_and_stores(ctx, typ, alloc, nbytes, nel_unboxed, zi);
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB = ctx.builder.GetInsertBlock();
     // phi node to choose which side of branch
