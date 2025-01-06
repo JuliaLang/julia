@@ -17,6 +17,12 @@ New language features
   - atomic set once (`@atomiconce v[3] = 2`),
   - atomic swap (`x = @atomicswap v[3] = 2`), and
   - atomic replace (`x = @atomicreplace v[3] 2=>5`).
+- New option `--task-metrics=yes` to enable the collection of per-task timing information,
+  which can also be enabled/disabled at runtime with `Base.Experimental.task_metrics(::Bool)`. ([#56320])
+  The available metrics are:
+  - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
+  - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
+- Support for Unicode 16 ([#56925]).
 
 Language changes
 ----------------
@@ -31,7 +37,7 @@ Language changes
    may pave the way for inference to be able to intelligently re-use the old
    results, once the new method is deleted. ([#53415])
 
- - Macro expansion will no longer eagerly recurse into into `Expr(:toplevel)`
+ - Macro expansion will no longer eagerly recurse into `Expr(:toplevel)`
    expressions returned from macros. Instead, macro expansion of `:toplevel`
    expressions will be delayed until evaluation time. This allows a later
    expression within a given `:toplevel` expression to make use of macros
@@ -40,6 +46,9 @@ Language changes
  - Trivial infinite loops (like `while true; end`) are no longer undefined
    behavior. Infinite loops that actually do things (e.g. have side effects
    or sleep) were never and are still not undefined behavior. ([#52999])
+
+ - It is now an error to mark a symbol as both `public` and `export`ed.
+   ([#53664])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -106,6 +115,7 @@ New library features
 * `Timer` now has a `spawn` kwarg to allow spawning the timer task, to avoid the Task stickiness issue ([#56745])
 * `invoke` now supports passing a CodeInstance instead of a type, which can enable
 certain compiler plugin workflows ([#56660]).
+* `sort` now supports `NTuple`s ([#54494])
 
 Standard library changes
 ------------------------
@@ -167,12 +177,22 @@ Standard library changes
   in the REPL will now issue a warning the first time occurs. ([#54872])
 - When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
   This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
+- Backslash completions now print the respective glyph or emoji next to each matching backslash shortcode. ([#54800])
 
 #### SuiteSparse
 
 #### SparseArrays
 
 #### Test
+
+* A failing `DefaultTestSet` now prints to screen the random number generator (RNG) of the failed test, to help reproducing a stochastic failure which only depends on the state of the RNG.
+  It is also possible seed a test set by passing the `rng` keyword argument to `@testset`:
+  ```julia
+  using Test, Random
+  @testset rng=Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850) begin
+      @test rand() == 0.559472630416976
+  end
+  ```
 
 #### Dates
 

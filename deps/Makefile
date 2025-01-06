@@ -22,9 +22,9 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl openssl
 # custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
-# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls libtracyclient
+# CMake libs: llvm llvmunwind libgit2 libssh2 libtracyclient
 #
 # downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2, libtracyclient
 #
@@ -119,8 +119,8 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-DEP_LIBS += mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+DEP_LIBS += openssl
 endif
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
@@ -200,7 +200,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
 	terminfo
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
@@ -256,7 +256,7 @@ include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
-include $(SRCDIR)/mbedtls.mk
+include $(SRCDIR)/openssl.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk

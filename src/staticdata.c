@@ -101,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    193
+#define NUM_TAGS    195
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -216,6 +216,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
         INSERT_TAG(jl_debuginfo_type);
+        INSERT_TAG(jl_abioverride_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -290,6 +291,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_replacefield);
         INSERT_TAG(jl_builtin_setfieldonce);
         INSERT_TAG(jl_builtin_fieldtype);
+        INSERT_TAG(jl_builtin_memorynew);
         INSERT_TAG(jl_builtin_memoryref);
         INSERT_TAG(jl_builtin_memoryrefoffset);
         INSERT_TAG(jl_builtin_memoryrefget);
@@ -508,7 +510,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
-    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
+    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
     &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryref_isassigned,
     &jl_f_memoryrefset,  &jl_f_memoryrefswap, &jl_f_memoryrefmodify, &jl_f_memoryrefreplace, &jl_f_memoryrefsetonce,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
@@ -769,6 +771,16 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
+           ((effects >> 6) & 0x01); // is_terminates(effects)
+}
+
+
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
@@ -898,18 +910,35 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
         // make sure we don't serialize other reachable cache entries of foreign methods
         // Should this now be:
         // if (ci !in ci->defs->cache)
         //     record_field_change((jl_value_t**)&ci->next, NULL);
         // Why are we checking that the method/module this originates from is in_image?
         // and then disconnect this CI?
-        if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
+        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
-        if (jl_atomic_load_relaxed(&ci->inferred) && !is_relocatable_ci(&relocatable_ext_cis, ci))
-            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
+                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+            else if (jl_is_method(mi->def.method) && // don't delete toplevel code
+                     mi->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (native_functions && // don't delete any code if making a ji file
+                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
+                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
+                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+            }
+        }
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
@@ -1782,7 +1811,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     fptr_id = JL_API_CONST;
                 }
                 else {
-                    if (jl_is_method(ci->def->def.method)) {
+                    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
                         builtin_id = jl_fptr_id(jl_atomic_load_relaxed(&ci->specptr.fptr));
                         if (builtin_id) { // found in the table of builtins
                             assert(builtin_id >= 2);
@@ -2325,9 +2354,9 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+            assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst->def;     // now it's a MethodInstance
+            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
