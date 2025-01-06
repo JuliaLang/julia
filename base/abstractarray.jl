@@ -3398,9 +3398,9 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 ## 1 argument
 
-function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    for (i,j) in zip(eachindex(dest),eachindex(A))
-        val = f(@inbounds A[j])
+function map!(f::F, dest::AbstractArray, itr) where F
+    for (i,v) in zip(eachindex(dest),itr)
+        val = f(v)
         @inbounds dest[i] = val
     end
     return dest
@@ -3443,9 +3443,8 @@ map(f, ::AbstractDict) = error("map is not defined on dictionaries")
 map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
-function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        @inbounds a, b = A[j], B[k]
+function map!(f::F, dest::AbstractArray, itr_a, itr_b) where F
+    for (i, a, b) in zip(eachindex(dest), itr_a, itr_b)
         val = f(a, b)
         @inbounds dest[i] = val
     end
@@ -3461,8 +3460,8 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
+    idxs1 = LinearIndices(eachindex(As[1]))
+    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(eachindex(x)) == idxs1, As)
     for i = idxs1
         @inbounds I = ith_all(i, As)
         val = f(I...)
@@ -3502,7 +3501,7 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
    0
 ```
 """
-function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+function map!(f::F, dest::AbstractArray, As...) where {F}
     isempty(As) && throw(ArgumentError(
         """map! requires at least one "source" argument"""))
     map_n!(f, dest, As)
