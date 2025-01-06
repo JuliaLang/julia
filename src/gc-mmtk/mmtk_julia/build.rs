@@ -9,42 +9,48 @@ fn main() {
     let mmtk_dir_key = "MMTK_JULIA_DIR";
     let buildroot_dir_key = "JULIA_BUILDROOT";
 
-    let (mmtk_dir, julia_dir) = match (std::env::var(mmtk_dir_key), std::env::var(julia_dir_key)) {
-        (Ok(mmtk_val), Ok(julia_val)) => (mmtk_val, julia_val),
-        _ => panic!("Must set {} and {}", julia_dir_key, mmtk_dir_key),
+    let mmtk_dir = match std::env::var(mmtk_dir_key) {
+        Ok(mmtk_val) => mmtk_val,
+        _ => format!(".."),
     };
 
-    // A build call from Julia's Makefile may build into a different directory
-    // e.g., via make O=/path-to-my-build/my-julia-build
-    // Check if JULIA_BUILD_ROOT is set and use it, otherwise, set it as the same dir as JULIA_PATH
-    let buildroot_dir = match std::env::var(buildroot_dir_key) {
-        Ok(buildroot_val) => buildroot_val,
-        _ => julia_dir.clone(),
-    };
-
-    // running `make julia_version.h` in $JULIA_PATH/src to generate julia_version.h
-    if !Path::new(format!("{}/src/julia_version.h", buildroot_dir).as_str()).exists() {
-        std::process::Command::new("make")
-            .current_dir(format!("{}/src", julia_dir))
-            .env("BUILDDIR", buildroot_dir.clone())
-            .args(["julia_version.h"])
-            .output()
-            .expect("failed to execute process");
-    }
-
-    // runing `make` in $JULIA_PATH/deps to generate $JULIA_PATH/usr/include, in particular libunwind.h
-    // skip this process if that path already exists since
-    // the .h files could have already beeen generated when building via Makefile
-    if !Path::new(format!("{}/usr/include", buildroot_dir).as_str()).exists() {
-        std::process::Command::new("make")
-            .current_dir(format!("{}/deps", julia_dir))
-            .env("BUILDDIR", buildroot_dir.clone())
-            .env("MMTK_PLAN", "None") // Make sure this call doesn't try to compile the binding again
-            .output()
-            .expect("failed to execute process");
-    }
-
+    // If bindings file already exists, no need to do anything
     if !Path::new(format!("{}/mmtk/src/julia_types.rs", mmtk_dir).as_str()).exists() {
+        let julia_dir = match std::env::var(julia_dir_key) {
+            Ok(julia_val) => julia_val,
+            _ => panic!("Must set {}", julia_dir_key),
+        };
+
+        // A build call from Julia's Makefile may build into a different directory
+        // e.g., via make O=/path-to-my-build/my-julia-build
+        // Check if JULIA_BUILD_ROOT is set and use it, otherwise, set it as the same dir as JULIA_PATH
+        let buildroot_dir = match std::env::var(buildroot_dir_key) {
+            Ok(buildroot_val) => buildroot_val,
+            _ => julia_dir.clone(),
+        };
+
+        // running `make julia_version.h` in $JULIA_PATH/src to generate julia_version.h
+        if !Path::new(format!("{}/src/julia_version.h", buildroot_dir).as_str()).exists() {
+            std::process::Command::new("make")
+                .current_dir(format!("{}/src", julia_dir))
+                .env("BUILDDIR", buildroot_dir.clone())
+                .args(["julia_version.h"])
+                .output()
+                .expect("failed to execute process");
+        }
+
+        // runing `make` in $JULIA_PATH/deps to generate $JULIA_PATH/usr/include, in particular libunwind.h
+        // skip this process if that path already exists since
+        // the .h files could have already beeen generated when building via Makefile
+        if !Path::new(format!("{}/usr/include", buildroot_dir).as_str()).exists() {
+            std::process::Command::new("make")
+                .current_dir(format!("{}/deps", julia_dir))
+                .env("BUILDDIR", buildroot_dir.clone())
+                .env("MMTK_PLAN", "None") // Make sure this call doesn't try to compile the binding again
+                .output()
+                .expect("failed to execute process");
+        }
+
         let bindings = bindgen::Builder::default()
             .header(format!("{}/src/julia.h", julia_dir))
             .header(format!("{}/src/julia_internal.h", julia_dir))
