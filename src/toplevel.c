@@ -640,7 +640,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instan
     jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
-        0, NULL, 1, NULL, NULL);
+        0, NULL, NULL, NULL);
     return ci;
 }
 

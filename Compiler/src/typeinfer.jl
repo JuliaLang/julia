@@ -120,7 +120,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         end
         inferred_result = nothing
         uncompressed = inferred_result
-        relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
@@ -139,22 +138,14 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
                 inferred_result = nothing
-            else
-                relocatability = 0x0
-            end
-            if isa(inferred_result, String)
-                t = @_gc_preserve_begin inferred_result
-                relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
-                @_gc_preserve_end t
             end
         end
-        # n.b. relocatability = !isa(inferred_result, String) || inferred_result[end]
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, relocatability, di, edges)
+            result.analysis_results, di, edges)
         engine_reject(interp, ci)
         if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
@@ -176,7 +167,6 @@ end
 function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance, src::CodeInfo)
     user_edges = src.edges
     edges = user_edges isa SimpleVector ? user_edges : user_edges === nothing ? Core.svec() : Core.svec(user_edges...)
-    relocatability = 0x1
     const_flag = false
     di = src.debuginfo
     rettype = Any
@@ -196,8 +186,8 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         ci, rettype, exctype, nothing, const_flags, min_world, max_world, ipo_effects, nothing, di, edges)
-    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
-        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, relocatability, di, edges)
+    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
     code_cache(interp)[mi] = ci
     if isdefined(interp, :codegen)
         interp.codegen[ci] = src
@@ -523,7 +513,6 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             rettype_const = nothing
             const_flags = 0x0
         end
-        relocatability = 0x1
         di = nothing
         edges = empty_edges # `edges` will be updated within `finish!`
         ci = result.ci
@@ -827,7 +816,7 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
         end
     end
     ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
-        min_world, max_world, zero(UInt32), nothing, zero(UInt8), nothing, edges)
+        min_world, max_world, zero(UInt32), nothing, nothing, edges)
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
