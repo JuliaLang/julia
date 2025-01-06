@@ -3,7 +3,8 @@ name: Stdlib Manifest is up-to-date
 on:
   pull_request:
     paths:
-      - 'stdlib/**'
+      - 'stdlib/*.version'
+      - 'stdlib/*/Project.toml'
 
 permissions: {}
 
