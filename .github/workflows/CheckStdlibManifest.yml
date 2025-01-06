@@ -1,0 +1,33 @@
+name: Stdlib Manifest is up-to-date
+
+on:
+  pull_request:
+    paths:
+      - 'stdlib/**'
+
+permissions: {}
+
+jobs:
+  check_stdlib_manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: julia-actions/setup-julia@5c9647d97b78a5debe5164e9eec09d653d29bd71 # v2.6.1
+        with:
+          version: 'nightly'
+      - uses: julia-actions/cache@824243901fb567ccb490b0d0e2483ccecde46834 # v2.0.5
+      - name: 'Update stdlib manifest'
+        shell: julia --project=stdlib --color=yes {0}
+        run: |
+          using Pkg
+          Pkg.Registry.add("General")
+          Pkg.resolve()
+      - name: 'Summary'
+        run: |
+          if ! git diff-index --quiet HEAD -- stdlib/Manifest.toml; then
+              echo "stdlib/Manifest.toml is not up-to-date"
+              echo "Update it with the command"
+              echo "    ./julia --project=stdlib -e 'using Pkg; Pkg.resolve()'"
+              exit 1
+          fi
