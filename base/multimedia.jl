@@ -27,7 +27,6 @@ Each media type is defined as a string in the form `"<type>/<subtype>"`.
 There are over one thousand official media types, along with innumerable unofficial application-specific
 types (though in practice only a few are usually supported in any given `display` environment).
 Examples of common media types include `"text/plain"``, `"text/html"``, `"image/jpeg"``, `"video/mpeg"``.
-Unofficial custom MIMEs are also supported.
 
 A specific singleton MIME **type** is constructed by passing the MIME string as a symbol,
 e.g. `MIME{Symbol("text/plain")}`.
