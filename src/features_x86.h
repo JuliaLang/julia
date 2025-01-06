@@ -127,7 +127,7 @@ JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 JL_FEATURE_DEF(cmpccxadd, 32 * 9 + 7, 160000)
 JL_FEATURE_DEF_NAME(amx_fp16, 32 * 9 + 21, 160000, "amx-fp16")
 JL_FEATURE_DEF(hreset, 32 * 9 + 22, 160000)
-JL_FEATURE_DEF(avxifma, 32 * 9 * 23, 160000)
+JL_FEATURE_DEF(avxifma, 32 * 9 + 23, 160000)
 
 // EAX=7,ECX=1: EBX
 JL_FEATURE_DEF(avxvnniint8, 32 * 10 + 4, 160000)
