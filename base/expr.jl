@@ -401,13 +401,14 @@ macro constprop(setting)
 end
 
 function constprop_setting(@nospecialize setting)
+    s = setting
     isa(setting, QuoteNode) && (setting = setting.value)
     if setting === :aggressive
         return :aggressive_constprop
     elseif setting === :none
         return :no_constprop
     end
-    throw(ArgumentError(LazyString("@constprop "), setting, "not supported"))
+    throw(ArgumentError(LazyString("`Base.@constprop ", s, "` not supported")))
 end
 
 """
