@@ -423,7 +423,7 @@ STATIC_INLINE void jl_batch_accum_free_size(jl_ptls_t ptls, uint64_t sz) JL_NOTS
 
 // big value list
 
-// Size includes the tag and the tag is not cleared!!
+// Size includes the tag and the tag field is undefined on return (must be set before the next GC safepoint)
 STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
 {
     maybe_collect(ptls);
@@ -448,6 +448,9 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
     memset(v, 0xee, allocsz);
 #endif
     v->sz = allocsz;
+#ifndef NDEBUG
+    v->header = 0; // must be initialized (and not gc_bigval_sentinel_tag) or gc_big_object_link assertions will get confused
+#endif
     gc_big_object_link(ptls->gc_tls.heap.young_generation_of_bigvals, v);
     return jl_valueof(&v->header);
 }
