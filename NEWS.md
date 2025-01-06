@@ -112,6 +112,8 @@ New library features
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 * `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
 * `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
+* `Timer(f, ...)` will now match the stickiness of the parent task when creating timer tasks, which can be overridden
+  by the new `spawn` kwarg. This avoids the issue where sticky tasks i.e. `@async` make their parent sticky ([#56745])
 * `invoke` now supports passing a CodeInstance instead of a type, which can enable
 certain compiler plugin workflows ([#56660]).
 * `sort` now supports `NTuple`s ([#54494])
