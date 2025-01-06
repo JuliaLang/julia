@@ -145,6 +145,7 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     token = unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
+    waiter_left = Threads.Atomic{Bool}(false)
     if timeout > 0.0
         timer = Timer(timeout)
         # start a task to wait on the timer
@@ -160,7 +161,7 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
             # Confirm that the waiting task is still in the wait queue and remove it. If
             # the task is not in the wait queue, it must have been notified already so we
             # don't do anything here.
-            if ct.queue == c.waitq
+            if !waiter_left[] && ct.queue == c.waitq
                 dosched = true
                 Base.list_deletefirst!(c.waitq, ct)
             end
@@ -174,7 +175,10 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
 
     try
         res = wait()
-        timer === nothing || close(timer)
+        if timer !== nothing
+            close(timer)
+            waiter_left[] = true
+        end
         return res
     catch
         q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
