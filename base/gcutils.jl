@@ -149,7 +149,7 @@ enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
     GC.enable_finalizers(on::Bool)
 
 Increment or decrement the counter that controls the running of finalizers on
-the current Task. Finalizers will only run when the counter is at zero. (Set
+the current thread. Finalizers will only run when the counter is at zero. (Set
 `true` for enabling, `false` for disabling). They may still run concurrently on
 another Task or thread.
 """
