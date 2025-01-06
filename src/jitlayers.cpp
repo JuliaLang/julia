@@ -301,32 +301,6 @@ static void finish_params(Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOIN
     }
 }
 
-// look for something with an egal ABI that is already in the JIT
-static jl_code_instance_t *jl_method_compiled_egal(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    jl_value_t *def = ci->def;
-    jl_method_instance_t *mi = jl_get_ci_mi(ci);
-    jl_value_t *owner = ci->owner;
-    jl_value_t *rettype = ci->rettype;
-    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
-    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-    while (codeinst) {
-        if (codeinst != ci &&
-            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->invoke) != NULL &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
-            jl_egal(codeinst->def, def) &&
-            jl_egal(codeinst->owner, owner) &&
-            jl_egal(codeinst->rettype, rettype)) {
-            return codeinst;
-        }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
-    }
-    return codeinst;
-}
-
 static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t &params, bool forceall=false) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     jl_task_t *ct = jl_current_task;
@@ -377,8 +351,8 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         }
         if (preal_decl.empty()) {
             // there may be an equivalent method already compiled (or at least registered with the JIT to compile), in which case we should be using that instead
-            jl_code_instance_t *compiled_ci = jl_method_compiled_egal(codeinst);
-            if (compiled_ci) {
+            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 1);
+            if ((jl_value_t*)compiled_ci != jl_nothing) {
                 codeinst = compiled_ci;
                 uint8_t specsigflags;
                 void *fptr;
