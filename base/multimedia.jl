@@ -34,7 +34,7 @@ The string macro [`@MIME_str`](@ref) allow you to specify `MIME{Symbol("...")}` 
 as `MIME"..."`, for example `MIME"text/plain"`.
 Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
 
-A `MIME` **object** is created by calling the MIME constructor, either directly,
+A `MIME` **instance** is created by calling the MIME constructor, either directly,
 e.g. `MIME("text/plain")`, or after the string macro, e.g. `MIME"text/plain"()`.
 A `mime::MIME` instance can be passed as the second argument to [`show(io, mime, x)`](@ref)
 to request output in that format (if it is implemented for `x`), as well as to various other functions like
