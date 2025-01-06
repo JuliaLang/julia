@@ -36,8 +36,10 @@ Singleton MIME types can be used to add new methods to the [`show`](@ref) functi
 
 A `MIME` **object** is created by calling the MIME constructor, either directly,
 e.g. `MIME("text/plain")`, or after the string macro, e.g. `MIME"text/plain"()`.
-A `MIME` object can be passed as the second argument to [`show`](@ref)
-to request output in that format.
+A `mime::MIME` instance can be passed as the second argument to [`show(io, mime, x)`](@ref)
+to request output in that format (if it is implemented for `x`), as well as to various other functions like
+[`showable`](@ref), [`repr`](@ref), and [`display`](@ref); most such functions also allow you to
+pass a string (e.g. `"text/plain"`) that will be converted to a `MIME` instance for you.
 
 # Examples
 ```jldoctest
