@@ -623,7 +623,7 @@ typedef struct _jl_weakref_t {
 
 // N.B: Needs to be synced with runtime_internals.jl
 enum jl_partition_kind {
-    // Constant: This binding partition is a constant declared using `const`
+    // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
     BINDING_KIND_CONST        = 0x0,
     // Import Constant: This binding partition is a constant declared using `import A`
@@ -649,7 +649,11 @@ enum jl_partition_kind {
     BINDING_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
     //  ->restriction is NULL.
-    BINDING_KIND_GUARD        = 0x8
+    BINDING_KIND_GUARD        = 0x8,
+    // Undef Constant: This binding partition is a constant declared using `const`, but
+    // without a value.
+    //  ->restriction is NULL
+    BINDING_KIND_UNDEF_CONST  = 0x9
 };
 
 #ifdef _P64
