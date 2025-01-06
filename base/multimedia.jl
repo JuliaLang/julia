@@ -52,9 +52,7 @@ julia> struct MyType
            val
        end
 
-julia> import Base.show
-
-julia> show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My Value is ", x.val);
+julia> Base.show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My Value is ", x.val);
 
 julia> show(stdout, MIME"text/plain"(), MyType(5))
 My Value is 5
