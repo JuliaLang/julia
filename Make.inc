@@ -486,11 +486,15 @@ endif
 # Set to 1 to enable profiling with perf
 ifeq ("$(OS)", "Linux")
 USE_PERF_JITEVENTS ?= 1
+ifeq ($(ARCH),x86_64)
 USE_INTEL_JITEVENTS ?= 1
-else
+else # ARCH x86_64
+USE_INTEL_JITEVENTS ?= 0
+endif # ARCH x86_64
+else # OS Linux
 USE_PERF_JITEVENTS ?= 0
 USE_INTEL_JITEVENTS ?= 0
-endif
+endif # OS Linux
 
 JULIACODEGEN := LLVM
 
