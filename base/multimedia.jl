@@ -30,8 +30,8 @@ Examples of common media types include `"text/plain"``, `"text/html"``, `"image/
 
 A specific singleton MIME **type** is constructed by passing the MIME string as a symbol,
 e.g. `MIME{Symbol("text/plain")}`.
-[`@MIME_str`](@ref) is defined to simplify creation of singleton types in this way,
-e.g. `MIME"text/plain"`.
+The string macro [`@MIME_str`](@ref) allow you to specify `MIME{Symbol("...")}` types more succinctly
+as `MIME"..."`, for example `MIME"text/plain"`.
 Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
 
 A `MIME` **object** is created by calling the MIME constructor, either directly,
