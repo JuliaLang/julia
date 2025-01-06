@@ -2,7 +2,7 @@
 
 julia_version = "1.12.0-DEV"
 manifest_format = "2.0"
-project_hash = "d3a1f6b706609fe0c59521e1d770be6e2b8c489d"
+project_hash = "1cb1aede0b4f0a2f12806233b9f188a63d6acf04"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -58,7 +58,7 @@ version = "1.11.0"
 [[deps.GMP_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
-version = "6.3.0+1"
+version = "6.3.0+2"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -78,7 +78,7 @@ version = "18.1.7+3"
 [[deps.LLVMLibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "47c5dbc3-30ba-59ef-96a6-123e260183d9"
-version = "12.0.1+0"
+version = "19.1.4+0"
 
 [[deps.LazyArtifacts]]
 deps = ["Artifacts", "Pkg"]
@@ -108,12 +108,12 @@ version = "1.9.0+0"
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "OpenSSL_jll"]
 uuid = "29816b5a-b9ab-546f-933c-edad1886dfa8"
-version = "1.11.3+0"
+version = "1.11.3+1"
 
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+19"
+version = "2.0.1+20"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -149,11 +149,11 @@ version = "1.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2024.3.11"
+version = "2024.11.26"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
-version = "1.2.0"
+version = "1.3.0"
 
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
@@ -163,17 +163,17 @@ version = "0.3.28+3"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.1+3"
+version = "0.8.4+1"
 
 [[deps.OpenSSL_jll]]
-deps = ["Artifacts", "Libdl", "NetworkOptions"]
+deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "3.0.15+1"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
-version = "10.43.0+1"
+version = "10.44.0+1"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -272,12 +272,12 @@ version = "1.11.0"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.3.1+1"
+version = "1.3.1+2"
 
 [[deps.dSFMT_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05ff407c-b0c1-5878-9df8-858cc2e60c36"
-version = "2.2.5+1"
+version = "2.2.5+2"
 
 [[deps.libLLVM_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -287,7 +287,7 @@ version = "18.1.7+3"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.11.0+0"
+version = "5.12.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -297,4 +297,4 @@ version = "1.64.0+1"
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-version = "17.5.0+1"
+version = "17.5.0+2"
