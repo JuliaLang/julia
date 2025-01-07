@@ -290,7 +290,11 @@ retry:
             if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
                 check_safe_newbinding(m, var);
                 if (!alloc)
-                    jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+                    jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                              "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                              "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                              jl_symbol_name(m->name), jl_symbol_name(var),
+                              jl_symbol_name(var), jl_symbol_name(m->name));
             }
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
