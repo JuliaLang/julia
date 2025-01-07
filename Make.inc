@@ -80,6 +80,9 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
+# Use stock if MMTK_PLAN hasn't been defined
+MMTK_PLAN ?= None
+
 # Enable DTrace support
 WITH_DTRACE := 0
 
@@ -833,6 +836,31 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
+ifneq (${MMTK_PLAN},None)
+JCXXFLAGS += -DMMTK_GC
+JCFLAGS += -DMMTK_GC
+# Do a release build on the binding by default
+MMTK_BUILD ?= release
+ifeq (${MMTK_PLAN},Immix)
+JCXXFLAGS += -DMMTK_PLAN_IMMIX
+JCFLAGS += -DMMTK_PLAN_IMMIX
+else
+$(error "Unsupported MMTk plan: $(MMTK_PLAN)")
+endif
+
+# Location of mmtk-julia binding
+# (needed for api/*.h and .so file)
+MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
+
+MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
+MMTK_API_INC = ${MMTK_DIR}/api
+
+MMTK_LIB := -lmmtk_julia
+else
+MMTK_JULIA_INC :=
+MMTK_LIB :=
+endif
+
 ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
@@ -931,6 +959,21 @@ endif
 ifeq ($(BUILD_OS),$(OS))
 ARCH := $(BUILD_OS)
 endif
+endif
+
+# MMTk is only available on x86_64 Linux for now
+ifneq (${MMTK_PLAN},None)
+
+ifeq ($(OS),Linux)
+MMTK_LIB_NAME := libmmtk_julia.so
+else
+$(error "Unsupported OS for MMTk")
+endif
+
+ifneq ($(ARCH),x86_64)
+$(error "Unsupported build architecture for MMTk")
+endif
+
 endif
 
 # Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
