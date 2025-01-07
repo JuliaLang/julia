@@ -16,6 +16,8 @@ export quot,
        show_sexpr,
        @dump
 
+public parse
+
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
 
