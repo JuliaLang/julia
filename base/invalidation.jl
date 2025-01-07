@@ -9,7 +9,7 @@ globalrefs(mod::Module) = GlobalRefIterator(mod)
 function iterate(gri::GlobalRefIterator, i = 1)
     m = gri.mod
     table = ccall(:jl_module_get_bindings, Ref{SimpleVector}, (Any,), m)
-    i == length(table) && return nothing
+    i > length(table) && return nothing
     b = table[i]
     b === nothing && return iterate(gri, i+1)
     return ((b::Core.Binding).globalref, i+1)
@@ -85,18 +85,33 @@ function should_invalidate_code_for_globalref(gr::GlobalRef, src::CodeInfo)
     return found_any
 end
 
-function invalidate_code_for_globalref!(gr::GlobalRef, new_max_world::UInt)
-    valid_in_valuepos = false
-    foreach_reachable_mtable(new_max_world) do mt::Core.MethodTable
-        for method in MethodList(mt)
-            if isdefined(method, :source)
-                src = _uncompressed_ir(method)
-                old_stmts = src.code
-                if should_invalidate_code_for_globalref(gr, src)
+function scan_edge_list(ci::Core.CodeInstance, bpart::Core.BindingPartition)
+    isdefined(ci, :edges) || return false
+    edges = ci.edges
+    i = 1
+    while i <= length(edges)
+        if isassigned(edges, i) && edges[i] === bpart
+            return true
+        end
+        i += 1
+    end
+    return false
+end
+
+function invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
+    try
+        valid_in_valuepos = false
+        foreach_reachable_mtable(new_max_world) do mt::Core.MethodTable
+            for method in MethodList(mt)
+                if isdefined(method, :source)
+                    src = _uncompressed_ir(method)
+                    old_stmts = src.code
+                    invalidate_all = should_invalidate_code_for_globalref(gr, src)
                     for mi in specializations(method)
+                        isdefined(mi, :cache) || continue
                         ci = mi.cache
                         while true
-                            if ci.max_world > new_max_world
+                            if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, invalidated_bpart))
                                 ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
                             end
                             isdefined(ci, :next) || break
@@ -105,7 +120,11 @@ function invalidate_code_for_globalref!(gr::GlobalRef, new_max_world::UInt)
                     end
                 end
             end
+            return true
         end
-        return true
+    catch err
+        bt = catch_backtrace()
+        invokelatest(Base.println, "Internal Error during invalidation:")
+        invokelatest(Base.display_error, err, bt)
     end
 end

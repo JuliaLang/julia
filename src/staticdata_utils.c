@@ -878,6 +878,10 @@ static int jl_verify_method(jl_code_instance_t *codeinst, size_t *minworld, size
             size_t min_valid2;
             size_t max_valid2;
             assert(!jl_is_method(edge)); // `Method`-edge isn't allowed for the optimized one-edge format
+            if (jl_is_binding_partition(edge)) {
+                j += 1;
+                continue;
+            }
             if (jl_is_code_instance(edge))
                 edge = (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)edge);
             if (jl_is_method_instance(edge)) {
@@ -1048,6 +1052,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_ci_list)
                             continue;
                         }
                         else if (jl_is_method(edge)) {
+                            j += 1;
+                            continue;
+                        }
+                        else if (jl_is_binding_partition(edge)) {
                             j += 1;
                             continue;
                         }
