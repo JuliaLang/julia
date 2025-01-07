@@ -917,7 +917,6 @@ function edit_insert(s::PromptState, c::StringLike)
         if pos > 0
             if buf.data[pos] != _space && string(c) != " "
                 options(s).auto_indent_tmp_off = false
-                options(s).hint_tab_completes_tmp_off = false
             end
             if buf.data[pos] == _space
                 #tabulators are already expanded to space
@@ -926,13 +925,12 @@ function edit_insert(s::PromptState, c::StringLike)
             else
                 #if characters after new line are coming in very fast
                 #its probably copy&paste => switch auto-indent and tab hinting off for the next coming new line
-                if time() - s.last_newline < options(s).auto_indent_time_threshold
-                    if !options(s).auto_indent_tmp_off
-                        options(s).auto_indent_tmp_off = true
-                    end
-                    if !options(s).hint_tab_completes_tmp_off
-                        options(s).hint_tab_completes_tmp_off = true
-                    end
+                if (!options(s).auto_indent_tmp_off || !options(s).hint_tab_completes_tmp_off) &&
+                        time() - s.last_newline < options(s).auto_indent_time_threshold
+                    options(s).auto_indent_tmp_off = true
+                    options(s).hint_tab_completes_tmp_off = true
+                else
+                    options(s).hint_tab_completes_tmp_off = false
                 end
             end
         end
