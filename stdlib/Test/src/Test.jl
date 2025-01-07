@@ -1071,8 +1071,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_end::Union{Float64,Nothing}
     failfast::Bool
     file::Union{String,Nothing}
+    rng::Union{Nothing,AbstractRNG}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1082,7 +1083,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source))
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), rng)
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1219,6 +1220,13 @@ function print_test_results(ts::AbstractTestSet, depth_pad=0)
     println()
     # Recursively print a summary at every level
     print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
+    # Print the RNG of the outer testset if there are failures
+    if total != total_pass + total_broken
+        rng = get_rng(ts)
+        if !isnothing(rng)
+            println("RNG of the outermost testset: ", rng)
+        end
+    end
 end
 
 
@@ -1289,6 +1297,24 @@ function filter_errors(ts::DefaultTestSet)
     end
     efs
 end
+
+"""
+    Test.get_rng(ts::AbstractTestSet) -> Union{Nothing,AbstractRNG}
+
+Return the global random number generator (RNG) associated to the input testset `ts`.
+If no RNG is associated to it, return `nothing`.
+"""
+get_rng(::AbstractTestSet) = nothing
+get_rng(ts::DefaultTestSet) = ts.rng
+"""
+    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG) -> AbstractRNG
+
+Set the global random number generator (RNG) associated to the input testset `ts` to `rng`.
+If no RNG is associated to it, do nothing.
+In any case, always return the input `rng`.
+"""
+set_rng!(::AbstractTestSet, rng::AbstractRNG) = rng
+set_rng!(ts::DefaultTestSet, rng::AbstractRNG) = ts.rng = rng
 
 """
     TestCounts
@@ -1494,20 +1520,26 @@ along with a summary of the test results.
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
-accepts three boolean options:
-- `verbose`: if `true`, the result summary of the nested testsets is shown even
+accepts the following options:
+- `verbose::Bool`: if `true`, the result summary of the nested testsets is shown even
   when they all pass (the default is `false`).
-- `showtiming`: if `true`, the duration of each displayed testset is shown
+- `showtiming::Bool`: if `true`, the duration of each displayed testset is shown
   (the default is `true`).
-- `failfast`: if `true`, any test failure or error will cause the testset and any
+- `failfast::Bool`: if `true`, any test failure or error will cause the testset and any
   child testsets to return immediately (the default is `false`).
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
+- `rng::Random.AbstractRNG`: use the given random number generator (RNG) as the global one
+  for the testset.  `rng` must be `copy!`-able.  This option can be useful to locally
+  reproduce stochastic test failures which only depend on the state of the global RNG.
 
 !!! compat "Julia 1.8"
     `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
+
+!!! compat "Julia 1.12"
+    The `rng` option requires at least Julia 1.12.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
@@ -1521,12 +1553,18 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
+call to `copy!(Random.default_rng(), rng)` where `rng` is the RNG of the current task, or
+the value of the RNG passed via the `rng` option.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
+
+!!! note "RNG of nested testsets"
+    Unless changed with the `rng` option, the same RNG is set at the beginning of all
+    nested testsets.  The RNG printed to screen when a testset has failures is the global RNG of
+    the outermost testset even if inner testsets have different RNGs manually set by the user.
 
 ## Examples
 ```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
@@ -1717,9 +1755,11 @@ function testset_beginend_call(args, tests, source)
         # by wrapping the body in a function
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
+        local tls_seed = isnothing(get_rng(ts)) ? set_rng!(ts, tls_seed_orig) : get_rng(ts)
         try
             # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
-            copy!(Random.default_rng(), tls_seed_orig)
+            copy!(Random.default_rng(), tls_seed)
+            copy!(Random.get_tls_seed(), Random.default_rng())
             let
                 $(esc(tests))
             end
@@ -1800,10 +1840,10 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-            copy!(default_rng(), tls_seed_orig)
+            copy!(default_rng(), tls_seed)
         end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
-            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options..., rng=tls_seed)
         else
             $(testsettype)($desc; $options...)
         end
@@ -1825,10 +1865,12 @@ function testset_forloop(args, testloop, source)
         local arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local rng_option = get($(options), :rng, nothing)
         local finish_errored = false
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
-        copy!(Random.default_rng(), tls_seed_orig)
+        local tls_seed = isnothing(rng_option) ? copy(Random.get_tls_seed()) : rng_option
+        copy!(Random.default_rng(), tls_seed)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))

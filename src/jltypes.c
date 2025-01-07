@@ -3656,7 +3656,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(18,
-                            jl_method_instance_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3952,6 +3952,7 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
+    jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
     jl_init_box_caches();
 

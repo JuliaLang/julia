@@ -818,6 +818,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
     end
 
+    # Base.@trace_compile (local version of the 2 above args)
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            """
+            f(x::Int) = 1
+            applyf(container) = f(container[1])
+            Base.@trace_compile @eval applyf([100])
+            Base.@trace_compile @eval applyf(Any[100])
+            f(::Bool) = 2
+            Base.@trace_compile @eval applyf([true])
+            Base.@trace_compile @eval applyf(Any[true])
+            """,
+            `$exename -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test length(findall(r"precompile\(", _stderr)) == 5
+        @test length(findall(r" # recompile", _stderr)) == 1
+    end
+
     # --trace-dispatch
     let
         io = IOBuffer()
