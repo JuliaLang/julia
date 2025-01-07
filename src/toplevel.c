@@ -157,7 +157,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
-        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_CONST);
+        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_UNDEF_CONST);
         jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
         if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
             if (decode_restriction_kind(pku) != BINDING_KIND_CONST) {
@@ -749,8 +749,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
     while (1) {
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (!val) {
-                JL_GC_POP();
-                return bpart;
+                break;
             }
             jl_value_t *old = decode_restriction_value(pku);
             JL_GC_PROMISE_ROOTED(old);
@@ -787,7 +786,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
 
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
 {
-    return jl_declare_constant_val2(b, mod, var, val, BINDING_KIND_CONST);
+    return jl_declare_constant_val2(b, mod, var, val, val ? BINDING_KIND_CONST : BINDING_KIND_UNDEF_CONST);
 }
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)

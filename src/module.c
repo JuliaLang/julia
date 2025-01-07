@@ -400,7 +400,10 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b)
 JL_DLLEXPORT jl_value_t *jl_bpart_get_restriction_value(jl_binding_partition_t *bpart)
 {
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    return decode_restriction_value(pku);
+    jl_value_t *v = decode_restriction_value(pku);
+    if (!v)
+        jl_throw(jl_undefref_exception);
+    return v;
 }
 
 typedef struct _modstack_t {
