@@ -303,9 +303,7 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
             // not, so assume it is running GC and wait for GC to finish first.
             // It will be unable to reenter helping with GC because we have
             // changed its safepoint page.
-            uv_mutex_unlock(&safepoint_lock);
             jl_set_gc_and_wait(jl_current_task);
-            uv_mutex_lock(&safepoint_lock);
         }
         while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {
             int8_t state2 = jl_atomic_load_acquire(&ptls2->gc_state);
