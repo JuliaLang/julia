@@ -38,7 +38,7 @@ Base.eval(test_mod, :(call_it(f, args...) = f(args...)))
 # Closure where a local `x` is captured but not boxed
 @test JuliaLowering.include_string(test_mod, """
 begin
-    function f(x)
+    function f_unboxed_test(x)
         z = 0
         function g()
             y = x  # x will not be boxed
@@ -47,9 +47,28 @@ begin
         z = 2 # will be boxed
         (x, g())
     end
-    f(10)
+    f_unboxed_test(10)
 end
 """) == (10,(11,2))
+
+# Use of isdefined
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_isdefined(x)
+        local w
+        function g()
+            z = 3
+            (@isdefined(x), # unboxed, always defined capture
+             @isdefined(y), # boxed capture
+             @isdefined(z), # normal local var
+             @isdefined(w)) # boxed undefined var
+        end
+        y = 2
+        (@isdefined(y), @isdefined(w), g())
+    end
+    f_isdefined(1)
+end
+""") == (true, false, (true, true, true, false))
 
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """

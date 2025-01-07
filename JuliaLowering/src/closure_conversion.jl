@@ -331,8 +331,23 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         ex
     elseif k == K"="
         convert_assignment(ctx, ex)
-    # elseif k == K"isdefined" TODO
+    elseif k == K"isdefined"
         # Convert isdefined expr to function for closure converted variables
+        var = ex[1]
+        binfo = lookup_binding(ctx, var)
+        if is_boxed(binfo)
+            access = is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
+            @ast ctx ex [K"call"
+                "isdefined"::K"core"
+                access
+                "contents"::K"Symbol"
+            ]
+        elseif binfo.is_always_defined || is_self_captured(ctx, var)
+            # Captured but unboxed vars are always defined
+            @ast ctx ex true::K"Bool"
+        else
+            ex
+        end
     elseif k == K"decl"
         @assert kind(ex[1]) == K"BindingId"
         binfo = lookup_binding(ctx, ex[1])

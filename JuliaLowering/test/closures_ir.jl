@@ -248,6 +248,70 @@ end
 18  (return %₁₇)
 
 ########################################
+# Use of isdefined
+function f(x)
+    function g()
+        z = 3
+        (@isdefined(x), # unboxed, always defined capture
+         @isdefined(y), # boxed capture
+         @isdefined(z)) # normal local var
+    end
+    y = 2
+    (@isdefined(y), # boxed local
+     @isdefined(x)) # always defined local (function arg)
+end
+#---------------------
+1   (method TestMod.f)
+2   --- thunk
+    1   (global TestMod.#f#g##3)
+    2   (call core.TypeVar :x_type)
+    3   (call core.svec %₂)
+    4   (call core.svec :x :y)
+    5   (call core.svec)
+    6   (call core._structtype TestMod :#f#g##3 %₃ %₄ %₅ false 2)
+    7   (call core._setsuper! %₆ core.Function)
+    8   (const TestMod.#f#g##3)
+    9   (= TestMod.#f#g##3 %₆)
+    10  (call core.svec %₂ core.Box)
+    11  (call core._typebody! %₆ %₁₀)
+    12  (return core.nothing)
+3   TestMod.#f#g##3
+4   (call core.svec %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/z]
+    1   (= slot₂/z 3)
+    2   (call core.getfield slot₁/#self# :y)
+    3   (call core.isdefined %₂ :contents)
+    4   (isdefined slot₂/z)
+    5   (call core.tuple true %₃ %₄)
+    6   (return %₅)
+8   TestMod.f
+9   (call core.Typeof %₈)
+10  (call core.svec %₉ core.Any)
+11  (call core.svec)
+12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
+13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/y]
+    1   (= slot₄/y (call core.Box))
+    2   TestMod.#f#g##3
+    3   (call core.typeof slot₂/x)
+    4   (call core.apply_type %₂ %₃)
+    5   slot₄/y
+    6   (= slot₃/g (new %₄ slot₂/x %₅))
+    7   slot₃/g
+    8   2
+    9   slot₄/y
+    10  (call core.setfield! %₉ :contents %₈)
+    11  slot₄/y
+    12  (call core.isdefined %₁₁ :contents)
+    13  (call core.tuple %₁₂ true)
+    14  (return %₁₃)
+14  TestMod.f
+15  (return %₁₄)
+
+########################################
 # Anonymous function syntax with ->
 x -> x*x
 #---------------------
