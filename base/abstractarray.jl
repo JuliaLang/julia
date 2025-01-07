@@ -3511,6 +3511,9 @@ end
     map!(function, array)
 
 Like [`map`](@ref), but stores the result in the same array.
+!!! compat "Julia 1.12"
+    This method requires Julia 1.12 or later. To support previous versions too,
+    use the equivalent `map!(function, array, array)`.
 
 # Examples
 ```jldoctest
