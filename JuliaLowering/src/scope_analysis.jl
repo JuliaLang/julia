@@ -189,8 +189,10 @@ function add_lambda_args(ctx, var_ids, args, args_kind)
                       "static parameter name not distinct from function argument"
                 throw(LoweringError(arg, msg))
             end
+            is_always_defined = args_kind == :argument || args_kind == :static_parameter
             id = init_binding(ctx, arg, varkey, args_kind;
-                              is_nospecialize=getmeta(arg, :nospecialize, false))
+                              is_nospecialize=getmeta(arg, :nospecialize, false),
+                              is_always_defined=is_always_defined)
             var_ids[varkey] = id
         elseif ka != K"BindingId" && ka != K"Placeholder"
             throw(LoweringError(arg, "Unexpected lambda arg kind"))
@@ -681,6 +683,7 @@ function analyze_variables!(ctx, ex)
         end
         ctx2 = VariableAnalysisContext(ctx.graph, ctx.bindings, ctx.mod, lambda_bindings,
                                        ctx.method_def_stack, ctx.closure_bindings)
+        # TODO: Types of any assigned captured vars will also be used and might be captured.
         foreach(e->analyze_variables!(ctx2, e), ex[3:end])
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))

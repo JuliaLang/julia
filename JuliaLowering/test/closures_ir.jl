@@ -88,7 +88,7 @@ end
 15  (return %₁₄)
 
 ########################################
-# Function where arguments are captured into a closure
+# Function where arguments are captured into a closure and assigned
 function f(x)
     function g()
         x = 10
@@ -143,6 +143,109 @@ end
     14  (return %₁₃)
 14  TestMod.f
 15  (return %₁₄)
+
+########################################
+# Closure where a local `x` is captured but not boxed
+function f(x)
+    function g()
+        y = x
+    end
+    z = x
+end
+#---------------------
+1   (method TestMod.f)
+2   --- thunk
+    1   (global TestMod.#f#g##1)
+    2   (call core.TypeVar :x_type)
+    3   (call core.svec %₂)
+    4   (call core.svec :x)
+    5   (call core.svec)
+    6   (call core._structtype TestMod :#f#g##1 %₃ %₄ %₅ false 1)
+    7   (call core._setsuper! %₆ core.Function)
+    8   (const TestMod.#f#g##1)
+    9   (= TestMod.#f#g##1 %₆)
+    10  (call core.svec %₂)
+    11  (call core._typebody! %₆ %₁₀)
+    12  (return core.nothing)
+3   TestMod.#f#g##1
+4   (call core.svec %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/y(!read)]
+    1   (call core.getfield slot₁/#self# :x)
+    2   (= slot₂/y %₁)
+    3   (return %₁)
+8   TestMod.f
+9   (call core.Typeof %₈)
+10  (call core.svec %₉ core.Any)
+11  (call core.svec)
+12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
+13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/z(!read)]
+    1   TestMod.#f#g##1
+    2   (call core.typeof slot₂/x)
+    3   (call core.apply_type %₁ %₂)
+    4   (= slot₃/g (new %₃ slot₂/x))
+    5   slot₃/g
+    6   slot₂/x
+    7   (= slot₄/z %₆)
+    8   (return %₆)
+14  TestMod.f
+15  (return %₁₄)
+
+########################################
+# Closure where a static parameter of an outer function is captured
+function f(::T) where T
+    function g()
+        use(T)
+    end
+end
+#---------------------
+1   (method TestMod.f)
+2   --- thunk
+    1   (global TestMod.#f#g##2)
+    2   (call core.TypeVar :T_type)
+    3   (call core.svec %₂)
+    4   (call core.svec :T)
+    5   (call core.svec)
+    6   (call core._structtype TestMod :#f#g##2 %₃ %₄ %₅ false 1)
+    7   (call core._setsuper! %₆ core.Function)
+    8   (const TestMod.#f#g##2)
+    9   (= TestMod.#f#g##2 %₆)
+    10  (call core.svec %₂)
+    11  (call core._typebody! %₆ %₁₀)
+    12  (return core.nothing)
+3   TestMod.#f#g##2
+4   (call core.svec %₃)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.use
+    2   (call core.getfield slot₁/#self# :T)
+    3   (call %₁ %₂)
+    4   (return %₃)
+8   (= slot₁/T (call core.TypeVar :T))
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  slot₁/T
+12  (call core.svec %₁₀ %₁₁)
+13  slot₁/T
+14  (call core.svec %₁₃)
+15  (call core.svec %₁₂ %₁₄ :($(QuoteNode(:(#= line 1 =#)))))
+16  --- method core.nothing %₁₅
+    slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/g]
+    1   TestMod.#f#g##2
+    2   static_parameter₁
+    3   (call core.typeof %₂)
+    4   (call core.apply_type %₁ %₃)
+    5   static_parameter₁
+    6   (= slot₃/g (new %₄ %₅))
+    7   slot₃/g
+    8   (return %₇)
+17  TestMod.f
+18  (return %₁₇)
 
 ########################################
 # Anonymous function syntax with ->

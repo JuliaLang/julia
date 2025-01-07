@@ -162,20 +162,18 @@ function convert_assignment(ctx, ex)
         convert_global_assignment(ctx, ex, var, rhs0)
     else
         @assert binfo.kind == :local || binfo.kind == :argument
-        lbinfo = lookup_lambda_binding(ctx, var)
-        self_captured = !isnothing(lbinfo) && lbinfo.is_captured
-        captured      = binfo.is_captured
-        if isnothing(binfo.type) && !self_captured && !captured
+        boxed = is_boxed(binfo)
+        if isnothing(binfo.type) && !boxed
             @ast ctx ex [K"=" var rhs0]
         else
             # Typed local
             tmp_rhs0 = ssavar(ctx, rhs0)
             rhs = isnothing(binfo.type) ? tmp_rhs0 :
                   convert_for_type_decl(ctx, ex, tmp_rhs0, _convert_closures(ctx, binfo.type), true)
-            assignment = if self_captured || captured
+            assignment = if boxed
                 @ast ctx ex [K"call"
                     "setfield!"::K"core"
-                    self_captured ? captured_var_access(ctx, var) : var
+                    is_self_captured(ctx, var) ? captured_var_access(ctx, var) : var
                     "contents"::K"Symbol"
                     rhs
                 ]
@@ -221,13 +219,15 @@ function closure_type_fields(ctx, srcref, closure_binds)
     field_syms = SyntaxList(ctx)
     field_orig_bindings = Vector{IdTag}()
     field_name_inds = Dict{IdTag,Int}()
+    field_is_box = Vector{Bool}()
     for (name,id) in sort!(collect(field_names))
         push!(field_syms, @ast ctx srcref name::K"Symbol")
         push!(field_orig_bindings, id)
+        push!(field_is_box, is_boxed(ctx, id))
         field_name_inds[id] = lastindex(field_syms)
     end
 
-    return field_syms, field_orig_bindings, field_name_inds
+    return field_syms, field_orig_bindings, field_name_inds, field_is_box
 end
 
 function closure_name(mod, name_stack)
@@ -245,21 +245,36 @@ end
 # Return a thunk which creates a new type for a closure with `field_syms` named
 # fields. The new type will be named `name_str` which must be an unassigned
 # name in the module.
-function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_syms)
+function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_syms, field_is_box)
     # New closure types always belong to the module we're expanding into - they
     # need to be serialized there during precompile.
     mod = ctx.mod
     type_binding = new_global_binding(ctx, srcref, name_str, mod)
+    typevar_stmts = SyntaxList(ctx)
+    type_params = SyntaxList(ctx)
+    field_types = SyntaxList(ctx)
+    for (name, isbox) in zip(field_syms, field_is_box)
+        if !isbox
+            typevar_name = "$(name.name_val)_type"
+            tv = ssavar(ctx, name)
+            push!(typevar_stmts, @ast ctx name [K"=" tv [K"call" "TypeVar"::K"core" typevar_name::K"Symbol"]])
+            push!(type_params, tv)
+            push!(field_types, tv)
+        else
+            push!(field_types, @ast ctx name "Box"::K"core")
+        end
+    end
     type_ex = @ast ctx srcref [K"lambda"(is_toplevel_thunk=true, lambda_bindings=LambdaBindings())
         [K"block"]
         [K"block"]
         [K"block"
             [K"global" type_binding]
+            typevar_stmts...
             closure_type := [K"call"
                 "_structtype"::K"core"
                 mod::K"Value"
                 name_str::K"Symbol"
-                [K"call" "svec"::K"core"]
+                [K"call" "svec"::K"core" type_params...]
                 [K"call"
                     "svec"::K"core"
                     field_syms...
@@ -275,7 +290,7 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
             [K"call"
                 "_typebody!"::K"core"
                 closure_type
-                [K"call" "svec"::K"core" ["Box"::K"core" for _ in field_syms]...]
+                [K"call" "svec"::K"core" field_types...]
             ]
             "nothing"::K"core"
         ]
@@ -283,38 +298,53 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
     type_ex, type_binding
 end
 
+function is_boxed(binfo::BindingInfo)
+    # True for
+    # * :argument when it's not reassigned
+    # * :static_parameter (these can't be reassigned)
+    defined_but_not_assigned = binfo.is_always_defined && binfo.n_assigned == 0
+    # For now, we box almost everything but later we'll want to do dominance
+    # analysis on the untyped IR.
+    return binfo.is_captured && !defined_but_not_assigned
+end
+
+function is_boxed(ctx, x)
+    is_boxed(lookup_binding(ctx, x))
+end
+
+# Is captured in the closure's `self` argument
+function is_self_captured(ctx, x)
+    lbinfo = lookup_lambda_binding(ctx, x)
+    !isnothing(lbinfo) && lbinfo.is_captured
+end
+
 function _convert_closures(ctx::ClosureConversionCtx, ex)
     k = kind(ex)
     if k == K"BindingId"
-        id = ex.var_id
-        lbinfo = lookup_lambda_binding(ctx, id)
-        if !isnothing(lbinfo) && lbinfo.is_captured # TODO: && vinfo:asgn cv ??
-            get_box_contents(ctx, ex, captured_var_access(ctx, ex))
-        elseif lookup_binding(ctx, id).is_captured # TODO: && vinfo:asgn vi
-            get_box_contents(ctx, ex, ex)
+        access = is_self_captured(ctx, ex) ? captured_var_access(ctx, ex) : ex
+        if is_boxed(ctx, ex)
+            get_box_contents(ctx, ex, access)
         else
-            ex
+            access
         end
     elseif is_leaf(ex) || k == K"inert"
         ex
     elseif k == K"="
         convert_assignment(ctx, ex)
+    # elseif k == K"isdefined" TODO
+        # Convert isdefined expr to function for closure converted variables
     elseif k == K"decl"
-        if kind(ex[1]) != K"BindingId"
-            # TODO: This case might be better dealt with in an earlier pass,
-            # emitting `K"::"`??
-            TODO(ex, "assertions for decls with non-bindings")
-        end
+        @assert kind(ex[1]) == K"BindingId"
         binfo = lookup_binding(ctx, ex[1])
-        if binfo.kind == :local
-            makeleaf(ctx, ex, K"TOMBSTONE")
-        else
+        if binfo.kind == :global
             @ast ctx ex [K"call"
                 "set_binding_type!"::K"core"
                 binfo.mod::K"Value"
                 binfo.name::K"Symbol"
                 _convert_closures(ctx, ex[2])
             ]
+        else
+            makeleaf(ctx, ex, K"TOMBSTONE")
         end
     elseif k == K"local"
         var = ex[1]
@@ -337,19 +367,33 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             needs_def = isnothing(closure_info)
             if needs_def
                 closure_binds = ctx.closure_bindings[func_name_id]
-                field_syms, field_orig_bindings, field_name_inds =
+                field_syms, field_orig_bindings, field_name_inds, field_is_box =
                     closure_type_fields(ctx, ex, closure_binds)
                 name_str = closure_name(ctx.mod, closure_binds.name_stack)
-                closure_type_def, closure_type =
-                    type_for_closure(ctx, ex, name_str, field_syms)
+                closure_type_def, closure_type_ =
+                    type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
                 push!(ctx.toplevel_stmts, closure_type_def)
-                closure_info = ClosureInfo(closure_type, field_syms, field_name_inds)
+                closure_info = ClosureInfo(closure_type_, field_syms, field_name_inds)
                 ctx.closure_infos[func_name_id] = closure_info
+                type_params = SyntaxList(ctx)
                 init_closure_args = SyntaxList(ctx)
-                for id in field_orig_bindings
-                    push!(init_closure_args, binding_ex(ctx, id))
+                for (id,boxed) in zip(field_orig_bindings, field_is_box)
+                    field_val = binding_ex(ctx, id)
+                    push!(init_closure_args, field_val)
+                    if !boxed
+                        push!(type_params, @ast ctx ex [K"call"
+                              # TODO: Update to use _typeof_captured_variable (#40985)
+                              #"_typeof_captured_variable"::K"core"
+                              "typeof"::K"core"
+                              field_val])
+                    end
                 end
                 @ast ctx ex [K"block"
+                    closure_type := if isempty(type_params)
+                        closure_type_
+                    else
+                        [K"call" "apply_type"::K"core" closure_type_ type_params...]
+                    end
                     [K"=" func_name
                         [K"new"
                             closure_type
@@ -419,8 +463,7 @@ function closure_convert_lambda(ctx, ex)
     # Add box initializations for arguments which are captured by an inner lambda
     for arg in children(args)
         kind(arg) != K"Placeholder" || continue
-        binfo = lookup_binding(ctx, arg)
-        if binfo.is_captured # TODO: && binfo.is_assigned
+        if is_boxed(ctx, arg)
             push!(body_stmts, @ast ctx arg [K"="
                 arg
                 [K"call" "Box"::K"core" arg]
