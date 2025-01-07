@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using InteractiveUtils: @activate
-if !isdefined(Main, :__custom_compiler_active)
+
+if Base.identify_package("Compiler") !== nothing && !isdefined(Main, :__custom_compiler_active)
     Base.eval(Main, :(__custom_compiler_active=true))
     @activate Compiler
 end
