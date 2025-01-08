@@ -276,7 +276,6 @@ baremodule BuildSettings end
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"
