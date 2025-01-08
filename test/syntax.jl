@@ -3919,28 +3919,28 @@ module ExtendedIsDefined
     import .Import.x4
     @test x2 == 2 # Resolve the binding
     @eval begin
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 
     @eval begin
         @Base.Experimental.force_compile
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 end
 

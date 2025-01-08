@@ -49,7 +49,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
+    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
@@ -58,7 +58,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
-    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer,
+    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
     is_some_const_binding, is_some_guard, is_some_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,

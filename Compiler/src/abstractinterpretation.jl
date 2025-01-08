@@ -2637,21 +2637,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.getfield && argtypes_are_actually_getglobal(argtypes)
             return Future(abstract_eval_getglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.isdefined && argtypes_are_actually_getglobal(argtypes)
-            exct = Bottom
-            if length(argtypes) == 4
-                order = argtypes[4]
-                exct = global_order_exct(order, #=loading=#true, #=storing=#false)
-                if !(isa(order, Const) && get_atomic_order(order.val, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
-                    exct = Union{exct, ConcurrencyViolationError}
-                end
-            end
-            return Future(merge_exct(CallMeta(abstract_eval_isdefined(
-                    interp,
-                    GlobalRef((argtypes[2]::Const).val::Module,
-                              (argtypes[3]::Const).val::Symbol),
-                    si.saw_latestworld,
-                    sv),
-                NoCallInfo()), exct))
+            return Future(abstract_eval_isdefinedglobal(interp, argtypes[2], argtypes[3], Const(true),
+                length(argtypes) == 4 ? argtypes[4] : Const(:unordered),
+                si.saw_latestworld, sv))
+        elseif f === Core.isdefinedglobal && 3 <= length(argtypes) <= 5
+            return Future(abstract_eval_isdefinedglobal(interp, argtypes[2], argtypes[3],
+                length(argtypes) >= 4 ? argtypes[4] : Const(true),
+                length(argtypes) >= 5 ? argtypes[5] : Const(:unordered),
+                si.saw_latestworld, sv))
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
         end
@@ -3203,21 +3196,73 @@ function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, ssta
     return abstract_eval_isdefined(interp, sym, sstate.saw_latestworld, sv)
 end
 
-function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym), saw_latestworld::Bool, sv::AbsIntState)
+const generic_isdefinedglobal_effects = Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE, nothrow=false)
+function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module, sym::Symbol, allow_import::Union{Bool, Nothing}, saw_latestworld::Bool, sv::AbsIntState)
     rt = Bool
+    if saw_latestworld
+        return RTEffects(rt, Union{}, Effects(generic_isdefinedglobal_effects, nothrow=true))
+    end
+
     effects = EFFECTS_TOTAL
-    exct = Union{}
-    isa(sym, Symbol) && (sym = GlobalRef(frame_module(sv), sym))
-    if isa(sym, GlobalRef)
-        rte = abstract_eval_globalref(interp, sym, saw_latestworld, sv)
+    partition = lookup_binding_partition!(interp, GlobalRef(mod, sym), sv)
+    if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import === false
+            rt = Const(false)
+        else
+            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+        end
+    else
+        partition = walk_binding_partition!(interp, partition, sv)
+        rte = abstract_eval_partition_load(interp, partition)
         if rte.exct == Union{}
             rt = Const(true)
         elseif rte.rt === Union{} && rte.exct === UndefVarError
             rt = Const(false)
         else
-            effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
         end
-    elseif isexpr(sym, :static_parameter)
+    end
+    return RTEffects(rt, Union{}, effects)
+end
+
+function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecialize(M), @nospecialize(s), @nospecialize(allow_import_arg), @nospecialize(order_arg), saw_latestworld::Bool, sv::AbsIntState)
+    exct = Bottom
+    allow_import = true
+    if allow_import_arg !== nothing
+        if !isa(allow_import_arg, Const)
+            allow_import = nothing
+            if widenconst(allow_import_arg) != Bool
+                exct = Union{exct, TypeError}
+            end
+        else
+            allow_import = allow_import_arg.val
+        end
+    end
+    if order_arg !== nothing
+        exct = global_order_exct(order_arg, #=loading=#true, #=storing=#false)
+        if !(isa(order_arg, Const) && get_atomic_order(order_arg.val, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
+            exct = Union{exct, ConcurrencyViolationError}
+        end
+    end
+    if M isa Const && s isa Const
+        M, s = M.val, s.val
+        if M isa Module && s isa Symbol
+            return merge_exct(CallMeta(abstract_eval_isdefinedglobal(interp, M, s, allow_import, saw_latestworld, sv), NoCallInfo()), exct)
+        end
+        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
+        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    elseif M ⊑ Module && s ⊑ Symbol
+        return CallMeta(Bool, Union{exct, UndefVarError}, generic_isdefinedglobal_effects, NoCallInfo())
+    end
+    return CallMeta(Bool, Union{exct, TypeError, UndefVarError}, generic_isdefinedglobal_effects, NoCallInfo())
+end
+
+function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym), saw_latestworld::Bool, sv::AbsIntState)
+    rt = Bool
+    effects = EFFECTS_TOTAL
+    exct = Union{}
+    if isexpr(sym, :static_parameter)
         n = sym.args[1]::Int
         if 1 <= n <= length(sv.sptypes)
             sp = sv.sptypes[n]
@@ -3443,22 +3488,31 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
     return partition_restriction(partition)
 end
 
-function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
+function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
     force_binding_resolution!(g)
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
+    partition
+end
 
+function walk_binding_partition!(interp::AbstractInterpreter, partition::Core.BindingPartition, sv::AbsIntState)
     while is_some_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(get_inference_world(interp), imported_binding)
         update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     end
+    return partition
+end
 
+function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
+    partition = lookup_binding_partition!(interp, g, sv)
+    partition = walk_binding_partition!(interp, partition, sv)
     return partition
 end
 
 function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Core.BindingPartition)
-    if is_some_guard(binding_kind(partition))
+    kind = binding_kind(partition)
+    if is_some_guard(kind) || kind == BINDING_KIND_UNDEF_CONST
         if InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
@@ -3468,13 +3522,12 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
         end
     end
 
-    if is_some_const_binding(binding_kind(partition))
+    if is_defined_const_binding(kind)
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end
 
     rt = partition_restriction(partition)
-
     return RTEffects(rt, UndefVarError, generic_getglobal_effects)
 end
 

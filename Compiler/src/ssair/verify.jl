@@ -366,7 +366,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     @verify_error "Assignment should have been removed during SSA conversion"
                     raise_error()
                 elseif stmt.head === :isdefined
-                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                    if length(stmt.args) > 2
                         @verify_error "malformed isdefined"
                         raise_error()
                     end
@@ -382,7 +382,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
                 elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        (stmt.args[1] isa GlobalRef || isexpr(stmt.args[1], :static_parameter))
+                        isexpr(stmt.args[1], :static_parameter)
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 elseif stmt.head === :call
