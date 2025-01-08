@@ -1423,3 +1423,20 @@ end
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
     end
 end
+
+if Sys.iswindows()
+    @testset "cwstring" begin
+        # empty string
+        str_0 = ""
+        # string with embedded NUL character
+        str_1 = "Au\000B"
+        # string with terminating NUL character
+        str_2 = "Wordu\000"
+        # "Regular" string with UTF-8 characters of differing byte counts
+        str_3 = "aܣ𒀀"
+        @test Base.cwstring(str_0) == UInt16[0x0000]
+        @test_throws ArgumentError Base.cwstring(str_1)
+        @test_throws ArgumentError Base.cwstring(str_2)
+        @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
+    end
+end
