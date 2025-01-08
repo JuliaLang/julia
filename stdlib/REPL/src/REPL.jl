@@ -78,7 +78,7 @@ function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
     to_warn_about = Dict{Module, Vector{Module}}()
     for m in modules
         # only warn if binding is resolved and exported or public
-        if !Base.isbindingresolved(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
+        if !Base.isdefined(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
             continue
         end
         warned = true
