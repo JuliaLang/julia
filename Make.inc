@@ -80,8 +80,8 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# Use stock if MMTK_PLAN hasn't been defined
-MMTK_PLAN ?= None
+# Use Immix by default
+MMTK_PLAN := Immix
 
 # Enable DTrace support
 WITH_DTRACE := 0
