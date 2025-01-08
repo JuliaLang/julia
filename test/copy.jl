@@ -253,19 +253,16 @@ end
     @test copyto!(s, String[]) == [1, 2] # No error
 end
 
-function make_circular_reference_array_56775()
+@testset "circular reference arrays" begin
+    # issue 56775
     p = Any[nothing]
     p[1] = p
-    return p
+    p2 = deepcopy(p)
+    @test p2 === p2[1]
 end
 
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
-
-    # issue 56775
-    p = make_circular_reference_array_56775()
-    p2 = deepcopy(p)
-    @test p2 === p2[1]
 end
 
 @testset "deepcopy_internal inference" begin
