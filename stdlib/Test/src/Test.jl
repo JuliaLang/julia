@@ -27,7 +27,7 @@ export TestLogger, LogRecord
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit
+using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 
 const DISPLAY_FAILED = (
@@ -47,30 +47,64 @@ const FAIL_FAST = Ref{Bool}(false)
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
+end
+in_file(frame, file) = string(frame.file) == file
+
+function test_location(bt, file_ts, file_t)
+    if (isnothing(file_ts) || isnothing(file_t))
+        return macrocall_location(bt, something(file_ts, @__FILE__))
+    else
+        return test_callsite(bt, file_ts, file_t)
+    end
 end
 
-function scrub_backtrace(bt)
+function test_callsite(bt, file_ts, file_t)
+    # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
+    # For that, we retrieve locations from lower to higher stack elements
+    # and only traverse parts of the backtrace which we haven't traversed before.
+    # The order will always be <internal functions> -> `@test` -> `@testset`.
+    internal = @something(macrocall_location(bt, @__FILE__), return nothing)
+    test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
+    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
+
+    # If stacktrace locations differ, include frames until the `@testset` appears.
+    test != testset && return testset
+    # `@test` and `@testset` occurred at the same stacktrace location.
+    # This may happen if `@test` occurred directly in scope of the testset,
+    # or if `@test` occurred in a function that has been inlined in the testset.
+    frames = StackTraces.lookup(bt[testset])
+    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
+    isnothing(outer_frame) && return nothing
+    # The `@test` call occurred directly in scope of a `@testset`.
+    # The __source__ from `@test` will be printed in the test message upon failure.
+    # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
+    in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined, so we still need to include the callsite.
+    return testset
+end
+
+macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+
+function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind !== nothing && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
+    stop_at = test_location(bt, file_ts, file_t)
+    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
-function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
+function scrub_exc_stack(stack, file_ts, file_t)
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}}, file_ts, file_t)) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
 @nospecialize
 
 """
-    Result
+    Test.Result
 
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
@@ -78,7 +112,7 @@ stored, depending on whether the test is part of a test set.
 abstract type Result end
 
 """
-    Pass
+    Test.Pass <: Test.Result
 
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
@@ -108,7 +142,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Fail
+    Test.Fail <: Test.Result
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -121,14 +155,16 @@ struct Fail <: Result
     context::Union{Nothing, String}
     source::LineNumberNode
     message_only::Bool
-    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool)
+    backtrace::Union{Nothing, String}
+    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool, backtrace=nothing)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
             context,
             source,
-            message_only)
+            message_only,
+            backtrace)
     end
 end
 
@@ -150,6 +186,11 @@ function Base.show(io::IO, t::Fail)
         else
             print(io, "\n    Expected: ", data)
             print(io, "\n      Thrown: ", value)
+            print(io, "\n")
+            if t.backtrace !== nothing
+                # Capture error message and indent to match
+                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+            end
         end
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
@@ -165,10 +206,11 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
+    println(io) # add some visual space to separate sequential failures
 end
 
 """
-    Error
+    Test.Error <: Test.Result
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a [`Bool`](@ref).
@@ -184,7 +226,7 @@ struct Error <: Result
 
     function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
-            bt = scrub_exc_stack(bt)
+            bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
@@ -249,7 +291,7 @@ function Base.show(io::IO, t::Error)
 end
 
 """
-    Broken
+    Test.Broken <: Test.Result
 
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
@@ -465,19 +507,20 @@ macro test(ex, kws...)
 
     # Build the test expression
     test_expr!("@test", ex, kws...)
-    orig_ex = Expr(:inert, ex)
 
     result = get_test_result(ex, __source__)
 
-    return quote
+    ex = Expr(:inert, ex)
+    result = quote
         if $(length(skip) > 0 && esc(skip[1]))
-            record(get_testset(), Broken(:skipped, $orig_ex))
+            record(get_testset(), Broken(:skipped, $ex))
         else
             let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
-                _do($result, $orig_ex)
+                _do($result, $ex)
             end
         end
     end
+    return result
 end
 
 """
@@ -505,10 +548,10 @@ Test Broken
 """
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
-    orig_ex = Expr(:inert, ex)
     result = get_test_result(ex, __source__)
     # code to call do_test with execution result and original expr
-    :(do_broken_test($result, $orig_ex))
+    ex = Expr(:inert, ex)
+    return :(do_broken_test($result, $ex))
 end
 
 """
@@ -535,9 +578,9 @@ Test Broken
 """
 macro test_skip(ex, kws...)
     test_expr!("@test_skip", ex, kws...)
-    orig_ex = Expr(:inert, ex)
-    testres = :(Broken(:skipped, $orig_ex))
-    :(record(get_testset(), $testres))
+    ex = Expr(:inert, ex)
+    testres = :(Broken(:skipped, $ex))
+    return :(record(get_testset(), $testres))
 end
 
 # An internal function, called by the code generated by the @test
@@ -625,7 +668,8 @@ function get_test_result(ex, source)
             $negate,
         ))
     else
-        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
+        ex = Expr(:block, source, esc(orig_ex))
+        testret = :(Returned($ex, nothing, $(QuoteNode(source))))
     end
     result = quote
         try
@@ -635,7 +679,6 @@ function get_test_result(ex, source)
             Threw(_e, Base.current_exceptions(), $(QuoteNode(source)))
         end
     end
-    Base.remove_linenums!(result)
     result
 end
 
@@ -674,8 +717,13 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
-        if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        if isa(value, Bool)
+            if value
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+            end
+        else
+            # If the result is non-Boolean, this counts as an Error
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -708,7 +756,7 @@ Test Passed
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-     Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
+     Message: "DomainError with -1.0:\\nsqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
 In the final example, instead of matching a single string it could alternatively have been performed with:
@@ -719,18 +767,18 @@ In the final example, instead of matching a single string it could alternatively
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
+    ex = Expr(:block, __source__, esc(ex))
     result = quote
         try
-            Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
+            Returned($ex, nothing, $(QuoteNode(__source__)))
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e, nothing, $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
-    Base.remove_linenums!(result)
-    :(do_test_throws($result, $orig_ex, $(esc(extype))))
+    return :(do_test_throws($result, $orig_ex, $(esc(extype))))
 end
 
 const MACROEXPAND_LIKE = Symbol.(("@macroexpand", "@macroexpand1", "macroexpand"))
@@ -754,6 +802,9 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                 if from_macroexpand && extype == LoadError && exc isa Exception
                     Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
                     true
+                elseif extype == ErrorException && isa(exc, FieldError)
+                    Base.depwarn(lazy"ErrorException should no longer be used to test field access; FieldError should be used instead!", :do_test_throws)
+                    true
                 else
                     isa(exc, extype)
                 end
@@ -761,7 +812,11 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
                 extype = extype.error # deprecated
             end
-            if isa(exc, typeof(extype))
+            # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
+            # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
+            if isa(extype, UndefVarError) && !isdefined(extype, :scope)
+                success = exc isa UndefVarError && exc.var == extype.var
+            else isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
                     if !isequal(getfield(extype, fld), getfield(exc, fld))
@@ -784,7 +839,22 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if success
             testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only)
+            if result.backtrace !== nothing
+                bt = scrub_exc_stack(result.backtrace, nothing, extract_file(result.source))
+                bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
+            else
+                bt_str = nothing
+            end
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
         end
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
@@ -817,21 +887,7 @@ Note: Warnings generated by `@warn` cannot be tested with this macro. Use
 [`@test_logs`](@ref) instead.
 """
 macro test_warn(msg, expr)
-    quote
-        let fname = tempname()
-            try
-                ret = open(fname, "w") do f
-                    redirect_stderr(f) do
-                        $(esc(expr))
-                    end
-                end
-                @test contains_warn(read(fname, String), $(esc(msg)))
-                ret
-            finally
-                rm(fname, force=true)
-            end
-        end
-    end
+    test_warn_expr(expr, msg)
 end
 
 """
@@ -844,28 +900,35 @@ Note: The absence of warnings generated by `@warn` cannot be tested
 with this macro. Use [`@test_logs`](@ref) instead.
 """
 macro test_nowarn(expr)
-    quote
-        # Duplicate some code from `@test_warn` to allow printing the content of
-        # `stderr` again to `stderr` here while suppressing it for `@test_warn`.
-        # If that shouldn't be used, it would be possible to just use
-        #     @test_warn isempty $(esc(expr))
-        # here.
-        let fname = tempname()
-            try
-                ret = open(fname, "w") do f
-                    redirect_stderr(f) do
-                        $(esc(expr))
-                    end
-                end
-                stderr_content = read(fname, String)
-                print(stderr, stderr_content) # this is helpful for debugging
-                @test isempty(stderr_content)
-                ret
+    # allow printing the content of `stderr` again to `stderr` here while suppressing it
+    # for `@test_warn`. If that shouldn't be used, this could just be `test_warn_expr(expr, #=msg=#isempty)`
+    test_warn_expr(expr, function (s)
+        print(stderr, s) # this is helpful for debugging
+        isempty(s)
+    end)
+end
+
+function test_warn_expr(@nospecialize(expr), @nospecialize(msg))
+    return :(let fname = tempname()
+        try
+            f = open(fname, "w")
+            stdold = stderr
+            redirect_stderr(f)
+            ret = try
+                # We deliberately don't use the thunk versions of open/redirect
+                # to ensure that adding the macro does not change the toplevel-ness
+                # of the resulting expression.
+                $(esc(expr))
             finally
-                rm(fname, force=true)
+                redirect_stderr(stdold)
+                close(f)
             end
+            @test contains_warn(read(fname, String), $(esc(msg)))
+            ret
+        finally
+            rm(fname, force=true)
         end
-    end
+    end)
 end
 
 #-----------------------------------------------------------------------
@@ -1007,8 +1070,10 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Union{Float64,Nothing}
     failfast::Bool
+    file::Union{String,Nothing}
+    rng::Union{Nothing,AbstractRNG}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1018,8 +1083,11 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast)
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), rng)
 end
+extract_file(source::LineNumberNode) = extract_file(source.file)
+extract_file(file::Symbol) = string(file)
+extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end
 
@@ -1030,14 +1098,14 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
-function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    if TESTSET_PRINT_ENABLE[]
+function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
+    if print_result
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
             end
             println()
         end
@@ -1047,6 +1115,27 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
     return t
 end
 
+"""
+    print_verbose(::AbstractTestSet) -> Bool
+
+Whether printing involving this `AbstractTestSet` should be verbose or not.
+
+Defaults to `false`.
+"""
+function print_verbose end
+
+"""
+    results(::AbstractTestSet)
+
+Return an iterator of results aggregated by this `AbstractTestSet`, if any were recorded.
+
+Defaults to the empty tuple.
+"""
+function results end
+
+print_verbose(ts::DefaultTestSet) = ts.verbose
+results(ts::DefaultTestSet) = ts.results
+
 # When a DefaultTestSet finishes, it records itself to its parent
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
@@ -1054,26 +1143,42 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
 @specialize
 
-function print_test_errors(ts::DefaultTestSet)
-    for t in ts.results
+"""
+    print_test_errors(::AbstractTestSet)
+
+Prints the errors that were recorded by this `AbstractTestSet` after it
+was `finish`ed.
+"""
+function print_test_errors(ts::AbstractTestSet)
+    for t in results(ts)
         if isa(t, Error) || isa(t, Fail)
             println("Error in testset $(ts.description):")
             show(t)
             println()
-        elseif isa(t, DefaultTestSet)
+        elseif isa(t, AbstractTestSet)
             print_test_errors(t)
         end
     end
 end
 
-function print_test_results(ts::DefaultTestSet, depth_pad=0)
+"""
+    print_test_results(ts::AbstractTestSet, depth_pad=0)
+
+Print the results of an `AbstractTestSet` as a formatted table.
+
+`depth_pad` refers to how much padding should be added in front of all output.
+
+Called inside of `Test.finish`, if the `finish`ed testset is the topmost
+testset.
+"""
+function print_test_results(ts::AbstractTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    total_pass   = passes + c_passes
-    total_fail   = fails  + c_fails
-    total_error  = errors + c_errors
-    total_broken = broken + c_broken
+    tc = get_test_counts(ts)
+    total_pass   = tc.passes + tc.cumulative_passes
+    total_fail   = tc.fails  + tc.cumulative_fails
+    total_error  = tc.errors + tc.cumulative_errors
+    total_broken = tc.broken + tc.cumulative_broken
     dig_pass   = total_pass   > 0 ? ndigits(total_pass)   : 0
     dig_fail   = total_fail   > 0 ? ndigits(total_fail)   : 0
     dig_error  = total_error  > 0 ? ndigits(total_error)  : 0
@@ -1086,14 +1191,13 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     fail_width   = dig_fail   > 0 ? max(length("Fail"),   dig_fail)   : 0
     error_width  = dig_error  > 0 ? max(length("Error"),  dig_error)  : 0
     broken_width = dig_broken > 0 ? max(length("Broken"), dig_broken) : 0
-    total_width  = dig_total  > 0 ? max(length("Total"),  dig_total)  : 0
-    duration_width = max(length("Time"), length(duration))
+    total_width  = max(textwidth("Total"),  dig_total)
+    duration_width = max(textwidth("Time"), textwidth(tc.duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
-    align = max(get_alignment(ts, 0), length("Test Summary:"))
+    align = max(get_alignment(ts, depth_pad), textwidth("Test Summary:"))
     # Print the outer test set header once
-    pad = total == 0 ? "" : " "
-    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true)
+    printstyled(rpad("Test Summary:", align, " "), " |", " "; bold=true)
     if pass_width > 0
         printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
@@ -1106,15 +1210,23 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     if broken_width > 0
         printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
-    if total_width > 0
+    if total_width > 0 || total == 0
         printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
     end
-    if ts.showtiming
+    timing = isdefined(ts, :showtiming) ? ts.showtiming : false
+    if timing
         printstyled(lpad("Time", duration_width, " "); bold=true)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
+    # Print the RNG of the outer testset if there are failures
+    if total != total_pass + total_broken
+        rng = get_rng(ts)
+        if !isnothing(rng)
+            println("RNG of the outermost testset: ", rng)
+        end
+    end
 end
 
 
@@ -1122,7 +1234,7 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
+function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     ts.time_end = time()
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
@@ -1132,14 +1244,14 @@ function finish(ts::DefaultTestSet)
         record(parent_ts, ts)
         return ts
     end
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    total_pass   = passes + c_passes
-    total_fail   = fails  + c_fails
-    total_error  = errors + c_errors
-    total_broken = broken + c_broken
+    tc = get_test_counts(ts)
+    total_pass   = tc.passes + tc.cumulative_passes
+    total_fail   = tc.fails  + tc.cumulative_fails
+    total_error  = tc.errors + tc.cumulative_errors
+    total_broken = tc.broken + tc.cumulative_broken
     total = total_pass + total_fail + total_error + total_broken
 
-    if TESTSET_PRINT_ENABLE[]
+    if print_results
         print_test_results(ts)
     end
 
@@ -1186,99 +1298,183 @@ function filter_errors(ts::DefaultTestSet)
     efs
 end
 
-# Recursive function that counts the number of test results of each
-# type directly in the testset, and totals across the child testsets
+"""
+    Test.get_rng(ts::AbstractTestSet) -> Union{Nothing,AbstractRNG}
+
+Return the global random number generator (RNG) associated to the input testset `ts`.
+If no RNG is associated to it, return `nothing`.
+"""
+get_rng(::AbstractTestSet) = nothing
+get_rng(ts::DefaultTestSet) = ts.rng
+"""
+    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG) -> AbstractRNG
+
+Set the global random number generator (RNG) associated to the input testset `ts` to `rng`.
+If no RNG is associated to it, do nothing.
+In any case, always return the input `rng`.
+"""
+set_rng!(::AbstractTestSet, rng::AbstractRNG) = rng
+set_rng!(ts::DefaultTestSet, rng::AbstractRNG) = ts.rng = rng
+
+"""
+    TestCounts
+
+Holds the state for recursively gathering the results of a test set for display purposes.
+
+Fields:
+
+ * `customized`: Whether the function `get_test_counts` was customized for the `AbstractTestSet`
+                 this counts object is for. If a custom method was defined, always pass `true`
+                 to the constructor.
+ * `passes`: The number of passing `@test` invocations.
+ * `fails`: The number of failing `@test` invocations.
+ * `errors`: The number of erroring `@test` invocations.
+ * `broken`: The number of broken `@test` invocations.
+ * `passes`: The cumulative number of passing `@test` invocations.
+ * `fails`: The cumulative number of failing `@test` invocations.
+ * `errors`: The cumulative number of erroring `@test` invocations.
+ * `broken`: The cumulative number of broken `@test` invocations.
+ * `duration`: The total duration the `AbstractTestSet` in question ran for, as a formatted `String`.
+"""
+struct TestCounts
+    customized::Bool
+    passes::Int
+    fails::Int
+    errors::Int
+    broken::Int
+    cumulative_passes::Int
+    cumulative_fails::Int
+    cumulative_errors::Int
+    cumulative_broken::Int
+    duration::String
+end
+
+""""
+    get_test_counts(::AbstractTestSet) -> TestCounts
+
+Recursive function that counts the number of test results of each
+type directly in the testset, and totals across the child testsets.
+
+Custom `AbstractTestSet` should implement this function to get their totals
+counted & displayed with `DefaultTestSet` as well.
+
+If this is not implemented for a custom `TestSet`, the printing falls back to
+reporting `x` for failures and `?s` for the duration.
+"""
+function get_test_counts end
+
+get_test_counts(ts::AbstractTestSet) = TestCounts(false, 0,0,0,0,0,0,0,0, format_duration(ts))
+
 function get_test_counts(ts::DefaultTestSet)
     passes, fails, errors, broken = ts.n_passed, 0, 0, 0
+    # cumulative results
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
-        if isa(t, DefaultTestSet)
-            np, nf, ne, nb, ncp, ncf, nce , ncb, duration = get_test_counts(t)
-            c_passes += np + ncp
-            c_fails  += nf + ncf
-            c_errors += ne + nce
-            c_broken += nb + ncb
+        if isa(t, AbstractTestSet)
+            tc = get_test_counts(t)::TestCounts
+            c_passes += tc.passes + tc.cumulative_passes
+            c_fails  += tc.fails + tc.cumulative_fails
+            c_errors += tc.errors + tc.cumulative_errors
+            c_broken += tc.broken + tc.cumulative_broken
         end
     end
+    duration = format_duration(ts)
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    duration = if isnothing(ts.time_end)
-        ""
-    else
-        dur_s = ts.time_end - ts.time_start
-        if dur_s < 60
-            string(round(dur_s, digits = 1), "s")
-        else
-            m, s = divrem(dur_s, 60)
-            s = lpad(string(round(s, digits = 1)), 4, "0")
-            string(round(Int, m), "m", s, "s")
-        end
-    end
-    return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
+    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
 end
+
+"""
+    format_duration(::AbstractTestSet)
+
+Return a formatted string for printing the duration the testset ran for.
+
+If not defined, falls back to `"?s"`.
+"""
+format_duration(::AbstractTestSet) = "?s"
+
+function format_duration(ts::DefaultTestSet)
+    (; time_start, time_end) = ts
+    isnothing(time_end) && return ""
+
+    dur_s = time_end - time_start
+    if dur_s < 60
+        string(round(dur_s, digits = 1), "s")
+    else
+        m, s = divrem(dur_s, 60)
+        s = lpad(string(round(s, digits = 1)), 4, "0")
+        string(round(Int, m), "m", s, "s")
+    end
+end
+
+print_verbose(::AbstractTestSet) = false
+results(::AbstractTestSet) = ()
 
 # Recursive function that prints out the results at each level of
 # the tree of test sets
-function print_counts(ts::DefaultTestSet, depth, align,
+function print_counts(ts::AbstractTestSet, depth, align,
                       pass_width, fail_width, error_width, broken_width, total_width, duration_width, showtiming)
     # Count results by each type at this level, and recursively
     # through any child test sets
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
+    tc = get_test_counts(ts)
+    fallbackstr = tc.customized ? " " : "x"
+    subtotal = tc.passes + tc.fails + tc.errors + tc.broken +
+               tc.cumulative_passes + tc.cumulative_fails + tc.cumulative_errors + tc.cumulative_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
     print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
-    np = passes + c_passes
-    if np > 0
-        printstyled(lpad(string(np), pass_width, " "), "  ", color=:green)
+    n_passes = tc.passes + tc.cumulative_passes
+    if n_passes > 0
+        printstyled(lpad(string(n_passes), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
-        print(lpad(" ", pass_width), "  ")
+        printstyled(lpad(fallbackstr, pass_width, " "), "  ", color=:green)
     end
 
-    nf = fails + c_fails
-    if nf > 0
-        printstyled(lpad(string(nf), fail_width, " "), "  ", color=Base.error_color())
+    n_fails = tc.fails + tc.cumulative_fails
+    if n_fails > 0
+        printstyled(lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
-        print(lpad(" ", fail_width), "  ")
+        printstyled(lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
     end
 
-    ne = errors + c_errors
-    if ne > 0
-        printstyled(lpad(string(ne), error_width, " "), "  ", color=Base.error_color())
+    n_errors = tc.errors + tc.cumulative_errors
+    if n_errors > 0
+        printstyled(lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
-        print(lpad(" ", error_width), "  ")
+        printstyled(lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
     end
 
-    nb = broken + c_broken
-    if nb > 0
-        printstyled(lpad(string(nb), broken_width, " "), "  ", color=Base.warn_color())
+    n_broken = tc.broken + tc.cumulative_broken
+    if n_broken > 0
+        printstyled(lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
-        print(lpad(" ", broken_width), "  ")
+        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
     end
 
-    if np == 0 && nf == 0 && ne == 0 && nb == 0
-        printstyled(lpad("None", total_width, " "), "  ", color=Base.info_color())
+    if n_passes == 0 && n_fails == 0 && n_errors == 0 && n_broken == 0
+        total_str = tc.customized ? string(subtotal) : "?"
+        printstyled(lpad(total_str, total_width, " "), "  ", color=Base.info_color())
     else
         printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
     end
 
     if showtiming
-        printstyled(lpad(string(duration), duration_width, " "))
+        printstyled(lpad(tc.duration, duration_width, " "))
     end
     println()
 
     # Only print results at lower levels if we had failures or if the user
-    # wants.
-    if (np + nb != subtotal) || (ts.verbose)
-        for t in ts.results
-            if isa(t, DefaultTestSet)
+    # wants. Requires the given `AbstractTestSet` to have a vector of results
+    if ((n_passes + n_broken != subtotal) || print_verbose(ts))
+        for t in results(ts)
+            if isa(t, AbstractTestSet)
                 print_counts(t, depth + 1, align,
                     pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
             end
@@ -1305,11 +1501,11 @@ function _check_testset(testsettype, testsetname)
 end
 
 """
-    @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
-    @testset let v = (...) ... end
+    @testset [CustomTestSet] [options...] ["description"] begin test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v"] for v in itr test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v, \$w"] for v in itrv, w in itrw test_ex end
+    @testset [CustomTestSet] [options...] ["description"] test_func()
+    @testset let v = v, w = w; test_ex; end
 
 # With begin/end or function call
 
@@ -1324,21 +1520,31 @@ along with a summary of the test results.
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
-accepts three boolean options:
-- `verbose`: if `true`, the result summary of the nested testsets is shown even
-when they all pass (the default is `false`).
-- `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `true`).
-- `failfast`: if `true`, any test failure or error will cause the testset and any
-child testsets to return immediately (the default is `false`). This can also be set
-globally via the env var `JULIA_TEST_FAILFAST`.
+accepts the following options:
+- `verbose::Bool`: if `true`, the result summary of the nested testsets is shown even
+  when they all pass (the default is `false`).
+- `showtiming::Bool`: if `true`, the duration of each displayed testset is shown
+  (the default is `true`).
+- `failfast::Bool`: if `true`, any test failure or error will cause the testset and any
+  child testsets to return immediately (the default is `false`).
+  This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
+- `rng::Random.AbstractRNG`: use the given random number generator (RNG) as the global one
+  for the testset.  `rng` must be `copy!`-able.  This option can be useful to locally
+  reproduce stochastic test failures which only depend on the state of the global RNG.
+
+!!! compat "Julia 1.8"
+    `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
 
+!!! compat "Julia 1.12"
+    The `rng` option requires at least Julia 1.12.
+
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
-If a function call is provided, its name will be used. Explicit description strings override this behavior.
+If a function call is provided, its name will be used.
+Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1347,12 +1553,18 @@ method, which by default will return a list of the testset objects used in
 each iteration.
 
 Before the execution of the body of a `@testset`, there is an implicit
-call to `Random.seed!(seed)` where `seed` is the current seed of the global RNG.
+call to `copy!(Random.default_rng(), rng)` where `rng` is the RNG of the current task, or
+the value of the RNG passed via the `rng` option.
 Moreover, after the execution of the body, the state of the global RNG is
 restored to what it was before the `@testset`. This is meant to ease
 reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
+
+!!! note "RNG of nested testsets"
+    Unless changed with the `rng` option, the same RNG is set at the beginning of all
+    nested testsets.  The RNG printed to screen when a testset has failures is the global RNG of
+    the outermost testset even if inner testsets have different RNGs manually set by the user.
 
 ## Examples
 ```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
@@ -1383,8 +1595,18 @@ individual tests fail. Transparent test sets do not introduce additional levels
 of nesting in the test set hierarchy and are passed through directly to the
 parent test set (with the context object appended to any failing tests.)
 
-    !!! compat "Julia 1.9"
+!!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
+
+!!! compat "Julia 1.10"
+    Multiple `let` assignments are supported since Julia 1.10.
+
+# Special implicit world age increment for `@testset begin`
+
+World age inside `@testset begin` increments implicitly after every statement.
+This matches the behavior of ordinary toplevel code, but not that of ordinary
+`begin/end` blocks, i.e. with respect to world age, `@testset begin` behaves
+as if the body of the `begin/end` block was written at toplevel.
 
 ## Examples
 ```jldoctest
@@ -1395,6 +1617,18 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
+ERROR: There was an error during testing
+
+julia> @testset let logi = log(im), op = !iszero
+           @test imag(logi) == π/2
+           @test op(real(logi))
+       end
+Test Failed at none:3
+  Expression: op(real(logi))
+     Context: logi = 0.0 + 1.5707963267948966im
+              op = !iszero
+
 ERROR: There was an error during testing
 ```
 """
@@ -1409,7 +1643,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
@@ -1426,7 +1660,7 @@ trigger_test_failure_break(@nospecialize(err)) =
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, tests, source)
+function testset_context(args, ex, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
@@ -1434,22 +1668,53 @@ function testset_context(args, tests, source)
         error("@testset with a `let` argument cannot be customized")
     end
 
-    assgn = tests.args[1]
-    if !isa(assgn, Expr) || assgn.head !== :(=)
-        error("`@testset let` must have exactly one assignment")
-    end
-    assignee = assgn.args[1]
+    let_ex = ex.args[1]
 
-    tests.args[2] = quote
-        $push_testset($(ContextTestSet)($(QuoteNode(assignee)), $assignee; $options...))
+    if Meta.isexpr(let_ex, :(=))
+        contexts = Any[let_ex.args[1]]
+    elseif Meta.isexpr(let_ex, :block)
+        contexts = Any[]
+        for assign_ex in let_ex.args
+            if Meta.isexpr(assign_ex, :(=))
+                push!(contexts, assign_ex.args[1])
+            else
+                error("Malformed `let` expression is given")
+            end
+        end
+    else
+        error("Malformed `let` expression is given")
+    end
+    reverse!(contexts)
+
+    test_ex = ex.args[2]
+
+    ex.args[2] = quote
+        $(map(contexts) do context
+            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
+        end...)
         try
-            $(tests.args[2])
+            $(test_ex)
         finally
-            $pop_testset()
+            $(map(_->:($pop_testset()), contexts)...)
         end
     end
 
-    return esc(tests)
+    return esc(ex)
+end
+
+function insert_toplevel_latestworld(@nospecialize(tests))
+    isa(tests, Expr) || return tests
+    (tests.head !== :block) && return tests
+    ret = Expr(:block)
+    for arg in tests.args
+        push!(ret.args, arg)
+        if isa(arg, LineNumberNode) ||
+          (isa(arg, Expr) && arg.head in (:latestworld, :var"latestworld-if-toplevel"))
+            continue
+        end
+        push!(ret.args, Expr(:var"latestworld-if-toplevel"))
+    end
+    return ret
 end
 
 """
@@ -1470,6 +1735,8 @@ function testset_beginend_call(args, tests, source)
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
+    tests = insert_toplevel_latestworld(tests)
+
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
     # finally removing the testset and giving it a chance to take
@@ -1477,17 +1744,22 @@ function testset_beginend_call(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
-        local ts = $(testsettype)($desc; $options...)
+        local ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
+        local tls_seed = isnothing(get_rng(ts)) ? set_rng!(ts, tls_seed_orig) : get_rng(ts)
         try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(Random.GLOBAL_SEED)
+            # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+            copy!(Random.default_rng(), tls_seed)
+            copy!(Random.get_tls_seed(), Random.default_rng())
             let
                 $(esc(tests))
             end
@@ -1502,8 +1774,8 @@ function testset_beginend_call(args, tests, source)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
             pop_testset()
             ret = finish(ts)
         end
@@ -1568,12 +1840,13 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(RNG, tmprng)
-
+            copy!(default_rng(), tls_seed)
         end
-        ts = $(testsettype)($desc; $options...)
+        ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options..., rng=tls_seed)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         first_iteration = false
         try
@@ -1592,12 +1865,12 @@ function testset_forloop(args, testloop, source)
         local arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local rng_option = get($(options), :rng, nothing)
         local finish_errored = false
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
-        Random.seed!(Random.GLOBAL_SEED)
-        local tmprng = copy(RNG)
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
+        local tls_seed = isnothing(rng_option) ? copy(Random.get_tls_seed()) : rng_option
+        copy!(Random.default_rng(), tls_seed)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1608,8 +1881,8 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
         end
         arr
     end
@@ -1626,10 +1899,21 @@ function parse_testset_args(args)
     options = :(Dict{Symbol, Any}())
     for arg in args
         # a standalone symbol is assumed to be the test set we should use
-        if isa(arg, Symbol)
+        # the same is true for a symbol that's not exported from a module
+        if isa(arg, Symbol) || Base.isexpr(arg, :.)
+            if testsettype !== nothing
+                msg = """Multiple testset types provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_testset_types; force=true)
+            end
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
+            if desc !== nothing
+                msg = """Multiple descriptions provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_descriptions; force=true)
+            end
             desc = esc(arg)
         # an assignment is an option
         elseif isa(arg, Expr) && arg.head === :(=)
@@ -1685,14 +1969,14 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the default test set
+Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
     return length(testsets)
 end
 
-_args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+_args_and_call((args..., f)...; kwargs...) = (args, kwargs, f(args...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
 
 """
@@ -1709,7 +1993,7 @@ matches the inferred type modulo `AllowedType`, or when the return type is a sub
 `AllowedType`. This is useful when testing type stability of functions returning a small
 union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
+```jldoctest; setup = :(using InteractiveUtils; using Base: >), filter = r"begin\\n(.|\\n)*end"
 julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1723,8 +2007,9 @@ Arguments
   #self#::Core.Const(f)
   a::Int64
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = (a > 1)::Bool
-└──      goto #3 if not %1
+1 ─ %1 = :>::Core.Const(>)
+│   %2 = (%1)(a, 1)::Bool
+└──      goto #3 if not %2
 2 ─      return 1
 3 ─      return 1.0
 
@@ -1770,34 +2055,33 @@ function _inferred(ex, mod, allow = :(Union{}))
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
     end
-    Base.remove_linenums!(let ex = ex;
+    result = let ex = ex
         quote
-            let
-                allow = $(esc(allow))
+            let allow = $(esc(allow))
                 allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-                $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                $(if any(@nospecialize(a)->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                     # Has keywords
                     args = gensym()
                     kwargs = gensym()
                     quote
                         $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                        inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...))))
                     end
                 else
                     # No keywords
                     quote
                         args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
                         result = $(esc(ex.args[1]))(args...)
-                        inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                        inftype = Base.infer_return_type($(esc(ex.args[1])), Base.typesof(args...))
                     end
                 end)
-                @assert length(inftypes) == 1
                 rettype = result isa Type ? Type{result} : typeof(result)
-                rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+                rettype <: allow || rettype == typesplit(inftype, allow) || error("return type $rettype does not match inferred return type $inftype")
                 result
             end
         end
-    end)
+    end
+    return remove_linenums!(result)
 end
 
 function is_in_mods(m::Module, recursive::Bool, mods)
@@ -1815,7 +2099,7 @@ end
                                       ambiguous_bottom=false,
                                       allowed_undefineds=nothing)
 
-Returns a vector of `(Method,Method)` pairs of ambiguous methods
+Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
 Use `recursive=true` to test in all submodules.
 
@@ -1846,7 +2130,7 @@ function detect_ambiguities(mods::Module...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             m.sig == Tuple && continue # ignore Builtins
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
             ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
@@ -1867,7 +2151,7 @@ function detect_ambiguities(mods::Module...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -1879,7 +2163,7 @@ function detect_ambiguities(mods::Module...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1892,7 +2176,7 @@ end
 """
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
-Returns a vector of `Method`s which may have unbound type parameters.
+Return a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
 
 By default, any undefined symbols trigger a warning. This warning can
@@ -1900,8 +2184,8 @@ be suppressed by supplying a collection of `GlobalRef`s for which
 the warning can be skipped. For example, setting
 
 ```
-allow_undefineds = Set([GlobalRef(Base, :active_repl),
-                        GlobalRef(Base, :active_repl_backend)])
+allowed_undefineds = Set([GlobalRef(Base, :active_repl),
+                          GlobalRef(Base, :active_repl_backend)])
 ```
 
 would suppress warnings about `Base.active_repl` and
@@ -1918,7 +2202,7 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
@@ -1938,7 +2222,7 @@ function detect_unbound_args(mods...;
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+            (!Base.isbindingresolved(mod, n) || Base.isdeprecated(mod, n)) && continue
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -1950,7 +2234,7 @@ function detect_unbound_args(mods...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1960,54 +2244,11 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-# find if var will be constrained to have a definite value
-# in any concrete leaftype subtype of typ
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
-    typ === var && return true
-    while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
-    end
-    if typ isa Union
-        # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant)
-        bb = constrains_param(var, typ.b, covariant)
-        (ba && bb) && return true
-    elseif typ isa DataType
-        # return true if any param constrains var
-        fc = length(typ.parameters)
-        if fc > 0
-            if typ.name === Tuple.name
-                # vararg tuple needs special handling
-                for i in 1:(fc - 1)
-                    p = typ.parameters[i]
-                    constrains_param(var, p, covariant) && return true
-                end
-                lastp = typ.parameters[fc]
-                vararg = Base.unwrap_unionall(lastp)
-                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant) && return true
-                    # T = vararg.parameters[1] doesn't constrain var
-                else
-                    constrains_param(var, lastp, covariant) && return true
-                end
-            else
-                for i in 1:fc
-                    p = typ.parameters[i]
-                    constrains_param(var, p, false) && return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
         var = sig.var
         sig = sig.body
-        if !constrains_param(var, sig, true)
+        if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
             return true
         end
     end
@@ -2062,6 +2303,8 @@ for G in (GenericSet, GenericDict)
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+Base.pop!(s::GenericDict, k) = pop!(s.s, k)
+Base.setindex!(s::GenericDict, v, k) = setindex!(s.s, v, k)
 
 """
 The `GenericArray` can be used to test generic array APIs that program to
@@ -2126,49 +2369,7 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     return true
 end
 
-# 0.7 deprecations
-
-begin
-    approx_full(x::AbstractArray) = x
-    approx_full(x::Number) = x
-    approx_full(x) = full(x)
-
-    function test_approx_eq(va, vb, Eps, astr, bstr)
-        va = approx_full(va)
-        vb = approx_full(vb)
-        la, lb = length(LinearIndices(va)), length(LinearIndices(vb))
-        if la != lb
-            error("lengths of ", astr, " and ", bstr, " do not match: ",
-                "\n  ", astr, " (length $la) = ", va,
-                "\n  ", bstr, " (length $lb) = ", vb)
-        end
-        diff = real(zero(eltype(va)))
-        for (xa, xb) = zip(va, vb)
-            if isfinite(xa) && isfinite(xb)
-                diff = max(diff, abs(xa-xb))
-            elseif !isequal(xa,xb)
-                error("mismatch of non-finite elements: ",
-                    "\n  ", astr, " = ", va,
-                    "\n  ", bstr, " = ", vb)
-            end
-        end
-
-        if !isnan(Eps) && !(diff <= Eps)
-            sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-            error("assertion failed: ", sdiff,
-                "\n  ", astr, " = ", va,
-                "\n  ", bstr, " = ", vb,
-                "\n  difference = ", diff, " > ", Eps)
-        end
-    end
-
-    array_eps(a::AbstractArray{Complex{T}}) where {T} = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-    array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-    test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-end
-
 include("logging.jl")
+include("precompile.jl")
 
 end # module

@@ -3,7 +3,7 @@
 """
     Threads.foreach(f, channel::Channel;
                     schedule::Threads.AbstractSchedule=Threads.FairSchedule(),
-                    ntasks=Threads.nthreads())
+                    ntasks=Threads.threadpoolsize())
 
 Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
 `f` are split across `ntasks` tasks spawned by `Threads.@spawn`. This function
@@ -40,7 +40,7 @@ collect(d) = [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256
 """
 function Threads.foreach(f, channel::Channel;
                          schedule::Threads.AbstractSchedule=Threads.FairSchedule(),
-                         ntasks=Threads.nthreads())
+                         ntasks=Threads.threadpoolsize())
     apply = _apply_for_schedule(schedule)
     stop = Threads.Atomic{Bool}(false)
     @sync for _ in 1:ntasks

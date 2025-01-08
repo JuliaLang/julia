@@ -59,6 +59,11 @@
     @test repr(r"\\\"") == raw"r\"\\\\\\\"\""
     @test repr(s"\\\"\\") == raw"s\"\\\\\\\"\\\\\""
 
+    @test repr(r""a) == "r\"\"a"
+    @test repr(r""imsxa) == "r\"\"imsxa"
+    @test repr(Regex("", Base.DEFAULT_COMPILER_OPTS, UInt32(0))) == """Regex("", $(repr(Base.DEFAULT_COMPILER_OPTS)), $(repr(UInt32(0))))"""
+    @test repr(Regex("", UInt32(0), Base.DEFAULT_MATCH_OPTS)) == """Regex("", $(repr(UInt32(0))), $(repr(Base.DEFAULT_MATCH_OPTS)))"""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
@@ -96,15 +101,34 @@
         @test haskey(m, 3)
         @test !haskey(m, 44)
         @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (var"1"="x", var"2"="y", var"3"="z")
+        @test Dict(m) == Dict([1=>"x", 2=>"y", 3=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
     end
 
     # Named subpatterns
+    let m = match(r"(?<a>.)(?<c>.)(?<b>.)", "xyz")
+        @test haskey(m, :a)
+        @test haskey(m, "b")
+        @test !haskey(m, "foo")
+        @test (m[:a], m[:c], m["b"]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (a="x", c="y", b="z")
+        @test Dict(m) == Dict(["a"=>"x", "c"=>"y", "b"=>"z"])
+        @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", c=\"y\", b=\"z\")"
+        @test keys(m) == ["a", "c", "b"]
+    end
+
+    # Named and unnamed subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
         @test haskey(m, :a)
         @test haskey(m, "b")
         @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
+        @test Tuple(m) == ("x", "y", "z")
+        @test NamedTuple(m) == (a="x", var"2"="y", b="z")
+        @test Dict(m) == Dict(["a"=>"x", 2=>"y", "b"=>"z"])
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
         @test keys(m) == ["a", 2, "b"]
     end
@@ -122,18 +146,24 @@
 
     # Backcapture reference in substitution string
     @test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
-    @test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")
+    @test_throws(ErrorException("Bad replacement string: Group y not found in regex r\"(?P<x>)\""),
+        replace("a", r"(?P<x>)" => s"\g<y>"))
     # test replace with invalid substitution group pattern
-    @test_throws ErrorException replace("s", r"(?<g1>.)" => s"\gg1>")
+    @test_throws(ErrorException("Bad replacement string: \\gg1>"),
+        replace("s", r"(?<g1>.)" => s"\gg1>"))
     # test replace with 2-digit substitution group
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
 
-    # 'a' flag to disable UCP
+    # 'a' flag to disable UCP and UTF
     @test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
     @test match(r"\w+"a, "Düsseldorf").match == "D"
+    @test match(r".+"a, "Düsseldorf").match == "Düsseldorf"
+    @test match(r".+"a, "Dü\xefsseldorf").match == "Dü\xefsseldorf"
+    @test_throws(ErrorException("PCRE.exec error: $(Base.PCRE.err_message(Base.PCRE.ERROR_UTF8_ERR6))"),
+        match(r"(*UTF).+"a, "Dü\xefsseldorf"))
 
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
@@ -183,7 +213,7 @@
 
         r = r"" * raw"a\Eb|c"
         @test match(r, raw"a\Eb|c").match == raw"a\Eb|c"
-        @test match(r, raw"c") == nothing
+        @test match(r, raw"c") === nothing
 
         # error for really incompatible options
         @test_throws ArgumentError r"a" * Regex("b", Base.DEFAULT_COMPILER_OPTS & ~Base.PCRE.UCP, Base.DEFAULT_MATCH_OPTS)
@@ -211,8 +241,7 @@
     end
 
     # Test that PCRE throws the correct kind of error
-    # TODO: Uncomment this once the corresponding change has propagated to CI
-    #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+    @test_throws ErrorException("PCRE error: NULL regex object") Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
 
     # test that we can get the error message of negative error codes
     @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
@@ -223,4 +252,15 @@
 
     # hash
     @test hash(r"123"i, zero(UInt)) == hash(Regex("123", "i"), zero(UInt))
+end
+
+@testset "#47936" begin
+    tests = (r"a+[bc]+c",
+             r"a+[bc]{1,2}c",
+             r"(a)+[bc]+c",
+             r"a{1,2}[bc]+c",
+             r"(a+)[bc]+c")
+    for re in tests
+        @test match(re, "ababc").match === SubString("ababc", 3:5)
+    end
 end

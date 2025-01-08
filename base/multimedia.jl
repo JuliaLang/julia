@@ -57,7 +57,7 @@ print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 """
     showable(mime, x)
 
-Returns a boolean value indicating whether or not the object `x` can be written
+Return a boolean value indicating whether or not the object `x` can be written
 as the given `mime` type.
 
 (By default, this is determined automatically by the existence of the
@@ -125,7 +125,7 @@ show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 """
     repr(mime, x; context=nothing)
 
-Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
+Return an `AbstractString` or `Vector{UInt8}` containing the representation of
 `x` in the requested `mime` type, as written by [`show(io, mime, x)`](@ref) (throwing a
 [`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
@@ -232,7 +232,7 @@ display(mime::AbstractString, @nospecialize x) = display(MIME(mime), x)
     displayable(mime) -> Bool
     displayable(d::AbstractDisplay, mime) -> Bool
 
-Returns a boolean value indicating whether the given `mime` type (string) is displayable by
+Return a boolean value indicating whether the given `mime` type (string) is displayable by
 any of the displays in the current display stack, or specifically by the display `d` in the
 second variant.
 """
@@ -244,7 +244,7 @@ displayable(mime::AbstractString) = displayable(MIME(mime))
 """
     TextDisplay(io::IO)
 
-Returns a `TextDisplay <: AbstractDisplay`, which displays any object as the text/plain MIME type
+Return a `TextDisplay <: AbstractDisplay`, which displays any object as the text/plain MIME type
 (by default), writing the text representation to the given I/O stream. (This is how
 objects are printed in the Julia REPL.)
 """

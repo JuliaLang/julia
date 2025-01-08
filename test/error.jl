@@ -93,9 +93,70 @@ end
 @testset "MethodError for methods without line numbers" begin
     try
         eval(Expr(:function, :(f44319()), 0))
-        f44319(1)
+        @invokelatest f44319()
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
+        @test s == """MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))
+                      The function `f44319` exists, but no method is defined for this combination of argument types.
+
+                      Closest candidates are:\n  f44319()\n   @ $curmod_str none:0
+                      """
     end
+end
+
+@testset "All types ending with Exception or Error subtype Exception" begin
+    function test_exceptions(mod, visited=Set{Module}())
+        if mod ∉ visited
+            push!(visited, mod)
+            for name in names(mod, all=true)
+                isdefined(mod, name) || continue
+                value = getfield(mod, name)
+                if value isa Module
+                    value === Main && continue
+                    test_exceptions(value, visited)
+                elseif value isa Type
+                    str = string(value)
+                    if endswith(str, "Exception") || endswith(str, "Error")
+                        @test value <: Exception
+                    end
+                end
+            end
+        end
+        visited
+    end
+    visited = test_exceptions(Base)
+    test_exceptions(Core, visited)
+end
+
+# inference quality test for `error`
+@test Base.infer_return_type(error, (Any,)) === Union{}
+@test Base.infer_return_type(xs->error(xs...), (Vector{Any},)) === Union{}
+module Issue54029
+export raise54029
+Base.Experimental.@max_methods 1
+raise54029(x) = error(x)
+end
+using .Issue54029
+@test Base.infer_return_type(raise54029, (Any,)) === Union{}
+@test Base.infer_return_type(xs->raise54029(xs...), (Vector{Any},)) === Union{}
+
+@testset "CompositeException" begin
+    ce = CompositeException()
+    @test isempty(ce)
+    @test length(ce) == 0
+    @test eltype(ce) == Any
+    str = sprint(showerror, ce)
+    @test str == "CompositeException()\n"
+    push!(ce, ErrorException("something sad has happened"))
+    @test !isempty(ce)
+    @test length(ce) == 1
+    pushfirst!(ce, ErrorException("something sad has happened even earlier"))
+    @test length(ce) == 2
+    # test iterate
+    for ex in ce
+        @test ex isa ErrorException
+    end
+    push!(ce, ErrorException("something sad has happened yet again"))
+    str = sprint(showerror, ce)
+    @test str == "something sad has happened even earlier\n\n...and 2 more exceptions.\n"
 end

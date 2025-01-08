@@ -1,12 +1,14 @@
+# -*- makefile -*-
 ## jll artifact
 LIBGIT2_JLL_NAME := LibGit2
 
 ## source build
-LIBGIT2_BRANCH=v1.4.3
-LIBGIT2_SHA1=465bbf88ea939a965fbcbade72870c61f815e457
+LIBGIT2_BRANCH=v1.9.0
+LIBGIT2_SHA1=338e6fb681369ff0537719095e22ce9dc602dbf0
 
 ## Other deps
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2022-02-01
+# Keep in sync with `stdlib/MozillaCACerts_jll/Project.toml`.
+MOZILLA_CACERT_VERSION := 2024-11-26

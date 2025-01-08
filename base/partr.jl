@@ -2,7 +2,7 @@
 
 module Partr
 
-using ..Threads: SpinLock, nthreads, threadid
+using ..Threads: SpinLock, maxthreadid, threadid
 
 # a task minheap
 mutable struct taskheap
@@ -18,15 +18,62 @@ end
 const heap_d = UInt32(8)
 const heaps = [Vector{taskheap}(undef, 0), Vector{taskheap}(undef, 0)]
 const heaps_lock = [SpinLock(), SpinLock()]
-const cong_unbias = [typemax(UInt32), typemax(UInt32)]
 
 
-cong(max::UInt32, unbias::UInt32) =
-    ccall(:jl_rand_ptls, UInt32, (UInt32, UInt32), max, unbias) + UInt32(1)
+"""
+    cong(max::UInt32)
 
-function unbias_cong(max::UInt32)
-    return typemax(UInt32) - ((typemax(UInt32) % max) + UInt32(1))
+Return a random UInt32 in the range `1:max` except if max is 0, in that case return 0.
+"""
+cong(max::UInt32) = iszero(max) ? UInt32(0) : rand_ptls(max) + UInt32(1) #TODO: make sure users don't use 0 and remove this check
+
+get_ptls_rng() = ccall(:jl_get_ptls_rng, UInt64, ())
+
+set_ptls_rng(seed::UInt64) = ccall(:jl_set_ptls_rng, Cvoid, (UInt64,), seed)
+
+"""
+    rand_ptls(max::UInt32)
+
+Return a random UInt32 in the range `0:max-1` using the thread-local RNG
+state. Max must be greater than 0.
+"""
+Base.@assume_effects :removable :inaccessiblememonly :notaskstate function rand_ptls(max::UInt32)
+    rngseed = get_ptls_rng()
+    val, seed = rand_uniform_max_int32(max, rngseed)
+    set_ptls_rng(seed)
+    return val % UInt32
 end
+
+# This implementation is based on OpenSSLs implementation of rand_uniform
+# https://github.com/openssl/openssl/blob/1d2cbd9b5a126189d5e9bc78a3bdb9709427d02b/crypto/rand/rand_uniform.c#L13-L99
+# Comments are vendored from their implementation as well.
+# For the original developer check the PR to swift https://github.com/apple/swift/pull/39143.
+
+# Essentially it boils down to incrementally generating a fixed point
+# number on the interval [0, 1) and multiplying this number by the upper
+# range limit.  Once it is certain what the fractional part contributes to
+# the integral part of the product, the algorithm has produced a definitive
+# result.
+"""
+    rand_uniform_max_int32(max::UInt32, seed::UInt64)
+
+Return a random UInt32 in the range `0:max-1` using the given seed.
+Max must be greater than 0.
+"""
+Base.@assume_effects :total function rand_uniform_max_int32(max::UInt32, seed::UInt64)
+    if max == UInt32(1)
+        return UInt32(0), seed
+    end
+    # We are generating a fixed point number on the interval [0, 1).
+    # Multiplying this by the range gives us a number on [0, upper).
+    # The high word of the multiplication result represents the integral part
+    # This is not completely unbiased as it's missing the fractional part of the original implementation but it's good enough for our purposes
+    seed = UInt64(69069) * seed + UInt64(362437)
+    prod = (UInt64(max)) * (seed % UInt32) # 64 bit product
+    i = prod >> 32 % UInt32 # integral part
+    return i % UInt32, seed
+end
+
 
 
 function multiq_sift_up(heap::taskheap, idx::Int32)
@@ -86,7 +133,6 @@ function multiq_size(tpid::Int8)
             newheaps[i] = taskheap()
         end
         heaps[tp] = newheaps
-        cong_unbias[tp] = unbias_cong(heap_p)
     end
 
     return heap_p
@@ -95,15 +141,16 @@ end
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
+    @assert tpid > -1
     heap_p = multiq_size(tpid)
     tp = tpid + 1
 
     task.priority = priority
 
-    rn = cong(heap_p, cong_unbias[tp])
+    rn = cong(heap_p)
     tpheaps = heaps[tp]
     while !trylock(tpheaps[rn].lock)
-        rn = cong(heap_p, cong_unbias[tp])
+        rn = cong(heap_p)
     end
 
     heap = tpheaps[rn]
@@ -131,6 +178,9 @@ function multiq_deletemin()
 
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return nothing
+    end
     tpheaps = heaps[tp]
 
     @label retry
@@ -140,8 +190,8 @@ function multiq_deletemin()
         if i == heap_p
             return nothing
         end
-        rn1 = cong(heap_p, cong_unbias[tp])
-        rn2 = cong(heap_p, cong_unbias[tp])
+        rn1 = cong(heap_p)
+        rn2 = cong(heap_p)
         prio1 = tpheaps[rn1].priority
         prio2 = tpheaps[rn2].priority
         if prio1 > prio2
@@ -179,13 +229,15 @@ function multiq_deletemin()
     return task
 end
 
-
 function multiq_check_empty()
-    for j = UInt32(1):length(heaps)
-        for i = UInt32(1):length(heaps[j])
-            if heaps[j][i].ntasks != 0
-                return false
-            end
+    tid = Threads.threadid()
+    tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
+    if tp == 0 # Foreign thread
+        return true
+    end
+    for i = UInt32(1):length(heaps[tp])
+        if heaps[tp][i].ntasks != 0
+            return false
         end
     end
     return true

@@ -25,41 +25,79 @@ end
     end
 end
 
-busywait(0, 0) # compile
-@profile busywait(1, 20)
+@noinline function sleeping_tasks(ch::Channel)
+    for _ in 1:100
+        Threads.@spawn take!(ch)
+    end
+    sleep(10)
+end
 
-let r = Profile.retrieve()
-    mktemp() do path, io
-        serialize(io, r)
-        close(io)
-        open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+function test_profile()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+            end
         end
     end
 end
 
-let iobuf = IOBuffer()
-    Profile.print(iobuf, format=:tree, C=true)
+function test_has_task_profiler_sample_in_buffer()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                all = deserialize(io)
+                data = all[1]
+                startframe = length(data)
+                for i in startframe:-1:1
+                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+                    if Profile.is_block_end(data, i)
+                        thread_sleeping_state = data[i - Profile.META_OFFSET_SLEEPSTATE]
+                        @test thread_sleeping_state == 0x3
+                    end
+                end
+            end
+        end
+    end
+end
+
+busywait(0, 0) # compile
+
+@profile_walltime busywait(1, 20)
+test_profile()
+
+Profile.clear()
+
+ch = Channel(1)
+@profile_walltime sleeping_tasks(ch)
+test_profile()
+close(ch)
+test_has_task_profiler_sample_in_buffer()
+
+Profile.clear()
+
+@profile busywait(1, 20)
+test_profile()
+
+# test printing options
+for options in ((format=:tree, C=true),
+                (format=:tree, maxdepth=2),
+                (format=:flat, C=true),
+                (),
+                (format=:flat, sortedby=:count),
+                (format=:tree, recur=:flat),
+               )
+    iobuf = IOBuffer()
+    Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:tree, maxdepth=2)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, C=true)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf)
-    @test !isempty(String(take!(iobuf)))
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, sortedby=:count)
-    @test !isempty(String(take!(iobuf)))
-    Profile.print(iobuf, format=:tree, recur=:flat)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin
@@ -120,11 +158,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (def_n * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == def_n
     end
@@ -133,8 +170,8 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (1_000_001 * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
@@ -167,6 +204,24 @@ end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
+import InteractiveUtils
+
+@testset "Module short names" begin
+    Profile.clear()
+    @profile InteractiveUtils.peakflops()
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """
@@ -179,12 +234,15 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    p = open(`$cmd -e $script`)
+    # use multiple threads here to ensure that profiling works with threading
+    p = open(`$cmd -t2 -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGTERM)
-        sleep(10)
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
         kill(p, Base.SIGKILL)
     end
     s = read(p, String)
@@ -199,42 +257,56 @@ if Sys.isbsd() || Sys.islinux()
     @testset "SIGINFO/SIGUSR1 profile triggering" begin
         let cmd = Base.julia_cmd()
             script = """
-                x = rand(1000, 1000)
-                println("started")
-                while true
-                    x * x
-                    yield()
-                end
+                print(stderr, "started\n")
+                eof(stdin)
                 """
-            iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            iob = Base.BufferStream() # make an unbounded buffer, so we can just read after waiting for exit
+            notify_exit = Base.PipeEndpoint()
+            p = run(`$cmd -e $script`, notify_exit, devnull, iob, wait=false)
+            eof = @async try # set up a monitor task to set EOF on iob after p exits
+                wait(p)
+            finally
+                closewrite(iob)
+            end
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
-                println("KILLING BY PROFILE TEST WATCHDOG\n")
-                kill(p, Base.SIGTERM)
-                sleep(10)
+                println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
+                kill(p, Base.SIGQUIT)
+                sleep(30)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
                 kill(p, Base.SIGKILL)
-                close(iob)
+                close(notify_exit)
             end
             try
-                s = readuntil(iob, "started", keep = true)
+                s = readuntil(iob, "started", keep=true)
                 @assert occursin("started", s)
                 @assert process_running(p)
-                for _ in 1:2
-                    sleep(2.5)
+                for i in 1:2
+                    i > 1 && sleep(5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
                         kill(p, 10) # SIGUSR1
                     end
-                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    s = readuntil(iob, "Overhead ╎", keep=true)
                     @test process_running(p)
+                    readavailable(iob)
                     @test occursin("Overhead ╎", s)
                 end
-            finally
-                kill(p, Base.SIGKILL)
+                close(notify_exit) # notify test finished
+                wait(eof) # wait for test completion
+                s = read(iob, String) # consume test output from buffer
                 close(t)
+            catch
+                close(notify_exit)
+                wait(eof) # wait for test completion
+                errs = read(iob, String) # consume test output
+                isempty(errs) || println("CHILD STDERR after test failure: ", errs)
+                close(t)
+                rethrow()
             end
+            @test success(p)
         end
     end
 end
@@ -272,4 +344,52 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+@testset "HeapSnapshot" begin
+    tmpdir = mktempdir()
+
+    # ensure that we can prevent redacting data
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
+    end
+
+    @test isfile(fname)
+
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test contains(sshot, "redact_this")
+
+    rm(fname)
+
+    # ensure that string data is redacted by default
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
+    end
+
+    @test isfile(fname)
+
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test !contains(sshot, "redact_this")
+
+    rm(fname)
+    rm(tmpdir, force = true, recursive = true)
+end
+
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
+        @test readline(fs) != ""
+    end
+    rm(fpath)
+end
+
 include("allocs.jl")
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Profile)
+    @test_broken isempty(undoc)
+    @test undoc == [:Allocs]
+end
+include("heapsnapshot_reassemble.jl")

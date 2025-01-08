@@ -119,6 +119,24 @@ end
     end
 end
 
+@testset "read!/write(::IO, A::StridedArray)" begin
+    s1 = reshape(view(rand(UInt8, 16), 1:16), 2, 2, 2, 2)
+    s2 = view(s1, 1:2, 1:2, 1:2, 1:2)
+    s3 = view(s1, 1:2, 1:2, 1, 1:2)
+    mktemp() do path, io
+        b = Vector{UInt8}(undef, 17)
+        for s::StridedArray in (s3, s1, s2)
+            @test write(io, s) == length(s)
+            seek(io, 0)
+            @test readbytes!(io, b) == length(s)
+            seek(io, 0)
+            @test view(b, 1:length(s)) == vec(s)
+            @test read!(io, fill!(deepcopy(s), 0)) == s
+            seek(io, 0)
+        end
+    end
+end
+
 @test Base.open_flags(read=false, write=true, append=false) == (read=false, write=true, create=true, truncate=true, append=false)
 
 @testset "issue #30978" begin
@@ -171,4 +189,8 @@ end
 @testset "inference" begin
     @test all(T -> T <: Union{UInt, Int}, Base.return_types(unsafe_write, (IO, Ptr{UInt8}, UInt)))
     @test all(T -> T === Bool, Base.return_types(eof, (IO,)))
+end
+
+@testset "fd" begin
+    @test open(fd, tempname(), "w") isa RawFD
 end

@@ -2,7 +2,7 @@
 
 using Random: randstring
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
@@ -93,6 +93,23 @@ end
 
 @test isless('a','b')
 
+@testset "isless on pairs of integers (because there is a fastpath)" begin
+    @test isless((1,2), (1,3))
+    @test isless((0,-2), (0,2))
+    @test isless((-1,2), (1,2))
+    @test isless((-1,-2), (1,2))
+    @test !isless((1,3), (1,2))
+    @test !isless((0,2), (0,-2))
+    @test !isless((1,2), (-1,2))
+    @test !isless((1,2), (-1,-2))
+    @test !isless((-1,-2), (-1,-2))
+
+    @test isless((typemin(Int), typemin(Int)), (0,0))
+    @test isless((1, 1), (Int8(2), Int8(2)))
+    @test !isless((UInt8(200),Int8(-1)), (UInt8(200),Int8(-1)))
+    @test isless((1, 1), (1, unsigned(2)))
+end
+
 @testset "isgreater" begin
     # isgreater should be compatible with min.
     min1(a, b) = Base.isgreater(a, b) ? b : a
@@ -137,6 +154,13 @@ Base.convert(::Type{T19714}, ::Int) = T19714()
 Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 @test T19714()/1 === 1/T19714() === T19714()
 
+@testset "operators with zero argument" begin
+    @test_throws(MethodError, +())
+    @test_throws(MethodError, *())
+    @test isempty(methods(+, ()))
+    @test isempty(methods(*, ()))
+end
+
 # pr #17155 and #33568
 @testset "function composition" begin
     @test (uppercase∘(x->string(x,base=16)))(239487) == "3A77F"
@@ -171,7 +195,7 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 
-    # test keyword ags in composition
+    # test keyword args in composition
     function kwf(a;b,c); a + b + c; end
     @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
 
@@ -184,7 +208,7 @@ end
     @test (@inferred g(1)) == ntuple(Returns(1), 13)
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
-    issue_45877 = reduce(∘, fill(sin,500))
+    issue_45877 = reduce(∘, fill(sin, 50))
     @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),)))
     @test fully_eliminated() do
         issue_45877(1.0)
@@ -274,6 +298,9 @@ end
     end
 
     @test fldmod1(4.0, 3) == fldmod1(4, 3)
+
+    # issue 28973
+    @test fld1(0.4, 0.9) == fld1(nextfloat(0.4), 0.9) == 1.0
 end
 
 @testset "Fix12" begin
@@ -301,9 +328,21 @@ end
     @test lt5(4) && !lt5(5)
 end
 
+@testset "in tuples" begin
+    @test ∈(5, (1,5,10,11))
+    @test ∉(0, (1,5,10,11))
+    @test ∈(5, (1,"hi","hey",5.0))
+    @test ∉(0, (1,"hi","hey",5.0))
+    @test ∈(5, (5,))
+    @test ∉(0, (5,))
+    @test ∉(5, ())
+end
+
 @testset "ni" begin
     @test ∋([1,5,10,11], 5)
     @test !∋([1,10,11], 5)
+    @test ∋((1,5,10,11), 5)
+    @test ∌((1,10,11), 5)
     @test ∋(5)([5,1])
     @test !∋(42)([0,1,100])
     @test ∌(0)(1:10)
@@ -338,4 +377,36 @@ end
     Base.:(==)(::B46327, ::B46327) = true
     Base.:(<)(::B46327, ::B46327) = false
     @test B46327() <= B46327()
+end
+
+@testset "inference for `x in itr::Tuple`" begin
+    # concrete evaluation
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
+    for i = (1,2,3)
+        @testset let i = i
+            @test @eval Base.return_types() do
+                Val($i in (1,2,3))
+            end |> only == Val{true}
+        end
+    end
+    @test Base.infer_return_type() do
+        Val(4 in (1,2,3))
+    end == Val{false}
+    @test Base.infer_return_type() do
+        Val('1' in ('1','2','3'))
+    end == Val{true}
+
+    # constant propagation
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(1 in (x,2,y))
+    end >: Val{true}
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(2 in (x,2,y))
+    end == Val{true}
+
+    # should use the loop implementation given large tuples to avoid inference blowup
+    let t = ntuple(x->'A', 10000);
+        @test Base.infer_return_type(in, (Char,typeof(t))) == Bool
+    end
 end

@@ -2,7 +2,12 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!
+using Base: typesof, insert!, replace_ref_begin_end!,
+    infer_return_type, infer_exception_type, infer_effects, code_ircode
+
+# defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
+# via. `Base.@time_imports` etc.
+import Base: @time_imports, @trace_compile, @trace_dispatch
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -24,7 +29,8 @@ function recursive_dotcalls!(ex, args, i=1)
         end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    for j in start:length(branches)
+    length_branches = length(branches)::Int
+    for j in start:length_branches
         branch, i = recursive_dotcalls!(branches[j], args, i)
         branches[j] = branch
     end
@@ -35,6 +41,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if Meta.isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -42,7 +52,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             end
             i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
-            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
         if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
@@ -56,7 +66,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
                 return quote
                     $(esc(dotfuncdef))
-                    local args = typesof($(map(esc, args)...))
+                    local args = $typesof($(map(esc, args)...))
                     $(fcn)($(esc(dotfuncname)), args; $(kws...))
                 end
             elseif !codemacro
@@ -80,7 +90,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = typesof($(map(esc, ex0.args)...))
+                            local args = $typesof($(map(esc, ex0.args)...))
                             $(fcn)(Base.getproperty, args)
                         end
                     end
@@ -96,11 +106,16 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             return quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
+                $(fcn)(Core.kwcall,
                        Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
                        $(kws...))
             end
         elseif ex0.head === :call
+            if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
+                return Expr(:call, fcn, :(Base.literal_pow),
+                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
+                                 esc(Val(ex0.args[3]))))
+            end
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...),
                         kws...)
@@ -211,37 +226,19 @@ macro which(ex0::Symbol)
     return :(which($__module__, $ex0))
 end
 
-for fname in [:code_warntype, :code_llvm, :code_native]
-    @eval begin
-        macro ($fname)(ex0...)
-            gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
-        end
+for fname in [:code_warntype, :code_llvm, :code_native,
+              :infer_return_type, :infer_effects, :infer_exception_type]
+    @eval macro ($fname)(ex0...)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
     end
 end
 
-macro code_typed(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
-    end
-end
-
-macro code_lowered(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
-    end
-end
-
-macro time_imports(ex)
-    quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+for fname in [:code_typed, :code_lowered, :code_ircode]
+    @eval macro ($fname)(ex0...)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        quote
+            local results = $thecall
+            length(results) == 1 ? results[1] : results
         end
     end
 end
@@ -296,6 +293,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_typed optimize=true foo(x)
 
 to control whether additional optimizations, such as inlining, are also applied.
+
+See also: [`code_typed`](@ref), [`@code_warntype`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_typed
 
@@ -304,6 +303,8 @@ to control whether additional optimizations, such as inlining, are also applied.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_lowered`](@ref) on the resulting expression.
+
+See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_lowered
 
@@ -312,6 +313,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_warntype`](@ref) on the resulting expression.
+
+See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_warntype
 
@@ -330,6 +333,8 @@ by putting them and their value before the function call, like this:
 `raw` makes all metadata and dbg.* calls visible.
 `debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
+
+See also: [`code_llvm`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_native`](@ref).
 """
 :@code_llvm
 
@@ -344,12 +349,12 @@ by putting it before the function call, like this:
 
     @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
-See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and [`@code_lowered`](@ref)
+See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
 """
 :@code_native
 
@@ -358,6 +363,10 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
+
+One line is printed per package or package extension. The duration shown is the time to import that package itself, not including the time to load any of its dependencies.
+
+On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
@@ -387,3 +396,97 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch
+
+"""
+    @activate Component
+
+Activate a newly loaded copy of an otherwise builtin component. The `Component`
+to be activated will be resolved using the ordinary rules of module resolution
+in the current environment.
+
+When using `@activate`, additional options for a component may be specified in
+square brackets `@activate Compiler[:option1, :option]`
+
+Currently `@activate Compiler` is the only available component that may be
+activatived.
+
+For `@activate Compiler`, the following options are available:
+1. `:reflection` - Activate the compiler for reflection purposes only.
+                   The ordinary reflection functionality in `Base` and `InteractiveUtils`.
+                   Will use the newly loaded compiler. Note however, that these reflection
+                   functions will still interact with the ordinary native cache (both loading
+                   and storing). An incorrect compiler implementation may thus corrupt runtime
+                   state if reflection is used. Use external packages like `Cthulhu.jl`
+                   introspecting compiler behavior with a separated cache partition.
+
+2. `:codegen`   - Activate the compiler for internal codegen purposes. The new compiler
+                  will be invoked whenever the runtime requests compilation.
+
+`@activate Compiler` without options is equivalent to `@activate Compiler[:reflection]`.
+
+"""
+macro activate(what)
+    options = Symbol[]
+    if Meta.isexpr(what, :ref)
+        Component = what.args[1]
+        for i = 2:length(what.args)
+            arg = what.args[i]
+            if !isa(arg, QuoteNode) || !isa(arg.value, Symbol)
+                error("Usage Error: Option $arg is not a symbol")
+            end
+            push!(options, arg.value)
+        end
+    else
+        Component = what
+    end
+    if !isa(Component, Symbol)
+        error("Usage Error: Component $Component is not a symbol")
+    end
+    allowed_components = (:Compiler,)
+    if !(Component in allowed_components)
+        error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
+    end
+    s = gensym()
+    if Component === :Compiler && isempty(options)
+        push!(options, :reflection)
+    end
+    options = map(options) do opt
+        Expr(:kw, opt, true)
+    end
+    Expr(:toplevel,
+        esc(:(import $Component as $s)),
+        esc(:($s.activate!(;$(options...)))))
+end

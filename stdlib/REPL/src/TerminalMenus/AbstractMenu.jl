@@ -131,7 +131,7 @@ end
 """
     header(m::AbstractMenu) -> String
 
-Returns a header string to be printed above the menu.
+Return a header string to be printed above the menu.
 Defaults to "".
 """
 header(m::AbstractMenu) = ""
@@ -176,7 +176,7 @@ Returns `selected(m)`.
 !!! compat "Julia 1.6"
     The `cursor` argument requires Julia 1.6 or later.
 """
-request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
+request(m::AbstractMenu; kwargs...) = request(default_terminal(), m; kwargs...)
 
 function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Union{Int, Base.RefValue{Int}}=1, suppress_output=false)
     if cursor isa Int
@@ -216,7 +216,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
                 m.pageoffset = 0
             elseif c == Int(END_KEY)
                 cursor[] = lastoption
-                m.pageoffset = lastoption - m.pagesize
+                m.pageoffset = max(0, lastoption - m.pagesize)
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor[]) && break
@@ -252,7 +252,7 @@ end
 
 Shorthand for `println(msg); request(m)`.
 """
-request(msg::AbstractString, m::AbstractMenu; kwargs...) = request(terminal, msg, m; kwargs...)
+request(msg::AbstractString, m::AbstractMenu; kwargs...) = request(default_terminal(), msg, m; kwargs...)
 
 function request(term::REPL.Terminals.TTYTerminal, msg::AbstractString, m::AbstractMenu; kwargs...)
     println(term.out_stream, msg)
@@ -269,7 +269,7 @@ function move_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     elseif scroll_wrap(m)
         # wrap to bottom
         cursor = lastoption
-        m.pageoffset = lastoption - m.pagesize
+        m.pageoffset = max(0, lastoption - m.pagesize)
     end
     return cursor
 end
@@ -299,7 +299,7 @@ end
 
 function page_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
-    m.pageoffset = min(m.pageoffset, lastoption - m.pagesize)
+    m.pageoffset = max(0, min(m.pageoffset, lastoption - m.pagesize))
     return min(cursor + m.pagesize, lastoption)
 end
 

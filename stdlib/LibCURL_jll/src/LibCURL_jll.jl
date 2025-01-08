@@ -3,8 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl
 
 baremodule LibCURL_jll
-using Base, Libdl, nghttp2_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
+using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
+if !(Sys.iswindows() || Sys.isapple())
+    # On Windows and macOS we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,16 +17,16 @@ export libcurl
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libcurl_handle = C_NULL
-libcurl_path = ""
+artifact_dir::String = ""
+libcurl_handle::Ptr{Cvoid} = C_NULL
+libcurl_path::String = ""
 
 if Sys.iswindows()
     const libcurl = "libcurl-4.dll"
 elseif Sys.isapple()
     const libcurl = "@rpath/libcurl.4.dylib"
 else
-    const libcurl = "libcurl.so"
+    const libcurl = "libcurl.so.4"
 end
 
 function __init__()

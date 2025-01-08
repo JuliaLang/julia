@@ -603,4 +603,12 @@ end
     @test length(r) == 366
 end
 
+# Issue #48209
+@testset "steprange_last overflow" begin
+    epoch = Date(Date(1) - Day(1))
+    dmax = epoch + Day(typemax(fieldtype(Day, :value)))
+    dmin = epoch + Day(typemin(fieldtype(Day, :value)))
+    @test_throws OverflowError StepRange(dmin, Day(1), dmax)
+end
+
 end  # RangesTest module

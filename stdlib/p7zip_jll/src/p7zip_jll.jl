@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/p7zip_jll.jl
 baremodule p7zip_jll
 using Base
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,8 +12,8 @@ export p7zip
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-p7zip_path = ""
+artifact_dir::String = ""
+p7zip_path::String = ""
 if Sys.iswindows()
     const p7zip_exe = "7z.exe"
 else
@@ -69,8 +68,8 @@ end
 
 function init_p7zip_path()
     # Prefer our own bundled p7zip, but if we don't have one, pick it up off of the PATH
-    # If this is an in-tree build, `7z` will live in `bin`.  Otherwise, it'll be in `libexec`
-    for bundled_p7zip_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, p7zip_exe),
+    # If this is an in-tree build, `7z` will live in `bindir`.  Otherwise, it'll be in `private_libexecdir`
+    for bundled_p7zip_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe),
                                joinpath(Sys.BINDIR, p7zip_exe))
         if isfile(bundled_p7zip_path)
             global p7zip_path = abspath(bundled_p7zip_path)

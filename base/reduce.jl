@@ -4,14 +4,6 @@
 
 ###### Generic (map)reduce functions ######
 
-if Int === Int32
-    const SmallSigned = Union{Int8,Int16}
-    const SmallUnsigned = Union{UInt8,UInt16}
-else
-    const SmallSigned = Union{Int8,Int16,Int32}
-    const SmallUnsigned = Union{UInt8,UInt16,UInt32}
-end
-
 abstract type AbstractBroadcasted end
 const AbstractArrayOrBroadcasted = Union{AbstractArray, AbstractBroadcasted}
 
@@ -22,8 +14,8 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::BitSignedSmall, y::BitSignedSmall) = Int(x) + Int(y)
+add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
 
 """
@@ -33,8 +25,8 @@ The reduction operator used in `prod`. The main difference from [`*`](@ref) is t
 integers are promoted to `Int`/`UInt`.
 """
 mul_prod(x, y) = x * y
-mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
+mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
@@ -51,17 +43,22 @@ function foldl_impl(op::OP, nt, itr) where {OP}
 end
 
 function _foldl_impl(op::OP, init, itr) where {OP}
-    # Unroll the while loop once; if init is known, the call to op may
-    # be evaluated at compile time
+    # Unroll the loop once to check if the iterator is empty.
+    # If init is known, the call to op may be evaluated at compile time
     y = iterate(itr)
     y === nothing && return init
     v = op(init, y[1])
-    while true
-        y = iterate(itr, y[2])
-        y === nothing && break
-        v = op(v, y[1])
+    # Using a for loop is more performant than a while loop (see #56492)
+    # This unrolls the loop a second time before entering the body
+    for x in Iterators.rest(itr, y[2])
+        v = op(v, x)
     end
     return v
+end
+
+function _foldl_impl(op, init, itr::Union{Tuple,NamedTuple})
+    length(itr) <= 32 && return afoldl(op, init, itr...)
+    @invoke _foldl_impl(op, init, itr::Any)
 end
 
 struct _InitialValue end
@@ -196,11 +193,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse(itr′))
+    return foldl_impl(op′, nt, _reverse_iter(itr′))
 end
 
-_reverse(itr) = Iterators.reverse(itr)
-_reverse(itr::Tuple) = reverse(itr)  #33235
+_reverse_iter(itr) = Iterators.reverse(itr)
+_reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
 
 struct FlipArgs{F}
     f::F
@@ -300,7 +297,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+mapreduce(f, op, itr, itrs...; kw...) = reduce(op, Generator(f, itr, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -311,10 +308,11 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
-_empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
-    reducing with $f over an empty collection of element type $T is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
+reduce_empty(f, T) = _empty_reduce_error()
+mapreduce_empty(f, op, T) = _empty_reduce_error()
+reduce_empty(f, ::Type{Union{}}, splat...) = _empty_reduce_error()
+mapreduce_empty(f, op, ::Type{Union{}}, splat...) = _empty_reduce_error()
 
 """
     Base.reduce_empty(op, T)
@@ -334,23 +332,19 @@ is generally ambiguous, and especially so when the element type is unknown).
 
 As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error(+, Union{})
 reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod, Union{})
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UInt)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitSignedSmall}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UInt)
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
@@ -388,7 +382,7 @@ reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
 
 The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
 [`foldr`](@ref) with reduction `op` over an iterator which contains a single element
-`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+`x`. This value may also be used to initialise the recursion, so that `reduce(op, [x, y])`
 may call `op(reduce_first(op, x), y)`.
 
 The default is `x` for most types. The main purpose is to ensure type stability, so
@@ -400,19 +394,19 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 
 """
     Base.mapreduce_first(f, op, x)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
-single element `x`. This value may also used to initialise the recursion, so that
-`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
+single element `x`. This value may also be used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(mapreduce_first(f, op, x), f(y))`.
 
 The default is `reduce_first(op, f(x))`.
 """
@@ -459,8 +453,10 @@ For empty collections, providing `init` will be necessary, except for some speci
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
-should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
- `any(itr)`, `all(itr)`.
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
+There are efficient methods for concatenating certain arrays of arrays
+by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
@@ -476,8 +472,8 @@ elements are not reordered if you use an ordered collection.
 julia> reduce(*, [2; 3; 4])
 24
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(*, Int[]; init=1)
+1
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
@@ -530,7 +526,7 @@ sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 """
     sum(itr; [init])
 
-Returns the sum of all elements in a collection.
+Return the sum of all elements in a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -562,7 +558,7 @@ sum(a::AbstractArray{Bool}; kw...) =
 """
     prod(f, itr; [init])
 
-Returns the product of `f` applied to each element of `itr`.
+Return the product of `f` applied to each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -586,7 +582,7 @@ prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 """
     prod(itr; [init])
 
-Returns the product of all elements of a collection.
+Return the product of all elements of a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -642,11 +638,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+        for i in start:4:simdstop
+            v1 = _fast(op, v1, f(@inbounds(A[i+0])))
+            v2 = _fast(op, v2, f(@inbounds(A[i+1])))
+            v3 = _fast(op, v3, f(@inbounds(A[i+2])))
+            v4 = _fast(op, v4, f(@inbounds(A[i+3])))
         end
         checkbounds(A, simdstop+3)
         start += chunk_len
@@ -673,7 +669,7 @@ end
 """
     maximum(f, itr; [init])
 
-Returns the largest result of calling function `f` on each element of `itr`.
+Return the largest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -700,7 +696,7 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 """
     minimum(f, itr; [init])
 
-Returns the smallest result of calling function `f` on each element of `itr`.
+Return the smallest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -727,7 +723,7 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 """
     maximum(itr; [init])
 
-Returns the largest element in a collection.
+Return the largest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -746,7 +742,7 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -759,7 +755,7 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 """
     minimum(itr; [init])
 
-Returns the smallest element in a collection.
+Return the smallest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -778,7 +774,7 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -870,11 +866,12 @@ end
 """
     findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
-`domain` must be a non-empty iterable.
+`domain` must be a non-empty iterable supporting [`keys`](@ref). Indices
+are of the same type as those returned by [`keys(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -908,6 +905,9 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
 # Examples
@@ -929,11 +929,14 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -968,6 +971,9 @@ Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
 # Examples
@@ -989,7 +995,7 @@ _findmin(a, ::Colon) = findmin(identity, a)
 """
     argmax(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+Return a value `x` from `domain` for which `f(x)` is maximised.
 If there are multiple maximal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1020,6 +1026,9 @@ If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 Values are compared with `isless`.
 
 See also: [`argmin`](@ref), [`findmax`](@ref).
@@ -1041,7 +1050,7 @@ argmax(itr) = findmax(itr)[2]
 """
     argmin(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+Return a value `x` from `domain` for which `f(x)` is minimised.
 If there are multiple minimal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1075,6 +1084,9 @@ If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 `NaN` is treated as less than all other values except `missing`.
 
 See also: [`argmax`](@ref), [`findmin`](@ref).
@@ -1092,226 +1104,6 @@ julia> argmin([7, 1, 1, NaN])
 ```
 """
 argmin(itr) = findmin(itr)[2]
-
-## all & any
-
-"""
-    any(itr) -> Bool
-
-Test whether any elements of a boolean collection are `true`, returning `true` as
-soon as the first `true` value in `itr` is encountered (short-circuiting). To
-short-circuit on `false`, use [`all`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `false` (or equivalently, if the input contains no `true` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
-
-# Examples
-```jldoctest
-julia> a = [true,false,false,true]
-4-element Vector{Bool}:
- 1
- 0
- 0
- 1
-
-julia> any(a)
-true
-
-julia> any((println(i); v) for (i, v) in enumerate(a))
-1
-true
-
-julia> any([missing, true])
-true
-
-julia> any([false, missing])
-missing
-```
-"""
-any(itr) = any(identity, itr)
-
-"""
-    all(itr) -> Bool
-
-Test whether all elements of a boolean collection are `true`, returning `false` as
-soon as the first `false` value in `itr` is encountered (short-circuiting). To
-short-circuit on `true`, use [`any`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `true` (or equivalently, if the input contains no `false` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
-
-# Examples
-```jldoctest
-julia> a = [true,false,false,true]
-4-element Vector{Bool}:
- 1
- 0
- 0
- 1
-
-julia> all(a)
-false
-
-julia> all((println(i); v) for (i, v) in enumerate(a))
-1
-2
-false
-
-julia> all([missing, false])
-false
-
-julia> all([true, missing])
-missing
-```
-"""
-all(itr) = all(identity, itr)
-
-"""
-    any(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for any elements of `itr`, returning
-`true` as soon as the first item in `itr` for which `p` returns `true` is encountered
-(short-circuiting). To short-circuit on `false`, use [`all`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `false` (or equivalently, if the input contains no `true` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-# Examples
-```jldoctest
-julia> any(i->(4<=i<=6), [3,5,7])
-true
-
-julia> any(i -> (println(i); i > 3), 1:10)
-1
-2
-3
-4
-true
-
-julia> any(i -> i > 0, [1, missing])
-true
-
-julia> any(i -> i > 0, [-1, missing])
-missing
-
-julia> any(i -> i > 0, [-1, 0])
-false
-```
-"""
-any(f, itr) = _any(f, itr, :)
-
-function _any(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
-        end
-    end
-    return anymissing ? missing : false
-end
-
-# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types.
-# We fall back to the for loop implementation all elements have the same type or
-# if the tuple is too large.
-any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
-function any(f, itr::Tuple)            # case of tuple with mixed types
-    length(itr) > 32 && return _any(f, itr, :)
-    _any_tuple(f, false, itr...)
-end
-
-@inline function _any_tuple(f, anymissing, x, rest...)
-    v = f(x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
-        return true
-    end
-    return _any_tuple(f, anymissing, rest...)
-end
-@inline _any_tuple(f, anymissing) = anymissing ? missing : false
-
-"""
-    all(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for all elements of `itr`, returning
-`false` as soon as the first item in `itr` for which `p` returns `false` is encountered
-(short-circuiting). To short-circuit on `true`, use [`any`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `true` (or equivalently, if the input contains no `false` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-# Examples
-```jldoctest
-julia> all(i->(4<=i<=6), [4,5,6])
-true
-
-julia> all(i -> (println(i); i < 3), 1:10)
-1
-2
-3
-false
-
-julia> all(i -> i > 0, [1, missing])
-missing
-
-julia> all(i -> i > 0, [-1, missing])
-false
-
-julia> all(i -> i > 0, [1, 2])
-true
-```
-"""
-all(f, itr) = _all(f, itr, :)
-
-function _all(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-        elseif v
-            continue
-        else
-            return false
-        end
-    end
-    return anymissing ? missing : true
-end
-
-# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types. This is similar to any(f, ::Tuple) defined above.
-all(f, itr::NTuple) = _all(f, itr, :)
-function all(f, itr::Tuple)
-    length(itr) > 32 && return _all(f, itr, :)
-    _all_tuple(f, false, itr...)
-end
-
-@inline function _all_tuple(f, anymissing, x, rest...)
-    v = f(x)
-    if ismissing(v)
-        anymissing = true
-    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-    elseif v
-        nothing
-    else
-        return false
-    end
-    return _all_tuple(f, anymissing, rest...)
-end
-@inline _all_tuple(f, anymissing) = anymissing ? missing : true
 
 ## count
 
@@ -1346,15 +1138,7 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
-
-function _simple_count_helper(g, init::T) where {T}
-    n::T = init
-    for x in g
-        n += x::Bool
-    end
-    return n
-end
+_simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
 function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     n::T = init

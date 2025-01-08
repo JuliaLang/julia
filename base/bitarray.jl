@@ -18,7 +18,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 !!! note
     Due to its packed storage format, concurrent access to the elements of a `BitArray`
-    where at least one of them is a write is not thread safe.
+    where at least one of them is a write is not thread-safe.
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
@@ -404,6 +404,7 @@ falses(dims::DimOrInd...) = falses(dims)
 falses(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = falses(map(to_dim, dims))
 falses(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), false)
 falses(dims::Tuple{}) = fill!(BitArray(undef, dims), false)
+falses(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), false)
 
 """
     trues(dims)
@@ -422,6 +423,7 @@ trues(dims::DimOrInd...) = trues(dims)
 trues(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = trues(map(to_dim, dims))
 trues(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), true)
 trues(dims::Tuple{}) = fill!(BitArray(undef, dims), true)
+trues(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), true)
 
 function one(x::BitMatrix)
     m, n = size(x)
@@ -462,7 +464,7 @@ copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integ
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
+    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -482,7 +484,7 @@ end
 reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
 function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
     prod(dims) == length(B) ||
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $(length(B))"))
     Br = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
@@ -541,10 +543,8 @@ end
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
 reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)::T
 BitArray(x::BitArray) = copy(x)
-end
 
 """
     BitArray(itr)
@@ -577,7 +577,7 @@ julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
 BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
 BitArray{N}(itr) where N = gen_bitarrayN(BitArray{N}, IteratorSize(itr), itr)
 
-convert(T::Type{<:BitArray}, a::AbstractArray) = a isa T ? a : T(a)
+convert(::Type{T}, a::AbstractArray) where {T<:BitArray} = a isa T ? a : T(a)::T
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
@@ -807,7 +807,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
 
@@ -1545,12 +1545,12 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
 
     @inbounds begin
         if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+            return (chunk_start-1) << 6 + (top_set_bit(Bc[chunk_start] & mask))
         end
 
         for i = (chunk_start-1):-1:1
             if Bc[i] != 0
-                return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
+                return (i-1) << 6 + (top_set_bit(Bc[i]))
             end
         end
     end
@@ -1779,26 +1779,44 @@ end
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
-    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
     isempty(A) && return dest
     destc = dest.chunks
     Ac = A.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = length(Ac)
+    for i = 1:(len_Ac-1)
         destc[i] = f(Ac[i])
     end
-    destc[end] = f(Ac[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(A)
+    # first zero out the bits mask is going to change
+    # then update bits by `or`ing with a masked RHS
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac aliases destc
+    destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
+    min_bitlen = min(length(A), length(B))
+    min_bitlen <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
     isempty(A) && return dest
+    isempty(B) && return dest
     destc = dest.chunks
     Ac = A.chunks
     Bc = B.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = min(length(Ac), length(Bc))
+    for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
-    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(min_bitlen)
+    # first zero out the bits mask is going to change
+    # then update bits by `or`ing with a masked RHS
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac or Bc aliases destc
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
     dest
 end
 

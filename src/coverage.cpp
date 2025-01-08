@@ -17,16 +17,16 @@ using namespace llvm;
 
 static int codegen_imaging_mode(void)
 {
-    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
 // Logging for code coverage and memory allocation
 
 const int logdata_blocksize = 32; // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
 typedef uint64_t logdata_block[logdata_blocksize];
-typedef StringMap< std::vector<logdata_block*> > logdata_t;
+typedef StringMap< SmallVector<logdata_block*, 0> > logdata_t;
 
-static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
+static uint64_t *allocLine(SmallVector<logdata_block*, 0> &vec, int line)
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -63,7 +63,7 @@ extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_
     StringRef filename = StringRef(filename_, len_filename);
     if (codegen_imaging_mode() || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    std::vector<logdata_block*> &vec = coverageData[filename];
+    SmallVector<logdata_block*, 0> &vec = coverageData[filename];
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
 }
@@ -77,24 +77,35 @@ JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line)
     return allocLine(mallocData[filename], line);
 }
 
-// Resets the malloc counts.
-extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+static void clear_log_data(logdata_t &logData, int resetValue)
 {
-    logdata_t::iterator it = mallocData.begin();
-    for (; it != mallocData.end(); it++) {
-        std::vector<logdata_block*> &bytes = (*it).second;
-        std::vector<logdata_block*>::iterator itb;
+    logdata_t::iterator it = logData.begin();
+    for (; it != logData.end(); it++) {
+        SmallVector<logdata_block*, 0> &bytes = (*it).second;
+        SmallVector<logdata_block*, 0>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
                 logdata_block &data = **itb;
                 for (int i = 0; i < logdata_blocksize; i++) {
                     if (data[i] > 0)
-                        data[i] = 1;
+                        data[i] = resetValue;
                 }
             }
         }
     }
     jl_gc_sync_total_bytes(0);
+}
+
+// Resets the malloc counts.
+extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
+{
+    clear_log_data(mallocData, 1);
+}
+
+// Resets the code coverage
+extern "C" JL_DLLEXPORT void jl_clear_coverage_data(void)
+{
+    clear_log_data(coverageData, 0);
 }
 
 static void write_log_data(logdata_t &logData, const char *extension)
@@ -104,7 +115,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
         std::string filename(it->first());
-        std::vector<logdata_block*> &values = it->second;
+        SmallVector<logdata_block*, 0> &values = it->second;
         if (!values.empty()) {
             if (!jl_isabspath(filename.c_str()))
                 filename = base + filename;
@@ -160,7 +171,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
         StringRef filename = it->first();
-        const std::vector<logdata_block*> &values = it->second;
+        const SmallVector<logdata_block*, 0> &values = it->second;
         if (!values.empty()) {
             outf << "SF:" << filename.str() << '\n';
             size_t n_covered = 0;
@@ -196,7 +207,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
-        if (output_pattern.endswith(".info"))
+        if (output_pattern.ends_with(".info"))
             write_lcov_data(coverageData, jl_format_filename(output_pattern.str().c_str()));
     }
     else {
@@ -206,7 +217,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
     }
 }
 
-extern "C" JL_DLLEXPORT void jl_write_malloc_log(void)
+extern "C" void jl_write_malloc_log(void)
 {
     std::string stm;
     raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";

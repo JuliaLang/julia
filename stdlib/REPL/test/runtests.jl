@@ -3,6 +3,10 @@
 # Make a copy of the original environment
 original_env = copy(ENV)
 
+module PrecompilationTests
+    include("precompilation.jl")
+end
+
 module REPLTests
     include("repl.jl")
 end

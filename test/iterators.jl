@@ -11,6 +11,10 @@ using Dates: Date, Day
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+# issue #45085
+@test_throws ArgumentError Iterators.reverse(zip("abc", "abcd"))
+@test_throws ArgumentError Iterators.reverse(zip("abc", Iterators.cycle("ab")))
+
 let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
@@ -250,6 +254,22 @@ let i = 0
     @test !Base.isdone(cycle(0:3), 1)
 end
 
+@testset "cycle(iter, n)"  begin
+    @test collect(cycle(0:3, 2)) == [0, 1, 2, 3, 0, 1, 2, 3]
+    @test collect(cycle(Iterators.filter(iseven, 1:4), 2)) == [2, 4, 2, 4]
+    @test collect(take(cycle(countfrom(11), 3), 4)) == 11:14
+
+    @test isempty(cycle(1:0)) == isempty(cycle(1:0, 3)) == true
+    @test isempty(cycle(1:5, 0))
+    @test isempty(cycle(Iterators.filter(iseven, 1:4), 0))
+
+    @test eltype(cycle(0:3, 2)) === Int
+    @test Base.IteratorEltype(cycle(0:3, 2)) == Base.HasEltype()
+
+    Base.haslength(cycle(0:3, 2)) == false  # but not sure we should test these
+    Base.IteratorSize(cycle(0:3, 2)) == Base.SizeUnknown()
+end
+
 # repeated
 # --------
 let i = 0
@@ -336,21 +356,25 @@ let a = 1:2,
     c = Int32(1):Int32(0)
 
     # length
+    @test length(product())        == 1
     @test length(product(a))       == 2
     @test length(product(a, b))    == 20
     @test length(product(a, b, c)) == 0
 
     # size
+    @test size(product())          == tuple()
     @test size(product(a))         == (2,)
     @test size(product(a, b))      == (2, 10)
     @test size(product(a, b, c))   == (2, 10, 0)
 
     # eltype
+    @test eltype(product())        == Tuple{}
     @test eltype(product(a))       == Tuple{Int}
     @test eltype(product(a, b))    == Tuple{Int, Float64}
     @test eltype(product(a, b, c)) == Tuple{Int, Float64, Int32}
 
     # ndims
+    @test ndims(product())         == 0
     @test ndims(product(a))        == 1
     @test ndims(product(a, b))     == 2
     @test ndims(product(a, b, c))  == 3
@@ -425,6 +449,8 @@ let a = 1:2,
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
     end
+
+    @test_throws OverflowError length(product(1:typemax(Int), 1:typemax(Int)))
 end
 
 # IteratorSize trait business
@@ -473,7 +499,7 @@ end
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
 @test Base.iterate(product()) == ((), true)
-@test Base.iterate(product(), 1) == nothing
+@test Base.iterate(product(), 1) === nothing
 
 # intersection
 @test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
@@ -487,6 +513,16 @@ end
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
 @test collect(flatten(Any[2:1])) == Any[]
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test eltype(flatten(([1, 2], [3.0, 4.0]))) == Real
+@test eltype(flatten((a = [1, 2], b = Int8[3, 4]))) == Signed
+@test eltype(flatten((Int[], Nothing[], Int[]))) == Union{Int, Nothing}
+@test eltype(flatten((String[],))) == String
+@test eltype(flatten((Int[], UInt[], Int8[],))) == Integer
+@test eltype(flatten((; a = Int[], b = Nothing[], c = Int[]))) == Union{Int, Nothing}
+@test eltype(flatten((; a = String[],))) == String
+@test eltype(flatten((; a = Int[], b = UInt[], c = Int8[],))) == Integer
+@test eltype(flatten(())) == Union{}
+@test eltype(flatten((;))) == Union{}
 @test length(flatten(zip(1:3, 4:6))) == 6
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
@@ -612,7 +648,7 @@ end
             @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
             @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
         end
-        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
 end
 @testset "empty/invalid partitions" begin
@@ -844,8 +880,10 @@ end
         v, s = iterate(z)
         @test Base.isdone(z, s)
     end
-    # Stateful wrapping mutable iterators of known length (#43245)
-    @test length(Iterators.Stateful(Iterators.Stateful(1:5))) == 5
+    # Stateful does not define length
+    let s = Iterators.Stateful(Iterators.Stateful(1:5))
+        @test_throws MethodError length(s)
+    end
 end
 
 @testset "pair for Svec" begin
@@ -857,6 +895,10 @@ end
 @testset "inference for large zip #26765" begin
     x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
             (1 for i in 1:2), Iterators.Stateful(["a", "b", "c"]), (1.0 for i in 1:2, j in 1:3))
+    @test Base.IteratorSize(x) isa Base.SizeUnknown
+    x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
+            (1 for i in 1:2), Iterators.cycle(Iterators.Stateful(["a", "b", "c"])), (1.0 for i in 1:2, j in 1:3))
+    @test Base.IteratorSize(x) isa Base.HasLength
     @test @inferred(length(x)) == 2
     z = Iterators.filter(x -> x[1] >= 1, x)
     @test @inferred(eltype(z)) <: Tuple{Int,String,Float64,Int,String,Float64,Any,String,Any}
@@ -865,20 +907,20 @@ end
 end
 
 @testset "Stateful fix #30643" begin
-    @test Base.IteratorSize(1:10) isa Base.HasShape
+    @test Base.IteratorSize(1:10) isa Base.HasShape{1}
     a = Iterators.Stateful(1:10)
-    @test Base.IteratorSize(a) isa Base.HasLength
-    @test length(a) == 10
+    @test Base.IteratorSize(a) isa Base.SizeUnknown
+    @test !Base.isdone(a)
     @test length(collect(a)) == 10
-    @test length(a) == 0
+    @test Base.isdone(a)
     b = Iterators.Stateful(Iterators.take(1:10,3))
-    @test Base.IteratorSize(b) isa Base.HasLength
-    @test length(b) == 3
+    @test Base.IteratorSize(b) isa Base.SizeUnknown
+    @test !Base.isdone(b)
     @test length(collect(b)) == 3
-    @test length(b) == 0
+    @test Base.isdone(b)
     c = Iterators.Stateful(Iterators.countfrom(1))
     @test Base.IteratorSize(c) isa Base.IsInfinite
-    @test length(Iterators.take(c,3)) == 3
+    @test !Base.isdone(Iterators.take(c,3))
     @test length(collect(Iterators.take(c,3))) == 3
     d = Iterators.Stateful(Iterators.filter(isodd,1:10))
     @test Base.IteratorSize(d) isa Base.SizeUnknown
@@ -947,13 +989,6 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
-
-@testset "Iterators.tail_if_any" begin
-    @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2,)
-    @test Iterators.tail_if_any((1,)) == ()
-end
-
 @testset "IteratorSize trait for zip" begin
     @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
     @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
@@ -964,12 +999,12 @@ end
     @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
 
 @testset "Iterators.peel" begin
-    @test Iterators.peel([]) == nothing
+    @test Iterators.peel([]) === nothing
     @test Iterators.peel(1:10)[1] == 1
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
@@ -987,4 +1022,67 @@ end
     @test !isempty(gen)
     @test !Base.isdone(gen)
     @test collect(gen) == ["foo"]
+end
+
+@testset "empty product iterators" begin
+    v = nothing
+    for (z,) in zip(Iterators.product())
+        v = z
+    end
+    @test v == ()
+end
+
+@testset "collect partition substring" begin
+    @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
+end
+
+@testset "IterableStringPairs" begin
+    for s in ["", "a", "abcde", "γ", "∋γa"]
+        for T in (String, SubString, GenericString)
+            sT = T(s)
+            p = pairs(sT)
+            @test collect(p) == [k=>v for (k,v) in zip(keys(sT), sT)]
+            rv = Iterators.reverse(p)
+            @test collect(rv) == reverse([k=>v for (k,v) in zip(keys(sT), sT)])
+            rrv = Iterators.reverse(rv)
+            @test collect(rrv) == collect(p)
+        end
+    end
+end
+
+let itr = (i for i in 1:9) # Base.eltype == Any
+    @test first(Iterators.partition(itr, 3)) isa Vector{Any}
+    @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
+end
+
+@testset "map/reduce/mapreduce without an iterator argument" begin
+    maps = map(Returns, (nothing, 3, 3:2, 3:3, (), (3,)))
+    mappers1 = (Iterators.map, map, foreach, reduce, foldl, foldr)
+    mappers2 = (mapreduce, mapfoldl, mapfoldr)
+
+    @testset "map/reduce" begin
+        @testset "r: $r" for r ∈ mappers1
+            @testset "f: $f" for f ∈ maps
+                @test_throws MethodError r(f)
+                @test !applicable(r, f)
+                @test !hasmethod(r, Tuple{typeof(f)})
+            end
+        end
+    end
+
+    @testset "mapreduce" begin
+        @testset "mr: $mr" for mr ∈ mappers2
+            @testset "f: $f" for f ∈ maps
+                @testset "g: $g" for g ∈ maps
+                    @test_throws MethodError mr(f, g)
+                    @test !applicable(mr, f, g)
+                    @test !hasmethod(mr, Tuple{typeof(f),typeof(g)})
+                end
+            end
+        end
+    end
+end
+
+@testset "Iterators docstrings" begin
+    @test isempty(Docs.undocumented_names(Iterators))
 end

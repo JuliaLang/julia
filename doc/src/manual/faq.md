@@ -8,36 +8,53 @@ No.
 
 ### Why don't you compile Matlab/Python/R/… code to Julia?
 
-Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language.  Simple, right?
+Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language. Simple, right?
 
-The basic issue is that there is *nothing special about Julia's compiler*: we use a commonplace compiler (LLVM) with no “secret sauce” that other language developers don't know about.  Indeed, Julia's compiler is in many ways much simpler than those of other dynamic languages (e.g. PyPy or LuaJIT).   Julia's performance advantage derives almost entirely from its front-end: its language semantics allow a [well-written Julia program](@ref man-performance-tips) to *give more opportunities to the compiler* to generate efficient code and memory layouts.  If you tried to compile Matlab or Python code to Julia, our compiler would be limited by the semantics of Matlab or Python to producing code no better than that of existing compilers for those languages (and probably worse).  The key role of semantics is also why several existing Python compilers (like Numba and Pythran) only attempt to optimize a small subset of the language (e.g. operations on Numpy arrays and scalars), and for this subset they are already doing at least as well as we could for the same semantics.  The people working on those projects are incredibly smart and have accomplished amazing things, but retrofitting a compiler onto a language that was designed to be interpreted is a very difficult problem.
+The basic issue is that there is *nothing special about Julia's compiler*: we use a commonplace compiler (LLVM) with no “secret sauce” that other language developers don't know about. Indeed, Julia's compiler is in many ways much simpler than those of other dynamic languages (e.g. PyPy or LuaJIT). Julia's performance advantage derives almost entirely from its front-end: its language semantics allow a [well-written Julia program](@ref man-performance-tips) to *give more opportunities to the compiler* to generate efficient code and memory layouts. If you tried to compile Matlab or Python code to Julia, our compiler would be limited by the semantics of Matlab or Python to producing code no better than that of existing compilers for those languages (and probably worse). The key role of semantics is also why several existing Python compilers (like Numba and Pythran) only attempt to optimize a small subset of the language (e.g. operations on Numpy arrays and scalars), and for this subset they are already doing at least as well as we could for the same semantics. The people working on those projects are incredibly smart and have accomplished amazing things, but retrofitting a compiler onto a language that was designed to be interpreted is a very difficult problem.
 
-Julia's advantage is that good performance is not limited to a small subset of “built-in” types and operations, and one can write high-level type-generic code that works on arbitrary user-defined types while remaining fast and memory-efficient.  Types in languages like Python simply don't provide enough information to the compiler for similar capabilities, so as soon as you used those languages as a Julia front-end you would be stuck.
+Julia's advantage is that good performance is not limited to a small subset of “built-in” types and operations, and one can write high-level type-generic code that works on arbitrary user-defined types while remaining fast and memory-efficient. Types in languages like Python simply don't provide enough information to the compiler for similar capabilities, so as soon as you used those languages as a Julia front-end you would be stuck.
 
 For similar reasons, automated translation to Julia would also typically generate unreadable, slow, non-idiomatic code that would not be a good starting point for a native Julia port from another language.
 
-On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
+On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities. We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
 
 ## [Public API](@id man-api)
 
 ### How does Julia define its public API?
 
-The only interfaces that are stable with respect to [SemVer](https://semver.org/) of `julia`
-version are the Julia `Base` and standard libraries interfaces described in
-[the documentation](https://docs.julialang.org/) and not marked as unstable (e.g.,
-experimental and internal).  Functions, types, and constants are not part of the public
-API if they are not included in the documentation, _even if they have docstrings_.
+Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
+documentation of public symbols from `Base` and the standard libraries. Functions,
+types, and constants are not part of the public API if they are not public, even if
+they have docstrings or are described in the documentation. Further, only the documented
+behavior of public symbols is part of the public API. Undocumented behavior of public
+symbols is internal.
+
+Public symbols are those marked with either `public foo` or `export foo`.
+
+In other words:
+
+- Documented behavior of public symbols is part of the public API.
+- Undocumented behavior of public symbols is not part of the public API.
+- Documented behavior of private symbols is not part of the public API.
+- Undocumented behavior of private symbols is not part of the public API.
+
+You can get a complete list of the public symbols from a module with `names(MyModule)`.
+
+Package authors are encouraged to define their public API similarly.
+
+Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
+will not be removed or receive meaningful breaking changes before Julia 2.0.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
-Updating Julia may break your code if you use non-public API.  If the code is
-self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+Updating Julia may break your code if you use non-public API. If the code is
+self-contained, it may be a good idea to copy it into your project. If you want to rely on
 a complex non-public API, especially when using it from a stable package, it is a good idea
 to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
-into a public API.  However, we do not discourage the attempt to create packages that expose
-stable public interfaces while relying on non-public implementation details of `julia` and
-buffering the differences across different `julia` versions.
+into a public API. However, we do not discourage the attempt to create packages that expose
+stable public interfaces while relying on non-public implementation details of Julia and
+buffering the differences across different Julia versions.
 
 ### The documentation is not accurate enough. Can I rely on the existing behavior?
 
@@ -54,12 +71,12 @@ session (technically, in module `Main`), it is always present.
 
 If memory usage is your concern, you can always replace objects with ones that consume less memory.
  For example, if `A` is a gigabyte-sized array that you no longer need, you can free the memory
-with `A = nothing`.  The memory will be released the next time the garbage collector runs; you can force
+with `A = nothing`. The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`GC.gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
 ### How can I modify the declaration of a type in my session?
 
-Perhaps you've defined a type and then realize you need to add a new field.  If you try this at
+Perhaps you've defined a type and then realize you need to add a new field. If you try this at
 the REPL, you get the error:
 
 ```
@@ -70,8 +87,8 @@ Types in module `Main` cannot be redefined.
 
 While this can be inconvenient when you are developing new code, there's an excellent workaround.
  Modules can be replaced by redefining them, and so if you wrap all your new code inside a module
-you can redefine types and constants.  You can't import the type names into `Main` and then expect
-to be able to redefine them there, but you can use the module name to resolve the scope.  In other
+you can redefine types and constants. You can't import the type names into `Main` and then expect
+to be able to redefine them there, but you can use the module name to resolve the scope. In other
 words, while developing you might use a workflow something like this:
 
 ```julia
@@ -94,11 +111,14 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
+However, it is recommended to not write files that double as a script and as an importable library.
+If one needs functionality both available as a library and a script, it is better to write is as a library, then import the functionality into a distinct script.
+
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
-(SIGINT).  To run a certain code before terminating a Julia script,
+(SIGINT). To run a certain code before terminating a Julia script,
 which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
@@ -131,7 +151,7 @@ invoking an [operating-system shell](https://en.wikipedia.org/wiki/Shell_(comput
 That means that `run` does not perform wildcard expansion of `*` (["globbing"](https://en.wikipedia.org/wiki/Glob_(programming))),
 nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
 
-You can still do globbing and pipelines using Julia features, however.  For example, the built-in
+You can still do globbing and pipelines using Julia features, however. For example, the built-in
 [`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
 the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
 
@@ -154,8 +174,8 @@ while x < 10
 end
 ```
 and notice that it works fine in an interactive environment (like the Julia REPL),
-but gives `UndefVarError: x not defined` when you try to run it in script or other
-file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
+but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
+file. What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
 an assignment to a global in that local scope.
@@ -164,7 +184,7 @@ As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
 keyword for code in the REPL (and many other interactive environments), to simplify
 exploration (e.g. copy-pasting code from a function to run interactively).
 However, once you move to code in files, Julia requires a more disciplined approach
-to global variables.  You have least three options:
+to global variables. You have least three options:
 
 1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
 2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
@@ -232,7 +252,7 @@ the variables `A` and `x` were distinct bindings referring to the same mutable `
 
 ### Can I use `using` or `import` inside a function?
 
-No, you are not allowed to have a `using` or `import` statement inside a function.  If you want
+No, you are not allowed to have a `using` or `import` statement inside a function. If you want
 to import a module but only use its symbols inside a specific function or set of functions, you
 have two options:
 
@@ -246,7 +266,7 @@ have two options:
    ```
 
    This loads the module `Foo` and defines a variable `Foo` that refers to the module, but does not
-   import any of the other symbols from the module into the current namespace.  You refer to the
+   import any of the other symbols from the module into the current namespace. You refer to the
    `Foo` symbols by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
@@ -375,7 +395,7 @@ julia> twothreearr()
 
 ### [What does "type-stable" mean?](@id man-type-stability)
 
-It means that the type of the output is predictable from the types of the inputs.  In particular,
+It means that the type of the output is predictable from the types of the inputs. In particular,
 it means that the type of the output cannot vary depending on the *values* of the inputs. The
 following code is *not* type-stable:
 
@@ -402,14 +422,14 @@ Certain operations make mathematical sense but result in errors:
 ```jldoctest
 julia> sqrt(-2.0)
 ERROR: DomainError with -2.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
 
-This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
+This behavior is an inconvenient consequence of the requirement for type-stability. In the case
 of [`sqrt`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
-it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@ref)
+it produced the complex number `1.4142135623730951 + 0.0im`. One could write the [`sqrt`](@ref)
 function to switch to a complex-valued output only when passed a negative number (which is what
 [`sqrt`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
 and the [`sqrt`](@ref) function would have poor performance.
@@ -427,14 +447,14 @@ julia> sqrt(-2.0+0im)
 The parameters of a [parametric type](@ref Parametric-Types) can hold either
 types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
-element type and the integer value `2` to express its number of dimensions.  When
+element type and the integer value `2` to express its number of dimensions. When
 defining your own parametric type, you can use subtype constraints to declare that a
 certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
-type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+type parameter. There is not, however, a dedicated syntax to declare that a parameter
 must be a _value_ of a given type — that is, you cannot directly declare that a
 dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
-example.  Similarly, you cannot do computations (including simple things like addition
-or subtraction) on type parameters.  Instead, these sorts of constraints and
+example. Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters. Instead, these sorts of constraints and
 relationships may be expressed through additional type parameters that are computed
 and enforced within the type's [constructors](@ref man-constructors).
 
@@ -705,7 +725,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: Foo not defined
+UndefVarError: `Foo` not defined in `Main`
 Stacktrace:
 [...]
 ```
@@ -726,7 +746,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: gvar not defined
+UndefVarError: `gvar` not defined in `Main.Foo`
 Stacktrace:
 [...]
 ```
@@ -762,7 +782,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: #bar not defined
+UndefVarError: `#bar` not defined in `Main`
 [...]
 
 julia> anon_bar  = ()->1
@@ -784,6 +804,7 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+The function `foo` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   foo(!Matched::Vector{Real})
@@ -818,10 +839,13 @@ to strings); similarly, `repeat` can be used instead of `^` to repeat strings. T
 
 ### What is the difference between "using" and "import"?
 
-There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `import Foo.bar`,
-you only need to say `function bar(...` and it automatically extends module Foo's function bar.
+There are several differences between `using` and `import`
+(see the [Modules section](https://docs.julialang.org/en/v1/manual/modules/#modules)),
+but there is an important difference that may not seem intuitive at first glance,
+and on the surface (i.e. syntax-wise) it may seem very minor. When loading modules with `using`,
+you need to say `function Foo.bar(...` to extend module `Foo`'s function `bar` with a new method,
+but with `import Foo.bar`, you only need to say `function bar(...` and it automatically extends
+module `Foo`'s function `bar`.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
@@ -876,7 +900,7 @@ array to store the result. If you prefer to mutate `x`, use `x .+= y` to update 
 individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
-of immutable objects within Julia, which cannot change their value once created.  Indeed, a
+of immutable objects within Julia, which cannot change their value once created. Indeed, a
 number is an immutable object; the statements `x = 5; x += 1` do not modify the meaning of `5`,
 they modify the value bound to `x`. For an immutable, the only way to change the value is to reassign
 it.
@@ -919,7 +943,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -932,7 +956,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -945,7 +969,7 @@ You can lock your writes with a `ReentrantLock` like this:
 julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
-           @async begin
+           Threads.@spawn begin
                lock(l)
                try
                    write(stdout, string(i), " Foo ", " Bar ")
@@ -1029,17 +1053,15 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 
 ### How do I manage precompilation caches in distributed file systems?
 
-When using `julia` in high-performance computing (HPC) facilities, invoking
-_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
-precompilation cache files. If this is an issue (slow and/or small distributed
-file system), you may:
+When using Julia in high-performance computing (HPC) facilities with shared filesystems, it is recommended to use a shared
+depot (via the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
+workers and using the same depot will coordinate via pidfile locks to only spend effort precompiling on one process while the
+others wait. The precompilation process will indicate when the process is precompiling or waiting for another that is
+precompiling. If non-interactive the messages are via `@debug`.
 
-1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
-2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
-   where `private_path` is a path unique to this `julia` process.  This
-   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
-   `$private_path:$HOME/.julia`.
-3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
+[`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable appropriately to get a single cache that is usable throughout the HPC
+environment.
 
 ## Julia Releases
 
@@ -1049,7 +1071,7 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.

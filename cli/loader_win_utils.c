@@ -12,30 +12,40 @@ static FILE _stderr = { INVALID_HANDLE_VALUE };
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
-int loader_fwrite(const WCHAR *str, size_t nchars, FILE *out) {
+int JL_HIDDEN fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
-        if (WriteConsole(out->fd, str, nchars, &written, NULL))
+        // Windows consoles do not support UTF-8 (for reading input, though new Windows Terminal does for writing), only UTF-16.
+        wchar_t* wstr = utf8_to_wchar(str);
+        if (!wstr)
+            return -1;
+        if (WriteConsoleW(out->fd, wstr, wcslen(wstr), &written, NULL)) {
+            free(wstr);
             return written;
+        }
+        free(wstr);
     } else {
-        if (WriteFile(out->fd, str, sizeof(WCHAR) * nchars, &written, NULL))
+        // However, we want to print UTF-8 if the output is a file.
+        if (WriteFile(out->fd, str, nchars, &written, NULL))
             return written;
     }
     return -1;
 }
 
-int loader_fputs(const char *str, FILE *out) {
-    wchar_t wstr[1024];
-    utf8_to_wchar(str, wstr, 1024);
-    return fwrite(wstr, wcslen(wstr), out);
+int JL_HIDDEN fputs(const char *str, FILE *out) {
+    return fwrite(str, strlen(str), out);
 }
 
-void * loader_malloc(const size_t size) {
+void JL_HIDDEN *malloc(const size_t size) {
     return HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, size);
 }
 
-void * loader_realloc(void * mem, const size_t size) {
+void JL_HIDDEN *realloc(void * mem, const size_t size) {
     return HeapReAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, mem, size);
+}
+
+void JL_HIDDEN free(void* mem) {
+    HeapFree(GetProcessHeap(), 0, mem);
 }
 
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs) {
@@ -100,59 +110,59 @@ void setup_stdio() {
     _stderr.isconsole = GetConsoleMode(_stderr.fd, &mode);
 }
 
-void loader_exit(int code) {
+void JL_HIDDEN exit(int code) {
     ExitProcess(code);
 }
 
 
 /* Utilities to convert from Windows' wchar_t stuff to UTF-8 */
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen) {
+char *wchar_to_utf8(const wchar_t * wstr) {
     /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
     if (wstr[0] == L'\0') {
+        char *str = malloc(1);
         str[0] = '\0';
-        return 1;
+        return str;
     }
     size_t len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    char *str = (char *)malloc(len);
     if (!WideCharToMultiByte(CP_UTF8, 0, wstr, -1, str, len, NULL, NULL))
-        return 0;
-    return 1;
+        return NULL;
+    return str;
 }
 
-int utf8_to_wchar(const char * str, wchar_t * wstr, size_t maxlen) {
-    /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
+wchar_t *utf8_to_wchar(const char * str) {
+    /* Fast-path empty strings, as MultiByteToWideChar() returns zero for them. */
     if (str[0] == '\0') {
+        wchar_t *wstr = malloc(sizeof(wchar_t));
         wstr[0] = L'\0';
-        return 1;
+        return wstr;
     }
     size_t len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    wchar_t *wstr = (wchar_t *)malloc(len * sizeof(wchar_t));
     if (!MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, len))
-        return 0;
-    return 1;
+        return NULL;
+    return wstr;
 }
 
-size_t loader_strlen(const char * x) {
+size_t JL_HIDDEN strlen(const char * x) {
     int idx = 0;
     while (x[idx] != 0)
         idx++;
     return idx;
 }
 
-size_t loader_wcslen(const wchar_t * x) {
+size_t JL_HIDDEN wcslen(const wchar_t * x) {
     int idx = 0;
     while (x[idx] != 0)
         idx++;
     return idx;
 }
 
-char * loader_strncat(char * base, const char * tail, size_t maxlen) {
+char JL_HIDDEN *strncat(char * base, const char * tail, size_t maxlen) {
     int base_len = strlen(base);
     int tail_len = strlen(tail);
     for (int idx=base_len; idx<min(maxlen, base_len + tail_len); ++idx) {
@@ -161,14 +171,21 @@ char * loader_strncat(char * base, const char * tail, size_t maxlen) {
     return base;
 }
 
-void * loader_memcpy(void * dest, const void * src, size_t len) {
+void JL_HIDDEN *memcpy(void * dest, const void * src, size_t len) {
     for (int idx=0; idx<len; ++idx) {
         ((char *)dest)[idx] = ((const char *)src)[idx];
     }
     return dest;
 }
 
-char * loader_dirname(char * x) {
+void JL_HIDDEN *memset(void *s, int c, size_t n) {
+  unsigned char* p = s;
+  while(n--)
+    *p++ = (unsigned char)c;
+  return s;
+}
+
+char JL_HIDDEN *dirname(char * x) {
     int idx = strlen(x);
     while (idx > 0 && x[idx] != PATHSEPSTRING[0]) {
         idx -= 1;
@@ -188,7 +205,7 @@ char * loader_dirname(char * x) {
     return x;
 }
 
-char * loader_strchr(const char * haystack, int needle) {
+char JL_HIDDEN *strchr(const char * haystack, int needle) {
     int idx=0;
     while (haystack[idx] != needle) {
         if (haystack[idx] == 0) {

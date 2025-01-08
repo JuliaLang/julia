@@ -252,10 +252,9 @@ end
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
-typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("arrayref(false", typed_40281)
-    @test !occursin("arrayref(true", typed_40281)
+    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
 end
 
 # Given this is a sub-processed test file, not using @testsets avoids
@@ -282,7 +281,6 @@ begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
     end
 end
 
-
 # Test that --check-bounds=off doesn't permit const prop of indices into
 # function that are not dynamically reachable (the same test for @inbounds
 # is in the compiler tests).
@@ -293,5 +291,60 @@ function f_boundscheck_elim(n)
     ntuple(x->getfield(sin, x), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+# https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
+@test Base.return_types() do
+    typeintersect(Int, Integer)
+end |> only === Type{Int}
+
+if bc_opt == bc_default
+@testset "Array/Memory escape analysis" begin
+    function no_allocate(T::Type{<:Union{Memory, Vector}})
+        v = T(undef, 2)
+        v[1] = 2
+        v[2] = 3
+        return v[1] + v[2]
+    end
+    function test_alloc(::Type{T}; broken=false) where T
+        @test (@allocated no_allocate(T)) == 0 broken=broken
+    end
+    @testset "$T" for T in [Memory, Vector]
+        @testset "$ET" for ET in [Int, Float32, Union{Int, Float64}]
+            no_allocate(T{ET}) #compile
+            # allocations aren't removed for Union eltypes which they theoretically could be eventually
+            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+        end
+    end
+    function f() # this was causing a bug on an in progress version of #55913.
+        m = Memory{Float64}(undef, 4)
+        m .= 1.0
+        s = 0.0
+        for x ∈ m
+            s += x
+        end
+        s
+    end
+    @test f() === 4.0
+    function confuse_alias_analysis()
+       mem0 = Memory{Int}(undef, 1)
+       mem1 = Memory{Int}(undef, 1)
+       @inbounds mem0[1] = 3
+       for width in 1:2
+            @inbounds mem1[1] = mem0[1]
+            mem0 = mem1
+       end
+       mem0[1]
+    end
+    @test confuse_alias_analysis() == 3
+    @test (@allocated confuse_alias_analysis()) == 0
+    function no_alias_prove(n)
+        m1 = Memory{Int}(undef,n)
+        m2 = Memory{Int}(undef,n)
+        m1 === m2
+    end
+    no_alias_prove(1)
+    @test_broken (@allocated no_alias_prove(5)) == 0
+end
+end
 
 end

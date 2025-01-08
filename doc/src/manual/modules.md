@@ -7,16 +7,17 @@ Modules in Julia help organize code into coherent units. They are delimited synt
    allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
 2. Modules have facilities for detailed namespace management: each defines a set of names it
-   `export`s, and can import names from other modules with `using` and `import` (we explain these below).
+   `export`s and marks as `public`, and can import names from other modules with `using` and
+   `import` (we explain these below).
 
-3. Modules can be precompiled for faster loading, and contain code for runtime initialization.
+3. Modules can be precompiled for faster loading, and may contain code for runtime initialization.
 
 Typically, in larger Julia packages you will see module code organized into files, eg
 
 ```julia
 module SomeModule
 
-# export, using, import statements are usually here; we discuss these below
+# export, public, using, import statements are usually here; we discuss these below
 
 include("file1.jl")
 include("file2.jl")
@@ -103,9 +104,19 @@ Also, some modules don't export names at all. This is usually done if they use c
 words, such as `derivative`, in their API, which could easily clash with the export lists of other
 modules. We will see how to manage name clashes below.
 
+To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
+one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
+but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
+and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
+[Compat](https://github.com/JuliaLang/Compat.jl) package, or the version-aware construct
+
+```julia
+VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
+```
+
 ### Standalone `using` and `import`
 
-Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
+For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
 code-loading) the code associated with `ModuleName`, and brings
 
 1. the module name
@@ -143,7 +154,7 @@ As we will see in the next section `import .NiceStuff` is equivalent to `using .
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
-julia> using LinearAlgebra, Statistics
+julia> using LinearAlgebra, Random
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods
@@ -161,6 +172,13 @@ Importantly, the module name `NiceStuff` will *not* be in the namespace. If you 
 julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
 
+When two or more packages/modules export a name and that name does not refer to the
+same thing in each of the packages, and the packages are loaded via `using` without
+an explicit list of names, it is an error to reference that name without qualification.
+It is thus recommended that code intended to be forward-compatible with future versions
+of its dependencies and of Julia, e.g., code in released packages, list the names it
+uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
+
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
 That is to say, the following example will give an error:
@@ -171,13 +189,12 @@ julia> using .NiceStuff: nice
 julia> struct Cat end
 
 julia> nice(::Cat) = "nice 😸"
-ERROR: error in method definition: function NiceStuff.nice must be explicitly imported to be extended
+ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
 Stacktrace:
  [1] top-level scope
    @ none:0
  [2] top-level scope
    @ none:1
-
 ```
 
 This error prevents accidentally adding methods to functions in other modules that you only intended to use.
@@ -189,17 +206,16 @@ julia> using .NiceStuff
 julia> struct Cat end
 
 julia> NiceStuff.nice(::Cat) = "nice 😸"
-
 ```
 
 Alternatively, you can `import` the specific function name:
 ```jldoctest module_manual
 julia> import .NiceStuff: nice
 
-julia> struct Cat end
+julia> struct Mouse end
 
-julia> nice(::Cat) = "nice 😸"
-nice (generic function with 2 methods)
+julia> nice(::Mouse) = "nice 🐭"
+nice (generic function with 3 methods)
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a
@@ -274,14 +290,14 @@ julia> module B
 B
 ```
 
-The statement `using .A, .B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get an error with a hint
 
 ```jldoctest module_manual
 julia> using .A, .B
 
 julia> f
-WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: UndefVarError: f not defined
+ERROR: UndefVarError: `f` not defined in `Main`
+Hint: It looks like two or more modules export different bindings with this name, resulting in ambiguity. Try explicitly importing it from a particular module, or qualifying the name with the module it should come from.
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -325,7 +341,17 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
-If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref):
+```jldoctest
+julia> arithmetic = Module(:arithmetic, false, false)
+Main.arithmetic
+
+julia> @eval arithmetic add(x, y) = $(+)(x, y)
+add (generic function with 1 method)
+
+julia> arithmetic.add(12, 13)
+25
+```
 
 ### Standard modules
 
@@ -387,7 +413,7 @@ x = 0
 
 module Sub
 using ..TestPackage
-z = y # ERROR: UndefVarError: y not defined
+z = y # ERROR: UndefVarError: `y` not defined in `Main`
 end
 
 y = 1
@@ -403,7 +429,7 @@ For similar reasons, you cannot use a cyclic ordering:
 module A
 
 module B
-using ..C # ERROR: UndefVarError: C not defined
+using ..C # ERROR: UndefVarError: `C` not defined in `Main.A`
 end
 
 module C
@@ -419,22 +445,28 @@ Large modules can take several seconds to load because executing all of the stat
 often involves compiling a large amount of code.
 Julia creates precompiled caches of the module to reduce this time.
 
-The incremental precompiled module file are created and used automatically when using `import`
-or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref). The resulting
-cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
-recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
+Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module. If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
+cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]`. If nothing about your system changes,
+such cache files will be used when you load the module with `import` or `using`.
+
+Precompilation cache files store definitions of modules, types, methods, and constants. They may also store method specializations and the code generated for them, but this typically requires that the developer add explicit [`precompile`](@ref) directives or execute workloads that force compilation during the package build.
+
+However, if you update the module's dependencies or change its source code, the module is automatically
+recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (`mtime`)
-of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
-to the modification time truncated to the nearest second (to accommodate systems that can't copy
-mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
+For file dependencies loaded by `include`, a change is determined by examining whether the
+file size (`fsize`) or content (condensed into a hash) is unchanged.
+For file dependencies loaded by `include_dependency` a change is determined by examining whether the modification time (`mtime`)
+is unchanged, or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen
 by the search logic in `require` matches the path that had created the precompile file. It also takes
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between
 the running system and the precompile cache.
+Finally, it takes account of changes in any [compile-time preferences](@ref preferences).
 
 If you know that a module is *not* safe to precompile
 (for example, for one of the reasons described below), you should
@@ -465,12 +497,12 @@ or other imported modules have their `__init__` functions called *before* the `_
 enclosing module.
 
 Two typical uses of `__init__` are calling runtime initialization functions of external C libraries
-and initializing global constants that involve pointers returned by external libraries.  For example,
+and initializing global constants that involve pointers returned by external libraries. For example,
 suppose that we are calling a C library `libfoo` that requires us to call a `foo_init()` initialization
 function at runtime. Suppose that we also want to define a global constant `foo_data_ptr` that
 holds the return value of a `void *foo_data()` function defined by `libfoo` -- this constant must
 be initialized at runtime (not at compile time) because the pointer address will change from run
-to run.  You could accomplish this by defining the following `__init__` function in your module:
+to run. You could accomplish this by defining the following `__init__` function in your module:
 
 ```julia
 const foo_data_ptr = Ref{Ptr{Cvoid}}(0)
@@ -495,9 +527,9 @@ null pointers unless they are hidden inside an [`isbits`](@ref) object). This in
 of the Julia functions [`@cfunction`](@ref) and [`pointer`](@ref).
 
 Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
-are a trickier case.  In the common case where the keys are numbers, strings, symbols, ranges,
+are a trickier case. In the common case where the keys are numbers, strings, symbols, ranges,
 `Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
-precompile.  However, for a few other key types, such as `Function` or `DataType` and generic
+precompile. However, for a few other key types, such as `Function` or `DataType` and generic
 user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
 on the memory address of the object (via its `objectid`) and hence may change from run to run.
 If you have one of these key types, or if you aren't sure, to be safe you can initialize this
@@ -576,9 +608,19 @@ A few other points to be aware of:
    an error to do this, but you simply need to be prepared that the system will try to copy some
    of these and to create a single unique instance of others.
 
-It is sometimes helpful during module development to turn off incremental precompilation. The
-command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
-off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
-manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
-precompilation triggering when installing, updating, and explicitly building packages.
+It is sometimes helpful during module development to turn off incremental precompilation.
+The command line flag `--compiled-modules={yes|no|existing}` enables you to toggle module
+precompilation on and off. When Julia is started with `--compiled-modules=no` the serialized
+modules in the compile cache are ignored when loading modules and module dependencies. In
+some cases, you may want to load existing precompiled modules, but not create new ones. This
+can be done by starting Julia with `--compiled-modules=existing`. More fine-grained control
+is available with `--pkgimages={yes|no|existing}`, which only affects native-code storage
+during precompilation. `Base.compilecache` can still be called manually. The state of this
+command line flag is passed to `Pkg.build` to disable automatic precompilation triggering
+when installing, updating, and explicitly building packages.
+
+You can also debug some precompilation failures with environment variables. Setting
+`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of
+compiled native code. See the **Developer Documentation** part of the Julia manual, where
+you will find further details in the section documenting Julia's internals under "Package
+Images".

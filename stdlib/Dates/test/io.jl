@@ -47,7 +47,7 @@ end
 end
 
 @testset "DateTime parsing" begin
-    # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
+    # Useful reference for different locales: https://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
     str = "02/15/1996 25:00"
@@ -60,7 +60,9 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SS\\P\""
+    @test sprint(show, dateformat"yyyy-mm-dd\THH:MM:SS.s") == "dateformat\"yyyy-mm-dd\\THH:MM:SS.s\""
+    @test sprint(show, dateformat"yyyy-mm-ddTHH:MM:SS.s") == "dateformat\"yyyy-mm-ddTHH:MM:SS.s\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
     @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
@@ -323,6 +325,23 @@ end
     # From Matt Bauman
     f = "yyyy-mm-ddTHH:MM:SS"
     @test Dates.DateTime("2014-05-28T16:46:04", f) == Dates.DateTime(2014, 5, 28, 16, 46, 04)
+
+    f = "yyyymmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "YYYYmmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "-yyyymmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
+    f = "-YYYYmmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
 end
 
 @testset "Error handling" begin
@@ -401,6 +420,17 @@ end
     @test_throws ArgumentError parse(Date, "Foo, 12 Nov 2016 07:45:36", Dates.RFC1123Format)
 end
 
+@testset "ISODateTimeFormat" begin
+    dt = Dates.DateTime(2024, 5, 21, 10, 57, 22)
+    neg_dt = Dates.DateTime(-2024, 5, 21, 10, 57, 22)
+    @test parse(Dates.DateTime, "2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "+2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "-2024-05-21T10:57:22", Dates.ISODateTimeFormat) == neg_dt
+
+    @test_throws ArgumentError parse(Dates.DateTime, "-", Dates.ISODateTimeFormat)
+    @test_throws ArgumentError parse(Dates.DateTime, "+", Dates.ISODateTimeFormat)
+end
+
 @testset "Issue 15195" begin
     f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
@@ -467,6 +497,9 @@ end
 
 # Issue #44003
 @test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
+
+# Issue #52989
+@test Dates.DateTime("2000") == Dates.DateTime(2000)
 
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
@@ -584,6 +617,41 @@ end
     @test (@inferred f1()) == (@inferred f2()) == (@inferred f3()) == datetime
     g() = tryparse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
     @test (@inferred Nothing g()) == datetime
+end
+
+@testset "Issue #43883: parsing empty strings" begin
+    for (T, name, fmt) in zip(
+            (DateTime, Date, Time),
+            ("DateTime", "Date or Time", "Date or Time"),
+            ("yyyy-mm-ddHHMMSS.s", "yyymmdd", "HHMMSS")
+        )
+        @test_throws ArgumentError T("")
+        @test_throws ArgumentError T("", fmt)
+        @test_throws ArgumentError T("", DateFormat(fmt))
+        try
+            T("")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test_throws ArgumentError parse(T, "")
+        @test_throws ArgumentError parse(T, "", DateFormat(fmt))
+        try
+            parse(T, "")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test tryparse(T, "") === nothing
+        @test tryparse(T, "", DateFormat(fmt)) === nothing
+    end
+end
+
+@testset "Issue #50328: parsing negative years" begin
+    @test Date("-2013-10-10") == Date(-2013, 10, 10)
+    @test Date("-2013") == Date(-2013, 01, 01)
 end
 
 end
