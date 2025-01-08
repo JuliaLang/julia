@@ -120,7 +120,7 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     return dest
 end
-@eval function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
