@@ -265,7 +265,7 @@ end
     # issue 56775
     p = make_circular_reference_array_56775()
     p2 = deepcopy(p)
-    p2 === p2[1]
+    @test p2 === p2[1]
 end
 
 @testset "deepcopy_internal inference" begin
