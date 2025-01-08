@@ -467,7 +467,6 @@ typedef struct _jl_code_instance_t {
                                    // & 0b010 == invokeptr matches specptr
                                    // & 0b100 == From image
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
-    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
