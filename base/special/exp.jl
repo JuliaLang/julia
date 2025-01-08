@@ -216,6 +216,7 @@ end
     small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
 
     if !(abs(x) <= SUBNORM_EXP(base, T))
+        isnan(x) && return x
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
@@ -243,6 +244,7 @@ end
     hi, lo = Base.canonicalize2(1.0, kern)
     small_part = fma(jU, hi, muladd(jU, (lo+xlo), very_small))
     if !(abs(x) <= SUBNORM_EXP(base, T))
+        isnan(x) && return x
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
@@ -250,7 +252,7 @@ end
             twopk = (k + UInt64(53)) << 52
             return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
-        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+        k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))

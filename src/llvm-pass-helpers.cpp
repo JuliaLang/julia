@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/DerivedTypes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -128,9 +129,7 @@ namespace jl_intrinsics {
     static Function *addGCAllocAttributes(Function *target)
     {
         auto FnAttrs = AttrBuilder(target->getContext());
-#if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
-#endif
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -162,7 +161,7 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),
@@ -227,11 +226,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME);
-#if JL_LLVM_VERSION >= 160000
             intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return intrinsic;
         });
 
@@ -247,18 +242,14 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 SAFEPOINT_NAME);
-#if JL_LLVM_VERSION >= 160000
             intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return intrinsic;
         });
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc_instrumented);
-    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc_instrumented);
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_SMALL_ALLOC_NAME = XSTR(jl_gc_small_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
@@ -272,7 +263,7 @@ namespace jl_well_known {
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), T_size , T_size},
+                    { PointerType::get(ctx, 0), T_size , T_size},
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
@@ -280,20 +271,20 @@ namespace jl_well_known {
             return addGCAllocAttributes(bigAllocFunc);
         });
 
-    const WellKnownFunctionDescription GCPoolAlloc(
-        GC_POOL_ALLOC_NAME,
+    const WellKnownFunctionDescription GCSmallAlloc(
+        GC_SMALL_ALLOC_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
             auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
-            auto poolAllocFunc = Function::Create(
+            auto smallAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
+                    { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
-                GC_POOL_ALLOC_NAME);
-            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
-            return addGCAllocAttributes(poolAllocFunc);
+                GC_SMALL_ALLOC_NAME);
+            smallAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return addGCAllocAttributes(smallAllocFunc);
         });
 
     const WellKnownFunctionDescription GCQueueRoot(
@@ -308,11 +299,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
-#if JL_LLVM_VERSION >= 160000
             func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return func;
         });
 
@@ -324,7 +311,7 @@ namespace jl_well_known {
             auto allocTypedFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),
@@ -333,11 +320,4 @@ namespace jl_well_known {
             allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
             return addGCAllocAttributes(allocTypedFunc);
         });
-}
-
-void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info)
-{
-    if (debug_info >= 2 && !llvm::isa<llvm::Constant>(V)) {
-        V->setName(Name);
-    }
 }

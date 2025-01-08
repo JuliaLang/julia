@@ -7,7 +7,7 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Core: CodeInfo, MethodInstance
+import Core: CodeInfo, MethodInstance, CodeInstance
 using Base.IRShow: normalize_method_name, append_scopes!, LineInfoNode
 
 export StackTrace, StackFrame, stacktrace
@@ -21,9 +21,9 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Method, Core.MethodInstance, Core.CodeInfo, Nothing}`
+- `linfo::Union{Method, Core.MethodInstance, Core.CodeInstance, Core.CodeInfo, Nothing}`
 
-  The Method, MethodInstance, or CodeInfo containing the execution context (if it could be found), \
+  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found), \
      or nothing (for example, if the inlining was a result of macro expansion).
 
 - `file::Symbol`
@@ -54,9 +54,9 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found), \
+    "the CodeInstance or CodeInfo containing the execution context (if it could be found), \
      or nothing (for example, if the inlining was a result of macro expansion)."
-    linfo::Union{MethodInstance, Method, CodeInfo, Nothing}
+    linfo::Union{Core.MethodInstance, Core.CodeInstance, Method, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -124,24 +124,39 @@ end
 
 const top_level_scope_sym = Symbol("top-level scope")
 
-function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
+function lookup(ip::Base.InterpreterIP)
     code = ip.code
     if code === nothing
         # interpreted top-level expression with no CodeInfo
         return [StackFrame(top_level_scope_sym, empty_sym, 0, nothing, false, false, 0)]
     end
-    codeinfo = (code isa MethodInstance ? code.uninferred : code)::CodeInfo
     # prepare approximate code info
     if code isa MethodInstance && (meth = code.def; meth isa Method)
         func = meth.name
         file = meth.file
         line = meth.line
+        codeinfo = meth.source
     else
         func = top_level_scope_sym
         file = empty_sym
         line = Int32(0)
+        if code isa Core.CodeInstance
+            codeinfo = code.inferred::CodeInfo
+            def = code.def
+            if isa(def, Core.ABIOverride)
+                def = def.def
+            end
+            if isa(def, MethodInstance) && isa(def.def, Method)
+                meth = def.def
+                func = meth.name
+                file = meth.file
+                line = meth.line
+            end
+        else
+            codeinfo = code::CodeInfo
+        end
     end
-    def = (code isa MethodInstance ? code : StackTraces) # Module just used as a token for top-level code
+    def = (code isa CodeInfo ? StackTraces : code) # Module just used as a token for top-level code
     pc::Int = max(ip.stmt + 1, 0) # n.b. ip.stmt is 0-indexed
     scopes = LineInfoNode[]
     append_scopes!(scopes, pc, codeinfo.debuginfo, def)
@@ -152,7 +167,7 @@ function lookup(ip::Union{Base.InterpreterIP,Core.Compiler.InterpreterIP})
     scopes = map(scopes) do lno
         if inlined
             def = lno.method
-            def isa Union{Method,MethodInstance} || (def = nothing)
+            def isa Union{Method,Core.CodeInstance,MethodInstance} || (def = nothing)
         else
             def = codeinfo
         end
@@ -170,7 +185,7 @@ Return a stack trace in the form of a vector of `StackFrame`s. (By default stack
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
-Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Core.Compiler.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
+Base.@constprop :none function stacktrace(trace::Vector{<:Union{Base.InterpreterIP,Ptr{Cvoid}}}, c_funcs::Bool=false)
     stack = StackTrace()
     for ip in trace
         for frame in lookup(ip)
@@ -222,6 +237,23 @@ end
 
 is_top_level_frame(f::StackFrame) = f.linfo isa CodeInfo || (f.linfo === nothing && f.func === top_level_scope_sym)
 
+function frame_method_or_module(lkup::StackFrame)
+    code = lkup.linfo
+    code isa Method && return code
+    code isa Module && return code
+    mi = frame_mi(lkup)
+    mi isa MethodInstance || return nothing
+    return mi.def
+end
+
+function frame_mi(lkup::StackFrame)
+    code = lkup.linfo
+    code isa Core.CodeInstance && (code = code.def)
+    code isa Core.ABIOverride && (code = code.def)
+    code isa MethodInstance || return nothing
+    return code
+end
+
 function show_spec_linfo(io::IO, frame::StackFrame)
     linfo = frame.linfo
     if linfo === nothing
@@ -236,16 +268,18 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         print(io, "top-level scope")
     elseif linfo isa Module
         Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
-    elseif linfo isa MethodInstance
-        def = linfo.def
-        if def isa Module
-            Base.show_mi(io, linfo, #=from_stackframe=#true)
-        else
-            show_spec_sig(io, def, linfo.specTypes)
-        end
     else
-        m = linfo::Method
-        show_spec_sig(io, m, m.sig)
+        if linfo isa Union{MethodInstance, CodeInstance}
+            def = frame_method_or_module(frame)
+            if def isa Module
+                Base.show_mi(io, linfo, #=from_stackframe=#true)
+            else
+                show_spec_sig(io, def, frame_mi(frame).specTypes)
+            end
+        else
+            m = linfo::Method
+            show_spec_sig(io, m, m.sig)
+        end
     end
 end
 
@@ -297,6 +331,12 @@ end
 
 function Base.parentmodule(frame::StackFrame)
     linfo = frame.linfo
+    if linfo isa CodeInstance
+        linfo = linfo.def
+        if isa(linfo, Core.ABIOverride)
+            linfo = linfo.def
+        end
+    end
     if linfo isa MethodInstance
         def = linfo.def
         if def isa Module

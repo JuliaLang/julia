@@ -468,6 +468,34 @@ end
     end
 end
 
+@testset "modular invert" begin
+    # test invert is correct and does not mutate
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    @test Base.GMP.MPZ.invert(a, b) == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
+
+    # test in place invert does mutate first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(3)
+    Base.GMP.MPZ.invert!(i_inplace, b)
+    @test i_inplace == i
+
+    # test in place invert does mutate only first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(0)
+    Base.GMP.MPZ.invert!(i_inplace, a, b)
+    @test i_inplace == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
+end
+
 @testset "math ops returning BigFloat" begin
     # operations that when applied to Int64 give Float64, should give BigFloat
     @test typeof(exp(a)) == BigFloat

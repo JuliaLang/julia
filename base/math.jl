@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max
+            exponent_max, exponent_raw_max, clamp, clamp!
 
 using Core.Intrinsics: sqrt_llvm
 
@@ -69,98 +69,6 @@ end
     return Txy, T(xy-Txy)
 end
 
-"""
-    clamp(x, lo, hi)
-
-Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
-are promoted to a common type.
-
-See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
-
-!!! compat "Julia 1.3"
-    `missing` as the first argument requires at least Julia 1.3.
-
-# Examples
-```jldoctest
-julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
-3-element Vector{BigFloat}:
- 3.141592653589793238462643383279502884197169399375105820974944592307816406286198
- 2.0
- 9.0
-
-julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
-3-element Vector{Int64}:
-  6
-  6
- 10
-```
-"""
-clamp(x::X, lo::L, hi::H) where {X,L,H} =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
-
-"""
-    clamp(x, T)::T
-
-Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
-
-See also [`trunc`](@ref).
-
-# Examples
-```jldoctest
-julia> clamp(200, Int8)
-127
-
-julia> clamp(-200, Int8)
--128
-
-julia> trunc(Int, 4pi^2)
-39
-```
-"""
-clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
-
-
-"""
-    clamp!(array::AbstractArray, lo, hi)
-
-Restrict values in `array` to the specified range, in-place.
-See also [`clamp`](@ref).
-
-!!! compat "Julia 1.3"
-    `missing` entries in `array` require at least Julia 1.3.
-
-# Examples
-```jldoctest
-julia> row = collect(-4:4)';
-
-julia> clamp!(row, 0, Inf)
-1×9 adjoint(::Vector{Int64}) with eltype Int64:
- 0  0  0  0  0  1  2  3  4
-
-julia> clamp.((-4:4)', 0, Inf)
-1×9 Matrix{Float64}:
- 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
-```
-"""
-function clamp!(x::AbstractArray, lo, hi)
-    @inbounds for i in eachindex(x)
-        x[i] = clamp(x[i], lo, hi)
-    end
-    x
-end
-
-"""
-    clamp(x::Integer, r::AbstractUnitRange)
-
-Clamp `x` to lie within range `r`.
-
-!!! compat "Julia 1.6"
-     This method requires at least Julia 1.6.
-"""
-clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
 
 """
     evalpoly(x, p)
@@ -1255,6 +1163,10 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
+@inline function use_power_by_squaring(n::Integer)
+    -2^12 <= n <= 3 * 2^13
+end
+
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
@@ -1267,24 +1179,33 @@ end
         y = sign(y)*0x1.8p62
     end
     yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
-    y == yint && return @noinline x^yint
-    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
-    x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
+    yisint = y == yint
+    if yisint
+        yint == 0 && return 1.0
+        use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
+    end
+    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
+    s = 1
+    if x < 0
+        !yisint && throw_exp_domainerror(x) # y isn't an integer
+        s = ifelse(isodd(yint), -1, 1)
+    end
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
+    return copysign(pow_body(abs(x), y), s)
+end
+
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
+    xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
         xu -= UInt64(52) << 52 # mess with the exponent
     end
-    return pow_body(xu, y)
-end
-
-@inline function pow_body(xu::UInt64, y::Float64)
     logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
-    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
@@ -1308,12 +1229,27 @@ end
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
-# compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
+    n = clamp(n, Int64)
     n == 0 && return one(x)
-    return pow_body(x, n)
+    if use_power_by_squaring(n)
+        return pow_body(x, n)
+    else
+        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
+        x = abs(x)
+        y = float(n)
+        if y == n
+            return copysign(pow_body(x, y), s)
+        else
+            n2 = n % 1024
+            y = float(n - n2)
+            return pow_body(x, y) * copysign(pow_body(x, n2), s)
+        end
+    end
 end
 
+# compensated power by squaring
+# this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
@@ -1340,14 +1276,12 @@ end
     return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
-function ^(x::Float32, n::Integer)
+function ^(x::Union{Float16,Float32}, n::Integer)
     n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
-    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
-    Float32(Base.power_by_squaring(Float64(x),n))
+    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
+    oftype(x, Base.power_by_squaring(widen(x),n))
 end
-@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
-@inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 ## rem2pi-related calculations ##
 
@@ -1656,7 +1590,6 @@ end
 
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
-clamp(::Missing, lo, hi) = missing
 fourthroot(::Missing) = missing
 
 end # module

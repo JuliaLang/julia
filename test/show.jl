@@ -755,6 +755,69 @@ end
 
 @test startswith(sprint(show, typeof(x->x), context = :module=>@__MODULE__), "var\"")
 
+# PR 53719
+module M53719
+    f = x -> x + 1
+    function foo(x)
+        function bar(y)
+            function baz(z)
+                return x + y + z
+            end
+            return baz
+        end
+        return bar
+    end
+    function foo2(x)
+        function bar2(y)
+            return z -> x + y + z
+        end
+        return bar2
+    end
+    lambda1 = (x)->begin
+        function foo(y)
+            return x + y
+        end
+        return foo
+    end
+    lambda2 = (x)->begin
+        y -> x + y
+    end
+end
+
+@testset "PR 53719 function names" begin
+    # M53719.f should be printed as var"#[0-9]+"
+    @test occursin(r"var\"#[0-9]+", sprint(show, M53719.f, context = :module=>M53719))
+    # M53719.foo(1) should be printed as var"#bar"
+    @test occursin(r"var\"#bar", sprint(show, M53719.foo(1), context = :module=>M53719))
+    # M53719.foo(1)(2) should be printed as var"#baz"
+    @test occursin(r"var\"#baz", sprint(show, M53719.foo(1)(2), context = :module=>M53719))
+    # M53719.foo2(1) should be printed as var"#bar2"
+    @test occursin(r"var\"#bar2", sprint(show, M53719.foo2(1), context = :module=>M53719))
+    # M53719.foo2(1)(2) should be printed as var"#foo2##[0-9]+"
+    @test occursin(r"var\"#foo2##[0-9]+", sprint(show, M53719.foo2(1)(2), context = :module=>M53719))
+    # M53719.lambda1(1) should be printed as var"#foo"
+    @test occursin(r"var\"#foo", sprint(show, M53719.lambda1(1), context = :module=>M53719))
+    # M53719.lambda2(1) should be printed as var"#[0-9]+"
+    @test occursin(r"var\"#[0-9]+", sprint(show, M53719.lambda2(1), context = :module=>M53719))
+end
+
+@testset "PR 53719 function types" begin
+    # typeof(M53719.f) should be printed as var"#[0-9]+#[0-9]+"
+    @test occursin(r"var\"#[0-9]+#[0-9]+", sprint(show, typeof(M53719.f), context = :module=>M53719))
+    #typeof(M53719.foo(1)) should be printed as var"#bar#foo##[0-9]+"
+    @test occursin(r"var\"#bar#foo##[0-9]+", sprint(show, typeof(M53719.foo(1)), context = :module=>M53719))
+    #typeof(M53719.foo(1)(2)) should be printed as var"#baz#foo##[0-9]+"
+    @test occursin(r"var\"#baz#foo##[0-9]+", sprint(show, typeof(M53719.foo(1)(2)), context = :module=>M53719))
+    #typeof(M53719.foo2(1)) should be printed as var"#bar2#foo2##[0-9]+"
+    @test occursin(r"var\"#bar2#foo2##[0-9]+", sprint(show, typeof(M53719.foo2(1)), context = :module=>M53719))
+    #typeof(M53719.foo2(1)(2)) should be printed as var"#foo2##[0-9]+#foo2##[0-9]+"
+    @test occursin(r"var\"#foo2##[0-9]+#foo2##[0-9]+", sprint(show, typeof(M53719.foo2(1)(2)), context = :module=>M53719))
+    #typeof(M53719.lambda1(1)) should be printed as var"#foo#[0-9]+"
+    @test occursin(r"var\"#foo#[0-9]+", sprint(show, typeof(M53719.lambda1(1)), context = :module=>M53719))
+    #typeof(M53719.lambda2(1)) should be printed as var"#[0-9]+#[0-9]+"
+    @test occursin(r"var\"#[0-9]+#[0-9]+", sprint(show, typeof(M53719.lambda2(1)), context = :module=>M53719))
+end
+
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test !Base.inbase(LinearAlgebra)
@@ -865,19 +928,19 @@ end
 # string show with elision
 @testset "string show with elision" begin
     @testset "elision logic" begin
-        strs = ["A", "∀", "∀A", "A∀", "😃"]
+        strs = ["A", "∀", "∀A", "A∀", "😃", "x̂"]
         for limit = 0:100, len = 0:100, str in strs
             str = str^len
             str = str[1:nextind(str, 0, len)]
             out = sprint() do io
                 show(io, MIME"text/plain"(), str; limit)
             end
-            lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
+            lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
+            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
-                @test limit-!isascii(str) <= length(out) <= limit
+                @test limit-2 <= textwidth(out) <= limit
                 re = r"(\"[^\"]*\") ⋯ (\d+) bytes ⋯ (\"[^\"]*\")"
                 m = match(re, out)
                 head = eval(Meta.parse(m.captures[1]))
@@ -893,11 +956,11 @@ end
 
     @testset "default elision limit" begin
         r = replstr("x"^1000)
-        @test length(r) == 7*80
-        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        @test length(r) == 7*80-1
+        @test r == repr("x"^270) * " ⋯ 460 bytes ⋯ " * repr("x"^270)
         r = replstr(["x"^1000])
         @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+        @test r == "1-element Vector{String}:\n " * repr("x"^30) * " ⋯ 940 bytes ⋯ " * repr("x"^30)
     end
 end
 
@@ -1212,6 +1275,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(y, x)
     push!(y, z)
     @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
+    @test replstr(x, :color => true) == "1-element Vector{Any}:\n Any[Any[\e[33m#= circular reference @-2 =#\e[39m], Base.ImmutableDict{Vector{Any}, Vector{Any}}([\e[33m#= circular reference @-3 =#\e[39m] => [\e[33m#= circular reference @-2 =#\e[39m])]"
     @test repr(z) == "Base.ImmutableDict{Vector{Any}, Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
@@ -1291,7 +1355,7 @@ end
               repr == "Union{String, $(curmod_prefix)M30442.T}"
     end
     let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
-        @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
+        @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
     end
     let repr = sprint(dump, Core.svec())
         @test repr == "empty SimpleVector\n"
@@ -1797,6 +1861,9 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    Base.showarg(io, reshape(UnitRange{Int64}(1,1)), false)
+    @test String(take!(io)) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin
@@ -2693,4 +2760,38 @@ let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:tople
     ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1)
     # Check that this gets printed as `_1 = 1` not `y = 1`
     @test contains(sprint(show, ci), "_1 = 1")
+end
+
+# Pointers should be reprable
+@test is_juliarepr(pointer([1]))
+@test is_juliarepr(Ptr{Vector{Complex{Float16}}}(UInt(0xdeadbeef)))
+
+# Toplevel MethodInstance with undef :uninferred
+let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    topmi.specTypes = Tuple{}
+    topmi.def = Main
+    @test contains(repr(topmi), "Toplevel MethodInstance")
+end
+
+@testset "show(<do-block expr>) no trailing whitespace" begin
+    do_expr1 = :(foo() do; bar(); end)
+    @test !contains(sprint(show, do_expr1), " \n")
+end
+
+struct NoLengthDict{K,V} <: AbstractDict{K,V}
+    dict::Dict{K,V}
+    NoLengthDict{K,V}() where {K,V} = new(Dict{K,V}())
+end
+Base.iterate(d::NoLengthDict, s...) = iterate(d.dict, s...)
+Base.IteratorSize(::Type{<:NoLengthDict}) = Base.SizeUnknown()
+Base.eltype(::Type{NoLengthDict{K,V}}) where {K,V} = Pair{K,V}
+Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
+
+# Issue 55931
+@testset "show AbstractDict with unknown length" begin
+    x = NoLengthDict{Int,Int}()
+    x[1] = 2
+    str = sprint(io->show(io, MIME("text/plain"), x))
+    @test contains(str, "NoLengthDict")
+    @test contains(str, "1 => 2")
 end

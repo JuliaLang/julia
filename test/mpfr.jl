@@ -1046,3 +1046,54 @@ end
         @test Float16(bf) == Float16(2.0e-7)
     end
 end
+
+# PR #54284
+import Base.MPFR: clear_flags, had_underflow, had_overflow, had_divbyzero,
+    had_nan, had_inexact_exception, had_range_exception
+
+function all_flags_54284()
+    (
+        had_underflow(),
+        had_overflow(),
+        had_divbyzero(),
+        had_nan(),
+        had_inexact_exception(),
+        had_range_exception(),
+    )
+end
+@testset "MPFR flags" begin
+    let x, a = floatmin(BigFloat), b = floatmax(BigFloat), c = zero(BigFloat)
+        clear_flags()
+        @test !any(all_flags_54284())
+
+        x = a - a # normal
+        @test all_flags_54284() == (false, false, false, false, false, false)
+        x = 1 / c # had_divbyzero
+        @test all_flags_54284() == (false, false, true, false, false, false)
+        clear_flags()
+        x = nextfloat(a) - a # underflow
+        @test all_flags_54284() == (true, false, false, false, true, false)
+        clear_flags()
+        x = 1 / a # overflow
+        @test all_flags_54284() == (false, true, false, false, true, false)
+        clear_flags()
+        x = c / c # nan
+        @test all_flags_54284() == (false, false, false, true, false, false)
+        clear_flags()
+        x = prevfloat(BigFloat(1.0)) * 100 # inexact
+        @test all_flags_54284() == (false, false, false, false, true, false)
+        clear_flags()
+        try convert(Int, b); catch; end # range exception
+        @test all_flags_54284() == (false, false, false, false, false, true)
+        clear_flags()
+    end
+end
+
+@testset "BigFloatData truncation OOB read" begin
+    @testset "T: $T" for T ∈ (UInt8, UInt16, UInt32, UInt64, UInt128)
+        v = Base.MPFR.BigFloatData{T}(fill(typemax(T), 1 + Base.MPFR.offset_p_limbs))
+        @testset "bit_count: $bit_count" for bit_count ∈ (0:10:80)
+            @test Base.MPFR.truncated(UInt128, v, bit_count) isa Any
+        end
+    end
+end

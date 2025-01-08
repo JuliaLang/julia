@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 27 # do not make changes without bumping the version #!
+const ser_version = 29 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -470,11 +470,6 @@ end
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     writetag(s.io, METHODINSTANCE_TAG)
-    if isdefined(linfo, :uninferred)
-        serialize(s, linfo.uninferred)
-    else
-        writetag(s.io, UNDEFREF_TAG)
-    end
     serialize(s, nothing)  # for backwards compat
     serialize(s, linfo.sparam_vals)
     serialize(s, Any)  # for backwards compat
@@ -1099,6 +1094,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if template !== nothing
             # TODO: compress template
             template = template::CodeInfo
+            if format_version(s) < 29
+                template.nargs = nargs
+                template.isva = isva
+            end
             meth.source = template
             meth.debuginfo = template.debuginfo
             if !@isdefined(slot_syms)
@@ -1126,9 +1125,13 @@ end
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Cvoid},), C_NULL)
     deserialize_cycle(s, linfo)
-    tag = Int32(read(s.io, UInt8)::UInt8)
-    if tag != UNDEFREF_TAG
-        setfield!(linfo, :uninferred, handle_deserialize(s, tag)::CodeInfo, :monotonic)
+    if format_version(s) < 28
+        tag = Int32(read(s.io, UInt8)::UInt8)
+        if tag != UNDEFREF_TAG
+            code = handle_deserialize(s, tag)::CodeInfo
+            ci = ccall(:jl_new_codeinst_for_uninferred, Ref{CodeInstance}, (Any, Any), linfo, code)
+            @atomic linfo.cache = ci
+        end
     end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
@@ -1228,25 +1231,20 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if !pre_12
         ci.slotflags = deserialize(s)
         ci.slottypes = deserialize(s)
-        if format_version(s) <= 26
-            deserialize(s) # rettype
-            ci.parent = deserialize(s)
-            world_or_edges = deserialize(s)
-            pre_13 = isa(world_or_edges, Union{UInt, Int})
-            if pre_13
-                ci.min_world = reinterpret(UInt, world_or_edges)
-                ci.max_world = reinterpret(UInt, deserialize(s))
-            else
-                ci.edges = world_or_edges
-                ci.min_world = deserialize(s)::UInt
-                ci.max_world = deserialize(s)::UInt
-            end
+        ci.rettype = deserialize(s)
+        ci.parent = deserialize(s)
+        world_or_edges = deserialize(s)
+        pre_13 = isa(world_or_edges, Union{UInt, Int})
+        if pre_13
+            ci.min_world = reinterpret(UInt, world_or_edges)
+            ci.max_world = reinterpret(UInt, deserialize(s))
         else
-            ci.parent = deserialize(s)
-            ci.method_for_inference_limit_heuristics = deserialize(s)
-            ci.edges = deserialize(s)
+            ci.edges = world_or_edges
             ci.min_world = deserialize(s)::UInt
             ci.max_world = deserialize(s)::UInt
+        end
+        if format_version(s) >= 26
+            ci.method_for_inference_limit_heuristics = deserialize(s)
         end
     end
     if format_version(s) <= 26
@@ -1260,6 +1258,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.inlining_cost = inlining_cost
         end
     end
+    if format_version(s) >= 29
+        ci.nargs = deserialize(s)
+    end
     ci.propagate_inbounds = deserialize(s)
     if format_version(s) < 23
         deserialize(s) # `pure` field has been removed
@@ -1269,6 +1270,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     if format_version(s) >= 24
         ci.nospecializeinfer = deserialize(s)::Bool
+    end
+    if format_version(s) >= 29
+        ci.isva = deserialize(s)::Bool
     end
     if format_version(s) >= 21
         ci.inlining = deserialize(s)::UInt8
@@ -1288,7 +1292,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     return ci
 end
 
-const NullDebugInfo = DebugInfo(:none)
+import Core: NullDebugInfo
 
 if Int === Int64
 const OtherInt = Int32
@@ -1566,11 +1570,11 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     t.storage = deserialize(s)
     state = deserialize(s)
     if state === :runnable
-        t._state = Base.task_state_runnable
+        @atomic :release t._state = Base.task_state_runnable
     elseif state === :done
-        t._state = Base.task_state_done
+        @atomic :release t._state = Base.task_state_done
     elseif state === :failed
-        t._state = Base.task_state_failed
+        @atomic :release t._state = Base.task_state_failed
     else
         @assert false
     end

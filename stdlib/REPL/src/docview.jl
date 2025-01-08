@@ -13,8 +13,6 @@ using Base: with_output_color, mapany, isdeprecated, isexported
 
 using Base.Filesystem: _readdirx
 
-import REPL
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
@@ -25,7 +23,7 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $Markdown.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
@@ -78,26 +76,13 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
-# Print horizontal lines between each docstring if there are multiple docs
-function insert_hlines(docs)
-    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
-        return docs
-    end
-    docs = docs::Markdown.MD
-    v = Any[]
-    for (n, doc) in enumerate(docs.content)
-        push!(v, doc)
-        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
-    end
-    return Markdown.MD(v)
-end
-
 function formatdoc(d::DocStr)
     buffer = IOBuffer()
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    md = Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    assume_julia_code!(md)
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
@@ -109,6 +94,27 @@ function parsedoc(d::DocStr)
         d.object = md
     end
     d.object
+end
+
+"""
+    assume_julia_code!(doc::Markdown.MD) -> doc
+
+Assume that code blocks with no language specified are Julia code.
+"""
+function assume_julia_code!(doc::Markdown.MD)
+    assume_julia_code!(doc.content)
+    doc
+end
+
+function assume_julia_code!(blocks::Vector)
+    for (i, block) in enumerate(blocks)
+        if block isa Markdown.Code && block.language == ""
+            blocks[i] = Markdown.Code("julia", block.code)
+        elseif block isa Vector || block isa Markdown.MD
+            assume_julia_code!(block)
+        end
+    end
+    blocks
 end
 
 ## Trimming long help ("# Extended help")
@@ -410,7 +416,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
-        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        println(io)
+        println(io, "---")
+        println(io, "_Package description from `$(basename(readme_path))`:_")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
@@ -467,7 +475,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -475,7 +488,7 @@ repl_corrections(s) = repl_corrections(stdout, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+    if isempty(symbols_latex)
         for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k

@@ -197,8 +197,8 @@ for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :se
     @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
     @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
 end
-@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
-@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
+@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)
@@ -345,3 +345,16 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "issue #54548" begin
+    @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
+            define ptr addrspace(1) @entry(ptr addrspace(1) %0) #0 {
+            entry:
+                ret ptr addrspace(1) %0
+            }
+
+            attributes #0 = { alwaysinline }""", "entry"),
+        Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
+    f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
+    f(C_NULL)
+end
