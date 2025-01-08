@@ -124,9 +124,10 @@ end
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    copied = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
-    #we need to check again, in case we just recursed back to x
-    get!(stackdict, x, copied)::typeof(x)
+    y = stackdict[x] = Array{T, N}(undef, ntuple(Returns(0), Val{N}()))
+    setfield!(y, :ref, deepcopy_internal(x.ref, stackdict))
+    setfield!(y, :size, x.size)
+    y
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)
