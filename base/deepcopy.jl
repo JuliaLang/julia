@@ -125,6 +125,7 @@ end
         return stackdict[x]::typeof(x)
     end
     copied = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    #we need to check again, in case we just recursed back to x
     get!(stackdict, x, copied)::typeof(x)
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
