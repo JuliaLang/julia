@@ -7483,7 +7483,8 @@ static Function *gen_cfun_wrapper(
     if (lam) {
         // TODO: this isn't ideal to be unconditionally calling type inference from here
         codeinst = jl_type_infer(lam, world, SOURCE_MODE_NOT_REQUIRED);
-        astrt = codeinst->rettype;
+        if (codeinst)
+            astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
             jl_type_intersection(astrt, declrt) == jl_bottom_type) {
             // Do not warn if the function never returns since it is
