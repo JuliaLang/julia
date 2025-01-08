@@ -1959,7 +1959,7 @@ Concatenate arrays or numbers horizontally. Equivalent to [`cat`](@ref)`(A...; d
 and to the syntax `[a b c]` or `[a;; b;; c]`.
 
 For a large vector of arrays, `reduce(hcat, A)` calls an efficient method
-when `A isa AbstractVector{<:AbstractVecOrMat}`.
+when `A isa AbstractVector{<:AbstractVecOrMat}`, and when `A` is a tuple of `AbstractVecOrMat`.
 For a vector of vectors, this can also be written [`stack`](@ref)`(A)`.
 
 See also [`vcat`](@ref), [`hvcat`](@ref).
