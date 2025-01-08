@@ -3,7 +3,7 @@
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
 
-```julia-repl
+```jldoctest
 # Assign the value 10 to the variable x
 julia> x = 10
 10
@@ -119,7 +119,7 @@ it from `+ ᵃx` where `ᵃx` is the variable name.
 
 A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 
-```julia-repl
+```jldoctest
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
@@ -132,7 +132,7 @@ ERROR: syntax: all-underscore identifiers are write-only and their values cannot
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
-```julia-repl
+```jldoctest
 julia> else = false
 ERROR: syntax: unexpected "else"
 
