@@ -30,8 +30,9 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.GenericMemory
 Base.Memory
-Base.MemoryRef
+Base.memoryref
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -78,6 +79,7 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
+Base.Broadcast.BroadcastFunction
 ```
 
 For specializing broadcast on custom types, see
@@ -113,6 +115,12 @@ Base.checkindex
 Base.elsize
 ```
 
+While most code can be written in an index-agnostic manner (see, e.g., [`eachindex`](@ref)), it can sometimes be useful to explicitly check for offset axes:
+```@docs
+Base.require_one_based_indexing
+Base.has_offset_axes
+```
+
 ## Views (SubArrays and other view types)
 
 A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually
@@ -124,7 +132,7 @@ accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writ
 
 Slicing operations like `x[1:10]` create a copy by default in Julia. `@view x[1:10]` changes it to make a view. The
 `@views` macro can be used on a whole block of code (e.g. `@views function foo() .... end` or `@views begin ... end`)
-to change all the slicing operations in that block to use views.  Sometimes making a copy of the data is faster and
+to change all the slicing operations in that block to use views. Sometimes making a copy of the data is faster and
 sometimes using a view is faster, as described in the [performance tips](@ref man-performance-views).
 
 ```@docs
@@ -136,10 +144,10 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
+Base.insertdims
 Base.dropdims
 Base.vec
 Base.SubArray
-Base.wrap
 ```
 
 ## Concatenation and permutation

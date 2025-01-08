@@ -229,30 +229,26 @@
               lst)))
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
-(define (try-arg-name v)
-  (cond ((symbol? v) (list v))
+(define (try-arg-name v (escaped #f))
+  (cond ((symbol? v) (if escaped '() (list v)))
         ((atom? v) '())
         (else
          (case (car v)
-           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
-           ((... kw =) (try-arg-name (cadr v)))
-           ((escape) (list v))
-           ((hygienic-scope) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v) escaped)))
+           ((... kw =) (try-arg-name (cadr v) escaped))
+           ((escape) (if escaped (list (cadr v)) '()))
+           ((hygienic-scope) (try-arg-name (cadr v) escaped))
+           ((tuple) (apply nconc (map (lambda (e) (try-arg-name e escaped)) (cdr v))))
            ((meta)  ;; allow certain per-argument annotations
             (if (nospecialize-meta? v #t)
-                (try-arg-name (caddr v))
+                (try-arg-name (caddr v) escaped)
                 '()))
            (else '())))))
 
 ;; get names from a formal argument list, specifying whether to include escaped ones
 (define (safe-arg-names lst (escaped #f))
   (apply nconc
-         (map (lambda (v)
-                (let ((vv (try-arg-name v)))
-                  (if (eq? escaped (and (pair? vv) (pair? (car vv)) (eq? (caar vv) 'escape)))
-                      (if escaped (list (cadar vv)) vv)
-                      '())))
-              lst)))
+         (map (lambda (v) (try-arg-name v escaped)) lst)))
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
@@ -386,6 +382,9 @@
       (cdr ranges)
       (list ranges))))
 
+(define (just-line? ex)
+  (and (pair? ex) (eq? (car ex) 'line) (atom? (cadr ex)) (or (atom? (caddr ex)) (nothing? (caddr ex)))))
+
 (define (resolve-expansion-vars- e env m lno parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
@@ -417,11 +416,15 @@
            ((toplevel) ; re-wrap Expr(:toplevel) in the current hygienic-scope(s)
             `(toplevel
                ,@(map (lambda (arg)
-                       (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
-                        (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
-                          (if (null? parent-scope) wrapped
-                            (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped)))))
-                      (cdr e))))
+                       ;; Minor optimization: A lot of toplevel exprs have just bare line numbers in them.
+                       ;; don't bother with the full rewrapping in that case (even though
+                       ;; this would be semantically legal) - lowering won't touch them anyways.
+                       (if (just-line? arg) arg
+                        (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
+                          (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
+                            (if (null? parent-scope) wrapped
+                              (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped))))))
+                        (cdr e))))
            ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)

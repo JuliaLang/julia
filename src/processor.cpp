@@ -7,7 +7,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -158,7 +158,7 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
-            cnt += llvm::countPopulation(eles[i]);
+            cnt += llvm::popcount(eles[i]);
         return cnt;
     }
     inline bool empty() const
@@ -970,8 +970,12 @@ static std::string jl_get_cpu_name_llvm(void)
 
 static std::string jl_get_cpu_features_llvm(void)
 {
+#if JL_LLVM_VERSION >= 190000
+    auto HostFeatures = llvm::sys::getHostCPUFeatures();
+#else
     llvm::StringMap<bool> HostFeatures;
     llvm::sys::getHostCPUFeatures(HostFeatures);
+#endif
     std::string attr;
     for (auto &ele: HostFeatures) {
         if (ele.getValue()) {

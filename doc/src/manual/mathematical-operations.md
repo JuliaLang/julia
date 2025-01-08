@@ -22,7 +22,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power           |
 | `x % y`    | remainder      | equivalent to `rem(x, y)`               |
 
-A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x + y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
+A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x + y)`, is treated as a multiplication, except with higher precedence than other binary operations. See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
 naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
@@ -174,7 +174,7 @@ to perform `^` element-by-element on arrays. For example,
 `[1, 2, 3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" a (non-square) array, but
 `[1, 2, 3] .^ 3` is defined as computing the elementwise
-(or "vectorized") result `[1^3, 2^3, 3^3]`.  Similarly for unary
+(or "vectorized") result `[1^3, 2^3, 3^3]`. Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
 
@@ -332,7 +332,7 @@ Mixed-type comparisons between signed integers, unsigned integers, and floats ca
 great deal of care has been taken to ensure that Julia does them correctly.
 
 For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==`](@ref) method.  If you define
+equality for your own types then you only need to add a [`==`](@ref) method. If you define
 your own equality function, you should probably define a corresponding [`hash`](@ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
@@ -551,21 +551,22 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 ### Powers, logs and roots
 
-| Function                 | Description                                                                |
-|:------------------------ |:-------------------------------------------------------------------------- |
-| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
-| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x, y)`](@ref)    | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
-| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x) - 1` for `x` near zero                                    |
-| [`ldexp(x, n)`](@ref)    | `x * 2^n` computed efficiently for integer values of `n`                   |
-| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b, x)`](@ref)      | base `b` logarithm of `x`                                                  |
-| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
-| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1 + x)` for `x` near zero                                    |
-| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
-| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
+| Function                      | Description                                                                |
+|:----------------------------- |:-------------------------------------------------------------------------- |
+| [`sqrt(x)`](@ref), `√x`       | square root of `x`                                                         |
+| [`cbrt(x)`](@ref), `∛x`       | cube root of `x`                                                           |
+| [`fourthroot(x)`](@ref), `∜x` | fourth root of `x`                                                         |
+| [`hypot(x, y)`](@ref)         | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@ref)              | natural exponential function at `x`                                        |
+| [`expm1(x)`](@ref)            | accurate `exp(x) - 1` for `x` near zero                                    |
+| [`ldexp(x, n)`](@ref)         | `x * 2^n` computed efficiently for integer values of `n`                   |
+| [`log(x)`](@ref)              | natural logarithm of `x`                                                   |
+| [`log(b, x)`](@ref)           | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@ref)             | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@ref)            | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@ref)            | accurate `log(1 + x)` for `x` near zero                                    |
+| [`exponent(x)`](@ref)         | binary exponent of `x`                                                     |
+| [`significand(x)`](@ref)      | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
 For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),

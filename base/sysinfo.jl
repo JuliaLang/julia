@@ -56,6 +56,8 @@ global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSI
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
+# Similarly, this is the root of the julia repo directory that julia was built from
+const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -147,7 +149,7 @@ function __init__()
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
-        if !(env_threads isa Int && env_threads > 0)
+        if env_threads === nothing || env_threads <= 0
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
@@ -165,7 +167,7 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
@@ -399,7 +401,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())

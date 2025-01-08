@@ -4,7 +4,7 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of
+languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
@@ -34,6 +34,9 @@ Main.include
 Base.include_string
 Base.include_dependency
 __init__
+Base.OncePerProcess
+Base.OncePerTask
+Base.OncePerThread
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
@@ -102,6 +105,11 @@ where
 ;
 =
 ?:
+.=
+.
+->
+::
+[]
 ```
 
 ## Standard Modules
@@ -277,6 +285,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix
 Base.Fix1
 Base.Fix2
 ```
@@ -307,7 +316,12 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@assume_effects
+```
+
+## Managing deprecations
+```@docs
 Base.@deprecate
+Base.depwarn
 ```
 
 ## Missing Values
@@ -338,6 +352,12 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.shell_escape
+Base.shell_split
+Base.shell_escape_posixly
+Base.shell_escape_csh
+Base.shell_escape_wincmd
+Base.escape_microsoft_c_args
 Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -408,6 +428,7 @@ Core.DivideError
 Core.DomainError
 Base.EOFError
 Core.ErrorException
+Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError

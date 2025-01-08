@@ -2,6 +2,8 @@
 
 using Random, LinearAlgebra
 
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
@@ -10,6 +12,9 @@ using .Main.StructArrays
 
 isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
 using .Main.FillArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
 
 A = rand(5,4,3)
 @testset "Bounds checking" begin
@@ -330,6 +335,22 @@ end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
     end
+
+    @testset "show" begin
+        A = zeros(2,3)
+        for B in (A, view(A, Base.IdentityUnitRange(2:4)))
+            l = LinearIndices(B)
+            s = sprint(show, l)
+            @test s == "LinearIndices($(axes(B)))"
+        end
+    end
+end
+
+@testset "copy for LinearIndices/CartesianIndices" begin
+    C = CartesianIndices((1:2, 1:4))
+    @test copy(C) === C
+    L = LinearIndices((1:2, 1:4))
+    @test copy(L) === L
 end
 
 # token type on which to dispatch testing methods in order to avoid potential
@@ -887,7 +908,7 @@ test_ind2sub(TestAbstractArray)
 
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
-@test_throws ArgumentError map!(-, [1])
+@test map!(-, [1]) == [-1]
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
@@ -1212,7 +1233,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1271,6 +1292,9 @@ Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S
             end
         end
     end
+    # constant propagation in the PermutedDimsArray constructor
+    X = @inferred (A -> PermutedDimsArray(A, (2,3,1)))(A)
+    @test @inferred((X -> PermutedDimsArray(X, (3,1,2)))(X)) == A
 end
 
 @testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))
@@ -1390,6 +1414,8 @@ end
 Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
 Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
 
+push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int, @nospecialize(y)) = push!(v, (; x, y))
+
 @testset "push! and pushfirst!" begin
     a_orig = [1]
     tpa = TestPushArray{Int, 2}(a_orig)
@@ -1399,6 +1425,11 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
+        # After optimization, all `push!` and `convert` calls should have been inlined
+        @test all((x)->!iscall((src, push!))(x) && !iscall((src, convert))(x), src.code)
+    end
 end
 
 mutable struct SimpleArray{T} <: AbstractVector{T}
@@ -1421,6 +1452,31 @@ using .Main.OffsetArrays
         @test_throws Exception f(a, args...)
         @test a == orig
     end
+end
+
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin
@@ -1771,6 +1827,9 @@ end
     @test_throws ArgumentError stack([1:3, 4:6]; dims=3)
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
 
+    @test stack(["hello", "world"]) isa Matrix{Char}
+    @test_throws DimensionMismatch stack(["hello", "world!"])  # had a bug in error printing
+
     # Empty
     @test_throws ArgumentError stack(())
     @test_throws ArgumentError stack([])
@@ -1826,7 +1885,7 @@ end
 end
 
 module IRUtils
-    include("compiler/irutils.jl")
+    include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 end
 
 function check_pointer_strides(A::AbstractArray)
@@ -1840,6 +1899,24 @@ function check_pointer_strides(A::AbstractArray)
         A[i] === Base.unsafe_load(pointer(A, i)) || return false
     end
     return true
+end
+
+@testset "colonful `reshape`, #54245" begin
+    @test reshape([], (0, :)) isa Matrix
+    @test_throws DimensionMismatch reshape([7], (0, :))
+    let b = prevpow(2, typemax(Int))
+        @test iszero(b*b)
+        @test_throws ArgumentError reshape([7], (b, :, b))
+        @test reshape([], (b, :, b)) isa Array{<:Any, 3}
+    end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
 end
 
 @testset "strides for ReshapedArray" begin
@@ -2030,37 +2107,6 @@ end
     end
 end
 
-@testset "_unsetindex!" begin
-    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
-    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
-    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
-    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
-    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
-
-    function test_unsetindex(MT)
-        M = MT(ones(2,2))
-        M2 = MT(Matrix{BigFloat}(undef, 2,2))
-        copyto!(M, M2)
-        @test all(==(1), M)
-        M3 = MT(Matrix{BigFloat}(undef, 2,2))
-        for i in eachindex(M3)
-            @test !isassigned(M3, i)
-        end
-        M3 .= 1
-        @test_throws MethodError copyto!(M3, M2)
-    end
-    test_unsetindex(MyMatrixUnsetIndexCartInds)
-    test_unsetindex(MyMatrixUnsetIndexLinInds)
-end
-
 @testset "reshape for offset arrays" begin
     p = Base.IdentityUnitRange(3:4)
     r = reshape(p, :, 1)
@@ -2088,5 +2134,96 @@ end
     r2[eachindex(r2)] = r2 .* 2
     for (i, j) in zip(eachindex(r2), eachindex(z))
         @test r2[i] == z[j]
+    end
+end
+
+@testset "zero for arbitrary axes" begin
+    r = SizedArrays.SOneTo(2)
+    s = Base.OneTo(2)
+    _to_oneto(x::Integer) = Base.OneTo(2)
+    _to_oneto(x::Union{Base.OneTo, SizedArrays.SOneTo}) = x
+    for (f, v) in ((zeros, 0), (ones, 1), ((x...)->fill(3,x...),3))
+        for ax in ((r,r), (s, r), (2, r))
+            A = f(ax...)
+            @test axes(A) == map(_to_oneto, ax)
+            if all(x -> x isa SizedArrays.SOneTo, ax)
+                @test A isa SizedArrays.SizedArray && parent(A) isa Array
+            else
+                @test A isa Array
+            end
+            @test all(==(v), A)
+        end
+    end
+end
+
+@testset "one" begin
+    @test one([1 2; 3 4]) == [1 0; 0 1]
+    @test one([1 2; 3 4]) isa Matrix{Int}
+
+    struct Mat <: AbstractMatrix{Int}
+        p::Matrix{Int}
+    end
+    Base.size(m::Mat) = size(m.p)
+    Base.IndexStyle(::Type{<:Mat}) = IndexLinear()
+    Base.getindex(m::Mat, i::Int) = m.p[i]
+    Base.setindex!(m::Mat, v, i::Int) = m.p[i] = v
+    Base.similar(::Mat, ::Type{Int}, size::NTuple{2,Int}) = Mat(Matrix{Int}(undef, size))
+
+    @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
+    @test one(Mat([1 2; 3 4])) isa Mat
+end
+
+@testset "copyto! with non-AbstractArray src" begin
+    A = zeros(4)
+    x = (i for i in axes(A,1))
+    copyto!(A, 1, x, 1, length(A))
+    @test A == axes(A,1)
+    A .= 0
+    copyto!(A, 1, x, 1, 2)
+    @test A[1:2] == first(x,2)
+    @test iszero(A[3:end])
+    A .= 0
+    copyto!(A, 1, x, 1)
+    @test A == axes(A,1)
+end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+    a = [1 2 3; 4 5 6]
+    reshaped_arrays = (
+        reshape(a, 3, 2),
+        reshape(a, (3, 2)),
+        reshape(a, big(3), big(2)),
+        reshape(a, (big(3), big(2))),
+        reshape(a, :, big(2)),
+        reshape(a, (:, big(2))),
+        reshape(a, big(3), :),
+        reshape(a, (big(3), :)),
+    )
+    @test allequal(reshaped_arrays)
+    for b ∈ reshaped_arrays
+        @test b isa Matrix{Int}
+        @test b.ref === a.ref
+    end
+end
+@testset "AbstractArrayMath" begin
+    @testset "IsReal" begin
+        A = [1, 2, 3, 4]
+        @test isreal(A) == true
+        B = [1.1, 2.2, 3.3, 4.4]
+        @test isreal(B) == true
+        C = [1, 2.2, 3]
+        @test isreal(C) == true
+        D = Real[]
+        @test isreal(D) == true
+        E = [1 + 1im, 2 - 2im]
+        @test isreal(E) == false
+        struct MyReal <: Real
+            value::Float64
+        end
+        F = [MyReal(1.0), MyReal(2.0)]
+        @test isreal(F) == true
+        G = ["a", "b", "c"]
+        @test_throws MethodError isreal(G)
     end
 end

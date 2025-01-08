@@ -37,7 +37,7 @@ STATISTIC(LoweredWithoutFMA, "Number of have_fma's that were lowered to false");
 extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
-Optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT {
+std::optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT {
     if (TT.isAArch64()) {
         auto intr_name = intr.getName();
         auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
@@ -94,7 +94,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
     for (auto &F: M.functions()) {
         auto FN = F.getName();
 
-        if (FN.startswith("julia.cpu.have_fma.")) {
+        if (FN.starts_with("julia.cpu.have_fma.")) {
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);

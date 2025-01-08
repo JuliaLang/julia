@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.ScopedValues
+
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -135,6 +138,12 @@ end
         @test sval[] == 1
         @test sval_float[] == 1.0
     end
+    @with sval=>2 sval_float=>2.0 begin
+        @with begin
+            @test sval[] == 2
+            @test sval_float[] == 2.0
+        end
+    end
 end
 
 @testset "isassigned" begin
@@ -160,3 +169,16 @@ end
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
 end
+
+# inline constant scoped values
+const inlineable_const_sv = ScopedValue(1)
+@test fully_eliminated(; retval=(inlineable_const_sv => 1)) do
+    inlineable_const_sv => 1
+end
+
+# Handle nothrow scope bodies correctly (#56609)
+@eval function nothrow_scope()
+    $(Expr(:tryfinally, :(), nothing, 1))
+    @test Core.current_scope() === nothing
+end
+nothrow_scope()

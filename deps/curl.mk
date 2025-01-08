@@ -1,6 +1,10 @@
 ## CURL ##
 include $(SRCDIR)/curl.version
 
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/openssl
+endif
+
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
@@ -14,7 +18,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
+CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.
@@ -35,38 +39,33 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
-CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
-	--without-gnutls --without-libidn2 --without-librtmp \
-	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
-	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
-	--without-gssapi --without-brotli
+CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
+        --without-gnutls						\
+        --without-libidn2 --without-librtmp				\
+        --without-nss --without-libpsl					\
+        --disable-ares --disable-manual					\
+        --disable-ldap --disable-ldaps --without-zsh-functions-dir	\
+        --disable-static --without-libgsasl				\
+        --without-brotli
 # A few things we actually enable
-CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
-	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
+CURL_CONFIGURE_FLAGS +=											\
+        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}	\
+        --enable-versioned-symbols
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
 #   On MacOS, we use SecureTransport
-#   On Linux, we use mbedTLS
+#   On Linux, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
 CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
 else
-CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
-	mkdir -p $(dir $@)
-	cd $(SRCCACHE)/curl-$(CURL_VER) && \
-		patch -p1 -f < $(SRCDIR)/patches/curl-memdup.patch
-	echo 1 > $@
-
-$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied
-	echo 1 > $@
-
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \

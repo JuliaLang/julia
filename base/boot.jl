@@ -175,15 +175,33 @@
 #end
 
 #mutable struct Task
-#    parent::Task
+#    next::Any
+#    queue::Any
 #    storage::Any
-#    state::Symbol
 #    donenotify::Any
 #    result::Any
-#    exception::Any
-#    backtrace::Any
 #    scope::Any
 #    code::Any
+#    @atomic _state::UInt8
+#    sticky::UInt8
+#    priority::UInt16
+#    @atomic _isexception::UInt8
+#    pad00::UInt8
+#    pad01::UInt8
+#    pad02::UInt8
+#    rngState0::UInt64
+#    rngState1::UInt64
+#    rngState2::UInt64
+#    rngState3::UInt64
+#    rngState4::UInt64
+#    const metrics_enabled::Bool
+#    pad10::UInt8
+#    pad11::UInt8
+#    pad12::UInt8
+#    @atomic first_enqueued_at::UInt64
+#    @atomic last_started_running_at::UInt64
+#    @atomic running_time_ns::UInt64
+#    @atomic finished_at::UInt64
 #end
 
 export
@@ -206,7 +224,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -259,19 +277,37 @@ else
     const UInt = UInt32
 end
 
-function iterate end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
+function iterate end
+
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
 Expr(@nospecialize args...) = _expr(args...)
 
+macro latestworld() Expr(:latestworld) end
+
 _is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
+macro _total_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true,
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
+end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -283,7 +319,9 @@ macro _foldable_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false,
+        #=:nortcall=#true))
 end
 
 macro inline()   Expr(:meta, :inline)   end
@@ -307,6 +345,11 @@ convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
+
+# will be inserted by the frontend for closures
+_typeof_captured_variable(@nospecialize t) = (@_total_meta; t isa Type && has_free_typevars(t) ? typeof(t) : Typeof(t))
+
+has_free_typevars(@nospecialize t) = (@_total_meta; ccall(:jl_has_free_typevars, Int32, (Any,), t) === Int32(1))
 
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
@@ -404,6 +447,11 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
+struct FieldError <: Exception
+    type::DataType
+    field::Symbol
+end
+
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
@@ -417,6 +465,12 @@ struct InitError <: WrappedException
     error
 end
 
+struct ABIOverride
+    abi::Type
+    def::MethodInstance
+    ABIOverride(@nospecialize(abi::Type), def::MethodInstance) = new(abi, def)
+end
+
 struct PrecompilableError <: Exception end
 
 String(s::String) = s  # no constructor yet
@@ -427,9 +481,13 @@ Nothing() = nothing
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
-include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
+include(m::Module, fname::String) = (@noinline; ccall(:jl_load_, Any, (Any, Any), m, fname))
+eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e))
 
-eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+struct EvalInto <: Function
+    m::Module
+end
+(this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
 mutable struct Box
     contents::Any
@@ -481,12 +539,13 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
+
+const NullDebugInfo = DebugInfo(:none)
 
 struct LineInfoNode # legacy support for aiding Serializer.deserialize of old IR
     mod::Module
@@ -499,14 +558,14 @@ end
 
 
 function CodeInstance(
-    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::Union{MethodInstance, ABIOverride}, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
-    relocatability::UInt8, edges::DebugInfo)
+    effects::UInt32, @nospecialize(analysis_results),
+    di::Union{DebugInfo,Nothing}, edges::SimpleVector)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8, Any),
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, analysis_results, relocatability, edges)
+        effects, analysis_results, di, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
@@ -522,28 +581,18 @@ struct UndefInitializer end
 const undef = UndefInitializer()
 
 # type and dimensionality specified
-(self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, m::Int) where {T,addrspace,kind} =
-    if isdefined(self, :instance) && m === 0
-        self.instance
-    else
-        ccall(:jl_alloc_genericmemory, Ref{GenericMemory{kind,T,addrspace}}, (Any, Int), self, m)
-    end
+(self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, m::Int) where {T,addrspace,kind} = memorynew(self, m)
 (self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, d::NTuple{1,Int}) where {T,kind,addrspace} = self(undef, getfield(d,1))
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
+memoryref(mem::GenericMemory) = memoryrefnew(mem)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}) where {kind,AS} = memoryref(mem)
-GenericMemoryRef{kind,<:Any,AS}(ref::GenericMemoryRef{kind,<:Any,AS}, i::Integer) where {kind,AS} = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}, i::Integer) where {kind,AS}  = memoryref(memoryref(mem), Int(i), @_boundscheck)
-GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}) where {kind,T,AS}  = memoryref(mem)
-GenericMemoryRef{kind,T,AS}(ref::GenericMemoryRef{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(memoryref(mem), Int(i), @_boundscheck)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
+GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
-const Memory{T} = GenericMemory{:not_atomic, T, CPU}
-const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
 const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
 
@@ -562,19 +611,22 @@ function _checked_mul_dims(m::Int, n::Int)
     return a, ovflw
 end
 function _checked_mul_dims(m::Int, d::Int...)
-   @_foldable_meta # the compiler needs to know this loop terminates
-   a = m
-   i = 1
-   ovflw = false
-   while Intrinsics.sle_int(i, nfields(d))
-     di = getfield(d, i)
-     b = Intrinsics.checked_smul_int(a, di)
-     ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
-     ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, di))
-     a = getfield(b, 1)
-     i = Intrinsics.add_int(i, 1)
+    @_foldable_meta # the compiler needs to know this loop terminates
+    a = m
+    i = 1
+    ovflw = false
+    neg = Intrinsics.ule_int(typemax_Int, m)
+    zero = false # if m==0 we won't have overflow since we go left to right
+    while Intrinsics.sle_int(i, nfields(d))
+        di = getfield(d, i)
+        b = Intrinsics.checked_smul_int(a, di)
+        zero = Intrinsics.or_int(zero, di === 0)
+        ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
+        neg = Intrinsics.or_int(neg, Intrinsics.ule_int(typemax_Int, di))
+        a = getfield(b, 1)
+        i = Intrinsics.add_int(i, 1)
    end
-   return a, ovflw
+   return a, Intrinsics.or_int(neg, Intrinsics.and_int(ovflw, Intrinsics.not_int(zero)))
 end
 
 # convert a set of dims to a length, with overflow checking
@@ -645,12 +697,12 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 end # module IR
 
@@ -743,6 +795,13 @@ function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospec
         return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
+
+# If the generator is a subtype of this trait, inference caches the generated unoptimized
+# code, sacrificing memory space to improve the performance of subsequent inferences.
+# This tradeoff is not appropriate in general cases (e.g., for `GeneratedFunctionStub`s
+# generated from the front end), but it can be justified for generators involving complex
+# code transformations, such as a Cassette-like system.
+abstract type CachedGenerator end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
@@ -947,6 +1006,14 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
+# During definition of struct type `B`, if an `A.B` expression refers to
+# the eventual global name of the struct, then return the partially-initialized
+# type object.
+# TODO: remove. This is a shim for backwards compatibility.
+function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecialize(t))
+    return x === mod ? t : getfield(x, name)
+end
+
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, lineno, offset, options)
@@ -998,6 +1065,35 @@ const check_top_bit = check_sign_bit
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
+
+# typename(_).constprop_heuristic
+const FORCE_CONST_PROP      = 0x1
+const ARRAY_INDEX_HEURISTIC = 0x2
+const ITERATE_HEURISTIC     = 0x3
+const SAMETYPE_HEURISTIC    = 0x4
+
+# `typename` has special tfunc support in inference to improve
+# the result for `Type{Union{...}}`. It is defined here, so that the Compiler
+# can look it up by value.
+struct TypeNameError <: Exception
+    a
+    TypeNameError(@nospecialize(a)) = new(a)
+end
+
+typename(a) = throw(TypeNameError(a))
+typename(a::DataType) = a.name
+function typename(a::Union)
+    ta = typename(a.a)
+    tb = typename(a.b)
+    ta === tb || throw(TypeNameError(a))
+    return tb
+end
+typename(union::UnionAll) = typename(union.body)
+
+# Special inference support to avoid execess specialization of these methods.
+# TODO: Replace this by a generic heuristic.
+(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+(!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
 

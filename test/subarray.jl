@@ -827,6 +827,25 @@ end
     @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i2, i3]
     V = view(A, i1, 1:5, i3, i2)
     @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i3, i2]
+
+    @testset "custom ranges" begin
+        struct MyStepRange{T} <: OrdinalRange{T,T}
+            r::StepRange{T,T}
+        end
+
+        for f in (:first, :last, :step, :length, :size)
+            @eval Base.$f(r::MyStepRange) = $f(r.r)
+        end
+        Base.getindex(r::MyStepRange, i::Int) = r.r[i]
+
+        a = rand(6)
+        V = view(a, MyStepRange(2:2:4))
+        @test @inferred(Base.unaliascopy(V))::typeof(V) == V
+
+        # empty range
+        V = view(a, MyStepRange(2:2:1))
+        @test @inferred(Base.unaliascopy(V))::typeof(V) == V
+    end
 end
 
 @testset "issue #27632" begin
@@ -1056,48 +1075,51 @@ end
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
     end
+end
 
-    @testset "_unsetindex!" begin
-        function test_unsetindex(A, B)
-            copyto!(A, B)
-            for i in eachindex(A)
-                @test !isassigned(A, i)
-            end
-            inds = eachindex(A)
-            @test_throws BoundsError Base._unsetindex!(A, last(inds) + oneunit(eltype(inds)))
-        end
-        @testset "dest IndexLinear, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), ntuple(_->:, ndims(p))...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+@testset "aliasing checks with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
 
-        @testset "dest IndexLinear, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+@testset "aliasing checks with disjoint arrays" begin
+    A = rand(3,4,5)
+    @test Base.mightalias(view(A, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(A, :, :, 1), view(A, :, :, 2))
 
-        @testset "dest IndexCartesian, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = similar(A)
-                test_unsetindex(A, B)
-            end
-        end
+    B = reinterpret(UInt64, A)
+    @test Base.mightalias(view(B, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(B, :, :, 1), view(A, :, :, 2))
 
-        @testset "dest IndexCartesian, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-            end
-        end
-    end
+    C = reinterpret(UInt32, A)
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 1))
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 2)) # This is overly conservative
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 1))
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 2)) # This is overly conservative
+end
+
+@testset "aliasing check with reshaped subarrays" begin
+    C = rand(2,1)
+    V1 = @view C[1, :]
+    V2 = @view C[2, :]
+
+    @test !Base.mightalias(V1, V2)
+    @test !Base.mightalias(V1, permutedims(V2))
+    @test !Base.mightalias(permutedims(V1), V2)
+    @test !Base.mightalias(permutedims(V1), permutedims(V2))
+
+    @test Base.mightalias(V1, V1)
+    @test Base.mightalias(V1, permutedims(V1))
+    @test Base.mightalias(permutedims(V1), V1)
+    @test Base.mightalias(permutedims(V1), permutedims(V1))
 end

@@ -577,7 +577,7 @@ let io = IOBuffer()
     serialize(io, f)
     seekstart(io)
     f2 = deserialize(io)
-    @test f2(1) === 1f0
+    @test invokelatest(f2, 1) === 1f0
 end
 
 # using a filename; #30151
@@ -595,7 +595,7 @@ let f_data
         f_data = "N0pMBwAAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI78jAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzJdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRsEWA1YkH04BBE1haW5EAQEqwCXAFgNWJB9OAQRNYWluRJ0ovyXBFgFVKMAVAAbBAQAAAAEAAAABAAAATsEVRr80EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbMl2/vhW+FcEAAAAVRsGifX5MTExMTsEp"
     end
     f = deserialize(IOBuffer(base64decode(f_data)))
-    @test f(10,3) == 23
+    @test invokelatest(f, 10,3) == 23
 end
 
 # issue #33466, IdDict

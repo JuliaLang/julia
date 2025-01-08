@@ -165,7 +165,7 @@ end
 @noinline sincos_domain_error(x) = throw(DomainError(x, "sincos(x) is only defined for finite x."))
 
 """
-    sincos(x::T) where T -> float(T)
+    sincos(x::T) where T -> Tuple{float(T),float(T)}
 
 Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
 a tuple `(sine, cosine)`.
@@ -850,7 +850,7 @@ function cospi(x::T) where T<:IEEEFloat
     end
 end
 """
-    sincospi(x::T) where T -> float(T)
+    sincospi(x::T) where T -> Tuple{float(T),float(T)}
 
 Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
 where `x` is in radians), returning a tuple `(sine, cosine)`.
@@ -1266,9 +1266,10 @@ end
 tand(x::Real) = sind(x) / cosd(x)
 
 """
-    sincosd(x::T) where T -> float(T)
+    sincosd(x::T) where T -> Tuple{float(T),float(T)}
 
-Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
+Simultaneously compute the sine and cosine of `x`, where `x` is in degrees, returning
+a tuple `(sine, cosine)`.
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
 

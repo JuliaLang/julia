@@ -142,7 +142,7 @@ As in the example above, we recommend following some simple conventions when wri
    # Examples
    ```jldoctest
    julia> a = [1 2; 3 4]
-   2×2 Array{Int64,2}:
+   2×2 Matrix{Int64}:
     1  2
     3  4
    ```
@@ -511,6 +511,20 @@ end
 Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
+The module docstring is evaluated *inside* the scope of the module, allowing
+access to all the symbols defined in and imported into the module:
+
+```julia
+"The magic number is $(MAGIC)."
+module DocStringEval
+const MAGIC = 42
+end
+```
+
+Documenting a `baremodule` by placing a docstring above the expression automatically imports
+`@doc` into the module. These imports must be done manually when the module expression is not
+documented:
+
 ```julia
 "..."
 baremodule M
@@ -526,10 +540,6 @@ f(x) = x
 
 end
 ```
-
-Documenting a `baremodule` by placing a docstring above the expression automatically imports
-`@doc` into the module. These imports must be done manually when the module expression is not
-documented.
 
 ### Global Variables
 

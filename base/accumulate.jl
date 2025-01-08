@@ -33,7 +33,7 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, promote_op(op, T, T))
+    out = similar(v, _accumulate_promote_op(op, v))
     return accumulate_pairwise!(op, out, v)
 end
 
@@ -111,8 +111,8 @@ julia> cumsum(a, dims=2)
     widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
-    out = similar(A, promote_op(add_sum, T, T))
-    cumsum!(out, A, dims=dims)
+    out = similar(A, _accumulate_promote_op(add_sum, A))
+    return cumsum!(out, A, dims=dims)
 end
 
 """
@@ -280,14 +280,13 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
     end
+
     nt = values(kw)
-    if isempty(kw)
-        out = similar(A, promote_op(op, eltype(A), eltype(A)))
-    elseif keys(nt) === (:init,)
-        out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
-    else
+    if !(isempty(kw) || keys(nt) === (:init,))
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
+
+    out = similar(A, _accumulate_promote_op(op, A; kw...))
     accumulate!(op, out, A; dims=dims, kw...)
 end
 
@@ -441,4 +440,43 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
         next = iterate(inds, state)
     end
     return B
+end
+
+# Internal function used to identify the widest possible eltype required for accumulate results
+function _accumulate_promote_op(op, v; init=nothing)
+    # Nested mock functions used to infer the widest necessary eltype
+    # NOTE: We are just passing this to promote_op for inference and should never be run.
+
+    # Initialization function used to identify initial type of `r`
+    # NOTE: reduce_first may have a different return type than calling `op`
+    function f(op, v, init)
+        val = first(something(iterate(v)))
+        return isnothing(init) ? Base.reduce_first(op, val) : op(init, val)
+    end
+
+    # Infer iteration type independent of the initialization type
+    # If `op` fails then this will return `Union{}` as `k` will be undefined.
+    # Returning `Union{}` is desirable as it won't break the `promote_type` call in the
+    # outer scope below
+    function g(op, v, r)
+        local k
+        for val in v
+            k = op(r, val)
+        end
+        return k
+    end
+
+    # Finally loop again with the two types promoted together
+    # If the `op` fails and reduce_first was used then then this will still just
+    # return the initial type, allowing the `op` to error during execution.
+    function h(op, v, r)
+        for val in v
+            r = op(r, val)
+        end
+        return r
+    end
+
+    R = Base.promote_op(f, typeof(op), typeof(v), typeof(init))
+    K = Base.promote_op(g, typeof(op), typeof(v), R)
+    return Base.promote_op(h, typeof(op), typeof(v), Base.promote_type(R, K))
 end

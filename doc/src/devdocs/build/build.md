@@ -148,6 +148,7 @@ Notes for various operating systems:
 Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
+* [RISC-V](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/riscv.md)
 
 ## Required Build Tools and External Libraries
 
@@ -194,7 +195,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
 - **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
+- **[OpenSSL]**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
@@ -229,7 +230,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 [utf8proc]:     https://julialang.org/utf8proc/
 [libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
-[mbedtls]:      https://tls.mbed.org/
+[OpenSSL]:      https://www.openssl.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
 [which]:        https://carlowood.github.io/which/
@@ -248,7 +249,7 @@ The most complicated dependency is LLVM, for which we require additional patches
 For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
-   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/15.x` branch.
+   * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
    * The only Julia-specific patch is the lib renaming (`llvm7-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
@@ -271,7 +272,7 @@ DEPS_GIT = llvm
 #  LLVM_BRANCH = julia-16.0.6-0
 #SHA hash of the alternate commit to check out automatically
 #  LLVM_SHA1 = $(LLVM_BRANCH)
-#List of LLVM targets to build.  It is strongly recommended to keep at least all the
+#List of LLVM targets to build. It is strongly recommended to keep at least all the
 #default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
 #  LLVM_TARGETS = ...
 #Use ccache for faster recompilation in case you need to restart a build.
@@ -335,8 +336,8 @@ Please note that assert builds of Julia will be slower than regular (non-assert)
 
 ## Building 32-bit Julia on a 64-bit machine
 
-Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.  Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
-However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system.  At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine. Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
+However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system. At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
 
 ```sh
 $ docker pull i386/ubuntu
