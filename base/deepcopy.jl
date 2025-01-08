@@ -124,7 +124,8 @@ end
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    stackdict[x] = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    copied = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    get!(stackdict, x, copied)::typeof(x)
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)
