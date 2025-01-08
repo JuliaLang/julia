@@ -743,8 +743,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             if kind(lam) == K"lambda"
                 lam = compile_lambda(ctx, lam)
             else
-                # lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
-                TODO(lam, "non-lambda method argument??")
+                lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
             emit(ctx, ex, K"method", fname, sig, lam)
             @assert !needs_value && !in_tail_pos
@@ -785,7 +784,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"isdefined" # TODO || k == K"throw_undef_if_not" (See upstream #53875)
+    elseif k == K"isdefined" || k == K"captured_local" # TODO || k == K"throw_undef_if_not" (See upstream #53875)
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value

@@ -102,11 +102,15 @@ function print_ir(io::IO, ex, indent="")
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
         if kind(e) == K"method" && numchildren(e) == 3
-            println(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
-            @assert kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
-            print_ir(io, e[3], indent*added_indent)
-        elseif kind(e) == K"code_info" && e.is_toplevel_thunk
-            println(io, indent, lno, " --- thunk")
+            print(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
+            if kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
+                println(io)
+                print_ir(io, e[3], indent*added_indent)
+            else
+                println(io, " ", string(e[3]))
+            end
+        elseif kind(e) == K"code_info"
+            println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
             print_ir(io, e, indent*added_indent)
         else
             code = string(e)

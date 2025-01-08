@@ -83,10 +83,9 @@ end
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
-    3   (isdefined slot₂/z)
-    4   (gotoifnot %₃ label₆)
-    5   (call top.setindex! %₂ slot₂/z :z)
-    6   (return %₂)
+    3   (gotoifnot true label₅)
+    4   (call top.setindex! %₂ slot₂/z :z)
+    5   (return %₂)
 8   TestMod.f
 9   (return %₈)
 

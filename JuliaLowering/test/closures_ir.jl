@@ -248,7 +248,7 @@ end
 18  (return %₁₇)
 
 ########################################
-# Use of isdefined
+# Closure captures with `isdefined`
 function f(x)
     function g()
         z = 3
@@ -310,6 +310,46 @@ end
     14  (return %₁₃)
 14  TestMod.f
 15  (return %₁₄)
+
+########################################
+# Global method capturing local variables
+begin
+    local x = 1
+    function f()
+        x = x + 1
+    end
+end
+#---------------------
+1   (= slot₁/x (call core.Box))
+2   1
+3   slot₁/x
+4   (call core.setfield! %₃ :contents %₂)
+5   (method TestMod.f)
+6   TestMod.f
+7   (call core.Typeof %₆)
+8   (call core.svec %₇)
+9   (call core.svec)
+10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 3 =#)))))
+11  --- code_info
+    slots: [slot₁/#self#(!read) slot₂/x(!read)]
+    1   TestMod.+
+    2   (captured_local 1)
+    3   (call core.isdefined %₂ :contents)
+    4   (gotoifnot %₃ label₆)
+    5   (goto label₈)
+    6   (newvar slot₂/x)
+    7   slot₂/x
+    8   (call core.getfield %₂ :contents)
+    9   (call %₁ %₈ 1)
+    10  (captured_local 1)
+    11  (call core.setfield! %₁₀ :contents %₉)
+    12  (return %₉)
+12  slot₁/x
+13  (call core.svec %₁₂)
+14  (call JuliaLowering.replace_captured_locals! %₁₁ %₁₃)
+15  --- method core.nothing %₁₀ %₁₄
+16  TestMod.f
+17  (return %₁₆)
 
 ########################################
 # Anonymous function syntax with ->

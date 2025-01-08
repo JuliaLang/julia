@@ -13,7 +13,7 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     bindings::Bindings
     mod::Module
     closure_bindings::Dict{IdTag,ClosureBindings}
-    closure_info::Union{Nothing,ClosureInfo{GraphType}}
+    capture_rewriting::Union{Nothing,ClosureInfo{GraphType},SyntaxList{GraphType}}
     lambda_bindings::LambdaBindings
     toplevel_stmts::SyntaxList{GraphType}
     closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
@@ -33,15 +33,22 @@ end
 
 # Access captured variable from inside a closure
 function captured_var_access(ctx, ex)
-    cinfo = ctx.closure_info
-    field_sym = cinfo.field_syms[cinfo.field_name_inds[ex.var_id]]
-    @ast ctx ex [K"call"
-        "getfield"::K"core"
-        # FIXME: attributing the self binding to srcref=ex gives misleading printing.
-        # We should carry provenance with each binding to fix this.
-        binding_ex(ctx, current_lambda_bindings(ctx).self)
-        field_sym
-    ]
+    cap_rewrite = ctx.capture_rewriting
+    if cap_rewrite isa ClosureInfo
+        field_sym = cap_rewrite.field_syms[cap_rewrite.field_name_inds[ex.var_id]]
+        @ast ctx ex [K"call"
+            "getfield"::K"core"
+            binding_ex(ctx, current_lambda_bindings(ctx).self)
+            field_sym
+        ]
+    else
+        interpolations = cap_rewrite
+        @assert !isnothing(cap_rewrite)
+        if isempty(interpolations) || !is_same_identifier_like(interpolations[end], ex)
+            push!(interpolations, ex)
+        end
+        @ast ctx ex [K"captured_local" length(interpolations)::K"Integer"]
+    end
 end
 
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
@@ -438,9 +445,9 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"method_defs"
         name = ex[1]
         is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind === :local
-        cinfo = is_closure ? ctx.closure_infos[name.var_id] : nothing
+        cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, cinfo, ctx.lambda_bindings,
+                                    ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings,
                                     ctx.toplevel_stmts, ctx.closure_infos)
         body = _convert_closures(ctx2, ex[2])
         if is_closure
@@ -467,8 +474,15 @@ function closure_convert_lambda(ctx, ex)
     body_stmts = SyntaxList(ctx)
     toplevel_stmts = ex.is_toplevel_thunk ? body_stmts : ctx.toplevel_stmts
     lambda_bindings = ex.lambda_bindings
+    interpolations = nothing
+    if isnothing(ctx.capture_rewriting)
+        interpolations = SyntaxList(ctx)
+        cap_rewrite = interpolations
+    else
+        cap_rewrite = ctx.capture_rewriting
+    end
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                ctx.closure_bindings, ctx.closure_info, lambda_bindings,
+                                ctx.closure_bindings, cap_rewrite, lambda_bindings,
                                 toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     args = ex[1]
@@ -494,11 +508,24 @@ function closure_convert_lambda(ctx, ex)
     push!(lambda_children, @ast ctx2 ex[3] [K"block" body_stmts...])
 
     if numchildren(ex) > 3
+        # Convert return type
         @assert numchildren(ex) == 4
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    makenode(ctx, ex, ex, lambda_children; lambda_bindings=lambda_bindings)
+    lam = makenode(ctx, ex, ex, lambda_children; lambda_bindings=lambda_bindings)
+    if !isnothing(interpolations) && !isempty(interpolations)
+        @ast ctx ex [K"call"
+            replace_captured_locals!::K"Value"
+            lam
+            [K"call"
+                "svec"::K"core"
+                interpolations...
+            ]
+        ]
+    else
+        lam
+    end
 end
 
 

@@ -76,6 +76,10 @@ function _register_kinds()
             "tryfinally"
             "unnecessary"
             "decl"
+            # [K"captured_local" index]
+            # A local variable captured into a global method. Contains the
+            # `index` of the associated `Box` in the rewrite list.
+            "captured_local"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

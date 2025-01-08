@@ -70,6 +70,18 @@ begin
 end
 """) == (true, false, (true, true, true, false))
 
+# Global method capturing local variables
+JuliaLowering.include_string(test_mod, """
+begin
+    local x = 1
+    function f_global_method_capturing_local()
+        x = x + 1
+    end
+end
+""")
+@test test_mod.f_global_method_capturing_local() == 2
+@test test_mod.f_global_method_capturing_local() == 3
+
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """
 begin

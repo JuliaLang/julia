@@ -98,6 +98,16 @@ function interpolate_ast(ex, values...)
     end
 end
 
+# Interpolate captured local variables into the CodeInfo for a global method
+function replace_captured_locals!(codeinfo, locals)
+    for (i, ex) in enumerate(codeinfo.code)
+        if Meta.isexpr(ex, :captured_local)
+            codeinfo.code[i] = locals[ex.args[1]]
+        end
+    end
+    codeinfo
+end
+
 # Construct new bare module including only the "default names"
 #
 #     using Core
