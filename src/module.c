@@ -60,6 +60,17 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
     }
 }
 
+jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min_world, size_t max_world) {
+    if (!b)
+        return NULL;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, min_world);
+    if (!bpart)
+        return NULL;
+    if (jl_atomic_load_relaxed(&bpart->max_world) < max_world)
+        return NULL;
+    return bpart;
+}
+
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
@@ -279,7 +290,11 @@ retry:
             if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
                 check_safe_newbinding(m, var);
                 if (!alloc)
-                    jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+                    jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                              "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                              "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                              jl_symbol_name(m->name), jl_symbol_name(var),
+                              jl_symbol_name(var), jl_symbol_name(m->name));
             }
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
@@ -385,7 +400,10 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b)
 JL_DLLEXPORT jl_value_t *jl_bpart_get_restriction_value(jl_binding_partition_t *bpart)
 {
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    return decode_restriction_value(pku);
+    jl_value_t *v = decode_restriction_value(pku);
+    if (!v)
+        jl_throw(jl_undefref_exception);
+    return v;
 }
 
 typedef struct _modstack_t {

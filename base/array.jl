@@ -346,12 +346,13 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-@eval function copy(a::Array{T}) where {T}
-    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
-    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+@eval function copy(a::Array)
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
     @_nothrow_meta
     ref = a.ref
-    newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
+    newmem = typeof(ref.mem)(undef, length(a))
+    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
@@ -2439,19 +2440,28 @@ end
 findfirst(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findnext(testf, A, first(keys(A)))
 
-findfirst(p::Union{Fix2{typeof(isequal),Int},Fix2{typeof(==),Int}}, r::OneTo{Int}) =
-    1 <= p.x <= r.stop ? p.x : nothing
+findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where {T<:Integer} =
+    1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
-findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange) where {T<:Integer} =
-    first(r) <= p.x <= last(r) ? firstindex(r) + Int(p.x - first(r)) : nothing
+findfirst(::typeof(iszero), ::OneTo) = nothing
+findfirst(::typeof(isone), r::OneTo) = isempty(r) ? nothing : oneunit(keytype(r))
+
+function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+    first(r) <= p.x <= last(r) || return nothing
+    i1 = first(keys(r))
+    return i1 + oftype(i1, p.x - first(r))
+end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))::S
+    d = p.x - first(r)
     iszero(d % step(r)) || return nothing
-    return d ÷ step(r) + 1
+    return convert(keytype(r), d ÷ step(r) + 1)
 end
+
+findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
+findfirst(::typeof(isone), r::AbstractRange) = findfirst(==(one(first(r))), r)
 
 """
     findprev(A, i)
@@ -2622,6 +2632,17 @@ end
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
+
+# for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
+function findlast(p::Union{Fix2{typeof(isequal),<:Integer},Fix2{typeof(==),<:Integer},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer})
+    findfirst(p, r)
+end
+
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::StepRange{T,S}) where {T,S}
+    findfirst(p, r)
+end
 
 """
     findall(f::Function, A)

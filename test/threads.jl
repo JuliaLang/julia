@@ -16,7 +16,8 @@ let lk = ReentrantLock()
     t2 = @async (notify(c2); trylock(lk))
     wait(c1)
     wait(c2)
-    @test t1.queue === lk.cond_wait.waitq
+    # wait for the task to park in the queue (it may be spinning)
+    @test timedwait(() -> t1.queue === lk.cond_wait.waitq, 1.0) == :ok
     @test t2.queue !== lk.cond_wait.waitq
     @test istaskdone(t2)
     @test !fetch(t2)

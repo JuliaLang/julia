@@ -1,18 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if isdefined(Base, :end_base_include) && !isdefined(Base, :Compiler)
+
+# Define a dummy `Compiler` module to make it installable even on Julia versions where
+# Compiler.jl is not available as a standard library.
+@eval module Compiler
+    function __init__()
+        println("""
+        The `Compiler` standard library is not available for this version of Julia.
+        Use Julia version `v"1.12.0-DEV.1581"` or later.
+        """)
+    end
+end
+
 # When generating an incremental precompile file, we first check whether we
 # already have a copy of this *exact* code in the system image. If so, we
 # simply generates a pkgimage that has the dependency edges we recorded in
 # the system image and simply returns that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
-if isdefined(Base, :generating_output) && Base.generating_output(true) &&
-        Base.samefile(Base._compiler_require_dependencies[1][2], @eval @__FILE__) &&
+elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
+        Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
         !Base.any_includes_stale(
-            map(Base.CacheHeaderIncludes, Base._compiler_require_dependencies),
-            "sysimg", nothing)
+            map(Base.compiler_chi, Base._compiler_require_dependencies),
+            "sysimg", nothing))
 
     Base.prepare_compiler_stub_image!()
-    append!(Base._require_dependencies, Base._compiler_require_dependencies)
+    append!(Base._require_dependencies, map(Base.expand_compiler_path, Base._compiler_require_dependencies))
     # There isn't much point in precompiling native code - downstream users will
     # specialize their own versions of the compiler code and we don't activate
     # the compiler by default anyway, so let's save ourselves some disk space.
@@ -28,36 +41,37 @@ ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
 
 using Core.Intrinsics, Core.IR
 
-import Core: print, println, show, write, unsafe_write,
-             _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodTable, MethodMatch, PartialOpaque,
-             TypeofVararg, Core, SimpleVector, donotdelete, compilerbarrier,
-             memoryref_isassigned, memoryrefnew, memoryrefoffset, memoryrefget,
-             memoryrefset!, typename
+using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
+    MethodTable, PartialOpaque, SimpleVector, TypeofVararg,
+    _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
+    memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
+    typename, unsafe_write, write
 
 using Base
-using Base: Ordering, vect, EffectsOverride, BitVector, @_gc_preserve_begin, @_gc_preserve_end, RefValue,
-    @nospecializeinfer, @_foldable_meta, fieldindex, is_function_def, indexed_iterate, isexpr, methods,
-    get_world_counter, JLOptions, _methods_by_ftype, unwrap_unionall, cconvert, unsafe_convert,
-    issingletontype, isType, rewrap_unionall, has_free_typevars, isvarargtype, hasgenerator,
-    IteratorSize, SizeUnknown, _array_for, Bottom, generating_output, diff_names,
-    ismutationfree, NUM_EFFECTS_OVERRIDES, _NAMEDTUPLE_NAME, datatype_fieldtypes,
-    argument_datatype, isfieldatomic, unwrapva, iskindtype, _bits_findnext, copy_exprargs,
-    Generator, Filter, ismutabletypename, isvatuple, datatype_fieldcount,
-    isconcretedispatch, isdispatchelem, datatype_layoutsize,
-    datatype_arrayelem, unionlen, isidentityfree, _uniontypes, uniontypes, OneTo, Callable,
-    DataTypeFieldDesc, datatype_nfields, datatype_pointerfree, midpoint, is_valid_intrinsic_elptr,
-    allocatedinline, isbitsunion, widen_diagonal, unconstrain_vararg_length,
-    rename_unionall, may_invoke_generator, is_meta_expr_head, is_meta_expr, quoted,
-    specialize_method, hasintersect, is_nospecializeinfer, is_nospecialized,
-    get_nospecializeinfer_sig, tls_world_age, uniontype_layout, kwerr,
-    moduleroot, is_file_tracked, decode_effects_override, lookup_binding_partition,
-    is_some_imported, binding_kind, is_some_guard, is_some_const_binding, partition_restriction,
-    BINDING_KIND_GLOBAL, structdiff
+using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
+    BINDING_KIND_GLOBAL, Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
+    EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
+    OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
+    _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
+    argument_datatype, binding_kind, cconvert, copy_exprargs, datatype_arrayelem,
+    datatype_fieldcount, datatype_fieldtypes, datatype_layoutsize, datatype_nfields,
+    datatype_pointerfree, decode_effects_override, diff_names, fieldindex,
+    generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
+    hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
+    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer,
+    is_some_const_binding, is_some_guard, is_some_imported, is_valid_intrinsic_elptr,
+    isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
+    iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
+    kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
+    partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
+    structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
+    uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
+    _uncompressed_ir
 using Base.Order
-import Base: getindex, setindex!, length, iterate, push!, isempty, first, convert, ==,
-    copy, popfirst!, in, haskey, resize!, copy!, append!, last, get!, size,
-    get, iterate, findall, min_world, max_world, _topmod
+
+import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
+    getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
+    min_world, popfirst!, push!, resize!, setindex!, size
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -74,14 +88,14 @@ eval(m, x) = Core.eval(m, x)
 function include(x::String)
     if !isdefined(Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(Compiler, x)
 end
 
 function include(mod::Module, x::String)
     if !isdefined(Base, :end_base_include)
-        x = Base.strcat(Base.strcat(Base.BUILDROOT, "../usr/share/julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
     end
     Base.include(mod, x)
 end
@@ -124,9 +138,7 @@ if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
 end
 end
 
-if false
-    import Base: Base, @show
-else
+if !isdefined(Base, :end_base_include)
     macro show(ex...)
         blk = Expr(:block)
         for s in ex
@@ -136,6 +148,8 @@ else
         isempty(ex) || push!(blk.args, :value)
         blk
     end
+else
+    using Base: @show
 end
 
 include("cicache.jl")
@@ -166,21 +180,28 @@ include("optimize.jl")
 
 include("bootstrap.jl")
 include("reflection_interface.jl")
+include("opaque_closure.jl")
 
-if isdefined(Base, :IRShow)
-    @eval module IRShow
-        import ..Compiler
-        using Core.IR
-        using ..Base
-        import .Compiler: IRCode, CFG, scan_ssa_use!,
-            isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-            Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx,
-            VarState, InvalidIRError, argextype, widenconst, singleton_type,
-            sptypes_from_meth_instance, EMPTY_SPTYPES, InferenceState,
-            NativeInterpreter, CachedMethodTable, LimitedAccuracy, Timings
-        # During bootstrap, Base will later include this into its own "IRShow module"
-        Compiler.include(IRShow, "ssair/show.jl")
+macro __SOURCE_FILE__()
+    __source__.file === nothing && return nothing
+    return QuoteNode(__source__.file::Symbol)
+end
+
+module IRShow end
+function load_irshow!()
+    if isdefined(Base, :end_base_include)
+        # This code path is exclusively for Revise, which may want to re-run this
+        # after bootstrap.
+        include(IRShow, Base.joinpath(Base.dirname(Base.String(@__SOURCE_FILE__)), "ssair/show.jl"))
+    else
+        include(IRShow, "ssair/show.jl")
     end
+end
+if !isdefined(Base, :end_base_include)
+    # During bootstrap, skip including this file and defer it to base/show.jl to include later
+else
+    # When this module is loaded as the standard library, include this file as usual
+    load_irshow!()
 end
 
 end # baremodule Compiler

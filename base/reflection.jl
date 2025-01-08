@@ -131,13 +131,6 @@ isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
-function _uncompressed_ir(m::Method)
-    s = m.source
-    if s isa String
-        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
-    end
-    return s::CodeInfo
-end
 
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
@@ -248,30 +241,17 @@ struct CodegenParams
     """
     trim::Cint
 
-    """
-    A pointer of type
-
-    typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
-    size_t min_world, size_t max_world);
-
-    that may be used by external compilers as a callback to look up the code instance corresponding
-    to a particular method instance.
-    """
-    lookup::Ptr{Cvoid}
-
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0),
-                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim),
-            lookup)
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim))
     end
 end
 
@@ -475,7 +455,7 @@ internals.
   when looking up methods, use current world age if not specified.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
-- `optimize_until::Union{Integer,AbstractString,Nothing} = nothing`: optional,
+- `optimize_until::Union{Int,String,Nothing} = nothing`: optional,
   controls the optimization passes to run.
   If it is a string, it specifies the name of the pass up to which the optimizer is run.
   If it is an integer, it specifies the number of passes to run.
@@ -519,7 +499,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     interp=nothing,
-    optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
+    optimize_until::Union{Int,String,Nothing}=nothing,
 )
     passed_interp = interp
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp

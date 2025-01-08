@@ -89,6 +89,7 @@ External links:
 #include "julia_assert.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
+size_t jl_require_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -100,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    193
+#define NUM_TAGS    195
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -215,6 +216,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
         INSERT_TAG(jl_debuginfo_type);
+        INSERT_TAG(jl_abioverride_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -289,6 +291,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_replacefield);
         INSERT_TAG(jl_builtin_setfieldonce);
         INSERT_TAG(jl_builtin_fieldtype);
+        INSERT_TAG(jl_builtin_memorynew);
         INSERT_TAG(jl_builtin_memoryref);
         INSERT_TAG(jl_builtin_memoryrefoffset);
         INSERT_TAG(jl_builtin_memoryrefget);
@@ -507,7 +510,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
-    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
+    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
     &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryref_isassigned,
     &jl_f_memoryrefset,  &jl_f_memoryrefswap, &jl_f_memoryrefmodify, &jl_f_memoryrefreplace, &jl_f_memoryrefsetonce,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
@@ -587,6 +590,7 @@ typedef enum {
     JL_API_BOXED,
     JL_API_CONST,
     JL_API_WITH_PARAMETERS,
+    JL_API_OC_CALL,
     JL_API_INTERPRETED,
     JL_API_BUILTIN,
     JL_API_MAX
@@ -655,6 +659,7 @@ static void jl_load_sysimg_so(void)
         plen = (size_t *)&jl_system_image_size;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(sysimg_data, *plen);
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
@@ -766,6 +771,16 @@ static uintptr_t jl_fptr_id(void *fptr)
     else
         return *(uintptr_t*)pbp;
 }
+
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
+           ((effects >> 6) & 0x01); // is_terminates(effects)
+}
+
 
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
@@ -896,18 +911,35 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
         // make sure we don't serialize other reachable cache entries of foreign methods
         // Should this now be:
         // if (ci !in ci->defs->cache)
         //     record_field_change((jl_value_t**)&ci->next, NULL);
         // Why are we checking that the method/module this originates from is in_image?
         // and then disconnect this CI?
-        if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
+        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
-        if (jl_atomic_load_relaxed(&ci->inferred) && !is_relocatable_ci(&relocatable_ext_cis, ci))
-            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
+                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+            else if (jl_is_method(mi->def.method) && // don't delete toplevel code
+                     mi->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (native_functions && // don't delete any code if making a ji file
+                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
+                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
+                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+            }
+        }
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
@@ -1780,7 +1812,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     fptr_id = JL_API_CONST;
                 }
                 else {
-                    if (jl_is_method(ci->def->def.method)) {
+                    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
                         builtin_id = jl_fptr_id(jl_atomic_load_relaxed(&ci->specptr.fptr));
                         if (builtin_id) { // found in the table of builtins
                             assert(builtin_id >= 2);
@@ -1796,6 +1828,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 }
                                 else if (invokeptr_id == -2) {
                                     fptr_id = JL_API_WITH_PARAMETERS;
+                                }
+                                else if (invokeptr_id == -3) {
+                                    abort();
+                                }
+                                else if (invokeptr_id == -4) {
+                                    fptr_id = JL_API_OC_CALL;
                                 }
                                 else {
                                     assert(invokeptr_id > 0);
@@ -2033,10 +2071,14 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         case JL_API_BOXED:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
-            JL_FALLTHROUGH;
+            return (uintptr_t)NULL;
         case JL_API_WITH_PARAMETERS:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
+            return (uintptr_t)NULL;
+        case JL_API_OC_CALL:
+            if (s->image->fptrs.nptrs)
+                return (uintptr_t)jl_f_opaque_closure_call;
             return (uintptr_t)NULL;
         case JL_API_CONST:
             return (uintptr_t)jl_fptr_const_return;
@@ -2313,9 +2355,9 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+            assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst->def;     // now it's a MethodInstance
+            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
@@ -2566,6 +2608,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
@@ -2667,7 +2710,6 @@ jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 extern jl_mutex_t world_counter_lock;
-extern size_t jl_require_world;
 
 jl_mutex_t precompile_field_replace_lock;
 jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
@@ -2885,10 +2927,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
     int en = jl_gc_enable(0);
     if (native_functions) {
-        jl_get_llvm_gvs(native_functions, &gvars);
-        jl_get_llvm_external_fns(native_functions, &external_fns);
-        if (jl_options.trim)
-            jl_get_llvm_mis(native_functions, &MIs);
+        size_t num_gvars, num_external_fns;
+        jl_get_llvm_gvs(native_functions, &num_gvars, NULL);
+        arraylist_grow(&gvars, num_gvars);
+        jl_get_llvm_gvs(native_functions, &num_gvars, gvars.items);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
+        arraylist_grow(&external_fns, num_external_fns);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns,
+                                 (jl_code_instance_t *)external_fns.items);
+        if (jl_options.trim) {
+            size_t num_mis;
+            jl_get_llvm_mis(native_functions, &num_mis, NULL);
+            arraylist_grow(&MIs, num_mis);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t *)MIs.items);
+        }
     }
     if (jl_options.trim) {
         jl_rebuild_methtables(&MIs, &new_methtables);
@@ -3938,6 +3990,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         size_t len = jl_array_nrows(*restored);
         assert(len > 0);
         jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        // Ordinarily set during deserialization, but our compiler stub image,
+        // just returns a reference to the sysimage version, so we set it here.
+        topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
         arraylist_push(&jl_top_mods, (void*)topmod);
     }
@@ -4030,16 +4085,30 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Insert method extensions and handle edges
+            int new_methods = jl_array_nrows(extext_methods) > 0;
+            if (!new_methods) {
+                size_t i, l = jl_array_nrows(internal_methods);
+                for (i = 0; i < l; i++) {
+                    jl_value_t *obj = jl_array_ptr_ref(internal_methods, i);
+                    if (jl_is_method(obj)) {
+                        new_methods = 1;
+                        break;
+                    }
+                }
+            }
             JL_LOCK(&world_counter_lock);
-              // allocate a world for the new methods, and insert them there, invalidating content as needed
-            size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-            jl_activate_methods(extext_methods, internal_methods, world);
-              // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
-              // allow users to start running in this updated world
-            jl_atomic_store_release(&jl_world_counter, world);
-              // now permit more methods to be added again
+            // allocate a world for the new methods, and insert them there, invalidating content as needed
+            size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+            if (new_methods)
+                world += 1;
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
+            // allow users to start running in this updated world
+            if (new_methods)
+                jl_atomic_store_release(&jl_world_counter, world);
+            // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
-              // but one of those immediate users is going to be our cache insertions
+            // but one of those immediate users is going to be our cache insertions
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)new_ext_cis); // restore existing caches (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);
@@ -4159,6 +4228,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_dlsym(pkgimg_handle, "jl_system_image_data", (void **)&pkgimg_data, 1);
     size_t *plen;
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(pkgimg_data, *plen);
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 

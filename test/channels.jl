@@ -550,8 +550,11 @@ end
 # make sure 1-shot timers work
 let a = []
     Timer(t -> push!(a, 1), 0.01, interval = 0)
-    sleep(0.2)
-    @test a == [1]
+    @test timedwait(() -> a == [1], 10) === :ok
+end
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0, spawn = true)
+    @test timedwait(() -> a == [1], 10) === :ok
 end
 
 # make sure that we don't accidentally create a one-shot timer
