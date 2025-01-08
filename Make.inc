@@ -1402,7 +1402,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT MMTK_JULIA
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1426,6 +1426,13 @@ $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortr
 endif
 endif
 
+ifneq (${MMTK_PLAN},None)
+# We still need some .h files from mmtk when
+# building Julia using the BinaryBuilder
+ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
+MMTK_API_INC=$(JULIAHOME)/deps/mmtk/
+endif
+endif
 
 # OS specific stuff
 
