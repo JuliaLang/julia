@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random, Logging
-using REPL # doc lookup function
+using Test, Distributed, Random, Logging, Libdl
+using REPL # testing the doc lookup function should be outside of the scope of this file, but is currently tested here
 
 include("precompile_utils.jl")
 
@@ -387,36 +387,27 @@ precompile_test_harness(false) do dir
         @test Base.object_build_id(Foo.a_vec_int) == Base.module_build_id(Foo)
     end
 
-    @eval begin function ccallable_test()
-        Base.llvmcall(
-        ("""declare i32 @f35014(i32)
-            define i32 @entry() {
-            0:
-                %1 = call i32 @f35014(i32 3)
-                ret i32 %1
-            }""", "entry"
-        ), Cint, Tuple{})
-    end
-    @test ccallable_test() == 4
-    end
-
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
+    @test isfile(cachefile)
     do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
     if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
         if do_pkgimg
-            ocachefile = Base.ocachefile_from_cachefile(cachefile)
+            ocachefile = Base.ocachefile_from_cachefile(cachefile)::String
+            @test isfile(ocachefile)
+            let foo_ptr = Libdl.dlopen(ocachefile::String, RTLD_NOLOAD)
+                f35014_ptr = Libdl.dlsym(foo_ptr, :f35014)
+                @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
+            end
         else
             ocachefile = nothing
         end
         # use _require_from_serialized to ensure that the test fails if
         # the module doesn't reload from the image:
-        @test_warn "@ccallable was already defined for this method name" begin
-            @test_logs (:warn, "Replacing module `$Foo_module`") begin
-                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile, Foo_file)
-                @test isa(m, Module)
-            end
+        @test_logs (:warn, "Replacing module `$Foo_module`") begin
+            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile, Foo_file)
+            @test isa(m, Module)
         end
     end
 
