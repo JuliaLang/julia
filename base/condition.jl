@@ -170,6 +170,7 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
             dosched && schedule(ct, TimeoutError(timeout); error=true)
         end
         t.sticky = false
+        Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
     end
 
