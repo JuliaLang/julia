@@ -183,3 +183,19 @@ x::T
 3   (call core.typeassert %₁ %₂)
 4   (return %₃)
 
+########################################
+# Error: braces vector syntax
+{x, y}
+#---------------------
+LoweringError:
+{x, y}
+└────┘ ── { } syntax is reserved for future use
+
+########################################
+# Error: braces matrix syntax
+{x y; y z}
+#---------------------
+LoweringError:
+{x y; y z}
+└────────┘ ── { } syntax is reserved for future use
+

@@ -2720,6 +2720,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
     elseif k == K"where"
         expand_forms_2(ctx, expand_wheres(ctx, ex))
+    elseif k == K"braces" || k == K"bracescat"
+        throw(LoweringError(ex, "{ } syntax is reserved for future use"))
     elseif k == K"string"
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
