@@ -113,6 +113,13 @@ end
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"
     end
+
+    # Exceptions in log handling (printing) of msg are caught by default
+    struct Foo end
+    Base.show(::IO, ::Foo) = 1 ÷ 0
+    @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true @info Foo()
+    # Exceptions in log handling (printing) of attributes are caught by default
+    @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true @info "foo" x=Foo()
 end
 
 @testset "Special keywords" begin
