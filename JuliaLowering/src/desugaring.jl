@@ -550,7 +550,10 @@ function expand_vcat(ctx, ex)
     check_no_assignment(children(ex))
     had_row = false
     had_row_splat = false
-    for e in children(ex)
+    is_typed = kind(ex) == K"typed_vcat"
+    eltype   = is_typed ? ex[1]     : nothing
+    elements = is_typed ? ex[2:end] : ex[1:end]
+    for e in elements
         k = kind(e)
         if k == K"row"
             had_row = true
@@ -561,40 +564,46 @@ function expand_vcat(ctx, ex)
         # In case there is splatting inside `hvcat`, collect each row as a
         # separate tuple and pass those to `hvcat_rows` instead (ref #38844)
         rows = SyntaxList(ctx)
-        for e in children(ex)
+        for e in elements
             if kind(e) == K"row"
                 push!(rows, @ast ctx e [K"tuple" children(e)...])
             else
                 push!(rows, @ast ctx e [K"tuple" e])
             end
         end
+        fname = is_typed ? "typed_hvcat_rows" : "hvcat_rows"
         @ast ctx ex [K"call"
-            "hvcat_rows"::K"top"
+            fname::K"top"
+            eltype
             rows...
         ]
     else
         row_sizes = SyntaxList(ctx)
-        elements = SyntaxList(ctx)
-        for e in children(ex)
+        elem_list = SyntaxList(ctx)
+        for e in elements
             if kind(e) == K"row"
                 rowsize = numchildren(e)
-                append!(elements, children(e))
+                append!(elem_list, children(e))
             else
                 rowsize = 1
-                push!(elements, e)
+                push!(elem_list, e)
             end
             push!(row_sizes, @ast ctx e rowsize::K"Integer")
         end
         if had_row
+            fname = is_typed ? "typed_hvcat" : "hvcat"
             @ast ctx ex [K"call"
-                "hvcat"::K"top"
+                fname::K"top"
+                eltype
                 [K"tuple" row_sizes...]
-                elements...
+                elem_list...
             ]
         else
+            fname = is_typed ? "typed_vcat" : "vcat"
             @ast ctx ex [K"call"
-                "vcat"::K"top"
-                elements...
+                fname::K"top"
+                eltype
+                elem_list...
             ]
         end
     end
@@ -2866,7 +2875,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             "hcat"::K"top"
             expand_forms_2(ctx, children(ex))...
         ]
-    elseif k == K"vcat"
+    elseif k == K"typed_hcat"
+        check_no_assignment(children(ex))
+        @ast ctx ex [K"call"
+            "typed_hcat"::K"top"
+            expand_forms_2(ctx, children(ex))...
+        ]
+    elseif k == K"vcat" || k == K"typed_vcat"
         expand_forms_2(ctx, expand_vcat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2

@@ -35,6 +35,17 @@ LoweringError:
 5   (return %₄)
 
 ########################################
+# typed hcat syntax
+T[a b c]
+#---------------------
+1   TestMod.T
+2   TestMod.a
+3   TestMod.b
+4   TestMod.c
+5   (call top.typed_hcat %₁ %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
 # Error: hcat syntax with embedded assignments
 [a b c=d]
 #---------------------
@@ -97,4 +108,44 @@ LoweringError:
 LoweringError:
 [a=b; c]
 #└─┘ ── misplaced assignment statement in `[ ... ]`
+
+########################################
+# typed_vcat syntax
+T[a; b; c]
+#---------------------
+1   TestMod.T
+2   TestMod.a
+3   TestMod.b
+4   TestMod.c
+5   (call top.typed_vcat %₁ %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
+# typed_hvcat syntax
+T[a; b c; d e f]
+#---------------------
+1   TestMod.T
+2   (call core.tuple 1 2 3)
+3   TestMod.a
+4   TestMod.b
+5   TestMod.c
+6   TestMod.d
+7   TestMod.e
+8   TestMod.f
+9   (call top.typed_hvcat %₁ %₂ %₃ %₄ %₅ %₆ %₇ %₈)
+10  (return %₉)
+
+########################################
+# typed_hvcat with splats nested within rows
+T[a; b c...]
+#---------------------
+1   TestMod.T
+2   TestMod.a
+3   (call core.tuple %₂)
+4   TestMod.b
+5   (call core.tuple %₄)
+6   TestMod.c
+7   (call core._apply_iterate top.iterate core.tuple %₅ %₆)
+8   (call top.typed_hvcat_rows %₁ %₃ %₇)
+9   (return %₈)
 
