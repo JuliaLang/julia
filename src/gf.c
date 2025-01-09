@@ -1867,6 +1867,11 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     JL_UNLOCK(&replaced_mi->def.method->writelock);
 }
 
+JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world)
+{
+    invalidate_code_instance(replaced, max_world, 1);
+}
+
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth) {
     jl_array_t *backedges = replaced_mi->backedges;
     if (backedges) {
