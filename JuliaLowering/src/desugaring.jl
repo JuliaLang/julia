@@ -536,6 +536,70 @@ function expand_setindex(ctx, ex)
     ]
 end
 
+function check_no_assignment(exs)
+    assign_pos = findfirst(kind(e) == K"=" for e in exs)
+    if !isnothing(assign_pos)
+        throw(LoweringError(exs[assign_pos], "misplaced assignment statement in `[ ... ]`"))
+    end
+end
+
+function expand_vcat(ctx, ex)
+    if has_parameters(ex)
+        throw(LoweringError(ex, "unexpected semicolon in array expression"))
+    end
+    check_no_assignment(children(ex))
+    had_row = false
+    had_row_splat = false
+    for e in children(ex)
+        k = kind(e)
+        if k == K"row"
+            had_row = true
+            had_row_splat = had_row_splat || any(kind(e1) == K"..." for e1 in children(e))
+        end
+    end
+    if had_row_splat
+        # In case there is splatting inside `hvcat`, collect each row as a
+        # separate tuple and pass those to `hvcat_rows` instead (ref #38844)
+        rows = SyntaxList(ctx)
+        for e in children(ex)
+            if kind(e) == K"row"
+                push!(rows, @ast ctx e [K"tuple" children(e)...])
+            else
+                push!(rows, @ast ctx e [K"tuple" e])
+            end
+        end
+        @ast ctx ex [K"call"
+            "hvcat_rows"::K"top"
+            rows...
+        ]
+    else
+        row_sizes = SyntaxList(ctx)
+        elements = SyntaxList(ctx)
+        for e in children(ex)
+            if kind(e) == K"row"
+                rowsize = numchildren(e)
+                append!(elements, children(e))
+            else
+                rowsize = 1
+                push!(elements, e)
+            end
+            push!(row_sizes, @ast ctx e rowsize::K"Integer")
+        end
+        if had_row
+            @ast ctx ex [K"call"
+                "hvcat"::K"top"
+                [K"tuple" row_sizes...]
+                elements...
+            ]
+        else
+            @ast ctx ex [K"call"
+                "vcat"::K"top"
+                elements...
+            ]
+        end
+    end
+end
+
 # Expand UnionAll definitions, eg `X{T} = Y{T,T}`
 function expand_unionall_def(ctx, srcref, lhs, rhs)
     if numchildren(lhs) <= 1
@@ -2668,7 +2732,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             @ast ctx ex [K"if" cond true::K"Bool" cs[end]]
         end
-    elseif k == K"::" && numchildren(ex) == 2
+    elseif k == K"::"
+        @chk numchildren(ex) == 2 "`::` must be written `value::type` outside function argument lists"
         @ast ctx ex [K"call"
             "typeassert"::K"core"
             expand_forms_2(ctx, ex[1])
@@ -2787,10 +2852,22 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             ]
         ]
     elseif k == K"vect"
+        if has_parameters(ex)
+            throw(LoweringError(ex, "unexpected semicolon in array expression"))
+        end
+        check_no_assignment(children(ex))
         @ast ctx ex [K"call"
             "vect"::K"top"
             expand_forms_2(ctx, children(ex))...
         ]
+    elseif k == K"hcat"
+        check_no_assignment(children(ex))
+        @ast ctx ex [K"call"
+            "hcat"::K"top"
+            expand_forms_2(ctx, children(ex))...
+        ]
+    elseif k == K"vcat"
+        expand_forms_2(ctx, expand_vcat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
         @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"

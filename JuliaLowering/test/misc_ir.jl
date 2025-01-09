@@ -184,6 +184,14 @@ x::T
 4   (return %₃)
 
 ########################################
+# Error: Invalid :: syntax outside function arg list
+::T
+#---------------------
+LoweringError:
+::T
+└─┘ ── `::` must be written `value::type` outside function argument lists
+
+########################################
 # Error: braces vector syntax
 {x, y}
 #---------------------

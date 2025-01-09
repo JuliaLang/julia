@@ -8,6 +8,7 @@ include("utils.jl")
 
     include("ir_tests.jl")
 
+    include("arrays.jl")
     include("branching.jl")
     include("decls.jl")
     include("desugaring.jl")
