@@ -113,13 +113,35 @@ end
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"
     end
+end
+@testset "Log message handle_message exception handling" begin
+    function capture_stderr(func)
+        fname = tempname()
+        f = open(fname, "w")
+        redirect_stderr(f) do
+            func()
+        end
+        close(f)
+        buf = read(fname)
+        rm(fname)
+        String(buf)
+    end
 
     # Exceptions in log handling (printing) of msg are caught by default
     struct Foo end
     Base.show(::IO, ::Foo) = 1 ÷ 0
-    @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true @info Foo()
+    out = capture_stderr() do
+        @info Foo()
+    end
+    @test occursin("Error: Exception while generating log record in module Main at", out)
+    @test occursin("DivideError: integer division error", out)
+
     # Exceptions in log handling (printing) of attributes are caught by default
-    @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true @info "foo" x=Foo()
+    out = capture_stderr() do
+        @info "foo" x=Foo()
+    end
+    @test occursin("Error: Exception while generating log record in module Main at", out)
+    @test occursin("DivideError: integer division error", out)
 end
 
 @testset "Special keywords" begin
