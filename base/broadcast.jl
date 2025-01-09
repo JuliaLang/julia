@@ -289,7 +289,9 @@ function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) wh
     else
         # for `N isa Int`, only nonnegative values are allowed, indicating the number of dimensions
         let n = N::Int
-            NTuple{n}  # throw if negative
+            if n < 0
+                throw(ArgumentError("dimension count must not be negative"))
+            end
             n
         end
     end
