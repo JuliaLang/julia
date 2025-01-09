@@ -231,7 +231,7 @@ export
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
     nfields, throw, tuple, ===, isdefined, eval,
     # access to globals
-    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!,
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
