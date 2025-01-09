@@ -281,20 +281,14 @@ end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
 Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
-function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
-    # `N` is the `AbstractArrayStyle` type parameter, so `N isa Union{Type,Int}`.
-    if (N isa Type) && (Any <: N)
-        # for `N isa Type`, `Any` is the only allowed value, indicating a wildcard
-        _maxndims_broadcasted(BC)
-    else
-        # for `N isa Int`, only nonnegative values are allowed, indicating the number of dimensions
-        let n = N::Int
-            if n < 0
-                throw(ArgumentError("dimension count must not be negative"))
-            end
-            n
-        end
+# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
+Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
+function Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
+    n = N::Int
+    if n < 0
+        throw(ArgumentError("dimension count must not be negative"))
     end
+    n
 end
 
 function _maxndims_broadcasted(BC::Type{<:Broadcasted})
