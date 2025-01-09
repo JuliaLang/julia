@@ -259,6 +259,7 @@ end
     p[1] = p
     p2 = deepcopy(p)
     @test p2 === p2[1]
+    @test p2 !== p
 end
 
 @testset "deepcopy_internal arrays" begin
