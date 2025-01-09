@@ -87,9 +87,8 @@ LoweringError:
 4   (call core.tuple %₃)
 5   TestMod.c
 6   (call core._apply_iterate top.iterate core.tuple %₄ %₅)
-7   (call core.tuple %₂ %₆)
-8   (call top.hvcat_rows %₇)
-9   (return %₈)
+7   (call top.hvcat_rows %₂ %₆)
+8   (return %₇)
 
 ########################################
 # Error: vcat syntax with assignments
