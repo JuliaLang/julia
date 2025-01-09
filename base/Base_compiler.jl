@@ -249,6 +249,8 @@ using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 include("namedtuple.jl")
 
+include("anyall.jl")
+
 include("ordering.jl")
 using .Order
 
@@ -274,7 +276,6 @@ baremodule BuildSettings end
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"

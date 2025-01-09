@@ -4505,6 +4505,15 @@ for T in (Any, ValueWrapper)
     end
 end
 
+#test grow_end ccall directly since it's used in the C source
+for ET in [Nothing, Int, Union{Int, Nothing}, Any]
+    for n in [0, 1, 10]
+        arr = Vector{ET}(undef, n)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), arr, 1)
+        @test length(arr) == n+1
+    end
+end
+
 # check if we can run multiple finalizers at the same time
 # Use a `@noinline` function to make sure the inefficient gc root generation
 # doesn't keep the object alive.

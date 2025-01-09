@@ -42,11 +42,10 @@ macro nospecs(ex)
         push!(names, arg)
     end
     @assert isexpr(body, :block)
-    if !isempty(names)
-        lin = first(body.args)::LineNumberNode
-        nospec = Expr(:macrocall, Symbol("@nospecialize"), lin, names...)
-        insert!(body.args, 2, nospec)
-    end
+    isempty(names) && throw(ArgumentError("no arguments for @nospec"))
+    lin = first(body.args)::LineNumberNode
+    nospec = Expr(:macrocall, GlobalRef(@__MODULE__, :var"@nospecialize"), lin, names...)
+    insert!(body.args, 2, nospec)
     return esc(ex)
 end
 
@@ -2017,6 +2016,15 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
 end
 
+@nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
+    hasintersect(widenconst(memlen), Int) || return Bottom
+    memt = tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
+    memt == Union{} && return memt
+    # PartialStruct so that loads of Const `length` get inferred
+    return PartialStruct(𝕃, memt, Any[memlen, Ptr{Nothing}])
+end
+add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
+
 @nospecs function memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
     return memoryref_elemtype(mem)
@@ -2106,7 +2114,7 @@ add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
     return true
 end
 
-@nospecs function memoryref_elemtype(@nospecialize mem)
+@nospecs function memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
         m0 = m
@@ -2122,7 +2130,7 @@ end
     return Any
 end
 
-@nospecs function _memoryref_elemtype(@nospecialize mem)
+@nospecs function _memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
         m0 = m
@@ -2157,7 +2165,7 @@ end
 end
 
 # whether getindex for the elements can potentially throw UndefRef
-function array_type_undefable(@nospecialize(arytype))
+@nospecs function array_type_undefable(arytype)
     arytype = unwrap_unionall(arytype)
     if isa(arytype, Union)
         return array_type_undefable(arytype.a) || array_type_undefable(arytype.b)
@@ -2238,13 +2246,32 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
+function memorynew_nothrow(argtypes::Vector{Any})
+    if !(argtypes[1] isa Const && argtypes[2] isa Const)
+        return false
+    end
+    MemT = argtypes[1].val
+    if !(isconcretetype(MemT) && MemT <: GenericMemory)
+        return false
+    end
+    len = argtypes[2].val
+    if !(len isa Int && 0 <= len < typemax(Int))
+        return false
+    end
+    elsz = datatype_layoutsize(MemT)
+    overflows = checked_smul_int(len, elsz)[2]
+    return !overflows
+end
+
 # Query whether the given builtin is guaranteed not to throw given the `argtypes`.
 # `argtypes` can be assumed not to contain varargs.
 function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
                           @nospecialize(rt))
     ⊑ = partialorder(𝕃)
     na = length(argtypes)
-    if f === memoryrefnew
+    if f === Core.memorynew
+        return memorynew_nothrow(argtypes)
+    elseif f === memoryrefnew
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
         length(argtypes) == 1 || return false
@@ -2347,6 +2374,7 @@ const _EFFECT_FREE_BUILTINS = [
     isa,
     UnionAll,
     getfield,
+    Core.memorynew,
     memoryrefnew,
     memoryrefoffset,
     memoryrefget,
@@ -2381,6 +2409,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     compilerbarrier,
     Core._typevar,
     donotdelete,
+    Core.memorynew,
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2543,7 +2572,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_TRUE
         elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
-        elseif f === Core._typevar
+        elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
@@ -3099,16 +3128,7 @@ add_tfunc(Core.get_binding_type, 2, 2, @nospecs((𝕃::AbstractLattice, args...)
 
 const FOREIGNCALL_ARG_START = 6
 
-function foreigncall_effects(@specialize(abstract_eval), e::Expr)
-    args = e.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
-    if name === :jl_alloc_genericmemory
-        nothrow = new_genericmemory_nothrow(abstract_eval, args)
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
-    elseif name === :jl_genericmemory_copy_slice
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
-    end
+function foreigncall_effects(@nospecialize(abstract_eval), e::Expr)
     # `:foreigncall` can potentially perform all sorts of operations, including calling
     # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
     # concern that the method calls that potentially occur within the `:foreigncall` will
