@@ -6,6 +6,7 @@ on:
       - 'stdlib/*.version'
       - 'stdlib/*/Project.toml'
 
+# We intentionally don't give any elevated permissions to the GITHUB_TOKEN:
 permissions: {}
 
 jobs:
