@@ -96,9 +96,10 @@ enum class CPU : uint32_t {
     amd_znver2,
     amd_znver3,
     amd_znver4,
+    amd_znver5,
 };
 
-static constexpr size_t feature_sz = 11;
+static constexpr size_t feature_sz = 12;
 static constexpr FeatureName feature_names[] = {
 #define JL_FEATURE_DEF(name, bit, llvmver) {#name, bit, llvmver},
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) {str, bit, llvmver},
@@ -141,6 +142,10 @@ static constexpr FeatureDep deps[] = {
     {vpclmulqdq, avx},
     {vpclmulqdq, pclmul},
     {avxvnni, avx2},
+    {avxvnniint8, avx2},
+    {avxvnniint16, avx2},
+    {avxifma, avx2},
+    {avxneconvert, avx2},
     {avx512f, avx2},
     {avx512dq, avx512f},
     {avx512ifma, avx512f},
@@ -159,6 +164,8 @@ static constexpr FeatureDep deps[] = {
     {avx512fp16, avx512vl},
     {amx_int8, amx_tile},
     {amx_bf16, amx_tile},
+    {amx_fp16, amx_tile},
+    {amx_complex, amx_tile},
     {sse4a, sse3},
     {xop, fma4},
     {fma4, avx},
@@ -166,6 +173,9 @@ static constexpr FeatureDep deps[] = {
     {xsaveopt, xsave},
     {xsavec, xsave},
     {xsaves, xsave},
+    {sha512, avx2},
+    {sm3, avx},
+    {sm4, avx2},
 };
 
 // We require cx16 on 64bit by default. This can be overwritten with `-cx16`
@@ -236,6 +246,7 @@ constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
                                                    avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
+constexpr auto znver5 = znver4 | get_feature_masks(avxvnni, movdiri, movdir64b, avx512vp2intersect, prefetchi, avxvnni);
 
 }
 
@@ -298,6 +309,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
     {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
+    {"znver5", CPU::amd_znver5, CPU::amd_znver4, 190000, Feature::znver5},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -575,6 +587,9 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
                 return CPU::amd_znver4;
             }
         return CPU::amd_znver3; // fallback
+    case 26:
+        // if (model <= 0x77)
+        return CPU::amd_znver5;
     }
 }
 
@@ -660,11 +675,12 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
         int32_t info7[4];
         jl_cpuidex(info7, 7, 1);
         features[9] = info7[0];
+        features[10] = info7[1];
     }
     if (maxleaf >= 0x14) {
         int32_t info14[4];
         jl_cpuidex(info14, 0x14, 0);
-        features[10] = info14[1];
+        features[11] = info14[1];
     }
 
     // Fix up AVX bits to account for OS support and match LLVM model
@@ -705,7 +721,20 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
     else {
         cpu = uint32_t(CPU::generic);
     }
-
+    /* Feature bits to register map
+    feature[0] = ecx
+    feature[1] = edx
+    feature[2] = leaf 7 ebx
+    feature[3] = leaf 7 ecx
+    feature[4] = leaf 7 edx
+    feature[5] = leaf 0x80000001 ecx
+    feature[6] = leaf 0x80000001 edx
+    feature[7] = leaf 0xd subleaf 1 eax
+    feature[8] = leaf 0x80000008 ebx
+    feature[9] = leaf 7 ebx subleaf 1 eax
+    feature[10] = leaf 7 ebx subleaf 1 ebx
+    feature[11] = leaf 0x14 ebx
+    */
     return std::make_pair(cpu, features);
 }
 
