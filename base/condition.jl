@@ -133,9 +133,9 @@ Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notif
 If the keyword `first` is set to `true`, the waiter will be put _first_
 in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
 
-If `timeout` is specified, cancel the `wait` when it expires and throw a
-`TimeoutError` to the waiting task. The minimum value for `timeout`
-is 0.001 seconds, i.e. 1 millisecond.
+If `timeout` is specified, cancel the `wait` when it expires and return
+`:timeout`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
+millisecond.
 """
 function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     timeout == 0.0 || timeout ≥ 1e-3 || throw(ArgumentError("timeout must be ≥ 1 millisecond"))
@@ -167,7 +167,7 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
             end
             unlock(c.lock)
             # send the waiting task a timeout
-            dosched && schedule(ct, TimeoutError(timeout); error=true)
+            dosched && schedule(ct, :timeout)
         end
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)

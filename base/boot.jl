@@ -224,7 +224,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError, FieldError, TimeoutError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -472,10 +472,6 @@ struct ABIOverride
 end
 
 struct PrecompilableError <: Exception end
-
-struct TimeoutError <: Exception
-    timeout::Real
-end
 
 String(s::String) = s  # no constructor yet
 

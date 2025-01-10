@@ -41,18 +41,18 @@ end
 end
 
 @testset "timed wait on Condition" begin
-    a = Condition()
-    @test_throws ArgumentError wait(a; timeout=0.0005)
-    @test_throws TimeoutError wait(a; timeout=0.1)
+    a = Threads.Condition()
+    @test_throws ArgumentError @lock a wait(a; timeout=0.0005)
+    @test @lock a wait(a; timeout=0.1)==:timeout
+    lock(a)
     @spawn begin
-        sleep(0.01)
-        notify(a)
+        @lock a notify(a)
     end
     @test try
         wait(a; timeout=2)
         true
-    catch
-        false
+    finally
+        unlock(a)
     end
 end
 
