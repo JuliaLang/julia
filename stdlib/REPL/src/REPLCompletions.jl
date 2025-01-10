@@ -646,9 +646,11 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if isdefined_globalref(g)
-            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL)
+            return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL), nothing)
         end
-        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
+        return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), nothing)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)

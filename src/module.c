@@ -1032,7 +1032,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_gc_wb(bpart, val);
 }
 
-void jl_invalidate_binding_refs(jl_globalref_t *ref, size_t new_world)
+void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, size_t new_world)
 {
     static jl_value_t *invalidate_code_for_globalref = NULL;
     if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
@@ -1043,7 +1043,7 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, size_t new_world)
         jl_error("Binding invalidation is not permitted during image generation.");
     jl_value_t *boxed_world = jl_box_ulong(new_world);
     JL_GC_PUSH1(&boxed_world);
-    jl_call2((jl_function_t*)invalidate_code_for_globalref, (jl_value_t*)ref, boxed_world);
+    jl_call3((jl_function_t*)invalidate_code_for_globalref, (jl_value_t*)ref, (jl_value_t*)invalidated_bpart, boxed_world);
     JL_GC_POP();
 }
 
@@ -1063,10 +1063,10 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
     jl_task_t *ct = jl_current_task;
     size_t last_world = ct->world_age;
     size_t new_max_world = jl_atomic_load_acquire(&jl_world_counter);
-    ct->world_age = jl_typeinf_world;
-    jl_invalidate_binding_refs(gr, new_max_world);
-    ct->world_age = last_world;
     jl_atomic_store_release(&bpart->max_world, new_max_world);
+    ct->world_age = jl_typeinf_world;
+    jl_invalidate_binding_refs(gr, bpart, new_max_world);
+    ct->world_age = last_world;
     jl_atomic_store_release(&jl_world_counter, new_max_world + 1);
     JL_UNLOCK(&world_counter_lock);
 }

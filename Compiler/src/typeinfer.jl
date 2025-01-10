@@ -544,6 +544,9 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
             i += 1
             continue
+        elseif isa(item, Core.BindingPartition)
+            i += 1
+            continue
         end
         if isa(item, CodeInstance)
             item = item.def

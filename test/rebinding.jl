@@ -31,7 +31,7 @@ module Rebinding
 
     # Tests for @world syntax
     @test Base.@world(Foo, defined_world_age) == typeof(x)
-    @test Base.@world(Rebinding.Foo, defined_world_age) == typeof(x)
+    nameof(@__MODULE__) === :Rebinding && @test Base.@world(Rebinding.Foo, defined_world_age) == typeof(x)
     @test Base.@world((@__MODULE__).Foo, defined_world_age) == typeof(x)
 
     # Test invalidation (const -> undefined)
@@ -40,4 +40,11 @@ module Rebinding
     @test f_return_delete_me() == 1
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_return_delete_me()
+
+    ## + via indirect access
+    const delete_me = 2
+    f_return_delete_me_indirect() = getglobal(@__MODULE__, :delete_me)
+    @test f_return_delete_me_indirect() == 2
+    Base.delete_binding(@__MODULE__, :delete_me)
+    @test_throws UndefVarError f_return_delete_me_indirect()
 end
