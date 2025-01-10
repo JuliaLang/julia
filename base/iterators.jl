@@ -1680,9 +1680,10 @@ end
 """
     nth(n::Integer)
 
-return a function that gets the `n`-th element from any iterator passed to it.
-Fixes the second element with
+Return a function that gets the `n`-th element from any iterator passed to it.
 Throw a `BoundsError`[@ref] if not existing.
+
+Fixes the second element. Equivalent to `Base.Fix2(nth, n)`.
 Will advance any `Stateful`[@ref] iterator.
 
 See also: [`nth`](@ref), [`Base.Fix2`](@ref)
