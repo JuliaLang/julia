@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Markdown
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+using Test, Markdown, StyledStrings
+import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
 # Basics
@@ -85,6 +85,8 @@ let text =
 
         And *another* paragraph.
 
+    \tAnd a third paragraph indented with a *tab*.
+
     This isn't part of the footnote.
     """,
     md = Markdown.parse(text)
@@ -97,7 +99,7 @@ let text =
     @test md.content[2].id == "1"
     @test md.content[3].id == "note"
 
-    @test length(md.content[3].text) == 4
+    @test length(md.content[3].text) == 5
 
     let expected =
             """
@@ -115,6 +117,8 @@ let text =
                 ```
 
                 And *another* paragraph.
+
+                And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -137,6 +141,8 @@ let text =
                    some.code
 
                And *another* paragraph.
+
+               And a third paragraph indented with a *tab*.
 
 
             This isn't part of the footnote.
@@ -227,7 +233,7 @@ World""" |> plain == "Hello\n\n---\n\nWorld\n"
 
 # multiple whitespace is ignored
 @test sprint(term, md"a  b") == "  a b"
-@test sprint(term, md"[x](https://julialang.org)") == "  x (https://julialang.org)"
+@test sprint(term, md"[x](https://julialang.org)") == "  x"
 @test sprint(term, md"[x](@ref)") == "  x"
 @test sprint(term, md"[x](@ref something)") == "  x"
 @test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)"
@@ -265,6 +271,43 @@ end
     |---|
     | L |
 """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+
+# Issue #38275
+function test_list_wrap(str, lenmin, lenmax)
+    strs = split(str, '\n')
+    l = length.(strs)
+    for i = 1:length(l)-1
+        if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
+            lenmin <= l[i] <= lenmax || return false
+        else
+            l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
+        end
+    end
+    # Check consistent indentation
+    rngs = findfirst.((". ",), strs)
+    k = last(rngs[1])
+    rex = Regex('^' * " "^k * "\\w")
+    for (i, rng) in enumerate(rngs)
+        isa(rng, AbstractRange) && last(rng) == k && continue  # every numbered line starts the text at the same position
+        rng === nothing && (isempty(strs[i]) || match(rex, strs[i]) !== nothing) && continue  # every unnumbered line is indented to text in numbered lines
+        return false
+    end
+    return true
+end
+
+let doc =
+    md"""
+    1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+
+    2. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
+    """
+    str = sprint(term, doc, 50)
+    @test test_list_wrap(str, 40, 50)
+    str = sprint(term, doc, 60)
+    @test test_list_wrap(str, 50, 60)
+    str = sprint(term, doc, 80)
+    @test test_list_wrap(str, 70, 80)
+end
 
 # HTML output
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
@@ -334,7 +377,8 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •    list1\n\n    •    list2"
+        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n    •  list2"
+    @test sprint(show, "text/plain", md"#") == "" # edge case of empty header
     @test sprint(show, "text/markdown", book) ==
         """
         # Title
@@ -487,6 +531,12 @@ foo()
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
                                                   [:l, :r, :r]))
+@test md"""
+    |   | b |
+    |:--|--:|
+    | 1 |   |""" == MD(Table(Any[[Any[],"b"],
+                                 ["1",Any[]]], [:l, :r]))
+
 @test md"""
 no|table
 no error
@@ -671,6 +721,8 @@ let t_1 =
         !!! note
             foo bar baz
 
+        \tsecond tab-indented paragraph
+
         !!! warning "custom title"
             - foo
             - bar
@@ -714,6 +766,7 @@ let t_1 =
     @test m_2.content[1].category == "note"
     @test m_2.content[1].title == "Note"
     @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+    @test isa(m_2.content[1].content[2], Markdown.Paragraph)
 
     @test isa(m_2.content[2], Markdown.Admonition)
     @test m_2.content[2].category == "warning"
@@ -810,6 +863,8 @@ let t_1 =
             !!! note
                 foo bar baz
 
+                second tab-indented paragraph
+
 
             !!! warning "custom title"
                   * foo
@@ -838,6 +893,8 @@ let t_1 =
             """
             .. note::
                foo bar baz
+
+               second tab-indented paragraph
 
 
             .. warning:: custom title
@@ -1093,7 +1150,7 @@ end
 # issue 20225, check this can print
 @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
 
-# different output depending on whether color is requested:	+# issue 20225, check this can print
+# different output depending on whether color is requested: +# issue 20225, check this can print
 let buf = IOBuffer()
     @test typeof(sprint(Markdown.term, Markdown.parse(" "))) == String
     show(buf, "text/plain", md"*emph*")
@@ -1101,7 +1158,41 @@ let buf = IOBuffer()
     show(buf, "text/markdown", md"*emph*")
     @test String(take!(buf)) == "*emph*\n"
     show(IOContext(buf, :color=>true), "text/plain", md"*emph*")
-    @test String(take!(buf)) == "  \e[4memph\e[24m"
+    @test String(take!(buf)) in ("  \e[3memph\e[23m", "  \e[4memph\e[24m")
+end
+
+let word = "Markdown" # disable underline when wrapping lines
+    buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], length(word)))
+    long_italic_text = Markdown.parse('_' * join(fill(word, 10), ' ') * '_')
+    show(ctx, MIME("text/plain"), long_italic_text)
+    lines = split(String(take!(buf)), '\n')
+    @test endswith(lines[begin], r"\e\[2[34]m")
+    @test startswith(lines[begin+1], Regex(' '^Markdown.margin * "\e\\[[34]m"))
+end
+
+let word = "Markdown" # pre is of size Markdown.margin when wrapping title
+    buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], length(word)))
+    long_title = Markdown.parse("# " * join(fill(word, 3)))
+    show(ctx, MIME("text/plain"), long_title)
+    lines = split(String(take!(buf)), '\n')
+    @test all(l -> startswith(l, ' '^Markdown.margin * StyledStrings.ANSI_STYLE_CODES.bold_weight) ||
+                   startswith(l, StyledStrings.ANSI_STYLE_CODES.bold_weight * ' '^Markdown.margin),
+              lines)
+end
+
+struct Struct49454 end
+Base.show(io::IO, ::Struct49454) =
+    print(io, Base.text_colors[:underline], "Struct 49454()", Base.text_colors[:normal])
+
+let buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
+    show(ctx, MIME("text/plain"), md"""
+    text without $(Struct49454()) underline.
+    """)
+    lines = split(String(take!(buf)), '\n')
+    @test !occursin(Base.text_colors[:underline], lines[end])
 end
 
 # table rendering with term #25213
@@ -1137,4 +1228,87 @@ end
 let m = Markdown.parse("---"), io = IOBuffer()
     show(io, "text/latex", m)
     @test String(take!(io)) == "\\rule{\\textwidth}{1pt}\n"
+end
+
+# issue #16194: interpolation in md"..." strings
+@testset "issue #16194: interpolation in md\"...\" strings" begin
+    x = "X"
+    contains_X(md) = occursin(x, sprint(show, MIME("text/plain"), md))
+    @test contains_X(md"# $x") # H1
+    @test contains_X(md"## $x") # H2
+    @test contains_X(md"### $x") # H3
+    @test contains_X(md"x = $x") # Paragraph
+    @test contains_X(md"- $x") # List
+    @test contains_X(md"[$x](..)") # Link
+    @test contains_X(md"**$x**") # Bold
+    @test contains_X(md"*$x*") # Italic
+    @test contains_X( # Table
+        md"""
+        | name |
+        |------|
+        |  $x  |
+        """)
+end
+
+@testset "issue 40080: empty list item breaks display()" begin
+    d = TextDisplay(devnull)
+    display(d, md"""
+               1. hello
+               2.
+               """)
+end
+
+@testset "issue #37232: linebreaks" begin
+    s = @md_str """
+       Misc:\\
+       - line\\
+         break
+       """
+    @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
+end
+
+@testset "pullrequest #41552: a code block has \\end{verbatim}" begin
+    s1 = md"""
+         ```tex
+         \begin{document}
+         \end{document}
+         ```
+         """
+    s2 = md"""
+         ```tex
+         \begin{verbatim}
+         \end{verbatim}
+         ```
+         """
+    @test Markdown.latex(s1) == """
+                                \\begin{verbatim}
+                                \\begin{document}
+                                \\end{document}
+                                \\end{verbatim}
+                                """
+    @test_throws ErrorException Markdown.latex(s2)
+end
+
+@testset "issue #42139: autolink" begin
+    # ok
+    @test md"<mailto:foo@bar.com>" |> html == """<p><a href="mailto:foo@bar.com">mailto:foo@bar.com</a></p>\n"""
+    # not ok
+    @test md"<mailto foo@bar.com>" |> html == """<p>&lt;mailto foo@bar.com&gt;</p>\n"""
+    # see issue #42139
+    @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Markdown))
+end
+
+@testset "Non-Markdown" begin
+    # https://github.com/JuliaLang/julia/issues/37765
+    @test isa(insert_hlines(Text("foo")), Text)
+    # https://github.com/JuliaLang/julia/issues/37757
+    @test insert_hlines(nothing) === nothing
+end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end

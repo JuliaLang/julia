@@ -7,8 +7,8 @@ module SharedArrays
 
 using Mmap, Distributed, Random
 
-import Base: length, size, ndims, IndexStyle, reshape, convert, deepcopy_internal,
-             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
 import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
@@ -206,7 +206,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     # Create the file if it doesn't exist, map it if it does
     refs = Vector{Future}(undef, length(pids))
     func_mmap = mode -> open(filename, mode) do io
-        Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
+        mmap(io, Array{T,N}, dims, offset; shared=true)
     end
     s = Array{T}(undef, ntuple(d->0,N))
     if onlocalhost
@@ -292,7 +292,15 @@ SharedVector(A::Vector) = SharedArray(A)
 SharedMatrix(A::Matrix) = SharedArray(A)
 
 size(S::SharedArray) = S.dims
+elsize(::Type{SharedArray{T,N}}) where {T,N} = elsize(Array{T,N}) # aka fieldtype(T, :s)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
+
+function local_array_by_id(refid)
+    if isa(refid, Future)
+        refid = remoteref_id(refid)
+    end
+    fetch(channel_from_id(refid))
+end
 
 function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     if length(a) != prod(dims)
@@ -300,8 +308,8 @@ function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     end
     refs = Vector{Future}(undef, length(a.pids))
     for (i, p) in enumerate(a.pids)
-        refs[i] = remotecall(p, a.refs[i], dims) do r,d
-            reshape(fetch(r),d)
+        refs[i] = remotecall(p, a.refs[i], dims) do r, d
+            reshape(local_array_by_id(r), d)
         end
     end
 
@@ -320,7 +328,7 @@ procs(S::SharedArray) = S.pids
 """
     indexpids(S::SharedArray)
 
-Returns the current worker's index in the list of workers
+Return the current worker's index in the list of workers
 mapping the `SharedArray` (i.e. in the same list returned by `procs(S)`), or
 0 if the `SharedArray` is not mapped locally.
 """
@@ -329,7 +337,7 @@ indexpids(S::SharedArray) = S.pidx
 """
     sdata(S::SharedArray)
 
-Returns the actual `Array` object backing `S`.
+Return the actual `Array` object backing `S`.
 """
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
@@ -337,7 +345,7 @@ sdata(A::AbstractArray) = A
 """
     localindices(S::SharedArray)
 
-Returns a range describing the "default" indices to be handled by the
+Return a range describing the "default" indices to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
@@ -350,8 +358,8 @@ for each worker process.
 """
 localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = cconvert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = cconvert(Ptr{T}, sdata(S))
 
 function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
@@ -366,7 +374,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-convert(T::Type{<:SharedArray}, a::Array) = T(a)
+convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
 function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
@@ -381,7 +389,7 @@ function shared_pids(pids)
         # only use workers on the current host
         pids = procs(myid())
         if length(pids) > 1
-            pids = filter(x -> x != 1, pids)
+            pids = filter(!=(1), pids)
         end
 
         onlocalhost = true
@@ -418,13 +426,7 @@ sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     if myid() in S.pids
         S.pidx = findfirst(isequal(myid()), S.pids)
-        if isa(S.refs[1], Future)
-            refid = remoteref_id(S.refs[S.pidx])
-        else
-            refid = S.refs[S.pidx]
-        end
-        c = channel_from_id(refid)
-        S.s = fetch(c)
+        S.s = local_array_by_id(S.refs[S.pidx])
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
@@ -505,9 +507,9 @@ end
 Array(S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
-getindex(S::SharedArray, i::Real) = getindex(S.s, i)
+Base.@propagate_inbounds getindex(S::SharedArray, i::Real) = getindex(S.s, i)
 
-setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
+Base.@propagate_inbounds setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
@@ -667,7 +669,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
+    mmap(s, Array{T,length(dims)}, dims, zero(Int64))
 end
 
 # no-op in windows
@@ -687,13 +689,19 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
         systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
     end
 
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
+    mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
-    (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
-
+function shm_open(shm_seg_name, oflags, permissions)
+    # On macOS, `shm_open()` is a variadic function, so to properly match
+    # calling ABI, we must declare our arguments as variadic as well.
+    @static if Sys.isapple()
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), shm_seg_name, oflags, permissions)
+    else
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
+    end
+end
 end # os-test
 
 end # module

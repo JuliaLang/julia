@@ -8,7 +8,7 @@ export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 struct SimdError <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 # Parse iteration space expression
@@ -26,7 +26,7 @@ function check_body!(x::Expr)
     if x.head === :break || x.head === :continue
         throw(SimdError("$(x.head) is not allowed inside a @simd loop body"))
     elseif x.head === :macrocall && x.args[1] === Symbol("@goto")
-        throw(SimdError("$(x.args[1]) is not allowed inside a @simd loop body"))
+        throw(SimdError("@goto is not allowed inside a @simd loop body"))
     end
     for arg in x.args
         check_body!(arg)
@@ -100,7 +100,7 @@ The object iterated over in a `@simd for` loop should be a one-dimensional range
 By using `@simd`, you are asserting several properties of the loop:
 
 * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.
-* Floating-point operations on reduction variables can be reordered, possibly causing different results than without `@simd`.
+* Floating-point operations on reduction variables can be reordered or contracted, possibly causing different results than without `@simd`.
 
 In many cases, Julia is able to automatically vectorize inner for loops without the use of `@simd`.
 Using `@simd` gives the compiler a little extra leeway to make it possible in more situations. In

@@ -60,25 +60,25 @@ julia> x = 12
 julia> typeof(x)
 Int64
 
-julia> convert(UInt8, x)
+julia> xu = convert(UInt8, x)
 0x0c
 
-julia> typeof(ans)
+julia> typeof(xu)
 UInt8
 
-julia> convert(AbstractFloat, x)
+julia> xf = convert(AbstractFloat, x)
 12.0
 
-julia> typeof(ans)
+julia> typeof(xf)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2×3 Array{Any,2}:
+2×3 Matrix{Any}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -165,16 +165,16 @@ constructor.
 Such a definition might look like this:
 
 ```julia
+import Base: convert
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
-`Type{MyType}`, the only instance of which is `MyType`. Thus, this method is only invoked
+The type of the first argument of this method is [`Type{MyType}`](@ref man-typet-type),
+the only instance of which is `MyType`. Thus, this method is only invoked
 when the first argument is the type value `MyType`. Notice the syntax used for the first
 argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
 This is the syntax in Julia for a function argument whose type is specified but whose value
-does not need to be referenced by name. In this example, since the type is a singleton, we
-already know its value without referring to an argument name.
+does not need to be referenced by name.
 
 All instances of some abstract types are by default considered "sufficiently similar"
 that a universal `convert` definition is provided in Julia Base.
@@ -182,7 +182,7 @@ For example, this definition states that it's valid to `convert` any `Number` ty
 any other by calling a 1-argument constructor:
 
 ```julia
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 ```
 
 This means that new `Number` types only need to define constructors, since this
@@ -195,6 +195,8 @@ convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
 Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
+
+
 
 ## Promotion
 
@@ -234,11 +236,11 @@ julia> promote(1 + 2im, 3//4)
 ```
 
 Floating-point values are promoted to the largest of the floating-point argument types. Integer
-values are promoted to the larger of either the native machine word size or the largest integer
-argument type. Mixtures of integers and floating-point values are promoted to a floating-point
-type big enough to hold all the values. Integers mixed with rationals are promoted to rationals.
-Rationals mixed with floats are promoted to floats. Complex values mixed with real values are
-promoted to the appropriate kind of complex value.
+values are promoted to the largest of the integer argument types. If the types are the same size
+but differ in signedness, the unsigned type is chosen. Mixtures of integers and floating-point
+values are promoted to a floating-point type big enough to hold all the values. Integers mixed
+with rationals are promoted to rationals. Rationals mixed with floats are promoted to floats.
+Complex values mixed with real values are promoted to the appropriate kind of complex value.
 
 That is really all there is to using promotions. The rest is just a matter of clever application,
 the most typical "clever" application being the definition of catch-all methods for numeric operations
@@ -271,10 +273,10 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 This allows calls like the following to work:
 
 ```jldoctest
-julia> Rational(Int8(15),Int32(-5))
+julia> x = Rational(Int8(15),Int32(-5))
 -3//1
 
-julia> typeof(ans)
+julia> typeof(x)
 Rational{Int32}
 ```
 
@@ -292,6 +294,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
@@ -320,9 +323,15 @@ julia> promote_type(Int8, Int64)
 Int64
 ```
 
+Note that we do **not** overload `promote_type` directly: we overload `promote_rule` instead.
+`promote_type` uses `promote_rule`, and adds the symmetry.
+Overloading it directly can cause ambiguity errors.
+We overload `promote_rule` to define how things should be promoted, and we use `promote_type`
+to query that.
+
 Internally, `promote_type` is used inside of `promote` to determine what type argument values
-should be converted to for promotion. It can, however, be useful in its own right. The curious
-reader can read the code in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
+should be converted to for promotion. The curious reader can read the code in
+[`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
 which defines the complete promotion mechanism in about 35 lines.
 
 ### Case Study: Rational Promotions
@@ -331,6 +340,7 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)

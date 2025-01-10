@@ -1,0 +1,18 @@
+name = "LibGit2_jll"
+uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
+version = "1.9.0+0"
+
+[deps]
+OpenSSL_jll = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
+LibSSH2_jll = "29816b5a-b9ab-546f-933c-edad1886dfa8"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.9"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

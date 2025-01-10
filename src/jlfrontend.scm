@@ -31,15 +31,14 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
-(define (julia-current-file) 'none)
-(define (julia-current-line) 0)
 
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
-(define (jl-parse-one str filename pos0 greedy)
+(define (jl-parse-one str filename pos0 greedy (lineno 1))
   (let ((inp (open-input-string str)))
     (io.seek inp pos0)
+    (io.set-lineno! inp lineno)
     (with-bindings ((current-filename (symbol filename)))
      (let ((expr (error-wrap (lambda ()
                                (if greedy
@@ -78,28 +77,52 @@
    (io.close io)))
 
 ;; parse all expressions in a string, the same way files are parsed
-(define (jl-parse-all str filename)
-  (parse-all- (open-input-string str) filename))
+(define (jl-parse-all str filename (lineno 1))
+  (let ((io (open-input-string str)))
+    (io.set-lineno! io lineno)
+    (parse-all- io filename)))
 
-(define (jl-parse-file filename)
+(define (jl-parse-file filename (lineno 1))
   (trycatch
-   (parse-all- (open-input-file filename) filename)
-   (lambda (e) #f)))
+    (let ((io (open-input-string str)))
+      (io.set-lineno! io lineno)
+      (parse-all- io filename))
+    (lambda (e) #f)))
 
 ;; lowering entry points
+
+; find the first line number in this expression, before we might eliminate them
+(define (first-lineno blk)
+  (cond ((not (pair? blk)) #f)
+        ((eq? (car blk) 'line) blk)
+        ((and (eq? (car blk) 'hygienic-scope) (pair? (cdddr blk)) (pair? (cadddr blk)) (eq? (car (cadddr blk)) 'line))
+         (cadddr blk))
+        ((memq (car blk) '(escape hygienic-scope))
+         (first-lineno (cadr blk)))
+        ((memq (car blk) '(toplevel block))
+           (let loop ((xs (cdr blk)))
+             (and (pair? xs)
+               (let ((elt (first-lineno (car xs))))
+                 (or elt (loop (cdr xs)))))))
+        (else #f)))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e file line)
-  (let ((ex0 (julia-expand-macroscope e)))
+  (let ((lno (first-lineno e))
+        (ex0 (julia-expand-macroscope e)))
+    (if (and lno (or (not (length= lno 3)) (not (atom? (caddr lno))))) (set! lno #f))
     (if (toplevel-only-expr? ex0)
-        ex0
-        (let* ((ex (julia-expand0 ex0 file line))
+        (if (and (pair? e) (memq (car ex0) '(error incomplete)))
+            ex0
+            (if lno `(toplevel ,lno ,ex0) ex0))
+        (let* ((linenode (if (and lno (or (= line 0) (eq? file 'none))) lno `(line ,line ,file)))
+               (ex (julia-expand0 ex0 linenode))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
-                              ,(blockify ex)))
+                              ,(blockify ex lno)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)
@@ -115,7 +138,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
@@ -124,7 +147,7 @@
 (define (expand-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
          (let ((last *in-expand*))
@@ -153,13 +176,17 @@
 (define (jl-expand-to-thunk-warn expr file line stmt)
   (let ((warnings '()))
     (with-bindings
-     ((lowering-warning (lambda lst (set! warnings (cons lst warnings)))))
-     (begin0
-      (if stmt
-          (expand-to-thunk-stmt- expr file line)
-          (expand-to-thunk- expr file line))
-      (for-each (lambda (args) (apply julia-logmsg args))
-                (reverse warnings))))))
+     ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
+     ;; `Expr`s but should be good enough provided we're only passing simple
+     ;; numbers, symbols and strings.
+     ((lowering-warning (lambda (level group warn_file warn_line . lst)
+        (let ((line (if (= warn_line 0) line warn_line))
+              (file (if (eq? warn_file 'none) file warn_file)))
+          (set! warnings (cons (list* 'warn level group (symbol (string file line)) file line lst) warnings))))))
+     (let ((thunk (if stmt
+                      (expand-to-thunk-stmt- expr file line)
+                      (expand-to-thunk- expr file line))))
+       (if (pair? warnings) `(warn ,@(reverse warnings) ,thunk) thunk)))))
 
 (define (jl-expand-to-thunk expr file line)
   (expand-to-thunk- expr file line))
@@ -170,33 +197,6 @@
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
-
-;; construct default definitions of `eval` for non-bare modules
-;; called by jl_eval_module_expr
-(define (module-default-defs e)
-  (jl-expand-to-thunk
-   (let* ((name (caddr e))
-          (body (cadddr e))
-          (loc  (if (null? (cdr body)) () (cadr body)))
-          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
-                    (list loc)
-                    '()))
-          (x    (if (eq? name 'x) 'y 'x))
-          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
-     `(block
-       (= (call eval ,x)
-          (block
-           ,@loc
-           (call (core eval) ,name ,x)))
-       (= (call include ,x)
-          (block
-           ,@loc
-           (call (top include) ,name ,x)))
-       (= (call include (:: ,mex (top Function)) ,x)
-          (block
-           ,@loc
-           (call (top include) ,mex ,name ,x)))))
-   'none 0))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
@@ -213,16 +213,6 @@
 ; --- logging ---
 ; Utilities for logging messages from the frontend, in a way which can be
 ; controlled from julia code.
-
-; Log a general deprecation message at line node location `lno`
-(define (deprecation-message msg lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (frontend-depwarn msg file line)))
-
-; Log a syntax deprecation from line node location `lno`
-(define (syntax-deprecation what instead lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (deprecation-message (format-syntax-deprecation what instead file line #f) lno)))
 
 ; Extract line and file from a line number node, defaulting to (0, none)
 ; respectively if lno is absent (`#f`) or doesn't contain a file
@@ -241,21 +231,4 @@
       ""
       (string (if exactloc " at " " around ") file ":" line)))
 
-(define (format-syntax-deprecation what instead file line exactloc)
-  (string "Deprecated syntax `" what "`"
-          (format-file-line file line exactloc)
-          "."
-          (if (equal? instead "") ""
-              (string #\newline "Use `" instead "` instead."))))
-
 (define *scopewarn-opt* 1)
-
-; Corresponds to --depwarn 0="no", 1="yes", 2="error"
-(define *depwarn-opt* 1)
-
-; Emit deprecation warning via julia logging layer.
-(define (frontend-depwarn msg file line)
-  ; (display (string msg "; file = " file "; line = " line #\newline)))
-  (case *depwarn-opt*
-    (1 (julia-logmsg 1000 'depwarn (symbol (string file line)) file line msg))
-    (2 (error msg))))

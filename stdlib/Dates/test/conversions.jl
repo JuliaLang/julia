@@ -11,28 +11,28 @@ using Dates
     @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
 
     # Tests from here: https://en.wikipedia.org/wiki/Unix_time
-    @test string(Dates.unix2datetime(1095379198.75)) == string("2004-09-16T23:59:58.75")
+    @test string(Dates.unix2datetime(1095379198.75)) == string("2004-09-16T23:59:58.750")
     @test string(Dates.unix2datetime(1095379199.00)) == string("2004-09-16T23:59:59")
-    @test string(Dates.unix2datetime(1095379199.25)) == string("2004-09-16T23:59:59.25")
-    @test string(Dates.unix2datetime(1095379199.50)) == string("2004-09-16T23:59:59.5")
-    @test string(Dates.unix2datetime(1095379199.75)) == string("2004-09-16T23:59:59.75")
+    @test string(Dates.unix2datetime(1095379199.25)) == string("2004-09-16T23:59:59.250")
+    @test string(Dates.unix2datetime(1095379199.50)) == string("2004-09-16T23:59:59.500")
+    @test string(Dates.unix2datetime(1095379199.75)) == string("2004-09-16T23:59:59.750")
     @test string(Dates.unix2datetime(1095379200.00)) == string("2004-09-17T00:00:00")
-    @test string(Dates.unix2datetime(1095379200.25)) == string("2004-09-17T00:00:00.25")
-    @test string(Dates.unix2datetime(1095379200.50)) == string("2004-09-17T00:00:00.5")
-    @test string(Dates.unix2datetime(1095379200.75)) == string("2004-09-17T00:00:00.75")
+    @test string(Dates.unix2datetime(1095379200.25)) == string("2004-09-17T00:00:00.250")
+    @test string(Dates.unix2datetime(1095379200.50)) == string("2004-09-17T00:00:00.500")
+    @test string(Dates.unix2datetime(1095379200.75)) == string("2004-09-17T00:00:00.750")
     @test string(Dates.unix2datetime(1095379201.00)) == string("2004-09-17T00:00:01")
-    @test string(Dates.unix2datetime(1095379201.25)) == string("2004-09-17T00:00:01.25")
-    @test string(Dates.unix2datetime(915148798.75)) == string("1998-12-31T23:59:58.75")
+    @test string(Dates.unix2datetime(1095379201.25)) == string("2004-09-17T00:00:01.250")
+    @test string(Dates.unix2datetime(915148798.75)) == string("1998-12-31T23:59:58.750")
     @test string(Dates.unix2datetime(915148799.00)) == string("1998-12-31T23:59:59")
-    @test string(Dates.unix2datetime(915148799.25)) == string("1998-12-31T23:59:59.25")
-    @test string(Dates.unix2datetime(915148799.50)) == string("1998-12-31T23:59:59.5")
-    @test string(Dates.unix2datetime(915148799.75)) == string("1998-12-31T23:59:59.75")
+    @test string(Dates.unix2datetime(915148799.25)) == string("1998-12-31T23:59:59.250")
+    @test string(Dates.unix2datetime(915148799.50)) == string("1998-12-31T23:59:59.500")
+    @test string(Dates.unix2datetime(915148799.75)) == string("1998-12-31T23:59:59.750")
     @test string(Dates.unix2datetime(915148800.00)) == string("1999-01-01T00:00:00")
-    @test string(Dates.unix2datetime(915148800.25)) == string("1999-01-01T00:00:00.25")
-    @test string(Dates.unix2datetime(915148800.50)) == string("1999-01-01T00:00:00.5")
-    @test string(Dates.unix2datetime(915148800.75)) == string("1999-01-01T00:00:00.75")
+    @test string(Dates.unix2datetime(915148800.25)) == string("1999-01-01T00:00:00.250")
+    @test string(Dates.unix2datetime(915148800.50)) == string("1999-01-01T00:00:00.500")
+    @test string(Dates.unix2datetime(915148800.75)) == string("1999-01-01T00:00:00.750")
     @test string(Dates.unix2datetime(915148801.00)) == string("1999-01-01T00:00:01")
-    @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.25")
+    @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.250")
 end
 
 @testset "conversion to/from Rata Die" begin
@@ -60,10 +60,16 @@ end
 
     if Sys.isapple()
         withenv("TZ" => "UTC") do
-            @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
+            a = Dates.now()
+            b = Dates.now(Dates.UTC)
+            c = Dates.now()
+            @test a <= b <= c
         end
     end
-    @test abs(Dates.now() - now(Dates.UTC)) < Dates.Hour(16)
+    a = Dates.now()
+    b = now(Dates.UTC)
+    c = Dates.now()
+    @test abs(a - b) < Dates.Hour(16) + abs(c - a)
 end
 @testset "Issue #9171, #9169" begin
     let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14 * 24), Dates.Minute(14 * 24 * 60), Dates.Second(14 * 24 * 60 * 60), Dates.Millisecond(14 * 24 * 60 * 60 * 1000)]

@@ -2,23 +2,30 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(undef, 20)
-_fact_table64[1] = 1
-for n in 2:20
-    _fact_table64[n] = _fact_table64[n-1] * n
+const _fact_table64 = let _fact_table64 = Vector{Int64}(undef, 20)
+    _fact_table64[1] = 1
+    for n in 2:20
+        _fact_table64[n] = _fact_table64[n-1] * n
+    end
+    Tuple(_fact_table64)
 end
 
-const _fact_table128 = Vector{UInt128}(undef, 34)
-_fact_table128[1] = 1
-for n in 2:34
-    _fact_table128[n] = _fact_table128[n-1] * n
+const _fact_table128 = let _fact_table128 = Vector{UInt128}(undef, 34)
+    _fact_table128[1] = 1
+    for n in 2:34
+        _fact_table128[n] = _fact_table128[n-1] * n
+    end
+    Tuple(_fact_table128)
 end
 
-function factorial_lookup(n::Integer, table, lim)
-    n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n > lim && throw(OverflowError(string(n, " is too large to look up in the table; consider using `factorial(big(", n, "))` instead")))
-    n == 0 && return one(n)
-    @inbounds f = table[n]
+function factorial_lookup(
+    n::Union{Checked.SignedInt,Checked.UnsignedInt},
+    table::Union{NTuple{20,Int64},NTuple{34,UInt128}}, lim::Int)
+    idx = Int(n)
+    idx < 0 && throw(DomainError(n, "`n` must not be negative."))
+    idx > lim && throw(OverflowError(lazy"$n is too large to look up in the table; consider using `factorial(big($n))` instead"))
+    idx == 0 && return one(n)
+    f = getfield(table, idx)
     return oftype(n, f)
 end
 
@@ -91,7 +98,7 @@ function isperm(P::Tuple)
     end
 end
 
-isperm(P::Any16) = _isperm(P)
+isperm(P::Any32) = _isperm(P)
 
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
@@ -103,6 +110,18 @@ function swapcols!(a::AbstractMatrix, i, j)
         @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
+
+# swap rows i and j of a, in-place
+function swaprows!(a::AbstractMatrix, i, j)
+    i == j && return
+    rows = axes(a,1)
+    @boundscheck i in rows || throw(BoundsError(a, (:,i)))
+    @boundscheck j in rows || throw(BoundsError(a, (:,j)))
+    for k in axes(a,2)
+        @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
+    end
+end
+
 # like permute!! applied to each row of a, in-place in a (overwriting p).
 function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -124,25 +143,41 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     a
 end
 
-function permute!!(a, p::AbstractVector{<:Integer})
+# Row and column permutations for AbstractMatrix
+permutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swapcols!)
+permuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swaprows!)
+@inline function _permute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
     require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            a[ptr] = a[next]
-            p[ptr] = 0
-            ptr = next
-            next = p[next]
-            count += 1
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = i
+        in = p[j] = -p[j]
+        while p[in] < 0
+            swapfun!(a, in, j)
+            j = in
+            in = p[in] = -p[in]
         end
-        a[ptr] = temp
-        p[ptr] = 0
     end
+    a
+end
+invpermutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swapcols!)
+invpermuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swaprows!)
+@inline function _invpermute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = p[i] = -p[i]
+        while j != i
+           swapfun!(a, j, i)
+           j = p[j] = -p[j]
+        end
+     end
     a
 end
 
@@ -152,8 +187,12 @@ end
 Permute vector `v` in-place, according to permutation `p`. No checking is done
 to verify that `p` is a permutation.
 
-To return a new permutation, use `v[p]`. Note that this is generally faster than
-`permute!(v,p)` for large vectors.
+To return a new permutation, use `v[p]`. This is generally faster than `permute!(v, p)`;
+it is even faster to write into a pre-allocated output array with `u .= @view v[p]`.
+(Even though `permute!` overwrites `v` in-place, it internally requires some allocation
+to keep track of which elements have been moved.)
+
+$(_DOCS_ALIASING_WARNING)
 
 See also [`invpermute!`](@ref).
 
@@ -166,43 +205,25 @@ julia> perm = [2, 4, 3, 1];
 julia> permute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  3
  1
 ```
 """
-permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
-
-function invpermute!!(a, p::AbstractVector{<:Integer})
-    require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            temp_next = a[next]
-            a[next] = temp
-            temp = temp_next
-            ptr = p[next]
-            p[next] = 0
-            next = ptr
-            count += 1
-        end
-        a[next] = temp
-        p[next] = 0
-    end
-    a
-end
+permute!(v, p::AbstractVector) = (v .= v[p])
 
 """
     invpermute!(v, p)
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
+
+Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
+it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
+allocates a copy of the data.)
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -213,14 +234,14 @@ julia> perm = [2, 4, 3, 1];
 julia> invpermute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
  1
 ```
 """
-invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
+invpermute!(v, p::AbstractVector) = (v[p] = v; v)
 
 """
     invperm(v)
@@ -228,12 +249,19 @@ invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permutedims`](@ref).
+
 # Examples
 ```jldoctest
+julia> p = (2, 3, 1);
+
+julia> invperm(p)
+(3, 1, 2)
+
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -242,14 +270,14 @@ julia> invperm(v)
 julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
@@ -258,7 +286,7 @@ julia> B[invperm(v)]
 """
 function invperm(a::AbstractVector)
     require_one_based_indexing(a)
-    b = zero(a) # similar vector of zeros
+    b = fill!(similar(a), zero(eltype(a))) # mutable vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
         ((1 <= j <= n) && b[j] == 0) ||
@@ -286,7 +314,7 @@ function invperm(P::Tuple)
     end
 end
 
-invperm(P::Any16) = Tuple(invperm(collect(P)))
+invperm(P::Any32) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
@@ -307,7 +335,7 @@ julia> 2^2 * 3^3
 !!! compat "Julia 1.6"
     The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Union{Tuple{Vararg{<:Integer}},AbstractVector{<:Integer}}, x::Real)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end

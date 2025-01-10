@@ -1,4 +1,6 @@
-; RUN: opt -load libjulia%shlibext -PropagateJuliaAddrspaces -dce -S %s | FileCheck %s
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='PropagateJuliaAddrspaces,dce' -S %s | FileCheck %s
 
 define i64 @simple() {
 ; CHECK-LABEL: @simple

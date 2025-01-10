@@ -1,0 +1,25 @@
+TOOLCHAIN=$(BUILDROOT)/../toolchain
+BINDIR=$(TOOLCHAIN)/usr/bin
+TOOLDIR=$(TOOLCHAIN)/usr/tools
+
+# use our new toolchain
+USECLANG=1
+override CC=$(TOOLDIR)/clang
+override CXX=$(TOOLDIR)/clang++
+override PATCHELF=$(TOOLDIR)/patchelf
+export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
+
+USE_BINARYBUILDER_LLVM=1
+
+override SANITIZE=1
+override SANITIZE_ADDRESS=1
+
+# make the GC use regular malloc/frees, which are hooked by ASAN
+override WITH_GC_DEBUG_ENV=1
+
+# Enable Julia assertions and LLVM assertions
+FORCE_ASSERTIONS=1
+LLVM_ASSERTIONS=1
+
+# Build a minimal system image
+JULIA_PRECOMPILE=0

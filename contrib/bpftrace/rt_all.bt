@@ -1,0 +1,81 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    printf("Tracing Julia Task events... Hit Ctrl-C to end.\n");
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__run__task
+{
+    printf("Task running: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__pause__task
+{
+    printf("Task pausing: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__new__task
+{
+    printf("Task created: %x (Parent %x)\n", arg1, arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__task
+{
+    printf("Task started: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__task
+{
+    printf("Task finished: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__process__events
+{
+    printf("Task processing libuv events: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
+{
+    printf("Task processed libuv events: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__insert
+{
+    printf("Thread %x inserting task to multiq: %x\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__get
+{
+    printf("Thread %x popped task from multiq: %x\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wake
+{
+    printf("Thread waking: %x (was sleeping?: %d)\n", arg0, arg1);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wakeup
+{
+    printf("Thread wakeup: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__sleep
+{
+    printf("Thread trying to sleep: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__taskq__wake
+{
+    printf("Thread waking due to non-empty task queue: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__task__wake
+{
+    printf("Thread waking due to popped task: %x\n", arg0);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__uv__wake
+{
+    printf("Thread waking due to libuv: %x\n", arg0);
+}

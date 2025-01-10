@@ -9,13 +9,15 @@ Uses multiple concurrent tasks to map `f` over a collection (or multiple
 equal length collections). For multiple collection arguments, `f` is
 applied elementwise.
 
+The output is guaranteed to be the same order as the elements of the collection(s) `c`.
+
 `ntasks` specifies the number of tasks to run concurrently.
 Depending on the length of the collections, if `ntasks` is unspecified,
 up to 100 tasks will be used for concurrent mapping.
 
 `ntasks` can also be specified as a zero-arg function. In this case, the
 number of tasks to run in parallel is checked before processing every element and a new
-task started if the value of `ntasks_func` is less than the current number
+task started if the value of `ntasks_func` is greater than the current number
 of tasks.
 
 If `batch_size` is specified, the collection is processed in batch mode. `f` must
@@ -26,11 +28,11 @@ The following examples highlight execution in different tasks by returning
 the `objectid` of the tasks in which the mapping function is executed.
 
 First, with `ntasks` undefined, each element is processed in a different task.
-```
+```julia-repl
 julia> tskoid() = objectid(current_task());
 
 julia> asyncmap(x->tskoid(), 1:5)
-5-element Array{UInt64,1}:
+5-element Vector{UInt64}:
  0x6e15e66c75c75853
  0x440f8819a1baa682
  0x9fb3eeadd0c83985
@@ -42,9 +44,9 @@ julia> length(unique(asyncmap(x->tskoid(), 1:5)))
 ```
 
 With `ntasks=2` all elements are processed in 2 tasks.
-```
+```julia-repl
 julia> asyncmap(x->tskoid(), 1:5; ntasks=2)
-5-element Array{UInt64,1}:
+5-element Vector{UInt64}:
  0x027ab1680df7ae94
  0xa23d2f80cd7cf157
  0x027ab1680df7ae94
@@ -58,24 +60,18 @@ julia> length(unique(asyncmap(x->tskoid(), 1:5; ntasks=2)))
 With `batch_size` defined, the mapping function needs to be changed to accept an array
 of argument tuples and return an array of results. `map` is used in the modified mapping
 function to achieve this.
-```
+```julia-repl
 julia> batch_func(input) = map(x->string("args_tuple: ", x, ", element_val: ", x[1], ", task: ", tskoid()), input)
 batch_func (generic function with 1 method)
 
 julia> asyncmap(batch_func, 1:5; ntasks=2, batch_size=2)
-5-element Array{String,1}:
+5-element Vector{String}:
  "args_tuple: (1,), element_val: 1, task: 9118321258196414413"
  "args_tuple: (2,), element_val: 2, task: 4904288162898683522"
  "args_tuple: (3,), element_val: 3, task: 9118321258196414413"
  "args_tuple: (4,), element_val: 4, task: 4904288162898683522"
  "args_tuple: (5,), element_val: 5, task: 9118321258196414413"
 ```
-
-!!! note
-    Currently, all tasks in Julia are executed in a single OS thread co-operatively. Consequently,
-    `asyncmap` is beneficial only when the mapping function involves any I/O - disk, network, remote
-    worker invocation, etc.
-
 """
 function asyncmap(f, c...; ntasks=0, batch_size=nothing)
     return async_usemap(f, c...; ntasks=ntasks, batch_size=batch_size)
@@ -124,8 +120,7 @@ function verify_ntasks(iterable, ntasks)
     end
 
     if ntasks == 0
-        chklen = IteratorSize(iterable)
-        if (chklen isa HasLength) || (chklen isa HasShape)
+        if haslength(iterable)
             ntasks = max(1,min(100, length(iterable)))
         else
             ntasks = 100
@@ -191,13 +186,13 @@ end
 
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
-        nt = ntasks()
+        nt = ntasks()::Int
         # start at least one worker task.
         if nt == 0
             nt = 1
         end
     else
-        nt = ntasks
+        nt = ntasks::Int
     end
 
     # Use an unbuffered channel for communicating with the worker tasks. In the event
@@ -237,7 +232,7 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
             end
         catch e
             close(chnl)
-            retval = e
+            retval = capture_exception(e, catch_backtrace())
         end
         retval
     end
@@ -306,20 +301,7 @@ end
 function iterate(itr::AsyncCollector)
     itr.ntasks = verify_ntasks(itr.enumerator, itr.ntasks)
     itr.batch_size = verify_batch_size(itr.batch_size)
-    if itr.batch_size !== nothing
-        exec_func = batch -> begin
-            # extract indices from the input tuple
-            batch_idxs = map(x->x[1], batch)
 
-            # and the args tuple....
-            batched_args = map(x->x[2], batch)
-
-            results = f(batched_args)
-            foreach(x -> (itr.results[batch_idxs[x[1]]] = x[2]), enumerate(results))
-        end
-    else
-        exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
-    end
     chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end
@@ -414,6 +396,8 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 Like [`asyncmap`](@ref), but stores output in `results` rather than
 returning a collection.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))

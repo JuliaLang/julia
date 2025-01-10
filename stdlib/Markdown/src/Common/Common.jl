@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+abstract type MarkdownElement end
+
 include("block.jl")
 include("inline.jl")
 
@@ -8,4 +10,3 @@ include("inline.jl")
 
                 linebreak, escapes, inline_code,
                 asterisk_bold, underscore_bold, asterisk_italic, underscore_italic, image, footnote_link, link, autolink]
-

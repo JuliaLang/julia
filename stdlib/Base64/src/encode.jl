@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generate encode table.
-const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
+const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
 encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
@@ -43,6 +43,9 @@ struct Base64EncodePipe <: IO
         return pipe
     end
 end
+
+Base.isreadable(::Base64EncodePipe) = false
+Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
 
 function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::Int
     buffer = pipe.buffer

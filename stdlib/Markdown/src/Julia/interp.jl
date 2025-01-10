@@ -11,9 +11,13 @@ function interpinner(stream::IO, greedy = false)
     startswith(stream, '$') || return
     (eof(stream) || peek(stream, Char) in whitespace) && return
     try
-        return _parse(stream::IOBuffer, greedy = greedy)
+        return _parse(stream, greedy = greedy)
     catch e
-        return
+        if isa(e, Meta.ParseError)
+            return nothing
+        else
+            rethrow()
+        end
     end
 end
 
@@ -39,10 +43,19 @@ end
 
 toexpr(x) = x
 
-toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:getindex), Any, mapany(toexpr, xs)...)
+toexpr(xs::Union{Vector{Any},Vector{Vector{Any}}}) =
+    Expr(:call, GlobalRef(Base,:getindex), Any, mapany(toexpr, xs)...)
 
 for T in Any[MD, Paragraph, Header, Link, Bold, Italic]
     @eval function toexpr(md::$T)
         Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(Base.unwrap_unionall(T)))...))
     end
+end
+
+function toexpr(md::Table)
+    Expr(:call, Table, toexpr(md.rows), md.align)
+end
+
+function toexpr(md::List)
+    Expr(:call, List, toexpr(md.items), md.ordered, md.loose)
 end

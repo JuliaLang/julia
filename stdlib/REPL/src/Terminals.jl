@@ -30,9 +30,7 @@ import Base:
     displaysize,
     flush,
     pipe_reader,
-    pipe_writer,
-    read,
-    readuntil
+    pipe_writer
 
 ## AbstractTerminal: abstract supertype of all terminals ##
 
@@ -76,8 +74,8 @@ cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
 hascolor(::TextTerminal) = false
 
 # Utility Functions
-width(t::TextTerminal) = displaysize(t)[2]
-height(t::TextTerminal) = displaysize(t)[1]
+width(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[2]
+height(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -99,6 +97,7 @@ abstract type UnixTerminal <: TextTerminal end
 pipe_reader(t::UnixTerminal) = t.in_stream::IO
 pipe_writer(t::UnixTerminal) = t.out_stream::IO
 
+@nospecialize
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
 end
@@ -109,6 +108,7 @@ mutable struct TTYTerminal <: UnixTerminal
     out_stream::IO
     err_stream::IO
 end
+@specialize
 
 const CSI = "\x1b["
 
@@ -120,23 +120,19 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
 cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
 
-const is_precompiling = Ref(false)
 if Sys.iswindows()
     function raw!(t::TTYTerminal,raw::Bool)
-        is_precompiling[] && return true
-        check_open(t.in_stream)
         if Base.ispty(t.in_stream)
             run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
                 t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) == 0
         end
     end
 else
     function raw!(t::TTYTerminal, raw::Bool)
-        check_open(t.in_stream)
-        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle, raw) != -1
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) == 0
     end
 end
 
@@ -152,7 +148,7 @@ beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
-hascolor(t::TTYTerminal) = Base.ttyhascolor(t.term_type)
+hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
 
 # use cached value of have_color
 Base.in(key_value::Pair, t::TTYTerminal) = in(key_value, pipe_writer(t))
@@ -160,6 +156,6 @@ Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
 Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
-Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)
+Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)::T
 
 end # module

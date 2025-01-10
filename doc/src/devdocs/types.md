@@ -1,6 +1,6 @@
 # More about types
 
-If you've used Julia for a while, you understand the fundamental role that types play.  Here we
+If you've used Julia for a while, you understand the fundamental role that types play. Here we
 try to get under the hood, focusing particularly on [Parametric Types](@ref).
 
 ## Types and sets (and `Any` and `Union{}`/`Bottom`)
@@ -42,17 +42,17 @@ Union{UInt8, Signed}
 julia> typejoin(Signed, Union{UInt8, Int8})
 Integer
 
-julia> typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Int64,Float64}
+julia> typeintersect(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Int64, Float64}
 
-julia> Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
-Union{Tuple{Int64,Real}, Tuple{Integer,Float64}}
+julia> Union{Tuple{Integer, Float64}, Tuple{Int, Real}}
+Union{Tuple{Int64, Real}, Tuple{Integer, Float64}}
 
-julia> typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
-Tuple{Integer,Real}
+julia> typejoin(Tuple{Integer, Float64}, Tuple{Int, Real})
+Tuple{Integer, Real}
 ```
 
-While these operations may seem abstract, they lie at the heart of Julia.  For example, method
+While these operations may seem abstract, they lie at the heart of Julia. For example, method
 dispatch is implemented by stepping through the items in a method list until reaching one for which
 the type of the argument tuple is a subtype of the method signature.
 For this algorithm to work, it's important that methods be sorted by their specificity, and that the
@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature - as described in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
+The signature - as described in [Function calls](@ref Function-calls) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
@@ -93,13 +93,15 @@ UnionAll
   var: TypeVar
     name: Symbol T
     lb: Union{}
-    ub: Any
+    ub: abstract type Any
   body: UnionAll
     var: TypeVar
       name: Symbol N
       lb: Union{}
-      ub: Any
-    body: Array{T,N} <: DenseArray{T,N}
+      ub: abstract type Any
+    body: mutable struct Array{T, N} <: DenseArray{T, N}
+      ref::MemoryRef{T}
+      size::NTuple{N, Int64}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -162,8 +164,8 @@ julia> TV, NV = TypeVar(:T), TypeVar(:N)
 julia> Array
 Array
 
-julia> Array{TV,NV}
-Array{T,N}
+julia> Array{TV, NV}
+Array{T, N}
 ```
 
 These can be distinguished by examining the `name` field of the type, which is an object of type
@@ -179,13 +181,13 @@ TypeName
     var: TypeVar
       name: Symbol T
       lb: Union{}
-      ub: Any
+      ub: abstract type Any
     body: UnionAll
       var: TypeVar
         name: Symbol N
         lb: Union{}
-        ub: Any
-      body: Array{T,N} <: DenseArray{T,N}
+        ub: abstract type Any
+      body: mutable struct Array{T, N} <: DenseArray{T, N}
   cache: SimpleVector
     ...
 
@@ -198,7 +200,6 @@ TypeName
     defs: Nothing nothing
     cache: Nothing nothing
     max_args: Int64 0
-    kwsorter: #undef
     module: Module Core
     : Int64 0
     : Int64 0
@@ -224,7 +225,7 @@ Ptr{Cvoid} @0x00007fcc7de64850
 The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
 to the original definition of the type.
 
-What about the other fields? `hash` assigns an integer to each type.  To examine the `cache`
+What about the other fields? `hash` assigns an integer to each type. To examine the `cache`
 field, it's helpful to pick a type that is less heavily used than Array. Let's first create our
 own type:
 
@@ -232,10 +233,10 @@ own type:
 julia> struct MyType{T,N} end
 
 julia> MyType{Int,2}
-MyType{Int64,2}
+MyType{Int64, 2}
 
 julia> MyType{Float32, 5}
-MyType{Float32,5}
+MyType{Float32, 5}
 ```
 
 When you instantiate a parametric type, each concrete type gets saved in a type
@@ -244,15 +245,15 @@ variables are not cached.
 
 ## Tuple types
 
-Tuple types constitute an interesting special case.  For dispatch to work on declarations like
-`x::Tuple`, the type has to be able to accommodate any tuple.  Let's check the parameters:
+Tuple types constitute an interesting special case. For dispatch to work on declarations like
+`x::Tuple`, the type has to be able to accommodate any tuple. Let's check the parameters:
 
 ```jldoctest
 julia> Tuple
 Tuple
 
 julia> Tuple.parameters
-svec(Vararg{Any,N} where N)
+svec(Vararg{Any})
 ```
 
 Unlike other types, tuple types are covariant in their parameters, so this definition permits
@@ -260,10 +261,10 @@ Unlike other types, tuple types are covariant in their parameters, so this defin
 
 ```jldoctest
 julia> typeintersect(Tuple, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 ```
 
 However, if a variadic (`Vararg`) tuple type has free variables it can describe different kinds
@@ -271,7 +272,7 @@ of tuples:
 
 ```jldoctest
 julia> typeintersect(Tuple{Vararg{T} where T}, Tuple{Int,Float64})
-Tuple{Int64,Float64}
+Tuple{Int64, Float64}
 
 julia> typeintersect(Tuple{Vararg{T}} where T, Tuple{Int,Float64})
 Union{}
@@ -367,7 +368,7 @@ Therefore in this case the diagonal rule is not really necessary, since
 the array determines `T` and we can then allow `x` and `y` to be of
 any subtypes of `T`.
 So variables that occur in invariant position are never considered diagonal.
-This choice of behavior is slightly controversial --- some feel this definition
+This choice of behavior is slightly controversial -- some feel this definition
 should be written as
 
 ```julia
@@ -418,15 +419,19 @@ whether that appearance of the variable is used or not.
 Otherwise types can behave differently depending on which other types
 they are compared to, making subtyping not transitive. For example, consider
 
+```julia
 Tuple{Int,Int8,Vector{Integer}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
-If the `T` inside the Union is ignored, then `T` is concrete and the answer is "false"
+If the `T` inside the `Union` is ignored, then `T` is concrete and the answer is "false"
 since the first two types aren't the same.
 But consider instead
 
+```julia
 Tuple{Int,Int8,Vector{Any}} <: Tuple{T,T,Vector{Union{Integer,T}}} where T
+```
 
-Now we cannot ignore the `T` in the Union (we must have T == Any), so `T` is not
+Now we cannot ignore the `T` in the `Union` (we must have `T == Any`), so `T` is not
 concrete and the answer is "true".
 That would make the concreteness of `T` depend on the other type, which is not
 acceptable since a type must have a clear meaning on its own.
@@ -474,10 +479,10 @@ We have not yet worked out a complete algorithm for this.
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.
 A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
-[gdb debugging tips](@ref) has some tips which may be useful.
+[gdb debugging tips](@ref gdb-debugging-tips) has some tips which may be useful.
 
-Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
-code get triggered often--it will be easiest if you make the following definition:
+Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
+code get triggered often -- it will be easiest if you make the following definition:
 
 ```julia-repl
 julia> function mysubtype(a,b)
@@ -486,13 +491,13 @@ julia> function mysubtype(a,b)
        end
 ```
 
-and then set a breakpoint in `jl_breakpoint`.  Once this breakpoint gets triggered, you can set
+and then set a breakpoint in `jl_breakpoint`. Once this breakpoint gets triggered, you can set
 breakpoints in other functions.
 
 As a warm-up, try the following:
 
 ```julia
-mysubtype(Tuple{Int,Float64}, Tuple{Integer,Real})
+mysubtype(Tuple{Int, Float64}, Tuple{Integer, Real})
 ```
 
 We can make it more interesting by trying a more complex case:
@@ -516,10 +521,6 @@ than the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{
 considered more specific. However, `morespecific` does get a bonus for length: in particular,
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
-If you're debugging how methods get sorted, it can be convenient to define the function:
-
-```julia
-type_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b)
-```
-
-which allows you to test whether tuple type `a` is more specific than tuple type `b`.
+Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
+will instead by compared by order of addition, such that the later method is more specific
+than the earlier one.

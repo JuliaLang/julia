@@ -239,17 +239,112 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
-# Ensure iteration over arrays is vectorizable with boundschecks off
+# Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
-    @inbounds for x in X
+    for x in X
         r += x
     end
     r
 end
+
+@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+
+# Boundschecking removal of indices with different type, see #40281
+getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
+llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
 end
 
+# Given this is a sub-processed test file, not using @testsets avoids
+# leaking the report print into the Base test runner report
+begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
+    @inline getindex_42115(r, i) = @inbounds getindex(r, i)
+    @inline getindex_42115(r, i, j) = @inbounds getindex(r, i, j)
+
+    R = CartesianIndices((5, 5))
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, -1, -1)
+        @test_throws BoundsError getindex_42115(R, 1, -1)
+    else
+        @test getindex_42115(R, -1, -1) == CartesianIndex(-1, -1)
+        @test getindex_42115(R, 1, -1) == CartesianIndex(1, -1)
+    end
+
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, CartesianIndices((6, 6)))
+        @test_throws BoundsError getindex_42115(R, -1:3, :)
+    else
+        @test getindex_42115(R, CartesianIndices((6, 6))) == CartesianIndices((6, 6))
+        @test getindex_42115(R, -1:3, :) == CartesianIndices((-1:3, 1:5))
+    end
+end
+
+# Test that --check-bounds=off doesn't permit const prop of indices into
+# function that are not dynamically reachable (the same test for @inbounds
+# is in the compiler tests).
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->getfield(sin, x), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+# https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
+@test Base.return_types() do
+    typeintersect(Int, Integer)
+end |> only === Type{Int}
+
+if bc_opt == bc_default
+@testset "Array/Memory escape analysis" begin
+    function no_allocate(T::Type{<:Union{Memory, Vector}})
+        v = T(undef, 2)
+        v[1] = 2
+        v[2] = 3
+        return v[1] + v[2]
+    end
+    function test_alloc(::Type{T}; broken=false) where T
+        @test (@allocated no_allocate(T)) == 0 broken=broken
+    end
+    @testset "$T" for T in [Memory, Vector]
+        @testset "$ET" for ET in [Int, Float32, Union{Int, Float64}]
+            no_allocate(T{ET}) #compile
+            # allocations aren't removed for Union eltypes which they theoretically could be eventually
+            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+        end
+    end
+    function f() # this was causing a bug on an in progress version of #55913.
+        m = Memory{Float64}(undef, 4)
+        m .= 1.0
+        s = 0.0
+        for x ∈ m
+            s += x
+        end
+        s
+    end
+    @test f() === 4.0
+    function confuse_alias_analysis()
+       mem0 = Memory{Int}(undef, 1)
+       mem1 = Memory{Int}(undef, 1)
+       @inbounds mem0[1] = 3
+       for width in 1:2
+            @inbounds mem1[1] = mem0[1]
+            mem0 = mem1
+       end
+       mem0[1]
+    end
+    @test confuse_alias_analysis() == 3
+    @test (@allocated confuse_alias_analysis()) == 0
+    function no_alias_prove(n)
+        m1 = Memory{Int}(undef,n)
+        m2 = Memory{Int}(undef,n)
+        m1 === m2
+    end
+    no_alias_prove(1)
+    @test_broken (@allocated no_alias_prove(5)) == 0
+end
+end
 
 end

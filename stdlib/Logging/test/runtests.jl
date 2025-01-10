@@ -6,6 +6,10 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
+# see "custom log macro" testset
+CustomLog = LogLevel(-500)
+macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., esc(CustomLog), exs...) end
+
 @testset "Logging" begin
 
 @testset "Core" begin
@@ -47,6 +51,15 @@ end
         end
     end
     @test String(take!(buf)) == ""
+
+    # Check that the AnnotatedString path works too
+    with_logger(logger) do
+        @info Base.AnnotatedString("test")
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
@@ -193,6 +206,9 @@ end
     └ SUFFIX
     """
 
+    # Execute backtrace once before checking formatting, see #3885
+    backtrace()
+
     # Attaching backtraces
     bt = func1()
     @test startswith(genmsg("msg", exception=(DivideError(),bt)),
@@ -201,7 +217,7 @@ end
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │     [1] func1() at""")
+    │      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin
@@ -209,7 +225,7 @@ end
         replace("""
         ┌ PREFIX msg
         │   a =
-        │    100×100 Array{Float64,2}:
+        │    100×100 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
@@ -217,7 +233,7 @@ end
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
@@ -231,7 +247,7 @@ end
         """
         ┌ PREFIX msg
         │   a =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
@@ -254,6 +270,40 @@ end
     \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
+end
+
+@testset "exported names" begin
+    m = Module(:ExportedLoggingNames)
+    include_string(m, """
+        using Logging
+        function run()
+            BelowMinLevel === Logging.BelowMinLevel &&
+            Debug === Logging.Debug &&
+            Info === Logging.Info &&
+            Warn === Logging.Warn &&
+            Error === Logging.Error &&
+            AboveMaxLevel === Logging.AboveMaxLevel
+        end
+        """)
+    @test invokelatest(m.run)
+end
+
+@testset "custom log macro" begin
+    @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, CustomLog)
+
+    with_logger(logger) do
+        @customlog "a"
+    end
+    @test occursin("LogLevel(-500): a", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test isempty(undoc)
 end
 
 end

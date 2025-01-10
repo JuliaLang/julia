@@ -1,0 +1,6 @@
+# -*- makefile -*-
+## jll artifact
+PCRE_JLL_NAME := PCRE2
+
+## source build
+PCRE_VER := 10.44

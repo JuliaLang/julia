@@ -1,6 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using InteractiveUtils: code_llvm
 # fast math
+
+@testset "check fast present in LLVM" begin
+    for T in (Float16, Float32, Float64, ComplexF32, ComplexF64)
+        f(x) = @fastmath x + x + x
+        llvm = sprint(code_llvm, f, (T,))
+        @test occursin("fast", llvm)
+
+        g(x) = @fastmath x * x * x
+        llvm = sprint(code_llvm, g, (T,))
+        @test occursin("fast", llvm)
+    end
+
+    for T in (Float16, Float32, Float64)
+        f(x, y, z) = @fastmath min(x, y, z)
+        llvm = sprint(code_llvm, f, (T,T,T))
+        @test occursin("fast", llvm)
+
+        g(x, y, z) = @fastmath max(x, y, z)
+        llvm = sprint(code_llvm, g, (T,T,T))
+        @test occursin("fast", llvm)
+    end
+end
 
 @testset "check expansions" begin
     @test macroexpand(Main, :(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
@@ -60,9 +83,6 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         @test @fastmath(cmp(two,two)) == cmp(two,two)
         @test @fastmath(cmp(two,three)) == cmp(two,three)
         @test @fastmath(cmp(three,two)) == cmp(three,two)
-        @test @fastmath(one/zero) == convert(T,Inf)
-        @test @fastmath(-one/zero) == -convert(T,Inf)
-        @test isnan(@fastmath(zero/zero)) # must not throw
 
         for x in (zero, two, convert(T, Inf), convert(T, NaN))
             @test @fastmath(isfinite(x))
@@ -210,6 +230,31 @@ end
         @test @fastmath(cis(third)) ≈ cis(third)
     end
 end
+
+@testset "reductions" begin
+    @test @fastmath(maximum([1,2,3])) == 3
+    @test @fastmath(minimum([1,2,3])) == 1
+    @test @fastmath(maximum(abs2, [1,2,3+0im])) == 9
+    @test @fastmath(minimum(sqrt, [1,2,3])) == 1
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9])) == 9.0f0
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9])) == 4.0f0
+
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9]; dims=1)) == Float32[7.0 8.0 9.0]
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9]; dims=2)) == Float32[4.0; 7.0;;]
+    @test @fastmath(maximum(abs, [4+im -5 6-im; -7 8 -9]; dims=1)) == [7.0 8.0 9.0]
+    @test @fastmath(minimum(cbrt, [4 -5 6; -7 8 -9]; dims=2)) == cbrt.([-5; -9;;])
+
+    x = randn(3,4,5)
+    x1 = sum(x; dims=1)
+    x23 = sum(x; dims=(2,3))
+    @test @fastmath(maximum!(x1, x)) ≈ maximum(x; dims=1)
+    @test x1 ≈ maximum(x; dims=1)
+    @test @fastmath(minimum!(x23, x)) ≈ minimum(x; dims=(2,3))
+    @test x23 ≈ minimum(x; dims=(2,3))
+    @test @fastmath(maximum!(abs, x23, x .+ im)) ≈ maximum(abs, x .+ im; dims=(2,3))
+    @test @fastmath(minimum!(abs2, x1, x .+ im)) ≈ minimum(abs2, x .+ im; dims=1)
+end
+
 @testset "issue #10544" begin
     a = fill(1.,2,2)
     b = fill(1.,2,2)
@@ -234,6 +279,28 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+    # Issue #53817
+    # Note that exponent -2^63 fails testing because of issue #53881
+    # Therefore we test with -(2^63-1). For Int == Int32 there is an analogue restriction.
+    # See also PR #53860.
+    if Int == Int64
+        @test @fastmath(2^-9223372036854775807) === 0.0
+        @test_throws DomainError @fastmath(2^-9223372036854775809)
+        @test @fastmath(1^-9223372036854775807) isa Float64
+        @test @fastmath(1^-9223372036854775809) isa Int
+    elseif Int == Int32
+        @test @fastmath(2^-2147483647) === 0.0
+        @test_throws DomainError @fastmath(2^-2147483649)
+        @test @fastmath(1^-2147483647) isa Float64
+        @test @fastmath(1^-2147483649) isa Int
+    end
+    @test_throws MethodError @fastmath(^(2))
+end
+# issue #53857
+@testset "fast_pow" begin
+    n = Int64(2)^52
+    @test @fastmath (1 + 1 / n) ^ n ≈ ℯ
+    @test @fastmath (1 + 1 / n) ^ 4503599627370496 ≈ ℯ
 end
 
 @testset "sincos fall-backs" begin
@@ -251,4 +318,34 @@ end
     @test (@fastmath :(:sin)) == :(:sin)
     @test (@fastmath "a" * "b") == "ab"
     @test (@fastmath "a" ^ 2) == "aa"
+end
+
+
+@testset "exp overflow and underflow" begin
+    for T in (Float32,Float64)
+        for func in (@fastmath exp2,exp,exp10)
+            @test func(T(2000)) == T(Inf)
+            @test func(T(-2000)) == T(0)
+        end
+    end
+end
+
+@testset "+= with indexing (#47241)" begin
+    i = 0
+    x = zeros(2)
+    @fastmath x[i += 1] += 1
+    @fastmath x[end] += 1
+    @test x == [1, 1]
+    @test i == 1
+end
+
+@testset "@fastmath-related crash (#49907)" begin
+    x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
+    @test x == Float16(3)
+end
+
+@testset "Test promotion of >=3 arg fastmath" begin
+    # Bug caught in https://github.com/JuliaLang/julia/pull/54513#discussion_r1620553369
+    x = @fastmath 1. + 1. + 1f0
+    @test x == 3.0
 end

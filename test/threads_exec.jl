@@ -2,7 +2,8 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock
+using Base.Threads: SpinLock, threadpoolsize
+using LinearAlgebra: peakflops
 
 # for cfunction_closure
 include("testenv.jl")
@@ -16,7 +17,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -27,9 +28,35 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+@testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
+
+@test Threads.threadid() == 1
+@test 1 <= threadpoolsize() <= Threads.maxthreadid()
+
+# basic lock check
+if threadpoolsize() > 1
+    let lk = SpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
 # threading constructs
 
-let a = zeros(Int, 2 * nthreads())
+let a = zeros(Int, 2 * threadpoolsize())
     @threads for i = 1:length(a)
         @sync begin
             @async begin
@@ -49,7 +76,23 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
+    counter = Threads.Atomic{Int}(min(threadpoolsize(), length(r)))
     @threads for i in r
+        # synchronize the start given that each partition is started sequentially,
+        # meaning that without the wait, if the loop is too fast the iteration can happen in order
+        if counter[] != 0
+            Threads.atomic_sub!(counter, 1)
+            spins = 0
+            while counter[] != 0
+                GC.safepoint()
+                ccall(:jl_cpu_pause, Cvoid, ())
+                spins += 1
+                if spins > 500_000_000  # about 10 seconds
+                    @warn "Failed wait for all workers. Unfinished rogue tasks occupying worker threads?"
+                    break
+                end
+            end
+        end
         j = i - firstindex(r) + 1
         a[j] = 1 + atomic_add!(x, 1)
     end
@@ -62,18 +105,13 @@ function test_threaded_loop_and_atomic_add()
         a = zeros(Int, n)
         threaded_loop(a,r,x)
         found = zeros(Bool,n)
-        was_inorder = true
         for i=1:length(a)
-            was_inorder &= a[i]==i
             found[a[i]] = true
         end
         @test x[] == n
         # Next test checks that all loop iterations ran,
         # and were unique (via pigeon-hole principle).
         @test !(false in found)
-        if was_inorder && nthreads() > 1
-            println(stderr, "Warning: threaded loop executed in order")
-        end
     end
 end
 
@@ -176,7 +214,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
 end
 
 threaded_gc_locked(SpinLock)
-threaded_gc_locked(Threads.ReentrantLock)
+threaded_gc_locked(ReentrantLock)
 
 # Issue 33159
 # Make sure that a Threads.Condition can't be used without being locked, on any thread.
@@ -197,7 +235,7 @@ end
 # Make sure that eval'ing in a different module doesn't mess up other threads
 orig_curmodule14726 = @__MODULE__
 main_var14726 = 1
-module M14726
+@eval Main module M14726
 module_var14726 = 1
 end
 
@@ -217,7 +255,7 @@ end
     @test @__MODULE__() == orig_curmodule14726
 end
 
-module M14726_2
+@eval Main module M14726_2
 using Test
 using Base.Threads
 @threads for i in 1:100
@@ -233,7 +271,7 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
 
     @test_throws TypeError Atomic{Int128}()
@@ -391,7 +429,7 @@ end
 for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     var = Atomic{T}()
     nloops = 1000
-    di = nthreads()
+    di = threadpoolsize()
     @threads for i in 1:di
         test_atomic_cas!(var, i:di:nloops)
     end
@@ -471,7 +509,6 @@ end
 
 function test_thread_cfunction()
     # ensure a runtime call to `get_trampoline` will be created
-    # TODO: get_trampoline is not thread-safe (as this test shows)
     fs = [ Core.Box() for i in 1:1000 ]
     @noinline cf(f) = @cfunction $f Float64 ()
     cfs = Vector{Base.CFunction}(undef, length(fs))
@@ -482,8 +519,8 @@ function test_thread_cfunction()
     @test cfs[1] == cf1
     @test cfs[2] == cf(fs[2])
     @test length(unique(cfs)) == 1000
-    ok = zeros(Int, nthreads())
-    @threads for i in 1:10000
+    ok = zeros(Int, threadpoolsize())
+    @threads :static for i in 1:10000
         i = mod1(i, 1000)
         fi = fs[i]
         cfi = cf(fi)
@@ -494,31 +531,18 @@ function test_thread_cfunction()
     @test sum(ok) == 10000
 end
 if cfunction_closure
-    if nthreads() == 1
-        test_thread_cfunction()
-    else
-        @test_broken "cfunction trampoline code not thread-safe"
-    end
-end
-
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
-else
-    @test_throws ErrorException cglobal(:jl_tls_states)
+    test_thread_cfunction()
 end
 
 function test_thread_range()
-    a = zeros(Int, nthreads())
+    a = zeros(Int, threadpoolsize())
     @threads for i in 1:threadid()
         a[i] = 1
     end
     for i in 1:threadid()
         @test a[i] == 1
     end
-    for i in (threadid() + 1):nthreads()
+    for i in (threadid() + 1):threadpoolsize()
         @test a[i] == 0
     end
 end
@@ -531,7 +555,9 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
-        catch
+        catch ex
+            ex isa ErrorException || rethrow()
+            startswith(ex.msg, "could not load library") || rethrow()
         end
     end
 end
@@ -556,41 +582,26 @@ test_nested_loops()
 
 function test_thread_too_few_iters()
     x = Atomic()
-    a = zeros(Int, nthreads()+2)
-    threaded_loop(a, 1:nthreads()-1, x)
-    found = zeros(Bool, nthreads()+2)
-    for i=1:nthreads()-1
+    a = zeros(Int, threadpoolsize()+2)
+    threaded_loop(a, 1:threadpoolsize()-1, x)
+    found = zeros(Bool, threadpoolsize()+2)
+    for i=1:threadpoolsize()-1
         found[a[i]] = true
     end
-    @test x[] == nthreads()-1
+    @test x[] == threadpoolsize()-1
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test !(false in found[1:nthreads()-1])
-    @test !(true in found[nthreads():end])
+    @test !(false in found[1:threadpoolsize()-1])
+    @test !(true in found[threadpoolsize():end])
 end
 test_thread_too_few_iters()
 
-let e = Event(), started = Event()
-    done = false
-    t = @async (notify(started); wait(e); done = true)
-    wait(started)
-    sleep(0.1)
-    @test done == false
-    notify(e)
-    wait(t)
-    @test done == true
-    blocked = true
-    wait(@async (wait(e); blocked = false))
-    @test !blocked
-end
-
-
-@testset "InvasiveLinkedList" begin
-    @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
+@testset "IntrusiveLinkedList" begin
+    @test eltype(Base.IntrusiveLinkedList{Integer}) == Integer
     @test eltype(Base.LinkedList{Integer}) == Integer
-    @test eltype(Base.InvasiveLinkedList{<:Integer}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Integer}) == Any
     @test eltype(Base.LinkedList{<:Integer}) == Any
-    @test eltype(Base.InvasiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
 
     t = Base.LinkedList{Integer}()
     @test eltype(t) == Integer
@@ -713,9 +724,9 @@ let ch = Channel{Char}(0), t
     @test String(collect(ch)) == "hello"
 end
 
-# errors inside @threads
+# errors inside @threads :static
 function _atthreads_with_error(a, err)
-    Threads.@threads for i in eachindex(a)
+    Threads.@threads :static for i in eachindex(a)
         if err
             error("failed")
         end
@@ -723,28 +734,158 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
-let a = zeros(nthreads())
+@test_throws CompositeException _atthreads_with_error(zeros(threadpoolsize()), true)
+let a = zeros(threadpoolsize())
     _atthreads_with_error(a, false)
-    @test a == [1:nthreads();]
+    @test a == [1:threadpoolsize();]
 end
 
 # static schedule
-function _atthreads_static_schedule()
-    ids = zeros(Int, nthreads())
-    Threads.@threads :static for i = 1:nthreads()
+function _atthreads_static_schedule(n)
+    ids = zeros(Int, n)
+    Threads.@threads :static for i = 1:n
         ids[i] = Threads.threadid()
     end
     return ids
 end
-@test _atthreads_static_schedule() == [1:nthreads();]
-@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+@test _atthreads_static_schedule(threadpoolsize()) == 1:threadpoolsize()
+@test _atthreads_static_schedule(1) == [1;]
+@test_throws(
+    "`@threads :static` cannot be used concurrently or nested",
+    @threads(for i = 1:1; _atthreads_static_schedule(threadpoolsize()); end),
+)
+
+# dynamic schedule
+function _atthreads_dynamic_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :dynamic for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_dynamic_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_dynamic_schedule(1) == (1, ones(1))
+@test _atthreads_dynamic_schedule(10) == (10, ones(10))
+@test _atthreads_dynamic_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+
+# nested dynamic schedule
+function _atthreads_dynamic_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dynamic_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_static_dynamic_schedule()
+    ids = zeros(Int, threadpoolsize())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:threadpoolsize()
+        ids[i] = Threads.threadid()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_dynamic_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+
+# errors inside @threads :dynamic
+function _atthreads_dynamic_with_error(a)
+    Threads.@threads :dynamic for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize()))
+
+####
+# :greedy
+###
+
+function _atthreads_greedy_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :greedy for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_greedy_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_greedy_schedule(1) == (1, ones(1))
+@test _atthreads_greedy_schedule(10) == (10, ones(10))
+@test _atthreads_greedy_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+
+# nested greedy schedule
+function _atthreads_greedy_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_greedy_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_dymamic_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dymamic_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_static_greedy_schedule()
+    ids = zeros(Int, threadpoolsize())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:threadpoolsize()
+        ids[i] = Threads.threadid()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_greedy_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+
+# errors inside @threads :greedy
+function _atthreads_greedy_with_error(a)
+    Threads.@threads :greedy for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_greedy_with_error(zeros(threadpoolsize()))
+
+####
+# multi-argument loop
+####
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
-    @test ex isa LoadError
-    @test ex.error isa ArgumentError
+    @test ex isa ArgumentError
 end
 
 @testset "@spawn interpolation" begin
@@ -846,6 +987,19 @@ fib34666(x) =
     end
 @test fib34666(25) == 75025
 
+# issue #41324
+@testset "Co-schedule" begin
+    parent = Threads.@spawn begin
+        @test current_task().sticky == false
+        child = @async begin end
+        @test current_task().sticky == true
+        @test Threads.threadid() == Threads.threadid(child)
+        wait(child)
+    end
+    wait(parent)
+    @test parent.sticky == true
+end
+
 function jitter_channel(f, k, delay, ntasks, schedule)
     x = Channel(ch -> foreach(i -> put!(ch, i), 1:k), 1)
     y = Channel(k) do ch
@@ -880,3 +1034,506 @@ end
     end
     @test sort!(collect(ys)) == 1:3
 end
+
+# reproducible multi-threaded rand()
+
+using Random
+
+function reproducible_rand(r, i)
+    if i == 0
+        return UInt64(0)
+    end
+    r1 = rand(r, UInt64)*hash(i)
+    t1 = Threads.@spawn reproducible_rand(r, i-1)
+    t2 = Threads.@spawn reproducible_rand(r, i-1)
+    r2 = rand(r, UInt64)
+    return r1 + r2 + fetch(t1) + fetch(t2)
+end
+
+@testset "Task-local random" begin
+    r = Random.TaskLocalRNG()
+    Random.seed!(r, 23)
+    val = reproducible_rand(r, 10)
+    for i = 1:4
+        Random.seed!(r, 23)
+        @test reproducible_rand(r, 10) == val
+    end
+end
+
+# @spawn racying with sync_end
+
+hidden_spawn(f) = Threads.@spawn f()
+
+function sync_end_race()
+    y = Ref(:notset)
+    local t
+    @sync begin
+        for _ in 1:6  # tweaked to maximize `nerror` below
+            Threads.@spawn nothing
+        end
+        t = hidden_spawn() do
+            Threads.@spawn y[] = :completed
+        end
+    end
+    try
+        wait(t)
+    catch
+        return :notscheduled
+    end
+    return y[]
+end
+
+function check_sync_end_race()
+    @sync begin
+        done = Threads.Atomic{Bool}(false)
+        try
+            # `Threads.@spawn` must fail to be scheduled or complete its execution:
+            ncompleted = 0
+            nnotscheduled = 0
+            nerror = 0
+            for i in 1:1000
+                y = try
+                    yield()
+                    sync_end_race()
+                catch err
+                    if err isa CompositeException
+                        if err.exceptions[1] isa Base.ScheduledAfterSyncException
+                            nerror += 1
+                            continue
+                        end
+                    end
+                    rethrow()
+                end
+                y in (:completed, :notscheduled) || return (; i, y)
+                ncompleted += y === :completed
+                nnotscheduled += y === :notscheduled
+            end
+            # Useful for tuning the test:
+            @debug "`check_sync_end_race` done" threadpoolsize() ncompleted nnotscheduled nerror
+        finally
+            done[] = true
+        end
+    end
+    return nothing
+end
+
+@testset "Racy `@spawn`" begin
+    @test check_sync_end_race() === nothing
+end
+
+# issue #41546, thread-safe package loading
+@testset "package loading" begin
+    ntasks = max(threadpoolsize(), 4)
+    ch = Channel{Bool}(ntasks)
+    barrier = Base.Event()
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    try
+        pushfirst!(LOAD_PATH, "@")
+        Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+        @sync begin
+            for _ in 1:ntasks
+                Threads.@spawn begin
+                    put!(ch, true)
+                    wait(barrier)
+                    @eval using TestPkg
+                end
+            end
+            for _ in 1:ntasks
+                take!(ch)
+            end
+            close(ch)
+            notify(barrier)
+        end
+        @test Base.root_module(@__MODULE__, :TestPkg) isa Module
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        popfirst!(LOAD_PATH)
+    end
+end
+
+# issue #49746, thread safety in `atexit(f)`
+@testset "atexit thread safety" begin
+    f = () -> nothing
+    before_len = length(Base.atexit_hooks)
+    @sync begin
+        for _ in 1:1_000_000
+            Threads.@spawn begin
+                atexit(f)
+            end
+        end
+    end
+    @test length(Base.atexit_hooks) == before_len + 1_000_000
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+
+    # cleanup
+    Base.@lock Base._atexit_hooks_lock begin
+        deleteat!(Base.atexit_hooks, 1:1_000_000)
+    end
+end
+
+#Thread safety of threacall
+function threadcall_threads()
+    Threads.@threads for i = 1:8
+        ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 3)
+        @test unsafe_load(ptr) == 3
+        ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 4, 2)
+        @test unsafe_load(ptr, 1) == 3
+        @test unsafe_load(ptr, 2) == 4
+        @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+    end
+end
+@testset "threadcall + threads" begin
+    threadcall_threads() #Shouldn't crash!
+end
+
+@testset "Wait multiple tasks" begin
+    convert_tasks(t, x) = x
+    convert_tasks(::Set{Task}, x::Vector{Task}) = Set{Task}(x)
+    convert_tasks(::Tuple{Task}, x::Vector{Task}) = tuple(x...)
+
+    function create_tasks()
+        tasks = Task[]
+        event = Threads.Event()
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.01)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.02)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  wait(event)
+              end)
+        return tasks, event
+    end
+
+    function teardown(tasks, event)
+        notify(event)
+        waitall(resize!(tasks, 3), throw=true)
+    end
+
+    for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
+        @testset "waitany" begin
+            @testset "throw=false" begin
+                tasks, event = create_tasks()
+                wait(tasks[1])
+                wait(tasks[2])
+                done,  pending = waitany(convert_tasks(tasks_type, tasks); throw=false)
+                @test length(done) == 2
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+                teardown(tasks, event)
+            end
+
+            @testset "throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+                wait(tasks[end]; throw=false)
+
+                @test_throws CompositeException begin
+                    waitany(convert_tasks(tasks_type, tasks); throw=true)
+                end
+
+                teardown(tasks, event)
+            end
+        end
+
+        @testset "waitall" begin
+            @testset "All tasks succeed" begin
+                tasks, event = create_tasks()
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks))
+                @test !istaskdone(waiter)
+
+                notify(event)
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[3] ∈ done
+                @test length(pending) == 0
+            end
+
+            @testset "failfast=true, throw=false" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=false)
+
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[4] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=false, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                notify(event)
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=false, throw=true)
+                end
+
+                @test all(istaskdone.(tasks))
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=true, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=true)
+                end
+
+                @test !istaskdone(tasks[3])
+
+                teardown(tasks, event)
+            end
+        end
+    end
+end
+
+@testset "Base.Experimental.task_metrics" begin
+    t = Task(() -> nothing)
+    @test_throws "const field" t.metrics_enabled = true
+    is_task_metrics_enabled() = fetch(Threads.@spawn current_task().metrics_enabled)
+    @test !is_task_metrics_enabled()
+    try
+        @testset "once" begin
+            Base.Experimental.task_metrics(true)
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false)
+            @test !is_task_metrics_enabled()
+        end
+        @testset "multiple" begin
+            Base.Experimental.task_metrics(true)  # 1
+            Base.Experimental.task_metrics(true)  # 2
+            Base.Experimental.task_metrics(true)  # 3
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false) # 2
+            @test is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false) # 1
+            @test is_task_metrics_enabled()
+            @sync for i in 1:5                    # 0 (not negative)
+                Threads.@spawn Base.Experimental.task_metrics(false)
+            end
+            @test !is_task_metrics_enabled()
+            Base.Experimental.task_metrics(true)  # 1
+            @test is_task_metrics_enabled()
+        end
+    finally
+        while is_task_metrics_enabled()
+            Base.Experimental.task_metrics(false)
+        end
+    end
+end
+
+@testset "task time counters" begin
+    @testset "enabled" begin
+        try
+            Base.Experimental.task_metrics(true)
+            start_time = time_ns()
+            t = Threads.@spawn peakflops()
+            wait(t)
+            end_time = time_ns()
+            wall_time_delta = end_time - start_time
+            @test t.metrics_enabled
+            @test Base.Experimental.task_running_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
+            @test wall_time_delta > Base.Experimental.task_wall_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "disabled" begin
+        t = Threads.@spawn peakflops()
+        wait(t)
+        @test !t.metrics_enabled
+        @test isnothing(Base.Experimental.task_running_time_ns(t))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t))
+    end
+    @testset "task not run" begin
+        t1 = Task(() -> nothing)
+        @test !t1.metrics_enabled
+        @test isnothing(Base.Experimental.task_running_time_ns(t1))
+        @test isnothing(Base.Experimental.task_wall_time_ns(t1))
+        try
+            Base.Experimental.task_metrics(true)
+            t2 = Task(() -> nothing)
+            @test t2.metrics_enabled
+            @test Base.Experimental.task_running_time_ns(t2) == 0
+            @test Base.Experimental.task_wall_time_ns(t2) == 0
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "task failure" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t = Threads.@spawn error("this task failed")
+            @test_throws "this task failed" wait(t)
+            @test Base.Experimental.task_running_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) > 0
+            @test Base.Experimental.task_wall_time_ns(t) >= Base.Experimental.task_running_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "direct yield(t)" begin
+        try
+            Base.Experimental.task_metrics(true)
+            start = time_ns()
+            t_outer = Threads.@spawn begin
+                t_inner = Task(() -> peakflops())
+                t_inner.sticky = false
+                # directly yield to `t_inner` rather calling `schedule(t_inner)`
+                yield(t_inner)
+                wait(t_inner)
+                @test Base.Experimental.task_running_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) > 0
+                @test Base.Experimental.task_wall_time_ns(t_inner) >= Base.Experimental.task_running_time_ns(t_inner)
+            end
+            wait(t_outer)
+            delta = time_ns() - start
+            @test Base.Experimental.task_running_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) > 0
+            @test Base.Experimental.task_wall_time_ns(t_outer) >= Base.Experimental.task_running_time_ns(t_outer)
+            @test Base.Experimental.task_wall_time_ns(t_outer) < delta
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "bad schedule" begin
+        try
+            Base.Experimental.task_metrics(true)
+            t1 = Task((x) -> 1)
+            schedule(t1) # MethodError
+            yield()
+            @assert istaskfailed(t1)
+            @test Base.Experimental.task_running_time_ns(t1) > 0
+            @test Base.Experimental.task_wall_time_ns(t1) > 0
+            foo(a, b) = a + b
+            t2 = Task(() -> (peakflops(); foo(wait())))
+            schedule(t2)
+            yield()
+            @assert istaskstarted(t1) && !istaskdone(t2)
+            schedule(t2, 1)
+            yield()
+            @assert istaskfailed(t2)
+            @test Base.Experimental.task_running_time_ns(t2) > 0
+            @test Base.Experimental.task_wall_time_ns(t2) > 0
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+    @testset "continuously update until task done" begin
+        try
+            Base.Experimental.task_metrics(true)
+            last_running_time = Ref(typemax(Int))
+            last_wall_time = Ref(typemax(Int))
+            t = Threads.@spawn begin
+                running_time = Base.Experimental.task_running_time_ns()
+                wall_time = Base.Experimental.task_wall_time_ns()
+                for _ in 1:5
+                    x = time_ns()
+                    while time_ns() < x + 100
+                    end
+                    new_running_time = Base.Experimental.task_running_time_ns()
+                    new_wall_time = Base.Experimental.task_wall_time_ns()
+                    @test new_running_time > running_time
+                    @test new_wall_time > wall_time
+                    running_time = new_running_time
+                    wall_time = new_wall_time
+                end
+                last_running_time[] = running_time
+                last_wall_time[] = wall_time
+            end
+            wait(t)
+            final_running_time = Base.Experimental.task_running_time_ns(t)
+            final_wall_time = Base.Experimental.task_wall_time_ns(t)
+            @test last_running_time[] < final_running_time
+            @test last_wall_time[] < final_wall_time
+            # ensure many more tasks are run to make sure the counters are
+            # not being updated after a task is done e.g. only when a new task is found
+            @sync for _ in 1:Threads.nthreads()
+                Threads.@spawn rand()
+            end
+            @test final_running_time == Base.Experimental.task_running_time_ns(t)
+            @test final_wall_time == Base.Experimental.task_wall_time_ns(t)
+        finally
+            Base.Experimental.task_metrics(false)
+        end
+    end
+end
+
+@testset "task time counters: lots of spawns" begin
+    using Dates
+    try
+        Base.Experimental.task_metrics(true)
+        # create more tasks than we have threads.
+        # - all tasks must have: cpu time <= wall time
+        # - some tasks must have: cpu time < wall time
+        # - summing across all tasks we must have: total cpu time <= available cpu time
+        n_tasks = 2 * Threads.nthreads(:default)
+        cpu_times = Vector{UInt64}(undef, n_tasks)
+        wall_times = Vector{UInt64}(undef, n_tasks)
+        start_time = time_ns()
+        @sync begin
+            for i in 1:n_tasks
+                start_time_i = time_ns()
+                task_i = Threads.@spawn peakflops()
+                Threads.@spawn begin
+                    wait(task_i)
+                    end_time_i = time_ns()
+                    wall_time_delta_i = end_time_i - start_time_i
+                    cpu_times[$i] = cpu_time_i = Base.Experimental.task_running_time_ns(task_i)
+                    wall_times[$i] = wall_time_i = Base.Experimental.task_wall_time_ns(task_i)
+                    # task should have recorded some cpu-time and some wall-time
+                    @test cpu_time_i > 0
+                    @test wall_time_i > 0
+                    # task cpu-time cannot be greater than its wall-time
+                    @test wall_time_i >= cpu_time_i
+                    # task wall-time must be less than our manually measured wall-time
+                    # between calling `@spawn` and returning from `wait`.
+                    @test wall_time_delta_i > wall_time_i
+                end
+            end
+        end
+        end_time = time_ns()
+        wall_time_delta = (end_time - start_time)
+        available_cpu_time = wall_time_delta * Threads.nthreads(:default)
+        summed_cpu_time = sum(cpu_times)
+        # total CPU time from all tasks can't exceed what was actually available.
+        @test available_cpu_time > summed_cpu_time
+        # some tasks must have cpu-time less than their wall-time, because we had more tasks
+        # than threads.
+        summed_wall_time = sum(wall_times)
+        @test summed_wall_time > summed_cpu_time
+    finally
+        Base.Experimental.task_metrics(false)
+    end
+end
+
+end # main testset

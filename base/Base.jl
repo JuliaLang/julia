@@ -1,123 +1,39 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+const start_base_include = time_ns()
 
-using Core.Intrinsics, Core.IR
-
-# to start, we're going to use a very simple definition of `include`
-# that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
-function include(mod::Module, path::String)
-    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
-    Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
-    Core.println(path)
-    ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
-    Core.include(mod, path)
-end
-include(path::String) = include(Base, path)
-
-# from now on, this is now a top-module for resolving syntax
-const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
-
-# Try to help prevent users from shooting them-selves in the foot
-# with ambiguities by defining a few common and critical operations
-# (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = getfield(x, f)
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v)
-getproperty(x::Type, f::Symbol) = getfield(x, f)
-setproperty!(x::Type, f::Symbol, v) = setfield!(x, f, v)
-getproperty(x::Tuple, f::Int) = getfield(x, f)
-setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
-
-getproperty(x, f::Symbol) = getfield(x, f)
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
-
-include("coreio.jl")
-
-eval(x) = Core.eval(Base, x)
-eval(m::Module, x) = Core.eval(m, x)
-
-# init core docsystem
-import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
-if isdefined(Core, :Compiler)
-    import Core.Compiler.CoreDocs
-    Core.atdoc!(CoreDocs.docm)
-end
-
-include("exports.jl")
-
-if false
-    # simple print definitions for debugging. enable these if something
-    # goes wrong during bootstrap before printing code is available.
-    # otherwise, they just just eventually get (noisily) overwritten later
-    global show, print, println
-    show(io::IO, x) = Core.show(io, x)
-    print(io::IO, a...) = Core.print(io, a...)
-    println(io::IO, x...) = Core.println(io, x...)
-end
-
-"""
-    time_ns()
-
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-"""
-time_ns() = ccall(:jl_hrtime, UInt64, ())
-
-start_base_include = time_ns()
-
-## Load essential files and libraries
-include("essentials.jl")
-include("ctypes.jl")
-include("gcutils.jl")
-include("generator.jl")
 include("reflection.jl")
-include("options.jl")
-
-# core operations & types
-include("promotion.jl")
-include("tuple.jl")
-include("expr.jl")
-include("pair.jl")
-include("traits.jl")
-include("range.jl")
-include("error.jl")
-
-# core numeric operations & types
-include("bool.jl")
-include("number.jl")
-include("int.jl")
-include("operators.jl")
-include("pointer.jl")
-include("refvalue.jl")
 include("refpointer.jl")
-include("checked.jl")
-using .Checked
 
-# array structures
-include("indices.jl")
-include("array.jl")
-include("abstractarray.jl")
-include("subarray.jl")
-include("views.jl")
-include("baseext.jl")
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(a isa A ? a : convert(A, a)), :(b isa B ? b : convert(B, b))))
+end
 
-include("ntuple.jl")
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}(Base)
+process_sysimg_args!()
 
-include("abstractdict.jl")
-include("iddict.jl")
-include("idset.jl")
+include(strcat(BUILDROOT, "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
-include("iterators.jl")
-using .Iterators: zip, enumerate, only
-using .Iterators: Flatten, Filter, product  # for generators
-
-include("namedtuple.jl")
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ())
+    if os === :Darwin || os === :Apple
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+end
 
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
 include("float.jl")
 include("twiceprecision.jl")
@@ -127,8 +43,10 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("slicearray.jl")
 
 # SIMD loops
+sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -138,13 +56,6 @@ include("reduce.jl")
 ## core structures
 include("reshapedarray.jl")
 include("reinterpretarray.jl")
-include("bitarray.jl")
-include("bitset.jl")
-
-if !isdefined(Core, :Compiler)
-    include("docs/core.jl")
-    Core.atdoc!(CoreDocs.docm)
-end
 
 include("multimedia.jl")
 using .Multimedia
@@ -153,20 +64,28 @@ using .Multimedia
 include("some.jl")
 
 include("dict.jl")
-include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
+function array_new_memory(mem::Memory{UInt8}, newlen::Int)
+    # add an optimization to array_new_memory for StringVector
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
+        # If data is in a String, keep it that way.
+        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
+        str = _string_n(newlen)
+        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
+    end
+end
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
-
-# For OS specific stuff
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+include("strings/cstring.jl")
 
 include("osutils.jl")
-include("c.jl")
 
 # Core I/O
 include("io.jl")
@@ -175,9 +94,9 @@ include("iobuffer.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
+include("regex.jl")
 include("parse.jl")
 include("shell.jl")
-include("regex.jl")
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -186,12 +105,11 @@ include("methodshow.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
 
 include("broadcast.jl")
 using .Broadcast
-using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!
+using .Broadcast: broadcasted, broadcasted_kwsyntax, materialize, materialize!,
+                  broadcast_preserving_zero_d, andand, oror
 
 # missing values
 include("missing.jl")
@@ -199,36 +117,42 @@ include("missing.jl")
 # version
 include("version.jl")
 
-# system & environment
-include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time
-
-const DL_LOAD_PATH = String[]
-if Sys.isapple()
-    if Base.DARWIN_FRAMEWORK
-        push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-    else
-        push!(DL_LOAD_PATH, "@loader_path/julia")
-    end
-    push!(DL_LOAD_PATH, "@loader_path")
-end
-
-include("env.jl")
-
-# Concurrency
+# Concurrency (part 1)
 include("linked_list.jl")
 include("condition.jl")
 include("threads.jl")
 include("lock.jl")
+
+# system & environment
+include("sysinfo.jl")
+include("libc.jl")
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+# These used to be in build_h.jl and are retained for backwards compatibility.
+# NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
+const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
+const liblapack_name = libblas_name
+
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
+include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
+# ScopedValues
+include("scopedvalues.jl")
+
+# metaprogramming
+include("meta.jl")
+
 # Logging
-include("logging.jl")
+include("logging/logging.jl")
 using .CoreLogging
+
+include("env.jl")
 
 # functions defined in Random
 function rand end
@@ -243,8 +167,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
-include("grisu/grisu.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -253,12 +176,13 @@ include("math.jl")
 using .Math
 const (√)=sqrt
 const (∛)=cbrt
+const (∜)=fourthroot
 
 # now switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
     global function include(mod::Module, path::String)
-        prev = SOURCE_PATH
+        prev = SOURCE_PATH::String
         path = normpath(joinpath(dirname(prev), path))
         Core.println(path)
         ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
@@ -271,16 +195,18 @@ let SOURCE_PATH = ""
 end
 
 # reduction along dims
-include("reducedim.jl")  # macros in this file relies on string.jl
+include("reducedim.jl")  # macros in this file rely on string.jl
 include("accumulate.jl")
 
-# basic data structures
-include("ordering.jl")
-using .Order
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # Fast math
 include("fastmath.jl")
@@ -306,100 +232,192 @@ using .MPFR
 
 include("combinatorics.jl")
 
-# more hashing definitions
-include("hashing2.jl")
-
 # irrational mathematical constants
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# metaprogramming
-include("meta.jl")
+# Stack frames and traces
+include("stacktraces.jl")
+using .StackTraces
+
+# experimental API's
+include("experimental.jl")
 
 # utilities
 include("deepcopy.jl")
 include("download.jl")
 include("summarysize.jl")
 include("errorshow.jl")
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
+include("util.jl")
 
 include("initdefs.jl")
+Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
 
 # code loading
 include("uuid.jl")
+include("pkgid.jl")
+include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
-include("util.jl")
-
+include("client.jl")
 include("asyncmap.jl")
-
-# experimental API's
-include("experimental.jl")
 
 # deprecated functions
 include("deprecated.jl")
-
-# Some basic documentation
+#
+# Some additional basic documentation
 include("docs/basedocs.jl")
-
-include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
 using .Docs
-if isdefined(Core, :Compiler) && is_primary_base_module
-    Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
-end
+Docs.loaddocs(CoreDocs.DOCS)
+@eval CoreDocs DOCS = DocLinkedList()
+
+include("precompilation.jl")
 
 # finally, now make `include` point to the full version
 for m in methods(include)
     delete_method(m)
 end
+for m in methods(IncludeInto(Base))
+    delete_method(m)
+end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
-include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
-include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+@noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
+@noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+(this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
+(this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
+
+# Compatibility with when Compiler was in Core
+@eval Core const Compiler = Main.Base.Compiler
+@eval Compiler const fl_parse = Core.Main.Base.fl_parse
+
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
+const _sysimage_modules = PkgId[]
+in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
+
 if is_primary_base_module
+
+# Profiling helper
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
+# Needs to be in Base because Profile is no longer loaded on boot
+function profile_printing_listener(cond::Base.AsyncCondition)
+    profile = nothing
+    try
+        while _trywait(cond)
+            profile = @something(profile, require_stdlib(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
+            invokelatest(profile.peek_report[])
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
+                println(stderr, "Saving heap snapshot...")
+                fname = invokelatest(profile.take_heap_snapshot)
+                println(stderr, "Heap snapshot saved to `$(fname)`")
+            end
+        end
+    catch ex
+        if !isa(ex, InterruptException)
+            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
+        end
+    end
+    nothing
+end
+
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
-    # try to ensuremake sure OpenBLAS does not set CPU affinity (#1070, #9639)
-    if !haskey(ENV, "OPENBLAS_MAIN_FREE") && !haskey(ENV, "GOTOBLAS_MAIN_FREE")
-        ENV["OPENBLAS_MAIN_FREE"] = "1"
-    end
-    # And try to prevent openblas from starting too many threads, unless/until specifically requested
-    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
-        cpu_threads = Sys.CPU_THREADS::Int
-        if cpu_threads > 8 # always at most 8
-            ENV["OPENBLAS_NUM_THREADS"] = "8"
-        elseif haskey(ENV, "JULIA_CPU_THREADS") # or exactly as specified
-            ENV["OPENBLAS_NUM_THREADS"] = cpu_threads
-        end # otherwise, trust that openblas will pick CPU_THREADS anyways, without any intervention
-    end
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
     # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
     init_load_path()
+    init_active_project()
+    append!(empty!(_sysimage_modules), keys(loaded_modules))
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
+    for mod in loaded_modules_order
+        push!(get!(Vector{Module}, loaded_precompiles, PkgId(mod)), mod)
+    end
+    if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
+        MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
+    end
+    # Profiling helper
+    @static if !Sys.iswindows()
+        # triggering a profile via signals is not implemented on windows
+        start_profile_listener()
+    end
+    _require_world_age[] = get_world_counter()
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+        JuliaSyntax.enable_in_core!()
+    end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 
+# enable threads support
+@eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
+
+# Record dependency information for files belonging to the Compiler, so that
+# we know whether the .ji can just give the Base copy or not.
+# TODO: We may want to do this earlier to avoid TOCTOU issues.
+const _compiler_require_dependencies = Any[]
+for i = 1:length(_included_files)
+    isassigned(_included_files, i) || continue
+    (mod, file) = _included_files[i]
+    if mod === Compiler || parentmodule(mod) === Compiler || endswith(file, "/Compiler.jl")
+        _include_dependency!(_compiler_require_dependencies, true, mod, file, true, false)
+    end
+end
+# Make relative to DATAROOTDIR to allow relocation
+let basedir = joinpath(Sys.BINDIR, DATAROOTDIR)
+for i = 1:length(_compiler_require_dependencies)
+    tup = _compiler_require_dependencies[i]
+    _compiler_require_dependencies[i] = (tup[1], relpath(tup[2], basedir), tup[3:end]...)
+end
+end
+@assert length(_compiler_require_dependencies) >= 15
 
 end
 
-const tot_time_stdlib = RefValue(0.0)
-
-end # baremodule Base
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))

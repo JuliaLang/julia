@@ -18,7 +18,7 @@ For example, you might write the method `sum` as:
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
-    for i = 1:length(A)
+    for i in eachindex(A)
         @inbounds r += A[i]
     end
     return r
@@ -28,13 +28,44 @@ end
 With a custom array-like type `MyArray` having:
 
 ```julia
-@inline getindex(A::MyArray, i::Real) = (@boundscheck checkbounds(A,i); A.data[to_index(i)])
+@inline getindex(A::MyArray, i::Real) = (@boundscheck checkbounds(A, i); A.data[to_index(i)])
 ```
 
-Then when `getindex` is inlined into `sum`, the call to `checkbounds(A,i)` will be elided. If
+Then when `getindex` is inlined into `sum`, the call to `checkbounds(A, i)` will be elided. If
 your function contains multiple layers of inlining, only `@boundscheck` blocks at most one level
 of inlining deeper are eliminated. The rule prevents unintended changes in program behavior from
 code further up the stack.
+
+### Caution!
+
+It is easy to accidentally expose unsafe operations with `@inbounds`. You might be tempted
+to write the above example as
+
+```julia
+function sum(A::AbstractArray)
+    r = zero(eltype(A))
+    for i in 1:length(A)
+        @inbounds r += A[i]
+    end
+    return r
+end
+```
+
+Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
+with [`OffsetArrays`](@ref man-custom-indices):
+
+```julia-repl
+julia> using OffsetArrays
+
+julia> sum(OffsetArray([1, 2, 3], -10))
+9164911648 # inconsistent results or segfault
+```
+
+While the original source of the error here is `1:length(A)`, the use of `@inbounds`
+increases the consequences from a bounds error to a less easily caught and debugged unsafe
+memory access. It is often difficult or impossible to prove that a method which uses
+`@inbounds` is safe, so one must weigh the benefits of performance improvements against the
+risk of segfaults and silent misbehavior, especially in public facing APIs.
 
 ## Propagating inbounds
 
@@ -74,7 +105,7 @@ checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) 
                                                       checkbounds_indices(Bool, IA, I)
 ```
 
-so `checkindex` checks a single dimension.  All of these functions, including the unexported
+so `checkindex` checks a single dimension. All of these functions, including the unexported
 `checkbounds_indices` have docstrings accessible with `?` .
 
 If you have to customize bounds checking for a specific array type, you should specialize `checkbounds(Bool, A, I...)`.
@@ -82,10 +113,14 @@ However, in most cases you should be able to rely on `checkbounds_indices` as lo
 useful `axes` for your array type.
 
 If you have novel index types, first consider specializing `checkindex`, which handles a single
-index for a particular dimension of an array.  If you have a custom multidimensional index type
+index for a particular dimension of an array. If you have a custom multidimensional index type
 (similar to `CartesianIndex`), then you may have to consider specializing `checkbounds_indices`.
 
-Note this hierarchy has been designed to reduce the likelihood of method ambiguities.  We try
+Note this hierarchy has been designed to reduce the likelihood of method ambiguities. We try
 to make `checkbounds` the place to specialize on array type, and try to avoid specializations
 on index types; conversely, `checkindex` is intended to be specialized only on index type (especially,
 the last argument).
+
+## Emit bounds checks
+
+Julia can be launched with `--check-bounds={yes|no|auto}` to emit bounds checks always, never, or respect `@inbounds` declarations.

@@ -43,6 +43,9 @@ struct Base64DecodePipe <: IO
     end
 end
 
+Base.isreadable(pipe::Base64DecodePipe) = !isempty(pipe.rest) || isreadable(pipe.io)
+Base.iswritable(::Base64DecodePipe) = false
+
 function Base.unsafe_read(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = read_until_end(pipe, ptr, n)
     if p < ptr + n
@@ -147,7 +150,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
             b4 = decode(read(input, UInt8))
         else
             b4 = BASE64_CODE_END
-            break
         end
     end
 
@@ -155,13 +157,13 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         k = 3
-    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b4 = 0x00
         k = 2
-    elseif b1 < 0x40 && b2 < 0x40 && b3 == b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && (b3 == BASE64_CODE_PAD || b3 == BASE64_CODE_END) && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b3 = b4 = 0x00
         k = 1
-    elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
+    elseif b1 == b2 == b3 == b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
     else
         throw(ArgumentError("malformed base64 sequence"))
@@ -196,7 +198,7 @@ See also [`base64encode`](@ref).
 # Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
-6-element Array{UInt8,1}:
+6-element Vector{UInt8}:
  0x48
  0x65
  0x6c

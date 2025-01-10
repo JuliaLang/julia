@@ -41,11 +41,10 @@ function github_paragraph(stream::IO, md::MD)
     buffer = IOBuffer()
     p = Paragraph()
     push!(md, p)
-    while !eof(stream)
-        char = read(stream, Char)
+    for char in readeach(stream, Char)
         if char == '\n'
             eof(stream) && break
-            if blankline(stream) || parse(stream, md, breaking = true)
+            if blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, '\n')
@@ -63,4 +62,3 @@ end
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 underscore_bold, asterisk_italic, underscore_italic, image, footnote_link, link, autolink]
-

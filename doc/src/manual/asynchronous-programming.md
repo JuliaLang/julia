@@ -28,7 +28,7 @@ It has a create-start-run-finish lifecycle.
 Tasks are created by calling the `Task` constructor on a 0-argument function to run,
 or using the [`@task`](@ref) macro:
 
-```
+```julia-repl
 julia> t = @task begin; sleep(5); println("done"); end
 Task (runnable) @0x00007f13a40c0eb0
 ```
@@ -38,7 +38,7 @@ Task (runnable) @0x00007f13a40c0eb0
 This task will wait for five seconds, and then print `done`. However, it has not
 started running yet. We can run it whenever we're ready by calling [`schedule`](@ref):
 
-```
+```julia-repl
 julia> schedule(t);
 ```
 
@@ -55,7 +55,7 @@ printed. `t` is then finished.
 The [`wait`](@ref) function blocks the calling task until some other task finishes.
 So for example if you type
 
-```
+```julia-repl
 julia> schedule(t); wait(t)
 ```
 
@@ -64,8 +64,8 @@ the next input prompt appears. That is because the REPL is waiting for `t`
 to finish before proceeding.
 
 It is common to want to create a task and schedule it right away, so the
-macro [`@async`](@ref) is provided for that purpose --- `@async x` is
-equivalent to `schedule(@task x)`.
+macro [`Threads.@spawn`](@ref) is provided for that purpose --- `Threads.@spawn x` is
+equivalent to `task = @task x; task.sticky = false; schedule(task)`.
 
 ## Communicating with Channels
 
@@ -186,7 +186,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
 
     # we can schedule `n` instances of `foo` to be active concurrently.
     for _ in 1:n
-        @async foo()
+        errormonitor(Threads.@spawn foo())
     end
     ```
   * Channels are created via the `Channel{T}(sz)` constructor. The channel will only hold objects
@@ -194,10 +194,11 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
     creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
     hold up to 64 objects of `MyType` at any time.
-  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
-  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available (see [`isempty`](@ref)).
+  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available (see [`isfull`](@ref)).
   * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
     waits for an object to become available.
+  * Note that if another task is currently waiting to `put!` an object into a channel, a channel can have more items available than its capacity.
   * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
     freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
@@ -211,7 +212,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     julia> close(c);
 
     julia> put!(c, 2) # `put!` on a closed channel throws an exception.
-    ERROR: InvalidStateException("Channel is closed.",:closed)
+    ERROR: InvalidStateException: Channel is closed.
     Stacktrace:
     [...]
     ```
@@ -230,7 +231,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     1
 
     julia> take!(c) # No more data available on a closed channel.
-    ERROR: InvalidStateException("Channel is closed.",:closed)
+    ERROR: InvalidStateException: Channel is closed.
     Stacktrace:
     [...]
     ```
@@ -263,10 +264,10 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> @async make_jobs(n); # feed the jobs channel with "n" jobs
+julia> errormonitor(Threads.@spawn make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for i in 1:4 # start 4 tasks to process requests in parallel
-           @async do_work()
+           errormonitor(Threads.@spawn do_work())
        end
 
 julia> @elapsed while n > 0 # print out results
@@ -288,6 +289,10 @@ julia> @elapsed while n > 0 # print out results
 11 finished in 0.97 seconds
 0.029772311
 ```
+
+Instead of `errormonitor(t)`, a more robust solution may be to use `bind(results, t)`, as that will
+not only log any unexpected failures, but also force the associated resources to close and propagate
+the exception everywhere.
 
 ## More task operations
 

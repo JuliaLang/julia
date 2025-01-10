@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
+char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 
@@ -33,14 +33,6 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 #define bswap_16(x) __builtin_bswap16(x)
 #define bswap_32(x) __builtin_bswap32(x)
 #define bswap_64(x) __builtin_bswap64(x)
-#elif defined(_MSC_VER)
-#define bswap_16(x) _byteswap_ushort(x)
-#define bswap_32(x) _byteswap_ulong(x)
-#define bswap_64(x) _byteswap_uint64(x)
-#elif defined(__INTEL_COMPILER)
-#define bswap_16(x) _bswap16(x)
-#define bswap_32(x) _bswap(x)
-#define bswap_64(x) _bswap64(x)
 #else
 #define bswap_16(x) (((x) & 0x00ff) << 8 | ((x) & 0xff00) >> 8)
 #define bswap_32(x) \

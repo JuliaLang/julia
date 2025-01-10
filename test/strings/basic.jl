@@ -10,7 +10,7 @@ using Random
 
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
-    write(b, "ab")
+    @inferred write(b, "ab")
     x = take!(b)
     s = String(x)
     resize!(x, 0)
@@ -164,14 +164,23 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
     x = "abcdefg"
     @testset "basic unit range" begin
         @test SubString(x, 2:4) == "bcd"
-        @test view(x, 2:4) == "bcd"
-        @test view(x, 2:4) isa SubString
+        sx = view(x, 2:4)
+        @test sx == "bcd"
+        @test sx isa SubString
+        @test parent(sx) === x
+        @test parentindices(sx) == (2:4,)
         @test (@view x[4:end]) == "defg"
         @test (@view x[4:end]) isa SubString
     end
@@ -193,6 +202,12 @@ end
 
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
     end
 end
 
@@ -241,8 +256,6 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
-        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -263,8 +276,10 @@ end
     for c in x
         nb += write(f, c)
     end
-    @test nb == 3
+    @test nb === 3
     @test String(take!(f)) == "123"
+
+    @test all(T -> T <: Union{Union{}, Int}, Base.return_types(write, (IO, AbstractString)))
 end
 
 @testset "issue #7248" begin
@@ -328,9 +343,7 @@ end
     @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
-#=
-# issue #7764
-let
+@testset "issue #7764" begin
     srep = repeat("Σβ",2)
     s="Σβ"
     ss=SubString(s,1,lastindex(s))
@@ -343,16 +356,15 @@ let
     @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
-    @test_throws BoundsError srep[8]
+    @test_throws StringIndexError srep[8]
 end
-=#
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
 
-# make sure substrings do not accept code unit if it is not start of codepoint
-let s = "x\u0302"
+@testset "make sure substrings do not accept code unit if it is not start of codepoint" begin
+    s = "x\u0302"
     @test s[1:2] == s
     @test_throws BoundsError s[0:3]
     @test_throws BoundsError s[1:4]
@@ -416,8 +428,10 @@ end
     end
     @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr) == Symbol("12")
+    @test Symbol(gstr) === Symbol("12")
 
+    @test eltype(gstr) == Char
+    @test firstindex(gstr) == 1
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
     @test length(gstr) == 2
@@ -433,6 +447,9 @@ end
         @test all(x -> x == "12", svec)
         @test svec isa Vector{AbstractString}
     end
+    # test startswith and endswith for AbstractString
+    @test endswith(GenericString("abcd"), GenericString("cd"))
+    @test startswith(GenericString("abcd"), GenericString("ab"))
 end
 
 @testset "issue #10307" begin
@@ -575,7 +592,9 @@ end
     for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
         for cont in rng
             @test isvalid(String, UInt8[0xe0, cont]) == false
-            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+            bytes = UInt8[0xe0, cont, 0x80]
+            @test isvalid(String, bytes) == flg
+            @test isvalid(String, @view(bytes[1:end])) == flg # contiguous subarray support
         end
     end
     # Check three-byte sequences
@@ -676,6 +695,7 @@ end
 Base.iterate(x::CharStr) = iterate(x.chars)
 Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
+Base.length(x::CharStr) = length(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -719,6 +739,11 @@ end
     @test_throws ArgumentError "abc"[BitArray([true, false, true])]
 end
 
+@testset "issue #46039 enhance StringIndexError display" begin
+    @test sprint(showerror, StringIndexError("αn", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'n'"
+    @test sprint(showerror, StringIndexError("α\n", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'\\n'"
+end
+
 @testset "concatenation" begin
     @test "ab" * "cd" == "abcd"
     @test 'a' * "bc" == "abc"
@@ -738,11 +763,6 @@ function getData(dic)
         "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"")
 end
 @test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
-
-@testset "unrecognized escapes in string/char literals" begin
-    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
-    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
-end
 
 @testset "thisind" begin
     let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",
@@ -850,7 +870,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end
@@ -922,6 +942,21 @@ end
         @test_throws StringIndexError prevind(s, 6, 0)
         @test_throws StringIndexError prevind(s, 7, 0)
         @test prevind(s, 8, 0) == 8
+    end
+end
+
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
     end
 end
 
@@ -1035,12 +1070,13 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[1] == 0xe2
     @test u[2] == 0x88
     @test u[8] == 0x79
-    @test_throws ErrorException (u[1] = 0x00)
+    @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
+    @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
 
-# issue #24388
-let v = unsafe_wrap(Vector{UInt8}, "abc")
+@testset "issue #24388" begin
+    v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
@@ -1056,6 +1092,17 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
+@testset "issue #54369" begin
+    v = Base.StringMemory(3)
+    v .= [0x41,0x42,0x43]
+    s = String(v)
+    @test s == "ABC"
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
+    @test s == "ABC"
+    @test v == [0x43,0x42,0x43]
+end
+
 # make sure length for identical String and AbstractString return the same value, PR #25533
 let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
                                    String(rand(rng, UInt8, 200))]
@@ -1068,9 +1115,328 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
     end
 end
 
-# conversion of SubString to the same type, issue #25525
-let x = SubString("ab", 1, 1)
+@testset "conversion of SubString to the same type, issue #25525" begin
+    x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
+end
+
+@testset "show StringIndexError" begin
+    str = "abcdefghκijklmno"
+    e = StringIndexError(str, 10)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid nearby indices [9]=>'κ', [11]=>'i'"
+    str = "κ"
+    e = StringIndexError(str, 2)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
+end
+
+@testset "summary" begin
+    @test sprint(summary, "foα") == "4-codeunit String"
+    @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
+    @test sprint(summary, "") == "empty String"
+end
+
+@testset "isascii" begin
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
+
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
+
+    for p = 1:16
+        N = 2^p
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
+
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
+        if N > 4
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
+        end
+    end
+end
+
+@testset "Plug holes in test coverage" begin
+    @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
+
+    apple_uint8 = Vector{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    apple_uint8 = Array{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    Base.String(::tstStringType) = "Test"
+    abstract_apple = tstStringType(apple_uint8)
+    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+
+    @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
+
+    @test isascii(GenericString("abc"))
+
+    code_units = Base.CodeUnits("abc")
+    @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
+    @test Base.elsize(code_units) == sizeof(UInt8)
+    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
+end
+
+@testset "LazyString" begin
+    @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
+    let d = Dict(lazy"$(1+2) is 3" => 3)
+        @test d["3 is 3"] == 3
+    end
+    l = lazy"1+2"
+    @test isequal( l, lazy"1+2" )
+    @test ncodeunits(l) == ncodeunits("1+2")
+    @test codeunit(l) == UInt8
+    @test codeunit(l,2) == 0x2b
+    @test isvalid(l, 1)
+    @test lastindex(l) == lastindex("1+2")
+    @test Base.infer_effects((Any,)) do a
+        throw(lazy"a is $a")
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Int,)) do a
+        if a < 0
+            throw(DomainError(a, lazy"$a isn't positive"))
+        end
+        return a
+    end |> Core.Compiler.is_foldable
+    let i=49248
+        @test String(lazy"PR n°$i") == "PR n°49248"
+    end
+end
+
+@testset "String Effects" begin
+    for (f, Ts) in [(*, (String, String)),
+                   (*, (Char, String)),
+                   (*, (Char, Char)),
+                   (string, (Symbol, String, Char)),
+                   (==, (String, String)),
+                   (cmp, (String, String)),
+                   (==, (Symbol, Symbol)),
+                   (cmp, (Symbol, Symbol)),
+                   (String, (Symbol,)),
+                   (length, (String,)),
+                   (hash, (String,UInt)),
+                   (hash, (Char,UInt)),]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    for (f, Ts) in [(^, (String, Int)),
+                   (^, (Char, Int)),
+                   (codeunit, (String, Int)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    # Substrings don't have any nice effects because the compiler can
+    # invent fake indices leading to out of bounds
+    for (f, Ts) in [(^, (SubString{String}, Int)),
+                   (string, (String, SubString{String})),
+                   (string, (Symbol, SubString{String})),
+                   (hash, (SubString{String},UInt)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test !Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    @test_throws ArgumentError Symbol("a\0a")
+
+    @test Base._string_n_override == Base.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
+end
+
+@testset "Ensure UTF-8 DFA can never leave invalid state" begin
+    for b = typemin(UInt8):typemax(UInt8)
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_INVALID,[b],1,1) == Base._UTF8_DFA_INVALID
+    end
+end
+@testset "Ensure  UTF-8 DFA stays in ASCII State for all ASCII" begin
+    for b = 0x00:0x7F
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_ASCII
+    end
+end
+
+@testset "Validate UTF-8 DFA" begin
+    # Unicode 15
+    # Table 3-7. Well-Formed UTF-8 Byte Sequences
+
+    table_rows = [  [0x00:0x7F],
+                    [0xC2:0xDF,0x80:0xBF],
+                    [0xE0:0xE0,0xA0:0xBF,0x80:0xBF],
+                    [0xE1:0xEC,0x80:0xBF,0x80:0xBF],
+                    [0xED:0xED,0x80:0x9F,0x80:0xBF],
+                    [0xEE:0xEF,0x80:0xBF,0x80:0xBF],
+                    [0xF0:0xF0,0x90:0xBF,0x80:0xBF,0x80:0xBF],
+                    [0xF1:0xF3,0x80:0xBF,0x80:0xBF,0x80:0xBF],
+                    [0xF4:0xF4,0x80:0x8F,0x80:0xBF,0x80:0xBF]]
+    invalid_first_bytes = union(0xC0:0xC1,0xF5:0xFF,0x80:0xBF)
+
+    valid_first_bytes = union(collect(first(r) for r in table_rows)...)
+
+
+
+    # Prove that the first byte sets in the table & invalid cover all bytes
+    @test length(union(valid_first_bytes,invalid_first_bytes)) == 256
+    @test length(intersect(valid_first_bytes,invalid_first_bytes)) == 0
+
+    #Check the ASCII range
+    for b = 0x00:0x7F
+        #Test from both UTF-8 state and ascii state
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) == Base._UTF8_DFA_ACCEPT
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_ASCII
+    end
+
+    #Check the remaining first bytes
+    for b = 0x80:0xFF
+        if b ∈ invalid_first_bytes
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) == Base._UTF8_DFA_INVALID
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_INVALID
+        else
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) != Base._UTF8_DFA_INVALID
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) != Base._UTF8_DFA_INVALID
+        end
+    end
+
+    # Check two byte Sequences
+    for table_row in [table_rows[2]]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+        b1 = first(table_row[1])
+        #Prove that all valid second bytes return correct state
+        for b2 = table_row[2]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+    end
+
+    # Check three byte Sequences
+    for table_row in table_rows[3:6]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+
+        b1 = first(table_row[1])
+        b2 = first(table_row[2])
+        #Prove that all valid second bytes return same state
+        state2 = Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        for b2 = table_row[2]
+            @test state2 == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+
+        b2 = first(table_row[2])
+        #Prove that all valid third bytes return correct state
+        for b3 = table_row[3]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+        for b3 = setdiff(0x00:0xFF,table_row[3])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+    end
+
+    # Check Four byte Sequences
+    for table_row in table_rows[7:9]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+
+        b1 = first(table_row[1])
+        b2 = first(table_row[2])
+        #Prove that all valid second bytes return same state
+        state2 = Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        for b2 = table_row[2]
+            @test state2 == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+
+
+        b2 = first(table_row[2])
+        b3 = first(table_row[3])
+        state3 = Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        #Prove that all valid third bytes return same state
+        for b3 = table_row[3]
+            @test state3 == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+        for b3 = setdiff(0x00:0xFF,table_row[3])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+
+        b3 = first(table_row[3])
+        #Prove that all valid forth bytes return correct state
+        for b4 = table_row[4]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
+        end
+        for b4 = setdiff(0x00:0xFF,table_row[4])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state3,[b4],1,1)
+        end
+    end
+end
+
+@testset "transcode" begin
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    # string starting with a 4 byte UTF-8 character
+    str_4 = "𒃵𒃰"
+    @testset for str in (str_1, str_2, str_3, str_4)
+        @test transcode(String, str) === str
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+end
+
+if Sys.iswindows()
+    @testset "cwstring" begin
+        # empty string
+        str_0 = ""
+        # string with embedded NUL character
+        str_1 = "Au\000B"
+        # string with terminating NUL character
+        str_2 = "Wordu\000"
+        # "Regular" string with UTF-8 characters of differing byte counts
+        str_3 = "aܣ𒀀"
+        @test Base.cwstring(str_0) == UInt16[0x0000]
+        @test_throws ArgumentError Base.cwstring(str_1)
+        @test_throws ArgumentError Base.cwstring(str_2)
+        @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
+    end
 end
