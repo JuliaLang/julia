@@ -389,3 +389,9 @@ end
     b = pushfirst!([0x02], 0x01)
     @test take!(IOBuffer(b)) == [0x01, 0x02]
 end
+
+@testset "Writing Char to full buffer" begin
+    io = IOBuffer(;maxsize=1)
+    write(io, 'a')
+    @test write(io, 'a') == 0
+end
