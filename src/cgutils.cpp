@@ -4463,8 +4463,6 @@ static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *ty
     auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
     auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
     aliasinfo.decorateInst(len_store);
-    //This avoids the length store from being deleted which is illegal
-    ctx.builder.CreateFence(AtomicOrdering::Release, SyncScope::SingleThread);
     // zeroinit pointers and unions
     if (zi) {
         Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
