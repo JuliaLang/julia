@@ -3503,10 +3503,31 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
-    isempty(As) && throw(ArgumentError(
-        """map! requires at least one "source" argument"""))
+    @assert !isempty(As) # should dispatch to map!(f, A)
     map_n!(f, dest, As)
 end
+
+"""
+    map!(function, array)
+
+Like [`map`](@ref), but stores the result in the same array.
+!!! compat "Julia 1.12"
+    This method requires Julia 1.12 or later. To support previous versions too,
+    use the equivalent `map!(function, array, array)`.
+
+# Examples
+```jldoctest
+julia> a = [1 2 3; 4 5 6];
+
+julia> map!(x -> x^3, a);
+
+julia> a
+2×3 Matrix{$Int}:
+  1    8   27
+ 64  125  216
+```
+"""
+map!(f::F, inout::AbstractArray) where F = map!(f, inout, inout)
 
 """
     map(f, A::AbstractArray...) -> N-array

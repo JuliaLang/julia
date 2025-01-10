@@ -3,7 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, MbedTLS_jll, LibSSH2_jll
+using Base, Libdl, LibSSH2_jll
+if !(Sys.iswindows() || Sys.isapple())
+    # On Windows and macOS we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -20,9 +24,9 @@ libgit2_path::String = ""
 if Sys.iswindows()
     const libgit2 = "libgit2.dll"
 elseif Sys.isapple()
-    const libgit2 = "@rpath/libgit2.1.8.dylib"
+    const libgit2 = "@rpath/libgit2.1.9.dylib"
 else
-    const libgit2 = "libgit2.so.1.8"
+    const libgit2 = "libgit2.so.1.9"
 end
 
 function __init__()

@@ -280,9 +280,14 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, :args))
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N<:Integer} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
+# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
+Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
+Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
 
+function _maxndims_broadcasted(BC::Type{<:Broadcasted})
+    _maxndims(fieldtype(BC, :args))
+end
 _maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
 _maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
 function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}

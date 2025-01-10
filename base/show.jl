@@ -1045,7 +1045,7 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
+        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
             max_world = @atomic partition.max_world
             max_world == typemax(UInt) && return nothing
             return Int(partition.min_world):Int(max_world)
@@ -3364,9 +3364,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
     print(io, " - ")
     kind = binding_kind(partition)
-    if is_some_const_binding(kind)
+    if is_defined_const_binding(kind)
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_UNDEF_CONST
+        print(io, "undefined const binding")
     elseif kind == BINDING_KIND_GUARD
         print(io, "undefined binding - guard entry")
     elseif kind == BINDING_KIND_FAILED

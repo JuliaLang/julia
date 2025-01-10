@@ -1152,6 +1152,7 @@ mktempdir() do dir
 
     function setup_clone_repo(cache_repo::AbstractString, path::AbstractString; name="AAAA", email="BBBB@BBBB.COM")
         repo = LibGit2.clone(cache_repo, path)
+        LibGit2.fetch(repo)
         # need to set this for merges to succeed
         cfg = LibGit2.GitConfig(repo)
         LibGit2.set!(cfg, "user.name", name)

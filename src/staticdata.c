@@ -101,7 +101,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    195
+#define NUM_TAGS    196
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -311,6 +311,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_compilerbarrier);
         INSERT_TAG(jl_builtin_getglobal);
         INSERT_TAG(jl_builtin_setglobal);
+        INSERT_TAG(jl_builtin_isdefinedglobal);
         INSERT_TAG(jl_builtin_swapglobal);
         INSERT_TAG(jl_builtin_modifyglobal);
         INSERT_TAG(jl_builtin_replaceglobal);
@@ -499,7 +500,6 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
 static htable_t bits_replace;
-static htable_t relocatable_ext_cis;
 
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
@@ -507,7 +507,7 @@ static htable_t relocatable_ext_cis;
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_throw_methoderror, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
+    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
@@ -659,6 +659,7 @@ static void jl_load_sysimg_so(void)
         plen = (size_t *)&jl_system_image_size;
     else
         jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(sysimg_data, *plen);
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
@@ -923,11 +924,17 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
         jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
         if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
-            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
-                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-            else if (jl_is_method(mi->def.method) && // don't delete toplevel code
-                     mi->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
-                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+            jl_method_t *def = mi->def.method;
+            if (jl_is_method(def)) { // don't delete toplevel code
+                int is_relocatable = jl_is_code_info(inferred) ||
+                    (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+                if (!is_relocatable) {
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (def->source == NULL) {
+                    // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                }
+                else if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
                     jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
@@ -1800,7 +1807,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         jl_atomic_store_release(&newci->min_world, 1);
                         jl_atomic_store_release(&newci->max_world, 0);
                     }
-                    newci->relocatability = 0;
                 }
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
                 jl_atomic_store_relaxed(&newci->specsigflags, 0);
@@ -2864,7 +2870,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
         // Extract `new_ext_cis` and `edges` now (from info prepared by jl_collect_methcache_from_mod)
         *method_roots_list = jl_alloc_vec_any(0);
         // Collect the new method roots for external specializations
-        jl_collect_new_roots(&relocatable_ext_cis, *method_roots_list, *new_ext_cis, worklist_key);
+        jl_collect_new_roots(*method_roots_list, *new_ext_cis, worklist_key);
         *edges = jl_alloc_vec_any(0);
         jl_collect_internal_cis(*edges, world);
     }
@@ -3367,7 +3373,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     assert((ct->reentrant_timing & 0b1110) == 0);
     ct->reentrant_timing |= 0b1000;
     if (worklist) {
-        htable_new(&relocatable_ext_cis, 0);
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
                                       &extext_methods, &new_ext_cis, &method_roots_list, &edges);
         if (!emit_split) {
@@ -3384,8 +3389,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, edges);
     if (_native_data != NULL)
         native_functions = NULL;
-    if (worklist)
-        htable_free(&relocatable_ext_cis);
     // make sure we don't run any Julia code concurrently before this point
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);
@@ -4227,6 +4230,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_dlsym(pkgimg_handle, "jl_system_image_data", (void **)&pkgimg_data, 1);
     size_t *plen;
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
+    jl_gc_notify_image_load(pkgimg_data, *plen);
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 

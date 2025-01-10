@@ -408,9 +408,9 @@ struct jl_tbaacache_t {
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
         tbaa_arraysize = tbaa_make_child(mbuilder, "jtbaa_arraysize", tbaa_array_scalar).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
-        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar, true).first;
-        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar, true).first;
-        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar, true).first;
+        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar).first;
+        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar).first;
+        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
@@ -996,6 +996,15 @@ static const auto jlinvoke_func = new JuliaFunction<>{
             {AttributeSet(),
              Attributes(C, {Attribute::ReadOnly, Attribute::NoCapture})}); },
 };
+static const auto jlinvokeoc_func = new JuliaFunction<>{
+    XSTR(jl_invoke_oc),
+    get_func2_sig,
+    [](LLVMContext &C) { return AttributeList::get(C,
+            AttributeSet(),
+            Attributes(C, {Attribute::NonNull}),
+            {AttributeSet(),
+             Attributes(C, {Attribute::ReadOnly, Attribute::NoCapture})}); },
+};
 static const auto jlopaque_closure_call_func = new JuliaFunction<>{
     XSTR(jl_f_opaque_closure_call),
     get_func_sig,
@@ -1170,6 +1179,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -1490,6 +1500,10 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
         FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::NoSync);
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
@@ -4159,6 +4173,34 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     return false;
 }
 
+static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_sym_t *name, int allow_import, enum jl_memory_order order)
+{
+    Value *isnull = NULL;
+    jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
+    if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+        if (jl_get_binding_value_if_const(bnd))
+            return mark_julia_const(ctx, jl_true);
+        Value *bp = julia_binding_gv(ctx, bnd);
+        bp = julia_binding_pvalue(ctx, bp);
+        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+        ai.decorateInst(v);
+        v->setOrdering(get_llvm_atomic_order(order));
+        isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+    }
+    else {
+        Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
+                literal_pointer_val(ctx, (jl_value_t*)modu),
+                literal_pointer_val(ctx, (jl_value_t*)name),
+                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
+            });
+        isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+    }
+    return mark_julia_type(ctx, isnull, false, jl_bool_type);
+}
+
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
@@ -4461,7 +4503,17 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
         if (inst == NULL)
             return false;
-        *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        if (argv[2].constant) {
+            if (!jl_is_long(argv[2].constant))
+                return false;
+            size_t nel = jl_unbox_long(argv[2].constant);
+            if (nel < 0)
+                return false;
+            *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
+        }
+        else {
+            *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        }
         return true;
     }
 
@@ -5048,6 +5100,42 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
         }
+    }
+
+    else if (f == jl_builtin_isdefinedglobal && (nargs == 2 || nargs == 3 || nargs == 4)) {
+        const jl_cgval_t &mod = argv[1];
+        const jl_cgval_t &sym = argv[2];
+        bool allow_import = true;
+        enum jl_memory_order order = jl_memory_order_unspecified;
+
+        if (nargs >= 3) {
+            const jl_cgval_t &arg3 = argv[3];
+            if (arg3.constant && jl_is_bool(arg3.constant))
+                allow_import = jl_unbox_bool(arg3.constant);
+            else
+                return false;
+        }
+
+        if (nargs == 4) {
+            const jl_cgval_t &arg4 = argv[4];
+            if (arg4.constant && jl_is_symbol(arg4.constant))
+                order = jl_get_atomic_order((jl_sym_t*)arg4.constant, true, false);
+            else
+                return false;
+        }
+        else
+            order = jl_memory_order_unordered;
+
+        if (order < jl_memory_order_unordered) {
+            return false;
+        }
+
+        if (!mod.constant || !sym.constant || !jl_is_symbol(sym.constant) || !jl_is_module(mod.constant)) {
+            return false;
+        }
+
+        *ret = emit_isdefinedglobal(ctx, (jl_module_t*)mod.constant, (jl_sym_t*)sym.constant, allow_import, order);
+        return true;
     }
 
     else if (f == jl_builtin_isdefined && (nargs == 2 || nargs == 3)) {
@@ -6050,39 +6138,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
     }
     else {
-        jl_module_t *modu;
-        jl_sym_t *name;
-        if (jl_is_globalref(sym)) {
-            modu = jl_globalref_mod(sym);
-            name = jl_globalref_name(sym);
-        }
-        else {
-            assert(jl_is_symbol(sym) && "malformed isdefined expression");
-            modu = ctx.module;
-            name = (jl_sym_t*)sym;
-        }
-        jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
-        if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            if (jl_get_binding_value_if_const(bnd))
-                return mark_julia_const(ctx, jl_true);
-            Value *bp = julia_binding_gv(ctx, bnd);
-            bp = julia_binding_pvalue(ctx, bp);
-            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-            ai.decorateInst(v);
-            v->setOrdering(AtomicOrdering::Unordered);
-            isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
-        }
-        else {
-            Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
-                    literal_pointer_val(ctx, (jl_value_t*)modu),
-                    literal_pointer_val(ctx, (jl_value_t*)name),
-                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
-                });
-            isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-        }
+        assert(false && "malformed expression");
     }
     return mark_julia_type(ctx, isnull, false, jl_bool_type);
 }
@@ -6762,7 +6818,7 @@ static void emit_latestworld(jl_codectx_t &ctx)
     (void)store_world;
 }
 
-// `expr` is not clobbered in JL_TRY
+// `expr` is not actually clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_0based)
 {
@@ -7288,8 +7344,10 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, M
         theFarg = literal_pointer_val(ctx, (jl_value_t*)codeinst);
     }
     else {
-        theFunc = prepare_call(jlinvoke_func);
-        theFarg = literal_pointer_val(ctx, (jl_value_t*)jl_get_ci_mi(codeinst));
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
+        theFunc = prepare_call(is_opaque_closure ? jlinvokeoc_func : jlinvoke_func);
+        theFarg = literal_pointer_val(ctx, (jl_value_t*)mi);
     }
     theFarg = track_pjlvalue(ctx, theFarg);
     auto args = f->arg_begin();
@@ -7455,9 +7513,10 @@ static Function *gen_cfun_wrapper(
 
     jl_code_instance_t *codeinst = NULL;
     if (lam) {
-        // TODO: this isn't ideal to be unconditionally calling type inference (and compile) from here
+        // TODO: this isn't ideal to be unconditionally calling type inference from here
         codeinst = jl_type_infer(lam, world, SOURCE_MODE_NOT_REQUIRED);
-        astrt = codeinst->rettype;
+        if (codeinst)
+            astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
             jl_type_intersection(astrt, declrt) == jl_bottom_type) {
             // Do not warn if the function never returns since it is
@@ -8916,6 +8975,8 @@ static jl_llvm_functions_t
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
             Align al = DL.getPrefTypeAlign(RT);
+            if (al > MAX_ALIGN)
+                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
@@ -9964,9 +10025,6 @@ static jl_llvm_functions_t
 
 // --- entry point ---
 
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
-
-JL_GCC_IGNORE_START("-Wclobbered")
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &m,
         jl_method_instance_t *li,
@@ -10012,15 +10070,6 @@ jl_llvm_functions_t jl_emit_code(
     return decls;
 }
 
-static int effects_foldable(uint32_t effects)
-{
-    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
-    return ((effects & 0x7) == 0) && // is_consistent(effects)
-           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
-           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
-           ((effects >> 6) & 0x01); // is_terminates(effects)
-}
-
 static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codegen_params_t &params, jl_method_instance_t *mi, jl_value_t *rettype)
 {
     jl_llvm_functions_t declarations;
@@ -10051,88 +10100,19 @@ jl_llvm_functions_t jl_emit_codeinst(
 {
     JL_TIMING(CODEGEN, CODEGEN_Codeinst);
     jl_timing_show_method_instance(jl_get_ci_mi(codeinst), JL_TIMING_DEFAULT_BLOCK);
-    JL_GC_PUSH1(&src);
     if (!src) {
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-        jl_method_t *def = mi->def.method;
-        // Check if this is the generic method for opaque closure wrappers -
-        // if so, this must compile specptr such that it holds the specptr -> invoke wrapper
+        // Assert that this this is the generic method for opaque closure wrappers:
+        // this signals to instead compile specptr such that it holds the specptr -> invoke wrapper
         // to satisfy the dispatching implementation requirements of jl_f_opaque_closure_call
-        if (def == jl_opaque_closure_method) {
-            JL_GC_POP();
+        if (mi->def.method == jl_opaque_closure_method) {
             return jl_emit_oc_wrapper(m, params, mi, codeinst->rettype);
         }
-        if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
-        if (!src || !jl_is_code_info(src)) {
-            JL_GC_POP();
-            m = orc::ThreadSafeModule();
-            return jl_llvm_functions_t(); // failed
-        }
+        m = orc::ThreadSafeModule();
+        return jl_llvm_functions_t(); // user error
     }
-    assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
+    //assert(jl_egal((jl_value_t*)jl_atomic_load_relaxed(&codeinst->debuginfo), (jl_value_t*)src->debuginfo) && "trying to generate code for a codeinst for an incompatible src");
     jl_llvm_functions_t decls = jl_emit_code(m, jl_get_ci_mi(codeinst), src, get_ci_abi(codeinst), params);
-
-    const std::string &specf = decls.specFunctionObject;
-    const std::string &f = decls.functionObject;
-    if (params.cache && !f.empty()) {
-        // Prepare debug info to receive this function
-        // record that this function name came from this linfo,
-        // so we can build a reverse mapping for debug-info.
-        bool toplevel = !jl_is_method(jl_get_ci_mi(codeinst)->def.method);
-        if (!toplevel) {
-            //Safe b/c params holds context lock
-            const DataLayout &DL = m.getModuleUnlocked()->getDataLayout();
-            // but don't remember toplevel thunks because
-            // they may not be rooted in the gc for the life of the program,
-            // and the runtime doesn't notify us when the code becomes unreachable :(
-            if (!specf.empty())
-                jl_add_code_in_flight(specf, codeinst, DL);
-            if (!f.empty() && f != "jl_fptr_args" && f != "jl_fptr_sparam")
-                jl_add_code_in_flight(f, codeinst, DL);
-        }
-
-        jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
-        // don't change inferred state
-        if (inferred) {
-            jl_method_t *def = jl_get_ci_mi(codeinst)->def.method;
-            if (// keep code when keeping everything
-                !(JL_DELETE_NON_INLINEABLE) ||
-                // aggressively keep code when debugging level >= 2
-                // note that this uses the global jl_options.debug_level, not the local emission_ctx.debug_info_level
-                jl_options.debug_level > 1) {
-                // update the stored code
-                if (inferred != (jl_value_t*)src) {
-                    // TODO: it is somewhat unclear what it means to be mutating this
-                    if (jl_is_method(def)) {
-                        src = (jl_code_info_t*)jl_compress_ir(def, src);
-                        assert(jl_is_string(src));
-                        codeinst->relocatability = jl_string_data(src)[jl_string_len(src)-1];
-                    }
-                    jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
-                    jl_gc_wb(codeinst, src);
-                }
-            }
-            // delete non-inlineable code, since it won't be needed again
-            // because we already emitted LLVM code from it and the native
-            // Julia-level optimization will never need to see it
-            else if (jl_is_method(def) && // don't delete toplevel code
-                        def->source != NULL && // don't delete code from optimized opaque closures that can't be reconstructed
-                        inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
-                        ((!effects_foldable(jl_atomic_load_relaxed(&codeinst->ipo_purity_bits)) && // don't delete code we may want for irinterp
-                          (jl_ir_inlining_cost(inferred) == UINT16_MAX) && // don't delete inlineable code
-                          !jl_generating_output()) || // don't delete code when generating a precompile file, trading memory in the short term for avoiding likely duplicating inference work for aotcompile
-                         jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)) { // unless it is constant (although this shouldn't have had code in the first place)
-                // Never end up in a situation where the codeinst has no invoke, but also no source, so we never fall
-                // through the cracks of SOURCE_MODE_ABI.
-                jl_callptr_t expected = NULL;
-                jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected, jl_fptr_wait_for_compiled_addr);
-                jl_atomic_store_release(&codeinst->inferred, jl_nothing);
-            }
-        }
-    }
-    JL_GC_POP();
     return decls;
 }
 

@@ -1739,9 +1739,12 @@ function sort!(v::AbstractVector{T};
 end
 
 """
-    sort(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort(v::Union{AbstractVector, NTuple}; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+
+!!! compat "Julia 1.12"
+    Sorting `NTuple`s requires Julia 1.12 or later.
 
 # Examples
 ```jldoctest
