@@ -47,7 +47,7 @@ StringVector(n::Integer) = wrap(Array, StringMemory(n))
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
 """
-    IOBuffer([data::AbstractVector{UInt8}]; keywords...) -> IOBuffer
+    IOBuffer([data::AbstractVector{UInt8}]; keywords...)::IOBuffer
 
 Create an in-memory I/O stream, which may optionally operate on a pre-existing array.
 

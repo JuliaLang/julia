@@ -3,7 +3,7 @@
 # name and module reflection
 
 """
-    parentmodule(m::Module) -> Module
+    parentmodule(m::Module)::Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
@@ -23,7 +23,7 @@ parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (
 is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
 """
-    moduleroot(m::Module) -> Module
+    moduleroot(m::Module)::Module
 
 Find the root module of a given module. This is the first module in the chain of
 parent modules of `m` which is either a registered root module or which is its
@@ -77,7 +77,7 @@ function fullname(m::Module)
 end
 
 """
-    moduleloc(m::Module) -> LineNumberNode
+    moduleloc(m::Module)::LineNumberNode
 
 Get the location of the `module` definition.
 """
@@ -88,7 +88,7 @@ function moduleloc(m::Module)
 end
 
 """
-    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false)::Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
@@ -117,7 +117,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
 """
-    isexported(m::Module, s::Symbol) -> Bool
+    isexported(m::Module, s::Symbol)::Bool
 
 Returns whether a symbol is exported from a module.
 
@@ -143,7 +143,7 @@ false
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 
 """
-    ispublic(m::Module, s::Symbol) -> Bool
+    ispublic(m::Module, s::Symbol)::Bool
 
 Returns whether a symbol is marked as public in a module.
 
@@ -178,7 +178,7 @@ ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m,
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
 """
-    isbindingresolved(m::Module, s::Symbol) -> Bool
+    isbindingresolved(m::Module, s::Symbol)::Bool
 
 Returns whether the binding of a symbol in a module is resolved.
 
@@ -363,7 +363,7 @@ false
 hasfield(T::Type, name::Symbol) = fieldindex(T, name, false) > 0
 
 """
-    nameof(t::DataType) -> Symbol
+    nameof(t::DataType)::Symbol
 
 Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
 as a symbol.
@@ -384,7 +384,7 @@ nameof(t::DataType) = t.name.name
 nameof(t::UnionAll) = nameof(unwrap_unionall(t))::Symbol
 
 """
-    parentmodule(t::DataType) -> Module
+    parentmodule(t::DataType)::Module
 
 Determine the module containing the definition of a (potentially `UnionAll`-wrapped) `DataType`.
 
@@ -406,7 +406,7 @@ parentmodule(t::DataType) = t.name.module
 parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
-    isconst(m::Module, s::Symbol) -> Bool
+    isconst(m::Module, s::Symbol)::Bool
 
 Determine whether a global is declared `const` in a given module `m`.
 """
@@ -418,7 +418,7 @@ function isconst(g::GlobalRef)
 end
 
 """
-    isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
+    isconst(t::DataType, s::Union{Int,Symbol})::Bool
 
 Determine whether a field `s` is declared `const` in a given type `t`.
 """
@@ -442,7 +442,7 @@ function isconst(@nospecialize(t::Type), s::Int)
 end
 
 """
-    isfieldatomic(t::DataType, s::Union{Int,Symbol}) -> Bool
+    isfieldatomic(t::DataType, s::Union{Int,Symbol})::Bool
 
 Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
@@ -522,7 +522,7 @@ struct DataTypeLayout
 end
 
 """
-    Base.datatype_alignment(dt::DataType) -> Int
+    Base.datatype_alignment(dt::DataType)::Int
 
 Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`, although for Memory it will give the
@@ -565,7 +565,7 @@ gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
 gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
 
 """
-    Base.datatype_haspadding(dt::DataType) -> Bool
+    Base.datatype_haspadding(dt::DataType)::Bool
 
 Return whether the fields of instances of this type are packed in memory,
 with no intervening padding bits (defined as bits whose value does not impact
@@ -580,7 +580,7 @@ function datatype_haspadding(dt::DataType)
 end
 
 """
-    Base.datatype_isbitsegal(dt::DataType) -> Bool
+    Base.datatype_isbitsegal(dt::DataType)::Bool
 
 Return whether egality of the (non-padding bits of the) in-memory representation
 of an instance of this type implies semantic egality of the instance itself.
@@ -595,7 +595,7 @@ function datatype_isbitsegal(dt::DataType)
 end
 
 """
-    Base.datatype_nfields(dt::DataType) -> UInt32
+    Base.datatype_nfields(dt::DataType)::UInt32
 
 Return the number of fields known to this datatype's layout. This may be
 different from the number of actual fields of the type for opaque types.
@@ -608,7 +608,7 @@ function datatype_nfields(dt::DataType)
 end
 
 """
-    Base.datatype_npointers(dt::DataType) -> Int
+    Base.datatype_npointers(dt::DataType)::Int
 
 Return the number of pointers in the layout of a datatype.
 """
@@ -619,7 +619,7 @@ function datatype_npointers(dt::DataType)
 end
 
 """
-    Base.datatype_pointerfree(dt::DataType) -> Bool
+    Base.datatype_pointerfree(dt::DataType)::Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
 Can be called on any `isconcretetype`.
@@ -630,7 +630,7 @@ function datatype_pointerfree(dt::DataType)
 end
 
 """
-    Base.datatype_fielddesc_type(dt::DataType) -> Int
+    Base.datatype_fielddesc_type(dt::DataType)::Int
 
 Return the size in bytes of each field-description entry in the layout array,
 located at `(dt.layout + sizeof(DataTypeLayout))`.
@@ -646,7 +646,7 @@ function datatype_fielddesc_type(dt::DataType)
 end
 
 """
-    Base.datatype_arrayelem(dt::DataType) -> Int
+    Base.datatype_arrayelem(dt::DataType)::Int
 
 Return the behavior of the trailing array types allocations.
 Can be called on any `isconcretetype`, but only meaningful on `Memory`.
@@ -714,7 +714,7 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
 end
 
 """
-    ismutable(v) -> Bool
+    ismutable(v)::Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you
@@ -743,7 +743,7 @@ ismutable(@nospecialize(x)) = (@_total_meta; (typeof(x).name::Core.TypeName).fla
 # See also https://github.com/JuliaLang/julia/issues/52134
 
 """
-    ismutabletype(T) -> Bool
+    ismutabletype(T)::Bool
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
@@ -762,7 +762,7 @@ end
 ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 """
-    isstructtype(T) -> Bool
+    isstructtype(T)::Bool
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
@@ -777,7 +777,7 @@ function isstructtype(@nospecialize t)
 end
 
 """
-    isprimitivetype(T) -> Bool
+    isprimitivetype(T)::Bool
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
@@ -825,7 +825,7 @@ Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 isbits(@nospecialize x) = isbitstype(typeof(x))
 
 """
-    objectid(x) -> UInt
+    objectid(x)::UInt
 
 Get a hash value for `x` based on object identity.
 
@@ -1221,7 +1221,7 @@ function get_methodtable(m::Method)
 end
 
 """
-    has_bottom_parameter(t) -> Bool
+    has_bottom_parameter(t)::Bool
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
@@ -1428,7 +1428,7 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atype, sparams) -> Bool
+    may_invoke_generator(method, atype, sparams)::Bool
 
 Computes whether or not we may invoke the generator for the given `method` on
 the given `atype` and `sparams`. For correctness, all generated function are

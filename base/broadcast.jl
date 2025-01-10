@@ -374,7 +374,7 @@ cat_nested_args(t::Tuple) = (cat_nested(t[1])..., cat_nested_args(tail(t))...)
 cat_nested(a) = (a,)
 
 """
-    make_makeargs(t::Tuple) -> Tuple{Vararg{Function}}
+    make_makeargs(t::Tuple)::Tuple{Vararg{Function}}
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
 The returned `Tuple` are functions which take in the (whole) flattened
@@ -414,7 +414,7 @@ prepare_args(::Tuple{}, ::Tuple) = ()
 ## logic for deciding the BroadcastStyle
 
 """
-    combine_styles(cs...) -> BroadcastStyle
+    combine_styles(cs...)::BroadcastStyle
 
 Decides which `BroadcastStyle` to use for any number of value arguments.
 Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
@@ -439,7 +439,7 @@ combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 """
-    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle])::BroadcastStyle
 
 Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
 determine a common `BroadcastStyle`.
@@ -488,7 +488,7 @@ end
 # Indices utilities
 
 """
-    combine_axes(As...) -> Tuple
+    combine_axes(As...)::Tuple
 
 Determine the result axes for broadcasting across all values in `As`.
 
@@ -505,7 +505,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 combine_axes(A) = axes(A)
 
 """
-    broadcast_shape(As...) -> Tuple
+    broadcast_shape(As...)::Tuple
 
 Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
 

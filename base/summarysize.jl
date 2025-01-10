@@ -12,7 +12,7 @@ nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any
 get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
 
 """
-    Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
+    Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...})::Int
 
 Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
 

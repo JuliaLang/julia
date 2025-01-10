@@ -9,7 +9,7 @@ isreal(x::AbstractArray{<:Real}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> AbstractVector
+    vec(a::AbstractArray)::AbstractVector
 
 Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
 already an `AbstractVector`. The resulting array

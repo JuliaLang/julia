@@ -426,7 +426,7 @@ julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) #
 """ searchsortedlast
 
 """
-    insorted(x, v; by=identity, lt=isless, rev=false) -> Bool
+    insorted(x, v; by=identity, lt=isless, rev=false)::Bool
 
 Determine whether a vector `v` contains any value equivalent to `x`.
 The vector `v` must be sorted according to the order defined by the keywords.

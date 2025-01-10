@@ -153,7 +153,7 @@ function ⊑ end
 @nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type)) = a <: b
 
 """
-    ⊏(𝕃::AbstractLattice, a, b) -> Bool
+    ⊏(𝕃::AbstractLattice, a, b)::Bool
 
 The strict partial order over the type inference lattice.
 This is defined as the irreflexive kernel of `⊑`.
@@ -161,7 +161,7 @@ This is defined as the irreflexive kernel of `⊑`.
 @nospecializeinfer ⊏(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = ⊑(𝕃, a, b) && !⊑(𝕃, b, a)
 
 """
-    ⋤(𝕃::AbstractLattice, a, b) -> Bool
+    ⋤(𝕃::AbstractLattice, a, b)::Bool
 
 This order could be used as a slightly more efficient version of the strict order `⊏`,
 where we can safely assume `a ⊑ b` holds.
@@ -169,7 +169,7 @@ where we can safely assume `a ⊑ b` holds.
 @nospecializeinfer ⋤(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = !⊑(𝕃, b, a)
 
 """
-    is_lattice_equal(𝕃::AbstractLattice, a, b) -> Bool
+    is_lattice_equal(𝕃::AbstractLattice, a, b)::Bool
 
 Check if two lattice elements are partial order equivalent.
 This is basically `a ⊑ b && b ⊑ a` in the lattice of `𝕃`
@@ -181,7 +181,7 @@ but (optionally) with extra performance optimizations.
 end
 
 """
-    has_nontrivial_extended_info(𝕃::AbstractLattice, t) -> Bool
+    has_nontrivial_extended_info(𝕃::AbstractLattice, t)::Bool
 
 Determines whether the given lattice element `t` of `𝕃` has non-trivial extended lattice
 information that would not be available from the type itself.
@@ -204,7 +204,7 @@ end
 @nospecializeinfer has_nontrivial_extended_info(::JLTypeLattice, @nospecialize(t)) = false
 
 """
-    is_const_prop_profitable_arg(𝕃::AbstractLattice, t) -> Bool
+    is_const_prop_profitable_arg(𝕃::AbstractLattice, t)::Bool
 
 Determines whether the given lattice element `t` of `𝕃` has new extended lattice information
 that should be forwarded along with constant propagation.

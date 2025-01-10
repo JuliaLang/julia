@@ -122,7 +122,7 @@ normalize(s::AbstractString, nf::Symbol) = Base.Unicode.normalize(s, nf)
 normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
 
 """
-    Unicode.isassigned(c) -> Bool
+    Unicode.isassigned(c)::Bool
 
 Return `true` if the given char or integer is an assigned Unicode code point.
 
@@ -138,7 +138,7 @@ true
 isassigned(c) = Base.Unicode.isassigned(c)
 
 """
-    graphemes(s::AbstractString) -> GraphemeIterator
+    graphemes(s::AbstractString)::GraphemeIterator
 
 Return an iterator over substrings of `s` that correspond to the extended graphemes in the
 string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as
@@ -148,7 +148,7 @@ letter combined with an accent mark is a single grapheme.)
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
 """
-    graphemes(s::AbstractString, m:n) -> SubString
+    graphemes(s::AbstractString, m:n)::SubString
 
 Returns a [`SubString`](@ref) of `s` consisting of the `m`-th
 through `n`-th graphemes of the string `s`, where the second

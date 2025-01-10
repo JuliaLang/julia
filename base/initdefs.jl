@@ -33,7 +33,7 @@ const roottask = current_task()
 is_interactive::Bool = false
 
 """
-    isinteractive() -> Bool
+    isinteractive()::Bool
 
 Determine whether Julia is running an interactive session.
 """

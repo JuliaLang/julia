@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    memcpy(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+    memcpy(dst::Ptr, src::Ptr, n::Integer)::Ptr{Cvoid}
 
 Call `memcpy` from the C standard library.
 
@@ -15,7 +15,7 @@ function memcpy(dst::Ptr, src::Ptr, n::Integer)
 end
 
 """
-    memmove(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+    memmove(dst::Ptr, src::Ptr, n::Integer)::Ptr{Cvoid}
 
 Call `memmove` from the C standard library.
 
@@ -29,7 +29,7 @@ function memmove(dst::Ptr, src::Ptr, n::Integer)
 end
 
 """
-    memset(dst::Ptr, val, n::Integer) -> Ptr{Cvoid}
+    memset(dst::Ptr, val, n::Integer)::Ptr{Cvoid}
 
 Call `memset` from the C standard library.
 
@@ -43,7 +43,7 @@ function memset(p::Ptr, val, n::Integer)
 end
 
 """
-    memcmp(a::Ptr, b::Ptr, n::Integer) -> Int
+    memcmp(a::Ptr, b::Ptr, n::Integer)::Int
 
 Call `memcmp` from the C standard library.
 

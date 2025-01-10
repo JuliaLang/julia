@@ -217,7 +217,7 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 # we can validate arguments in tryparse.
 
 """
-    validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Nothing}
+    validargs(::Type{<:TimeType}, args...)::Union{ArgumentError, Nothing}
 
 Determine whether the given arguments constitute valid inputs for the given type.
 Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
@@ -236,7 +236,7 @@ end
 ### CONSTRUCTORS ###
 # Core constructors
 """
-    DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+    DateTime(y, [m, d, h, mi, s, ms])::DateTime
 
 Construct a `DateTime` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
@@ -268,7 +268,7 @@ end
 DateTime(dt::Base.Libc.TmStruct) = DateTime(1900 + dt.year, 1 + dt.month, dt.mday, dt.hour, dt.min, dt.sec)
 
 """
-    Date(y, [m, d]) -> Date
+    Date(y, [m, d])::Date
 
 Construct a `Date` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
@@ -287,7 +287,7 @@ end
 Date(dt::Base.Libc.TmStruct) = Date(1900 + dt.year, 1 + dt.month, dt.mday)
 
 """
-    Time(h, [mi, s, ms, us, ns]) -> Time
+    Time(h, [mi, s, ms, us, ns])::Time
 
 Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
@@ -333,7 +333,7 @@ end
 # To allow any order/combination of Periods
 
 """
-    DateTime(periods::Period...) -> DateTime
+    DateTime(periods::Period...)::DateTime
 
 Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
 parts not provided will default to the value of `Dates.default(period)`.
@@ -354,7 +354,7 @@ function DateTime(period::Period, periods::Period...)
 end
 
 """
-    Date(period::Period...) -> Date
+    Date(period::Period...)::Date
 
 Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
 not provided will default to the value of `Dates.default(period)`.
@@ -370,7 +370,7 @@ function Date(period::Period, periods::Period...)
 end
 
 """
-    Time(period::TimePeriod...) -> Time
+    Time(period::TimePeriod...)::Time
 
 Construct a `Time` type by `Period` type parts. Arguments may be in any order. `Time` parts
 not provided will default to the value of `Dates.default(period)`.
@@ -428,10 +428,10 @@ calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
 """
-    eps(::Type{DateTime}) -> Millisecond
-    eps(::Type{Date}) -> Day
-    eps(::Type{Time}) -> Nanosecond
-    eps(::TimeType) -> Period
+    eps(::Type{DateTime})::Millisecond
+    eps(::Type{Date})::Day
+    eps(::Type{Time})::Nanosecond
+    eps(::TimeType)::Period
 
 Return the smallest unit value supported by the `TimeType`.
 

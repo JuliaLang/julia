@@ -1013,7 +1013,7 @@ end
 # function reflection
 
 """
-    nameof(f::Function) -> Symbol
+    nameof(f::Function)::Symbol
 
 Get the name of a generic `Function` as a symbol. For anonymous functions,
 this is a compiler-generated name. For explicitly-declared subtypes of
@@ -1035,7 +1035,7 @@ function nameof(f::Core.IntrinsicFunction)
 end
 
 """
-    parentmodule(f::Function) -> Module
+    parentmodule(f::Function)::Module
 
 Determine the module containing the (first) definition of a generic
 function.
@@ -1043,7 +1043,7 @@ function.
 parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    parentmodule(f::Function, types) -> Module
+    parentmodule(f::Function, types)::Module
 
 Determine the module containing the first method of a generic function `f` matching
 the specified `types`.
@@ -1057,7 +1057,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    parentmodule(m::Method) -> Module
+    parentmodule(m::Method)::Module
 
 Return the module in which the given method `m` is defined.
 
@@ -1067,7 +1067,7 @@ Return the module in which the given method `m` is defined.
 parentmodule(m::Method) = m.module
 
 """
-    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
+    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter())::Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1178,7 +1178,7 @@ function bodyfunction(basemethod::Method)
 end
 
 """
-    Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+    Base.isambiguous(m1, m2; ambiguous_bottom=false)::Bool
 
 Determine whether two methods `m1` and `m2` may be ambiguous for some call
 signature. This test is performed in the context of other methods of the same

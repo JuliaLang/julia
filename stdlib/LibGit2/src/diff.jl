@@ -74,7 +74,7 @@ function GitDiffStats(diff::GitDiff)
 end
 
 """
-    files_changed(diff_stat::GitDiffStats) -> Csize_t
+    files_changed(diff_stat::GitDiffStats)::Csize_t
 
 Return how many files were changed (added/modified/deleted) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -87,7 +87,7 @@ function files_changed(diff_stat::GitDiffStats)
 end
 
 """
-    insertions(diff_stat::GitDiffStats) -> Csize_t
+    insertions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of insertions (lines added) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -100,7 +100,7 @@ function insertions(diff_stat::GitDiffStats)
 end
 
 """
-    deletions(diff_stat::GitDiffStats) -> Csize_t
+    deletions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of deletions (lines removed) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)

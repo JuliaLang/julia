@@ -2517,7 +2517,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
 end
 
 """
-    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Effects
+    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Effects
 
 Compute the effects of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2660,7 +2660,7 @@ current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
 """
-    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
+    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Bool
 
 Compute throw-ness of a builtin function call. `argtypes` should not include `f` itself.
 """

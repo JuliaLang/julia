@@ -527,7 +527,7 @@ function get(default::Callable, h::Dict{K,V}, key) where V where K
 end
 
 """
-    haskey(collection, key) -> Bool
+    haskey(collection, key)::Bool
 
 Determine whether a collection has a mapping for a given `key`.
 

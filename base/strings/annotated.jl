@@ -410,7 +410,7 @@ annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar) -> Vector{$Annotation}
+    annotations(chr::AnnotatedChar)::Vector{$Annotation}
 
 Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """

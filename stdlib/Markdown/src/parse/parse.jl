@@ -96,7 +96,7 @@ _parse(stream::IO, block::MD; breaking = false) =
     _parse(stream, block, config(block), breaking = breaking)
 
 """
-    parse(stream::IO) -> MD
+    parse(stream::IO)::MD
 
 Parse the content of `stream` as Julia-flavored Markdown text and return the corresponding `MD` object.
 """

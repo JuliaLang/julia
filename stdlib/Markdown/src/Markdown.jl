@@ -61,7 +61,7 @@ __init__() = foreach(addface!, MARKDOWN_FACES)
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 
 """
-    Markdown.parse(markdown::AbstractString) -> MD
+    Markdown.parse(markdown::AbstractString)::MD
 
 Parse `markdown` as Julia-flavored Markdown text and return the corresponding `MD` object.
 

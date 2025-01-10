@@ -361,8 +361,8 @@ ctime(st::StatStruct) = st.ctime
 # mode type predicates
 
 """
-    ispath(path) -> Bool
-    ispath(path_elements...) -> Bool
+    ispath(path)::Bool
+    ispath(path_elements...)::Bool
 
 Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
@@ -382,26 +382,26 @@ end
 ispath(path::AbstractString) = ispath(String(path))
 
 """
-    isfifo(path) -> Bool
-    isfifo(path_elements...) -> Bool
-    isfifo(stat_struct) -> Bool
+    isfifo(path)::Bool
+    isfifo(path_elements...)::Bool
+    isfifo(stat_struct)::Bool
 
 Return `true` if the file at `path` or file descriptor `stat_struct` is FIFO, `false` otherwise.
 """
 isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
-    ischardev(path) -> Bool
-    ischardev(path_elements...) -> Bool
-    ischardev(stat_struct) -> Bool
+    ischardev(path)::Bool
+    ischardev(path_elements...)::Bool
+    ischardev(stat_struct)::Bool
 
 Return `true` if the path `path` or file descriptor `stat_struct` refer to a character device, `false` otherwise.
 """
 ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
 """
-    isdir(path) -> Bool
-    isdir(path_elements...) -> Bool
+    isdir(path)::Bool
+    isdir(path_elements...)::Bool
 
 Return `true` if `path` points to a directory, `false` otherwise.
 
@@ -419,17 +419,17 @@ See also [`isfile`](@ref) and [`ispath`](@ref).
 isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
-    isblockdev(path) -> Bool
-    isblockdev(path_elements...) -> Bool
-    isblockdev(stat_struct) -> Bool
+    isblockdev(path)::Bool
+    isblockdev(path_elements...)::Bool
+    isblockdev(stat_struct)::Bool
 
 Return `true` if the path `path` or file descriptor `stat_struct` refer to a block device, `false` otherwise.
 """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 """
-    isfile(path) -> Bool
-    isfile(path_elements...) -> Bool
+    isfile(path)::Bool
+    isfile(path_elements...)::Bool
 
 Return `true` if `path` points to a regular file, `false` otherwise.
 
@@ -456,16 +456,16 @@ See also [`isdir`](@ref) and [`ispath`](@ref).
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
-    islink(path) -> Bool
-    islink(path_elements...) -> Bool
+    islink(path)::Bool
+    islink(path_elements...)::Bool
 
 Return `true` if `path` points to a symbolic link, `false` otherwise.
 """
 islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
-    issocket(path) -> Bool
-    issocket(path_elements...) -> Bool
+    issocket(path)::Bool
+    issocket(path_elements...)::Bool
 
 Return `true` if `path` points to a socket, `false` otherwise.
 """
@@ -474,27 +474,27 @@ issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 # mode permission predicates
 
 """
-    issetuid(path) -> Bool
-    issetuid(path_elements...) -> Bool
-    issetuid(stat_struct) -> Bool
+    issetuid(path)::Bool
+    issetuid(path_elements...)::Bool
+    issetuid(stat_struct)::Bool
 
 Return `true` if the file at `path` or file descriptor `stat_struct` have the setuid flag set, `false` otherwise.
 """
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
 
 """
-    issetgid(path) -> Bool
-    issetgid(path_elements...) -> Bool
-    issetgid(stat_struct) -> Bool
+    issetgid(path)::Bool
+    issetgid(path_elements...)::Bool
+    issetgid(stat_struct)::Bool
 
 Return `true` if the file at `path` or file descriptor `stat_struct` have the setgid flag set, `false` otherwise.
 """
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
 
 """
-    issticky(path) -> Bool
-    issticky(path_elements...) -> Bool
-    issticky(stat_struct) -> Bool
+    issticky(path)::Bool
+    issticky(path_elements...)::Bool
+    issticky(stat_struct)::Bool
 
 Return `true` if the file at `path` or file descriptor `stat_struct` have the sticky bit set, `false` otherwise.
 """
@@ -601,8 +601,8 @@ Check if the paths `path_a` and `path_b` refer to the same existing file or dire
 samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
-    ismount(path) -> Bool
-    ismount(path_elements...) -> Bool
+    ismount(path)::Bool
+    ismount(path_elements...)::Bool
 
 Return `true` if `path` is a mount point, `false` otherwise.
 """

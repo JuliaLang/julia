@@ -7,7 +7,7 @@ convert(::Type{T}, x::T)      where {T<:Number} = x
 convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
-    isinteger(x) -> Bool
+    isinteger(x)::Bool
 
 Test whether `x` is numerically equal to some integer.
 
@@ -62,7 +62,7 @@ true
 isone(x) = x == one(x) # fallback method
 
 """
-    isfinite(f) -> Bool
+    isfinite(f)::Bool
 
 Test whether a number is finite.
 

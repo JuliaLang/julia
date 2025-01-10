@@ -337,7 +337,7 @@ end
 
 
 """
-    hash_seed(seed) -> AbstractVector{UInt8}
+    hash_seed(seed)::AbstractVector{UInt8}
 
 Return a cryptographic hash of `seed` of size 256 bits (32 bytes).
 `seed` can currently be of type

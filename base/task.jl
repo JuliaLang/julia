@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
 end
 
 """
-    capture_exception(ex, bt) -> Exception
+    capture_exception(ex, bt)::Exception
 
 Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
 
@@ -185,7 +185,7 @@ end
 end
 
 """
-    istaskdone(t::Task) -> Bool
+    istaskdone(t::Task)::Bool
 
 Determine whether a task has exited.
 
@@ -209,7 +209,7 @@ true
 istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
-    istaskstarted(t::Task) -> Bool
+    istaskstarted(t::Task)::Bool
 
 Determine whether a task has started executing.
 
@@ -226,7 +226,7 @@ false
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 """
-    istaskfailed(t::Task) -> Bool
+    istaskfailed(t::Task)::Bool
 
 Determine whether a task has exited because an exception was thrown.
 

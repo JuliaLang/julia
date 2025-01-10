@@ -64,8 +64,8 @@ end
 
 
 """
-    reshape(A, dims...) -> AbstractArray
-    reshape(A, dims) -> AbstractArray
+    reshape(A, dims...)::AbstractArray
+    reshape(A, dims)::AbstractArray
 
 Return an array with the same data as `A`, but with different
 dimension sizes or number of dimensions. The two arrays share the same
