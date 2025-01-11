@@ -120,7 +120,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         end
         inferred_result = nothing
         uncompressed = inferred_result
-        relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
@@ -139,22 +138,14 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
                 inferred_result = nothing
-            else
-                relocatability = 0x0
-            end
-            if isa(inferred_result, String)
-                t = @_gc_preserve_begin inferred_result
-                relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
-                @_gc_preserve_end t
             end
         end
-        # n.b. relocatability = !isa(inferred_result, String) || inferred_result[end]
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, relocatability, di, edges)
+            result.analysis_results, di, edges)
         engine_reject(interp, ci)
         if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
@@ -170,6 +161,38 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             end
         end
     end
+    return nothing
+end
+
+function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance, src::CodeInfo)
+    user_edges = src.edges
+    edges = user_edges isa SimpleVector ? user_edges : user_edges === nothing ? Core.svec() : Core.svec(user_edges...)
+    const_flag = false
+    di = src.debuginfo
+    rettype = Any
+    exctype = Any
+    rettype_const = nothing
+    const_flags = 0x0
+    ipo_effects = zero(UInt32)
+    min_world = src.min_world
+    max_world = src.max_world
+    if max_world >= get_world_counter()
+        max_world = typemax(UInt)
+    end
+    if max_world == typemax(UInt)
+        # if we can record all of the backedges in the global reverse-cache,
+        # we can now widen our applicability in the global cache too
+        store_backedges(ci, edges)
+    end
+    ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        ci, rettype, exctype, nothing, const_flags, min_world, max_world, ipo_effects, nothing, di, edges)
+    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
+    code_cache(interp)[mi] = ci
+    if isdefined(interp, :codegen)
+        interp.codegen[ci] = src
+    end
+    engine_reject(interp, ci)
     return nothing
 end
 
@@ -490,7 +513,6 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             rettype_const = nothing
             const_flags = 0x0
         end
-        relocatability = 0x1
         di = nothing
         edges = empty_edges # `edges` will be updated within `finish!`
         ci = result.ci
@@ -520,6 +542,9 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             continue # ignore the query information if present but process the contents
         elseif isa(item, Method)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            i += 1
+            continue
+        elseif isa(item, Core.BindingPartition)
             i += 1
             continue
         end
@@ -794,7 +819,7 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
         end
     end
     ci = CodeInstance(mi, cache_owner(interp), Any, Any, nothing, nothing, zero(Int32),
-        min_world, max_world, zero(UInt32), nothing, zero(UInt8), nothing, edges)
+        min_world, max_world, zero(UInt32), nothing, nothing, edges)
     if max_world == typemax(UInt)
         # if we can record all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
@@ -826,7 +851,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
     end
@@ -1096,15 +1121,6 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         end
     end
     def = mi.def
-    if isa(def, Method)
-        if ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !generating_output(#=incremental=#false)
-            src = retrieve_code_info(mi, get_inference_world(interp))
-            src isa CodeInfo || return nothing
-            return CodeInstance(mi, cache_owner(interp), Any, Any, nothing, src, Int32(0),
-                get_inference_world(interp), get_inference_world(interp),
-                UInt32(0), nothing, UInt8(0), src.debuginfo, src.edges)
-        end
-    end
     ci = engine_reserve(interp, mi)
     # check cache again if it is still new after reserving in the engine
     let code = get(code_cache(interp), mi, nothing)
@@ -1117,11 +1133,22 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             end
         end
     end
+    if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
+        src = retrieve_code_info(mi, get_inference_world(interp))
+        if src isa CodeInfo
+            finish!(interp, mi, ci, src)
+        else
+            engine_reject(interp, ci)
+        end
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+        return ci
+    end
     result = InferenceResult(mi, typeinf_lattice(interp))
     result.ci = ci
     frame = InferenceState(result, #=cache_mode=#:global, interp)
     if frame === nothing
         engine_reject(interp, ci)
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
         return nothing
     end
     typeinf(interp, frame)
@@ -1263,18 +1290,29 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
             callee in inspected && continue
             push!(inspected, callee)
             # now make sure everything has source code, if desired
-            # TODO: typeinf_code could return something with different edges/ages (needing an update to callee), which we don't handle here
+            mi = get_ci_mi(callee)
+            def = mi.def
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, callee.def, code.rettype_const)
+                src = codeinfo_for_const(interp, mi, code.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
+            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
+                src = retrieve_code_info(mi, get_inference_world(interp))
             else
-                src = typeinf_code(interp, callee.def, true)
+                # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here
+                src = typeinf_code(interp, mi, true)
             end
             if src isa CodeInfo
                 collectinvokes!(tocompile, src)
+                # It is somewhat ambiguous if typeinf_ext might have callee in the caches,
+                # but for the purpose of native compile, we always want them put there.
+                if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
+                    code_cache(interp)[mi] = callee
+                end
                 push!(codeinfos, callee)
                 push!(codeinfos, src)
+            elseif trim
+                println("warning: failed to get code for ", mi)
             end
         end
     end

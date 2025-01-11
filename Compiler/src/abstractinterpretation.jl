@@ -2395,7 +2395,8 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return CallMeta(abstract_eval_globalref(interp, GlobalRef(M, s), saw_latestworld, sv), NoCallInfo())
+            (ret, bpart) = abstract_eval_globalref(interp, GlobalRef(M, s), saw_latestworld, sv)
+            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(bpart))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
@@ -2473,8 +2474,8 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     if isa(M, Const) && isa(s, Const)
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            rt, exct = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
-            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), NoCallInfo())
+            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(partition))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2512,7 +2513,7 @@ function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState,
     scm = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
     scm.rt === Bottom && return scm
     gcm = abstract_eval_getglobal(interp, sv, saw_latestworld, M, s)
-    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), NoCallInfo())
+    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), scm.info)
 end
 
 function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool,
@@ -2520,7 +2521,7 @@ function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState,
     scm = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v, order)
     scm.rt === Bottom && return scm
     gcm = abstract_eval_getglobal(interp, sv, saw_latestworld, M, s, order)
-    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), NoCallInfo())
+    return CallMeta(gcm.rt, Union{scm.exct,gcm.exct}, merge_effects(scm.effects, gcm.effects), scm.info)
 end
 
 function abstract_eval_swapglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
@@ -2569,7 +2570,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             end
             exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
-            sg = CallMeta(Any, exct, effects, NoCallInfo())
+            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(partition))
         else
             sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
         end
@@ -2637,21 +2638,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.getfield && argtypes_are_actually_getglobal(argtypes)
             return Future(abstract_eval_getglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.isdefined && argtypes_are_actually_getglobal(argtypes)
-            exct = Bottom
-            if length(argtypes) == 4
-                order = argtypes[4]
-                exct = global_order_exct(order, #=loading=#true, #=storing=#false)
-                if !(isa(order, Const) && get_atomic_order(order.val, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
-                    exct = Union{exct, ConcurrencyViolationError}
-                end
-            end
-            return Future(merge_exct(CallMeta(abstract_eval_isdefined(
-                    interp,
-                    GlobalRef((argtypes[2]::Const).val::Module,
-                              (argtypes[3]::Const).val::Symbol),
-                    si.saw_latestworld,
-                    sv),
-                NoCallInfo()), exct))
+            return Future(abstract_eval_isdefinedglobal(interp, argtypes[2], argtypes[3], Const(true),
+                length(argtypes) == 4 ? argtypes[4] : Const(:unordered),
+                si.saw_latestworld, sv))
+        elseif f === Core.isdefinedglobal && 3 <= length(argtypes) <= 5
+            return Future(abstract_eval_isdefinedglobal(interp, argtypes[2], argtypes[3],
+                length(argtypes) >= 4 ? argtypes[4] : Const(true),
+                length(argtypes) >= 5 ? argtypes[5] : Const(:unordered),
+                si.saw_latestworld, sv))
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
         end
@@ -2944,7 +2938,8 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
             return RTEffects(sv.ir.argtypes[e.n], Union{}, EFFECTS_TOTAL) # TODO frame_argtypes(sv)[e.n] and remove the assertion
         end
     elseif isa(e, GlobalRef)
-        return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)
+        # No need for an edge since an explicit GlobalRef will be picked up by the source scan
+        return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)[1]
     end
     if isa(e, QuoteNode)
         e = e.value
@@ -3200,24 +3195,10 @@ function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, ssta
         end
         return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     end
-    return abstract_eval_isdefined(interp, sym, sstate.saw_latestworld, sv)
-end
-
-function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym), saw_latestworld::Bool, sv::AbsIntState)
     rt = Bool
     effects = EFFECTS_TOTAL
     exct = Union{}
-    isa(sym, Symbol) && (sym = GlobalRef(frame_module(sv), sym))
-    if isa(sym, GlobalRef)
-        rte = abstract_eval_globalref(interp, sym, saw_latestworld, sv)
-        if rte.exct == Union{}
-            rt = Const(true)
-        elseif rte.rt === Union{} && rte.exct === UndefVarError
-            rt = Const(false)
-        else
-            effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
-        end
-    elseif isexpr(sym, :static_parameter)
+    if isexpr(sym, :static_parameter)
         n = sym.args[1]::Int
         if 1 <= n <= length(sv.sptypes)
             sp = sv.sptypes[n]
@@ -3229,8 +3210,71 @@ function abstract_eval_isdefined(interp::AbstractInterpreter, @nospecialize(sym)
         end
     else
         effects = EFFECTS_UNKNOWN
+        exct = Any
     end
     return RTEffects(rt, exct, effects)
+end
+
+const generic_isdefinedglobal_effects = Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE, nothrow=false)
+function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module, sym::Symbol, allow_import::Union{Bool, Nothing}, saw_latestworld::Bool, sv::AbsIntState)
+    rt = Bool
+    if saw_latestworld
+        return CallMeta(RTEffects(rt, Union{}, Effects(generic_isdefinedglobal_effects, nothrow=true)), NoCallInfo())
+    end
+
+    effects = EFFECTS_TOTAL
+    partition = lookup_binding_partition!(interp, GlobalRef(mod, sym), sv)
+    if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import === false
+            rt = Const(false)
+        else
+            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+        end
+    else
+        partition = walk_binding_partition!(interp, partition, sv)
+        rte = abstract_eval_partition_load(interp, partition)
+        if rte.exct == Union{}
+            rt = Const(true)
+        elseif rte.rt === Union{} && rte.exct === UndefVarError
+            rt = Const(false)
+        else
+            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+        end
+    end
+    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(partition))
+end
+
+function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecialize(M), @nospecialize(s), @nospecialize(allow_import_arg), @nospecialize(order_arg), saw_latestworld::Bool, sv::AbsIntState)
+    exct = Bottom
+    allow_import = true
+    if allow_import_arg !== nothing
+        if !isa(allow_import_arg, Const)
+            allow_import = nothing
+            if widenconst(allow_import_arg) != Bool
+                exct = Union{exct, TypeError}
+            end
+        else
+            allow_import = allow_import_arg.val
+        end
+    end
+    if order_arg !== nothing
+        exct = global_order_exct(order_arg, #=loading=#true, #=storing=#false)
+        if !(isa(order_arg, Const) && get_atomic_order(order_arg.val, #=loading=#true, #=storing=#false).x >= MEMORY_ORDER_UNORDERED.x)
+            exct = Union{exct, ConcurrencyViolationError}
+        end
+    end
+    if M isa Const && s isa Const
+        M, s = M.val, s.val
+        if M isa Module && s isa Symbol
+            return merge_exct(abstract_eval_isdefinedglobal(interp, M, s, allow_import, saw_latestworld, sv), exct)
+        end
+        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
+        return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    elseif M ⊑ Module && s ⊑ Symbol
+        return CallMeta(Bool, Union{exct, UndefVarError}, generic_isdefinedglobal_effects, NoCallInfo())
+    end
+    return CallMeta(Bool, Union{exct, TypeError, UndefVarError}, generic_isdefinedglobal_effects, NoCallInfo())
 end
 
 function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
@@ -3443,22 +3487,31 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
     return partition_restriction(partition)
 end
 
-function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
+function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
     force_binding_resolution!(g)
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
+    partition
+end
 
+function walk_binding_partition!(interp::AbstractInterpreter, partition::Core.BindingPartition, sv::AbsIntState)
     while is_some_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(get_inference_world(interp), imported_binding)
         update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     end
+    return partition
+end
 
+function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
+    partition = lookup_binding_partition!(interp, g, sv)
+    partition = walk_binding_partition!(interp, partition, sv)
     return partition
 end
 
 function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Core.BindingPartition)
-    if is_some_guard(binding_kind(partition))
+    kind = binding_kind(partition)
+    if is_some_guard(kind) || kind == BINDING_KIND_UNDEF_CONST
         if InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
@@ -3468,38 +3521,40 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
         end
     end
 
-    if is_some_const_binding(binding_kind(partition))
+    if is_defined_const_binding(kind)
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end
 
     rt = partition_restriction(partition)
-
     return RTEffects(rt, UndefVarError, generic_getglobal_effects)
 end
 
 function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
     if saw_latestworld
-        return RTEffects(Any, Any, generic_getglobal_effects)
+        return Pair{RTEffects, Union{Nothing, Core.BindingPartition}}(RTEffects(Any, Any, generic_getglobal_effects), nothing)
     end
     partition = abstract_eval_binding_partition!(interp, g, sv)
     ret = abstract_eval_partition_load(interp, partition)
     if ret.rt !== Union{} && ret.exct === UndefVarError && InferenceParams(interp).assume_bindings_static
         if isdefined(g, :binding) && isdefined(g.binding, :value)
-            return RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
+            ret = RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
         end
         # We do not assume in general that assigned global bindings remain assigned.
         # The existence of pkgimages allows them to revert in practice.
     end
-    return ret
+    return Pair{RTEffects, Union{Nothing, Core.BindingPartition}}(ret, partition)
 end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
+        return Pair{Pair{Any,Any}, Union{Core.BindingPartition, Nothing}}(
+            Pair{Any,Any}(newty, Union{ErrorException, TypeError}), nothing)
     end
     partition = abstract_eval_binding_partition!(interp, g, sv)
-    return global_assignment_binding_rt_exct(interp, partition, newty)
+    return Pair{Pair{Any,Any}, Union{Core.BindingPartition, Nothing}}(
+        global_assignment_binding_rt_exct(interp, partition, newty),
+        partition)
 end
 
 function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partition::Core.BindingPartition, @nospecialize(newty))
@@ -3518,18 +3573,6 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
         return Pair{Any,Any}(retty, TypeError)
     end
     return Pair{Any,Any}(newty, Bottom)
-end
-
-function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, saw_latestworld::Bool, lhs::GlobalRef, @nospecialize(newty))
-    effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_rt_exct(interp, frame, saw_latestworld, lhs, ignorelimited(newty))[2] === Union{}
-    inaccessiblememonly = ALWAYS_FALSE
-    if !nothrow
-        sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
-    end
-    sub_curr_ssaflag!(frame, IR_FLAG_EFFECT_FREE)
-    merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; effect_free, nothrow, inaccessiblememonly))
-    return nothing
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)

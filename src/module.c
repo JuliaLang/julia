@@ -290,7 +290,11 @@ retry:
             if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
                 check_safe_newbinding(m, var);
                 if (!alloc)
-                    jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+                    jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                              "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                              "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                              jl_symbol_name(m->name), jl_symbol_name(var),
+                              jl_symbol_name(var), jl_symbol_name(m->name));
             }
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
@@ -396,7 +400,10 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b)
 JL_DLLEXPORT jl_value_t *jl_bpart_get_restriction_value(jl_binding_partition_t *bpart)
 {
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    return decode_restriction_value(pku);
+    jl_value_t *v = decode_restriction_value(pku);
+    if (!v)
+        jl_throw(jl_undefref_exception);
+    return v;
 }
 
 typedef struct _modstack_t {
@@ -1025,6 +1032,21 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_gc_wb(bpart, val);
 }
 
+void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *invalidated_bpart, size_t new_world)
+{
+    static jl_value_t *invalidate_code_for_globalref = NULL;
+    if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
+        invalidate_code_for_globalref = jl_get_global(jl_base_module, jl_symbol("invalidate_code_for_globalref!"));
+    if (!invalidate_code_for_globalref)
+        jl_error("Binding invalidation is not permitted during bootstrap.");
+    if (jl_generating_output())
+        jl_error("Binding invalidation is not permitted during image generation.");
+    jl_value_t *boxed_world = jl_box_ulong(new_world);
+    JL_GC_PUSH1(&boxed_world);
+    jl_call3((jl_function_t*)invalidate_code_for_globalref, (jl_value_t*)ref, (jl_value_t*)invalidated_bpart, boxed_world);
+    JL_GC_POP();
+}
+
 extern jl_mutex_t world_counter_lock;
 JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
 {
@@ -1039,10 +1061,12 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
 
     JL_LOCK(&world_counter_lock);
     jl_task_t *ct = jl_current_task;
+    size_t last_world = ct->world_age;
     size_t new_max_world = jl_atomic_load_acquire(&jl_world_counter);
-    // TODO: Trigger invalidation here
-    (void)ct;
     jl_atomic_store_release(&bpart->max_world, new_max_world);
+    ct->world_age = jl_typeinf_world;
+    jl_invalidate_binding_refs(gr, bpart, new_max_world);
+    ct->world_age = last_world;
     jl_atomic_store_release(&jl_world_counter, new_max_world + 1);
     JL_UNLOCK(&world_counter_lock);
 }
@@ -1325,6 +1349,11 @@ JL_DLLEXPORT void jl_add_to_module_init_list(jl_value_t *mod)
     if (jl_module_init_order == NULL)
         jl_module_init_order = jl_alloc_vec_any(0);
     jl_array_ptr_1d_push(jl_module_init_order, mod);
+}
+
+JL_DLLEXPORT jl_svec_t *jl_module_get_bindings(jl_module_t *m)
+{
+    return jl_atomic_load_relaxed(&m->bindings);
 }
 
 JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)

@@ -801,7 +801,7 @@ precompile_test_harness("code caching") do dir
     mi = minternal.specializations::Core.MethodInstance
     @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
-    @test ci.relocatability == 0
+    @test (codeunits(ci.inferred::String)[end]) === 0x01
     @test ci.inferred !== nothing
     # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
     Base.invokelatest() do
@@ -812,7 +812,7 @@ precompile_test_harness("code caching") do dir
     mi = mispecs[2]::Core.MethodInstance
     mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
     ci = mi.cache
-    @test ci.relocatability == 0
+    @test (codeunits(ci.inferred::String)[end]) == 0x00
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
@@ -1721,8 +1721,7 @@ precompile_test_harness("issue #46296") do load_path
 
         mi = first(Base.specializations(first(methods(identity))))
         ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
-                               typemax(UInt), zero(UInt32), nothing, 0x00,
-                               Core.DebugInfo(mi), Core.svec())
+                               typemax(UInt), zero(UInt32), nothing, Core.DebugInfo(mi), Core.svec())
 
         __init__() = @assert ci isa Core.CodeInstance
 

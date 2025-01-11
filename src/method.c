@@ -1384,10 +1384,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 //   at the time of writing the system image (such occur first in the list of
 //   roots). These are the cases with `key = 0` that do not prevent
 //   serialization.
-// - CodeInstances have a `relocatability` field which when 1 indicates that
-//   every root is "safe," meaning it was either added at sysimg creation or is
-//   tagged with a non-zero `key`. Even a single unsafe root will cause this to
-//   have value 0.
 
 // Get the key of the current (final) block of roots
 static uint64_t current_root_id(jl_array_t *root_blocks)

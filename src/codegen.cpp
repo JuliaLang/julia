@@ -408,9 +408,9 @@ struct jl_tbaacache_t {
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
         tbaa_arraysize = tbaa_make_child(mbuilder, "jtbaa_arraysize", tbaa_array_scalar).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
-        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar, true).first;
-        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar, true).first;
-        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar, true).first;
+        tbaa_memoryptr = tbaa_make_child(mbuilder, "jtbaa_memoryptr", tbaa_array_scalar).first;
+        tbaa_memorylen = tbaa_make_child(mbuilder, "jtbaa_memorylen", tbaa_array_scalar).first;
+        tbaa_memoryown = tbaa_make_child(mbuilder, "jtbaa_memoryown", tbaa_array_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
@@ -1179,6 +1179,7 @@ static const auto jl_alloc_genericmemory_unchecked_func = new JuliaFunction<Type
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -1499,6 +1500,10 @@ static const auto pointer_from_objref_func = new JuliaFunction<>{
         AttrBuilder FnAttrs(C);
         FnAttrs.addMemoryAttr(MemoryEffects::none());
         FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::NoSync);
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             Attributes(C, {Attribute::NonNull}),
@@ -4168,6 +4173,34 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     return false;
 }
 
+static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_sym_t *name, int allow_import, enum jl_memory_order order)
+{
+    Value *isnull = NULL;
+    jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
+    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
+    if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+        if (jl_get_binding_value_if_const(bnd))
+            return mark_julia_const(ctx, jl_true);
+        Value *bp = julia_binding_gv(ctx, bnd);
+        bp = julia_binding_pvalue(ctx, bp);
+        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+        ai.decorateInst(v);
+        v->setOrdering(get_llvm_atomic_order(order));
+        isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+    }
+    else {
+        Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
+                literal_pointer_val(ctx, (jl_value_t*)modu),
+                literal_pointer_val(ctx, (jl_value_t*)name),
+                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
+            });
+        isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+    }
+    return mark_julia_type(ctx, isnull, false, jl_bool_type);
+}
+
 static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ArrayRef<jl_cgval_t> argv, size_t nargs, const jl_cgval_t *modifyop)
 {
@@ -4470,7 +4503,17 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         jl_genericmemory_t *inst = (jl_genericmemory_t*)((jl_datatype_t*)typ)->instance;
         if (inst == NULL)
             return false;
-        *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        if (argv[2].constant) {
+            if (!jl_is_long(argv[2].constant))
+                return false;
+            size_t nel = jl_unbox_long(argv[2].constant);
+            if (nel < 0)
+                return false;
+            *ret = emit_const_len_memorynew(ctx, typ, nel, inst);
+        }
+        else {
+            *ret = emit_memorynew(ctx, typ, argv[2], inst);
+        }
         return true;
     }
 
@@ -5057,6 +5100,42 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
         }
+    }
+
+    else if (f == jl_builtin_isdefinedglobal && (nargs == 2 || nargs == 3 || nargs == 4)) {
+        const jl_cgval_t &mod = argv[1];
+        const jl_cgval_t &sym = argv[2];
+        bool allow_import = true;
+        enum jl_memory_order order = jl_memory_order_unspecified;
+
+        if (nargs >= 3) {
+            const jl_cgval_t &arg3 = argv[3];
+            if (arg3.constant && jl_is_bool(arg3.constant))
+                allow_import = jl_unbox_bool(arg3.constant);
+            else
+                return false;
+        }
+
+        if (nargs == 4) {
+            const jl_cgval_t &arg4 = argv[4];
+            if (arg4.constant && jl_is_symbol(arg4.constant))
+                order = jl_get_atomic_order((jl_sym_t*)arg4.constant, true, false);
+            else
+                return false;
+        }
+        else
+            order = jl_memory_order_unordered;
+
+        if (order < jl_memory_order_unordered) {
+            return false;
+        }
+
+        if (!mod.constant || !sym.constant || !jl_is_symbol(sym.constant) || !jl_is_module(mod.constant)) {
+            return false;
+        }
+
+        *ret = emit_isdefinedglobal(ctx, (jl_module_t*)mod.constant, (jl_sym_t*)sym.constant, allow_import, order);
+        return true;
     }
 
     else if (f == jl_builtin_isdefined && (nargs == 2 || nargs == 3)) {
@@ -6059,39 +6138,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
     }
     else {
-        jl_module_t *modu;
-        jl_sym_t *name;
-        if (jl_is_globalref(sym)) {
-            modu = jl_globalref_mod(sym);
-            name = jl_globalref_name(sym);
-        }
-        else {
-            assert(jl_is_symbol(sym) && "malformed isdefined expression");
-            modu = ctx.module;
-            name = (jl_sym_t*)sym;
-        }
-        jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
-        if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            if (jl_get_binding_value_if_const(bnd))
-                return mark_julia_const(ctx, jl_true);
-            Value *bp = julia_binding_gv(ctx, bnd);
-            bp = julia_binding_pvalue(ctx, bp);
-            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-            ai.decorateInst(v);
-            v->setOrdering(AtomicOrdering::Unordered);
-            isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
-        }
-        else {
-            Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
-                    literal_pointer_val(ctx, (jl_value_t*)modu),
-                    literal_pointer_val(ctx, (jl_value_t*)name),
-                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
-                });
-            isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-        }
+        assert(false && "malformed expression");
     }
     return mark_julia_type(ctx, isnull, false, jl_bool_type);
 }
@@ -7468,7 +7515,8 @@ static Function *gen_cfun_wrapper(
     if (lam) {
         // TODO: this isn't ideal to be unconditionally calling type inference from here
         codeinst = jl_type_infer(lam, world, SOURCE_MODE_NOT_REQUIRED);
-        astrt = codeinst->rettype;
+        if (codeinst)
+            astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
             jl_type_intersection(astrt, declrt) == jl_bottom_type) {
             // Do not warn if the function never returns since it is
@@ -8927,6 +8975,8 @@ static jl_llvm_functions_t
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
             Align al = DL.getPrefTypeAlign(RT);
+            if (al > MAX_ALIGN)
+                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);

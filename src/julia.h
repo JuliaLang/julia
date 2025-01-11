@@ -20,7 +20,6 @@
 #include "libsupport.h"
 #include <stdint.h>
 #include <string.h>
-#include <fenv.h>
 
 #include "htable.h"
 #include "arraylist.h"
@@ -468,7 +467,6 @@ typedef struct _jl_code_instance_t {
                                    // & 0b010 == invokeptr matches specptr
                                    // & 0b100 == From image
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
-    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
@@ -623,7 +621,7 @@ typedef struct _jl_weakref_t {
 
 // N.B: Needs to be synced with runtime_internals.jl
 enum jl_partition_kind {
-    // Constant: This binding partition is a constant declared using `const`
+    // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
     BINDING_KIND_CONST        = 0x0,
     // Import Constant: This binding partition is a constant declared using `import A`
@@ -649,7 +647,11 @@ enum jl_partition_kind {
     BINDING_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
     //  ->restriction is NULL.
-    BINDING_KIND_GUARD        = 0x8
+    BINDING_KIND_GUARD        = 0x8,
+    // Undef Constant: This binding partition is a constant declared using `const`, but
+    // without a value.
+    //  ->restriction is NULL
+    BINDING_KIND_UNDEF_CONST  = 0x9
 };
 
 #ifdef _P64
@@ -2310,9 +2312,6 @@ typedef struct _jl_task_t {
     _Atomic(uint64_t) finished_at;
 
 // hidden state:
-    // cached floating point environment
-    // only updated at task switch
-    fenv_t fenv;
 
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;

@@ -429,7 +429,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
                 }
             }
             else if (params.params->trim) {
-                jl_safe_printf("warning: no code provided for function");
+                jl_safe_printf("warning: no code provided for function ");
                 jl_(codeinst->def);
                 if (params.params->trim)
                     abort();
@@ -441,7 +441,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         Function *pinvoke = nullptr;
         if (preal_decl.empty()) {
             if (invokeName.empty() && params.params->trim) {
-                jl_safe_printf("warning: bailed out to invoke when compiling:");
+                jl_safe_printf("warning: bailed out to invoke when compiling: ");
                 jl_(codeinst->def);
                 abort();
             }
@@ -658,7 +658,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             else if (params.params->trim) {
                 // if we're building a small image, we need to compile everything
                 // to ensure that we have all the information we need.
-                jl_safe_printf("codegen failed to compile code root");
+                jl_safe_printf("codegen failed to compile code root ");
                 jl_(mi);
                 abort();
             }

@@ -255,6 +255,7 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("invalidation.jl")
 
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
@@ -276,7 +277,6 @@ baremodule BuildSettings end
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"

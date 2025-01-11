@@ -481,4 +481,18 @@ end
 add_edges_impl(edges::Vector{Any}, info::VirtualMethodMatchInfo) =
     _add_edges_impl(edges, info.info, #=mi_edge=#true)
 
+"""
+    info::GlobalAccessInfo <: CallInfo
+
+Represents access to a global through runtime reflection, rather than as a manifest
+`GlobalRef` in the source code. Used for builtins (getglobal/setglobal/etc.) that
+perform such accesses.
+"""
+struct GlobalAccessInfo <: CallInfo
+    bpart::Core.BindingPartition
+end
+GlobalAccessInfo(::Nothing) = NoCallInfo()
+add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo) =
+    push!(edges, info.bpart)
+
 @specialize

@@ -46,7 +46,7 @@ let world = Base.tls_world_age()
         #=owner=#SecondArgConstOverride(1), new_source.rettype, Any#=new_source.exctype is missing=#,
         #=inferred_const=#nothing, #=code=#nothing, #=const_flags=#Int32(0),
         new_source.min_world, new_source.max_world, #=new_source.ipo_purity_bits is missing=#UInt32(0),
-      #=analysis_results=#nothing, #=not relocatable?=#UInt8(0), new_source.debuginfo, new_source.edges)
+        #=analysis_results=#nothing, new_source.debuginfo, new_source.edges)
 
     # Poke the CI into the global cache
     # This isn't necessary, but does conveniently give it the mandatory permanent GC-root before calling `invoke`

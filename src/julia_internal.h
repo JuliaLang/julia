@@ -226,7 +226,7 @@ extern volatile int profile_all_tasks;
 // Ensures that we can safely read the `live_tasks`field of every TLS when profiling.
 // We want to avoid the case that a GC gets interleaved with `jl_profile_task` and shrinks
 // the `live_tasks` array while we are reading it or frees tasks that are being profiled.
-// Because of that, this lock must be held in `jl_profile_task` and `sweep_stack_pools_and_mtarraylist_buffers`.
+// Because of that, this lock must be held in `jl_profile_task` and `jl_gc_sweep_stack_pools_and_mtarraylist_buffers`.
 extern uv_mutex_t live_tasks_lock;
 // Ensures that we can safely write to `profile_bt_data_prof` and `profile_bt_size_cur`.
 // We want to avoid the case that:
@@ -691,7 +691,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
-        uint8_t relocatability, jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/);
+        jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/);
+JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPAGATES_ROOT, int compiled) JL_NOTSAFEPOINT;
 
 STATIC_INLINE jl_method_instance_t *jl_get_ci_mi(jl_code_instance_t *ci JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
@@ -923,8 +924,13 @@ EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind
     uint8_t bits = (pku & 0x7);
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
 
-    if (val == NULL && bits == BINDING_KIND_IMPLICIT) {
-        return BINDING_KIND_GUARD;
+    if (val == NULL) {
+        if (bits == BINDING_KIND_IMPLICIT) {
+            return BINDING_KIND_GUARD;
+        }
+        if (bits == BINDING_KIND_CONST) {
+            return BINDING_KIND_UNDEF_CONST;
+        }
     }
 
     return (enum jl_partition_kind)bits;
@@ -946,10 +952,14 @@ STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t JL_PROPAG
 STATIC_INLINE jl_ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
 {
 #ifdef _P64
-    if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
+    if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
         assert(val == NULL);
+    else if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_CONST)
+        assert(val != NULL);
     if (kind == BINDING_KIND_GUARD)
         kind = BINDING_KIND_IMPLICIT;
+    else if (kind == BINDING_KIND_UNDEF_CONST)
+        kind = BINDING_KIND_CONST;
     assert((((uintptr_t)val) & 0x7) == 0);
     return ((jl_ptr_kind_union_t)val) | kind;
 #else
@@ -963,6 +973,10 @@ STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAF
 }
 
 STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_UNDEF_CONST;
+}
+
+STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT;
 }
 
@@ -1221,7 +1235,6 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
 JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
                                    jl_code_instance_t *expected_ci,
                                    jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
-JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi, jl_code_instance_t *ci) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codeinst, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src);
