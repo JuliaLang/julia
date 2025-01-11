@@ -128,7 +128,7 @@ julia> pwd()
 "/home/JuliaUser"
 
 julia> cd(readdir, "/home/JuliaUser/Projects/julia")
-34-element Array{String,1}:
+34-element Vector{String}:
  ".circleci"
  ".freebsdci.sh"
  ".git"
@@ -211,17 +211,17 @@ julia> mkpath("my/test/dir") # creates three directories
 "my/test/dir"
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "my"
 
 julia> cd("my")
 
 julia> readdir()
-1-element Array{String,1}:
+1-element Vector{String}:
  "test"
 
 julia> readdir("test")
-1-element Array{String,1}:
+1-element Vector{String}:
  "dir"
 
 julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directories
@@ -943,7 +943,7 @@ See also: [`walkdir`](@ref).
 julia> cd("/home/JuliaUser/dev/julia")
 
 julia> readdir()
-30-element Array{String,1}:
+30-element Vector{String}:
  ".appveyor.yml"
  ".git"
  ".gitattributes"
@@ -953,7 +953,7 @@ julia> readdir()
  "usr-staging"
 
 julia> readdir(join=true)
-30-element Array{String,1}:
+30-element Vector{String}:
  "/home/JuliaUser/dev/julia/.appveyor.yml"
  "/home/JuliaUser/dev/julia/.git"
  "/home/JuliaUser/dev/julia/.gitattributes"
@@ -963,7 +963,7 @@ julia> readdir(join=true)
  "/home/JuliaUser/dev/julia/usr-staging"
 
 julia> readdir("base")
-145-element Array{String,1}:
+145-element Vector{String}:
  ".gitignore"
  "Base.jl"
  "Enums.jl"
@@ -973,7 +973,7 @@ julia> readdir("base")
  "weakkeydict.jl"
 
 julia> readdir("base", join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "base/.gitignore"
  "base/Base.jl"
  "base/Enums.jl"
@@ -983,7 +983,7 @@ julia> readdir("base", join=true)
  "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
-145-element Array{String,1}:
+145-element Vector{String}:
  "/home/JuliaUser/dev/julia/base/.gitignore"
  "/home/JuliaUser/dev/julia/base/Base.jl"
  "/home/JuliaUser/dev/julia/base/Enums.jl"
@@ -1100,7 +1100,7 @@ function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=fa
 end
 
 """
-    walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
+    walkdir(dir = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
 
@@ -1116,6 +1116,9 @@ The returned iterator is stateful so when accessed repeatedly each access will
 resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
+
+!!! compat "Julia 1.12"
+    `pwd()` as the default directory was added in Julia 1.12.
 
 # Examples
 ```julia
@@ -1146,7 +1149,7 @@ julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+function walkdir(path = pwd(); topdown=true, follow_symlinks=false, onerror=throw)
     function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)

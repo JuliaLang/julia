@@ -828,7 +828,6 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::Tuple{Integer, Vararg{Integer}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -1012,14 +1011,19 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
         end
         y = iterate(src, y[2])
     end
-    i = Int(dstart)
-    while i <= dmax && y !== nothing
-        val, st = y
-        @inbounds dest[i] = val
-        y = iterate(src, st)
-        i += 1
+    if y === nothing
+        throw(ArgumentError(LazyString(
+            "source has fewer elements than required, ",
+            "expected at least ",sstart," got ", sstart-1)))
     end
-    i <= dmax && throw(BoundsError(dest, i))
+    val, st = y
+    i = Int(dstart)
+    @inbounds dest[i] = val
+    for val in Iterators.take(Iterators.rest(src, st), n-1)
+        i += 1
+        @inbounds dest[i] = val
+    end
+    i < dmax && throw(BoundsError(dest, i))
     return dest
 end
 
@@ -1101,11 +1105,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in src
-                idx, state = ret::NTuple{2,Any}
-                dest[idx] = a
-                ret = iterate(iterdest, state)
+            for (Idest, Isrc) in zip(iterdest, itersrc)
+                @inbounds dest[Idest] = src[Isrc]
             end
         end
     end
@@ -1587,7 +1588,7 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
@@ -3048,6 +3049,15 @@ function cmp(A::AbstractVector, B::AbstractVector)
 end
 
 """
+    isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+
+Return `true` when the only element of `A` is less than the only element of `B`.
+"""
+function isless(A::AbstractArray{<:Any,0}, B::AbstractArray{<:Any,0})
+    isless(only(A), only(B))
+end
+
+"""
     isless(A::AbstractVector, B::AbstractVector)
 
 Return `true` when `A` is less than `B` in lexicographic order.
@@ -3493,10 +3503,31 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
-    isempty(As) && throw(ArgumentError(
-        """map! requires at least one "source" argument"""))
+    @assert !isempty(As) # should dispatch to map!(f, A)
     map_n!(f, dest, As)
 end
+
+"""
+    map!(function, array)
+
+Like [`map`](@ref), but stores the result in the same array.
+!!! compat "Julia 1.12"
+    This method requires Julia 1.12 or later. To support previous versions too,
+    use the equivalent `map!(function, array, array)`.
+
+# Examples
+```jldoctest
+julia> a = [1 2 3; 4 5 6];
+
+julia> map!(x -> x^3, a);
+
+julia> a
+2×3 Matrix{$Int}:
+  1    8   27
+ 64  125  216
+```
+"""
+map!(f::F, inout::AbstractArray) where F = map!(f, inout, inout)
 
 """
     map(f, A::AbstractArray...) -> N-array

@@ -313,6 +313,13 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
+    if (ct->metrics_enabled) {
+        // [task] user_time -finished-> wait_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->finished_at, now);
+        jl_atomic_fetch_add_relaxed(&ct->running_time_ns, now - jl_atomic_load_relaxed(&ct->last_started_running_at));
+    }
     if (jl_atomic_load_relaxed(&ct->_isexception))
         jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
@@ -1143,6 +1150,11 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    jl_atomic_store_relaxed(&t->first_enqueued_at, 0);
+    jl_atomic_store_relaxed(&t->last_started_running_at, 0);
+    jl_atomic_store_relaxed(&t->running_time_ns, 0);
+    jl_atomic_store_relaxed(&t->finished_at, 0);
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1241,6 +1253,12 @@ CFI_NORETURN
 #endif
 
     ct->ctx.started = 1;
+    if (ct->metrics_enabled) {
+        // [task] wait_time -started-> user_time
+        assert(jl_atomic_load_relaxed(&ct->first_enqueued_at) != 0);
+        assert(jl_atomic_load_relaxed(&ct->last_started_running_at) == 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, jl_hrtime());
+    }
     JL_PROBE_RT_START_TASK(ct);
     jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
@@ -1491,6 +1509,14 @@ CFI_NORETURN
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_RISCV64_)
+    asm volatile(
+        " mv sp, %0;\n"
+        " mv ra, zero;\n" // Clear return address register
+        " mv fp, zero;\n" // Clear frame pointer
+        " jr %1;\n" // call `fn` with fake stack frame
+        " ebreak" // abort
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_PPC64_)
     // N.B.: There is two iterations of the PPC64 ABI.
     // v2 is current and used here. Make sure you have the
@@ -1584,6 +1610,19 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    jl_atomic_store_relaxed(&ct->running_time_ns, 0);
+    jl_atomic_store_relaxed(&ct->finished_at, 0);
+    ct->metrics_enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled) != 0;
+    if (ct->metrics_enabled) {
+        // [task] created -started-> user_time
+        uint64_t now = jl_hrtime();
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, now);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, now);
+    }
+    else {
+        jl_atomic_store_relaxed(&ct->first_enqueued_at, 0);
+        jl_atomic_store_relaxed(&ct->last_started_running_at, 0);
+    }
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);

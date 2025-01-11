@@ -240,7 +240,6 @@
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
-    XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
@@ -316,6 +315,7 @@
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_getloc) \
     XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
@@ -344,6 +344,8 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
+    XX(jl_method_match_to_mi) \
+    XX(jl_get_unspecialized) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -452,6 +454,8 @@
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
+    XX(jl_get_ptls_rng) \
+    XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -512,6 +516,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
+    YY(jl_emit_codeinst_to_jit) \
     YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
@@ -520,6 +525,7 @@
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
     YY(jl_get_llvm_external_fns) \
+    YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -536,27 +542,12 @@
     YY(jl_dump_emitted_mi_name) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
+    YY(jl_emit_native) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraMPMAddCPUFeaturesPass) \
-    YY(LLVMExtraMPMAddRemoveNIPass) \
-    YY(LLVMExtraMPMAddMultiVersioningPass) \
-    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
-    YY(LLVMExtraMPMAddLowerPTLSPass) \
-    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
-    YY(LLVMExtraFPMAddCombineMulAddPass) \
-    YY(LLVMExtraFPMAddLateLowerGCPass) \
-    YY(LLVMExtraFPMAddAllocOptPass) \
-    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
-    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
-    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
-    YY(LLVMExtraFPMAddFinalLowerGCPass) \
-    YY(LLVMExtraLPMAddJuliaLICMPass) \
-    YY(LLVMExtraLPMAddLowerSIMDLoopPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

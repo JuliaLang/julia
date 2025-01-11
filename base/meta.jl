@@ -16,6 +16,8 @@ export quot,
        show_sexpr,
        @dump
 
+public parse
+
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
 
@@ -362,11 +364,29 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.UpsilonNode)
+        if !isdefined(x, :val)
+            return x
+        end
+        return Core.UpsilonNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.PhiCNode)
+        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                           slot_offset, statement_offset, boundscheck)
+    end
     if isa(x, Core.ReturnNode)
+       # Unreachable doesn't have val defined
+       if !isdefined(x, :val)
+          return x
+       else
         return Core.ReturnNode(
             _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
+       end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
@@ -376,6 +396,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         )
     end
     if isa(x, Core.EnterNode)
+        if x.catch_dest == 0
+            return x
+        end
         return Core.EnterNode(x, x.catch_dest + statement_offset)
     end
     if isa(x, Expr)
@@ -449,7 +472,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !Core.Compiler.is_meta_expr_head(head)
+        elseif !Base.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end

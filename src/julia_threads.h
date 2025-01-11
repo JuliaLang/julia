@@ -4,7 +4,12 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#include "gc-tls.h"
+#ifndef MMTK_GC
+#include "gc-tls-stock.h"
+#else
+#include "gc-tls-mmtk.h"
+#endif
+#include "gc-tls-common.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
@@ -18,6 +23,8 @@ extern "C" {
 
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -54,7 +61,7 @@ typedef struct {
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
-     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
 #define JL_HAVE_ASM
 #endif
 #if 0
@@ -153,6 +160,8 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_gc_tls_states_t gc_tls; // this is very large, and the offset of the first member is baked into codegen
+    jl_gc_tls_states_common_t gc_tls_common; // common tls for both GCs
+    small_arraylist_t lazily_freed_mtarraylist_buffers;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;

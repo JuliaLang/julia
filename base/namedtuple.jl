@@ -110,8 +110,6 @@ julia> (; t.x)
 """
 Core.NamedTuple
 
-if nameof(@__MODULE__) === :Base
-
 @eval function (NT::Type{NamedTuple{names,T}})(args::Tuple) where {names, T <: Tuple}
     if length(args) != length(names::Tuple)
         throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
@@ -150,8 +148,6 @@ end
 
 NamedTuple(itr) = (; itr...)
 
-end # if Base
-
 # Like NamedTuple{names, T} as a constructor, but omits the additional
 # `convert` call, when the types are known to match the fields
 @eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
@@ -179,10 +175,11 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
-convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = NT(t)
+convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = (@inline NT(t))::NT
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+    NT = NamedTuple{names,T}
+    (@inline NT(nt))::NT
 end
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
@@ -193,7 +190,6 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
     return NT1(T1(nt))::NT1::NT
 end
 
-if nameof(@__MODULE__) === :Base
 Tuple(nt::NamedTuple) = (nt...,)
 (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
@@ -228,7 +224,6 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
-end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)

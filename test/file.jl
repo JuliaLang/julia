@@ -459,6 +459,11 @@ end
     end
 end
 
+# Issue #51710 and PR #54855
+@test_throws MethodError stat(7)
+@test_throws MethodError ispath(false)
+@test_throws MethodError ispath(1)
+
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
 if Sys.iswindows()
@@ -1728,6 +1733,13 @@ cd(dirwalk) do
         @test dirs == []
         @test files == ["foo"]
     end
+
+    # pwd() as default directory
+    for ((r1, d1, f1), (r2, d2, f2)) in zip(walkdir(), walkdir(pwd()))
+        @test r1 == r2
+        @test d1 == d2
+        @test f1 == f2
+    end
 end
 rm(dirwalk, recursive=true)
 
@@ -1905,6 +1917,26 @@ end
         @test startswith(tmpdir, tmpdirbase)
         @test sizeof(tmpdir) == 6 + sizeof(tmpdirbase)
         @test sizeof(basename(tmpdir)) == 6
+    end
+end
+
+@testset "pwd tests" begin
+    mktempdir() do dir
+        cd(dir) do
+            withenv("OLDPWD" => nothing) do
+                io = IOBuffer()
+                Base.repl_cmd(@cmd("cd"), io)
+                Base.repl_cmd(@cmd("cd -"), io)
+                @test realpath(pwd()) == realpath(dir)
+                if !Sys.iswindows()
+                    # Delete the working directory and check we can cd out of it
+                    # Cannot delete the working directory on Windows
+                    rm(dir)
+                    @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+                    Base.repl_cmd(@cmd("cd \\~"), io)
+                end
+            end
+        end
     end
 end
 
@@ -2108,6 +2140,16 @@ Base.joinpath(x::URI50890) = URI50890(x.f)
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+    s = Base.Filesystem.StatStruct()
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"\" ENOENT: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"\"\n ENOENT: ") && !endswith(stat_show_str_multi, r"\s")
+    s = Base.Filesystem.StatStruct("my/test", Ptr{UInt8}(0), Int32(Base.UV_ENOTDIR))
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(\"my/test\" ENOTDIR: ") && endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for \"my/test\"\n ENOTDIR: ") && !endswith(stat_show_str_multi, r"\s")
 end
 
 @testset "diskstat() works" begin

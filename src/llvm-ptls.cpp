@@ -9,11 +9,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Triple.h>
-#else
-#include <llvm/ADT/Triple.h>
-#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -67,11 +63,7 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-#if JL_LLVM_VERSION >= 160000
     pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
-#else
-    addFnAttr(pgcstack, Attribute::ReadNone);
-#endif
     addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
@@ -117,6 +109,8 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
+        } else if (TargetTriple.isRISCV()) {
+            asm_str = "mv $0, tp";
         } else if (TargetTriple.getArch() == Triple::x86_64) {
             asm_str = "movq %fs:0, $0";
         } else if (TargetTriple.getArch() == Triple::x86) {
@@ -191,7 +185,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         builder.SetInsertPoint(fastTerm->getParent());
         fastTerm->removeFromParent();
         MDNode *tbaa = tbaa_gcframe;
-        Value *prior = emit_gc_unsafe_enter(builder, T_size, get_current_ptls_from_task(builder, T_size, get_current_task_from_pgcstack(builder, T_size, pgcstack), tbaa), true);
+        Value *prior = emit_gc_unsafe_enter(builder, T_size, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa), true);
         builder.Insert(fastTerm);
         phi->addIncoming(pgcstack, fastTerm->getParent());
         // emit pre-return cleanup
@@ -203,7 +197,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             for (auto &BB : *pgcstack->getParent()->getParent()) {
                 if (isa<ReturnInst>(BB.getTerminator())) {
                     builder.SetInsertPoint(BB.getTerminator());
-                    emit_gc_unsafe_leave(builder, T_size, get_current_ptls_from_task(builder, T_size, get_current_task_from_pgcstack(builder, T_size, phi), tbaa), last_gc_state, true);
+                    emit_gc_unsafe_leave(builder, T_size, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa), last_gc_state, true);
                 }
             }
         }

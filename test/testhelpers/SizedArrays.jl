@@ -99,4 +99,7 @@ mul!(dest::AbstractMatrix, S1::SizedMatrix, S2::SizedMatrix, α::Number, β::Num
 mul!(dest::AbstractVector, M::AbstractMatrix, v::SizedVector, α::Number, β::Number) =
     mul!(dest, M, _data(v), α, β)
 
+LinearAlgebra.zeroslike(::Type{S}, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) where {S<:SizedArray} =
+            zeros(eltype(S), ax)
+
 end

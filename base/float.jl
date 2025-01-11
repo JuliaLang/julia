@@ -122,13 +122,16 @@ significand_mask(::Type{Float16}) = 0x03ff
 mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
 
 for T in (Float16, Float32, Float64)
-    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
-    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
-    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    sb = trailing_ones(significand_mask(T))
+    em = exponent_mask(T)
+    eb = Int(exponent_one(T) >> sb)
+    @eval significand_bits(::Type{$T}) = $(sb)
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - sb - 1)
+    @eval exponent_bias(::Type{$T}) = $(eb)
     # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T) - 1)
+    @eval exponent_max(::Type{$T}) = $(Int(em >> sb) - eb - 1)
     # maximum float exponent without bias
-    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+    @eval exponent_raw_max(::Type{$T}) = $(Int(em >> sb))
 end
 
 """
@@ -247,8 +250,6 @@ for t1 in (Float16, Float32, Float64)
         end
     end
 end
-
-Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
@@ -926,8 +927,8 @@ end
 """
     nextfloat(x::AbstractFloat)
 
-Return the smallest floating point number `y` of the same type as `x` such `x < y`. If no
-such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
+Return the smallest floating point number `y` of the same type as `x` such that `x < y`.
+If no such `y` exists (e.g. if `x` is `Inf` or `NaN`), then return `x`.
 
 See also: [`prevfloat`](@ref), [`eps`](@ref), [`issubnormal`](@ref).
 """
@@ -944,8 +945,8 @@ prevfloat(x::AbstractFloat, d::Integer) = nextfloat(x, -d)
 """
     prevfloat(x::AbstractFloat)
 
-Return the largest floating point number `y` of the same type as `x` such `y < x`. If no
-such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
+Return the largest floating point number `y` of the same type as `x` such that `y < x`.
+If no such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then return `x`.
 """
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 

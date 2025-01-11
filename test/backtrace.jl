@@ -237,7 +237,7 @@ let trace = try
     end
     @test trace[1].func === Symbol("top-level scope")
     @test trace[1].file === :a_filename
-    @test trace[1].line == 3
+    @test trace[1].line in (2, 3)
 end
 
 # issue #45171

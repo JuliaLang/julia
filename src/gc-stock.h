@@ -5,7 +5,6 @@
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
-
 #ifndef JL_GC_H
 #define JL_GC_H
 
@@ -20,6 +19,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "threading.h"
+#include "gc-common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,33 +84,6 @@ typedef struct _jl_gc_chunk_t {
 // layout for big (>2k) objects
 
 extern uintptr_t gc_bigval_sentinel_tag;
-
-JL_EXTENSION typedef struct _bigval_t {
-    struct _bigval_t *next;
-    struct _bigval_t *prev;
-    size_t sz;
-#ifdef _P64 // Add padding so that the value is 64-byte aligned
-    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
-    void *_padding[8 - 4];
-#else
-    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
-    void *_padding[16 - 4];
-#endif
-    //struct jl_taggedvalue_t <>;
-    union {
-        uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
-    };
-    // must be 64-byte aligned here, in 32 & 64 bit modes
-} bigval_t;
-
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
@@ -505,12 +478,26 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+// Must be kept in sync with `base/timing.jl`
+#define FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL (0)
+#define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
+#define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
+#define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
+#define FULL_SWEEP_NUM_REASONS (4)
+
+extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
+STATIC_INLINE void gc_count_full_sweep_reason(int reason) JL_NOTSAFEPOINT
+{
+    assert(reason >= 0 && reason < FULL_SWEEP_NUM_REASONS);
+    jl_full_sweep_reasons[reason]++;
+}
+
 extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
-extern _Atomic(int) gc_n_threads_sweeping;
+extern _Atomic(int) gc_n_threads_sweeping_pools;
 extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
@@ -521,7 +508,7 @@ void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
-void sweep_stack_pools(void) JL_NOTSAFEPOINT;
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages

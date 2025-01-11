@@ -4,7 +4,7 @@ module Sort
 
 using Base.Order
 
-using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
+using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
     sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
@@ -186,10 +186,10 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
-    @inbounds while len != 0
+    while len != 0
         half_len = len >>> 0x01
         m = lo + half_len
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m + 1
             len -= half_len + 1
         else
@@ -206,9 +206,9 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     u = T(1)
     lo = lo - u
     hi = hi + u
-    @inbounds while lo < hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt(o, x, @inbounds(v[m]))
             hi = m
         else
             lo = m
@@ -224,15 +224,15 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     u = T(1)
     lo = ilo - u
     hi = ihi + u
-    @inbounds while lo < hi - u
+    while lo != hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt(o, @inbounds(v[m]), x)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, x, @inbounds(v[m]))
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = searchsortedfirst(v, x, lo+u, m, o)
+            b = searchsortedlast(v, x, m, hi-u, o)
             return a : b
         end
     end
@@ -1475,21 +1475,16 @@ InitialOptimizations(next) = SubArrayOptimization(
             Small{10}(
                 IEEEFloatOptimization(
                     next)))))
+
 """
-    DEFAULT_STABLE
+    struct DefaultStable <: Algorithm end
 
-The default sorting algorithm.
+`DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
+algorithm should be used, but does not specify exactly which algorithm.
 
-This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
-equal). It makes an effort to be fast for most inputs.
-
-The algorithms used by `DEFAULT_STABLE` are an implementation detail. See extended help
-for the current dispatch system.
-
-# Extended Help
-
-`DEFAULT_STABLE` is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid
-of Radix, Insertion, Counting, Quick sorts.
+Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
+composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
+Counting, Quick sorts.
 
 We begin with MissingOptimization because it has no runtime cost when it is not
 triggered and can enable other optimizations to be applied later. For example,
@@ -1549,7 +1544,39 @@ stage.
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
 otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
-const DEFAULT_STABLE = InitialOptimizations(
+struct DefaultStable <: Algorithm end
+
+"""
+    DEFAULT_STABLE
+
+The default sorting algorithm.
+
+This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
+equal). It makes an effort to be fast for most inputs.
+
+The algorithms used by `DEFAULT_STABLE` are an implementation detail. See the docstring
+of `Base.Sort.DefaultStable` for the current dispatch system.
+"""
+const DEFAULT_STABLE = DefaultStable()
+
+"""
+    DefaultUnstable <: Algorithm
+
+Like [`DefaultStable`](@ref), but does not guarantee stability.
+"""
+struct DefaultUnstable <: Algorithm end
+
+"""
+    DEFAULT_UNSTABLE
+
+An efficient sorting algorithm which may or may not be stable.
+
+The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
+the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
+"""
+const DEFAULT_UNSTABLE = DefaultUnstable()
+
+const _DEFAULT_ALGORITHMS_FOR_VECTORS = InitialOptimizations(
     IsUIntMappable(
         Small{40}(
             CheckSorted(
@@ -1560,15 +1587,10 @@ const DEFAULT_STABLE = InitialOptimizations(
                                 ScratchQuickSort())))))),
         StableCheckSorted(
             ScratchQuickSort())))
-"""
-    DEFAULT_UNSTABLE
 
-An efficient sorting algorithm.
+_sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw) =
+    _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
-The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
-the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
-"""
-const DEFAULT_UNSTABLE = DEFAULT_STABLE
 const SMALL_THRESHOLD  = 20
 
 function Base.show(io::IO, alg::Algorithm)
@@ -1598,6 +1620,7 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::NTuple) = DEFAULT_STABLE
 
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
@@ -1677,12 +1700,15 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (2, "b")
  (1, "c")
 
-julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) # same as sort(0:3, by=abs(x->x-2))
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs))
 4-element Vector{Int64}:
  2
  1
  3
  0
+
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) == sort(0:3, by=x->abs(x-2))
+true
 
 julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
 5-element Vector{Float64}:
@@ -1713,9 +1739,12 @@ function sort!(v::AbstractVector{T};
 end
 
 """
-    sort(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    sort(v::Union{AbstractVector, NTuple}; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+
+!!! compat "Julia 1.12"
+    Sorting `NTuple`s requires Julia 1.12 or later.
 
 # Examples
 ```jldoctest
@@ -1735,6 +1764,41 @@ julia> v
 ```
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+
+function sort(x::NTuple;
+              alg::Algorithm=defalg(x),
+              lt=isless,
+              by=identity,
+              rev::Union{Bool,Nothing}=nothing,
+              order::Ordering=Forward,
+              scratch::Union{Vector, Nothing}=nothing)
+    # Can't do this check with type parameters because of https://github.com/JuliaLang/julia/issues/56698
+    scratch === nothing || eltype(x) == eltype(scratch) || throw(ArgumentError("scratch has the wrong eltype"))
+    _sort(x, alg, ord(lt,by,rev,order), (;scratch))::typeof(x)
+end
+# Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
+# or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
+function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
+    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
+    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
+    if length(x) > 9
+        v = copymutable(x)
+        _sort!(v, a, o, kw)
+        typeof(x)(v)
+    else
+        _mergesort(x, o)
+    end
+end
+_mergesort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _mergesort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_mergesort(a, o), _mergesort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
