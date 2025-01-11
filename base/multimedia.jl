@@ -54,10 +54,10 @@ julia> struct MyType
            val
        end
 
-julia> Base.show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My Value is ", x.val);
+julia> Base.show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My value is ", x.val);
 
 julia> show(stdout, MIME"text/plain"(), MyType(5))
-My Value is 5
+My value is 5
 ```
 """
 struct MIME{mime} end
