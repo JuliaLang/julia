@@ -16,7 +16,9 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 """
     MIME
 
-A parametric type representing a standard internet data format.
+A parametric type representing a content type/format, which is used to define [`show`](@ref)
+methods to output objects in different formats and allows [`display(x)`](@ref) to detect
+which formats are available for a given `x` in a particular display environment.
 
 "MIME" stands for "Multipurpose Internet Mail Extensions", since the standard was originally
 used to describe multimedia attachments to email messages.
