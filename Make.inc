@@ -1395,7 +1395,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
