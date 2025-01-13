@@ -153,10 +153,19 @@ function findnext(
     i == scu + 1 && return nothing
     @boundscheck if i < 1 || i > scu + 1
         throw(BoundsError(s, i))
-    elseif !isvalid(s, i)
-        string_index_err(s, i)
     end
-    try_next(FwCharPosIter(s, pred.x), Int(i)::Int)
+    # The most common case is probably searching for an ASCII char.
+    # We inline this critical path here to avoid instantiating a
+    # FwCharPosIter in the common case.
+    c = Char(pred.x)::Char
+    u = (reinterpret(UInt32, c) >> 24) % UInt8
+    i = Int(i)::Int
+    isvalid(s, i) || string_index_err(s, i)
+    return if is_standalone_byte(u)
+        _search(s, u, i)
+    else
+        try_next(FwCharPosIter(s, c, last_utf8_byte(c)), i)
+    end
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
@@ -201,7 +210,15 @@ function findprev(
     @boundscheck if i < 1 || i > ncodeunits(s) + 1
         throw(BoundsError(s, i))
     end
-    try_next(RvCharPosIter(s, pred.x), Int(i)::Int)
+    # Manually inline the fast path if c is ASCII, as we expect it to often be
+    c = Char(pred.x)::Char
+    u = (reinterpret(UInt32, c) >> 24) % UInt8
+    i = Int(i)::Int
+    return if is_standalone_byte(u)
+        _rsearch(s, u, i)
+    else
+        try_next(RvCharPosIter(s, c, last_utf8_byte(c)), i)
+    end
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
