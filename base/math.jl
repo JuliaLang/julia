@@ -25,7 +25,7 @@ using .Base: sign_mask, exponent_mask, exponent_one,
             significand_bits, exponent_bits, exponent_bias,
             exponent_max, exponent_raw_max, clamp, clamp!
 
-using Core.Intrinsics: sqrt_llvm
+using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
 using .Base: IEEEFloat
 
@@ -833,23 +833,12 @@ minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
 _isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
-Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-Base.@assume_effects :total @inline llvm_min(x::Float16, y::Float16) = ccall("llvm.minimum.f16", llvmcall, Float16, (Float16, Float16), x, y)
-Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-Base.@assume_effects :total @inline llvm_max(x::Float16, y::Float16) = ccall("llvm.maximum.f16", llvmcall, Float16, (Float16, Float16), x, y)
-
 function min(x::T, y::T) where {T<:Union{Float16,Float32,Float64}}
-    return llvm_min(x,y)
+    return min_float(x, y)
 end
 
 function max(x::T, y::T) where {T<:Union{Float16,Float32,Float64}}
-    return llvm_max(x,y)
-end
-
-function minmax(x::T, y::T) where {T<:Union{Float16,Float32,Float64}}
-    return llvm_min(x, y), llvm_max(x, y)
+    return max_float(x, y)
 end
 
 """
