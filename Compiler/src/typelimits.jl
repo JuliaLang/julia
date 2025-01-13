@@ -601,7 +601,7 @@ end
         end
         nflds == 0 && return nothing
         fields = Vector{Any}(undef, nflds)
-        anyrefine = nflds > datatype_min_ninitialized(unwrap_unionall(aty))
+        anyrefine = nflds > datatype_min_ninitialized(aty)
         for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
