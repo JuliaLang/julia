@@ -46,7 +46,7 @@ function __init__()
         set_emin!(get_emin_min())
         set_emax!(get_emax_max())
     catch ex
-        Base.showerror_nostdio(ex, "WARNING: Error during initialization of module MPFR")
+        showerror_nostdio(ex, "WARNING: Error during initialization of module MPFR")
     end
     nothing
 end
@@ -106,9 +106,9 @@ end
 tie_breaker_is_to_even(::MPFRRoundingMode) = true
 
 const ROUNDING_MODE = Ref{MPFRRoundingMode}(MPFRRoundNearest)
-const CURRENT_ROUNDING_MODE = Base.ScopedValues.ScopedValue{MPFRRoundingMode}()
+const CURRENT_ROUNDING_MODE = ScopedValues.ScopedValue{MPFRRoundingMode}()
 const DEFAULT_PRECISION = Ref{Clong}(256)
-const CURRENT_PRECISION = Base.ScopedValues.ScopedValue{Clong}()
+const CURRENT_PRECISION = ScopedValues.ScopedValue{Clong}()
 # Basic type and initialization definitions
 
 # Warning: the constants are MPFR implementation details from
@@ -143,7 +143,7 @@ struct BigFloat <: AbstractFloat
     # Not recommended for general use:
     # used internally by, e.g. deepcopy
     global function _BigFloat(d::Memory{Limb})
-        Base.unsafe_convert(Ref{BigFloat}, BigFloatData(d)) # force early initialization of pointer field of z.d
+        unsafe_convert(Ref{BigFloat}, BigFloatData(d)) # force early initialization of pointer field of z.d
         return new(d)
     end
 
@@ -156,7 +156,7 @@ struct BigFloat <: AbstractFloat
         #ccall((:mpfr_custom_init,libmpfr), Cvoid, (Ptr{Limb}, Clong), BigFloatData(d), prec) # currently seems to be a no-op in mpfr
         #NAN_KIND = Cint(0)
         #ccall((:mpfr_custom_init_set,libmpfr), Cvoid, (Ref{BigFloat}, Cint, Clong, Ptr{Limb}), z, NAN_KIND, prec, BigFloatData(d))
-        p = Base.unsafe_convert(Ptr{Limb}, d)
+        p = unsafe_convert(Ptr{Limb}, d)
         GC.@preserve d begin # initialize to +NAN
             unsafe_store!(Ptr{Clong}(p) + offset_prec, Clong(precision))
             unsafe_store!(Ptr{Cint}(p) + offset_sign, one(Cint))
@@ -176,9 +176,9 @@ struct BigFloatData{Limb}
 end
 
 # BigFloat interface
-@inline function Base.getproperty(x::BigFloat, s::Symbol)
+@inline function etproperty(x::BigFloat, s::Symbol)
     d = getfield(x, :d)
-    p = Base.unsafe_convert(Ptr{Limb}, d)
+    p = unsafe_convert(Ptr{Limb}, d)
     if s === :prec
         return GC.@preserve d unsafe_load(Ptr{Clong}(p) + offset_prec)
     elseif s === :sign
@@ -194,9 +194,9 @@ end
 
 # While BigFloat (like all Numbers) is considered immutable, for practical reasons
 # of writing the algorithms on it we allow mutating sign, exp, and the contents of d
-@inline function Base.setproperty!(x::BigFloat, s::Symbol, v)
+@inline function setproperty!(x::BigFloat, s::Symbol, v)
     d = getfield(x, :d)
-    p = Base.unsafe_convert(Ptr{Limb}, d)
+    p = unsafe_convert(Ptr{Limb}, d)
     if s === :sign
         return GC.@preserve d unsafe_store!(Ptr{Cint}(p) + offset_sign, v)
     elseif s === :exp
@@ -208,12 +208,12 @@ end
 end
 
 # Ref interface: make sure the conversion to C is done properly
-Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
-Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
-Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
-function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
+unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
+unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
+cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
+function unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
-    p = Base.unsafe_convert(Ptr{Limb}, d)
+    p = unsafe_convert(Ptr{Limb}, d)
     dptrptr = Ptr{Ptr{Limb}}(p) + offset_d
     dptr = p + offset_p
     GC.@preserve d if unsafe_load(dptrptr, :monotonic) != dptr # make sure this pointer value was recomputed after any deserialization or copying
@@ -221,27 +221,27 @@ function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     end
     return Ptr{BigFloat}(p)
 end
-Base.unsafe_convert(::Type{Ptr{Limb}}, fd::BigFloatData) = Base.unsafe_convert(Ptr{Limb}, getfield(fd, :d)) + offset_p
-function Base.setindex!(fd::BigFloatData, v, i)
+unsafe_convert(::Type{Ptr{Limb}}, fd::BigFloatData) = unsafe_convert(Ptr{Limb}, getfield(fd, :d)) + offset_p
+function setindex!(fd::BigFloatData, v, i)
     d = getfield(fd, :d)
     @boundscheck 1 <= i <= length(d) - offset_p_limbs || throw(BoundsError(fd, i))
     @inbounds d[i + offset_p_limbs] = v
     return fd
 end
-function Base.getindex(fd::BigFloatData, i)
+function getindex(fd::BigFloatData, i)
     d = getfield(fd, :d)
     @boundscheck 1 <= i <= length(d) - offset_p_limbs || throw(BoundsError(fd, i))
     @inbounds d[i + offset_p_limbs]
 end
-Base.length(fd::BigFloatData) = length(getfield(fd, :d)) - offset_p_limbs
-Base.copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs + 1, limbs) # for Random
+length(fd::BigFloatData) = length(getfield(fd, :d)) - offset_p_limbs
+copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs + 1, limbs) # for Random
 
 include("rawbigfloats.jl")
 
-rounding_raw(::Type{BigFloat}) = something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
+rounding_raw(::Type{BigFloat}) = something(ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 function setrounding_raw(f::Function, ::Type{BigFloat}, r::MPFRRoundingMode)
-    Base.ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
+    ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
 end
 
 rounding(::Type{BigFloat}) = convert(RoundingMode, rounding_raw(BigFloat))
@@ -326,7 +326,7 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=rounding_raw(BigFloat); precis
     z = BigFloat(;precision)
     # punt on the hard case where we might have to deal with rounding
     # we could use this path in all cases, but mpfr_set_d has a lot of overhead.
-    if precision <= Base.significand_bits(Float64)
+    if precision <= significand_bits(Float64)
         ccall((:mpfr_set_d, libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
         if isnan(x) && signbit(x) != signbit(z)
             z.sign = -z.sign
@@ -886,15 +886,15 @@ end
 function minmax(x::BigFloat, y::BigFloat)
     isnan(x) && return x, x
     isnan(y) && return y, y
-    Base.Math._isless(x, y) ? (x, y) : (y, x)
+    Math._isless(x, y) ? (x, y) : (y, x)
 end
 
-function Base._extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
+function _extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
     (x1, x2), (y1, y2) = x, y
     isnan(x1) && return x
     isnan(y1) && return y
-    z1 = Base.Math._isless(x1, y1) ? x1 : y1
-    z2 = Base.Math._isless(x2, y2) ? y2 : x2
+    z1 = Math._isless(x1, y1) ? x1 : y1
+    z2 = Math._isless(x2, y2) ? y2 : x2
     z1, z2
 end
 
@@ -1039,7 +1039,7 @@ _convert_precision_from_base(precision::Integer, base::Integer) =
     base == 2 ? precision : ceil(Int, precision * log2(base))
 
 _precision_with_base_2(::Type{BigFloat}) =
-    Int(something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
+    Int(something(ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int; base=2)
@@ -1177,7 +1177,7 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
     The `base` keyword requires at least Julia 1.8.
 """
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
-    Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
+    ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end
 
 setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
@@ -1259,7 +1259,7 @@ check_exponent_err(ret) = ret == 0 || throw(ArgumentError("Invalid MPFR exponent
 set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, libmpfr), Cint, (Clong,), x))
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, libmpfr), Cint, (Clong,), x))
 
-function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
+function deepcopy_internal(x::BigFloat, stackdict::IdDict)
     get!(stackdict, x) do
         d′ = copy(getfield(x, :d))
         y = _BigFloat(d′)
@@ -1277,7 +1277,7 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     b = s.size * sizeof(Limb)            # bytes
     ccall((:__gmpz_realloc2, libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
     xd = x.d
-    GC.@preserve xd memcpy(s.d, Base.unsafe_convert(Ptr{Limb}, xd), b)
+    GC.@preserve xd memcpy(s.d, unsafe_convert(Ptr{Limb}, xd), b)
     s, x.exp - 8b, x.sign
 end
 
