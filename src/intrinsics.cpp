@@ -138,7 +138,7 @@ uint32_t jl_get_LLVM_VERSION_impl(void)
   the bitcast function does nothing except change the type tag
    of a value. At the user-level, it is perhaps better known as reinterpret.
   boxing is delayed until absolutely necessary, and handled at the point
-    where the box is nefeded.
+    where the box is needed.
   all intrinsics have a non-compiled implementation, this file contains
     the optimizations for handling them unboxed
 */
