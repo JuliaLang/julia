@@ -3708,7 +3708,7 @@ end
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
         anyrefine = !isvarargtype(rt.fields[end]) &&
-            length(rt.fields) > datatype_min_ninitialized(unwrap_unionall(rt.typ))
+            length(rt.fields) > datatype_min_ninitialized(rt.typ)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
