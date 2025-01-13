@@ -831,13 +831,11 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-_isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
-
-function min(x::T, y::T) where {T<:Union{Float16,Float32,Float64}}
+function min(x::T, y::T) where {T<:IEEEFloat}
     return min_float(x, y)
 end
 
-function max(x::T, y::T) where {T<:Union{Float16,Float32,Float64}}
+function max(x::T, y::T) where {T<:IEEEFloat}
     return max_float(x, y)
 end
 

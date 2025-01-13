@@ -1404,7 +1404,7 @@ bi_fintrinsic(sub,sub_float)
 bi_fintrinsic(mul,mul_float)
 bi_fintrinsic(div,div_float)
 
-float min_float(float x, float y)
+float min_float(float x, float y) JL_NOTSAFEPOINT
 {
     float diff = x - y;
     float argmin = signbit(diff) ? x : y;
@@ -1412,7 +1412,7 @@ float min_float(float x, float y)
     return is_nan ? diff : argmin;
 }
 
-double min_double(double x, double y)
+double min_double(double x, double y) JL_NOTSAFEPOINT
 {
     double diff = x - y;
     double argmin = signbit(diff) ? x : y;
@@ -1423,7 +1423,7 @@ double min_double(double x, double y)
 #define _min(a, b) sizeof(a) == sizeof(float) ? min_float(a, b) : min_double(a, b)
 bi_fintrinsic(_min, min_float)
 
-float max_float(float x, float y)
+float max_float(float x, float y) JL_NOTSAFEPOINT
 {
     float diff = x - y;
     float argmin = signbit(diff) ? y : x;
@@ -1431,7 +1431,7 @@ float max_float(float x, float y)
     return is_nan ? diff : argmin;
 }
 
-double max_double(double x, double y)
+double max_double(double x, double y) JL_NOTSAFEPOINT
 {
     double diff = x - y;
     double argmin = signbit(diff) ? x : y;
