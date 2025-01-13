@@ -162,14 +162,18 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 
 
 // --- storing and accessing source location metadata ---
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     // Non-opaque-closure MethodInstances are considered globally rooted
     // through their methods, but for OC, we need to create a global root
     // here.
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
         jl_as_global_root((jl_value_t*)mi, 1);
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
+    }
     getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
 }
 
