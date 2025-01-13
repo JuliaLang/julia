@@ -6,9 +6,11 @@
 MMTK_MOVING := 0
 MMTK_VARS := MMTK_PLAN=$(MMTK_PLAN) MMTK_MOVING=$(MMTK_MOVING)
 
+$(eval $(call git-external,mmtk_julia,MMTK_JULIA,,,$(BUILDDIR)))
+get-mmtk_julia: $(MMTK_JULIA_SRC_FILE)
+
 # Download the binding, build it from source
 ifeq (${MMTK_JULIA_DIR},$(BUILDROOT)/usr/lib/mmtk_julia)
-$(eval $(call git-external,mmtk_julia,MMTK_JULIA,,,$(BUILDDIR)))
 
 MMTK_JULIA_DIR=$(BUILDROOT)/deps/$(BUILDDIR)/$(MMTK_JULIA_SRC_DIR)
 MMTK_JULIA_LIB_PATH=$(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)
@@ -24,7 +26,6 @@ $(BUILDROOT)/usr/lib/libmmtk_julia.so: $(MMTK_JULIA_LIB_PATH)/libmmtk_julia.so
 $(MMTK_JULIA_LIB_PATH)/libmmtk_julia.so: $(BUILDDIR)/$(MMTK_JULIA_SRC_DIR)/source-extracted
 	@$(PROJECT_DIRS) $(MMTK_VARS) $(MAKE) -C $(MMTK_JULIA_DIR) $(MMTK_BUILD)
 
-get-mmtk_julia: $(MMTK_JULIA_SRC_FILE)
 extract-mmtk_julia: $(BUILDDIR)/$(MMTK_JULIA_SRC_DIR)/source-extracted
 configure-mmtk_julia: extract-mmtk_julia
 compile-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
