@@ -1238,3 +1238,9 @@ end
         @test parse(UInt64,read(`$exename --heap-size-hint=$str -E "Base.JLOptions().heap_size_hint"`, String)) == val
     end
 end
+
+@testset "--timeout-for-safepoint-straggler" begin
+    exename = `$(Base.julia_cmd())`
+    timeout = 120
+    @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
+end
