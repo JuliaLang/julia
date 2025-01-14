@@ -3,11 +3,17 @@
 // Processor feature detection
 
 #include "llvm-version.h"
+#include "llvm/TargetParser/Triple.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/TargetParser.h>
+#include <llvm/TargetParser/AArch64TargetParser.h>
+#include <llvm/TargetParser/X86TargetParser.h>
+#include <llvm/TargetParser/RISCVTargetParser.h>
+#include <llvm/Support/RISCVISAInfo.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -16,8 +22,8 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#include <map>
 #include <algorithm>
+#include <string>
 
 #include "julia_assert.h"
 
@@ -25,7 +31,170 @@
 #include <dlfcn.h>
 #endif
 
-#include <iostream>
+struct TargetData2 {
+    std::string CPUName;
+    llvm::SmallVector<std::string> Features;
+    int base;
+    std::string getFeatureString() const
+    {
+        std::string res;
+        for (auto &Feature : Features) {
+            if (!res.empty())
+                res += ",";
+            res += Feature;
+        }
+        return res;
+    }
+    TargetData2(std::string CPUName, llvm::SmallVector<std::string> Features, int base) : CPUName(CPUName), Features(Features), base(base) {}
+    TargetData2(llvm::StringRef CpuName, llvm::StringRef FeatureString /*Comma separated list*/) {
+        CPUName = CpuName.str();
+        size_t pos = 0;
+        while (pos < FeatureString.size()) {
+            auto next = FeatureString.find(',', pos);
+            if (next == llvm::StringRef::npos) {
+                Features.push_back(FeatureString.substr(pos).str());
+                break;
+            }
+            Features.push_back(FeatureString.substr(pos, next - pos).str());
+            pos = next + 1;
+        }
+    }
+    std::string serialize() const
+    {
+        std::string res = CPUName;
+        res += ";";
+        for (auto &Feature : Features) {
+            res += Feature;
+            res += ",";
+        }
+        res += std::to_string(base);
+        return res;
+    }
+    TargetData2(llvm::StringRef Data)
+    {
+        size_t pos = Data.find(';');
+        CPUName = Data.substr(0, pos).str();
+        pos++;
+        size_t next = Data.find(',', pos);
+        while (next != llvm::StringRef::npos) {
+            Features.push_back(Data.substr(pos, next - pos).str());
+            pos = next + 1;
+            next = Data.find(',', pos);
+        }
+        base = std::stoi(Data.substr(pos).str());
+    }
+    // Returns number of matched features or -1 if incompatible
+    int isCompatible(const TargetData2 &Other) const
+    {
+        if (CPUName != Other.CPUName)
+            return -1;
+        int count = 0;
+        for (auto &Feature : Features) {
+            if (std::find(Other.Features.begin(), Other.Features.end(), Feature) != Other.Features.end())
+                count++;
+            else
+                return -1;
+        }
+        return count;
+    }
+};
+
+// Serialized as a colon separated list of TargetData2
+struct TargetSet {
+    llvm::SmallVector<TargetData2> Targets;
+    TargetSet() = default;
+    TargetSet(llvm::StringRef Data)
+    {
+        size_t pos = 0;
+        while (pos < Data.size()) {
+            auto next = Data.find(':', pos);
+            if (next == llvm::StringRef::npos) {
+                Targets.emplace_back(Data.substr(pos));
+                break;
+            }
+            Targets.emplace_back(Data.substr(pos, next - pos));
+            pos = next + 1;
+        }
+    }
+    std::string serialize() const
+    {
+        std::string res;
+        for (auto &Target : Targets) {
+            res += Target.serialize();
+            res += ":";
+        }
+        return res;
+    }
+    // Returns the index of the target that matches the best
+    // Returns -1 if no match is found
+    int findBestMatch(const TargetData2 &Target) const
+    {
+        int best = -1;
+        int bestCount = -1;
+        for (size_t i = 0; i < Targets.size(); i++) {
+            auto count = Targets[i].isCompatible(Target);
+            if (count > bestCount) {
+                best = i;
+                bestCount = count;
+            }
+        }
+        return best;
+    }
+};
+
+// Multiarch feature detection using the triple and cpu name
+TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName)
+{
+    llvm::Triple TheTriple(Triple);
+    llvm::SmallVector<std::string> Features;
+    // While LLVM is inconsistent in what it wants to represent all the features we always use SmallVector of std::String
+    // This does mean we need to convert it to what llvm modules which is a single string with `,` separated features
+    if (CpuName.empty())
+        CpuName = "generic";
+
+    if (TheTriple.isAArch64()) {
+        // aarch64
+        auto CpuInfo = llvm::AArch64::parseCpu(CpuName);
+        llvm::AArch64::ExtensionSet Extensions;
+        Extensions.addCPUDefaults(*CpuInfo);
+        Extensions.addArchDefaults((*CpuInfo).Arch);
+        std::vector<llvm::StringRef> Arm64Features;
+        Extensions.toLLVMFeatureList(Arm64Features);
+        for (auto &Feature : Arm64Features) {
+            Features.push_back(Feature.str());
+        }
+    }
+    else if (TheTriple.isX86()) {
+        // x86
+        llvm::SmallVector<llvm::StringRef> X86Features;
+        llvm::X86::getFeaturesForCPU(CpuName, X86Features, true);
+        for (auto &Feature : X86Features) {
+            Features.push_back(Feature.str());
+        }
+    }
+    else if (TheTriple.isRISCV64()) {
+        llvm::StringRef RISCVMarch = llvm::RISCV::getMArchFromMcpu(CpuName);
+        auto ISAInfo = llvm::RISCVISAInfo::parseArchString(RISCVMarch, true); // Is in support in LLVM18 but back to TargetParser in 19
+        auto RISCVFeatures = (*ISAInfo)->toFeatures(/*AddAllExtension=*/true, /*IgnoreUnknown=*/false);
+        for (auto &Feature : RISCVFeatures) {
+            Features.push_back(Feature);
+        }
+    }
+    // Handle AMDGPU,ARM32...?
+    return TargetData2{CpuName.str(), Features, 0};
+}
+
+JL_DLLEXPORT void jl_dump_host_cpu2(void)
+{
+    auto Triple =llvm::sys::getProcessTriple();
+    auto CpuName = llvm::sys::getHostCPUName();
+    auto TargetData = jl_get_llvm_features(Triple, CpuName);
+    llvm::Triple TheTriple(Triple);
+    jl_printf(JL_STDOUT, "%s\n", TheTriple.normalize().c_str());
+    jl_printf(JL_STDOUT, "%s\n", CpuName.str().c_str());
+    jl_printf(JL_STDOUT, "%s\n", TargetData.getFeatureString().c_str());
+}
+
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
