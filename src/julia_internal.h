@@ -1595,6 +1595,8 @@ JL_DLLEXPORT jl_value_t *jl_add_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_sub_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_mul_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_div_float(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_min_float(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_max_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_fma_float(jl_value_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT jl_value_t *jl_muladd_float(jl_value_t *a, jl_value_t *b, jl_value_t *c);
 
