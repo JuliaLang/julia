@@ -178,10 +178,15 @@ struct jl_locked_stream {
     }
 };
 
-typedef struct _jl_llvm_functions_t {
+struct jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
     std::string specFunctionObject; // specialized llvm Function name
-} jl_llvm_functions_t;
+    jl_llvm_functions_t() JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t &operator=(const jl_llvm_functions_t&) JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t(const jl_llvm_functions_t &) JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t(jl_llvm_functions_t &&) JL_NOTSAFEPOINT = default;
+    ~jl_llvm_functions_t() JL_NOTSAFEPOINT = default;
+};
 
 struct jl_returninfo_t {
     llvm::FunctionCallee decl;
@@ -642,7 +647,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M);
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 // NewPM
 #include "passes.h"

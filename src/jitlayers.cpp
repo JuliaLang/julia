@@ -699,7 +699,7 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
     }
 }
 
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_emit_codeinst_to_jit_impl(
