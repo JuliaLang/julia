@@ -13,7 +13,11 @@
 #include <llvm/TargetParser/AArch64TargetParser.h>
 #include <llvm/TargetParser/X86TargetParser.h>
 #include <llvm/TargetParser/RISCVTargetParser.h>
+#if JL_LLVM_VERSION >= 190000
+#include <llvm/TargetParser/RISCVISAInfo.h>
+#else
 #include <llvm/Support/RISCVISAInfo.h>
+#endif
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
