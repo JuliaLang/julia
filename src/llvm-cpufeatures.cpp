@@ -71,8 +71,16 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
             if (Feature == "+fma" || Feature == "+fma4")
                 return typ == "f32" || typ == "f64";
         } else if (TT.isRISCV64()) {
-            if (Feature == "+zfh" || Feature == "+f" || Feature == "+d")
-                return typ == "f16" || typ == "f32" || typ == "f64";
+            // Don't return early if we find a known extension but it doesn't
+            // support the current type (e.g. f64 with Zfh or f16 with D)
+            if (Feature == "+zfh" && (typ == "f16" || typ == "f32"))
+                // Zfh implies F: https://github.com/riscv/riscv-isa-manual/blob/9799e5b43fa6780e58ec440774b0194debbca52b/src/zfh.adoc
+                return true;
+            else if (Feature == "+d" && (typ == "f32" || typ == "f64"))
+                // D implies F: https://github.com/riscv/riscv-isa-manual/blob/9799e5b43fa6780e58ec440774b0194debbca52b/src/d-st-ext.adoc
+                return true;
+            if (Feature == "+f" && typ == "f32")
+                return true;
         }
 
     return false;
