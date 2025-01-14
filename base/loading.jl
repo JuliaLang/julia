@@ -613,7 +613,12 @@ end
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const manifest_names = (
+    "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml",
+    "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+    "JuliaManifest.toml",
+    "Manifest.toml",
+)
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
 function locate_project_file(env::String)
@@ -1215,6 +1220,7 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    (modkey == precompilation_target) && return nothing
     run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
@@ -1338,7 +1344,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id) || (trigger_id == precompilation_target)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1350,6 +1356,7 @@ end
 
 loading_extension::Bool = false
 precompiling_extension::Bool = false
+precompilation_target::Union{Nothing,PkgId} = nothing
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -2342,6 +2349,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.precompiling_extension = $(loading_extension)
+        Base.precompilation_target = $(pkg_str(pkg))
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)

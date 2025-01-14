@@ -493,7 +493,15 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     else {
         // identify whether this is an invalidated method that is being recompiled
-        is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
+        // Is a recompile if there is cached code, and it was compiled (not only inferred) before
+        jl_code_instance_t *codeinst_old = jl_atomic_load_relaxed(&mi->cache);
+        while (codeinst_old != NULL) {
+            if (jl_atomic_load_relaxed(&codeinst_old->invoke) != NULL) {
+                is_recompile = 1;
+                break;
+            }
+            codeinst_old = jl_atomic_load_relaxed(&codeinst_old->next);
+        }
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
