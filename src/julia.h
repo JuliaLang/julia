@@ -696,6 +696,7 @@ typedef struct _jl_binding_t {
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
+    jl_array_t *backedges;
     uint8_t did_print_backdate_admonition:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.

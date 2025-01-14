@@ -208,6 +208,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     end
                     if const_edge !== nothing
                         edge = const_edge
+                        update_valid_age!(sv, world_range(const_edge))
                     end
                 end
 
@@ -2330,6 +2331,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             end
             if const_edge !== nothing
                 edge = const_edge
+                update_valid_age!(sv, world_range(const_edge))
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
@@ -2396,8 +2398,9 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            (ret, bpart) = abstract_eval_globalref(interp, GlobalRef(M, s), saw_latestworld, sv)
-            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(bpart))
+            gr = GlobalRef(M, s)
+            (ret, bpart) = abstract_eval_globalref(interp, gr, saw_latestworld, sv)
+            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(convert(Core.Binding, gr), bpart))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
@@ -2475,8 +2478,9 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     if isa(M, Const) && isa(s, Const)
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
-            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(partition))
+            gr = GlobalRef(M, s)
+            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr), partition))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2564,14 +2568,15 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             M, s = M.val, s.val
             M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-            partition = abstract_eval_binding_partition!(interp, GlobalRef(M, s), sv)
+            gr = GlobalRef(M, s)
+            partition = abstract_eval_binding_partition!(interp, gr, sv)
             rte = abstract_eval_partition_load(interp, partition)
             if binding_kind(partition) == BINDING_KIND_GLOBAL
                 T = partition_restriction(partition)
             end
             exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
-            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(partition))
+            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(convert(Core.Binding, gr), partition))
         else
             sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
         end
@@ -2791,6 +2796,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
                 end
                 if const_edge !== nothing
                     edge = const_edge
+                    update_valid_age!(sv, world_range(const_edge))
                 end
             end
         end
@@ -3225,7 +3231,8 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     end
 
     effects = EFFECTS_TOTAL
-    partition = lookup_binding_partition!(interp, GlobalRef(mod, sym), sv)
+    gr = GlobalRef(mod, sym)
+    partition = lookup_binding_partition!(interp, gr, sv)
     if allow_import !== true && is_some_imported(binding_kind(partition))
         if allow_import === false
             rt = Const(false)
@@ -3243,7 +3250,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
             effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
         end
     end
-    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(partition))
+    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(convert(Core.Binding, gr), partition))
 end
 
 function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecialize(M), @nospecialize(s), @nospecialize(allow_import_arg), @nospecialize(order_arg), saw_latestworld::Bool, sv::AbsIntState)
@@ -3454,6 +3461,7 @@ end
 
 world_range(ir::IRCode) = ir.valid_worlds
 world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
+world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
 function force_binding_resolution!(g::GlobalRef, world::UInt)

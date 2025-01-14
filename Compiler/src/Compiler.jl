@@ -67,7 +67,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir
+    _uncompressed_ir, maybe_add_binding_backedge!
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,

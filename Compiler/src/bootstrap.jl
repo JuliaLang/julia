@@ -91,6 +91,6 @@ function activate!(; reflection=true, codegen=false)
         Base.REFLECTION_COMPILER[] = Compiler
     end
     if codegen
-        activate_codegen!()
+        bootstrap!()
     end
 end

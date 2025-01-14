@@ -719,8 +719,9 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATE
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile);
 jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
-JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
-                                                      int binding_effects);
+JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
+                                           int binding_effects);
+JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t *defining_module, jl_value_t *edge);
 
 int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT;
 int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller);

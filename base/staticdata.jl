@@ -22,21 +22,22 @@ end
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
 # `ext_ci_list` = [caller1, ...], the list of worklist-owned code instances externally
-function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}})
+function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
+    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods)
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
-    _insert_backedges(edges, stack, visiting)
+    _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
     if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, stack, visiting, #=external=#true)
+        _insert_backedges(ext_ci_list, stack, visiting, methods_with_invalidated_source, #=external=#true)
     end
 end
 
-function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, external::Bool=false)
+function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, external::Bool=false)
     for i = 1:length(edges)
         codeinst = edges[i]::CodeInstance
-        verify_method_graph(codeinst, stack, visiting)
+        verify_method_graph(codeinst, stack, visiting, mwis)
         minvalid = codeinst.min_world
         maxvalid = codeinst.max_world
         if maxvalid ≥ minvalid && external
@@ -54,9 +55,9 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
     end
 end
 
-function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int})
+function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method})
     @assert isempty(stack); @assert isempty(visiting);
-    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting)
+    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting, mwis)
     @assert child_cycle == 0
     @assert isempty(stack); @assert isempty(visiting);
     nothing
@@ -66,7 +67,7 @@ end
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
-function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int})
+function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method})
     world = codeinst.min_world
     let max_valid2 = codeinst.max_world
         if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
@@ -75,7 +76,8 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     end
     current_world = get_world_counter()
     local minworld::UInt, maxworld::UInt = 1, current_world
-    @assert get_ci_mi(codeinst).def isa Method
+    def = get_ci_mi(codeinst).def
+    @assert def isa Method
     if haskey(visiting, codeinst)
         return visiting[codeinst], minworld, maxworld
     end
@@ -84,6 +86,14 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     visiting[codeinst] = depth
     # TODO JL_TIMING(VERIFY_IMAGE, VERIFY_Methods)
     callees = codeinst.edges
+    # Check for invalidation of the implicit edges from GlobalRef in the Method source
+    if def in mwis
+        maxworld = 0
+        invalidations = _jl_debug_method_invalidation[]
+        if invalidations !== nothing
+            push!(invalidations, def, "method_globalref", codeinst, nothing)
+        end
+    end
     # verify current edges
     if isempty(callees)
         # quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
@@ -96,10 +106,6 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             local min_valid2::UInt, max_valid2::UInt
             edge = callees[j]
             @assert !(edge isa Method) # `Method`-edge isn't allowed for the optimized one-edge format
-            if edge isa Core.BindingPartition
-                j += 1
-                continue
-            end
             if edge isa CodeInstance
                 edge = get_ci_mi(edge)
             end
@@ -112,6 +118,21 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
                 j += 2 + edge
                 edge = sig
+            elseif edge isa Core.Binding
+                j += 1
+                min_valid2 = minworld
+                max_valid2 = maxworld
+                if !Base.binding_was_invalidated(edge)
+                    if isdefined(edge, :partitions)
+                        min_valid2 = edge.partitions.min_world
+                        max_valid2 = edge.partitions.max_world
+                    end
+                else
+                    # Binding was previously invalidated
+                    min_valid2 = 1
+                    max_valid2 = 0
+                end
+                matches = nothing
             else
                 callee = callees[j+1]
                 if callee isa Core.MethodTable # skip the legacy edge (missing backedge)
@@ -156,7 +177,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             callee = edge
             local min_valid2::UInt, max_valid2::UInt
-            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting)
+            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting, mwis)
             if minworld < min_valid2
                 minworld = min_valid2
             end

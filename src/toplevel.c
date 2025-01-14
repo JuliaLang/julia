@@ -1097,7 +1097,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
@@ -1110,8 +1110,9 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     else {
         // use interpreter
         assert(thk);
-        if (has_opaque)
-            jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        if (has_opaque) {
+            jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
+        }
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         result = jl_interpret_toplevel_thunk(m, thk);
