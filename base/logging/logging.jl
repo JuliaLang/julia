@@ -420,12 +420,13 @@ function logmsg_code(_module, file, line, level, message, exs...)
     end
 end
 
-@noinline function handle_message_nothrow(logger, level, msg, _module, group, id, file,
-                                          line, args...; kwargs...)
+@noinline function handle_message_nothrow(logger, level, msg, _module, group, id, file, line; kwargs...)
+    @nospecialize
     try
         @invokelatest handle_message(
-            logger, level, msg, _module, group, id, file, line, args...;
+            logger, level, msg, _module, group, id, file, line;
             kwargs...)
+
     catch err
         @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
     end

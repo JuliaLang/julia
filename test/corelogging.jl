@@ -115,26 +115,11 @@ end
     end
 end
 @testset "Log message handle_message exception handling" begin
-    function capture_stderr(func)
-        fname = tempname()
-        f = open(fname, "w")
-        redirect_stderr(f) do
-            func()
-        end
-        close(f)
-        buf = read(fname)
-        rm(fname)
-        String(buf)
-    end
-
     # Exceptions in log handling (printing) of msg are caught by default
     struct Foo end
     Base.show(::IO, ::Foo) = 1 ÷ 0
-    out = capture_stderr() do
-        @info Foo()
-    end
-    @test occursin("Error: Exception while generating log record in module Main at", out)
-    @test occursin("DivideError: integer division error", out)
+
+    @test_warn r"Error: Exception while generating log record in module Main at.*DivideError: integer division error" @info Foo()
 
     # Exceptions in log handling (printing) of attributes are caught by default
     out = capture_stderr() do
