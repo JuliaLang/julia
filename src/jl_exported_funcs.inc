@@ -388,7 +388,7 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_resolve_globals_in_ir) \
+    XX(jl_resolve_definition_effects_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \

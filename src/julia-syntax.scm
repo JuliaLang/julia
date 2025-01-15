@@ -3683,11 +3683,17 @@ f(x) = yt(x)
      (else
        (error (string "invalid assignment location \"" (deparse var) "\"")))))
 
+(define (sig-type-expr namemap name expr)
+  (let ((newname (get namemap name expr)))
+    (if (symbol? newname)
+      `(globalref (thismodule) ,newname)
+      newname)))
+
 (define (rename-sig-types ex namemap)
   (pattern-replace
    (pattern-set
     (pattern-lambda (call (core (-/ Typeof)) name)
-                    (get namemap name __)))
+                    (sig-type-expr namemap name __)))
    ex))
 
 ;; replace leading (function) argument type with `typ`
@@ -4242,7 +4248,7 @@ f(x) = yt(x)
                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
                                     (renamemap (map cons closure-param-names closure-param-syms))
                                     (arg-defs (replace-vars
-                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                               (fix-function-arg-type sig `(globalref (thismodule) ,type-name) iskw namemap closure-param-syms)
                                                renamemap)))
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
@@ -4270,8 +4276,8 @@ f(x) = yt(x)
                                                                 `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
-                                      type-name
-                                      `(call (core apply_type) ,type-name ,@P))
+                                      `(globalref (thismodule) ,type-name)
+                                      `(call (core apply_type) (globalref (thismodule) ,type-name) ,@P))
                                  ,@var-exprs))))
                    (if (pair? moved-vars)
                        (set-car! (lam:vinfo lam)
