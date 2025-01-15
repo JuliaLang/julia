@@ -349,6 +349,9 @@ function _front(v, t...)
     (v, _front(t...)...)
 end
 
+
+merge(a::Tuple, b::Tuple) = (b..., last(a, length(a) - length(b))...)
+
 ## mapping ##
 
 # 1 argument function
