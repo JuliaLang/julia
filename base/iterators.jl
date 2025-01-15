@@ -13,33 +13,26 @@ using .Base:
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
+    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    afoldl
 using Core: @doc
 
-if Base !== Core.Compiler
 using .Base:
     cld, fld, SubArray, view, resize!, IndexCartesian
 using .Base.Checked: checked_mul
-else
-    # Checked.checked_mul is not available during bootstrapping:
-    const checked_mul = *
-end
 
 import .Base:
     first, last,
     isempty, length, size, axes, ndims,
-    eltype, IteratorSize, IteratorEltype,
+    eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
-
-if Base !== Core.Compiler
-export partition
-end
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition
+public accumulate, filter, map, peel, reverse, Stateful
 
 """
     Iterators.map(f, iterators...)
@@ -278,10 +271,8 @@ pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 
-if Base !== Core.Compiler
 pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, Base.CartesianIndices(axes(A)))
 pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
-end
 
 length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
@@ -1096,7 +1087,7 @@ _prod_size(t::Tuple) = (_prod_size1(t[1], IteratorSize(t[1]))..., _prod_size(tai
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute size for object of type ", typeof(a))))
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
@@ -1104,7 +1095,7 @@ _prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indic
 _prod_axes1(a, ::HasShape)  = axes(a)
 _prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_axes1(a, A) =
-    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute indices for object of type ", typeof(a))))
 
 ndims(p::ProductIterator) = length(axes(p))
 length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
@@ -1212,7 +1203,13 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
+
+# For tuples, we statically know the element type of each index, so we can compute
+# this at compile time.
+function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
+end
+
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
@@ -1300,7 +1297,6 @@ true
 """
 flatmap(f, c...) = flatten(map(f, c...))
 
-if Base !== Core.Compiler # views are not defined
 @doc """
     partition(collection, n)
 
@@ -1507,8 +1503,6 @@ IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa IsInfinite ?
 eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
 IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
 
-end # if statement several hundred lines above
-
 """
     only(x)
 
@@ -1571,5 +1565,40 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    IterableStatePairs(x)
+
+This internal type is returned by [`pairs`](@ref), when the key is the same as
+the state of `iterate`. This allows the iterator to determine the key => value
+pairs by only calling iterate on the values.
+
+"""
+struct IterableStatePairs{T}
+    x::T
+end
+
+IteratorSize(::Type{<:IterableStatePairs{T}}) where T = IteratorSize(T)
+length(x::IterableStatePairs) = length(x.x)
+Base.eltype(::Type{IterableStatePairs{T}}) where T = Pair{<:Any, eltype(T)}
+
+function iterate(x::IterableStatePairs, state=first(keys(x.x)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+reverse(x::IterableStatePairs) = IterableStatePairs(Iterators.reverse(x.x))
+reverse(x::IterableStatePairs{<:Iterators.Reverse}) = IterableStatePairs(x.x.itr)
+
+function iterate(x::IterableStatePairs{<:Iterators.Reverse}, state=last(keys(x.x.itr)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+# According to the docs of iterate(::AbstractString), the iteration state must
+# be the same as the keys, so this is a valid optimization (see #51631)
+pairs(s::AbstractString) = IterableStatePairs(s)
 
 end

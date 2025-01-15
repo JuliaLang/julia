@@ -44,19 +44,7 @@ public:
 
         DstTy = SrcTy;
         if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
-            #if JL_LLVM_VERSION >= 170000
             DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            #else
-            if (Ty->isOpaque()) {
-                DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            }
-            else {
-                //Remove once opaque pointer transition is complete
-                DstTy = PointerType::get(
-                        remapType(Ty->getNonOpaquePointerElementType()),
-                        ASRemapper(Ty->getAddressSpace()));
-            }
-            #endif
         }
         else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
@@ -157,24 +145,8 @@ public:
                     Ops.push_back(NewOp ? cast<Constant>(NewOp) : Op);
                 }
 
-                #if JL_LLVM_VERSION >= 170000
                 if (CE->getOpcode() != Instruction::GetElementPtr)
                     DstV = CE->getWithOperands(Ops, Ty);
-                #else
-                if (CE->getOpcode() == Instruction::GetElementPtr) {
-                    // GEP const exprs need to know the type of the source.
-                    // asserts remapType(typeof arg0) == typeof mapValue(arg0).
-                    Constant *Src = CE->getOperand(0);
-                    auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
-                    //Remove once opaque pointer transition is complete
-                    if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
-                        DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
-                    }
-                }
-                else
-                    DstV = CE->getWithOperands(Ops, Ty);
-                #endif
             }
         }
 
@@ -220,10 +192,8 @@ bool RemoveNoopAddrSpaceCasts(Function *F)
                 if (ASC->getType() == ASC->getOperand(0)->getType()) {
                     ASC->replaceAllUsesWith(ASC->getOperand(0));
                 } else {
-                    // uncanonicalized addrspacecast; demote to bitcast
-                    llvm::IRBuilder<> builder(ASC);
-                    auto BC = builder.CreateBitCast(ASC->getOperand(0), ASC->getType());
-                    ASC->replaceAllUsesWith(BC);
+                    // uncanonicalized addrspacecast; just use the value
+                    ASC->replaceAllUsesWith(ASC->getOperand(0));
                 }
                 NoopCasts.push_back(ASC);
             }

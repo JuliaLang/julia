@@ -51,6 +51,7 @@
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \
+    XX(jl_binding_partition_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
     XX(jl_enternode_type) \
@@ -115,6 +116,7 @@
     XX(jl_simplevector_type) \
     XX(jl_slotnumber_type) \
     XX(jl_ssavalue_type) \
+    XX(jl_abioverride_type) \
     XX(jl_stackovf_exception) \
     XX(jl_string_type) \
     XX(jl_symbol_type) \
@@ -138,6 +140,7 @@
     XX(jl_uint8_type) \
     XX(jl_undefref_exception) \
     XX(jl_undefvarerror_type) \
+    XX(jl_fielderror_type) \
     XX(jl_unionall_type) \
     XX(jl_uniontype_type) \
     XX(jl_upsilonnode_type) \

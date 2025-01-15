@@ -257,6 +257,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # handling of `@temp` in --project and JULIA_PROJECT
+    @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
+    @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
+
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
@@ -335,43 +339,37 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test errors_not_signals(`$exename -C invalidtarget`)
     @test errors_not_signals(`$exename --cpu-target=invalidtarget`)
 
-    if Sys.iswindows()
-        # -t, --threads
-        code = "print(Threads.threadpoolsize())"
-        cpu_threads = ccall(:jl_effective_threads, Int32, ())
-        @test string(cpu_threads) ==
-            read(`$exename --threads auto -e $code`, String) ==
-            read(`$exename --threads=auto -e $code`, String) ==
-            read(`$exename -tauto -e $code`, String) ==
-            read(`$exename -t auto -e $code`, String)
-        for nt in (nothing, "1")
-            withenv("JULIA_NUM_THREADS" => nt) do
-                @test read(`$exename --threads=2 -e $code`, String) ==
-                    read(`$exename -t 2 -e $code`, String) == "2"
-            end
+    # -t, --threads
+    code = "print(Threads.threadpoolsize())"
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
+    @test string(cpu_threads) ==
+        read(`$exename --threads auto -e $code`, String) ==
+        read(`$exename --threads=auto -e $code`, String) ==
+        read(`$exename -tauto -e $code`, String) ==
+        read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_THREADS" => nt) do
+            @test read(`$exename --threads=2 -e $code`, String) ==
+                read(`$exename -t 2 -e $code`, String) == "2"
         end
-        # We want to test oversubscription, but on manycore machines, this can
-        # actually exhaust limited PID spaces
-        cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
-        if Sys.WORD_SIZE == 32
-            cpu_threads = min(cpu_threads, 50)
-        end
-        @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
-        withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
-            @test read(`$exename -e $code`, String) == string(cpu_threads)
-        end
-        @test errors_not_signals(`$exename -t 0`)
-        @test errors_not_signals(`$exename -t -1`)
+    end
+    # We want to test oversubscription, but on manycore machines, this can
+    # actually exhaust limited PID spaces
+    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+    if Sys.WORD_SIZE == 32
+        cpu_threads = min(cpu_threads, 50)
+    end
+    @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
+    withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
+        @test read(`$exename -e $code`, String) == string(cpu_threads)
+    end
+    @test errors_not_signals(`$exename -t 0`)
+    @test errors_not_signals(`$exename -t -1`)
 
-        # Combining --threads and --procs: --threads does propagate
-        withenv("JULIA_NUM_THREADS" => nothing) do
-            code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
-            @test read(`$exename -p2 -t2 -e $code`, String) == "6"
-        end
-    else
-        @test_skip "Command line tests with -t are flakey on non-Windows OS"
-        # Known issue: https://github.com/JuliaLang/julia/issues/49154
-        # These tests should be fixed and reenabled on all operating systems.
+    # Combining --threads and --procs: --threads does propagate
+    withenv("JULIA_NUM_THREADS" => nothing) do
+        code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
+        @test read(`$exename -p2 -t2 -e $code`, String) == "6"
     end
 
     # Combining --threads and invalid -C should yield a decent error
@@ -785,9 +783,71 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
+    let JL_OPTIONS_TASK_METRICS_OFF = 0, JL_OPTIONS_TASK_METRICS_ON = 1
+        @test parse(Int,readchomp(`$exename -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_OFF
+        @test parse(Int, readchomp(`$exename --task-metrics=yes -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_ON
+        @test !parse(Bool, readchomp(`$exename  -E "current_task().metrics_enabled"`))
+        @test parse(Bool, readchomp(`$exename --task-metrics=yes -E "current_task().metrics_enabled"`))
+    end
+
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)
+
+    # --trace-compile
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # Base.@trace_compile (local version of the 2 above args)
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            """
+            f(x::Int) = 1
+            applyf(container) = f(container[1])
+            Base.@trace_compile @eval applyf([100])
+            Base.@trace_compile @eval applyf(Any[100])
+            f(::Bool) = 2
+            Base.@trace_compile @eval applyf([true])
+            Base.@trace_compile @eval applyf(Any[true])
+            """,
+            `$exename -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test length(findall(r"precompile\(", _stderr)) == 5
+        @test length(findall(r" # recompile", _stderr)) == 1
+    end
+
+    # --trace-dispatch
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-dispatch=stderr -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
 
     # test passing arguments
     mktempdir() do dir

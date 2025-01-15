@@ -37,6 +37,14 @@ kw"help", kw"Julia", kw"julia", kw""
 available for direct use. Names can also be used via dot syntax (e.g. `Foo.foo` to access
 the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
+
+!!! note
+    When two or more packages/modules export a name and that name does not refer to the
+    same thing in each of the packages, and the packages are loaded via `using` without
+    an explicit list of names, it is an error to reference that name without qualification.
+    It is thus recommended that code intended to be forward-compatible with future versions
+    of its dependencies and of Julia, e.g., code in released packages, list the names it
+    uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 """
 kw"using"
 
@@ -152,6 +160,8 @@ functions of submodules will be executed first. Two typical uses of `__init__` a
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
+
+See also: [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -396,11 +406,11 @@ Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) o
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 julia> b = [1]; a = copy(b); b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  1
 
 ```
@@ -410,7 +420,7 @@ julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 ```
@@ -429,7 +439,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -439,11 +449,11 @@ julia> b[1] = 2; a, b, c
 Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
-ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
+ERROR: BoundsError: attempt to access 2-element Vector{Int64} at index [3]
 [...]
 
 julia> push!(a, 2, 3)
-4-element Array{Int64, 1}:
+4-element Vector{Int64}:
  1
  1
  2
@@ -457,7 +467,7 @@ ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  2
  3
 
@@ -480,14 +490,14 @@ assignment expression is converted into a single loop.
 julia> A = zeros(4, 4); B = [1, 2, 3, 4];
 
 julia> A .= B
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
  4.0  4.0  4.0  4.0
 
 julia> A
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
@@ -663,8 +673,11 @@ kw"{", kw"{}", kw"}"
 """
     []
 
-Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
-[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+Square brackets are used for [indexing](@ref man-array-indexing) ([`getindex`](@ref)),
+[indexed assignment](@ref man-indexed-assignment) ([`setindex!`](@ref)),
+[array literals](@ref man-array-literals) ([`Base.vect`](@ref)),
+[array concatenation](@ref man-array-concatenation) ([`vcat`](@ref), [`hcat`](@ref), [`hvcat`](@ref), [`hvncat`](@ref)),
+and [array comprehensions](@ref man-comprehensions) ([`collect`](@ref)).
 """
 kw"[", kw"[]", kw"]"
 
@@ -934,11 +947,14 @@ expression, rather than the side effects that evaluating `b` or `c` may have.
 See the manual section on [control flow](@ref man-conditional-evaluation) for more details.
 
 # Examples
-```
+```jldoctest
 julia> x = 1; y = 2;
 
-julia> x > y ? println("x is larger") : println("y is larger")
-y is larger
+julia> x > y ? println("x is larger") : println("x is not larger")
+x is not larger
+
+julia> x > y ? "x is larger" : x == y ? "x and y are equal" : "y is larger"
+"y is larger"
 ```
 """
 kw"?", kw"?:"
@@ -1002,12 +1018,12 @@ collection or the last index of a dimension of an array.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64, 2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[end, :]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  3
  4
 ```
@@ -1050,6 +1066,17 @@ exception object to the given variable within the `catch` block.
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
+A `try/catch` block can also have an `else` clause that executes only if no exception occurred:
+```julia
+try
+    a_dangerous_operation()
+catch
+    @warn "The operation failed."
+else
+    @info "The operation succeeded."
+end
+```
+
 A `try` or `try`/`catch` block can also have a [`finally`](@ref) clause that executes
 at the end, regardless of whether an exception occurred.  For example, this can be
 used to guarantee that an opened file is closed:
@@ -1064,6 +1091,9 @@ finally
 end
 ```
 (`finally` can also be used without a `catch` block.)
+
+!!! compat "Julia 1.8"
+    Else clauses require at least Julia 1.8.
 """
 kw"try", kw"catch"
 
@@ -1275,6 +1305,12 @@ kw";"
 
 Short-circuiting boolean AND.
 
+This is equivalent to `x ? y : false`: it returns `false` if `x` is `false` and the result of evaluating `y` if `x` is `true`.
+Note that if `y` is an expression, it is only evaluated when `x` is `true`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) && (statement)` can be used as shorthand for
+`if condition; statement; end` for an arbitrary `statement`.
+
 See also [`&`](@ref), the ternary operator `? :`, and the manual section on [control flow](@ref man-conditional-evaluation).
 
 # Examples
@@ -1286,6 +1322,9 @@ true
 
 julia> x < 0 && error("expected positive x")
 false
+
+julia> x > 0 && "not a boolean"
+"not a boolean"
 ```
 """
 kw"&&"
@@ -1294,6 +1333,12 @@ kw"&&"
     x || y
 
 Short-circuiting boolean OR.
+
+This is equivalent to `x ? true : y`: it returns `true` if `x` is `true` and the result of evaluating `y` if `x` is `false`.
+Note that if `y` is an expression, it is only evaluated when `x` is `false`, which is called "short-circuiting" behavior.
+
+Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
+`if !(condition); statement; end` for an arbitrary `statement`.
 
 See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
@@ -1304,6 +1349,9 @@ true
 
 julia> false || true || println("neither is true!")
 true
+
+julia> pi < 3 || "not a boolean"
+"not a boolean"
 ```
 """
 kw"||"
@@ -1372,17 +1420,21 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array.
+collection or the first index of a dimension of an array. For example,
+`a[begin]` is the first element of an array `a`.
+
+!!! compat "Julia 1.4"
+    Use of `begin` as an index requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[begin, :]
-2-element Array{Int64,1}:
+2-element Matrix{Int64}:
  1
  2
 ```
@@ -1433,8 +1485,20 @@ kw"struct"
     mutable struct
 
 `mutable struct` is similar to [`struct`](@ref), but additionally allows the
-fields of the type to be set after construction. See the manual section on
-[Composite Types](@ref) for more information.
+fields of the type to be set after construction.
+
+Individual fields of a mutable struct can be marked as `const` to make them immutable:
+
+```julia
+mutable struct Baz
+    a::Int
+    const b::Float64
+end
+```
+!!! compat "Julia 1.8"
+    The `const` keyword for fields of mutable structs requires at least Julia 1.8.
+
+See the manual section on [Composite Types](@ref) for more information.
 """
 kw"mutable struct"
 
@@ -1451,7 +1515,7 @@ kw"new"
 """
     where
 
-The `where` keyword creates a type that is an iterated union of other types, over all
+The `where` keyword creates a [`UnionAll`](@ref) type, which may be thought of as an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
@@ -1641,6 +1705,34 @@ julia> ex.msg
 ErrorException
 
 """
+    FieldError(type::DataType, field::Symbol)
+
+An operation tried to access invalid `field` on an object of `type`.
+
+!!! compat "Julia 1.12"
+    Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
+
+See [`getfield`](@ref)
+
+# Examples
+```jldoctest
+julia> struct AB
+          a::Float32
+          b::Float64
+       end
+
+julia> ab = AB(1, 3)
+AB(1.0f0, 3.0)
+
+julia> ab.c # field `c` doesn't exist
+ERROR: FieldError: type AB has no field `c`, available fields: `a`, `b`
+Stacktrace:
+[...]
+```
+"""
+FieldError
+
+"""
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
@@ -1777,16 +1869,20 @@ Stacktrace:
 DomainError
 
 """
-    Task(func)
+    Task(func[, reserved_stack::Int])
 
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
+The optional `reserved_stack` argument specifies the size of the stack available
+for this task, in bytes. The default, `0`, uses the system-dependent stack size default.
+
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
     historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
-    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
     bit manually to `false`.
 
 # Examples
@@ -1934,20 +2030,48 @@ applicable
 
 """
     invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Method, args...; kwargs...)
+    invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
+implementation of a more specific method of the same function). However, because this means
+the runtime must do more work, `invoke` is generally also slower--sometimes significantly
+so--than doing normal dispatch with a regular call.
 
-Be careful when using `invoke` for functions that you don't write.  What definition is used
+Be careful when using `invoke` for functions that you don't write. What definition is used
 for given `argtypes` is an implementation detail unless the function is explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
 visible if you use `invoke`.
+
+# Passing a `Method` instead of a signature
+The `argtypes` argument may be a `Method`, in which case the ordinary method table lookup is
+bypassed entirely and the given method is invoked directly. Needing this feature is uncommon.
+Note in particular that the specified `Method` may be entirely unreachable from ordinary dispatch
+(or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
+If the method is part of the ordinary method table, this call behaves similar
+to `invoke(f, method.sig, args...)`.
+
+!!! compat "Julia 1.12"
+    Passing a `Method` requires Julia 1.12.
+
+# Passing a `CodeInstance` instead of a signature
+The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
+The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
+`invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
+parent `MethodInstance` or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a `CodeInstance` whose behavior does not match the constraints
+specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
+by external compilers), it may be an error to invoke them after passing through precompilation.
+This is an advanced interface intended for use with external compiler plugins.
+
+!!! compat "Julia 1.12"
+    Passing a `CodeInstance` requires Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -2510,12 +2634,17 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest
-julia> module M end;
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
+julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined in `M`
-Suggestion: check for spelling errors or missing imports.
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+Stacktrace:
+ [1] getproperty(x::Module, f::Symbol)
+   @ Base ./Base_compiler.jl:40
+ [2] top-level scope
+   @ none:1
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2535,18 +2664,6 @@ Retrieve the declared type of the binding `name` from the module `module`.
     This function requires Julia 1.9 or later.
 """
 Core.get_binding_type
-
-"""
-    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
-
-Set the declared type of the binding `name` in the module `module` to `type`. Error if the
-binding already has a type that is not equivalent to `type`. If the `type` argument is
-absent, set the binding type to `Any` if unset, but do not error.
-
-!!! compat "Julia 1.9"
-    This function requires Julia 1.9 or later.
-"""
-Core.set_binding_type!
 
 """
     swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
@@ -2637,6 +2754,9 @@ compatible with the stores to that location. Otherwise, if not declared as
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
+The global variable variant is supported for compatibility with older julia
+releases. For new code, prefer [`isdefinedglobal`](@ref).
+
 See also [`@isdefined`](@ref).
 
 # Examples
@@ -2664,6 +2784,37 @@ false
 """
 isdefined
 
+
+"""
+    isdefinedglobal(m::Module, s::Symbol, [allow_import::Bool=true, [order::Symbol=:unordered]])
+
+Tests whether a global variable `s` is defined in module `m` (in the current world age).
+A variable is considered defined if and only if a value may be read from this global variable
+and an access will not throw. This includes both constants and global variables that have
+a value set.
+
+If `allow_import` is `false`, the global variable must be defined inside `m`
+and may not be imported from another module.
+
+See also [`@isdefined`](@ref).
+
+# Examples
+```jldoctest
+julia> isdefinedglobal(Base, :sum)
+true
+
+julia> isdefinedglobal(Base, :NonExistentMethod)
+false
+
+julia> isdefinedglobal(Base, :sum, false)
+true
+
+julia> isdefinedglobal(Main, :sum, false)
+false
+```
+"""
+isdefinedglobal
+
 """
     Memory{T}(undef, n)
 
@@ -2683,23 +2834,23 @@ julia> Memory{Float64}(undef, 3)
 Memory{T}(::UndefInitializer, n)
 
 """
-    MemoryRef(memory)
+    memoryref(::GenericMemory)
 
-Construct a MemoryRef from a memory object. This does not fail, but the
-resulting memory may point out-of-bounds if the memory is empty.
+Construct a `GenericMemoryRef` from a memory object. This does not fail, but the
+resulting memory will point out-of-bounds if and only if the memory is empty.
 """
-MemoryRef(::Memory)
+memoryref(::GenericMemory)
 
 """
-    MemoryRef(::Memory, index::Integer)
-    MemoryRef(::MemoryRef, index::Integer)
+    memoryref(::GenericMemory, index::Integer)
+    memoryref(::GenericMemoryRef, index::Integer)
 
-Construct a MemoryRef from a memory object and an offset index (1-based) which
+Construct a `GenericMemoryRef` from a memory object and an offset index (1-based) which
 can also be negative. This always returns an inbounds object, and will throw an
 error if that is not possible (because the index would result in a shift
 out-of-bounds of the underlying memory).
 """
-MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
+memoryref(::Union{GenericMemory,GenericMemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -2709,7 +2860,7 @@ Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
 # Examples
 ```julia-repl
 julia> Vector{Float64}(undef, 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
@@ -2759,7 +2910,7 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
-2×3 Array{Float64, 2}:
+2×3 Matrix{Float64}:
  2.36365e-314  2.28473e-314    5.0e-324
  2.26704e-314  2.26711e-314  NaN
 
@@ -2897,7 +3048,7 @@ an alias for `UndefInitializer()`.
 # Examples
 ```julia-repl
 julia> Array{Float64, 1}(UndefInitializer(), 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -3130,13 +3281,26 @@ Any
 """
     Union{}
 
-`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
-is `Core.TypeofBottom`.
+`Union{}`, the empty [`Union`](@ref) of types, is the *bottom* type of the type system. That is, for each
+`T::Type`, `Union{} <: T`. Also see the subtyping operator's documentation: [`<:`](@ref).
+
+As such, `Union{}` is also an *empty*/*uninhabited* type, meaning that it has no values. That is, for each `x`,
+`isa(x, Union{}) == false`.
+
+`Base.Bottom` is defined as its alias and the type of `Union{}` is `Core.TypeofBottom`.
 
 # Examples
 ```jldoctest
 julia> isa(nothing, Union{})
+false
+
+julia> Union{} <: Int
+true
+
+julia> typeof(Union{}) === Core.TypeofBottom
+true
+
+julia> isa(Union{}, Union)
 false
 ```
 """
@@ -3641,6 +3805,9 @@ unused and delete the entire benchmark code).
     which the value of the arguments of this intrinsic were available (in a register,
     in memory, etc.).
 
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+
 # Examples
 
 ```julia
@@ -3730,6 +3897,20 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+"""
+    ConcurrencyViolationError(msg) <: Exception
+
+An error thrown when a detectable violation of concurrent semantics has occurred.
+
+A non-exhaustive list of examples of when this is used include:
+
+ * Throwing when a deadlock has been detected (e.g. `wait(current_task())`)
+ * Known-unsafe behavior is attempted (e.g. `yield(current_task)`)
+ * A known non-threadsafe datastructure is attempted to be modified from multiple concurrent tasks
+ * A lock is being unlocked that wasn't locked by this task
+"""
+ConcurrencyViolationError
 
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 

@@ -12,6 +12,9 @@ using Base: n_avail
     end
     @test wait(a) == "success"
     @test fetch(t) == "finished"
+
+    # Test printing
+    @test repr(a) == "Condition()"
 end
 
 @testset "wait first behavior of wait on Condition" begin
@@ -382,7 +385,7 @@ end
         """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t._state = 66
+    @atomic t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
@@ -496,12 +499,35 @@ end
     end
 end
 
+struct CustomError <: Exception end
+
 @testset "check_channel_state" begin
     c = Channel(1)
     close(c)
     @test !isopen(c)
-    c.excp == nothing # to trigger the branch
+    c.excp === nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
+
+    # Issue 52974 - closed channels with exceptions
+    # must be thrown on iteration, if channel is empty
+    c = Channel(2)
+    put!(c, 5)
+    close(c, CustomError())
+    @test take!(c) == 5
+    @test_throws CustomError iterate(c)
+
+    c = Channel(Inf)
+    put!(c, 1)
+    close(c)
+    @test take!(c) == 1
+    @test_throws InvalidStateException take!(c)
+    @test_throws InvalidStateException put!(c, 5)
+
+    c = Channel(3)
+    put!(c, 1)
+    close(c)
+    @test first(iterate(c)) == 1
+    @test isnothing(iterate(c))
 end
 
 # PR #36641
@@ -547,8 +573,11 @@ end
 # make sure 1-shot timers work
 let a = []
     Timer(t -> push!(a, 1), 0.01, interval = 0)
-    sleep(0.2)
-    @test a == [1]
+    @test timedwait(() -> a == [1], 10) === :ok
+end
+let a = []
+    Timer(t -> push!(a, 1), 0.01, interval = 0, spawn = true)
+    @test timedwait(() -> a == [1], 10) === :ok
 end
 
 # make sure that we don't accidentally create a one-shot timer

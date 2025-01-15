@@ -344,7 +344,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
         check = quote
             if !isa(func, Ptr{Cvoid})
                 name = $name
-                throw(ArgumentError("interpolated function `$name` was not a Ptr{Cvoid}, but $(typeof(func))"))
+                throw(ArgumentError(LazyString("interpolated function `", name, "` was not a Ptr{Cvoid}, but ", typeof(func))))
             end
         end
         push!(statements, check)

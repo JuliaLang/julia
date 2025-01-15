@@ -226,12 +226,12 @@ end
 ## Allocating the output container
 Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
     similar(BitArray, dims)
 # In cases of conflict we fall back on Array
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
 
@@ -250,9 +250,11 @@ BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
 argtype(::Type{BC}) where {BC<:Broadcasted} = fieldtype(BC, :args)
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
-@inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
-_eachindex(t::Tuple{Any}) = t[1]
-_eachindex(t::Tuple) = CartesianIndices(t)
+@inline Base.eachindex(bc::Broadcasted) = eachindex(IndexStyle(bc), bc)
+@inline Base.eachindex(s::IndexStyle, bc::Broadcasted) = _eachindex(s, axes(bc))
+_eachindex(::IndexCartesian, t::Tuple) = CartesianIndices(t)
+_eachindex(s::IndexLinear, t::Tuple) = eachindex(s, LinearIndices(t))
+_eachindex(::IndexLinear, t::Tuple{Any}) = t[1]
 
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
 Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
@@ -278,9 +280,14 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, :args))
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N<:Integer} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
+# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
+Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
+Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
 
+function _maxndims_broadcasted(BC::Type{<:Broadcasted})
+    _maxndims(fieldtype(BC, :args))
+end
 _maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
 _maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
 function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
@@ -604,17 +611,31 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
+Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
     I = to_index(Base.IteratorsMD.flatten(Is))
+    _getindex(IndexStyle(bc), bc, I)
+end
+@inline function _getindex(::IndexStyle, bc, I)
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
+end
+Base.@propagate_inbounds function _getindex(s::IndexCartesian, bc, I::Integer)
+    C = CartesianIndices(axes(bc))
+    _getindex(s, bc, C[I])
+end
+Base.@propagate_inbounds function _getindex(s::IndexLinear, bc, I::CartesianIndex)
+    L = LinearIndices(axes(bc))
+    _getindex(s, bc, L[I])
 end
 to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+
+@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
+    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
 
 
 """
@@ -751,6 +772,7 @@ The resulting container type is established by the following rules:
  - All other combinations of arguments default to returning an `Array`, but
    custom container types can define their own implementation and promotion-like
    rules to customize the result when they appear as arguments.
+ - The element type is determined in the same manner as in [`collect`](@ref).
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a

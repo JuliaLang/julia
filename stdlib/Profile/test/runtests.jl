@@ -25,18 +25,63 @@ end
     end
 end
 
-busywait(0, 0) # compile
-@profile busywait(1, 20)
+@noinline function sleeping_tasks(ch::Channel)
+    for _ in 1:100
+        Threads.@spawn take!(ch)
+    end
+    sleep(10)
+end
 
-let r = Profile.retrieve()
-    mktemp() do path, io
-        serialize(io, r)
-        close(io)
-        open(path) do io
-            @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+function test_profile()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                @test isa(deserialize(io), Tuple{Vector{UInt},Dict{UInt64,Vector{Base.StackTraces.StackFrame}}})
+            end
         end
     end
 end
+
+function test_has_task_profiler_sample_in_buffer()
+    let r = Profile.retrieve()
+        mktemp() do path, io
+            serialize(io, r)
+            close(io)
+            open(path) do io
+                all = deserialize(io)
+                data = all[1]
+                startframe = length(data)
+                for i in startframe:-1:1
+                    (startframe - 1) >= i >= (startframe - (Profile.nmeta + 1)) && continue # skip metadata (its read ahead below) and extra block end NULL IP
+                    if Profile.is_block_end(data, i)
+                        thread_sleeping_state = data[i - Profile.META_OFFSET_SLEEPSTATE]
+                        @test thread_sleeping_state == 0x3
+                    end
+                end
+            end
+        end
+    end
+end
+
+busywait(0, 0) # compile
+
+@profile_walltime busywait(1, 20)
+test_profile()
+
+Profile.clear()
+
+ch = Channel(1)
+@profile_walltime sleeping_tasks(ch)
+test_profile()
+close(ch)
+test_has_task_profiler_sample_in_buffer()
+
+Profile.clear()
+
+@profile busywait(1, 20)
+test_profile()
 
 # test printing options
 for options in ((format=:tree, C=true),
@@ -50,6 +95,9 @@ for options in ((format=:tree, C=true),
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
+    file, _ = mktemp()
+    Profile.print(file; options...)
+    @test filesize(file) > 0
 end
 
 @testset "Profile.print() groupby options" begin
@@ -156,6 +204,24 @@ end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
+import InteractiveUtils
+
+@testset "Module short names" begin
+    Profile.clear()
+    @profile InteractiveUtils.peakflops()
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """
@@ -168,12 +234,15 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    p = open(`$cmd -e $script`)
+    # use multiple threads here to ensure that profiling works with threading
+    p = open(`$cmd -t2 -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGTERM)
-        sleep(10)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
         kill(p, Base.SIGKILL)
     end
     s = read(p, String)
@@ -202,8 +271,10 @@ if Sys.isbsd() || Sys.islinux()
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
-                kill(p, Base.SIGTERM)
-                sleep(10)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
                 kill(p, Base.SIGKILL)
                 close(notify_exit)
             end
@@ -275,15 +346,30 @@ end
 
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
+
+    # ensure that we can prevent redacting data
     fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot(; redact_data=false))"`, String)
     end
 
     @test isfile(fname)
 
-    open(fname) do fs
-        @test readline(fs) != ""
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test contains(sshot, "redact_this")
+
+    rm(fname)
+
+    # ensure that string data is redacted by default
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
     end
+
+    @test isfile(fname)
+
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test !contains(sshot, "redact_this")
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)

@@ -2,6 +2,21 @@
 
 const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
+"""
+    current_task()
+
+Get the currently running [`Task`](@ref).
+"""
+current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
+
+# This bit is set in the `havelock` of a `ReentrantLock` when that lock is locked by some task.
+const LOCKED_BIT = 0b01
+# This bit is set in the `havelock` of a `ReentrantLock` just before parking a task. A task is being
+# parked if it wants to lock the lock, but it is currently being held by some other task.
+const PARKED_BIT = 0b10
+
+const MAX_SPIN_ITERS = 40
+
 # Advisory reentrant lock
 """
     ReentrantLock()
@@ -36,7 +51,28 @@ mutable struct ReentrantLock <: AbstractLock
     # offset32 = 20, offset64 = 24
     reentrancy_cnt::UInt32
     # offset32 = 24, offset64 = 28
-    @atomic havelock::UInt8 # 0x0 = none, 0x1 = lock, 0x2 = conflict
+    #
+    # This atomic integer holds the current state of the lock instance. Only the two lowest bits
+    # are used. See `LOCKED_BIT` and `PARKED_BIT` for the bitmask for these bits.
+    #
+    # # State table:
+    #
+    # PARKED_BIT | LOCKED_BIT | Description
+    #     0      |     0      | The lock is not locked, nor is anyone waiting for it.
+    # -----------+------------+------------------------------------------------------------------
+    #     0      |     1      | The lock is locked by exactly one task. No other task is
+    #            |            | waiting for it.
+    # -----------+------------+------------------------------------------------------------------
+    #     1      |     0      | The lock is not locked. One or more tasks are parked.
+    # -----------+------------+------------------------------------------------------------------
+    #     1      |     1      | The lock is locked by exactly one task. One or more tasks are
+    #            |            | parked waiting for the lock to become available.
+    #            |            | In this state, PARKED_BIT is only ever cleared when the cond_wait lock
+    #            |            | is held (i.e. on unlock). This ensures that
+    #            |            | we never end up in a situation where there are parked tasks but
+    #            |            | PARKED_BIT is not set (which would result in those tasks
+    #            |            | potentially never getting woken up).
+    @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
     cond_wait::ThreadSynchronizer # 2 words
     # offset32 = 36, offset64 = 48
@@ -50,6 +86,20 @@ mutable struct ReentrantLock <: AbstractLock
 end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
+
+show(io::IO, ::ReentrantLock) = print(io, ReentrantLock, "()")
+
+function show(io::IO, ::MIME"text/plain", l::ReentrantLock)
+    show(io, l)
+    if !(get(io, :compact, false)::Bool)
+        locked_by = l.locked_by
+        if locked_by isa Task
+            print(io, " (locked by ", locked_by === current_task() ? "current " : "", locked_by, ")")
+        else
+            print(io, " (unlocked)")
+        end
+    end
+end
 
 """
     islocked(lock) -> Status (Boolean)
@@ -91,7 +141,7 @@ function islocked end
 # `ReentrantLock`.
 
 function islocked(rl::ReentrantLock)
-    return (@atomic :monotonic rl.havelock) != 0
+    return (@atomic :monotonic rl.havelock) & LOCKED_BIT != 0
 end
 
 """
@@ -115,7 +165,6 @@ function trylock end
 @inline function trylock(rl::ReentrantLock)
     ct = current_task()
     if rl.locked_by === ct
-        #@assert rl.havelock !== 0x00
         rl.reentrancy_cnt += 0x0000_0001
         return true
     end
@@ -123,9 +172,8 @@ function trylock end
 end
 @noinline function _trylock(rl::ReentrantLock, ct::Task)
     GC.disable_finalizers()
-    if (@atomicreplace :acquire rl.havelock 0x00 => 0x01).success
-        #@assert rl.locked_by === nothing
-        #@assert rl.reentrancy_cnt === 0
+    state = (@atomic :monotonic rl.havelock) & PARKED_BIT
+    if (@atomicreplace :acquire rl.havelock state => (state | LOCKED_BIT)).success
         rl.reentrancy_cnt = 0x0000_0001
         @atomic :release rl.locked_by = ct
         return true
@@ -147,22 +195,68 @@ Each `lock` must be matched by an [`unlock`](@ref).
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
         Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
-        lock(c.lock)
-        try
-            while true
-                if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
-                    # it was unlocked, so try to lock it ourself
-                    _trylock(rl, current_task()) && break
-                else # it was locked, so now wait for the release to notify us
-                    wait(c)
+        ct = current_task()
+        iteration = 1
+        while true
+            state = @atomic :monotonic rl.havelock
+            # Grab the lock if it isn't locked, even if there is a queue on it
+            if state & LOCKED_BIT == 0
+                GC.disable_finalizers()
+                result = (@atomicreplace :acquire :monotonic rl.havelock state => (state | LOCKED_BIT))
+                if result.success
+                    rl.reentrancy_cnt = 0x0000_0001
+                    @atomic :release rl.locked_by = ct
+                    return
                 end
+                GC.enable_finalizers()
+                continue
             end
-        finally
-            unlock(c.lock)
+
+            if state & PARKED_BIT == 0
+                # If there is no queue, try spinning a few times
+                if iteration <= MAX_SPIN_ITERS
+                    Base.yield()
+                    iteration += 1
+                    continue
+                end
+
+                # If still not locked, try setting the parked bit
+                @atomicreplace :monotonic :monotonic rl.havelock state => (state | PARKED_BIT)
+            end
+
+            # lock the `cond_wait`
+            lock(c.lock)
+
+            # Last check before we wait to make sure `unlock` did not win the race
+            # to the `cond_wait` lock and cleared the parked bit
+            state = @atomic :acquire rl.havelock
+            if state != LOCKED_BIT | PARKED_BIT
+                unlock(c.lock)
+                continue
+            end
+
+            # It was locked, so now wait for the unlock to notify us
+            wait_no_relock(c)
+
+            # Loop back and try locking again
+            iteration = 1
         end
     end)(rl)
     return
 end
+
+function wait_no_relock(c::GenericCondition)
+    ct = current_task()
+    _wait2(c, ct)
+    token = unlockall(c.lock)
+    try
+        return wait()
+    catch
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        rethrow()
+    end
+end
+
 
 """
     unlock(lock)
@@ -180,18 +274,27 @@ internal counter and return immediately.
         rl.reentrancy_cnt = n
         if n == 0x0000_00000
             @atomic :monotonic rl.locked_by = nothing
-            if (@atomicswap :release rl.havelock = 0x00) == 0x02
+            result = (@atomicreplace :release :monotonic rl.havelock LOCKED_BIT => 0x00)
+            if result.success
+                return true
+            else
                 (@noinline function notifywaiters(rl)
                     cond_wait = rl.cond_wait
                     lock(cond_wait)
-                    try
-                        notify(cond_wait)
-                    finally
-                        unlock(cond_wait)
+
+                    notify(cond_wait, all=false)
+                    if !isempty(cond_wait.waitq)
+                        @atomic :release rl.havelock = PARKED_BIT
+                    else
+                        # We may have won the race to the `cond_wait` lock as a task was about to park
+                        # but we unlock anyway as any parking task will retry
+                        @atomic :release rl.havelock = 0x00
                     end
+
+                    unlock(cond_wait)
                 end)(rl)
+                return true
             end
-            return true
         end
         return false
     end)(rl) && GC.enable_finalizers()
@@ -498,10 +601,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    const notify::ThreadSynchronizer
+    const notify::Threads.Condition
     const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
+    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
 function wait(e::Event)
@@ -556,3 +659,278 @@ end
     import .Base: Event
     export Event
 end
+
+const PerStateInitial       = 0x00
+const PerStateHasrun        = 0x01
+const PerStateErrored       = 0x02
+const PerStateConcurrent    = 0x03
+
+"""
+    OncePerProcess{T}(init::Function)() -> T
+
+Calling a `OncePerProcess` object returns a value of type `T` by running the
+function `initializer` exactly once per process. All concurrent and future
+calls in the same process will return exactly the same value. This is useful in
+code that will be precompiled, as it allows setting up caches or other state
+which won't get serialized.
+
+## Example
+
+```jldoctest
+julia> const global_state = Base.OncePerProcess{Vector{UInt32}}() do
+           println("Making lazy global value...done.")
+           return [Libc.rand()]
+       end;
+
+julia> (procstate = global_state()) |> typeof
+Making lazy global value...done.
+Vector{UInt32} (alias for Array{UInt32, 1})
+
+julia> procstate === global_state()
+true
+
+julia> procstate === fetch(@async global_state())
+true
+```
+"""
+mutable struct OncePerProcess{T, F}
+    value::Union{Nothing,T}
+    @atomic state::UInt8 # 0=initial, 1=hasrun, 2=error
+    @atomic allow_compile_time::Bool
+    const initializer::F
+    const lock::ReentrantLock
+
+    function OncePerProcess{T,F}(initializer::F) where {T, F}
+        once = new{T,F}(nothing, PerStateInitial, true, initializer, ReentrantLock())
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :value, nothing)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :state, PerStateInitial)
+        return once
+    end
+end
+OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
+OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
+@inline function (once::OncePerProcess{T})() where T
+    state = (@atomic :acquire once.state)
+    if state != PerStateHasrun
+        (@noinline function init_perprocesss(once, state)
+            state == PerStateErrored && error("OncePerProcess initializer failed previously")
+            once.allow_compile_time || __precompile__(false)
+            lock(once.lock)
+            try
+                state = @atomic :monotonic once.state
+                if state == PerStateInitial
+                    once.value = once.initializer()
+                elseif state == PerStateErrored
+                    error("OncePerProcess initializer failed previously")
+                elseif state != PerStateHasrun
+                    error("invalid state for OncePerProcess")
+                end
+            catch
+                state == PerStateErrored || @atomic :release once.state = PerStateErrored
+                unlock(once.lock)
+                rethrow()
+            end
+            state == PerStateHasrun || @atomic :release once.state = PerStateHasrun
+            unlock(once.lock)
+            nothing
+        end)(once, state)
+    end
+    return once.value::T
+end
+
+function copyto_monotonic!(dest::AtomicMemory, src)
+    i = 1
+    for j in eachindex(src)
+        if isassigned(src, j)
+            @atomic :monotonic dest[i] = src[j]
+        #else
+        #    _unsetindex_atomic!(dest, i, src[j], :monotonic)
+        end
+        i += 1
+    end
+    dest
+end
+
+function fill_monotonic!(dest::AtomicMemory, x)
+    for i = 1:length(dest)
+        @atomic :monotonic dest[i] = x
+    end
+    dest
+end
+
+
+# share a lock/condition, since we just need it briefly, so some contention is okay
+const PerThreadLock = ThreadSynchronizer()
+"""
+    OncePerThread{T}(init::Function)() -> T
+
+Calling a `OncePerThread` object returns a value of type `T` by running the function
+`initializer` exactly once per thread. All future calls in the same thread, and
+concurrent or future calls with the same thread id, will return exactly the
+same value. The object can also be indexed by the threadid for any existing
+thread, to get (or initialize *on this thread*) the value stored for that
+thread. Incorrect usage can lead to data-races or memory corruption so use only
+if that behavior is correct within your library's threading-safety design.
+
+!!! warning
+    It is not necessarily true that a Task only runs on one thread, therefore the value
+    returned here may alias other values or change in the middle of your program. This function
+    may get deprecated in the future. If initializer yields, the thread running the current
+    task after the call might not be the same as the one at the start of the call.
+
+See also: [`OncePerTask`](@ref).
+
+## Example
+
+```jldoctest
+julia> const thread_state = Base.OncePerThread{Vector{UInt32}}() do
+           println("Making lazy thread value...done.")
+           return [Libc.rand()]
+       end;
+
+julia> (threadvec = thread_state()) |> typeof
+Making lazy thread value...done.
+Vector{UInt32} (alias for Array{UInt32, 1})
+
+julia> threadvec === fetch(@async thread_state())
+true
+
+julia> threadvec === thread_state[Threads.threadid()]
+true
+```
+"""
+mutable struct OncePerThread{T, F}
+    @atomic xs::AtomicMemory{T} # values
+    @atomic ss::AtomicMemory{UInt8} # states: 0=initial, 1=hasrun, 2=error, 3==concurrent
+    const initializer::F
+
+    function OncePerThread{T,F}(initializer::F) where {T, F}
+        xs, ss = AtomicMemory{T}(), AtomicMemory{UInt8}()
+        once = new{T,F}(xs, ss, initializer)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :xs, xs)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :ss, ss)
+        return once
+    end
+end
+OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
+OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
+@inline (once::OncePerThread)() = once[Threads.threadid()]
+@inline function getindex(once::OncePerThread, tid::Integer)
+    tid = Int(tid)
+    ss = @atomic :acquire once.ss
+    xs = @atomic :monotonic once.xs
+    # n.b. length(xs) >= length(ss)
+    if tid <= 0 || tid > length(ss) || (@atomic :acquire ss[tid]) != PerStateHasrun
+        (@noinline function init_perthread(once, tid)
+            local ss = @atomic :acquire once.ss
+            local xs = @atomic :monotonic once.xs
+            local len = length(ss)
+            # slow path to allocate it
+            nt = Threads.maxthreadid()
+            0 < tid <= nt || throw(ArgumentError("thread id outside of allocated range"))
+            if tid <= length(ss) && (@atomic :acquire ss[tid]) == PerStateErrored
+                error("OncePerThread initializer failed previously")
+            end
+            newxs = xs
+            newss = ss
+            if tid > len
+                # attempt to do all allocations outside of PerThreadLock for better scaling
+                @assert length(xs) >= length(ss) "logical constraint violation"
+                newxs = typeof(xs)(undef, len + nt)
+                newss = typeof(ss)(undef, len + nt)
+            end
+            # uses state and locks to ensure this runs exactly once per tid argument
+            lock(PerThreadLock)
+            try
+                ss = @atomic :monotonic once.ss
+                xs = @atomic :monotonic once.xs
+                if tid > length(ss)
+                    @assert len <= length(ss) <= length(newss) "logical constraint violation"
+                    fill_monotonic!(newss, PerStateInitial)
+                    xs = copyto_monotonic!(newxs, xs)
+                    ss = copyto_monotonic!(newss, ss)
+                    @atomic :release once.xs = xs
+                    @atomic :release once.ss = ss
+                end
+                state = @atomic :monotonic ss[tid]
+                while state == PerStateConcurrent
+                    # lost race, wait for notification this is done running elsewhere
+                    wait(PerThreadLock) # wait for initializer to finish without releasing this thread
+                    ss = @atomic :monotonic once.ss
+                    state = @atomic :monotonic ss[tid]
+                end
+                if state == PerStateInitial
+                    # won the race, drop lock in exchange for state, and run user initializer
+                    @atomic :monotonic ss[tid] = PerStateConcurrent
+                    result = try
+                        unlock(PerThreadLock)
+                        once.initializer()
+                    catch
+                        lock(PerThreadLock)
+                        ss = @atomic :monotonic once.ss
+                        @atomic :release ss[tid] = PerStateErrored
+                        notify(PerThreadLock)
+                        rethrow()
+                    end
+                    # store result and notify waiters
+                    lock(PerThreadLock)
+                    xs = @atomic :monotonic once.xs
+                    @atomic :release xs[tid] = result
+                    ss = @atomic :monotonic once.ss
+                    @atomic :release ss[tid] = PerStateHasrun
+                    notify(PerThreadLock)
+                elseif state == PerStateErrored
+                    error("OncePerThread initializer failed previously")
+                elseif state != PerStateHasrun
+                    error("invalid state for OncePerThread")
+                end
+            finally
+                unlock(PerThreadLock)
+            end
+            nothing
+        end)(once, tid)
+        xs = @atomic :monotonic once.xs
+    end
+    return xs[tid]
+end
+
+"""
+    OncePerTask{T}(init::Function)() -> T
+
+Calling a `OncePerTask` object returns a value of type `T` by running the function `initializer`
+exactly once per Task. All future calls in the same Task will return exactly the same value.
+
+See also: [`task_local_storage`](@ref).
+
+## Example
+
+```jldoctest
+julia> const task_state = Base.OncePerTask{Vector{UInt32}}() do
+           println("Making lazy task value...done.")
+           return [Libc.rand()]
+       end;
+
+julia> (taskvec = task_state()) |> typeof
+Making lazy task value...done.
+Vector{UInt32} (alias for Array{UInt32, 1})
+
+julia> taskvec === task_state()
+true
+
+julia> taskvec === fetch(@async task_state())
+Making lazy task value...done.
+false
+```
+"""
+mutable struct OncePerTask{T, F}
+    const initializer::F
+
+    OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
+end
+@inline (once::OncePerTask)() = get!(once.initializer, task_local_storage(), once)

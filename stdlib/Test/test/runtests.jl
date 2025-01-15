@@ -1534,6 +1534,22 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
 
+# Issue 54807
+struct FEexc
+    a::Nothing
+    b::Nothing
+end
+
+@testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
+    feexc = FEexc(nothing, nothing)
+    # This is redundant regular test for FieldError
+    @test_throws FieldError feexc.c
+    # This should raise ErrorException
+    @test_throws ErrorException feexc.a = 1
+    # This is test for FieldError shim and deprecation
+    @test_deprecated @test_throws ErrorException feexc.c
+end
+
 # Issue 25483
 mutable struct PassInformationTestSet <: Test.AbstractTestSet
     results::Vector
@@ -1696,17 +1712,61 @@ end
 
         # this tests both the `TestCounts` parts as well as the fallback `x`s
         expected = r"""
-                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
-                    outer         |    3     1      1       1      6  \s*\d*.\ds
-                      a           |    1                           1  \s*\d*.\ds
-                      custom      |    1     1      1       1      4  \s*?s
-                      no-record   |    x     x      x       x      ?  \s*?s
-                      b           |    1                           1  \s*\d*.\ds
-                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
+                    Test Summary: \| Pass  Fail  Error  Broken  Total  Time
+                    outer         \|    3     1      1       1      6  \s*\d*.\ds
+                      a           \|    1                           1  \s*\d*.\ds
+                      custom      \|    1     1      1       1      4  \s*\?s
+                      no-record   \|    x     x      x       x      \?  \s*\?s
+                      b           \|    1                           1  \s*\d*.\ds
+                    RNG of the outermost testset: .*
                     """
 
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
+    end
+
+end
+
+@testset "Deprecated multiple arguments" begin
+    msg1 = """Multiple descriptions provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg1 @macroexpand @testset "name1" "name2" begin end
+    msg2 = """Multiple testset types provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg2 @macroexpand @testset DefaultTestSet DefaultTestSet begin end
+end
+
+# Issue #54082
+module M54082 end
+@testset "@test_throws UndefVarError(:var)" begin
+    # Single-arg `UndefVarError` should match all `UndefVarError` for the
+    # same variable name, regardless of scope, to keep pre-v1.11 behaviour.
+    f54082() = var
+    @test_throws UndefVarError(:var) f54082()
+    # But if scope is set, then it has to match.
+    @test_throws UndefVarError(:var, M54082) M54082.var
+    let result = @testset NoThrowTestSet begin
+            # Wrong module scope
+            @test_throws UndefVarError(:var, Main) M54082.var
+        end
+        @test only(result) isa Test.Fail
+    end
+end
+
+@testset "Set RNG of testset" begin
+    rng1 = Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850)
+    rng2 = Xoshiro(0xc380f460355639ee, 0xb39bc754b7d63bbf, 0x1551dbcfb5ed5668, 0x71ab5a18fec21a25, 0x649d0c1be1ca5436)
+    rng3 = Xoshiro(0xee97f5b53f7cdc49, 0x480ac387b0527d3d, 0x614b416502a9e0f5, 0x5250cb36e4a4ceb1, 0xed6615c59e475fa0)
+
+    @testset rng=rng1 begin
+        @test rand() == rand(rng1)
+    end
+
+    @testset rng=rng2 "Outer" begin
+        @test rand() == rand(rng2)
+        @testset rng=rng3 "Inner: $(i)" for i in 1:10
+            @test rand() == rand(rng3)
+        end
     end
 end

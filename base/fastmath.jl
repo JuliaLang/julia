@@ -28,8 +28,9 @@ module FastMath
 export @fastmath
 
 import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
-    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast,
+    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, min_float_fast, max_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
+import Base: afoldl
 
 const fast_op =
     Dict(# basic arithmetic
@@ -167,11 +168,9 @@ add_fast(x::T, y::T) where {T<:FloatTypes} = add_float_fast(x, y)
 sub_fast(x::T, y::T) where {T<:FloatTypes} = sub_float_fast(x, y)
 mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
-
-add_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
-    add_fast(add_fast(x, y), zs...)
-mul_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
-    mul_fast(mul_fast(x, y), zs...)
+max_fast(x::T, y::T) where {T<:FloatTypes} = max_float_fast(x, y)
+min_fast(x::T, y::T) where {T<:FloatTypes} = min_float_fast(x, y)
+minmax_fast(x::T, y::T) where {T<:FloatTypes} = (min_fast(x, y), max_fast(x, y))
 
 @fastmath begin
     cmp_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(x==y, 0, ifelse(x<y, -1, +1))
@@ -240,14 +239,6 @@ ComplexTypes = Union{ComplexF32, ComplexF64}
 
     ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
 
-    # Note: we use the same comparison for min, max, and minmax, so
-    # that the compiler can convert between them
-    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
-    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
-    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
-
-    max_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = max_fast(max_fast(x, y), z...)
-    min_fast(x::T, y::T, z::T...) where {T<:FloatTypes} = min_fast(min_fast(x, y), z...)
 end
 
 # fall-back implementations and type promotion
@@ -260,7 +251,7 @@ for op in (:abs, :abs2, :conj, :inv, :sign)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem, :min, :max, :minmax)
+for op in (:-, :/, :(==), :!=, :<, :<=, :cmp, :rem, :minmax)
     op_fast = fast_op[op]
     @eval begin
         # fall-back implementation for non-numeric types
@@ -273,6 +264,31 @@ for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :rem, :min, :max, :minmax)
     end
 end
 
+for op in (:+, :*, :min, :max)
+    op_fast = fast_op[op]
+    @eval begin
+        $op_fast(x) = $op(x)
+        # fall-back implementation for non-numeric types
+        $op_fast(x, y) = $op(x, y)
+        # type promotion
+        $op_fast(x::Number, y::Number) =
+            $op_fast(promote(x,y)...)
+        # fall-back implementation that applies after promotion
+        $op_fast(x::T,y::T) where {T<:Number} = $op(x,y)
+        # note: these definitions must not cause a dispatch loop when +(a,b) is
+        # not defined, and must only try to call 2-argument definitions, so
+        # that defining +(a,b) is sufficient for full functionality.
+        ($op_fast)(a, b, c, xs...) = (@inline; afoldl($op_fast, ($op_fast)(($op_fast)(a,b),c), xs...))
+        # a further concern is that it's easy for a type like (Int,Int...)
+        # to match many definitions, so we need to keep the number of
+        # definitions down to avoid losing type information.
+        # type promotion
+        $op_fast(a::Number, b::Number, c::Number, xs::Number...) =
+            $op_fast(promote(a,b,c,xs...)...)
+        # fall-back implementation that applies after promotion
+        $op_fast(a::T, b::T, c::T, xs::T...) where {T<:Number} = (@inline; afoldl($op_fast, ($op_fast)(($op_fast)(a,b),c), xs...))
+    end
+end
 
 # Math functions
 exp2_fast(x::Union{Float32,Float64})  = Base.Math.exp2_fast(x)

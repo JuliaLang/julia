@@ -48,7 +48,7 @@ Generally it makes sense for `n` to equal the number of CPU threads (logical cor
 argument implicitly loads module [`Distributed`](@ref man-distributed).
 
 
-```julia
+```julia-repl
 $ julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
@@ -58,7 +58,7 @@ julia> s = @spawnat 2 1 .+ fetch(r)
 Future(2, 1, 5, nothing)
 
 julia> fetch(s)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.18526  1.50912
  1.16296  1.60607
 ```
@@ -106,7 +106,7 @@ julia> s = @spawnat :any 1 .+ fetch(r)
 Future(3, 1, 5, nothing)
 
 julia> fetch(s)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.38854  1.9098
  1.20939  1.57158
 ```
@@ -123,7 +123,7 @@ An important thing to remember is that, once fetched, a [`Future`](@ref Distribu
 locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
-[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
+[`Threads.@spawn`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
 be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
@@ -153,7 +153,7 @@ julia> function rand2(dims...)
        end
 
 julia> rand2(2,2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.153756  0.368514
  1.15119   0.918912
 
@@ -186,7 +186,7 @@ end
 ```
 
 In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
-every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
+every process. Calling `include("DummyModule.jl")` loads it only on a single process. To
 load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
 2`):
 
@@ -198,7 +198,7 @@ loaded
 ```
 
 As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
+[`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
@@ -262,7 +262,7 @@ as a programmatic means of adding, removing and querying the processes in a clus
 julia> using Distributed
 
 julia> addprocs(2)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -657,7 +657,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
+julia> errormonitor(Threads.@spawn make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)
@@ -734,7 +734,7 @@ serialization/deserialization of data. Consequently, the call refers to the same
 as passed - no copies are created. This behavior is highlighted below:
 
 ```julia-repl
-julia> using Distributed;
+julia> using Distributed
 
 julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
 
@@ -748,7 +748,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[3], [3], [3]]
+[[3], [3], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 1
@@ -767,7 +767,7 @@ julia> for i in 1:3
 julia> result = [take!(rc) for _ in 1:3];
 
 julia> println(result);
-Array{Int64,1}[[1], [2], [3]]
+[[1], [2], [3]]
 
 julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 3
@@ -855,7 +855,7 @@ Here's a brief example:
 julia> using Distributed
 
 julia> addprocs(3)
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  4
@@ -863,7 +863,7 @@ julia> addprocs(3)
 julia> @everywhere using SharedArrays
 
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[localindices(S)] = repeat([myid()], length(localindices(S))))
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  3  4
  2  3  3  4
  2  3  4  4
@@ -872,7 +872,7 @@ julia> S[3,2] = 7
 7
 
 julia> S
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  3  4
  2  3  3  4
  2  7  4  4
@@ -884,7 +884,7 @@ you wish:
 
 ```julia-repl
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
-3×4 SharedArray{Int64,2}:
+3×4 SharedMatrix{Int64}:
  2  2  2  2
  3  3  3  3
  4  4  4  4
@@ -896,7 +896,7 @@ conflicts. For example:
 ```julia
 @sync begin
     for p in procs(S)
-        @async begin
+        Threads.@spawn begin
             remotecall_wait(fill!, p, S, p)
         end
     end
@@ -978,7 +978,7 @@ and one that delegates in chunks:
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
-                   @async remotecall_wait(advection_shared_chunk!, p, q, u)
+                   Threads.@spawn remotecall_wait(advection_shared_chunk!, p, q, u)
                end
            end
            q
@@ -1371,7 +1371,7 @@ julia> all(C .≈ 4*π)
 true
 
 julia> typeof(C)
-Array{Float64,1}
+Vector{Float64} (alias for Array{Float64, 1})
 
 julia> dB = distribute(B);
 
@@ -1383,7 +1383,7 @@ julia> all(dC .≈ 4*π)
 true
 
 julia> typeof(dC)
-DistributedArrays.DArray{Float64,1,Array{Float64,1}}
+DistributedArrays.DArray{Float64,1,Vector{Float64}}
 
 julia> cuB = CuArray(B);
 
@@ -1419,7 +1419,7 @@ function declaration, let's see if it works with the aforementioned datatypes:
 julia> M = [2. 1; 1 1];
 
 julia> v = rand(2)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
 0.40395
 0.445877
 
@@ -1442,7 +1442,7 @@ julia> dv = distribute(v);
 julia> dC = power_method(dM, dv);
 
 julia> typeof(dC)
-Tuple{DistributedArrays.DArray{Float64,1,Array{Float64,1}},Float64}
+Tuple{DistributedArrays.DArray{Float64,1,Vector{Float64}},Float64}
 ```
 
 To end this short exposure to external packages, we can consider `MPI.jl`, a Julia wrapper

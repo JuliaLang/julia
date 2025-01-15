@@ -810,6 +810,28 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
 }
 
 /**
+ * @brief Enable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_enable(void)
+{
+    // Increment the flag to allow reentrant callers.
+    jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
+}
+
+/**
+ * @brief Disable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_disable(void)
+{
+    // Prevent decrementing the counter below zero
+    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled);
+    while (enabled > 0) {
+        if (jl_atomic_cmpswap(&jl_task_metrics_enabled, &enabled, enabled-1))
+            break;
+    }
+}
+
+/**
  * @brief Retrieve floating-point environment constants.
  *
  * Populates an array with constants related to the floating-point environment,

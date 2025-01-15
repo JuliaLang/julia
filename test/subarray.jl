@@ -1027,31 +1027,6 @@ catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
 end
 
-
-@testset "avoid allocating in reindex" begin
-    a = reshape(1:16, 4, 4)
-    inds = ([2,3], [3,4])
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (2,3)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
-
-    inds = (reshape([eachindex(a);], size(a)),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
-
-    inds = (reshape([eachindex(a);], size(a)..., 1),)
-    av = view(a, inds...)
-    av2 = view(av, 1, 1, 1)
-    @test parentindices(av2) === (1,)
-    av2 = view(av, 2:2, 2:2, 1:1)
-    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
-end
-
 @testset "isassigned" begin
     a = Vector{BigFloat}(undef, 5)
     a[2] = 0
@@ -1075,6 +1050,37 @@ end
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
     end
+end
+
+@testset "aliasing checks with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
+
+@testset "aliasing checks with disjoint arrays" begin
+    A = rand(3,4,5)
+    @test Base.mightalias(view(A, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(A, :, :, 1), view(A, :, :, 2))
+
+    B = reinterpret(UInt64, A)
+    @test Base.mightalias(view(B, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(B, :, :, 1), view(A, :, :, 2))
+
+    C = reinterpret(UInt32, A)
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 1))
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 2)) # This is overly conservative
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 1))
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 2)) # This is overly conservative
 end
 
 @testset "aliasing check with reshaped subarrays" begin

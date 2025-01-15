@@ -9,8 +9,8 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON -DBUILD_CLI=OFF
@@ -39,8 +39,12 @@ LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-I/usr/local/include"
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="OpenSSL" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
+
+# use the bundled distribution of libpcre. we should consider linking against the
+# pcre2 library we're building anyway, but this is currently how Yggdrasil does it.
+LIBGIT2_OPTS += -DREGEX_BACKEND="builtin"
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
@@ -51,12 +55,12 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(CMAKE) --build $(dir $@) test
+	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
 

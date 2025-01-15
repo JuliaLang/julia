@@ -166,7 +166,7 @@ The following is a complete list of command-line switches available when launchi
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message)|
 |`--help-hidden`                        |Print uncommon options not shown by `-h`|
-|`--project[={<dir>\|@.}]`              |Set `<dir>` as the active project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
+|`--project[={<dir>\|@temp\|@.}]`       |Set `<dir>` as the active project/environment. Or, create a temporary environment with `@temp`. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
@@ -179,7 +179,7 @@ The following is a complete list of command-line switches available when launchi
 |`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {auto\|N[,auto\|M]}`  |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
-| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
+| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
@@ -203,6 +203,7 @@ The following is a complete list of command-line switches available when launchi
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
+|`--task-metrics={yes\|no*}`             |Enable the collection of per-task metrics|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
 |`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
@@ -214,10 +215,16 @@ The following is a complete list of command-line switches available when launchi
 |`--output-bc <name>`                   |Generate LLVM bitcode (.bc)|
 |`--output-asm <name>`                  |Generate an assembly file (.s)|
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
-|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to a path|
+|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
+|`--trace-compile-timing`               |If `--trace-compile` is enabled show how long each took to compile in ms|
+|`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
+|`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|
 
+Options that have the form `--option={...}` can be specified either as `--option=value` or as `--option value`. For example, `julia --banner=no` is equivalent to `julia --banner no`. This is especially relevant for options that take a filename for output, because forgetting to specifying the argument for (say) `--trace-compile` will cause the option following it to be interpreted as the filename, possibly unintentionally overwriting it.
+
+Note that options of the form `--option[=...]` can **not** be specified as `--option value`, but only as `--option=value` (or simply `--option`, when no argument is provided).
 
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root

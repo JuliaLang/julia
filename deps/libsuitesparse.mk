@@ -59,8 +59,8 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
-	$(CMAKE) --build $(dir $<)
-	$(CMAKE) --install $(dir $<)
+	$(MAKE) -C $(dir $<)
+	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -70,7 +70,7 @@ LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	for PROJ in $(shell echo $(subst ;, ,$(LIBSUITESPARSE_PROJECTS))); do \
-		$(LIBSUITESPARSE_SHLIB_ENV) $(CMAKE) --build $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
+		$(LIBSUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@
 
@@ -95,7 +95,7 @@ configure-libsuitesparse: extract-libsuitesparse
 compile-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 fastcheck-libsuitesparse: #none
 check-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked
-install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse
+install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse remove-libsuitesparse-gpl-lib
 
 else # USE_BINARYBUILDER_LIBSUITESPARSE
 
@@ -103,6 +103,7 @@ $(eval $(call bb-install,libsuitesparse,LIBSUITESPARSE,false))
 
 # libsuitesparse depends on blastrampoline
 compile-libsuitesparse: | $(build_prefix)/manifest/blastrampoline
+install-libsuitesparse: | remove-libsuitesparse-gpl-lib
 endif
 
 define manual_libsuitesparse
@@ -110,3 +111,13 @@ uninstall-libsuitesparse:
 	-rm -f $(build_prefix)/manifest/libsuitesparse
 	-rm -f $(addprefix $(build_shlibdir)/lib,$3)
 endef
+
+remove-libsuitesparse-gpl-lib:
+ifeq ($(USE_GPL_LIBS),0)
+	@echo Removing GPL libs...
+	-rm -f $(build_bindir)/libcholmod*
+	-rm -f $(build_bindir)/libklu_cholmod*
+	-rm -f $(build_bindir)/librbio*
+	-rm -f $(build_bindir)/libspqr*
+	-rm -f $(build_bindir)/libumfpack*
+endif

@@ -577,6 +577,10 @@ function _doc(binding::Binding, sig::Type = Union{})
             for msig in multidoc.order
                 sig <: msig && return multidoc.docs[msig]
             end
+            # if no matching signatures, return first
+            if !isempty(multidoc.docs)
+                return first(values(multidoc.docs))
+            end
         end
     end
     return nothing
@@ -610,9 +614,8 @@ function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    elseif isassigned(Base.REPL_MODULE_REF)
+    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        REPL = Base.REPL_MODULE_REF[]
         return invokelatest(REPL.lookup_doc, ex)
     else
         return simple_lookup_doc(ex)
@@ -747,15 +750,16 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
-function loaddocs(docs::Vector{Core.SimpleVector})
-    for (mod, ex, str, file, line) in docs
+function loaddocs(docs::Base.CoreDocs.DocLinkedList)
+    while isdefined(docs, :doc)
+        (mod, ex, str, file, line) = docs.doc
         data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         lno = LineNumberNode(line, file)
         docstring = docm(lno, mod, doc, ex, false) # expand the real @doc macro now
         Core.eval(mod, Expr(:var"hygienic-scope", docstring, Docs, lno))
+        docs = docs.next
     end
-    empty!(docs)
     nothing
 end
 

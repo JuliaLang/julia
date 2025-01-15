@@ -50,7 +50,7 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
 that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
-well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg> ` ) are parsed, but others are
 removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
 without having to scrub away prompts and outputs. This feature is enabled by default but can be
 disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
@@ -68,7 +68,7 @@ It's possible, as an experimental feature, to specify the attributes used by the
 
 ```julia-repl
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.8833    0.329197
  0.719708  0.59114
 
@@ -78,7 +78,7 @@ julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
 julia> Base.active_repl.options.iocontext[:compact] = false;
 
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.2083967319174056  0.13330606013126012
  0.6244375177790158  0.9777957560761545
 ```
@@ -368,13 +368,13 @@ julia> π
 
 julia> e\_1[TAB] = [1,0]
 julia> e₁ = [1,0]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 
 julia> e\^1[TAB] = [1 0]
 julia> e¹ = [1 0]
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 
 julia> \sqrt[TAB]2     # √ is equivalent to the sqrt function

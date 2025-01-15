@@ -6,7 +6,7 @@ module Unicode
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
-             @assume_effects
+             @assume_effects, annotations
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -256,6 +256,15 @@ julia> textwidth('⛵')
 ```
 """
 function textwidth(c::AbstractChar)
+    ismalformed(c) && return 1
+    i = codepoint(c)
+    i < 0x7f && return Int(i >= 0x20) # ASCII fast path
+    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
+end
+
+function textwidth(c::Char)
+    b = bswap(reinterpret(UInt32, c)) # from isascii(c)
+    b < 0x7f && return Int(b >= 0x20) # ASCII fast path
     ismalformed(c) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
@@ -525,9 +534,15 @@ iscntrl(c::AbstractChar) = c <= '\x1f' || '\x7f' <= c <= '\u9f'
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
 character whose category code begins with 'P'.
 
+!!! note
+    This behavior is different from the `ispunct` function in C.
+
 # Examples
 ```jldoctest
 julia> ispunct('α')
+false
+
+julia> ispunct('=')
 false
 
 julia> ispunct('/')
