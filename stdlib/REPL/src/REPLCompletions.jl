@@ -716,7 +716,7 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
 end
 
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
-    @ccall jl_resolve_globals_in_ir(
+    @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,

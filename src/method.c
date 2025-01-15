@@ -41,235 +41,160 @@ static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
-static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
+static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
                                    int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
-        if (module == NULL)
-            return expr;
-        return jl_module_globalref(module, (jl_sym_t*)expr);
+        jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
     }
-    else if (jl_is_returnnode(expr)) {
-        jl_value_t *retval = jl_returnnode_value(expr);
-        if (retval) {
-            jl_value_t *val = resolve_globals(retval, module, sparam_vals, binding_effects, eager_resolve);
-            if (val != retval) {
-                JL_GC_PUSH1(&val);
-                expr = jl_new_struct(jl_returnnode_type, val);
-                JL_GC_POP();
-            }
-        }
+    if (!jl_is_expr(expr)) {
         return expr;
     }
-    else if (jl_is_enternode(expr)) {
-        jl_value_t *scope = jl_enternode_scope(expr);
-        if (scope) {
-            jl_value_t *val = resolve_globals(scope, module, sparam_vals, binding_effects, eager_resolve);
-            if (val != scope) {
-                intptr_t catch_dest = jl_enternode_catch_dest(expr);
-                JL_GC_PUSH1(&val);
-                expr = jl_new_struct_uninit(jl_enternode_type);
-                jl_enternode_catch_dest(expr) = catch_dest;
-                jl_enternode_scope(expr) = val;
-                JL_GC_POP();
-            }
-        }
+
+    jl_expr_t *e = (jl_expr_t*)expr;
+    if (e->head == jl_global_sym && binding_effects) {
+        // execute the side-effects of "global x" decl immediately:
+        // creates uninitialized mutable binding in module for each global
+        jl_eval_global_expr(module, e, 1);
+        return jl_nothing;
+    }
+    // These exprs are not fully linearized
+    if (e->head == jl_assign_sym) {
+        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_effects, eager_resolve));
+        return expr;
+    } else if (e->head == jl_new_opaque_closure_sym) {
+        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_effects, eager_resolve));
         return expr;
     }
-    else if (jl_is_gotoifnot(expr)) {
-        jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
-        if (cond != jl_gotoifnot_cond(expr)) {
-            intptr_t label = jl_gotoifnot_label(expr);
-            JL_GC_PUSH1(&cond);
-            expr = jl_new_struct_uninit(jl_gotoifnot_type);
-            set_nth_field(jl_gotoifnot_type, expr, 0, cond, 0);
-            jl_gotoifnot_label(expr) = label;
-            JL_GC_POP();
+    size_t nargs = jl_array_nrows(e->args);
+    if (e->head == jl_opaque_closure_method_sym) {
+        if (nargs != 5) {
+            jl_error("opaque_closure_method: invalid syntax");
         }
+        jl_value_t *name = jl_exprarg(e, 0);
+        jl_value_t *oc_nargs = jl_exprarg(e, 1);
+        int isva = jl_exprarg(e, 2) == jl_true;
+        jl_value_t *functionloc = jl_exprarg(e, 3);
+        jl_value_t *ci = jl_exprarg(e, 4);
+        if (!jl_is_code_info(ci)) {
+            jl_error("opaque_closure_method: lambda should be a CodeInfo");
+        } else if (!jl_is_long(oc_nargs)) {
+            jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
+        }
+        jl_method_t *m = jl_make_opaque_closure_method(module, name,
+            jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva, /*isinferred*/0);
+        return (jl_value_t*)m;
+    }
+    if (e->head == jl_cfunction_sym) {
+        JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
+        jl_task_t *ct = jl_current_task;
+        jl_value_t *typ = jl_exprarg(e, 0);
+        if (!jl_is_type(typ))
+            jl_error("first parameter to :cfunction must be a type");
+        if (typ == (jl_value_t*)jl_voidpointer_type) {
+            jl_value_t *a = jl_exprarg(e, 1);
+            JL_TYPECHK(cfunction method definition, quotenode, a);
+            *(jl_value_t**)a = jl_toplevel_eval(module, *(jl_value_t**)a);
+            jl_gc_wb(a, *(jl_value_t**)a);
+        }
+        jl_value_t *rt = jl_exprarg(e, 2);
+        jl_value_t *at = jl_exprarg(e, 3);
+        if (!jl_is_type(rt)) {
+            JL_TRY {
+                rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+            }
+            JL_CATCH {
+                if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                    jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
+                else
+                    jl_rethrow();
+            }
+            jl_exprargset(e, 2, rt);
+        }
+        if (!jl_is_svec(at)) {
+            JL_TRY {
+                at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+            }
+            JL_CATCH {
+                if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                    jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
+                else
+                    jl_rethrow();
+            }
+            jl_exprargset(e, 3, at);
+        }
+        check_c_types("cfunction method definition", rt, at);
+        JL_TYPECHK(cfunction method definition, quotenode, jl_exprarg(e, 4));
+        JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
         return expr;
     }
-    else if (jl_is_expr(expr)) {
-        jl_expr_t *e = (jl_expr_t*)expr;
-        if (e->head == jl_global_sym && binding_effects) {
-            // execute the side-effects of "global x" decl immediately:
-            // creates uninitialized mutable binding in module for each global
-            jl_eval_global_expr(module, e, 1);
-            expr = jl_nothing;
+    if (e->head == jl_foreigncall_sym) {
+        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
+        jl_task_t *ct = jl_current_task;
+        jl_value_t *rt = jl_exprarg(e, 1);
+        jl_value_t *at = jl_exprarg(e, 2);
+        if (!jl_is_type(rt)) {
+            JL_TRY {
+                rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+            }
+            JL_CATCH {
+                if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                    jl_error("could not evaluate ccall return type (it might depend on a local variable)");
+                else
+                    jl_rethrow();
+            }
+            jl_exprargset(e, 1, rt);
         }
-        if (jl_is_toplevel_only_expr(expr) || e->head == jl_const_sym ||
-            e->head == jl_coverageeffect_sym || e->head == jl_copyast_sym ||
-            e->head == jl_quote_sym || e->head == jl_inert_sym ||
-            e->head == jl_meta_sym || e->head == jl_inbounds_sym ||
-            e->head == jl_boundscheck_sym || e->head == jl_loopinfo_sym ||
-            e->head == jl_aliasscope_sym || e->head == jl_popaliasscope_sym ||
-            e->head == jl_inline_sym || e->head == jl_noinline_sym) {
-            // ignore these
+        if (!jl_is_svec(at)) {
+            JL_TRY {
+                at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+            }
+            JL_CATCH {
+                if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                    jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
+                else
+                    jl_rethrow();
+            }
+            jl_exprargset(e, 2, at);
         }
-        else {
-            size_t i = 0, nargs = jl_array_nrows(e->args);
-            if (e->head == jl_opaque_closure_method_sym) {
-                if (nargs != 5) {
-                    jl_error("opaque_closure_method: invalid syntax");
-                }
-                jl_value_t *name = jl_exprarg(e, 0);
-                jl_value_t *oc_nargs = jl_exprarg(e, 1);
-                int isva = jl_exprarg(e, 2) == jl_true;
-                jl_value_t *functionloc = jl_exprarg(e, 3);
-                jl_value_t *ci = jl_exprarg(e, 4);
-                if (!jl_is_code_info(ci)) {
-                    jl_error("opaque_closure_method: lambda should be a CodeInfo");
-                } else if (!jl_is_long(oc_nargs)) {
-                    jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
-                }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name,
-                    jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva, /*isinferred*/0);
-                return (jl_value_t*)m;
+        check_c_types("ccall method definition", rt, at);
+        JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
+        JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
+        jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
+        if (!jl_is_symbol(cc)) {
+            JL_TYPECHK(ccall method definition, tuple, cc);
+            if (jl_nfields(cc) != 2) {
+                jl_error("In ccall calling convention, expected two argument tuple or symbol.");
             }
-            if (e->head == jl_cfunction_sym) {
-                JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
-                jl_task_t *ct = jl_current_task;
-                jl_value_t *typ = jl_exprarg(e, 0);
-                if (!jl_is_type(typ))
-                    jl_error("first parameter to :cfunction must be a type");
-                if (typ == (jl_value_t*)jl_voidpointer_type) {
-                    jl_value_t *a = jl_exprarg(e, 1);
-                    JL_TYPECHK(cfunction method definition, quotenode, a);
-                    *(jl_value_t**)a = jl_toplevel_eval(module, *(jl_value_t**)a);
-                    jl_gc_wb(a, *(jl_value_t**)a);
+            JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
+            JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
+        }
+    }
+    if (e->head == jl_call_sym && nargs > 0 &&
+            jl_is_globalref(jl_exprarg(e, 0))) {
+        // TODO: this hack should be deleted once llvmcall is fixed
+        jl_value_t *fe = jl_exprarg(e, 0);
+        jl_module_t *fe_mod = jl_globalref_mod(fe);
+        jl_sym_t *fe_sym = jl_globalref_name(fe);
+        if (jl_binding_resolved_p(fe_mod, fe_sym)) {
+            // look at some known called functions
+            jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
+            if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
+                size_t j;
+                for (j = 1; j < nargs; j++) {
+                    if (!jl_is_quotenode(jl_exprarg(e, j)))
+                        break;
                 }
-                jl_value_t *rt = jl_exprarg(e, 2);
-                jl_value_t *at = jl_exprarg(e, 3);
-                if (!jl_is_type(rt)) {
+                if (j == nargs) {
+                    jl_value_t *val = NULL;
                     JL_TRY {
-                        rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                        val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
+                        val = NULL; // To make the analyzer happy see #define JL_TRY
                     }
-                    jl_exprargset(e, 2, rt);
-                }
-                if (!jl_is_svec(at)) {
-                    JL_TRY {
-                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
-                    }
-                    JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
-                    }
-                    jl_exprargset(e, 3, at);
-                }
-                check_c_types("cfunction method definition", rt, at);
-                JL_TYPECHK(cfunction method definition, quotenode, jl_exprarg(e, 4));
-                JL_TYPECHK(cfunction method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
-                return expr;
-            }
-            if (e->head == jl_foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
-                jl_task_t *ct = jl_current_task;
-                jl_value_t *rt = jl_exprarg(e, 1);
-                jl_value_t *at = jl_exprarg(e, 2);
-                if (!jl_is_type(rt)) {
-                    JL_TRY {
-                        rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
-                    }
-                    JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate ccall return type (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
-                    }
-                    jl_exprargset(e, 1, rt);
-                }
-                if (!jl_is_svec(at)) {
-                    JL_TRY {
-                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
-                    }
-                    JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
-                            jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
-                        else
-                            jl_rethrow();
-                    }
-                    jl_exprargset(e, 2, at);
-                }
-                check_c_types("ccall method definition", rt, at);
-                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
-                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
-                jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
-                if (!jl_is_symbol(cc)) {
-                    JL_TYPECHK(ccall method definition, tuple, cc);
-                    if (jl_nfields(cc) != 2) {
-                        jl_error("In ccall calling convention, expected two argument tuple or symbol.");
-                    }
-                    JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
-                    JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
-                }
-                jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
-                i++;
-            }
-            if (e->head == jl_method_sym || e->head == jl_module_sym || e->head == jl_throw_undef_if_not_sym) {
-                i++;
-            }
-            for (; i < nargs; i++) {
-                // TODO: this should be making a copy, not mutating the source
-                jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
-            }
-            if (e->head == jl_call_sym && jl_expr_nargs(e) == 3 &&
-                    jl_is_globalref(jl_exprarg(e, 0)) &&
-                    jl_is_globalref(jl_exprarg(e, 1)) &&
-                    jl_is_quotenode(jl_exprarg(e, 2))) {
-                // replace module_expr.sym with GlobalRef(module, sym)
-                // for expressions pattern-matching to `getproperty(module_expr, :sym)` in a top-module
-                // (this is expected to help inference performance)
-                // TODO: this was broken by linear-IR
-                jl_value_t *s = jl_fieldref(jl_exprarg(e, 2), 0);
-                jl_value_t *me = jl_exprarg(e, 1);
-                jl_value_t *fe = jl_exprarg(e, 0);
-                jl_module_t *fe_mod = jl_globalref_mod(fe);
-                jl_sym_t *fe_sym = jl_globalref_name(fe);
-                jl_module_t *me_mod = jl_globalref_mod(me);
-                jl_sym_t *me_sym = jl_globalref_name(me);
-                if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
-                    if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
-                        jl_binding_t *b = jl_get_binding(me_mod, me_sym);
-                        jl_value_t *v = jl_get_binding_value_if_const(b);
-                        if (v && jl_is_module(v))
-                            return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
-                    }
-                }
-            }
-            if (e->head == jl_call_sym && nargs > 0 &&
-                    jl_is_globalref(jl_exprarg(e, 0))) {
-                // TODO: this hack should be deleted once llvmcall is fixed
-                jl_value_t *fe = jl_exprarg(e, 0);
-                jl_module_t *fe_mod = jl_globalref_mod(fe);
-                jl_sym_t *fe_sym = jl_globalref_name(fe);
-                if (jl_binding_resolved_p(fe_mod, fe_sym)) {
-                    // look at some known called functions
-                    jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-                    if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
-                        size_t j;
-                        for (j = 1; j < nargs; j++) {
-                            if (!jl_is_quotenode(jl_exprarg(e, j)))
-                                break;
-                        }
-                        if (j == nargs) {
-                            jl_value_t *val = NULL;
-                            JL_TRY {
-                                val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
-                            }
-                            JL_CATCH {
-                                val = NULL; // To make the analyzer happy see #define JL_TRY
-                            }
-                            if (val)
-                                return val;
-                        }
-                    }
+                    if (val)
+                        return val;
                 }
             }
         }
@@ -277,13 +202,13 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
     return expr;
 }
 
-JL_DLLEXPORT void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects)
 {
     size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_globals(stmt, m, sparam_vals, binding_effects, 0));
+        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_effects, 0));
     }
 }
 
@@ -697,7 +622,7 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
     JL_GC_PUSH1(&func);
     if (jl_is_code_info(func)) {
         jl_array_t *stmts = (jl_array_t*)func->code;
-        jl_resolve_globals_in_ir(stmts, module, sparam_vals, 1);
+        jl_resolve_definition_effects_in_ir(stmts, module, sparam_vals, 1);
     }
     JL_GC_POP();
     return func;
@@ -777,7 +702,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, mi->sparam_vals, 1);
+            jl_resolve_definition_effects_in_ir(stmts, def->module, mi->sparam_vals, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
@@ -1000,7 +925,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_globals(st, m->module, sparam_vars, 1, 0);
+            st = resolve_definition_effects(st, m->module, sparam_vars, 1, 0);
         }
         jl_array_ptr_set(copy, i, st);
     }
