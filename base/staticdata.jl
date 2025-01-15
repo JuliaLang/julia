@@ -5,7 +5,7 @@ module StaticData
 using Core: CodeInstance, MethodInstance
 using Base: get_world_counter
 
-const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1 # needs to sync with staticdata.c
+const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
