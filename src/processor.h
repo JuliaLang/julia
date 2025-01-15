@@ -219,6 +219,7 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
 JL_DLLEXPORT void jl_dump_host_cpu2(void);
+JL_DLLEXPORT void jl_dump_specific_cpu(const char* triple, const char* cpu_name);
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);

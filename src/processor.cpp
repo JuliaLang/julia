@@ -147,7 +147,7 @@ struct TargetSet {
 };
 
 // Multiarch feature detection using the triple and cpu name
-TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName)
+TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName, int is_native_host)
 {
     llvm::Triple TheTriple(Triple);
     llvm::SmallVector<std::string> Features;
@@ -172,47 +172,83 @@ TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName
                 Features.push_back("+zcm");
                 Features.push_back("+zcz");
             }
+        } else {
+            // Fallback to the default set of features
+            llvm::AArch64::ExtensionSet Extensions;
+            Extensions.addArchDefaults(llvm::AArch64::ARMV8A);
+            std::vector<llvm::StringRef> Arm64Features;
+            Extensions.toLLVMFeatureList(Arm64Features);
+            for (auto &Feature : Arm64Features) {
+                Features.push_back(Feature.str());
+            }
+            jl_printf(JL_STDERR, "Warning: Unknown CPU name: %s\n", CpuName.str().c_str());
         }
     }
     else if (TheTriple.isX86()) {
         // x86
+        llvm::SmallVector<llvm::StringRef> CPUList;
+        llvm::X86::fillValidCPUArchList(CPUList);
+        if (std::find(CPUList.begin(), CPUList.end(), CpuName) == CPUList.end()) {
+            // Not a valid CPU name, fallback to generic
+            jl_printf(JL_STDERR, "Warning: Unknown CPU name: %s\n", CpuName.str().c_str());
+            CpuName = "generic";
+        }
         llvm::SmallVector<llvm::StringRef> X86Features;
-        llvm::X86::getFeaturesForCPU(CpuName, X86Features, true);
+        llvm::X86::getFeaturesForCPU(CpuName, X86Features, true); // Does not handle malformed CPU
         for (auto &Feature : X86Features) {
             Features.push_back(Feature.str());
         }
     }
     else if (TheTriple.isRISCV64()) {
+        // The fact that this checks the host is annoying but not much we can do for now
         std::vector<std::string> RISCVFeatures;
         if (CpuName.starts_with("generic")) {
-                        #if JL_LLVM_VERSION >= 190000
+            if (is_native_host) {
+#if JL_LLVM_VERSION >= 190000
                 auto HostFeatures = llvm::sys::getHostCPUFeatures();
-            #else
+#else
                 llvm::StringMap<bool> HostFeatures;
                 llvm::sys::getHostCPUFeatures(HostFeatures);
-            #endif
-            // hwprobe may be unavailable on older Linux versions.
-            if (!HostFeatures.empty()) {
-            std::vector<std::string> RISCVMapFeatures;
-            for (auto &F : HostFeatures)
-                RISCVMapFeatures.push_back(((F.second ? "+" : "-") + F.first()).str());
-            auto ParseResult = llvm::RISCVISAInfo::parseFeatures(
-                TheTriple.isRISCV32() ? 32 : 64, RISCVMapFeatures);
-            if (ParseResult)
-                RISCVFeatures = (*ParseResult)->toFeatures(true);
-            } else {
-                // Fallback to the default set of features
-                auto ISAInfo = llvm::RISCVISAInfo::parseArchString("rv64imafdc", true); // Baseline rv64gc
-                RISCVFeatures = (*ISAInfo)->toFeatures(true);
+#endif
+                std::vector<std::string> RISCVMapFeatures;
+                // hwprobe may be unavailable on older Linux versions.
+                if (!HostFeatures.empty()) {
+                    for (auto &F : HostFeatures)
+                        RISCVMapFeatures.push_back(((F.second ? "+" : "-") + F.first()).str());
+                }
+                auto ISAInfo = llvm::RISCVISAInfo::parseFeatures(
+                    TheTriple.isRISCV32() ? 32 : 64, RISCVMapFeatures);
+                if (!ISAInfo) {
+                    handleAllErrors(ISAInfo.takeError(), [&](llvm::StringError &ErrMsg) {
+                        jl_printf(JL_STDERR, "Warning: Tried getting the Host CPU features and LLVM Failed Parsing\n%s\n", ErrMsg.getMessage().c_str());
+                      });
+                } else
+                    RISCVFeatures = (*ISAInfo)->toFeatures(true);
             }
         }
         else {
             llvm::StringRef RISCVMarch = llvm::RISCV::getMArchFromMcpu(CpuName);
+            llvm::dbgs() << "RISCVMarch: " << RISCVMarch << "\n";
             auto ISAInfo = llvm::RISCVISAInfo::parseArchString(RISCVMarch, true); // Is in support in LLVM18 but back to TargetParser in 19
-            auto RISCVFeatures = (*ISAInfo)->toFeatures(true);
-            for (auto &Feature : RISCVFeatures) {
-                Features.push_back(Feature);
-            }
+            if (!ISAInfo) {
+                handleAllErrors(ISAInfo.takeError(), [&](llvm::StringError &ErrMsg) {
+                    jl_printf(JL_STDERR, "Warning: For CPU name: %s LLVM Failed Parsing\n%s\n", CpuName.str().c_str(), ErrMsg.getMessage().c_str());
+                  });
+            } else
+                RISCVFeatures = (*ISAInfo)->toFeatures(true);
+        }
+        if (RISCVFeatures.empty()) {
+            // Fallback to the default set of features
+            auto ISAInfo = llvm::RISCVISAInfo::parseArchString("rv64imafdc", true); // Baseline rv64gc
+            if (!ISAInfo) {
+                handleAllErrors(ISAInfo.takeError(), [&](llvm::StringError &ErrMsg) {
+                    jl_printf(JL_STDERR, "Warning: LLVM Failed Parsing\n%s\n", ErrMsg.getMessage().c_str());
+                  });
+            } else
+                RISCVFeatures = (*ISAInfo)->toFeatures(true);
+        }
+        for (auto &Feature : RISCVFeatures) {
+            Features.push_back(Feature);
         }
     }
     // Handle AMDGPU,ARM32...?
@@ -221,15 +257,23 @@ TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName
 
 JL_DLLEXPORT void jl_dump_host_cpu2(void)
 {
-    auto Triple =llvm::sys::getProcessTriple();
+    auto Triple = llvm::sys::getProcessTriple();
     auto CpuName = llvm::sys::getHostCPUName();
-    auto TargetData = jl_get_llvm_features(Triple, CpuName);
+    auto TargetData = jl_get_llvm_features(Triple, CpuName, true);
     llvm::Triple TheTriple(Triple);
     jl_printf(JL_STDOUT, "%s\n", TheTriple.normalize().c_str());
     jl_printf(JL_STDOUT, "%s\n", CpuName.str().c_str());
     jl_printf(JL_STDOUT, "%s\n", TargetData.getFeatureString().c_str());
 }
 
+JL_DLLEXPORT void jl_dump_specific_cpu(const char* triple, const char* cpu_name)
+{
+    auto TargetData = jl_get_llvm_features(triple, cpu_name, false);
+    llvm::Triple TheTriple(triple);
+    jl_printf(JL_STDOUT, "%s\n", TheTriple.normalize().c_str());
+    jl_printf(JL_STDOUT, "%s\n", cpu_name);
+    jl_printf(JL_STDOUT, "%s\n", TargetData.getFeatureString().c_str());
+}
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
