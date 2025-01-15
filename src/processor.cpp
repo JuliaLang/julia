@@ -159,13 +159,19 @@ TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName
     if (TheTriple.isAArch64()) {
         // aarch64
         auto CpuInfo = llvm::AArch64::parseCpu(CpuName);
-        llvm::AArch64::ExtensionSet Extensions;
-        Extensions.addCPUDefaults(*CpuInfo);
-        Extensions.addArchDefaults((*CpuInfo).Arch);
-        std::vector<llvm::StringRef> Arm64Features;
-        Extensions.toLLVMFeatureList(Arm64Features);
-        for (auto &Feature : Arm64Features) {
-            Features.push_back(Feature.str());
+        if (CpuInfo) {
+            llvm::AArch64::ExtensionSet Extensions;
+            Extensions.addCPUDefaults(*CpuInfo);
+            Extensions.addArchDefaults((*CpuInfo).Arch);
+            std::vector<llvm::StringRef> Arm64Features;
+            Extensions.toLLVMFeatureList(Arm64Features);
+            for (auto &Feature : Arm64Features) {
+                Features.push_back(Feature.str());
+            }
+            if (CpuName.starts_with("apple")) {
+                Features.push_back("+zcm");
+                Features.push_back("+zcz");
+            }
         }
     }
     else if (TheTriple.isX86()) {
@@ -177,11 +183,36 @@ TargetData2 jl_get_llvm_features(llvm::StringRef Triple, llvm::StringRef CpuName
         }
     }
     else if (TheTriple.isRISCV64()) {
-        llvm::StringRef RISCVMarch = llvm::RISCV::getMArchFromMcpu(CpuName);
-        auto ISAInfo = llvm::RISCVISAInfo::parseArchString(RISCVMarch, true); // Is in support in LLVM18 but back to TargetParser in 19
-        auto RISCVFeatures = (*ISAInfo)->toFeatures(/*AddAllExtension=*/true, /*IgnoreUnknown=*/false);
-        for (auto &Feature : RISCVFeatures) {
-            Features.push_back(Feature);
+        std::vector<std::string> RISCVFeatures;
+        if (CpuName.starts_with("generic")) {
+                        #if JL_LLVM_VERSION >= 190000
+                auto HostFeatures = llvm::sys::getHostCPUFeatures();
+            #else
+                llvm::StringMap<bool> HostFeatures;
+                llvm::sys::getHostCPUFeatures(HostFeatures);
+            #endif
+            // hwprobe may be unavailable on older Linux versions.
+            if (!HostFeatures.empty()) {
+            std::vector<std::string> RISCVMapFeatures;
+            for (auto &F : HostFeatures)
+                RISCVMapFeatures.push_back(((F.second ? "+" : "-") + F.first()).str());
+            auto ParseResult = llvm::RISCVISAInfo::parseFeatures(
+                TheTriple.isRISCV32() ? 32 : 64, RISCVMapFeatures);
+            if (ParseResult)
+                RISCVFeatures = (*ParseResult)->toFeatures(true);
+            } else {
+                // Fallback to the default set of features
+                auto ISAInfo = llvm::RISCVISAInfo::parseArchString("rv64imafdc", true); // Baseline rv64gc
+                RISCVFeatures = (*ISAInfo)->toFeatures(true);
+            }
+        }
+        else {
+            llvm::StringRef RISCVMarch = llvm::RISCV::getMArchFromMcpu(CpuName);
+            auto ISAInfo = llvm::RISCVISAInfo::parseArchString(RISCVMarch, true); // Is in support in LLVM18 but back to TargetParser in 19
+            auto RISCVFeatures = (*ISAInfo)->toFeatures(true);
+            for (auto &Feature : RISCVFeatures) {
+                Features.push_back(Feature);
+            }
         }
     }
     // Handle AMDGPU,ARM32...?
