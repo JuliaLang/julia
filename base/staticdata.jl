@@ -46,7 +46,7 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
             end
             if get_world_counter() == maxvalid
                 maxvalid = typemax(UInt)
-                @atomic codeinst.max_world = maxvalid
+                @atomic :monotonic codeinst.max_world = maxvalid
             end
             if external
                 caller = get_ci_mi(codeinst)
@@ -196,9 +196,9 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     while length(stack) ≥ depth
         child = pop!(stack)
         if maxworld ≠ 0
-            @atomic child.min_world = minworld
+            @atomic  :monotonic child.min_world = minworld
         end
-        @atomic child.max_world = maxworld
+        @atomic :monotonic child.max_world = maxworld
         @assert visiting[child] == length(stack) + 1
         delete!(visiting, child)
         invalidations = _jl_debug_method_invalidation[]
