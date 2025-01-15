@@ -1280,17 +1280,20 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
+                ccall(:jl_restore_package_image_from_file, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring, Cint),
+                    ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
+                ccall(:jl_restore_incremental, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring),
+                    path, depmods, #=completeinfo=#false, pkg.name)
             end
         finally
             lock(require_lock)
         end
-        if isa(sv, Exception)
-            return sv
-        end
+
+        edges = sv[3]::Vector{Any}
+        ext_edges = sv[4]::Union{Nothing,Vector{Any}}
+        StaticData.insert_backedges(edges, ext_edges)
 
         restored = register_restored_modules(sv, pkg, path)
 
@@ -4198,7 +4201,7 @@ function precompile(@nospecialize(argt::Type))
 end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
-precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
+precompile(mi::MethodInstance, world::UInt=get_world_counter()) =
     (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
 
 """
@@ -4214,7 +4217,7 @@ end
 
 function precompile(@nospecialize(argt::Type), m::Method)
     atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
-    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end
 

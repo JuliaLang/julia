@@ -560,12 +560,11 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
                 ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
                 i += 2
                 continue
-            end
-            # `invoke` edge
-            if isa(callee, Method)
+            elseif isa(callee, Method)
                 # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
                 i += 2
                 continue
+            # `invoke` edge
             elseif isa(callee, CodeInstance)
                 callee = get_ci_mi(callee)
             end

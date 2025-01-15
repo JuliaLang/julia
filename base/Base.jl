@@ -262,6 +262,7 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+include("staticdata.jl")
 include("loading.jl")
 
 # misc useful functions & macros
