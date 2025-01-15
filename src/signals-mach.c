@@ -714,10 +714,13 @@ static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
     jl_unlock_profile();
 }
 
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
+int jl_lock_stackwalk(void)
 {
-    int lockret = jl_lock_profile_mach(1);
-    f(ctx);
+    return jl_lock_profile_mach(1);
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
     jl_unlock_profile_mach(1, lockret);
 }
 

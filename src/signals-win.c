@@ -383,23 +383,18 @@ void jl_thread_resume(int tid)
     }
 }
 
-void jl_lock_stackwalk(void)
+int jl_lock_stackwalk(void)
 {
     uv_mutex_lock(&jl_in_stackwalk);
     jl_lock_profile();
+    return 0;
 }
 
-void jl_unlock_stackwalk(void)
+void jl_unlock_stackwalk(int lockret)
 {
+    (void)lockret;
     jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
-}
-
-void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
-{
-    jl_lock_stackwalk();
-    f(ctx);
-    jl_unlock_stackwalk();
 }
 
 
@@ -421,10 +416,10 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
             }
             else {
                 // TODO: bring this up to parity with other OS by adding loop over tid here
-                jl_lock_stackwalk();
+                int lockret = jl_lock_stackwalk();
                 CONTEXT ctxThread;
                 if (!jl_thread_suspend_and_get_state(0, 0, &ctxThread)) {
-                    jl_unlock_stackwalk();
+                    jl_unlock_stackwalk(lockret);
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
                     jl_profile_stop_timer();
                     break;
@@ -451,7 +446,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 // Mark the end of this block with two 0's
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
                 profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
-                jl_unlock_stackwalk();
+                jl_unlock_stackwalk(lockret);
                 jl_thread_resume(0);
                 jl_check_profile_autostop();
             }
