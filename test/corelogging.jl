@@ -115,18 +115,17 @@ end
     end
 end
 @testset "Log message handle_message exception handling" begin
-    # Exceptions in log handling (printing) of msg are caught by default
+    # Exceptions in log handling (printing) of msg are caught by default.
     struct Foo end
     Base.show(::IO, ::Foo) = 1 ÷ 0
 
-    @test_warn r"Error: Exception while generating log record in module Main at.*DivideError: integer division error" @info Foo()
+    # We cannot use `@test_logs` here, since test_logs does not actually _print_ the message
+    # (i.e. it does not invoke handle_message). To test exception handling during printing,
+    # we have to use `@test_warn` to see what was printed.
+    @test_warn r"Error: Exception while generating log record in module .*DivideError: integer division error"s @info Foo()
 
     # Exceptions in log handling (printing) of attributes are caught by default
-    out = capture_stderr() do
-        @info "foo" x=Foo()
-    end
-    @test occursin("Error: Exception while generating log record in module Main at", out)
-    @test occursin("DivideError: integer division error", out)
+    @test_warn r"Error: Exception while generating log record in module .*DivideError: integer division error"s @info "foo" x=Foo()
 end
 
 @testset "Special keywords" begin
