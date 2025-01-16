@@ -100,6 +100,7 @@ JL_DLLEXPORT jl_sym_t *jl_escape_sym;
 JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
 JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
+JL_DLLEXPORT jl_sym_t *jl_min_optlevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
 JL_DLLEXPORT jl_sym_t *jl_eval_sym;
 JL_DLLEXPORT jl_sym_t *jl_include_sym;
@@ -392,6 +393,7 @@ void jl_init_common_symbols(void)
     jl_specialize_sym = jl_symbol("specialize");
     jl_nospecializeinfer_sym = jl_symbol("nospecializeinfer");
     jl_optlevel_sym = jl_symbol("optlevel");
+    jl_min_optlevel_sym = jl_symbol("min_optlevel");
     jl_compile_sym = jl_symbol("compile");
     jl_force_compile_sym = jl_symbol("force_compile");
     jl_infer_sym = jl_symbol("infer");

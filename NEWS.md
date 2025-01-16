@@ -23,6 +23,9 @@ New language features
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
 - Support for Unicode 16 ([#56925]).
+* `Base.Experimental.@min_optlevel level` sets a minimum optlevel (`--min_optlevel`) for a
+  module, ensuring that level of optimization even if the process is run at a lower optlevel
+  (`-O`) ([#]).
 
 Language changes
 ----------------

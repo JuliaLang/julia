@@ -91,6 +91,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     jl_atomic_store_relaxed(&m->counter, 1);
     m->nospecialize = 0;
     m->optlevel = -1;
+    m->min_optlevel = -1;
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
@@ -145,6 +146,10 @@ JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl)
 {
     self->optlevel = lvl;
 }
+JL_DLLEXPORT void jl_set_module_min_optlevel(jl_module_t *self, int lvl)
+{
+    self->min_optlevel = lvl;
+}
 
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
 {
@@ -155,6 +160,16 @@ JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m)
     }
     return lvl;
 }
+JL_DLLEXPORT int jl_get_module_min_optlevel(jl_module_t *m)
+{
+    int lvl = m->min_optlevel;
+    while (lvl == -1 && m->parent != m && m != jl_base_module) {
+        m = m->parent;
+        lvl = m->min_optlevel;
+    }
+    return lvl;
+}
+
 
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value)
 {

@@ -724,6 +724,7 @@ typedef struct _jl_module_t {
     _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
+    int8_t min_optlevel;
     int8_t compile;
     int8_t infer;
     uint8_t istopmod;
@@ -1989,7 +1990,9 @@ extern JL_DLLIMPORT jl_module_t *jl_libdl_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
+JL_DLLEXPORT void jl_set_module_min_optlevel(jl_module_t *self, int lvl);
 JL_DLLEXPORT int jl_get_module_optlevel(jl_module_t *m);
+JL_DLLEXPORT int jl_get_module_min_optlevel(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_compile(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_compile(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);

@@ -8673,6 +8673,11 @@ static jl_llvm_functions_t
         static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
         FnAttrs.addAttribute("julia-optimization-level", optLevelStrings[optlevel]);
     }
+    int min_optlevel = jl_get_module_min_optlevel(ctx.module);
+    if (min_optlevel >= 0 && min_optlevel <= 3) {
+        static const char* const optLevelStrings[] = { "0", "1", "2", "3" };
+        FnAttrs.addAttribute("julia-min-optimization-level", optLevelStrings[min_optlevel]);
+    }
 
     ctx.f = f;
 

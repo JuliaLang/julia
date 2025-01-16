@@ -1049,6 +1049,14 @@ static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAF
                         if (ol < opt_level)
                             opt_level = ol;
                     }
+                    attr = F.getFnAttribute("julia-min-optimization-level");
+                    val = attr.getValueAsString();
+                    if (val != "") {
+                        size_t ol = (size_t)val[0] - '0';
+                        if (ol > opt_level)
+                            opt_level = ol;
+                        jl_safe_printf("Function %s opt: %d\n", F.getName().str().c_str(), (int)opt_level);
+                    }
                 }
             }
             if (opt_level < opt_level_min)
