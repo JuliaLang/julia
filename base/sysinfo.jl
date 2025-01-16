@@ -543,8 +543,8 @@ Windows Subsystem for Linux (WSL).
     Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime tests, and thus
     cannot meaningfully be used in `@static if ` constructs.
 
-!!! compat "Julia 1.11"
-    This function requires at least Julia 1.11.
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
 """
 function detectwsl(os::Symbol)
     islinux(os) &&
