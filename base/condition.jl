@@ -145,9 +145,10 @@ function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
     token = unlockall(c.lock)
 
     timer::Union{Timer, Nothing} = nothing
-    waiter_left = Threads.Atomic{Bool}(false)
+    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
     if timeout > 0.0
         timer = Timer(timeout)
+        waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
         t = Task() do
             try
