@@ -1706,6 +1706,10 @@ JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 JL_DLLEXPORT uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT uint16_t julia_double_to_half(double param) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
+JL_DLLEXPORT float julia_half_to_float(uint16_t param) JL_NOTSAFEPOINT;
+
 // -- synchronization utilities -- //
 
 extern jl_mutex_t typecache_lock;
@@ -1975,13 +1979,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
-
-//JL_DLLEXPORT float julia__gnu_h2f_ieee(half param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT half julia__gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT half julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT float julia__truncsfbf2(float param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT float julia__truncdfbf2(double param) JL_NOTSAFEPOINT;
-//JL_DLLEXPORT double julia__extendhfdf2(half n) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 

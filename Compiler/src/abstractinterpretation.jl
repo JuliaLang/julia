@@ -1352,6 +1352,8 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     assign_parentchild!(frame, sv)
     if !typeinf(interp, frame)
+        sv.time_caches += frame.time_caches
+        sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
         callstack = frame.callstack::Vector{AbsIntState}
@@ -4357,6 +4359,7 @@ end
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    time_before = _time_ns()
     callstack = frame.callstack::Vector{AbsIntState}
     nextstates = CurrentState[]
     takenext = frame.frameid
@@ -4388,7 +4391,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             # get_compileable_sig), but still must be finished up since it may see and
             # change the local variables of the InferenceState at currpc, we do this
             # even if the nextresult status is already completed.
-            continue
         elseif isdefined(nextstates[nextstateid], :result) || !isempty(callee.ip)
             # Next make progress on this frame
             prev = length(callee.tasks) + 1
@@ -4396,16 +4398,23 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             reverse!(callee.tasks, prev)
         elseif callee.cycleid == length(callstack)
             # With no active ip's and no cycles, frame is done
-            finish_nocycle(interp, callee)
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
+            finish_nocycle(interp, callee, time_before)
             callee.frameid == 0 && break
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
             #@assert length(nextstates) == nextstateid + 1
             #@assert all(i -> !isdefined(nextstates[i], :result), nextstateid+1:length(nextstates))
             resize!(nextstates, nextstateid)
+            continue
         elseif callee.cycleid == callee.frameid
             # If the current frame is the top part of a cycle, check if the whole cycle
             # is done, and if not, pick the next item to work on.
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
             no_active_ips_in_cycle = true
             for i = callee.cycleid:length(callstack)
                 caller = callstack[i]::InferenceState
@@ -4416,7 +4425,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 end
             end
             if no_active_ips_in_cycle
-                finish_cycle(interp, callstack, callee.cycleid)
+                finish_cycle(interp, callstack, callee.cycleid, time_before)
             end
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
@@ -4426,10 +4435,14 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             else
                 #@assert length(nextstates) == nextstateid
             end
+            continue
         else
             # Continue to the next frame in this cycle
             takenext = takenext - 1
         end
+        time_now = _time_ns()
+        callee.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
     #@assert all(nextresult -> !isdefined(nextresult, :result), nextstates)
     return is_inferred(frame)
