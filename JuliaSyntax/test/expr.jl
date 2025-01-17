@@ -824,3 +824,9 @@
             Expr(:import, Expr(:as, Expr(:., :A, :+), :y))
     end
 end
+
+@testset "SyntaxNode->Expr conversion" begin
+    src = repeat('a', 1000) * '\n' * "@hi"
+    @test Expr(parsestmt(SyntaxNode, SubString(src, 1001:lastindex(src)))) ==
+        Expr(:macrocall, Symbol("@hi"), LineNumberNode(2))
+end
