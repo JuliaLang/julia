@@ -3016,24 +3016,28 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
-    matches = find_method_matches(interp, argtypes, atype; max_methods)
-    info = NoCallInfo()
-    if isa(matches, FailedMethodMatch)
-        rt = Bool # too many matches to analyze
+    if atype === Union{}
+        rt = Union{} # accidentally unreachable code
     else
-        (; valid_worlds, applicable) = matches
-        update_valid_age!(sv, valid_worlds)
-        napplicable = length(applicable)
-        if napplicable == 0
-            rt = Const(false) # never any matches
-        elseif !fully_covering(matches) || any_ambig(matches)
-            # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-            rt = Bool
+        matches = find_method_matches(interp, argtypes, atype; max_methods)
+        info = NoCallInfo()
+        if isa(matches, FailedMethodMatch)
+            rt = Bool # too many matches to analyze
         else
-            rt = Const(true) # has applicable matches
-        end
-        if rt !== Bool
-            info = VirtualMethodMatchInfo(matches.info)
+            (; valid_worlds, applicable) = matches
+            update_valid_age!(sv, valid_worlds)
+            napplicable = length(applicable)
+            if napplicable == 0
+                rt = Const(false) # never any matches
+            elseif !fully_covering(matches) || any_ambig(matches)
+                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+                rt = Bool
+            else
+                rt = Const(true) # has applicable matches
+            end
+            if rt !== Bool
+                info = VirtualMethodMatchInfo(matches.info)
+            end
         end
     end
     return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, info))
