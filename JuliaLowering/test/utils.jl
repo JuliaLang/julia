@@ -23,7 +23,7 @@ using JuliaLowering:
 function _ast_test_graph()
     graph = SyntaxGraph()
     ensure_attributes!(graph,
-                       kind=Kind, source=Union{SourceRef,NodeId,LineNumberNode},
+                       kind=Kind, source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
                        var_id=Int, value=Any, name_val=String)
 end
 
@@ -35,6 +35,7 @@ function _source_node(graph, src)
 end
 
 macro ast_(tree)
+    # TODO: Implement this in terms of new-style macros.
     quote
         graph = _ast_test_graph()
         srcref = _source_node(graph, $(QuoteNode(__source__)))
@@ -141,9 +142,21 @@ function read_ir_test_cases(filename)
      [match_ir_test_case(s) for s in split(cases_str, r"######*") if strip(s) != ""])
 end
 
+function setup_ir_test_module(preamble)
+    test_mod = Module(:TestMod)
+    Base.include_string(test_mod, preamble)
+    Base.eval(test_mod, :(const var"@ast_" = $(var"@ast_")))
+    test_mod
+end
+
 function format_ir_for_test(mod, description, input, expect_error=false)
     ex = parsestmt(SyntaxTree, input)
     try
+        if kind(ex) == K"macrocall" && ex[1].name_val == "@ast_"
+            # Total hack, until @ast_ can be implemented in terms of new-style
+            # macros.
+            ex = JuliaLowering.eval(mod, Expr(ex))
+        end
         x = JuliaLowering.lower(mod, ex)
         if expect_error
             error("Expected a lowering error in test case \"$description\"")
@@ -161,8 +174,7 @@ end
 
 function test_ir_cases(filename::AbstractString)
     preamble, cases = read_ir_test_cases(filename)
-    test_mod = Module(:TestMod)
-    Base.include_string(test_mod, preamble)
+    test_mod = setup_ir_test_module(preamble)
     for (expect_error, description, input, ref) in cases
         output = format_ir_for_test(test_mod, description, input, expect_error)
         @testset "$description" begin
@@ -183,8 +195,7 @@ When `pattern` is supplied, update only those tests where
 """
 function refresh_ir_test_cases(filename, pattern=nothing)
     preamble, cases = read_ir_test_cases(filename)
-    test_mod = Module(:TestMod)
-    Base.include_string(test_mod, preamble)
+    test_mod = setup_ir_test_module(preamble)
     io = IOBuffer()
     if !isempty(preamble)
         println(io, preamble, "\n")

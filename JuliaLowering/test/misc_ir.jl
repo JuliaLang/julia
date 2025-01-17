@@ -207,3 +207,12 @@ LoweringError:
 {x y; y z}
 └────────┘ ── { } syntax is reserved for future use
 
+########################################
+# Error: Test AST which has no source form and thus must have been constructed
+# programmatically (eg, a malformed if)
+@ast_ [K"if"]
+#---------------------
+LoweringError:
+#= line 1 =# - expected `numchildren(ex) >= 2`
+
+
