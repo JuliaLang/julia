@@ -623,8 +623,13 @@ restart_switch:
             break;
         case 't': // threads
             errno = 0;
-            jl_options.nthreadpools = 1;
-            long nthreads = -1, nthreadsi = 0;
+            jl_options.nthreadpools = 2;
+            // By default:
+            // default threads = -1 (== "auto")
+            long nthreads = -1;
+            // interactive threads = 1, or 0 if generating output
+            long nthreadsi = jl_generating_output() ? 0 : 1;
+
             if (!strncmp(optarg, "auto", 4)) {
                 jl_options.nthreads = -1;
                 if (optarg[4] == ',') {
@@ -633,10 +638,9 @@ restart_switch:
                     else {
                         errno = 0;
                         nthreadsi = strtol(&optarg[5], &endptr, 10);
-                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
-                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 1");
+                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 0 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 0");
                     }
-                    jl_options.nthreadpools++;
                 }
             }
             else {
@@ -650,17 +654,18 @@ restart_switch:
                         errno = 0;
                         char *endptri;
                         nthreadsi = strtol(&endptr[1], &endptri, 10);
-                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
-                            jl_errorf("julia: -t,--threads=<n>,<m>; n and m must be integers >= 1");
+                        // Allow 0 for interactive
+                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 0 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=<n>,<m>; m must be an integer ≥ 0");
+                        if (nthreadsi == 0)
+                            jl_options.nthreadpools = 1;
                     }
-                    jl_options.nthreadpools++;
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
             int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            if (jl_options.nthreadpools == 2)
-                ntpp[1] = (int16_t)nthreadsi;
+            ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
         case 'p': // procs
