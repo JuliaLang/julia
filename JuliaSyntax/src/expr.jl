@@ -68,7 +68,7 @@ function _expr_leaf_val(node::SyntaxNode)
     node.val
 end
 
-function _leaf_to_Expr(source, txtbuf, head, srcrange, node)
+function _leaf_to_Expr(source, txtbuf, txtbuf_offset, head, srcrange, node)
     k = kind(head)
     if k == K"MacroName" && view(source, srcrange) == "."
         return Symbol("@__dot__")
@@ -77,7 +77,9 @@ function _leaf_to_Expr(source, txtbuf, head, srcrange, node)
             Expr(:error) :
             Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
     else
-        val = isnothing(node) ? parse_julia_literal(txtbuf, head, srcrange) : _expr_leaf_val(node)
+        val = isnothing(node) ?
+            parse_julia_literal(txtbuf, head, srcrange .+ txtbuf_offset) :
+            _expr_leaf_val(node)
         if val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
             # symbolic/textural form for compatibility with the Expr
@@ -547,7 +549,7 @@ function build_tree(::Type{Expr}, stream::ParseStream;
         end
         k = kind(head)
         if isnothing(nodechildren)
-            ex = _leaf_to_Expr(source, txtbuf, head, srcrange, nothing)
+            ex = _leaf_to_Expr(source, txtbuf, 0, head, srcrange, nothing)
         else
             resize!(childranges, length(nodechildren))
             resize!(childheads, length(nodechildren))
@@ -568,8 +570,8 @@ end
 function _to_expr(node)
     file = sourcefile(node)
     if is_leaf(node)
-        offset, txtbuf = _unsafe_wrap_substring(sourcetext(file))
-        return _leaf_to_Expr(file, txtbuf, head(node), byte_range(node) .+ offset, node)
+        txtbuf_offset, txtbuf = _unsafe_wrap_substring(sourcetext(file))
+        return _leaf_to_Expr(file, txtbuf, txtbuf_offset, head(node), byte_range(node), node)
     end
     cs = children(node)
     args = Any[_to_expr(c) for c in cs]
