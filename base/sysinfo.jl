@@ -546,13 +546,13 @@ Windows Subsystem for Linux (WSL).
 !!! compat "Julia 1.12"
     This function requires at least Julia 1.12.
 """
-function detectwsl(os::Symbol)
-    islinux(os) &&
+function detectwsl()
+    islinux() &&
     isfile("/proc/sys/kernel/osrelease") &&
     contains(read("/proc/sys/kernel/osrelease", String), r"Microsoft|WSL"i)
 end
 
-for f in (:detectwsl, :isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
+for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
 
