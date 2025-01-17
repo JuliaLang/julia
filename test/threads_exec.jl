@@ -1536,4 +1536,29 @@ end
     end
 end
 
+@testset "--timeout-for-safepoint-straggler command-line flag" begin
+    program = "
+        function main()
+            t = Threads.@spawn begin
+                ccall(:uv_sleep, Cvoid, (Cuint,), 5000)
+            end
+            # Force a GC
+            ccall(:uv_sleep, Cvoid, (Cuint,), 1000)
+            GC.gc()
+            wait(t)
+        end
+        main()
+    "
+    tmp_output_filename = tempname()
+    tmp_output_file = open(tmp_output_filename, "w")
+    if isnothing(tmp_output_file)
+        error("Failed to open file $tmp_output_filename")
+    end
+    run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=1 -e $program`, stderr=tmp_output_file))
+    # Check whether we printed the straggler's backtrace
+    @test !isempty(read(tmp_output_filename, String))
+    close(tmp_output_file)
+    rm(tmp_output_filename)
+end
+
 end # main testset
