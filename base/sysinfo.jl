@@ -534,7 +534,7 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 isjsvm(os::Symbol) = (os === :Emscripten)
 
 """
-    Sys.detectwsl([os])
+    Sys.detectwsl()
 
 Runtime predicate for testing if Julia is running inside
 Windows Subsystem for Linux (WSL).
