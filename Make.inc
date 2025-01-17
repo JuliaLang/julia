@@ -1426,13 +1426,6 @@ $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortr
 endif
 endif
 
-ifneq (${MMTK_PLAN},None)
-# We still need some .h files from mmtk when
-# building Julia using the BinaryBuilder
-ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
-MMTK_API_INC=$(JULIAHOME)/deps/mmtk/
-endif
-endif
 
 # OS specific stuff
 
