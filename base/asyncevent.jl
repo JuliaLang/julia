@@ -74,7 +74,24 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
-[`isopen`](@ref) to check whether a timer is still active.
+[`isopen`](@ref) to check whether a timer is still active. Use `t.timeout` and `t.interval` to read
+the setup conditions of a `Timer` `t`.
+
+```julia-repl
+julia> t = Timer(1.0; interval=0.5)
+Timer (open, timeout: 1.0 s, interval: 0.5 s) @0x000000010f4e6e90
+
+julia> isopen(t)
+true
+
+julia> t.timeout
+1.0
+
+julia> close(t)
+
+julia> isopen(t)
+false
+```
 
 !!! note
     `interval` is subject to accumulating time skew. If you need precise events at a particular
@@ -84,12 +101,17 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
     A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
     used to timeout a non-yielding while loop.
 
+!!! compat "Julia 1.12
+    The `timeout` and `interval` readable properties were added in Julia 1.12.
+
 """
 mutable struct Timer
     @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
     @atomic isopen::Bool
     @atomic set::Bool
+    timeout_ms::UInt64
+    interval_ms::UInt64
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
@@ -99,7 +121,7 @@ mutable struct Timer
         intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
-        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
+        this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false, timeoutms, intervalms)
         associate_julia_struct(this.handle, this)
         iolock_begin()
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), loop, this)
@@ -113,6 +135,24 @@ mutable struct Timer
         iolock_end()
         return this
     end
+end
+function getproperty(t::Timer, f::Symbol)
+    if f == :timeout
+        t.timeout_ms == 0 && return 0.0
+        return (t.timeout_ms - 1) / 1000 # remove the +1ms compensation from the constructor
+    elseif f == :interval
+        return t.interval_ms / 1000
+    else
+        return getfield(t, f)
+    end
+end
+propertynames(::Timer) = (:handle, :cond, :isopen, :set, :timeout, :timeout_ms, :interval, :interval_ms)
+
+function show(io::IO, t::Timer)
+    state = isopen(t) ? "open" : "closed"
+    interval = t.interval
+    interval_str = interval > 0 ? ", interval: $(t.interval) s" : ""
+    print(io, "Timer ($state, timeout: $(t.timeout) s$interval_str) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
