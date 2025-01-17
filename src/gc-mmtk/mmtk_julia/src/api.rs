@@ -52,27 +52,27 @@ pub extern "C" fn mmtk_gc_init(
         }
 
         // Set heap size
-        let success;
-        if min_heap_size != 0 {
-            info!(
-                "Setting mmtk heap size to a variable size with min-max of {}-{} (in bytes)",
-                min_heap_size, max_heap_size
-            );
-            success = builder.options.gc_trigger.set(
-                mmtk::util::options::GCTriggerSelector::DynamicHeapSize(
-                    min_heap_size,
-                    max_heap_size,
-                ),
-            );
-        } else {
-            info!(
-                "Setting mmtk heap size to a fixed max of {} (in bytes)",
-                max_heap_size
-            );
-            success = builder.options.gc_trigger.set(
-                mmtk::util::options::GCTriggerSelector::FixedHeapSize(max_heap_size),
-            );
-        }
+        let success =
+            if min_heap_size != 0 {
+                info!(
+                    "Setting mmtk heap size to a variable size with min-max of {}-{} (in bytes)",
+                    min_heap_size, max_heap_size
+                );
+                builder.options.gc_trigger.set(
+                    mmtk::util::options::GCTriggerSelector::DynamicHeapSize(
+                        min_heap_size,
+                        max_heap_size,
+                    ),
+                )
+            } else {
+                info!(
+                    "Setting mmtk heap size to a fixed max of {} (in bytes)",
+                    max_heap_size
+                );
+                builder.options.gc_trigger.set(
+                    mmtk::util::options::GCTriggerSelector::FixedHeapSize(max_heap_size),
+                )
+            };
         assert!(
             success,
             "Failed to set heap size to {}-{}",

@@ -107,27 +107,29 @@ impl Scanning<JuliaVM> for VMScanning {
         // Scan backtrace buffer: See gc_queue_bt_buf in gc.c
         let mut i = 0;
         while i < ptls.bt_size {
-            let bt_entry = unsafe { ptls.bt_data.add(i) };
-            let bt_entry_size = mmtk_jl_bt_entry_size(bt_entry);
-            if mmtk_jl_bt_is_native(bt_entry) {
+            unsafe {
+                let bt_entry = ptls.bt_data.add(i);
+                let bt_entry_size = mmtk_jl_bt_entry_size(bt_entry);
+                if mmtk_jl_bt_is_native(bt_entry) {
+                    i += bt_entry_size;
+                    continue;
+                }
+                let njlvals = mmtk_jl_bt_num_jlvals(bt_entry);
+                for j in 0..njlvals {
+                    let bt_entry_value = mmtk_jl_bt_entry_jlvalue(bt_entry, j);
+
+                    // captures wrong root nodes before creating the work
+                    debug_assert!(
+                        bt_entry_value.to_raw_address().as_usize() % 16 == 0
+                            || bt_entry_value.to_raw_address().as_usize() % 8 == 0,
+                        "root node {:?} is not aligned to 8 or 16",
+                        bt_entry_value
+                    );
+
+                    node_buffer.push(bt_entry_value);
+                }
                 i += bt_entry_size;
-                continue;
             }
-            let njlvals = mmtk_jl_bt_num_jlvals(bt_entry);
-            for j in 0..njlvals {
-                let bt_entry_value = mmtk_jl_bt_entry_jlvalue(bt_entry, j);
-
-                // captures wrong root nodes before creating the work
-                debug_assert!(
-                    bt_entry_value.to_raw_address().as_usize() % 16 == 0
-                        || bt_entry_value.to_raw_address().as_usize() % 8 == 0,
-                    "root node {:?} is not aligned to 8 or 16",
-                    bt_entry_value
-                );
-
-                node_buffer.push(bt_entry_value);
-            }
-            i += bt_entry_size;
         }
 
         // We do not need gc_queue_remset from gc.c (we are not using remset in the thread)
@@ -211,6 +213,12 @@ pub struct SweepVMSpecific {
 impl SweepVMSpecific {
     pub fn new() -> Self {
         Self { swept: false }
+    }
+}
+
+impl Default for SweepVMSpecific {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

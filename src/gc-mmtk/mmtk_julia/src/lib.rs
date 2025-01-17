@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 extern crate libc;
 extern crate log;
 extern crate mmtk;
@@ -31,6 +33,7 @@ pub mod julia_scanning;
 #[allow(improper_ctypes_definitions)]
 #[allow(non_upper_case_globals)]
 #[allow(non_snake_case)]
+#[allow(clippy::all)]
 pub mod julia_types;
 
 #[derive(Default)]

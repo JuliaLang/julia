@@ -11,7 +11,7 @@ fn main() {
 
     let mmtk_dir = match std::env::var(mmtk_dir_key) {
         Ok(mmtk_val) => mmtk_val,
-        _ => format!(".."),
+        _ => "..".to_string(),
     };
 
     // If bindings file already exists, no need to do anything

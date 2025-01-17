@@ -63,7 +63,7 @@ impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
     fn get_referent(object: ObjectReference) -> Option<ObjectReference> {
         let value = Self::load_referent_raw(object);
         if value == unsafe { jl_nothing } {
-            return None;
+            None
         } else {
             debug_assert!(
                 !value.is_null(),

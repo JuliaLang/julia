@@ -57,7 +57,7 @@ pub unsafe fn mmtk_jl_to_typeof(t: Address) -> *const jl_datatype_t {
         let ty = jl_small_typeof[t_raw / std::mem::size_of::<Address>()];
         return ty;
     }
-    return t.to_ptr::<jl_datatype_t>();
+    t.to_ptr::<jl_datatype_t>()
 }
 
 const PRINT_OBJ_TYPE: bool = false;
@@ -177,10 +177,10 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                 process_slot(closure, slot);
                 obj8_begin = obj8_begin.shift::<u8>(1);
             }
-        } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4) {
-            if PRINT_OBJ_TYPE {
-                println!("scan_julia_obj {}: string\n", obj);
-            }
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_string_tag as usize) << 4)
+            && PRINT_OBJ_TYPE
+        {
+            println!("scan_julia_obj {}: string\n", obj);
         }
         return;
     } else {
@@ -310,9 +310,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
 
     let layout = (*vt).layout;
     let npointers = (*layout).npointers;
-    if npointers == 0 {
-        return;
-    } else {
+    if npointers != 0 {
         if vt == jl_binding_partition_type {
             let bpart_ptr = obj.to_mut_ptr::<jl_binding_partition_t>();
             let restriction = (*bpart_ptr).restriction._M_i;
@@ -383,16 +381,16 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     let copy_stack = (*ta).ctx.copy_stack_custom();
 
     #[cfg(feature = "julia_copy_stack")]
-    if stkbuf != std::ptr::null_mut() && copy_stack != 0 {
+    if !stkbuf.is_null() && copy_stack != 0 {
         let stkbuf_slot = Address::from_ptr(::std::ptr::addr_of!((*ta).ctx.stkbuf));
         process_slot(closure, stkbuf_slot);
     }
 
     let mut s = (*ta).gcstack;
-    let (mut offset, mut lb, mut ub) = (0 as isize, 0 as u64, u64::MAX);
+    let (mut offset, mut lb, mut ub) = (0_isize, 0_u64, u64::MAX);
 
     #[cfg(feature = "julia_copy_stack")]
-    if stkbuf != std::ptr::null_mut() && copy_stack != 0 && (*ta).ptls == std::ptr::null_mut() {
+    if !stkbuf.is_null() && copy_stack != 0 && (*ta).ptls.is_null() {
         if ((*ta).tid._M_i) < 0 {
             panic!("tid must be positive.")
         }
@@ -402,10 +400,10 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
         offset = (*ta).ctx.stkbuf as isize - lb as isize;
     }
 
-    if s != std::ptr::null_mut() {
+    if !s.is_null() {
         let s_nroots_addr = ::std::ptr::addr_of!((*s).nroots);
         let mut nroots = read_stack(Address::from_ptr(s_nroots_addr), offset, lb, ub);
-        debug_assert!(nroots.as_usize() as u32 <= std::u32::MAX);
+        debug_assert!(nroots.as_usize() as u32 <= u32::MAX);
         let mut nr = nroots >> 2;
 
         loop {
@@ -458,7 +456,7 @@ pub unsafe fn mmtk_scan_gcstack<EV: SlotVisitor<JuliaVMSlot>>(
     }
 
     // just call into C, since the code is cold
-    if (*ta).excstack != std::ptr::null_mut() {
+    if !(*ta).excstack.is_null() {
         jl_gc_scan_julia_exc_obj(
             Address::from_ptr(ta),
             Address::from_mut_ptr(closure),
@@ -477,9 +475,9 @@ unsafe fn read_stack(addr: Address, offset: isize, lb: u64, ub: u64) -> Address 
 #[inline(always)]
 fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     if addr.as_usize() >= lb as usize && addr.as_usize() < ub as usize {
-        return addr + offset;
+        addr + offset
     } else {
-        return addr;
+        addr
     }
 }
 
@@ -532,14 +530,14 @@ pub fn mmtk_decode_restriction_value(pku: usize) -> usize {
         // need to apply (pku & ~0x7) to get the object to be traced
         // so we use (pku & 0x7) to get the offset from the object
         // and pass it to process_offset_slot
-        return pku & 0x7;
+        pku & 0x7
     }
 
     #[cfg(not(target_pointer_width = "64"))]
     {
         // when not #ifdef _P64 we simply return pku.val
         // i.e., the offset is 0, since val is the first field
-        return 0;
+        0
     }
 }
 
@@ -573,7 +571,7 @@ pub fn mmtk_jl_array_ndimwords(ndims: u32) -> usize {
         return 0;
     }
 
-    return (ndims - 2) as usize;
+    (ndims - 2) as usize
 }
 
 #[inline(always)]
@@ -602,7 +600,7 @@ pub unsafe fn mmtk_jl_svecref(vt: *mut jl_svec_t, i: usize) -> *const jl_datatyp
     let svec_data = mmtk_jl_svec_data(Address::from_mut_ptr(vt));
     let result_ptr = svec_data + i;
     let result = result_ptr.atomic_load::<AtomicUsize>(Ordering::Relaxed);
-    ::std::mem::transmute::<usize, *const jl_datatype_t>(result)
+    result as *const _jl_datatype_t
 }
 
 #[inline(always)]
@@ -624,12 +622,12 @@ pub unsafe fn mmtk_jl_fielddesc_size(fielddesc_type: u16) -> u32 {
 
 const JL_BT_NON_PTR_ENTRY: usize = usize::MAX;
 
-pub fn mmtk_jl_bt_is_native(bt_entry: *mut jl_bt_element_t) -> bool {
+pub unsafe fn mmtk_jl_bt_is_native(bt_entry: *mut jl_bt_element_t) -> bool {
     let entry = unsafe { (*bt_entry).__bindgen_anon_1.uintptr };
     entry != JL_BT_NON_PTR_ENTRY
 }
 
-pub fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize {
     if mmtk_jl_bt_is_native(bt_entry) {
         1
     } else {
@@ -637,19 +635,22 @@ pub fn mmtk_jl_bt_entry_size(bt_entry: *mut jl_bt_element_t) -> usize {
     }
 }
 
-pub fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_num_jlvals(bt_entry: *mut jl_bt_element_t) -> usize {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     entry & 0x7
 }
 
-pub fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize {
+pub unsafe fn mmtk_jl_bt_num_uintvals(bt_entry: *mut jl_bt_element_t) -> usize {
     debug_assert!(!mmtk_jl_bt_is_native(bt_entry));
     let entry = unsafe { (*bt_entry.add(1)).__bindgen_anon_1.uintptr };
     (entry >> 3) & 0x7
 }
 
-pub fn mmtk_jl_bt_entry_jlvalue(bt_entry: *mut jl_bt_element_t, i: usize) -> ObjectReference {
+pub unsafe fn mmtk_jl_bt_entry_jlvalue(
+    bt_entry: *mut jl_bt_element_t,
+    i: usize,
+) -> ObjectReference {
     let entry = unsafe { (*bt_entry.add(2 + i)).__bindgen_anon_1.jlvalue };
     debug_assert!(!entry.is_null());
     unsafe { ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(entry)) }

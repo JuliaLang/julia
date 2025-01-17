@@ -61,7 +61,7 @@ impl Collection<JuliaVM> for VMCollection {
         AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
         AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
 
-        let &(_, ref cvar) = &*STW_COND.clone();
+        let (_, cvar) = &*STW_COND.clone();
         cvar.notify_all();
 
         info!(
@@ -109,7 +109,7 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn is_collection_enabled() -> bool {
-        unsafe { jl_get_gc_disable_counter() <= 0 }
+        unsafe { jl_get_gc_disable_counter() == 0 }
     }
 }
 
@@ -124,7 +124,7 @@ pub fn is_current_gc_nursery() -> bool {
 pub extern "C" fn mmtk_block_thread_for_gc() {
     AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
 
-    let &(ref lock, ref cvar) = &*STW_COND.clone();
+    let (lock, cvar) = &*STW_COND.clone();
     let mut count = lock.lock().unwrap();
 
     info!("Blocking for GC!");

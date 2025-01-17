@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "mmtk-julia"
-version = "0.30.0"
+version = "0.30.3"
 dependencies = [
  "atomic 0.4.6",
  "bindgen",

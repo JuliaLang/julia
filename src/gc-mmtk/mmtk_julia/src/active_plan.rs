@@ -18,7 +18,7 @@ pub struct JuliaMutatorIterator<'a> {
 
 impl<'a> JuliaMutatorIterator<'a> {
     fn new(guard: RwLockReadGuard<'a, HashMap<Address, Address>>) -> Self {
-        let vec = guard.keys().map(|addr| *addr).collect();
+        let vec = guard.keys().copied().collect();
         Self {
             _guard: guard,
             vec,
@@ -49,7 +49,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 
     fn is_mutator(tls: VMThread) -> bool {
         // FIXME have a tls field to check whether it is a mutator tls
-        MUTATORS.read().unwrap().keys().find(|mutator_addr| unsafe { &*mutator_addr.to_mut_ptr::<Mutator<JuliaVM>>() }.mutator_tls.0 == tls).is_some()
+        MUTATORS.read().unwrap().keys().any(|mutator_addr| unsafe { &*mutator_addr.to_mut_ptr::<Mutator<JuliaVM>>() }.mutator_tls.0 == tls)
     }
 
     fn mutator(_tls: VMMutatorThread) -> &'static mut Mutator<JuliaVM> {
@@ -67,7 +67,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
         _worker: &mut GCWorker<JuliaVM>,
     ) -> ObjectReference {
         queue.enqueue(object);
-        return object;
+        object
     }
 }
 
@@ -80,17 +80,17 @@ pub extern "C" fn mmtk_new_mutator_iterator() -> *mut JuliaMutatorIterator<'stat
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_get_next_mutator_tls(
+pub unsafe extern "C" fn mmtk_get_next_mutator_tls(
     iter: *mut JuliaMutatorIterator<'static>,
 ) -> OpaquePointer {
-    match unsafe { iter.as_mut() }.unwrap().next() {
+    match { iter.as_mut() }.unwrap().next() {
         Some(m) => m.mutator_tls.0 .0,
         None => OpaquePointer::from_address(Address::ZERO),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {
+pub unsafe extern "C" fn mmtk_close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {
     // The boxed pointer will get dropped
     let _to_drop = unsafe { Box::from_raw(iter) };
 }

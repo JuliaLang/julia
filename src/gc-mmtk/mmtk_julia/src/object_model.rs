@@ -109,7 +109,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 
             Self::LOCAL_FORWARDING_BITS_SPEC.store_atomic::<JuliaVM, u8>(
                 from,
-                0b10 as u8, // BEING_FORWARDED
+                0b10_u8, // BEING_FORWARDED
                 None,
                 Ordering::SeqCst,
             );
@@ -126,8 +126,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         // not being called by objects in LOS
         debug_assert!(!is_object_in_los(&object));
 
-        let obj_size = unsafe { get_so_object_size(object) };
-        obj_size
+        unsafe { get_so_object_size(object) }
     }
 
     fn get_size_when_copied(_object: ObjectReference) -> usize {
@@ -152,12 +151,11 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 
     #[inline(always)]
     fn ref_to_object_start(object: ObjectReference) -> Address {
-        let res = if is_object_in_los(&object) {
+        if is_object_in_los(&object) {
             object.to_raw_address() - 48
         } else {
             unsafe { get_object_start_ref(object) }
-        };
-        res
+        }
     }
 
     #[inline(always)]
@@ -178,6 +176,7 @@ pub fn is_object_in_los(object: &ObjectReference) -> bool {
 }
 
 #[inline(always)]
+/// This function uses mutable static variables and requires unsafe annotation
 pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
     let obj_address = object.to_raw_address();
     let mut vtag = mmtk_jl_typetagof(obj_address);
@@ -199,7 +198,7 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
         vtag = Address::from_usize(vtag_usize);
     } else if vtag_usize < ((jl_small_typeof_tags_jl_max_tags as usize) << 4) {
         if vtag_usize == ((jl_small_typeof_tags_jl_simplevector_tag as usize) << 4) {
-            let length = (*obj_address.to_ptr::<jl_svec_t>()).length as usize;
+            let length = (*obj_address.to_ptr::<jl_svec_t>()).length;
             let dtsz = length * std::mem::size_of::<Address>() + std::mem::size_of::<jl_svec_t>();
 
             debug_assert!(
@@ -209,7 +208,7 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
             );
 
             return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
-        } else if vtag_usize == ((jl_small_typeof_tags_jl_module_tag as usize) << 4) as usize {
+        } else if vtag_usize == ((jl_small_typeof_tags_jl_module_tag as usize) << 4) {
             let dtsz = std::mem::size_of::<jl_module_t>();
             debug_assert!(
                 dtsz + JULIA_HEADER_SIZE <= 2032,
@@ -276,9 +275,9 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
         let how = jl_gc_genericmemory_how(obj_address);
         let res = if how == 0 {
             let layout = (*(mmtk_jl_typetagof(obj_address).to_ptr::<jl_datatype_t>())).layout;
-            let mut sz = (*layout).size as usize * (*m).length as usize;
+            let mut sz = (*layout).size as usize * (*m).length;
             if (*layout).flags.arrayelem_isunion() != 0 {
-                sz += (*m).length as usize;
+                sz += (*m).length;
             }
 
             let dtsz = llt_align(std::mem::size_of::<jl_genericmemory_t>(), 16);
@@ -301,7 +300,7 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
         dtsz + JULIA_HEADER_SIZE
     );
 
-    return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+    llt_align(dtsz + JULIA_HEADER_SIZE, 16)
 }
 
 #[inline(always)]
