@@ -30,7 +30,7 @@ using Libdl
         @test Sys.windows_version() >= v"1.0.0-"
     end
 
-    @test !Sys.detectwsl(:Windows)
+    @test !Sys.detectwsl()
     if !Sys.islinux()
         @test !Sys.detectwsl()
     end
