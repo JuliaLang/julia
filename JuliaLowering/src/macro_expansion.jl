@@ -239,6 +239,25 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             e2 = @ast ctx e2 e2=>K"Symbol"
         end
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
+    elseif (k == K"call" || k == K"dotcall") && numchildren(ex) == 3 && begin
+            fname = is_infix_op_call(ex) ? ex[2] : ex[1]
+            is_same_identifier_like(fname, "^") && kind(ex[3]) == K"Integer"
+        end
+        # Do literal-pow expansion here as it's later used in both call and
+        # dotcall expansion.
+        arg1 = is_infix_op_call(ex) ? ex[1] : ex[2]
+        @ast ctx ex [k
+            "literal_pow"::K"top"
+            expand_forms_1(ctx, fname)
+            expand_forms_1(ctx, arg1)
+            [K"call"
+                [K"call"
+                    "apply_type"::K"core"
+                    "Val"::K"top"
+                    ex[3]
+                ]
+            ]
+        ]
     elseif is_leaf(ex)
         ex
     else
