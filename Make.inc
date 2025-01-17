@@ -81,7 +81,7 @@ WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
 # Use stock if MMTK_PLAN hasn't been defined
-MMTK_PLAN ?= None
+MMTK_PLAN ?= Immix
 
 # Enable DTrace support
 WITH_DTRACE := 0
@@ -1426,13 +1426,6 @@ $(error "Attempting to build OpenBLAS or SuiteSparse without a functioning fortr
 endif
 endif
 
-ifneq (${MMTK_PLAN},None)
-# We still need some .h files from mmtk when
-# building Julia using the BinaryBuilder
-ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
-MMTK_API_INC=$(JULIAHOME)/deps/mmtk/
-endif
-endif
 
 # OS specific stuff
 
