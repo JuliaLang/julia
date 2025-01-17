@@ -1094,6 +1094,17 @@ precompile_test_harness("invoke") do dir
               f44320(::Any) = 2
               g44320() = invoke(f44320, Tuple{Any}, 0)
               g44320()
+              # Issue #57115
+              f57115(@nospecialize(::Any)) = error("unimplemented")
+              function g57115(@nospecialize(x))
+                  if @noinline rand(Bool)
+                      # Add an 'invoke' edge from 'foo' to 'bar'
+                      Core.invoke(f57115, Tuple{Any}, x)
+                  else
+                      # ... and also an identical 'call' edge
+                      @noinline f57115(x)
+                  end
+              end
 
               # Adding new specializations should not invalidate `invoke`s
               function getlast(itr)
@@ -1110,6 +1121,8 @@ precompile_test_harness("invoke") do dir
           """
           module $CallerModule
               using $InvokeModule
+              import $InvokeModule: f57115, g57115
+
               # involving external modules
               callf(x) = f(x)
               callg(x) = x < 5 ? g(x) : invoke(g, Tuple{Real}, x)
@@ -1130,6 +1143,8 @@ precompile_test_harness("invoke") do dir
 
               # Issue #44320
               f44320(::Real) = 3
+              # Issue #57115
+              f57115(::Int) = 1
 
               call_getlast(x) = getlast(x)
 
@@ -1150,6 +1165,7 @@ precompile_test_harness("invoke") do dir
                   @noinline internalnc(3)
                   @noinline call_getlast([1,2,3])
               end
+              precompile(g57115, (Any,))
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
               $InvokeModule.h(x::Integer) = -1
@@ -1216,6 +1232,30 @@ precompile_test_harness("invoke") do dir
 
     m = only(methods(M.g44320))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+
+    m = only(methods(M.g57115))
+    mi = m.specializations::Core.MethodInstance
+
+    f_m = get_method_for_type(M.f57115, Any)
+    f_mi = f_m.specializations::Core.MethodInstance
+
+    # Make sure that f57115(::Any) has a 'call' backedge to 'g57115'
+    has_f_call_backedge = false
+    i = 1
+    while i ≤ length(f_mi.backedges)
+        if f_mi.backedges[i] isa DataType
+            # invoke edge - skip
+            i += 2
+        else
+            caller = f_mi.backedges[i]::Core.CodeInstance
+            if caller.def === mi
+                has_f_call_backedge = true
+                break
+            end
+            i += 1
+        end
+    end
+    @test has_f_call_backedge
 
     m = which(MI.getlast, (Any,))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
