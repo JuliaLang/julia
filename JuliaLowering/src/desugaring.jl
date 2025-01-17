@@ -579,14 +579,14 @@ function expand_vcat(ctx, ex)
         ]
     else
         row_sizes = SyntaxList(ctx)
-        elem_list = SyntaxList(ctx)
+        flat_elems = SyntaxList(ctx)
         for e in elements
             if kind(e) == K"row"
                 rowsize = numchildren(e)
-                append!(elem_list, children(e))
+                append!(flat_elems, children(e))
             else
                 rowsize = 1
-                push!(elem_list, e)
+                push!(flat_elems, e)
             end
             push!(row_sizes, @ast ctx e rowsize::K"Integer")
         end
@@ -596,17 +596,170 @@ function expand_vcat(ctx, ex)
                 fname::K"top"
                 eltype
                 [K"tuple" row_sizes...]
-                elem_list...
+                flat_elems...
             ]
         else
             fname = is_typed ? "typed_vcat" : "vcat"
             @ast ctx ex [K"call"
                 fname::K"top"
                 eltype
-                elem_list...
+                flat_elems...
             ]
         end
     end
+end
+
+function ncat_contains_row(ex)
+    k = kind(ex)
+    if k == K"row"
+        return true
+    elseif k == K"nrow"
+        return any(ncat_contains_row(e) for e in children(ex))
+    else
+        return false
+    end
+end
+
+# flip first and second dimension for row major layouts
+function nrow_flipdim(row_major, d)
+    return !row_major ? d :
+           d == 1     ? 2 :
+           d == 2     ? 1 : d
+end
+
+function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim, ex)
+    # Note that most of the checks for valid nesting here are also checked in
+    # the parser - they can only fail when nrcat is constructed
+    # programmatically (eg, by a macro).
+    k = kind(ex)
+    if k == K"row"
+        layout_dim = 1
+        @chk parent_layout_dim != 1 (ex,"Badly nested rows in `ncat`")
+    elseif k == K"nrow"
+        dim = numeric_flags(ex)
+        @chk dim > 0                (ex,"Unsupported dimension $dim in ncat")
+        @chk !row_major || dim != 2 (ex,"2D `nrow` cannot be mixed with `row` in `ncat`")
+        layout_dim = nrow_flipdim(row_major, dim)
+    elseif kind(ex) == K"..."
+        throw(LoweringError(ex, "Splatting ... in an `ncat` with multiple dimensions is not supported"))
+    else
+        push!(flat_elems, ex)
+        for ld in parent_layout_dim-1:-1:1
+            push!(nrow_spans, (ld, 1))
+        end
+        return
+    end
+    row_start = length(flat_elems)
+    @chk parent_layout_dim > layout_dim (ex, "Badly nested rows in `ncat`")
+    for e in children(ex)
+        if layout_dim == 1
+            @chk kind(e) ∉ KSet"nrow row" (e,"Badly nested rows in `ncat`")
+        end
+        flatten_ncat_rows!(flat_elems, nrow_spans, row_major, layout_dim, e)
+    end
+    n_elems_in_row = length(flat_elems) - row_start
+    for ld in parent_layout_dim-1:-1:layout_dim
+        push!(nrow_spans, (ld, n_elems_in_row))
+    end
+end
+
+# ncat comes in various layouts which we need to lower to special cases
+# - one dimensional along some dimension
+# - balanced column first or row first
+# - ragged colum first or row first
+function expand_ncat(ctx, ex)
+    is_typed = kind(ex) == K"typed_ncat"
+    outer_dim = numeric_flags(ex)
+    @chk outer_dim > 0 (ex,"Unsupported dimension in ncat")
+    eltype      = is_typed ? ex[1]     : nothing
+    elements    = is_typed ? ex[2:end] : ex[1:end]
+    hvncat_name = is_typed ? "typed_hvncat" : "hvncat"
+    if !any(kind(e) in KSet"row nrow" for e in elements)
+        # One-dimensional ncat along some dimension
+        #   [a ;;; b ;;; c]
+        return @ast ctx ex [K"call"
+            hvncat_name::K"top"
+            eltype
+            outer_dim::K"Integer"
+            elements...
+        ]
+    end
+    # N-dimensional case. May be
+    # * column first or row first:
+    #   [a;b ;;; c;d]
+    #   [a b ;;; c d]
+    # * balanced or ragged:
+    #   [a ; b ;;; c ; d]
+    #   [a ; b ;;; c]
+    row_major = any(ncat_contains_row, elements)
+    @chk !row_major || outer_dim != 2 (ex,"2D `nrow` cannot be mixed with `row` in `ncat`")
+    flat_elems = SyntaxList(ctx)
+    # `ncat` syntax nests lower dimensional `nrow` inside higher dimensional
+    # ones (with the exception of K"row" when `row_major` is true). Each nrow
+    # spans a number of elements and we first extract that.
+    nrow_spans = Vector{Tuple{Int,Int}}()
+    for e in elements
+        flatten_ncat_rows!(flat_elems, nrow_spans, row_major,
+                           nrow_flipdim(row_major, outer_dim), e)
+    end
+    push!(nrow_spans, (outer_dim, length(flat_elems)))
+    # Construct the shape specification by postprocessing the flat list of
+    # spans.
+    sort!(nrow_spans, by=first) # depends on a stable sort
+    is_balanced = true
+    i = 1
+    dim_lengths = zeros(outer_dim)
+    prev_dimspan = 1
+    while i <= length(nrow_spans)
+        layout_dim, dimspan = nrow_spans[i]
+        while i <= length(nrow_spans) && nrow_spans[i][1] == layout_dim
+            if dimspan != nrow_spans[i][2]
+                is_balanced = false
+                break
+            end
+            i += 1
+        end
+        is_balanced || break
+        @assert dimspan % prev_dimspan == 0
+        dim_lengths[layout_dim] = dimspan ÷ prev_dimspan
+        prev_dimspan = dimspan
+    end
+    shape_spec = SyntaxList(ctx)
+    if is_balanced
+        if row_major
+            dim_lengths[1], dim_lengths[2] = dim_lengths[2], dim_lengths[1]
+        end
+        # For balanced concatenations, the shape is specified by the length
+        # along each dimension.
+        for dl in dim_lengths
+            push!(shape_spec, @ast ctx ex dl::K"Integer")
+        end
+    else
+        # For unbalanced/ragged concatenations, the shape is specified by the
+        # number of elements in each ND slice of the array, from layout
+        # dimension 1 to N. See the documentation for `hvncat` for details.
+        i = 1
+        while i <= length(nrow_spans)
+            groups_for_dim = Int[]
+            layout_dim = nrow_spans[i][1]
+            while i <= length(nrow_spans) && nrow_spans[i][1] == layout_dim
+                push!(groups_for_dim, nrow_spans[i][2])
+                i += 1
+            end
+            push!(shape_spec,
+                @ast ctx ex [K"tuple"
+                    [i::K"Integer" for i in groups_for_dim]...
+                ]
+            )
+        end
+    end
+    @ast ctx ex [K"call"
+        hvncat_name::K"top"
+        eltype
+        [K"tuple" shape_spec...]
+        row_major::K"Bool"
+        flat_elems...
+    ]
 end
 
 # Expand UnionAll definitions, eg `X{T} = Y{T,T}`
@@ -2735,7 +2888,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             cs[1] :
             makenode(ctx, ex, k, cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
-        # added by a later pass.
+        # added by a later compiler pass (currently done in codegen)
         if k == K"&&"
             @ast ctx ex [K"if" cond cs[end] false::K"Bool"]
         else
@@ -2883,6 +3036,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"vcat" || k == K"typed_vcat"
         expand_forms_2(ctx, expand_vcat(ctx, ex))
+    elseif k == K"ncat" || k == K"typed_ncat"
+        expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
         @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"

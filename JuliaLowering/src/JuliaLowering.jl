@@ -10,7 +10,7 @@ using Core: eval
 using JuliaSyntax
 
 using JuliaSyntax: highlight, Kind, @KSet_str
-using JuliaSyntax: is_leaf, children, numchildren, head, kind, flags, has_flags
+using JuliaSyntax: is_leaf, children, numchildren, head, kind, flags, has_flags, numeric_flags
 using JuliaSyntax: filename, first_byte, last_byte, byte_range, sourcefile, source_location, span, sourcetext
 
 using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_prefix_call, is_infix_op_call, is_postfix_op_call, is_error

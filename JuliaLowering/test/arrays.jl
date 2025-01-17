@@ -71,4 +71,14 @@ end
 """) ≅ [1 2 3;
         4 1 2]
 
+# ncat with a single dimension
+@test JuliaLowering.include_string(test_mod, """
+[1 ;;; 2 ;;; 3]
+""") ≅ [1 ;;; 2 ;;; 3]
+
+@test JuliaLowering.include_string(test_mod, """
+Int[1.0 ;;; 2.0 ;;; 3.0]
+""") ≅ [1 ;;; 2 ;;; 3]
+
+
 end

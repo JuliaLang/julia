@@ -10,7 +10,7 @@ import FileWatching
 using Markdown
 import REPL
 
-using JuliaSyntax: sourcetext
+using JuliaSyntax: sourcetext, set_numeric_flags
 
 using JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
@@ -23,7 +23,8 @@ using JuliaLowering:
 function _ast_test_graph()
     graph = SyntaxGraph()
     ensure_attributes!(graph,
-                       kind=Kind, source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
+                       kind=Kind, syntax_flags=UInt16,
+                       source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
                        var_id=Int, value=Any, name_val=String)
 end
 
@@ -204,7 +205,7 @@ function refresh_ir_test_cases(filename, pattern=nothing)
     for (expect_error, description, input, ref) in cases
         if isnothing(pattern) || occursin(pattern, description)
             ir = format_ir_for_test(test_mod, description, input, expect_error)
-            if ir != ref
+            if rstrip(ir) != ref
                 @info "Refreshing test case $(repr(description)) in $filename"
             end
         else
