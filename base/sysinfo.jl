@@ -547,9 +547,11 @@ Windows Subsystem for Linux (WSL).
     This function requires at least Julia 1.12.
 """
 function detectwsl()
-    islinux() &&
-    isfile("/proc/sys/kernel/osrelease") &&
-    contains(read("/proc/sys/kernel/osrelease", String), r"Microsoft|WSL"i)
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
 end
 
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
