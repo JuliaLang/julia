@@ -1252,72 +1252,149 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = r"""
-    Test Summary:             | Pass  Total  Time
-    Parent                    |    9      9  \s*\d*.\ds
-      Child 1                 |    3      3  \s*\d*.\ds
-        Child 1.1 (long name) |    1      1  \s*\d*.\ds
-        Child 1.2             |    1      1  \s*\d*.\ds
-        Child 1.3             |    1      1  \s*\d*.\ds
-      Child 2                 |    3      3  \s*\d*.\ds
-      Child 3                 |    3      3  \s*\d*.\ds
-        Child 3.1             |    1      1  \s*\d*.\ds
-        Child 3.2             |    1      1  \s*\d*.\ds
-        Child 3.3             |    1      1  \s*\d*.\ds
-    """
-
-    mktemp() do f, _
-        write(f,
+    @testset "verbose = true" begin
+        expected = r"""
+        Test Summary:             | Pass  Total  Time
+        Parent                    |    9      9  \s*\d*.\ds
+          Child 1                 |    3      3  \s*\d*.\ds
+            Child 1.1 (long name) |    1      1  \s*\d*.\ds
+            Child 1.2             |    1      1  \s*\d*.\ds
+            Child 1.3             |    1      1  \s*\d*.\ds
+          Child 2                 |    3      3  \s*\d*.\ds
+          Child 3                 |    3      3  \s*\d*.\ds
+            Child 3.1             |    1      1  \s*\d*.\ds
+            Child 3.2             |    1      1  \s*\d*.\ds
+            Child 3.3             |    1      1  \s*\d*.\ds
         """
-        using Test
 
-        @testset "Parent" verbose = true begin
-            @testset "Child 1" verbose = true begin
-                @testset "Child 1.1 (long name)" begin
-                    @test 1 == 1
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Parent" verbose = true begin
+                @testset "Child 1" verbose = true begin
+                    @testset "Child 1.1 (long name)" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 1.2" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 1.3" begin
+                        @test 1 == 1
+                    end
                 end
 
-                @testset "Child 1.2" begin
-                    @test 1 == 1
+                @testset "Child 2" begin
+                    @testset "Child 2.1" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 2.2" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 2.3" begin
+                        @test 1 == 1
+                    end
                 end
 
-                @testset "Child 1.3" begin
-                    @test 1 == 1
+                @testset "Child 3" verbose = true begin
+                    @testset "Child 3.1" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 3.2" begin
+                        @test 1 == 1
+                    end
+
+                    @testset "Child 3.3" begin
+                        @test 1 == 1
+                    end
                 end
             end
-
-            @testset "Child 2" begin
-                @testset "Child 2.1" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 2.2" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 2.3" begin
-                    @test 1 == 1
-                end
-            end
-
-            @testset "Child 3" verbose = true begin
-                @testset "Child 3.1" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 3.2" begin
-                    @test 1 == 1
-                end
-
-                @testset "Child 3.3" begin
-                    @test 1 == 1
-                end
-            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
         end
-        """)
-        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
-        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
-        @test occursin(expected, result)
+    end
+
+    @testset "verbose = 2" begin
+        expected = r"""
+        Test Summary:             \| Pass  Total  Time
+        Parent                    \|    9      9  \s*\d*\.\ds
+          Child 1                 \|    3      3  \s*\d*\.\ds
+            Child 1\.1 \(long name\) \|    2      2  \s*\d*\.\ds
+            Child 1\.2             \|    1      1  \s*\d*\.\ds
+          Child 2                 \|    3      3  \s*\d*\.\ds
+            Child 2\.1             \|    1      1  \s*\d*\.\ds
+              Child 2\.1\.1         \|    1      1  \s*\d*\.\ds
+            Child 2\.2             \|    1      1  \s*\d*\.\ds
+            Child 2\.3             \|    1      1  \s*\d*\.\ds
+          Child 3                 \|    3      3  \s*\d*\.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+                """
+                using Test
+
+                @testset "Parent" verbose = 2 begin
+                    # Setting the verbosity to just 1 overrides the inherited, higher level of 2.
+                    @testset "Child 1" verbose = 1 begin
+                        @testset "Child 1.1 (long name)" begin
+                            @testset "Child 1.1.1" begin
+                                @test 1 == 1
+                            end
+
+                            @testset "Child 1.1.2" begin
+                                @test 1 == 1
+                            end
+                        end
+
+                        @testset "Child 1.2" begin
+                            @test 1 == 1
+                        end
+                    end
+
+                    @testset "Child 2" begin
+                        @testset "Child 2.1" begin
+                            @testset "Child 2.1.1" begin
+                                @test 1 == 1
+                            end
+                        end
+
+                        @testset "Child 2.2" begin
+                            @test 1 == 1
+                        end
+
+                        @testset "Child 2.3" begin
+                            @test 1 == 1
+                        end
+                    end
+
+                    @testset "Child 3" verbose = false begin
+                        @testset "Child 3.1" begin
+                            @test 1 == 1
+                        end
+
+                        @testset "Child 3.2" begin
+                            @test 1 == 1
+                        end
+
+                        @testset "Child 3.3" begin
+                            @test 1 == 1
+                        end
+                    end
+                end
+                """)
+            cmd = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
     end
 end
 

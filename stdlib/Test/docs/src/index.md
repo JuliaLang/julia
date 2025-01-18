@@ -157,10 +157,10 @@ This can be used to allow for factorization of test sets, making it easier to ru
 test sets by running the associated functions instead.
 Note that in the case of functions, the test set will be given the name of the called function.
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary, unless the `verbose=true` option is passed:
+summary:
 
 ```jldoctest testfoo; filter = r"[0-9\.]+s"
-julia> @testset verbose = true "Foo Tests" begin
+julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
                @test foo("dog") == foo("cat")
@@ -172,10 +172,6 @@ julia> @testset verbose = true "Foo Tests" begin
        end;
 Test Summary: | Pass  Total  Time
 Foo Tests     |    8      8  0.0s
-  Animals     |    2      2  0.0s
-  Arrays 1    |    2      2  0.0s
-  Arrays 2    |    2      2  0.0s
-  Arrays 3    |    2      2  0.0s
 ```
 
 If we do have a test failure, only the details for the failed test sets will be shown:
@@ -205,6 +201,66 @@ Foo Tests     |    3     1      4  0.0s
   Animals     |    2            2  0.0s
   Arrays      |    1     1      2  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
+```
+
+You can use the `verbose` option to show results even for test sets that pass.
+`verbose=true` (or equivalently `verbose=1`) displays results only for the top level of
+nested sets:
+
+```julia-repl; filter = r"[0-9\.]+s"
+julia> @testset "Foo Tests" verbose = true begin
+           @testset "Animals" begin
+               @testset "Felines" begin
+                   @test foo("cat") == 9
+               end
+               @testset "Canines" begin
+                   @test foo("dog") == 9
+               end
+           end
+           @testset "Arrays" begin
+               @testset "zeros" begin
+                   @test foo(zeros(2)) == 4
+               end
+               @testset "fill" begin
+                   @test foo(fill(1.0, 4)) == 16
+               end
+           end
+       end;
+Test Summary: | Pass  Total  Time
+Foo Tests     |    4      4  0.0s
+  Animals     |    2      2  0.0s
+  Arrays      |    2      2  0.0s
+```
+
+whereas `verbose=2` will apply to all nested test sets:
+
+```julia-repl; filter = r"[0-9\.]+s"
+julia> @testset "Foo Tests" verbose = 2 begin
+           @testset "Animals" begin
+               @testset "Felines" begin
+                   @test foo("cat") == 9
+               end
+               @testset "Canines" begin
+                   @test foo("dog") == 9
+               end
+           end
+           @testset "Arrays" begin
+               @testset "zeros" begin
+                   @test foo(zeros(2)) == 4
+               end
+               @testset "fill" begin
+                   @test foo(fill(1.0, 4)) == 16
+               end
+           end
+       end;
+Test Summary: | Pass  Total  Time
+Foo Tests     |    4      4  0.0s
+  Animals     |    2      2  0.0s
+    Felines   |    1      1  0.0s
+    Canines   |    1      1  0.0s
+  Arrays      |    2      2  0.0s
+    zeros     |    1      1  0.0s
+    fill      |    1      1  0.0s
 ```
 
 ## Testing Log Statements
