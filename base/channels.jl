@@ -130,8 +130,7 @@ julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
            end
-       end
-Channel{Char}(1) (2 items available)
+       end;
 
 julia> String(collect(chnl))
 "hello world"
