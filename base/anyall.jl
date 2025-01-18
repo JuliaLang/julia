@@ -129,6 +129,8 @@ end
 
 function _any(f, itr::Tuple, ::Colon)
     @_terminates_locally_meta
+    # avoid short-circuiting to help vectorization
+    r = false
     anymissing = false
     for i in eachindex(itr)
         x = getfield(itr, i, false)  # avoid `getindex` bounds checking to help vectorization
@@ -136,10 +138,14 @@ function _any(f, itr::Tuple, ::Colon)
         if ismissing(v)
             anymissing = true
         else
-            v && return true
+            r |= v::Bool
         end
     end
-    return anymissing ? missing : false
+    if r
+        true
+    else
+        anymissing ? missing : false
+    end
 end
 
 # Specialized versions of any(f, ::Tuple)
@@ -212,6 +218,8 @@ end
 
 function _all(f, itr::Tuple, ::Colon)
     @_terminates_locally_meta
+    # avoid short-circuiting to help vectorization
+    r = true
     anymissing = false
     for i in eachindex(itr)
         x = getfield(itr, i, false)  # avoid `getindex` bounds checking to help vectorization
@@ -219,10 +227,14 @@ function _all(f, itr::Tuple, ::Colon)
         if ismissing(v)
             anymissing = true
         else
-            v || return false
+            r &= v::Bool
         end
     end
-    return anymissing ? missing : true
+    if r
+        anymissing ? missing : true
+    else
+        false
+    end
 end
 
 # Specialized versions of all(f, ::Tuple),
