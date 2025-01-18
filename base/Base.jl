@@ -91,6 +91,12 @@ include("osutils.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
@@ -116,12 +122,6 @@ include("missing.jl")
 
 # version
 include("version.jl")
-
-# Concurrency (part 1)
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
 
 # system & environment
 include("sysinfo.jl")
@@ -262,6 +262,7 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+include("staticdata.jl")
 include("loading.jl")
 
 # misc useful functions & macros

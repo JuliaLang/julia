@@ -750,10 +750,9 @@ precompile_test_harness("code caching") do dir
               struct X end
               struct X2 end
               @noinline function f(d)
-                  @noinline
-                  d[X()] = nothing
+                  @noinline d[X()] = nothing
               end
-              @noinline fpush(dest) = push!(dest, X())
+              @noinline fpush(dest) = @noinline push!(dest, X())
               function callboth()
                   f(Dict{X,Any}())
                   fpush(X[])
@@ -797,24 +796,12 @@ precompile_test_harness("code caching") do dir
         end
     end
     @test hasspec
-    # Test that compilation adds to method roots with appropriate provenance
-    m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test Memory{M.X} ∈ m.roots
-    # Check that roots added outside of incremental builds get attributed to a moduleid of 0
-    Base.invokelatest() do
-        Dict{M.X2,Any}()[M.X2()] = nothing
-    end
-    @test Memory{M.X2} ∈ m.roots
-    groups = group_roots(m)
-    @test Memory{M.X} ∈ groups[Mid]           # attributed to M
-    @test Memory{M.X2} ∈ groups[0]            # activate module is not known
-    @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations::Core.MethodInstance
     @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
-    @test ci.relocatability == 0
+    @test (codeunits(ci.inferred::String)[end]) === 0x01
     @test ci.inferred !== nothing
     # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
     Base.invokelatest() do
@@ -825,19 +812,19 @@ precompile_test_harness("code caching") do dir
     mi = mispecs[2]::Core.MethodInstance
     mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
     ci = mi.cache
-    @test ci.relocatability == 0
+    @test (codeunits(ci.inferred::String)[end]) == 0x00
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
           """
           module $Cache_module2
               struct Y end
-              @noinline f(dest) = push!(dest, Y())
+              @noinline f(dest) = @noinline push!(dest, Y())
               callf() = f(Y[])
               callf()
               using $(Cache_module)
               struct Z end
-              @noinline g(dest) = push!(dest, Z())
+              @noinline g(dest) = @noinline push!(dest, Z())
               callg() = g(Z[])
               callg()
           end
@@ -915,7 +902,7 @@ precompile_test_harness("code caching") do dir
             # external callers
             mods = Module[]
             for be in mi.backedges
-                push!(mods, (be.def.def::Method).module) # XXX
+                push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
             end
             @test MA ∈ mods
             @test MB ∈ mods
@@ -1017,9 +1004,9 @@ precompile_test_harness("code caching") do dir
     MA = getfield(@__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
     @eval using $StaleC
-    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    invalidations = Base.StaticData.debug_method_invalidation(true)
     @eval using $StaleB
-    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+    Base.StaticData.debug_method_invalidation(false)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -1146,22 +1133,22 @@ precompile_test_harness("invoke") do dir
 
               call_getlast(x) = getlast(x)
 
-              # force precompilation
+              # force precompilation, force call so that inlining heuristics don't affect the result
               begin
                   Base.Experimental.@force_compile
-                  callf(3)
-                  callg(3)
-                  callh(3)
-                  callq(3)
-                  callqi(3)
-                  callfnc(3)
-                  callgnc(3)
-                  callhnc(3)
-                  callqnc(3)
-                  callqnci(3)
-                  internal(3)
-                  internalnc(3)
-                  call_getlast([1,2,3])
+                  @noinline callf(3)
+                  @noinline callg(3)
+                  @noinline callh(3)
+                  @noinline callq(3)
+                  @noinline callqi(3)
+                  @noinline callfnc(3)
+                  @noinline callgnc(3)
+                  @noinline callhnc(3)
+                  @noinline callqnc(3)
+                  @noinline callqnci(3)
+                  @noinline internal(3)
+                  @noinline internalnc(3)
+                  @noinline call_getlast([1,2,3])
               end
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
@@ -1194,9 +1181,15 @@ precompile_test_harness("invoke") do dir
     for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
         m = get_method_for_type(func, Real)
         mi = m.specializations::Core.MethodInstance
-        @test length(mi.backedges) == 2
+        @test length(mi.backedges) == 2 || length(mi.backedges) == 4 # internalnc might have a constprop edge
         @test mi.backedges[1] === Tuple{typeof(func), Real}
         @test isa(mi.backedges[2], Core.CodeInstance)
+        if length(mi.backedges) == 4
+            @test mi.backedges[3] === Tuple{typeof(func), Real}
+            @test isa(mi.backedges[4], Core.CodeInstance)
+            @test mi.backedges[2] !== mi.backedges[4]
+            @test mi.backedges[2].def === mi.backedges[4].def
+        end
         @test mi.cache.max_world == typemax(mi.cache.max_world)
     end
     for func in (M.q, M.qnc)
@@ -1215,7 +1208,7 @@ precompile_test_harness("invoke") do dir
     m = only(methods(M.callq))
     @test nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqnc))
-    @test nvalid(m.specializations::Core.MethodInstance) == 0
+    @test nvalid(m.specializations::Core.MethodInstance) == 1
     m = only(methods(M.callqi))
     @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
@@ -1728,8 +1721,7 @@ precompile_test_harness("issue #46296") do load_path
 
         mi = first(Base.specializations(first(methods(identity))))
         ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
-                               typemax(UInt), zero(UInt32), nothing, 0x00,
-                               Core.DebugInfo(mi), Core.svec())
+                               typemax(UInt), zero(UInt32), nothing, Core.DebugInfo(mi), Core.svec())
 
         __init__() = @assert ci isa Core.CodeInstance
 
@@ -1828,16 +1820,18 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
+            ocachefile, depmods, #=completeinfo=#true, "PCI", false)
     else
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
+            cachefile, depmods, #=completeinfo=#true, "PCI")
     end
 
-    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
+    modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
     m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
     @test new_ext_cis === nothing || any(new_ext_cis) do ci
-        mi = ci.def
+        mi = ci.def::Core.MethodInstance
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end

@@ -228,10 +228,12 @@ const BINDING_KIND_IMPORTED     = 0x5
 const BINDING_KIND_FAILED       = 0x6
 const BINDING_KIND_DECLARED     = 0x7
 const BINDING_KIND_GUARD        = 0x8
+const BINDING_KIND_UNDEF_CONST  = 0x9
 
-is_some_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT)
+is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT)
+is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
-is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
+is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
@@ -1390,6 +1392,17 @@ end
 
 hasgenerator(m::Method) = isdefined(m, :generator)
 hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
+
+function _uncompressed_ir(m::Method)
+    s = m.source
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
+    return s::CodeInfo
+end
+
+_uncompressed_ir(codeinst::CodeInstance, s::String) =
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
 """
     Base.generating_output([incremental::Bool])::Bool

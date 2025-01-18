@@ -64,7 +64,9 @@ end
 
 # Compute the minimum number of initialized fields for a particular datatype
 # (therefore also a lower bound on the number of fields)
-function datatype_min_ninitialized(t::DataType)
+function datatype_min_ninitialized(@nospecialize t0)
+    t = unwrap_unionall(t0)
+    t isa DataType || return 0
     isabstracttype(t) && return 0
     if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]

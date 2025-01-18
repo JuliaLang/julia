@@ -75,12 +75,24 @@ else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_seh,1)))
 endif
 else
-ifeq ($(APPLE_ARCH),arm64)
+ifeq ($(OS),Darwin)
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(ARCH),aarch64)
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
 else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
 endif
 endif
+else
+# Other targets just use libgcc_s.1
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
+endif
+endif
+
 # winpthread is only Windows, pthread is only others
 ifeq ($(OS),WINNT)
 $(eval $(call copy_csl,$(call versioned_libname,libwinpthread,1)))
@@ -105,13 +117,14 @@ distclean-csl: clean-csl
 else
 $(eval $(call bb-install,csl,CSL,true))
 ifeq ($(OS),WINNT)
+GCC_VERSION = 14
 install-csl:
 	mkdir -p $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 endif
 endif
 ifeq ($(OS),WINNT)
