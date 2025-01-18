@@ -889,4 +889,141 @@ LoweringError:
 LoweringError:
 #= line 1 =# - Call expressions must have a function name
 
+########################################
+# Simple broadcast
+x .* y .+ f.(z)
+#---------------------
+1   TestMod.+
+2   TestMod.*
+3   TestMod.x
+4   TestMod.y
+5   (call top.broadcasted %₂ %₃ %₄)
+6   TestMod.f
+7   TestMod.z
+8   (call top.broadcasted %₆ %₇)
+9   (call top.broadcasted %₁ %₅ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
+
+########################################
+# Broadcast with unary function calls
+.+x
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   (call top.broadcasted %₁ %₂)
+4   (call top.materialize %₃)
+5   (return %₄)
+
+########################################
+# Broadcast with short circuit operators
+x .&& y .|| z
+#---------------------
+1   TestMod.x
+2   TestMod.y
+3   (call top.broadcasted top.andand %₁ %₂)
+4   TestMod.z
+5   (call top.broadcasted top.oror %₃ %₄)
+6   (call top.materialize %₅)
+7   (return %₆)
+
+########################################
+# TODO: Broadcast with comparison chains
+x .< y .< z
+#---------------------
+LoweringError:
+x .< y .< z
+# └┘ ── expected `numchildren(ex) == 2`
+
+Detailed provenance:
+(. <)
+└─ (. <)
+   └─ @ :1
+
+
+########################################
+# Broadcast with literal_pow
+x.^3
+#---------------------
+1   TestMod.^
+2   TestMod.x
+3   (call core.apply_type top.Val 3)
+4   (call %₃)
+5   (call top.broadcasted top.literal_pow %₁ %₂ %₄)
+6   (call top.materialize %₅)
+7   (return %₆)
+
+########################################
+# Broadcast with keywords
+f.(x, y, z = 1; w = 2)
+#---------------------
+1   top.broadcasted_kwsyntax
+2   (call core.tuple :z :w)
+3   (call core.apply_type core.NamedTuple %₂)
+4   (call core.tuple 1 2)
+5   (call %₃ %₄)
+6   TestMod.f
+7   TestMod.x
+8   TestMod.y
+9   (call core.kwcall %₅ %₁ %₆ %₇ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
+
+########################################
+# Broadcast with unary dot syntax
+(.+)(x,y)
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   TestMod.y
+4   (call top.broadcasted %₁ %₂ %₃)
+5   (call top.materialize %₄)
+6   (return %₅)
+
+########################################
+# Trivial in-place broadcast update
+x .= y
+#---------------------
+1   TestMod.x
+2   TestMod.y
+3   (call top.broadcasted top.identity %₂)
+4   (call top.materialize! %₁ %₃)
+5   (return %₄)
+
+########################################
+# Fused in-place broadcast update
+x .= y .+ z
+#---------------------
+1   TestMod.x
+2   TestMod.+
+3   TestMod.y
+4   TestMod.z
+5   (call top.broadcasted %₂ %₃ %₄)
+6   (call top.materialize! %₁ %₅)
+7   (return %₆)
+
+########################################
+# In-place broadcast update with property assignment on left hand side
+x.prop .= y
+#---------------------
+1   TestMod.x
+2   (call top.dotgetproperty %₁ :prop)
+3   TestMod.y
+4   (call top.broadcasted top.identity %₃)
+5   (call top.materialize! %₂ %₄)
+6   (return %₅)
+
+########################################
+# TODO: In-place broadcast update with ref on left hand side
+x[i] .= y
+#---------------------
+LoweringError:
+x[i] .= y
+└──┘ ── Lowering TODO: Need to call partially-expand-ref
+
+Detailed provenance:
+(ref x i)
+└─ (ref x i)
+   └─ @ :1
+
 

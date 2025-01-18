@@ -536,6 +536,75 @@ function expand_setindex(ctx, ex)
     ]
 end
 
+function expand_dotcall(ctx, ex)
+    k = kind(ex)
+    if k == K"dotcall"
+        @chk numchildren(ex) >= 1
+        farg = ex[1]
+        args = SyntaxList(ctx)
+        append!(args, ex[2:end])
+        kws = remove_kw_args!(ctx, args)
+        @ast ctx ex [K"call"
+            (isnothing(kws) ? "broadcasted" : "broadcasted_kwsyntax")::K"top"
+            farg    # todo: What about (z=f).(x,y) ?
+            (expand_dotcall(ctx, arg) for arg in args)...
+            if !isnothing(kws)
+                [K"parameters"
+                    kws...
+                ]
+            end
+        ]
+    elseif k == K"comparison"
+        TODO(ex, "call expand-compare-chain inside expand_dotcall")
+    elseif (k == K"&&" || k == K"||") && is_dotted(ex)
+        @ast ctx ex [K"call"
+            "broadcasted"::K"top"
+            (k == K"&&" ? "andand" : "oror")::K"top"
+            (expand_dotcall(ctx, arg) for arg in children(ex))...
+        ]
+    else
+        ex
+    end
+end
+
+function expand_fuse_broadcast(ctx, ex)
+    if kind(ex) == K"="
+        @assert is_dotted(ex)
+        @chk numchildren(ex) == 2
+        lhs = ex[1]
+        kl = kind(lhs)
+        rhs = expand_dotcall(ctx, ex[2])
+        @ast ctx ex [K"call"
+            "materialize!"::K"top"
+            if kl == K"ref"
+                TODO(lhs, "Need to call partially-expand-ref")
+            elseif kl == K"." && numchildren(lhs) == 2
+                [K"call"
+                    "dotgetproperty"::K"top"
+                    children(lhs)...
+                ]
+            else
+                lhs
+            end
+            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && rhs[1].name_val == "broadcasted")
+                # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
+                [K"call"(rhs)
+                    "broadcasted"::K"top"
+                    "identity"::K"top"
+                    rhs
+                ]
+            else
+                rhs
+            end
+        ]
+    else
+        @ast ctx ex [K"call"
+            "materialize"::K"top"
+            expand_dotcall(ctx, ex)
+        ]
+    end
+end
+
 function check_no_assignment(exs)
     assign_pos = findfirst(kind(e) == K"=" for e in exs)
     if !isnothing(assign_pos)
@@ -2850,6 +2919,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     k = kind(ex)
     if k == K"call"
         expand_call(ctx, ex)
+    elseif k == K"dotcall" || ((k == K"&&" || k == K"||") && is_dotted(ex))
+        expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
     elseif k == K"."
         expand_dot(ctx, ex)
     elseif k == K"?"
@@ -2880,7 +2951,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             expand_forms_2(ctx, ex[2])
         ]
     elseif k == K"="
-        expand_assignment(ctx, ex)
+        if is_dotted(ex)
+            expand_fuse_broadcast(ctx, ex)
+        else
+            expand_assignment(ctx, ex)
+        end
     elseif k == K"break"
         numchildren(ex) > 0 ? ex :
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]

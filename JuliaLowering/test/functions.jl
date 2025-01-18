@@ -224,4 +224,25 @@ end
 
 end
 
+@testset "Broadcast" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let x = [1,2], y = [3,4], z = [5,6]
+        x .* y .+ z
+    end
+    """) == [8, 14]
+
+    @test JuliaLowering.include_string(test_mod, """
+    let nums = [1, 2, 3]
+        string.(nums, base=2; pad=2)
+    end
+    """) == ["01", "10", "11"]
+
+    @test JuliaLowering.include_string(test_mod, """
+    let lhs = [0,0], x = [1,2], y = [3,4], z = [5,6]
+        lhs .= x .* y .+ z
+        lhs
+    end
+    """) == [8, 14]
+end
+
 end
