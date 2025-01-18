@@ -681,11 +681,7 @@ any(::typeof(identity), x::Tuple{Vararg{Bool}}) = _any_tuple_vararg_bool(x)
 all(::typeof(identity), x::Tuple{Bool}) = _all_tuple_vararg_bool(x)
 any(::typeof(identity), x::Tuple{Bool}) = _any_tuple_vararg_bool(x)
 
-# `identity` and a homogeneous tuple of `Missing`
-all(::typeof(identity), ::Tuple{Missing, Vararg{Missing}}) = missing
-any(::typeof(identity), ::Tuple{Missing, Vararg{Missing}}) = missing
-
-# `identity` and a homogeneous tuple of `Missing`: disambiguate
+# `identity` and a singleton tuple of `Missing`
 all(::typeof(identity), ::Tuple{Missing}) = missing
 any(::typeof(identity), ::Tuple{Missing}) = missing
 
