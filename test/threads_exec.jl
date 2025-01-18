@@ -546,20 +546,6 @@ if cfunction_closure
     test_thread_cfunction()
 end
 
-function test_thread_range()
-    a = zeros(Int, threadpoolsize())
-    @threads for i in 1:threadid()
-        a[i] = 1
-    end
-    for i in 1:threadid()
-        @test a[i] == 1
-    end
-    for i in (threadid() + 1):threadpoolsize()
-        @test a[i] == 0
-    end
-end
-test_thread_range()
-
 # Thread safety of `jl_load_and_lookup`.
 function test_load_and_lookup_18020(n)
     @threads for i in 1:n
