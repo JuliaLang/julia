@@ -310,23 +310,14 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include <sys/eventfd.h>
 #include <link.h>
 
-typedef struct {
-    void (*f)(void*) JL_NOTSAFEPOINT;
-    void *ctx;
-} callback_t;
-static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
-{
-    jl_lock_profile();
-    callback_t *callback = (callback_t*)data;
-    callback->f(callback->ctx);
-    jl_unlock_profile();
-    return 1; // only call this once
-}
-
 void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
 {
-    callback_t callback = {f, ctx};
-    dl_iterate_phdr(with_dl_iterate_phdr_lock, &callback);
+    sigset_t sset, oset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGUSR2);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+    f(ctx);
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))

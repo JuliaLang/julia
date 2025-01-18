@@ -281,6 +281,10 @@ endif
 endif
 endif
 
+ifneq (${MMTK_PLAN},None)
+JL_PRIVATE_LIBS-0 += libmmtk_julia
+endif
+
 # Note that we disable MSYS2's path munging here, as otherwise
 # it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
