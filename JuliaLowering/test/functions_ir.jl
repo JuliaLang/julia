@@ -864,3 +864,31 @@ end
 7   (call JuliaLowering.bind_docs! %₆ "some docs\n" %₄)
 8   (return core.nothing)
 
+########################################
+# Error: infix call without enough arguments
+@ast_ [K"call"(syntax_flags=JuliaSyntax.INFIX_FLAG)
+    "x"::K"Identifier"
+]
+#---------------------
+LoweringError:
+#= line 1 =# - Postfix/infix operators must have at least two positional arguments
+
+
+########################################
+# Error: postfix call without enough arguments
+@ast_ [K"call"(syntax_flags=JuliaSyntax.POSTFIX_OP_FLAG)
+    "x"::K"Identifier"
+]
+#---------------------
+LoweringError:
+#= line 1 =# - Postfix/infix operators must have at least two positional arguments
+
+
+########################################
+# Error: Call with no function name
+@ast_ [K"call"]
+#---------------------
+LoweringError:
+#= line 1 =# - Call expressions must have a function name
+
+
