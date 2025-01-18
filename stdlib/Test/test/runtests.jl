@@ -870,7 +870,7 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
         end'`), stderr=devnull), String)
     @test occursin(r"""
-        Test Summary: \| Pass  Fail  Total  Time
+        Test Summary: \| Pass  Fail  Total +Time
         Foo Tests     \|    2     2      4  \s*\d*\.\ds
           Animals     \|    1     1      2  \s*\d*\.\ds
             Felines   \|    1            1  \s*\d*\.\ds
@@ -1253,7 +1253,7 @@ end
 
 @testset "verbose option" begin
     expected = r"""
-    Test Summary:             \| Pass  Total  Time
+    Test Summary:             \| Pass  Total +Time
     Parent                    \|    9      9  \s*\d*\.\ds
       Child 1                 \|    3      3  \s*\d*\.\ds
         Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
@@ -1324,7 +1324,7 @@ end
 @testset "failfast option" begin
     @testset "non failfast (default)" begin
         expected = r"""
-        Test Summary: \| Pass  Fail  Error  Total  Time
+        Test Summary: \| Pass  Fail  Error  Total +Time
         Foo           \|    1     2      1      4  \s*\d*\.\ds
           Bar         \|    1     1             2  \s*\d*\.\ds
         """
@@ -1350,7 +1350,7 @@ end
     end
     @testset "failfast" begin
         expected = r"""
-        Test Summary: \| Fail  Total  Time
+        Test Summary: \| Fail  Total +Time
         Foo           \|    1      1  \s*\d*\.\ds
         """
 
@@ -1375,7 +1375,7 @@ end
     end
     @testset "failfast passes to child testsets" begin
         expected = r"""
-        Test Summary: \| Fail  Total  Time
+        Test Summary: \| Fail  Total +Time
         Foo           \|    1      1  \s*\d*\.\ds
           1           \|    1      1  \s*\d*\.\ds
         """
@@ -1401,7 +1401,7 @@ end
     end
     @testset "failfast via env var" begin
         expected = r"""
-        Test Summary: \| Fail  Total  Time
+        Test Summary: \| Fail  Total +Time
         Foo           \|    1      1  \s*\d*\.\ds
         """
 
@@ -1712,7 +1712,7 @@ end
 
         # this tests both the `TestCounts` parts as well as the fallback `x`s
         expected = r"""
-                    Test Summary: \| Pass  Fail  Error  Broken  Total  Time
+                    Test Summary: \| Pass  Fail  Error  Broken  Total +Time
                     outer         \|    3     1      1       1      6  \s*\d*.\ds
                       a           \|    1                           1  \s*\d*.\ds
                       custom      \|    1     1      1       1      4  \s*\?s
