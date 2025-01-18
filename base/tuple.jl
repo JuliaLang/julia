@@ -656,31 +656,6 @@ prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
 function identity end  # method defined later
 
-function _all_tuple_vararg_bool(x::Tuple{Vararg{Bool}})
-    @_terminates_locally_meta
-    r = true
-    for i ∈ eachindex(x)
-        r &= getfield(x, i, false)  # avoid `getindex` bounds checking to help vectorization
-    end
-    r
-end
-function _any_tuple_vararg_bool(x::Tuple{Vararg{Bool}})
-    @_terminates_locally_meta
-    r = false
-    for i ∈ eachindex(x)
-        r |= getfield(x, i, false)  # avoid `getindex` bounds checking to help vectorization
-    end
-    r
-end
-
-# `identity` and a homogeneous tuple of `Bool`
-all(::typeof(identity), x::Tuple{Vararg{Bool}}) = _all_tuple_vararg_bool(x)
-any(::typeof(identity), x::Tuple{Vararg{Bool}}) = _any_tuple_vararg_bool(x)
-
-# `identity` and a homogeneous tuple of `Bool`: disambiguate
-all(::typeof(identity), x::Tuple{Bool}) = _all_tuple_vararg_bool(x)
-any(::typeof(identity), x::Tuple{Bool}) = _any_tuple_vararg_bool(x)
-
 # `identity` and a singleton tuple of `Missing`
 all(::typeof(identity), ::Tuple{Missing}) = missing
 any(::typeof(identity), ::Tuple{Missing}) = missing
