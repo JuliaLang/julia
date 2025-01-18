@@ -137,8 +137,9 @@ else
 	-cp -a /mingw32/i686-w64-mingw32/lib/libmingw32.a	$(build_private_libdir)/
 	-cp -a /mingw32/i686-w64-mingw32/lib/libmingwex.a	$(build_private_libdir)/
 endif # ifeq ($(ARCH),x86_64)
+endif # ifeq ($(OS),WINNT)
 endif
-endif
+
 ifeq ($(OS),WINNT)
 uninstall-csl: uninstall-gcc-libraries
 uninstall-gcc-libraries:
