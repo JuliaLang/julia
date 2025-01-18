@@ -215,6 +215,8 @@ typedef struct {
     size_t bt_size;
     int tid;
 } jl_record_backtrace_result_t;
+JL_DLLEXPORT JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, struct _jl_bt_element_t *bt_data,
+                                                                size_t max_bt_size) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, struct _jl_bt_element_t *bt_data,
                                                               size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT;
 extern volatile struct _jl_bt_element_t *profile_bt_data_prof;

@@ -1263,12 +1263,11 @@ static const auto jlsubtype_func = new JuliaFunction<>{
 static const auto jlapplytype_func = new JuliaFunction<>{
     XSTR(jl_instantiate_type_in_env),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
-        return FunctionType::get(T_prjlvalue,
-            {T_pjlvalue, T_pjlvalue, T_pprjlvalue}, false);
+        auto T_ptr = PointerType::get(C, 0);
+        auto T_tracked = PointerType::get(C, AddressSpace::Tracked);
+        auto T_derived = PointerType::get(C, AddressSpace::Derived);
+        return FunctionType::get(T_tracked,
+            {T_ptr, T_ptr, T_derived}, false);
     },
     [](LLVMContext &C) {
         return AttributeList::get(C,
@@ -1377,11 +1376,10 @@ static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContext
 static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     XSTR(jl_get_cfunction_trampoline),
     [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-        auto T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
+        auto T_pjlvalue = PointerType::get(C, 0);
+        auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
+        auto T_ppjlvalue = PointerType::get(C, 0);
+        auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {
                 T_prjlvalue, // f (object)
@@ -1390,7 +1388,7 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
                 T_pjlvalue, // fill
                 FunctionType::get(getPointerTy(C), { getPointerTy(C), T_ppjlvalue }, false)->getPointerTo(), // trampoline
                 T_pjlvalue, // env
-                T_pprjlvalue, // vals
+                T_derived, // vals
             }, false);
     },
     [](LLVMContext &C) { return AttributeList::get(C,
@@ -5610,18 +5608,23 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
             // handle self-recursion specially (TODO: assuming ci is a valid invoke for mi?)
-            jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
-            FunctionType *ft = ctx.f->getFunctionType();
-            StringRef protoname = ctx.f->getName();
+            Function *f = ctx.f;
+            FunctionType *ft = f->getFunctionType();
             if (ft == ctx.types().T_jlfunc) {
-                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, nullptr, argv, nargs, rt, age_ok);
-                handled = true;
+                Value *ret = emit_jlcall(ctx, f, nullptr, argv, nargs, julia_call);
+                result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
             }
-            else if (ft != ctx.types().T_jlfuncparams) {
+            else if (ft == ctx.types().T_jlfuncparams) {
+                Value *ret = emit_jlcall(ctx, f, ctx.spvals_ptr, argv, nargs, julia_call2);
+                result = update_julia_type(ctx, mark_julia_type(ctx, ret, true, ctx.rettype), rt);
+            }
+            else {
                 unsigned return_roots = 0;
+                jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
+                StringRef protoname = f->getName();
                 result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
-                handled = true;
             }
+            handled = true;
         }
         else {
             if (ci) {
@@ -5630,7 +5633,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                  // check if we know how to handle this specptr
                 if (invoke == jl_fptr_const_return_addr) {
                     result = mark_julia_const(ctx, codeinst->rettype_const);
-                    handled = true;
                 }
                 else {
                     bool specsig, needsparams;
@@ -5640,8 +5642,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                             push_frames(ctx, ctx.linfo, mi);
                         Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
-                        handled = true;
-                    } else {
+                    }
+                    else {
                         std::string name;
                         StringRef protoname;
                         bool need_to_emit = true;
@@ -5689,7 +5691,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                             result = emit_call_specfun_other(ctx, codeinst, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, age_ok);
                         else
                             result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt, age_ok);
-                        handled = true;
                         if (need_to_emit) {
                             Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                             ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, nullptr, specsig};
@@ -5698,6 +5699,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         }
                     }
                 }
+                handled = true;
             }
         }
     }
@@ -6078,8 +6080,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             return mark_julia_const(ctx, e);
         }
     }
-    assert(ctx.spvals_ptr != NULL);
-    Value *bp = emit_ptrgep(ctx, ctx.spvals_ptr, i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
+    Value *bp = emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
     setName(ctx.emission_context, sp, "sparam");
@@ -6131,8 +6132,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
                 return mark_julia_const(ctx, jl_true);
             }
         }
-        assert(ctx.spvals_ptr != NULL);
-        Value *bp = emit_ptrgep(ctx, ctx.spvals_ptr, i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
+        Value *bp = emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), i * sizeof(jl_value_t*) + sizeof(jl_svec_t));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
         isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false, true), emit_tagfrom(ctx, jl_tvar_type));
@@ -8000,7 +8000,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
-                 closure_types ? ctx.spvals_ptr : ConstantPointerNull::get(cast<PointerType>(ctx.types().T_pprjlvalue))
+                 closure_types ? decay_derived(ctx, ctx.spvals_ptr) : ConstantPointerNull::get(ctx.builder.getPtrTy(AddressSpace::Derived))
              });
         outboxed = true;
     }

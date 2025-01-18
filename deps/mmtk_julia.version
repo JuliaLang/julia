@@ -1,4 +1,6 @@
 MMTK_JULIA_BRANCH = master
-MMTK_JULIA_SHA1 = b69acf5af7a7dd97c1cc6fd99f7c2d51b477f214
+MMTK_JULIA_SHA1 = f07d66aafc86af84ea988b35335acc9bbc770fa1
 MMTK_JULIA_GIT_URL := https://github.com/mmtk/mmtk-julia.git
-MMTK_JULIA_TAR_URL = https://github.com/mmtk/mmtk-julia/archive/refs/tags/v0.30.2.tar.gz
+MMTK_JULIA_TAR_URL = https://github.com/mmtk/mmtk-julia/archive/refs/tags/v0.30.3.tar.gz
+MMTK_JULIA_JLL_VER := 0.30.3+1
+MMTK_JULIA_JLL_NAME := mmtk_julia
