@@ -654,16 +654,6 @@ prod(x::Tuple{}) = 1
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
-function identity end  # method defined later
-
-# `identity` and a singleton tuple of `Missing`
-all(::typeof(identity), ::Tuple{Missing}) = missing
-any(::typeof(identity), ::Tuple{Missing}) = missing
-
-# singleton tuple
-all(f, x::Tuple{Any}) = all(identity, (f(only(x)),))
-any(f, x::Tuple{Any}) = any(identity, (f(only(x)),))
-
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @noinline
