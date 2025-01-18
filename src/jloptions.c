@@ -153,6 +153,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
                         0, // task_metrics
+                        -1, // timeout_for_safepoint_straggler_s
     };
     jl_options_initialized = 1;
 }
@@ -311,6 +312,8 @@ static const char opts_hidden[]  =
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
+    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace for a thread\n"
+    "                                               that fails to reach a safepoint within the specified time\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to stderr or a path. Methods that\n"
     "                                               were recompiled are printed in yellow or with a trailing\n"
@@ -346,6 +349,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_scope,
            opt_inline,
            opt_polly,
+           opt_timeout_for_safepoint_straggler,
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
@@ -427,6 +431,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
@@ -969,6 +974,13 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_timeout_for_safepoint_straggler:
+            errno = 0;
+            long timeout = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
+                jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
+            jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
             break;
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
