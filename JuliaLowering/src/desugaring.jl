@@ -69,6 +69,9 @@ function is_effect_free(ex)
     # because this calls the user-defined getproperty?
 end
 
+#-------------------------------------------------------------------------------
+# Destructuring
+
 # Convert things like `(x,y,z) = (a,b,c)` to assignments, eliminating the
 # tuple. Includes support for slurping/splatting.
 #
@@ -398,6 +401,8 @@ function expand_tuple_destruct(ctx, ex)
     makenode(ctx, ex, K"block", stmts)
 end
 
+#-------------------------------------------------------------------------------
+# Expansion of array indexing 
 function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
     k = kind(ex)
     if is_effect_free(ex)
@@ -536,6 +541,9 @@ function expand_setindex(ctx, ex)
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Expansion of broadcast notation `f.(x .+ y)`
+
 function expand_dotcall(ctx, ex)
     k = kind(ex)
     if k == K"dotcall"
@@ -604,6 +612,9 @@ function expand_fuse_broadcast(ctx, ex)
         ]
     end
 end
+
+#-------------------------------------------------------------------------------
+# Expansion of array concatenation notation `[a b ; c d]` etc
 
 function check_no_assignment(exs)
     assign_pos = findfirst(kind(e) == K"=" for e in exs)
@@ -831,6 +842,9 @@ function expand_ncat(ctx, ex)
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Expand assignments
+
 # Expand UnionAll definitions, eg `X{T} = Y{T,T}`
 function expand_unionall_def(ctx, srcref, lhs, rhs)
     if numchildren(lhs) <= 1
@@ -958,6 +972,9 @@ function expand_assignment(ctx, ex)
     end
 end
 
+#-------------------------------------------------------------------------------
+# Expand logical conditional statements
+
 # Flatten nested && or || nodes and expand their children
 function expand_cond_children(ctx, ex, cond_kind=kind(ex), flat_children=SyntaxList(ctx))
     for e in children(ex)
@@ -992,6 +1009,9 @@ function expand_condition(ctx, ex)
         test
     end
 end
+
+#-------------------------------------------------------------------------------
+# Expand let blocks
 
 function expand_let(ctx, ex)
     @chk numchildren(ex) == 2
@@ -1035,6 +1055,9 @@ function expand_let(ctx, ex)
     end
     return blk
 end
+
+#-------------------------------------------------------------------------------
+# Expand named tuples
 
 function _named_tuple_expr(ctx, srcref, names, values)
     if isempty(names)
@@ -1134,6 +1157,9 @@ function expand_named_tuple(ctx, ex, kws;
     current_nt
 end
 
+#-------------------------------------------------------------------------------
+# Call expansion
+
 function expand_kw_call(ctx, srcref, farg, args, kws)
     @ast ctx srcref [K"block"
         func := farg
@@ -1231,23 +1257,36 @@ function expand_call(ctx, ex)
     end
 end
 
+#-------------------------------------------------------------------------------
+
 function expand_dot(ctx, ex)
-    @chk numchildren(ex) == 2 # TODO: bare `.+` syntax
-    rhs = ex[2]
-    # Required to support the possibly dubious syntax `a."b"`. See
-    # https://github.com/JuliaLang/julia/issues/26873
-    # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
-    if !(kind(rhs) == K"string" || is_leaf(rhs))
-        throw(LoweringError(rhs, "Unrecognized field access syntax"))
-    end
-    expand_forms_2(ctx,
+    @chk numchildren(ex) in (1,2)  (ex, "`.` form requires either one or two children")
+
+    if numchildren(ex) == 1
+        # eg, `f = .+`
+        @ast ctx ex [K"call"
+            "BroadcastFunction"::K"top"
+            ex[1]
+        ]
+    elseif numchildren(ex) == 2
+        # eg, `x.a` syntax
+        rhs = ex[2]
+        # Required to support the possibly dubious syntax `a."b"`. See
+        # https://github.com/JuliaLang/julia/issues/26873
+        # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
+        if !(kind(rhs) == K"string" || is_leaf(rhs))
+            throw(LoweringError(rhs, "Unrecognized field access syntax"))
+        end
         @ast ctx ex [K"call"
             "getproperty"::K"top" 
             ex[1]
             rhs
         ]
-    )
+    end
 end
+
+#-------------------------------------------------------------------------------
+# Expand for loops
 
 function foreach_lhs_var(f::Function, ex)
     k = kind(ex)
@@ -1367,6 +1406,9 @@ function expand_for(ctx, ex)
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Expand try/catch/finally
+
 function match_try(ex)
     @chk numchildren(ex) > 1 "Invalid `try` form"
     try_ = ex[1]
@@ -1436,6 +1478,9 @@ function expand_try(ctx, ex)
     end
 end
 
+#-------------------------------------------------------------------------------
+# Expand local/global/const declarations
+
 # Strip variable type declarations from within a `local` or `global`, returning
 # the stripped expression. Works recursively with complex left hand side
 # assignments containing tuple destructuring. Eg, given
@@ -1502,6 +1547,9 @@ function expand_decls(ctx, ex)
     end
     makenode(ctx, ex, K"block", stmts)
 end
+
+#-------------------------------------------------------------------------------
+# Expansion of function definitions
 
 function match_function_arg(full_ex)
     name = nothing
@@ -1941,6 +1989,9 @@ function expand_arrow_arglist(ctx, arglist)
     end
 end
 
+#-------------------------------------------------------------------------------
+# Expand macro definitions
+
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
@@ -1985,6 +2036,9 @@ function expand_macro_def(ctx, ex)
         ex[2]
     ]
 end
+
+#-------------------------------------------------------------------------------
+# Expand type definitions
 
 # Match `x<:T<:y` etc, returning `(name, lower_bound, upper_bound)`
 # A bound is `nothing` if not specified
@@ -2723,6 +2777,9 @@ function expand_struct_def(ctx, ex, docs)
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Expand `where` syntax
+
 function expand_where(ctx, srcref, lhs, rhs)
     bounds = analyze_typevar(ctx, rhs)
     v = bounds[1]
@@ -2752,6 +2809,9 @@ function expand_wheres(ctx, ex)
     end
     body
 end
+
+#-------------------------------------------------------------------------------
+# Expand import / using / export
 
 function _append_importpath(ctx, path_spec, path)
     prev_was_dot = true
@@ -2829,6 +2889,9 @@ function expand_import(ctx, ex)
         ]
     ]
 end
+
+#-------------------------------------------------------------------------------
+# Expand module definitions
 
 function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
     modname_ex = ex[1]
@@ -2908,9 +2971,13 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Desugaring's "big switch": expansion of some simple forms; dispatch to other
+# expansion functions for the rest.
+
 """
 Lowering pass 2 - desugaring
-
+ 
 This pass simplifies expressions by expanding complicated syntax sugar into a
 small set of core syntactic forms. For example, field access syntax `a.b` is
 expanded to a function call `getproperty(a, :b)`.
@@ -2922,7 +2989,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"dotcall" || ((k == K"&&" || k == K"||") && is_dotted(ex))
         expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
     elseif k == K"."
-        expand_dot(ctx, ex)
+        expand_forms_2(ctx, expand_dot(ctx, ex))
     elseif k == K"?"
         @chk numchildren(ex) == 3
         expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])

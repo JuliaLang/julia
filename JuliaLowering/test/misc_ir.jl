@@ -1,4 +1,35 @@
 ########################################
+# Getproperty syntax
+x.a
+#---------------------
+1   TestMod.x
+2   (call top.getproperty %₁ :a)
+3   (return %₂)
+
+########################################
+# Getproperty syntax with a string on right hand side
+x."b"
+#---------------------
+1   TestMod.x
+2   (call top.getproperty %₁ "b")
+3   (return %₂)
+
+########################################
+# Standalone dot syntax
+.*
+#---------------------
+1   TestMod.*
+2   (call top.BroadcastFunction %₁)
+3   (return %₂)
+
+########################################
+# Error: Wrong number of children in `.`
+@ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
+#---------------------
+LoweringError:
+#= line 1 =# - `.` form requires either one or two children
+
+########################################
 # Error: Placeholder value used
 _ + 1
 #---------------------

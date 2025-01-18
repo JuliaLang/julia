@@ -2,22 +2,6 @@
 
 test_mod = Module(:TestMod)
 
-@test desugar(test_mod, """
-a.b
-""") ~ @ast_ [K"call"
-    "getproperty"::K"top"
-    "a"::K"Identifier"
-    "b"::K"Symbol"
-]
-
-@test desugar(test_mod, """
-a."b"
-""") ~ @ast_ [K"call"
-    "getproperty"::K"top"
-    "a"::K"Identifier"
-    "b"::K"String"
-]
-
 # @test desugar(test_mod, """
 # let
 #     y = 0
