@@ -223,7 +223,6 @@ LoweringError:
 LoweringError:
 #= line 1 =# - Badly nested rows in `ncat`
 
-
 ########################################
 # Error: bad nrow nesting
 @ast_ [K"ncat"(syntax_flags=set_numeric_flags(3))
@@ -237,7 +236,6 @@ LoweringError:
 LoweringError:
 #= line 1 =# - 2D `nrow` cannot be mixed with `row` in `ncat`
 
-
 ########################################
 # Error: bad nrow nesting
 @ast_ [K"ncat"(syntax_flags=set_numeric_flags(3))
@@ -250,5 +248,4 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - Badly nested rows in `ncat`
-
 

@@ -122,7 +122,9 @@ end
 # TODO: Probably terribly non-inferrable?
 function setattr!(graph::SyntaxGraph, id; attrs...)
     for (k,v) in pairs(attrs)
-        getattr(graph, k)[id] = v
+        if !isnothing(v)
+            getattr(graph, k)[id] = v
+        end
     end
 end
 
@@ -310,7 +312,7 @@ JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_in
 JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
 
 function JuliaSyntax.highlight(io::IO, src::LineNumberNode; note="")
-    print(io, src, " - ", note, "\n")
+    print(io, src, " - ", note)
 end
 
 function JuliaSyntax.highlight(io::IO, src::SourceRef; kws...)

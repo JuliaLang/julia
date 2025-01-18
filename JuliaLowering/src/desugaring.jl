@@ -1020,9 +1020,10 @@ function expand_named_tuple(ctx, ex, kws;
             end
             name = to_symbol(ctx, kw[2])
             value = kw
-        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 && kw[2].name_val == "=>"
+        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 &&
+                is_same_identifier_like(kw[1], "=>")
             # a=>b   ==>  $a=b
-            appended_nt = _named_tuple_expr(ctx, kw, (kw[1],), (kw[3],))
+            appended_nt = _named_tuple_expr(ctx, kw, (kw[2],), (kw[3],))
             nothing, nothing
         elseif k == K"..."
             # args...  ==> splat pairs
@@ -1142,17 +1143,8 @@ function remove_kw_args!(ctx, args::SyntaxList)
 end
 
 function expand_call(ctx, ex)
-    args = SyntaxList(ctx)
-    if is_infix_op_call(ex) || is_postfix_op_call(ex)
-        @chk numchildren(ex) >= 2 "Postfix/infix operators must have at least two positional arguments"
-        farg = ex[2]
-        push!(args, ex[1])
-        append!(args, ex[3:end])
-    else
-        @chk numchildren(ex) > 0 "Call expressions must have a function name"
-        farg = ex[1]
-        append!(args, ex[2:end])
-    end
+    farg = ex[1]
+    args = copy(ex[2:end])
     kws = remove_kw_args!(ctx, args)
     if !isnothing(kws)
         return expand_forms_2(ctx, expand_kw_call(ctx, ex, farg, args, kws))
@@ -1664,6 +1656,8 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             "#anon#"::K"Placeholder"
             children(name)...
         ]
+    elseif kind(name) == K"dotcall"
+        throw(LoweringError(name, "Cannot define function using `.` broadcast syntax"))
     else
         throw(LoweringError(name, "Bad function definition"))
     end

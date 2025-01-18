@@ -295,7 +295,7 @@ end
 #---------------------
 LoweringError:
 function (.+)(x,y)
-#         └┘ ── Invalid function name
+#        └───────┘ ── Cannot define function using `.` broadcast syntax
 end
 
 ########################################
@@ -873,7 +873,6 @@ end
 LoweringError:
 #= line 1 =# - Postfix/infix operators must have at least two positional arguments
 
-
 ########################################
 # Error: postfix call without enough arguments
 @ast_ [K"call"(syntax_flags=JuliaSyntax.POSTFIX_OP_FLAG)
@@ -882,7 +881,6 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - Postfix/infix operators must have at least two positional arguments
-
 
 ########################################
 # Error: Call with no function name

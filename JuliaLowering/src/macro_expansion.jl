@@ -204,8 +204,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier" && all(==('_'), ex.name_val)
         @ast ctx ex ex=>K"Placeholder"
-    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" ||
-            (is_operator(k) && is_leaf(ex)) # <- TODO: fix upstream: make operator *tokens* into identifiers
+    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName"
         layerid = get(ex, :scope_layer, ctx.current_layer.id)
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
     elseif k == K"var" || k == K"char" || k == K"parens"
@@ -239,25 +238,49 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             e2 = @ast ctx e2 e2=>K"Symbol"
         end
         @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
-    elseif (k == K"call" || k == K"dotcall") && numchildren(ex) == 3 && begin
-            fname = is_infix_op_call(ex) ? ex[2] : ex[1]
-            is_same_identifier_like(fname, "^") && kind(ex[3]) == K"Integer"
+    elseif (k == K"call" || k == K"dotcall")
+        # Do some initial desugaring of call and dotcall here to simplify
+        # the later desugaring pass
+        args = SyntaxList(ctx)
+        if is_infix_op_call(ex) || is_postfix_op_call(ex)
+            @chk numchildren(ex) >= 2 "Postfix/infix operators must have at least two positional arguments"
+            farg = ex[2]
+            push!(args, ex[1])
+            append!(args, ex[3:end])
+        else
+            @chk numchildren(ex) > 0 "Call expressions must have a function name"
+            farg = ex[1]
+            append!(args, ex[2:end])
         end
-        # Do literal-pow expansion here as it's later used in both call and
-        # dotcall expansion.
-        arg1 = is_infix_op_call(ex) ? ex[1] : ex[2]
-        @ast ctx ex [k
-            "literal_pow"::K"top"
-            expand_forms_1(ctx, fname)
-            expand_forms_1(ctx, arg1)
-            [K"call"
+        if length(args) == 2 && is_same_identifier_like(farg, "^") && kind(args[2]) == K"Integer"
+            # Do literal-pow expansion here as it's later used in both call and
+            # dotcall expansion.
+            @ast ctx ex [k
+                "literal_pow"::K"top"
+                expand_forms_1(ctx, farg)
+                expand_forms_1(ctx, args[1])
                 [K"call"
-                    "apply_type"::K"core"
-                    "Val"::K"top"
-                    ex[3]
+                    [K"call"
+                        "apply_type"::K"core"
+                        "Val"::K"top"
+                        args[2]
+                    ]
                 ]
             ]
-        ]
+        else
+            if kind(farg) == K"." && numchildren(farg) == 1
+                # (.+)(x,y) is treated as a dotcall
+                k = K"dotcall"
+                farg = farg[1]
+            end
+            # Preserve call type flags (mostly ignored in the next pass as
+            # we've already reordered arguments.)
+            callflags = JuliaSyntax.call_type_flags(ex)
+            @ast ctx ex [k(syntax_flags=(callflags == 0 ? nothing : callflags))
+                expand_forms_1(ctx, farg)
+                (expand_forms_1(ctx, a) for a in args)...
+            ]
+        end
     elseif is_leaf(ex)
         ex
     else
