@@ -227,5 +227,3 @@ end
     return _all_tuple(f, anymissing, rest...)
 end
 @inline _all_tuple(f, anymissing) = anymissing ? missing : true
-
-all(::Tuple{Missing}) = missing

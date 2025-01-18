@@ -654,18 +654,44 @@ prod(x::Tuple{}) = 1
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-all(x::Tuple{Any}) = x[1] || return false
-all(f, x::Tuple{}) = true
-all(f, x::Tuple{Any}) = all((f(x[1]),))
+function identity end  # method defined later
 
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+function _all_tuple_vararg_bool(x::Tuple{Vararg{Bool}})
+    @_terminates_locally_meta
+    r = true
+    for i ∈ eachindex(x)
+        r &= getfield(x, i, false)  # avoid `getindex` bounds checking to help vectorization
+    end
+    r
+end
+function _any_tuple_vararg_bool(x::Tuple{Vararg{Bool}})
+    @_terminates_locally_meta
+    r = false
+    for i ∈ eachindex(x)
+        r |= getfield(x, i, false)  # avoid `getindex` bounds checking to help vectorization
+    end
+    r
+end
+
+# `identity` and a homogeneous tuple of `Bool`
+all(::typeof(identity), x::Tuple{Vararg{Bool}}) = _all_tuple_vararg_bool(x)
+any(::typeof(identity), x::Tuple{Vararg{Bool}}) = _any_tuple_vararg_bool(x)
+
+# `identity` and a homogeneous tuple of `Bool`: disambiguate
+all(::typeof(identity), x::Tuple{Bool}) = _all_tuple_vararg_bool(x)
+any(::typeof(identity), x::Tuple{Bool}) = _any_tuple_vararg_bool(x)
+
+# `identity` and a homogeneous tuple of `Missing`
+all(::typeof(identity), ::Tuple{Missing, Vararg{Missing}}) = missing
+any(::typeof(identity), ::Tuple{Missing, Vararg{Missing}}) = missing
+
+# `identity` and a homogeneous tuple of `Missing`: disambiguate
+all(::typeof(identity), ::Tuple{Missing}) = missing
+any(::typeof(identity), ::Tuple{Missing}) = missing
+
+# singleton tuple
+all(f, x::Tuple{Any}) = all(identity, (f(only(x)),))
+any(f, x::Tuple{Any}) = any(identity, (f(only(x)),))
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
