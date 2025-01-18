@@ -128,6 +128,7 @@ install-csl:
 ifeq ($(ARCH),x86_64)
 #	libmingw32:		mingw_raise_matherr
 #	libmingwex:		ldexp,log2l,exp2l,powi
+	-cp -a /mingw64/lib/libmsvcrt.a     $(build_private_libdir)/
 	-cp -a /mingw64/lib/libmingw32.a    $(build_private_libdir)/
 	-cp -a /mingw64/lib/libmingwex.a    $(build_private_libdir)/
 else
