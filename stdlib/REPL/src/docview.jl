@@ -301,10 +301,11 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
+            varstr = "$(binding.mod).$(binding.var)"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public symbol.\n")
+                println(io, "No documentation found for public binding `$varstr`.\n")
             else
-                println(io, "No documentation found for private symbol.\n")
+                println(io, "No documentation found for private binding `$varstr`.\n")
             end
         end
         summarize(io, binding_res, binding)
