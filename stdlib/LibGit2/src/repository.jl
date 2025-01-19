@@ -480,7 +480,7 @@ Return the list of all the fetch heads for `repo`, each represented as a [`Fetch
 including their names, URLs, and merge statuses.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> fetch_heads = LibGit2.fetchheads(repo);
 
 julia> fetch_heads[1].name

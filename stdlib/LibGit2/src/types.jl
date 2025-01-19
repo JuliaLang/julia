@@ -254,7 +254,7 @@ distinct payload. Each callback, when called, will receive `Dict` which will hol
 callback's custom payload which can be accessed using the callback name.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> c = LibGit2.Callbacks(:credentials => (LibGit2.credentials_cb(), LibGit2.CredentialPayload()));
 
 julia> LibGit2.clone(url, callbacks=c);
@@ -304,7 +304,7 @@ The fields represent:
   * `payload`: the payload to be provided to the two callback functions.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> fo = LibGit2.FetchOptions(
            proxy_opts = LibGit2.ProxyOptions(url = Cstring("https://my_proxy_url.com")))
 
@@ -966,7 +966,7 @@ Given the git configuration file containing:
 
 The `ConfigEntry` would look like the following:
 
-```julia-repl
+```jldoctest
 julia> entry
 ConfigEntry("credential.https://example.com.username", "me")
 

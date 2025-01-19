@@ -719,7 +719,7 @@ Union{Missing, Int64}[]
 
 When the iterator is non-empty, the result type depends only on values:
 
-```julia-repl
+```jldoctest
 julia> [rand(Bool) ? 1 : missing for _ in [""]]
 1-element Vector{Int64}:
  1

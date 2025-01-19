@@ -371,7 +371,7 @@ On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → 
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
 
-```julia-repl
+```jldoctest
 julia> @time_imports using CSV
      50.7 ms  Parsers 17.52% compilation time
       0.2 ms  DataValueInterfaces
@@ -403,7 +403,7 @@ julia> @time_imports using CSV
 A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
 like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
 
-```julia-repl
+```jldoctest
 julia> @trace_compile rand(2,2) * rand(2,2)
 #=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
 #=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})

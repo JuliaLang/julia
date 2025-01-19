@@ -30,14 +30,14 @@ See also [`randn!`](@ref) to act in-place.
 
 Generating a single random number (with the default `Float64` type):
 
-```julia-repl
+```jldoctest
 julia> randn()
 -0.942481877315864
 ```
 
 Generating a matrix of normal random numbers (with the default `Float64` type):
 
-```julia-repl
+```jldoctest
 julia> randn(2,3)
 2×3 Matrix{Float64}:
   1.18786   -0.678616   1.49463

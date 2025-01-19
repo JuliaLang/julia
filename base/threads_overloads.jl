@@ -21,7 +21,7 @@ uniform workloads, but may perform worse than `FairSchedule` in concurrence
 with other multithreaded workloads.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> n = 20
 
 julia> c = Channel{Int}(ch -> foreach(i -> put!(ch, i), 1:n), 1)

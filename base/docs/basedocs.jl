@@ -2823,7 +2823,7 @@ objects of length 0 might alias, since there is no reachable mutable content
 from them.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Memory{Float64}(undef, 3)
 3-element Memory{Float64}:
  6.90966e-310
@@ -2858,7 +2858,7 @@ memoryref(::Union{GenericMemory,GenericMemoryRef}, ::Integer)
 Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Vector{Float64}(undef, 3)
 3-element Vector{Float64}:
  6.90966e-310
@@ -2908,7 +2908,7 @@ Vector{T}(::Missing, n)
 Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Matrix{Float64}(undef, 2, 3)
 2×3 Matrix{Float64}:
  2.36365e-314  2.28473e-314    5.0e-324
@@ -2969,7 +2969,7 @@ match the length or number of `dims`. Here [`undef`](@ref) is
 the [`UndefInitializer`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> A = Array{Float64, 2}(undef, 2, 3) # N given explicitly
 2×3 Matrix{Float64}:
  6.90198e-310  6.90198e-310  6.90198e-310
@@ -3046,7 +3046,7 @@ would like an uninitialized array. See also [`undef`](@ref),
 an alias for `UndefInitializer()`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Array{Float64, 1}(UndefInitializer(), 3)
 3-element Vector{Float64}:
  2.2752528595e-314
@@ -3066,7 +3066,7 @@ array-constructor-caller would like an uninitialized array.
 See also: [`missing`](@ref), [`similar`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Array{Float64, 1}(undef, 3)
 3-element Vector{Float64}:
  2.2752528595e-314

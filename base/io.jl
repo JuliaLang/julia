@@ -605,7 +605,7 @@ julia> readline("my_file.txt", keep=true)
 
 julia> rm("my_file.txt")
 ```
-```julia-repl
+```jldoctest
 julia> print("Enter your name: ")
 Enter your name:
 

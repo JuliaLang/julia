@@ -39,7 +39,7 @@ Get the current working directory.
 See also: [`cd`](@ref), [`tempdir`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> pwd()
 "/home/JuliaUser"
 
@@ -74,7 +74,7 @@ Set the current working directory.
 See also: [`pwd`](@ref), [`mkdir`](@ref), [`mkpath`](@ref), [`mktempdir`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> cd("/home/JuliaUser/Projects/julia")
 
 julia> pwd()
@@ -123,7 +123,7 @@ Temporarily change the current working directory to `dir`, apply function `f` an
 finally return to the original directory.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> pwd()
 "/home/JuliaUser"
 
@@ -164,7 +164,7 @@ required intermediate directories.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> mkdir("testingdir")
 "testingdir"
 
@@ -204,7 +204,7 @@ If `path` includes a filename you will probably want to use `mkpath(dirname(path
 avoid creating a directory using the filename.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> cd(mktempdir())
 
 julia> mkpath("my/test/dir") # creates three directories
@@ -516,7 +516,7 @@ If the file does not exist a new file is created.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> write("my_little_file", 2);
 
 julia> mtime("my_little_file")
@@ -939,7 +939,7 @@ See also: [`walkdir`](@ref).
     The `join` and `sort` keyword arguments require at least Julia 1.4.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> cd("/home/JuliaUser/dev/julia")
 
 julia> readdir()
@@ -1134,7 +1134,7 @@ for (path, dirs, files) in walkdir(".")
 end
 ```
 
-```julia-repl
+```jldoctest
 julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");

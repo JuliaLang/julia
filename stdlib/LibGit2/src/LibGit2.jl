@@ -87,7 +87,7 @@ Check if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
@@ -230,7 +230,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);

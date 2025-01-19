@@ -103,7 +103,7 @@ Take the expression `x` and return an equivalent expression with all macros remo
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```julia-repl
+```jldoctest
 julia> module M
            macro m1()
                42
@@ -144,7 +144,7 @@ There are differences between `@macroexpand` and [`macroexpand`](@ref).
   expands with respect to the module in which it is called.
 
 This is best seen in the following example:
-```julia-repl
+```jldoctest
 julia> module M
            macro m()
                1

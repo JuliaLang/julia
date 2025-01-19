@@ -52,7 +52,7 @@ end
 Return a shortened version of the name of `ref` that's
 "human-readable".
 
-```julia-repl
+```jldoctest
 julia> repo = GitRepo(path_to_repo);
 
 julia> branch_ref = LibGit2.head(repo);

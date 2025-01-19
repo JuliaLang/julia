@@ -56,7 +56,7 @@ Gets all of the IP addresses of the `host`.
 Uses the operating system's underlying `getaddrinfo` implementation, which may do a DNS lookup.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getalladdrinfo("google.com")
 2-element Vector{IPAddr}:
  ip"172.217.6.174"
@@ -129,7 +129,7 @@ Uses the operating system's underlying getaddrinfo implementation, which may do
 a DNS lookup.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getaddrinfo("localhost", IPv6)
 ip"::1"
 
@@ -187,7 +187,7 @@ Performs a reverse-lookup for IP address to return a hostname and service
 using the operating system's underlying `getnameinfo` implementation.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getnameinfo(IPv4("8.8.8.8"))
 "google-public-dns-a.google.com"
 ```
@@ -270,7 +270,7 @@ This function is a backwards-compatibility wrapper around [`getipaddrs`](@ref).
 New applications should use [`getipaddrs`](@ref) instead.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getipaddr()
 ip"192.168.1.28"
 
@@ -305,7 +305,7 @@ The `loopback` keyword argument dictates whether loopback addresses (e.g. `ip"12
     This function is available as of Julia 1.2.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getipaddrs()
 5-element Vector{IPAddr}:
  ip"198.51.100.17"

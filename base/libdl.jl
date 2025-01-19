@@ -235,7 +235,7 @@ end
 Get the full path of the library `libname`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> dlpath("libjulia")
 ```
 """

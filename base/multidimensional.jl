@@ -1311,7 +1311,7 @@ $(_DOCS_ALIASING_WARNING)
 See also: [`circshift`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> src = reshape(Vector(1:16), (4,4))
 4×4 Matrix{Int64}:
  1  5   9  13

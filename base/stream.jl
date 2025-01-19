@@ -560,7 +560,7 @@ julia> withenv("LINES" => 30, "COLUMNS" => 100) do
 
 To get your TTY size,
 
-```julia-repl
+```jldoctest
 julia> displaysize(stdout)
 (34, 147)
 ```
@@ -1369,7 +1369,7 @@ Possible values for each stream are:
 * `io` an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or `devnull`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> redirect_stdio(stdout="stdout.txt", stderr="stderr.txt") do
            print("hello stdout")
            print(stderr, "hello stderr")
@@ -1385,14 +1385,14 @@ julia> read("stderr.txt", String)
 # Edge cases
 
 It is possible to pass the same argument to `stdout` and `stderr`:
-```julia-repl
+```jldoctest
 julia> redirect_stdio(stdout="log.txt", stderr="log.txt", stdin=devnull) do
     ...
 end
 ```
 
 However it is not supported to pass two distinct descriptors of the same file.
-```julia-repl
+```jldoctest
 julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
@@ -1400,7 +1400,7 @@ julia> io2 = open("same/path", "w")
 julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
-```julia-repl
+```jldoctest
 julia> io = open(...)
 
 julia> redirect_stdio(f, stdout=io, stdin=io) # not supported

@@ -141,7 +141,7 @@ for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
         See also: [`$($fname)`](@ref), [`$($see_other!)`](@ref)
 
         # Examples
-        ```julia-repl
+        ```jldoctest
         julia> $($fname!)($($fname!)(Xoshiro(1))) == $($fname!)(Xoshiro(1), 2)
         true
         ```
@@ -162,7 +162,7 @@ for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
         See also: [`$($fname!)`](@ref), [`$($see_other)`](@ref)
 
         # Examples
-        ```julia-repl
+        ```jldoctest
         julia> x = Xoshiro(1);
 
         julia> $($fname)($($fname)(x)) == $($fname)(x, 2)

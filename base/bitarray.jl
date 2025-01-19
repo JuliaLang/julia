@@ -53,7 +53,7 @@ Construct an undef [`BitArray`](@ref) with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> BitArray(undef, 2, 2)
 2×2 BitMatrix:
  0  0
@@ -81,7 +81,7 @@ BitVector() = BitVector(undef, 0)
 
 Construct a `BitVector` from a tuple of `Bool`.
 # Examples
-```julia-repl
+```jldoctest
 julia> nt = (true, false, true, false)
 (true, false, true, false)
 

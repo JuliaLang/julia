@@ -297,7 +297,7 @@ it is on. If `spawn` is `nothing` (default), the task will be spawned if the par
 Here the first number is printed after a delay of two seconds, then the following numbers are
 printed quickly.
 
-```julia-repl
+```jldoctest
 julia> begin
            i = 0
            cb(timer) = (global i += 1; println(i))

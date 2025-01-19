@@ -12,7 +12,7 @@ Get the ID number of the current thread of execution, or the thread of task
 `t`. The master thread has ID `1`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Threads.threadid()
 1
 
@@ -374,7 +374,7 @@ thread other than 1.
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
 
-```julia-repl
+```jldoctest
 julia> function busywait(seconds)
             tstart = time_ns()
             while (time_ns() - tstart) / 1e9 < seconds
@@ -469,7 +469,7 @@ the variable's value in the current task.
     A threadpool may be specified as of Julia 1.9.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> t() = println("Hello from ", Threads.threadid());
 
 julia> tasks = fetch.([Threads.@spawn t() for i in 1:4]);
