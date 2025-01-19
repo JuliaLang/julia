@@ -544,7 +544,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
     elseif k == K"const_if_global"
         id = _resolve_scopes(ctx, ex[1])
         if lookup_binding(ctx, id).kind == :global
-            @ast ctx ex [K"const" ex[1]]
+            @ast ctx ex [K"const" id]
         else
             makeleaf(ctx, ex, K"TOMBSTONE")
         end

@@ -11,9 +11,10 @@ end
 """)
 
 # TODO: Desugaring of assignment done, but needs `where` lowering
-@test_broken JuliaLowering.include_string(test_mod, """
+JuliaLowering.include_string(test_mod, """
 MyVector{T} = Array{1,T}
-""") == 42
+""")
+@test test_mod.MyVector{Int} == Array{1,Int}
 
 # Chained assignment
 @test JuliaLowering.include_string(test_mod, """

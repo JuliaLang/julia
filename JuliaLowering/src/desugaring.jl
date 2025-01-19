@@ -937,7 +937,7 @@ function expand_unionall_def(ctx, srcref, lhs, rhs)
     @ast ctx srcref [K"block"
         [K"const_if_global" name]
         unionall_type := expand_forms_2(ctx, [K"where" rhs lhs[2:end]...])
-        expand_forms_2([K"=" name unionall_type])
+        expand_forms_2(ctx, [K"=" name unionall_type])
     ]
 end
 

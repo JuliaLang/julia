@@ -115,6 +115,39 @@ end
 10  (return %₉)
 
 ########################################
+# UnionAll expansion at global scope results in const decl
+X{T} = Y{T,T}
+#---------------------
+1   (const TestMod.X)
+2   (call core.TypeVar :T)
+3   (= slot₁/T %₂)
+4   slot₁/T
+5   TestMod.Y
+6   slot₁/T
+7   slot₁/T
+8   (call core.apply_type %₅ %₆ %₇)
+9   (call core.UnionAll %₄ %₈)
+10  (= TestMod.X %₉)
+11  (return %₉)
+
+########################################
+# UnionAll expansion in local scope
+let
+    X{T} = Y{T,T}
+end
+#---------------------
+1   (call core.TypeVar :T)
+2   (= slot₂/T %₁)
+3   slot₂/T
+4   TestMod.Y
+5   slot₂/T
+6   slot₂/T
+7   (call core.apply_type %₄ %₅ %₆)
+8   (call core.UnionAll %₃ %₇)
+9   (= slot₁/X %₈)
+10  (return %₈)
+
+########################################
 # simple setindex!
 a[i] = x
 #---------------------
