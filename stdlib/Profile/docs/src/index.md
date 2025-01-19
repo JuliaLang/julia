@@ -12,7 +12,7 @@ There are two main approaches to CPU profiling julia code:
 
 Where profiling is enabled for a given call via the `@profile` macro.
 
-```julia-repl
+```jldoctest
 julia> using Profile
 
 julia> @profile foo()
@@ -41,7 +41,7 @@ e.g. tight loops.
 Optionally set environment variable [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@ref JULIA_PROFILE_PEEK_HEAP_SNAPSHOT) to `1` to also automatically collect a
 [heap snapshot](@ref Heap-Snapshots).
 
-```julia-repl
+```jldoctest
 julia> foo()
 ##== the user sends a trigger while foo is running ==##
 load: 2.53  cmd: julia 88903 running 6.16u 0.97s
@@ -124,7 +124,7 @@ Profile.take_heap_snapshot
 
 The methods in `Profile` are not exported and need to be called e.g. as `Profile.take_heap_snapshot()`.
 
-```julia-repl
+```jldoctest
 julia> using Profile
 
 julia> Profile.take_heap_snapshot("snapshot.heapsnapshot")
@@ -137,7 +137,7 @@ collector will not show up in the snapshot.
 To avoid OOMing while recording the snapshot, we added a streaming option to stream out the heap snapshot
 into four files,
 
-```julia-repl
+```jldoctest
 julia> using Profile
 
 julia> Profile.take_heap_snapshot("snapshot"; streaming=true)
@@ -147,7 +147,7 @@ where "snapshot" is the filepath as the prefix for the generated files.
 
 Once the snapshot files are generated, they could be assembled offline with the following command:
 
-```julia-repl
+```jldoctest
 julia> using Profile
 
 julia> Profile.HeapSnapshot.assemble_snapshot("snapshot", "snapshot.heapsnapshot")

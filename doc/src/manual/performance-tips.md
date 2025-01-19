@@ -58,13 +58,13 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
 ```
 
@@ -756,7 +756,7 @@ loaded from an input file that might contain either integers, floats, strings, o
 The macro [`@code_warntype`](@ref) (or its function variant [`code_warntype`](@ref)) can sometimes
 be helpful in diagnosing type-related problems. Here's an example:
 
-```julia-repl
+```jldoctest
 julia> @noinline pos(x) = x < 0 ? 0 : x;
 
 julia> function f(x)
@@ -1315,7 +1315,7 @@ end
 
 Now we will time each of these functions using the same random `10000` by `1` input vector:
 
-```julia-repl
+```jldoctest
 julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
@@ -1344,7 +1344,7 @@ in a large speedup, such as in the example below. Here, a matrix is being access
 randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
 multiplication even with the added cost of copying and allocation.
 
-```julia-repl
+```jldoctest
 julia> using Random
 
 julia> A = randn(3000, 3000);
@@ -1445,7 +1445,7 @@ General good practice for package developers includes:
 
 The tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
 
-```julia-repl
+```jldoctest
 julia> @time @time_imports using Plots
       0.5 ms  Printf
      16.4 ms  Dates
@@ -1697,7 +1697,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)

@@ -48,7 +48,7 @@ argument values to be passed to the function.
 As a complete but simple example, the following calls the `clock` function from the standard C
 library on most Unix-derived systems:
 
-```julia-repl
+```jldoctest
 julia> t = @ccall clock()::Int32
 2292761
 
@@ -59,7 +59,7 @@ Int32
 `clock` takes no arguments and returns an `Int32`. To call the `getenv` function
 to get a pointer to the value of an environment variable, one makes a call like this:
 
-```julia-repl
+```jldoctest
 julia> path = @ccall getenv("SHELL"::Cstring)::Cstring
 Cstring(@0x00007fff5fbffc45)
 
@@ -89,7 +89,7 @@ indicate errors in different ways, including by returning -1, 0, 1, and other sp
 This wrapper throws an exception indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia-repl
+```jldoctest
 julia> getenv("SHELL")
 "/bin/bash"
 
@@ -139,7 +139,7 @@ void say_y(int y)
 and compile it with `gcc -fPIC -shared -o mylib.so mylib.c`.
 It can then be called by specifying the (absolute) path as the library name:
 
-```julia-repl
+```jldoctest
 julia> @ccall "./mylib.so".say_y(5::Cint)::Cvoid
 Hello from C: got y = 5.
 ```
@@ -952,7 +952,7 @@ To call variadic C functions a `semicolon` can be used in the argument list to
 separate required arguments from variadic arguments. An example with the
 `printf` function is given below:
 
-```julia-repl
+```jldoctest
 julia> @ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
 foo = 3
 8
@@ -1039,7 +1039,7 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia-repl
+```jldoctest
 julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```

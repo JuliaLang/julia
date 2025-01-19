@@ -275,7 +275,7 @@ This pipes the output of the `echo` command to the `sort` command. Of course, th
 interesting since there's only one line to sort, but we can certainly do much more interesting
 things:
 
-```julia-repl
+```jldoctest
 julia> run(pipeline(`cut -d: -f3 /etc/passwd`, `sort -n`, `tail -n5`))
 210
 211

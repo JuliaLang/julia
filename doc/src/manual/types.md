@@ -1313,7 +1313,7 @@ This can be done with a simple assignment statement.
 For example, `UInt` is aliased to either [`UInt32`](@ref) or [`UInt64`](@ref) as is
 appropriate for the size of pointers on the system:
 
-```julia-repl
+```jldoctest
 # 32-bit system:
 julia> UInt
 UInt32

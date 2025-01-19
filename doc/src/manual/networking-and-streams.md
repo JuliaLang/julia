@@ -12,7 +12,7 @@ functionality.
 All Julia streams expose at least a [`read`](@ref) and a [`write`](@ref) method, taking the
 stream as their first argument, e.g.:
 
-```julia-repl
+```jldoctest
 julia> write(stdout, "Hello World");  # suppress return value 11 with ;
 Hello World
 julia> read(stdin, Char)
@@ -29,7 +29,7 @@ takes the type of the data to be read as the second argument.
 
 For example, to read a simple byte array, we could do:
 
-```julia-repl
+```jldoctest
 julia> x = zeros(UInt8, 4)
 4-element Vector{UInt8}:
  0x00
@@ -49,7 +49,7 @@ abcd
 However, since this is slightly cumbersome, there are several convenience methods provided. For
 example, we could have written the above as:
 
-```julia-repl
+```jldoctest
 julia> read(stdin, 4)
 abcd
 4-element Vector{UInt8}:
@@ -61,7 +61,7 @@ abcd
 
 or if we had wanted to read the entire line instead:
 
-```julia-repl
+```jldoctest
 julia> readline(stdin)
 abcd
 "abcd"
@@ -123,7 +123,7 @@ of common properties.
 
 You can write content to a file with the `write(filename::String, content)` method:
 
-```julia-repl
+```jldoctest
 julia> write("hello.txt", "Hello, World!")
 13
 ```
@@ -133,7 +133,7 @@ _(`13` is the number of bytes written.)_
 You can read the contents of a file with the `read(filename::String)` method, or `read(filename::String, String)`
 to the contents as a string:
 
-```julia-repl
+```jldoctest
 julia> read("hello.txt", String)
 "Hello, World!"
 ```
@@ -146,7 +146,7 @@ environments, Julia also has an [`open`](@ref) function, which takes a filename 
 returns an [`IOStream`](@ref) object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
-```julia-repl
+```jldoctest
 julia> f = open("hello.txt")
 IOStream(<file hello.txt>)
 
@@ -157,7 +157,7 @@ julia> readlines(f)
 
 If you want to write to a file, you can open it with the write (`"w"`) flag:
 
-```julia-repl
+```jldoctest
 julia> f = open("hello.txt","w")
 IOStream(<file hello.txt>)
 
@@ -169,7 +169,7 @@ If you examine the contents of `hello.txt` at this point, you will notice that i
 has actually been written to disk yet. This is because the `IOStream` must be closed before the
 write is actually flushed to disk:
 
-```julia-repl
+```jldoctest
 julia> close(f)
 ```
 
@@ -188,7 +188,7 @@ end
 
 You can call:
 
-```julia-repl
+```jldoctest
 julia> open(read_and_capitalize, "hello.txt")
 "HELLO AGAIN."
 ```
@@ -199,7 +199,7 @@ contents.
 To avoid even having to define a named function, you can use the `do` syntax, which creates an
 anonymous function on the fly:
 
-```julia-repl
+```jldoctest
 julia> open("hello.txt") do f
            uppercase(read(f, String))
        end
@@ -230,7 +230,7 @@ Let's jump right in with a simple example involving TCP sockets.
 This functionality is in a standard library package called `Sockets`.
 Let's first create a simple server:
 
-```julia-repl
+```jldoctest
 julia> using Sockets
 
 julia> errormonitor(Threads.@spawn begin
@@ -248,7 +248,7 @@ usage is somewhat simpler than the raw Unix socket API. The first call to [`list
 create a server waiting for incoming connections on the specified port (2000) in this case. The
 same function may also be used to create various other kinds of servers:
 
-```julia-repl
+```jldoctest
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
 Sockets.TCPServer(active)
 
@@ -284,7 +284,7 @@ so, assuming the environment (i.e. host, cwd, etc.) is the same you should be ab
 arguments to [`connect`](@ref) as you did to listen to establish the connection. So let's try that
 out (after having created the server above):
 
-```julia-repl
+```jldoctest
 julia> connect(2000)
 TCPSocket(open, 0 bytes waiting)
 
@@ -304,7 +304,7 @@ task resumed execution (because a connection request was now available), accepte
 printed the message and waited for the next client. Reading and writing works in the same way.
 To see this, consider the following simple echo server:
 
-```julia-repl
+```jldoctest
 julia> errormonitor(Threads.@spawn begin
            server = listen(2001)
            while true
@@ -330,7 +330,7 @@ Hello World from the Echo Server
 
 As with other streams, use [`close`](@ref) to disconnect the socket:
 
-```julia-repl
+```jldoctest
 julia> close(clientside)
 ```
 
@@ -340,7 +340,7 @@ One of the [`connect`](@ref) methods that does not follow the [`listen`](@ref) m
 `connect(host::String,port)`, which will attempt to connect to the host given by the `host` parameter
 on the port given by the `port` parameter. It allows you to do things like:
 
-```julia-repl
+```jldoctest
 julia> connect("google.com", 80)
 TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
@@ -348,7 +348,7 @@ TCPSocket(RawFD(30) open, 0 bytes waiting)
 At the base of this functionality is [`getaddrinfo`](@ref), which will do the appropriate address
 resolution:
 
-```julia-repl
+```jldoctest
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
 ```
@@ -359,7 +359,7 @@ All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can b
 asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
 read from or write to a stream using the [`Threads.@spawn`](@ref) macro:
 
-```julia-repl
+```jldoctest
 julia> task = Threads.@spawn open("foo.txt", "w") do io
            write(io, "Hello, World!")
        end;
@@ -375,7 +375,7 @@ It's common to run into situations where you want to perform multiple asynchrono
 concurrently and wait until they've all completed. You can use the [`@sync`](@ref) macro to cause
 your program to block until all of the coroutines it wraps around have exited:
 
-```julia-repl
+```jldoctest
 julia> using Sockets
 
 julia> @sync for hostname in ("google.com", "github.com", "julialang.org")

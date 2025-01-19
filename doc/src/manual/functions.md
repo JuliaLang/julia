@@ -76,7 +76,7 @@ The statement `x[1] = 42` *mutates* the object `x`, and hence this change *will*
 by the caller for this argument. On the other hand, the assignment `y = 7 + y` changes the *binding* ("name")
 `y` to refer to a new value `7 + y`, rather than mutating the *original* object referred to by `y`,
 and hence does *not* change the corresponding argument passed by the caller. This can be seen if we call `f(x, y)`:
-```julia-repl
+```jldoctest
 julia> a = [4, 5, 6]
 3-element Vector{Int64}:
  4
@@ -584,7 +584,7 @@ The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
 a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 
-```julia-repl
+```jldoctest
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
 
 julia> gap((min, max)) = max - min
@@ -598,7 +598,7 @@ would be a two-argument function, and this example would not work.
 
 Similarly, property destructuring can also be used for function arguments:
 
-```julia-repl
+```jldoctest
 julia> foo((; x, y)) = x + y
 foo (generic function with 1 method)
 
@@ -616,7 +616,7 @@ julia> foo(A(3, 4))
 
 For anonymous functions, destructuring a single argument requires an extra comma:
 
-```julia-repl
+```jldoctest
 julia> map(((x, y),) -> x + y, [(1, 2), (3, 4)])
 2-element Vector{Int64}:
  3
@@ -784,7 +784,7 @@ Optional arguments are actually just a convenient syntax for writing multiple me
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
 This can be checked for our `date` function example by calling the `methods` function:
 
-```julia-repl
+```jldoctest
 julia> methods(date)
 # 3 methods for generic function "date":
 [1] date(y::Int64) in Main at REPL[1]:1

@@ -368,7 +368,7 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid:
 
-```julia-repl
+```jldoctest
 julia> x = rand(8)
 8-element Vector{Float64}:
  0.843025
@@ -413,7 +413,7 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia-repl
+```jldoctest
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
 ```
@@ -1036,7 +1036,7 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia-repl
+```jldoctest
 julia> a = rand(2, 1); A = rand(2, 3);
 
 julia> repeat(a, 1, 3) + A
@@ -1049,7 +1049,7 @@ This is wasteful when dimensions get large, so Julia provides [`broadcast`](@ref
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
-```julia-repl
+```jldoctest
 julia> broadcast(+, a, A)
 2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387
@@ -1160,7 +1160,7 @@ dimension `d`. For example, the builtin `Array` returned by `rand(5,7,2)` has it
 arranged contiguously in column major order. This means that the stride of the first
 dimension — the spacing between elements in the same column — is `1`:
 
-```julia-repl
+```jldoctest
 julia> A = rand(5, 7, 2);
 
 julia> stride(A, 1)
@@ -1172,7 +1172,7 @@ as many elements as there are in a single column (`5`). Similarly, jumping betwe
 "pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
-```julia-repl
+```jldoctest
 julia> strides(A)
 (1, 5, 35)
 ```
@@ -1185,7 +1185,7 @@ This view `V` refers to the same memory as `A` but is skipping and re-arranging 
 elements. The stride of the first dimension of `V` is `3` because we're only selecting every
 third row from our original array:
 
-```julia-repl
+```jldoctest
 julia> V = @view A[1:3:4, 2:2:6, 2:-1:1];
 
 julia> stride(V, 1)
@@ -1196,7 +1196,7 @@ This view is similarly selecting every other column from our original `A` — an
 needs to skip the equivalent of two five-element columns when moving between indices in the
 second dimension:
 
-```julia-repl
+```jldoctest
 julia> stride(V, 2)
 10
 ```
@@ -1205,7 +1205,7 @@ The third dimension is interesting because its order is reversed! Thus to get fr
 "page" to the second one it must go _backwards_ in memory, and so its stride in this
 dimension is negative!
 
-```julia-repl
+```jldoctest
 julia> stride(V, 3)
 -35
 ```

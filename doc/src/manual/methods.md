@@ -248,7 +248,7 @@ Although it seems a simple concept, multiple dispatch on the types of values is 
 most powerful and central feature of the Julia language. Core operations typically have dozens
 of methods:
 
-```julia-repl
+```jldoctest
 julia> methods(+)
 # 180 methods for generic function "+":
 [1] +(x::Bool, z::Complex{Bool}) in Base at complex.jl:227
@@ -294,7 +294,7 @@ mysum(x::Real, y::Real) = x + y
 
 you've given the function `mysum` one new method (possibly its only method), and that method takes any pair of `Real` number inputs. But if you then execute
 
-```julia-repl
+```jldoctest
 julia> mysum(1, 2)
 3
 
@@ -544,7 +544,7 @@ Indeed, any new method definition won't be visible to the current runtime enviro
 including Tasks and Threads (and any previously defined `@generated` functions).
 Let's start with an example to see what this means:
 
-```julia-repl
+```jldoctest
 julia> function tryeval()
            @eval newfun() = 1
            newfun()
@@ -697,7 +697,7 @@ eltype_wrong(::Type{A}) where {A<:AbstractArray} = eltype_wrong(supertype(A))
 While this works for declared types, it fails for types without
 supertypes:
 
-```julia-repl
+```jldoctest
 julia> eltype_wrong(Union{Vector{Int}, Matrix{Int}})
 ERROR: MethodError: no method matching supertype(::Type{VecOrMat{Int64}})
 

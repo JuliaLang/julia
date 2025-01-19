@@ -48,7 +48,7 @@ Generally it makes sense for `n` to equal the number of CPU threads (logical cor
 argument implicitly loads module [`Distributed`](@ref man-distributed).
 
 
-```julia-repl
+```jldoctest
 $ julia -p 2
 
 julia> r = remotecall(rand, 2, 2, 2)
@@ -79,7 +79,7 @@ you read from a remote object to obtain data needed by the next local operation.
 [`remotecall_fetch`](@ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
 but is more efficient.
 
-```julia-repl
+```jldoctest
 julia> remotecall_fetch(r-> fetch(r)[1, 1], 2, r)
 0.18526337335308085
 ```
@@ -87,7 +87,7 @@ julia> remotecall_fetch(r-> fetch(r)[1, 1], 2, r)
 This fetches the array on worker 2 and returns the first value. Note, that `fetch` doesn't move any data in
 this case, since it's executed on the worker that owns the array. One can also write:
 
-```julia-repl
+```jldoctest
 julia> remotecall_fetch(getindex, 2, r, 1, 1)
 0.10824216411304866
 ```
@@ -98,7 +98,7 @@ the first element of the future `r`.
 To make things easier, the symbol `:any` can be passed to [`@spawnat`](@ref), which picks where to do
 the operation for you:
 
-```julia-repl
+```jldoctest
 julia> r = @spawnat :any rand(2,2)
 Future(2, 1, 4, nothing)
 
@@ -147,7 +147,7 @@ the same time.
 Your code must be available on any process that runs it. For example, type the following into
 the Julia prompt:
 
-```julia-repl
+```jldoctest
 julia> function rand2(dims...)
            return 2*rand(dims...)
        end
@@ -190,7 +190,7 @@ every process. Calling `include("DummyModule.jl")` loads it only on a single pro
 load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
 2`):
 
-```julia-repl
+```jldoctest
 julia> @everywhere include("DummyModule.jl")
 loaded
       From worker 3:    loaded
@@ -201,7 +201,7 @@ As usual, this does not bring `DummyModule` into scope on any of the process, wh
 [`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
-```julia-repl
+```jldoctest
 julia> using .DummyModule
 
 julia> MyType(7)
@@ -219,7 +219,7 @@ MyType(7)
 However, it's still possible, for instance, to send a `MyType` to a process which has loaded
 `DummyModule` even if it's not in scope:
 
-```julia-repl
+```jldoctest
 julia> put!(RemoteChannel(2), MyType(7))
 RemoteChannel{Channel{Any}}(2, 1, 13)
 ```
@@ -258,7 +258,7 @@ The base Julia installation has in-built support for two types of clusters:
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 
-```julia-repl
+```jldoctest
 julia> using Distributed
 
 julia> addprocs(2)
@@ -293,7 +293,7 @@ operation. Consider these two approaches to constructing and squaring a random m
 
 Method 1:
 
-```julia-repl
+```jldoctest
 julia> A = rand(1000,1000);
 
 julia> Bref = @spawnat :any A^2;
@@ -305,7 +305,7 @@ julia> fetch(Bref);
 
 Method 2:
 
-```julia-repl
+```jldoctest
 julia> Bref = @spawnat :any rand(1000,1000)^2;
 
 [...]
@@ -333,7 +333,7 @@ Expressions executed remotely via [`@spawnat`](@ref), or closures specified for 
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia-repl
+```jldoctest
 A = rand(10,10)
 remotecall_fetch(()->sum(A), 2)
 ```
@@ -374,7 +374,7 @@ altogether if possible. If you must reference globals, consider using `let` bloc
 
 For example:
 
-```julia-repl
+```jldoctest
 julia> A = rand(10,10);
 
 julia> remotecall_fetch(()->A, 2);
@@ -418,7 +418,7 @@ end
 The function `count_heads` simply adds together `n` random bits. Here is how we can perform some
 trials on two machines, and add together the results:
 
-```julia-repl
+```jldoctest
 julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawnat :any count_heads(100000000)
@@ -505,7 +505,7 @@ in some range (or, more generally, to all elements in some collection). This is 
 operation called *parallel map*, implemented in Julia as the [`pmap`](@ref) function. For example,
 we could compute the singular values of several large random matrices in parallel as follows:
 
-```julia-repl
+```jldoctest
 julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 
 julia> pmap(svdvals, M);
@@ -633,7 +633,7 @@ are written to the channel. Each remotely executing task in this simulation read
 waits for a random amount of time and writes back a tuple of `job_id`, time taken and its own
 `pid` to the results channel. Finally all the `results` are printed out on the master process.
 
-```julia-repl
+```jldoctest
 julia> addprocs(4); # add worker processes
 
 julia> const jobs = RemoteChannel(()->Channel{Int}(32));
@@ -733,7 +733,7 @@ as a local call. It is usually (not always) executed in a different task - but t
 serialization/deserialization of data. Consequently, the call refers to the same object instances
 as passed - no copies are created. This behavior is highlighted below:
 
-```julia-repl
+```jldoctest
 julia> using Distributed
 
 julia> rc = RemoteChannel(()->Channel(3));   # RemoteChannel created on local node
@@ -783,7 +783,7 @@ appropriate to store a `deepcopy` of the object.
 
 This is also true for remotecalls on the local node as seen in the following example:
 
-```julia-repl
+```jldoctest
 julia> using Distributed; addprocs(1);
 
 julia> v = [0];
@@ -851,7 +851,7 @@ portion of the array, thereby parallelizing initialization.
 
 Here's a brief example:
 
-```julia-repl
+```jldoctest
 julia> using Distributed
 
 julia> addprocs(3)
@@ -882,7 +882,7 @@ julia> S
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
-```julia-repl
+```jldoctest
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = repeat([myid()], length( indexpids(S):length(procs(S)):length(S))))
 3×4 SharedMatrix{Int64}:
  2  2  2  2
@@ -920,7 +920,7 @@ not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, 
 off chunking the array manually. Let's split along the second dimension.
 Define a function that returns the `(irange, jrange)` indices assigned to this worker:
 
-```julia-repl
+```jldoctest
 julia> @everywhere function myrange(q::SharedArray)
            idx = indexpids(q)
            if idx == 0 # This worker is not assigned a piece
@@ -934,7 +934,7 @@ julia> @everywhere function myrange(q::SharedArray)
 
 Next, define the kernel:
 
-```julia-repl
+```jldoctest
 julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
            @show (irange, jrange, trange)  # display so we can see what's happening
            for t in trange, j in jrange, i in irange
@@ -946,20 +946,20 @@ julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
 
 We also define a convenience wrapper for a `SharedArray` implementation
 
-```julia-repl
+```jldoctest
 julia> @everywhere advection_shared_chunk!(q, u) =
            advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
 ```
 
 Now let's compare three different versions, one that runs in a single process:
 
-```julia-repl
+```jldoctest
 julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
 one that uses [`@distributed`](@ref):
 
-```julia-repl
+```jldoctest
 julia> function advection_parallel!(q, u)
            for t = 1:size(q,3)-1
                @sync @distributed for j = 1:size(q,2)
@@ -974,7 +974,7 @@ julia> function advection_parallel!(q, u)
 
 and one that delegates in chunks:
 
-```julia-repl
+```jldoctest
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
@@ -987,7 +987,7 @@ julia> function advection_shared!(q, u)
 
 If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
-```julia-repl
+```jldoctest
 julia> q = SharedArray{Float64,3}((500,500,500));
 
 julia> u = SharedArray{Float64,3}((500,500,500));
@@ -995,7 +995,7 @@ julia> u = SharedArray{Float64,3}((500,500,500));
 
 Run the functions once to JIT-compile and [`@time`](@ref) them on the second run:
 
-```julia-repl
+```jldoctest
 julia> @time advection_serial!(q, u);
 (irange,jrange,trange) = (1:500,1:500,1:499)
  830.220 milliseconds (216 allocations: 13820 bytes)
@@ -1352,7 +1352,7 @@ processes by first casting it through `distribute()` and `CuArray()`.
 Remember when importing `DistributedArrays.jl` to import it across all processes using [`@everywhere`](@ref)
 
 
-```julia-repl
+```jldoctest
 $ ./julia -p 4
 
 julia> addprocs()
@@ -1415,7 +1415,7 @@ end
 `power_method` repeatedly creates a new vector and normalizes it. We have not specified any type signature in
 function declaration, let's see if it works with the aforementioned datatypes:
 
-```julia-repl
+```jldoctest
 julia> M = [2. 1; 1 1];
 
 julia> v = rand(2)

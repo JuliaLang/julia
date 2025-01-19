@@ -209,7 +209,7 @@ enable all debug logging, use the special value `all`.
 To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
 name of the module of interest. Functions defined in the REPL belong to
 module `Main`; logging for them can be enabled like this:
-```julia-repl
+```jldoctest
 julia> foo() = @debug "foo"
 foo (generic function with 1 method)
 
@@ -235,7 +235,7 @@ Sometimes it can be useful to write log events to a file. Here is an example
 of how to use a task-local and global logger to write information to a text
 file:
 
-```julia-repl
+```jldoctest
 # Load the logging module
 julia> using Logging
 
@@ -271,7 +271,7 @@ julia> close(io)
 Here is an example of creating a [`ConsoleLogger`](@ref) that lets through any messages
 with log level higher than, or equal, to [`Logging.Debug`](@ref).
 
-```julia-repl
+```jldoctest
 julia> using Logging
 
 # Create a ConsoleLogger that prints any log messages with level >= Debug to stderr

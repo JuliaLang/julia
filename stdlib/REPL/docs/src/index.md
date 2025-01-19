@@ -66,7 +66,7 @@ like `:compact`.
 It's possible, as an experimental feature, to specify the attributes used by the REPL via the
 `Base.active_repl.options.iocontext` dictionary (associating values to attributes). For example:
 
-```julia-repl
+```jldoctest
 julia> rand(2, 2)
 2×2 Matrix{Float64}:
  0.8833    0.329197
@@ -96,7 +96,7 @@ end
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
 `?`. Julia will attempt to print help or documentation for anything entered in help mode:
 
-```julia-repl
+```jldoctest
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
@@ -153,7 +153,7 @@ system shell to execute system commands. Just as `?` entered help mode when at t
 of the line, a semicolon (`;`) will enter the shell mode. And it can be exited by pressing backspace
 at the beginning of the line.
 
-```julia-repl
+```jldoctest
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> echo hello
@@ -163,7 +163,7 @@ hello
     For Windows users, Julia's shell mode does not expose windows shell commands.
     Hence, this will fail:
 
-```julia-repl
+```jldoctest
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> dir
@@ -172,7 +172,7 @@ Stacktrace!
 .......
 ```
 However, you can get access to `PowerShell` like this:
-```julia-repl
+```jldoctest
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> powershell
@@ -181,7 +181,7 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 PS C:\Users\elm>
 ```
 ... and to `cmd.exe` like that (see the `dir` command):
-```julia-repl
+```jldoctest
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> cmd
@@ -322,21 +322,21 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
-```julia-repl
+```jldoctest
 julia> x[TAB]
 julia> xor
 ```
 
 In some cases it only completes part of the name, up to the next ambiguity:
 
-```julia-repl
+```jldoctest
 julia> mapf[TAB]
 julia> mapfold
 ```
 
 If you hit tab again, then you get the list of things that might complete this:
 
-```julia-repl
+```jldoctest
 julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
@@ -350,7 +350,7 @@ This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
 
 Like other components of the REPL, the search is case-sensitive:
 
-```julia-repl
+```jldoctest
 julia> stri[TAB]
 stride     strides     string      strip
 
@@ -361,7 +361,7 @@ StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:
 
-```julia-repl
+```jldoctest
 julia> \pi[TAB]
 julia> π
 π = 3.1415926535897...
@@ -399,7 +399,7 @@ A full list of tab-completions can be found in the [Unicode Input](@ref) section
 
 Completion of paths works for strings and julia's shell mode:
 
-```julia-repl
+```jldoctest
 julia> path="/[TAB]"
 .dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
@@ -410,7 +410,7 @@ shell> /[TAB]
 
 Dictionary keys can also be tab completed:
 
-```julia-repl
+```jldoctest
 julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
 Dict{String,Int64} with 3 entries:
   "qwer2" => 2
@@ -425,7 +425,7 @@ julia> foo["qwer
 
 Tab completion can also help completing fields:
 
-```julia-repl
+```jldoctest
 julia> x = 3 + 4im;
 
 julia> x.[TAB][TAB]
@@ -439,7 +439,7 @@ uuid1        uuid4         uuid5        uuid_version
 
 Fields for output from functions can also be completed:
 
-```julia-repl
+```jldoctest
 julia> split("","")[1].[TAB]
 lastindex  offset  string
 ```
@@ -450,7 +450,7 @@ fields if the function is type stable.
 
 Tab completion can help with investigation of the available methods matching the input arguments:
 
-```julia-repl
+```jldoctest
 julia> max([TAB] # All methods are displayed, not shown here due to size of the list
 
 julia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument
@@ -465,7 +465,7 @@ max(a, b, c, xs...) in Base at operators.jl:281
 Keywords are also displayed in the suggested methods after `;`, see below line where `limit`
 and `keepempty` are keyword arguments:
 
-```julia-repl
+```jldoctest
 julia> split("1 1 1", [TAB]
 split(str::AbstractString; limit, keepempty) in Base at strings/util.jl:302
 split(str::T, splitter; limit, keepempty) where T<:AbstractString in Base at strings/util.jl:277
@@ -478,7 +478,7 @@ completion to be able to remove non-matching methods.
 If you wonder which methods can be used with particular argument types, use `?` as the function name.
 This shows an example of looking for functions in InteractiveUtils that accept a single string:
 
-```julia-repl
+```jldoctest
 julia> InteractiveUtils.?("somefile")[TAB]
 edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
 less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
@@ -488,7 +488,7 @@ This listed methods in the `InteractiveUtils` module that can be called on a str
 By default, this excludes methods where all arguments are typed as `Any`,
 but you can see those too by holding down SHIFT-TAB instead of TAB:
 
-```julia-repl
+```jldoctest
 julia> InteractiveUtils.?("somefile")[SHIFT-TAB]
 apropos(string) in REPL at REPL/src/docview.jl:796
 clipboard(x) in InteractiveUtils at InteractiveUtils/src/clipboard.jl:64
@@ -508,7 +508,7 @@ You can also use ` ?("somefile")[TAB]`  and look across all modules, but the met
 
 By omitting the closing parenthesis, you can include functions that might require additional arguments:
 
-```julia-repl
+```jldoctest
 julia> using Mmap
 
 help?> Mmap.?("file",[TAB]
@@ -577,7 +577,7 @@ ENV["JULIA_INFO_COLOR"] = :cyan
 
 When entering expressions at the REPL, they are by default evaluated in the `Main` module;
 
-```julia-repl
+```jldoctest
 julia> @__MODULE__
 Main
 ```
@@ -588,7 +588,7 @@ and pressing the keybinding Alt-m with the cursor on the module name (Esc-m on M
 Pressing the keybinding on an empty prompt toggles the context between the previously active
 non-`Main` module and `Main`. The active module is shown in the prompt (unless it is `Main`):
 
-```julia-repl
+```jldoctest
 julia> using REPL
 
 julia> REPL.activate(Base)
@@ -619,7 +619,7 @@ Functions that take an optional module argument often defaults to the REPL
 context module. As an example, calling `varinfo()` will show the variables of
 the current active module:
 
-```julia-repl
+```jldoctest
 julia> module CustomMod
            export var, f
            var = 1
@@ -652,7 +652,7 @@ end
 
 to your `startup.jl` file. In numbered prompt the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
 
-```julia-repl
+```jldoctest
 In [1]: 5 + 3
 Out[1]: 8
 
@@ -785,7 +785,7 @@ v  [ ] blueberry
 
 can instead be rendered with Unicode selection and navigation characters with
 
-```julia-repl
+```jldoctest
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
@@ -799,7 +799,7 @@ julia> request(menu)
 
 More fine-grained configuration is also possible:
 
-```julia-repl
+```jldoctest
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
 
 julia> request(menu)

@@ -67,7 +67,7 @@ If the condition could not be evaluated because an exception was thrown, which o
 case because `length` is not defined for symbols, an `Error` object is returned and an exception
 is thrown:
 
-```julia-repl
+```jldoctest
 julia> @test foo(:cat) == 1
 Error During Test
   Test threw an exception of type MethodError
@@ -180,7 +180,7 @@ Foo Tests     |    8      8  0.0s
 
 If we do have a test failure, only the details for the failed test sets will be shown:
 
-```julia-repl; filter = r"[0-9\.]+s"
+```jldoctest; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
