@@ -134,7 +134,7 @@ end
 
 # When the function is side effect-free, we may avoid short-circuiting to help
 # vectorize the loop.
-function _any(::typeof(identity), itr::Tuple, ::Colon)
+function _any(::typeof(identity), itr::NTuple, ::Colon)
     @_terminates_locally_meta
     r = false
     anymissing = false
@@ -230,7 +230,7 @@ end
 
 # When the function is side effect-free, we may avoid short-circuiting to help
 # vectorize the loop.
-function _all(::typeof(identity), itr::Tuple, ::Colon)
+function _all(::typeof(identity), itr::NTuple, ::Colon)
     @_terminates_locally_meta
     r = true
     anymissing = false
