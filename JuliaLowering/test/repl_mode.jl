@@ -30,8 +30,8 @@ function eval_ish(mod, ex, do_eval)
     end
     linear_ir = JuliaLowering.lower(mod, ex)
     JuliaLowering.print_ir(stdout, linear_ir)
-    println(stdout, "#----------------------")
     if do_eval
+        println(stdout, "#----------------------")
         expr_form = JuliaLowering.to_lowered_expr(mod, linear_ir)
         Base.eval(mod, expr_form)
     end

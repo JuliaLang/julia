@@ -243,6 +243,10 @@ end
         lhs
     end
     """) == [8, 14]
+
+    @test JuliaLowering.include_string(test_mod, """
+    [1,2] .+ ([3,4] .< [5,6] .< [7,1])
+    """) == [2, 2]
 end
 
 end

@@ -928,18 +928,113 @@ x .&& y .|| z
 7   (return %₆)
 
 ########################################
-# TODO: Broadcast with comparison chains
+# Scalar comparison chain
+x < y < z
+#---------------------
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (gotoifnot %₄ label₁₁)
+6   TestMod.<
+7   TestMod.y
+8   TestMod.z
+9   (call %₆ %₇ %₈)
+10  (return %₉)
+11  (return false)
+
+########################################
+# Broadcasted comparison chain
 x .< y .< z
 #---------------------
-LoweringError:
-x .< y .< z
-# └┘ ── expected `numchildren(ex) == 2`
+1   TestMod.<
+2   TestMod.x
+3   TestMod.y
+4   (call top.broadcasted %₁ %₂ %₃)
+5   TestMod.<
+6   TestMod.y
+7   TestMod.z
+8   (call top.broadcasted %₅ %₆ %₇)
+9   (call top.broadcasted top.& %₄ %₈)
+10  (call top.materialize %₉)
+11  (return %₁₀)
 
-Detailed provenance:
-(. <)
-└─ (. <)
-   └─ @ :1
+########################################
+# Mixed scalar / broadcasted comparison chain
+a < b < c .< d .< e
+#---------------------
+1   TestMod.<
+2   TestMod.a
+3   TestMod.b
+4   (call %₁ %₂ %₃)
+5   (gotoifnot %₄ label₁₁)
+6   TestMod.<
+7   TestMod.b
+8   TestMod.c
+9   (= slot₁/if_val (call %₆ %₇ %₈))
+10  (goto label₁₂)
+11  (= slot₁/if_val false)
+12  slot₁/if_val
+13  TestMod.<
+14  TestMod.c
+15  TestMod.d
+16  (call top.broadcasted %₁₃ %₁₄ %₁₅)
+17  (call top.broadcasted top.& %₁₂ %₁₆)
+18  TestMod.<
+19  TestMod.d
+20  TestMod.e
+21  (call top.broadcasted %₁₈ %₁₉ %₂₀)
+22  (call top.broadcasted top.& %₁₇ %₂₁)
+23  (call top.materialize %₂₂)
+24  (return %₂₃)
 
+########################################
+# Mixed scalar / broadcasted comparison chain
+a .< b .< c < d < e
+#---------------------
+1   TestMod.<
+2   TestMod.a
+3   TestMod.b
+4   (call top.broadcasted %₁ %₂ %₃)
+5   TestMod.<
+6   TestMod.b
+7   TestMod.c
+8   (call top.broadcasted %₅ %₆ %₇)
+9   (call top.broadcasted top.& %₄ %₈)
+10  TestMod.<
+11  TestMod.c
+12  TestMod.d
+13  (call %₁₀ %₁₁ %₁₂)
+14  (gotoifnot %₁₃ label₂₀)
+15  TestMod.<
+16  TestMod.d
+17  TestMod.e
+18  (= slot₁/if_val (call %₁₅ %₁₆ %₁₇))
+19  (goto label₂₁)
+20  (= slot₁/if_val false)
+21  slot₁/if_val
+22  (call top.broadcasted top.& %₉ %₂₁)
+23  (call top.materialize %₂₂)
+24  (return %₂₃)
+
+########################################
+# Comparison chain fused with other broadcasting
+x .+ (a .< b .< c)
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   TestMod.<
+4   TestMod.a
+5   TestMod.b
+6   (call top.broadcasted %₃ %₄ %₅)
+7   TestMod.<
+8   TestMod.b
+9   TestMod.c
+10  (call top.broadcasted %₇ %₈ %₉)
+11  (call top.broadcasted top.& %₆ %₁₀)
+12  (call top.broadcasted %₁ %₂ %₁₁)
+13  (call top.materialize %₁₂)
+14  (return %₁₃)
 
 ########################################
 # Broadcast with literal_pow

@@ -402,6 +402,89 @@ function expand_tuple_destruct(ctx, ex)
 end
 
 #-------------------------------------------------------------------------------
+# Expand comparison chains
+
+function expand_scalar_compare_chain(ctx, srcref, terms, i)
+    comparisons = nothing
+    while i + 2 <= length(terms)
+        lhs = terms[i]
+        op = terms[i+1]
+        rhs = terms[i+2]
+        if kind(op) == K"."
+            break
+        end
+        comp = @ast ctx op [K"call"
+            op
+            lhs
+            rhs
+        ]
+        if isnothing(comparisons)
+            comparisons = comp
+        else
+            comparisons = @ast ctx srcref [K"&&"
+                comparisons
+                comp
+            ]
+        end
+        i += 2
+    end
+    (comparisons, i)
+end
+
+# Expanding comparison chains: (comparison a op b op c ...)
+#
+# We use && to combine pairs of adjacent scalar comparisons and .& to combine
+# vector-vector and vector-scalar comparisons. Combining scalar comparisons are
+# treated as having higher precedence than vector comparisons, thus:
+#
+# a < b < c   ==>  (a < b) && (b < c)
+# a .< b .< c   ==>  (a .< b) .& (b .< c)
+# a < b < c .< d .< e   ==>  (a < b && b < c) .& (c .< d) .& (d .< e)
+# a .< b .< c < d < e   ==>  (a .< b) .& (b .< c) .& (c < d && d < e)
+function expand_compare_chain(ctx, ex)
+    @assert kind(ex) == K"comparison"
+    terms = children(ex)
+    @chk numchildren(ex) >= 3
+    @chk isodd(numchildren(ex))
+    i = 1
+    comparisons = nothing
+    # Combine any number of dotted comparisons
+    while i + 2 <= length(terms)
+        if kind(terms[i+1]) != K"."
+            (comp, i) = expand_scalar_compare_chain(ctx, ex, terms, i)
+        else
+            lhs = terms[i]
+            op = terms[i+1]
+            rhs = terms[i+2]
+            i += 2
+            comp = @ast ctx op [K"dotcall"
+                op[1]
+                lhs
+                rhs
+            ]
+        end
+        if isnothing(comparisons)
+            comparisons = comp
+        else
+            comparisons = @ast ctx ex [K"dotcall"
+                "&"::K"top"
+                # ^^ NB: Flisp bug. Flisp lowering essentially does
+                #     adopt_scope("&"::K"Identifier", ctx.mod)
+                # here which seems wrong if the comparison chain arose from
+                # a macro in a different module. One fix would be to use
+                #     adopt_scope("&"::K"Identifier", ex)
+                # to get the module of the comparison expression for the
+                # `&` operator. But a simpler option is probably to always
+                # use `Base.&` so we do that.
+                comparisons
+                comp
+            ]
+        end
+    end
+    comparisons
+end
+
+#-------------------------------------------------------------------------------
 # Expansion of array indexing 
 function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
     k = kind(ex)
@@ -563,7 +646,7 @@ function expand_dotcall(ctx, ex)
             end
         ]
     elseif k == K"comparison"
-        TODO(ex, "call expand-compare-chain inside expand_dotcall")
+        expand_dotcall(ctx, expand_compare_chain(ctx, ex))
     elseif (k == K"&&" || k == K"||") && is_dotted(ex)
         @ast ctx ex [K"call"
             "broadcasted"::K"top"
@@ -3028,6 +3111,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
     elseif k == K"continue"
         @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+    elseif k == K"comparison"
+        expand_forms_2(ctx, expand_compare_chain(ctx, ex))
     elseif k == K"doc"
         @chk numchildren(ex) == 2
         sig = expand_forms_2(ctx, ex[2], ex)
