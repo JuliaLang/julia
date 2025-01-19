@@ -114,27 +114,34 @@ false
 """
 any(f, itr) = _any(f, itr, :)
 
-function _any(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        else
-            v && return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _any(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v && return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
-function _any(f, itr::Tuple, ::Colon)
+# When the function is side effect-free, we may avoid short-circuiting to help
+# vectorize the loop.
+function _any(::typeof(identity), itr::Tuple, ::Colon)
     @_terminates_locally_meta
-    # avoid short-circuiting to help vectorization
     r = false
     anymissing = false
     for i in eachindex(itr)
-        x = getfield(itr, i, false)  # avoid `getindex` bounds checking to help vectorization
-        v = f(x)
+        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # instead of `@inbounds itr[i]`, for better effects.
+        v = getfield(itr, i, false)
         if ismissing(v)
             anymissing = true
         else
@@ -203,27 +210,34 @@ true
 """
 all(f, itr) = _all(f, itr, :)
 
-function _all(f, itr, ::Colon)
-    anymissing = false
-    for x in itr
-        v = f(x)
-        if ismissing(v)
-            anymissing = true
-        else
-            v || return false
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function _all(f, itr::$ItrT, ::Colon)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for x in itr
+            v = f(x)
+            if ismissing(v)
+                anymissing = true
+            else
+                v || return false
+            end
         end
+        return anymissing ? missing : true
     end
-    return anymissing ? missing : true
 end
 
-function _all(f, itr::Tuple, ::Colon)
+# When the function is side effect-free, we may avoid short-circuiting to help
+# vectorize the loop.
+function _all(::typeof(identity), itr::Tuple, ::Colon)
     @_terminates_locally_meta
-    # avoid short-circuiting to help vectorization
     r = true
     anymissing = false
     for i in eachindex(itr)
-        x = getfield(itr, i, false)  # avoid `getindex` bounds checking to help vectorization
-        v = f(x)
+        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # instead of `@inbounds itr[i]`, for better effects.
+        v = getfield(itr, i, false)
         if ismissing(v)
             anymissing = true
         else
