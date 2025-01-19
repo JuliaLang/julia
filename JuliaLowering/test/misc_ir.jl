@@ -246,3 +246,15 @@ LoweringError:
 LoweringError:
 #= line 1 =# - expected `numchildren(ex) >= 2`
 
+########################################
+# Error: @atomic in wrong position
+let
+    @atomic x
+end
+#---------------------
+LoweringError:
+let
+    @atomic x
+#   └───────┘ ── unimplemented or unsupported atomic declaration
+end
+

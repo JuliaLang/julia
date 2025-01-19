@@ -3101,7 +3101,9 @@ expanded to a function call `getproperty(a, :b)`.
 """
 function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     k = kind(ex)
-    if k == K"call"
+    if k == K"atomic"
+        throw(LoweringError(ex, "unimplemented or unsupported atomic declaration"))
+    elseif k == K"call"
         expand_call(ctx, ex)
     elseif k == K"dotcall" || ((k == K"&&" || k == K"||") && is_dotted(ex))
         expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
