@@ -71,6 +71,35 @@ to use some of these tricks to make `SyntaxTree` faster, eventually. See, for
 example,
 [Building Games in ECS with Entity Relationships](https://ajmmertens.medium.com/building-games-in-ecs-with-entity-relationships-657275ba2c6c)
 
+### Structural assertions / checking validity of syntax trees
+
+Syntax trees in Julia `Expr` form are very close to lisp lists: a symbol at the
+`head` of the list which specifies the syntactic form, and a sequence of
+children in the syntax tree. This is a representation which `JuliaSyntax` and
+`JuliaLowering` follow but it does come with certain disadvantages. One of the
+most problematic is that the number of children affects the validity (and
+sometimes semantics) of an AST node, as much as the `head` symbol does.
+
+In `JuliaSyntax` we've greatly reduced the overloading of `head` in order to
+simplify the interpretation of child structures in the tree. For example,
+broadcast calls like `f.(x,y)` use the `K"dotcall"` kind rather than being a
+node with `head == Symbol(".")` and a tuple as children.
+
+However, there's still many ways for lowering to encounter invalid expressions
+of type `SyntaxTree` and these must be checked. In JuliaSyntax we have several
+levels of effort corresponding to the type of errors conditions we desire to
+check and report:
+
+* For invalid syntax which is accepted by the `JuliaSyntax`
+  parser but is invalid in lowering we use manual `if` blocks followed by
+  throwing a `LoweringError`. This is more programming effort but allows for
+  the highest quality error messages for the typical end user.
+* For invalid syntax which can only be produced by macros (ie, not by the
+  parser) we mostly use the `@chk` macro. This is a quick tool for validating
+  input but gives lesser quality error messages.
+* For JuliaLowering's internal invariants we just use `@assert` - these should
+  never be hit and can be compiled out in principle.
+
 ## Provenance tracking
 
 Expression provenance is tracked through lowering by attaching provenance
