@@ -1073,7 +1073,10 @@ run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, de
 let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename --sysimage-native-code=yes -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    @test readchomp(`$exename --sysimage-native-code=no -E
+    @showtime @test readchomp(`$exename --sysimage-native-code=no -E
+        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
+    # test multithreaded startup with no sysimage
+    @showtime @test readchomp(`$exename --sysimage-native-code=no -t2,1 -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
